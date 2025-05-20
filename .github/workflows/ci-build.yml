@@ -89,18 +89,22 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          # Determine architecture suffix for Pandoc macOS asset name
-          ARCH_SUFFIX=""
+          # Determine architecture suffix for Pandoc macOS asset name AND internal directory
+          ARCH_ASSET_SUFFIX="" # For the ZIP filename like pandoc-3.7.0.1-x86_64-macOS.zip
+          ARCH_DIR_SUFFIX=""   # For the directory name inside ZIP like pandoc-3.7.0.1-x86_64
+
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            ARCH_SUFFIX="arm64-"
+            ARCH_ASSET_SUFFIX="arm64-"
+            ARCH_DIR_SUFFIX="arm64" 
           elif [[ "${{ matrix.arch }}" == "x64" ]]; then
-            ARCH_SUFFIX="x86_64-"
+            ARCH_ASSET_SUFFIX="x86_64-"
+            ARCH_DIR_SUFFIX="x86_64"
           else
             echo "Error: Unsupported architecture for macOS Pandoc download: ${{ matrix.arch }}"
             exit 1
           fi
 
-          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_SUFFIX}macOS.zip"
+          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_ASSET_SUFFIX}macOS.zip"
           PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
 
           echo "Downloading Pandoc version $PANDOC_TAG for macOS (${{ matrix.arch }})..."
@@ -118,7 +122,8 @@ jobs:
           echo "Extracting all from Pandoc ZIP for macOS to ./temp_pandoc_extract/"
           unzip -q pandoc_macos.zip -d ./temp_pandoc_extract/
 
-          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc"
+          # Corrected path: The top-level directory inside the arch-specific macOS ZIPs includes the architecture
+          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}/bin/pandoc"
           echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
 
           if [ -f "$EXPECTED_PANDOC_PATH" ]; then
@@ -126,7 +131,7 @@ jobs:
           else
             echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
             echo "Contents of ./temp_pandoc_extract/:"
-            ls -R ./temp_pandoc_extract/ # List contents for debugging
+            ls -R ./temp_pandoc_extract/ 
             exit 1
           fi
           
@@ -140,6 +145,7 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
+          # Windows Pandoc asset name pattern for x86_64
           PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-windows-x86_64.zip"
           PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
 
@@ -158,6 +164,7 @@ jobs:
           echo "Extracting all from Pandoc ZIP for Windows to ./temp_pandoc_extract/"
           unzip -q pandoc_windows.zip -d ./temp_pandoc_extract/
 
+          # For Windows, the top-level directory in the ZIP is typically just pandoc-VERSION
           EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe"
           echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
           
@@ -166,7 +173,7 @@ jobs:
           else
             echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
             echo "Contents of ./temp_pandoc_extract/:"
-            ls -R ./temp_pandoc_extract/ # List contents for debugging
+            ls -R ./temp_pandoc_extract/ 
             exit 1
           fi
           
