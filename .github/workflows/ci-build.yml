@@ -1,0 +1,113 @@
+name: CI Build (macOS & Windows)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'    # trigger on new version tags, e.g. v0.1.0
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        # On macOS we build both x86_64 and arm64:
+        arch: [x64, arm64]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      SIDECA R_REPO: dipanjan92/harvey-sidecars
+      APP_NAME: harvey
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for tag version
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.arch == 'x64' && matrix.os.startsWith('macos') && 'x86_64-apple-darwin' || matrix.arch == 'arm64' && 'aarch64-apple-darwin' || matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' }}
+          override: true
+
+      - name: Install Node.js & Yarn
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Fetch sidecar binaries from GitHub Releases
+        uses: dawidd6/action-download-release@v2
+        with:
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: ${{ github.ref_name }}       # assumes your sidecars have identical tags
+          pattern: >                         # pick the matching assets per runner
+            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '**/macos-x86_64/**' ||
+               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '**/macos-arm64/**' ||
+               matrix.os == 'windows-latest' && '**/windows-x86_64/**' }}
+          output: sidecars
+
+      - name: Download Pandoc
+        if: matrix.os == 'macos-latest'
+        run: |
+          curl -L -o pandoc.zip https://github.com/jgm/pandoc/releases/latest/download/pandoc-$(uname -m)-macos.zip
+          unzip pandoc.zip -d pandoc
+        shell: bash
+
+      - name: Download Pandoc (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          curl -L -o pandoc.zip https://github.com/jgm/pandoc/releases/latest/download/pandoc-windows-x86_64.zip
+          tar -xf pandoc.zip -C pandoc
+        shell: bash
+
+      - name: Copy sidecars & pandoc into tauri bundle folder
+        run: |
+          mkdir -p src-tauri/sidecar
+          cp sidecars/*/${matrix.os == 'windows-latest' && '*.exe' || matrix.os == 'macos-latest' && '*' } src-tauri/sidecar/
+          cp -R pandoc/*/* src-tauri/sidecar/
+        shell: bash
+
+      - name: Mark executables + strip quarantine on macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x src-tauri/sidecar/*
+          xattr -rc src-tauri/sidecar/*
+        shell: bash
+
+      - name: Mark executables on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          # .exe is already executable; no-op
+          echo "Windows sidecars ready"
+        shell: bash
+
+      - name: Install frontend deps & build
+        run: |
+          yarn install
+          yarn build
+        working-directory: .
+
+      - name: Build Tauri bundle
+        run: |
+          # targets: macOS .app, Windows .exe
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            # Build universal binary: both archs on same runner?
+            # or separate: per-arch
+            cargo tauri build --target ${{ matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }} --release
+          else
+            cargo tauri build --target x86_64-pc-windows-msvc --release
+          fi
+        env:
+          TAURI_SKIP_SIGN: "true"   # you’ll sign & notarize later
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos' || 'windows' }}/*
