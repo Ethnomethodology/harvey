@@ -53,57 +53,88 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'yarn'
+          cache: 'yarn' # Requires yarn.lock to be present in your repository
 
-      # No longer need to parse SIDECAR_REPO as robinraju/release-downloader takes owner/repo directly
-
-      - name: Fetch sidecar binaries & pandoc installers
-        uses: robinraju/release-downloader@v1.10 # Using a well-maintained action and a recent version
+      - name: Fetch ffmpeg, whisper, diarize-cli from SIDECAR_REPO
+        # This step fetches sidecars OTHER THAN Pandoc from your specified repository
+        uses: robinraju/release-downloader@v1.10
         with:
-          token: ${{ secrets.SIDECAR_TOKEN }} # Ensure this token has access to SIDECAR_REPO
-          repository: ${{ env.SIDECAR_REPO }} # Format: owner/repo
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
           tag: ${{ github.event.inputs.ref }}
-          # This action supports glob patterns for fileName.
-          # We need to construct a pattern that matches your release assets.
-          # Assuming your assets contain these distinguishing strings.
-          # If you have specific filenames, you can list them or use a more precise glob.
-          # This will download ALL assets matching the glob.
+          # This pattern should match ffmpeg, whisper, diarize-cli but NOT Pandoc,
+          # as Pandoc is handled separately. Ensure your asset names in SIDECAR_REPO allow this.
+          # If names are distinct (e.g., no "pandoc" in their names), this is fine.
+          # Otherwise, you might need more specific patterns like '*ffmpeg*os*arch*', '*whisper*os*arch*', etc.
+          # For simplicity, assuming the current pattern works for the three sidecars from your repo
+          # and will not erroneously pick up something named "pandoc" if it's not there.
           fileName: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
-          # Example: if assets are 'ffmpeg-macos-x86_64.tar.gz', 'whisper-macos-x86_64.bin' both would be downloaded.
-          # If your release has a single archive per platform, e.g., 'sidecars-macos-x86_64.zip', the pattern would be simpler.
-          # For example: 'sidecars-${{ matrix.os == 'macos-latest' && 'macos' || 'windows' }}-${{ matrix.arch }}.*'
           downloadPath: ./sidecars # Download files into the ./sidecars directory
-          # extract: true # Uncomment this if your downloaded assets are archives (zip, tar.gz) that need extraction
+          # extract: true # Uncomment if your assets from SIDECAR_REPO are archives
 
-      - name: List downloaded files
+      - name: Get Latest Pandoc Release Tag
+        id: get_pandoc_tag
         run: |
-          echo "Files in ./sidecars after download:"
-          ls -R ./sidecars
+          # Fetches the latest release tag name (e.g., "3.2") from jgm/pandoc
+          # Requires curl and jq (usually available on GitHub runners)
+          TAG_NAME=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest | jq -r .tag_name)
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ]; then
+            echo "Failed to fetch latest Pandoc tag. Using a fallback version."
+            TAG_NAME="3.2" # Fallback to a known recent version
+          fi
+          echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
+          echo "Using Pandoc Tag: $TAG_NAME"
         shell: bash
 
-      # If you uncomment 'extract: true' above, the files in ./sidecars will be the extracted contents.
-      # If assets are archives and you don't use 'extract: true', add your own extraction step here:
-      # - name: Extract sidecar archives
-      #   if: steps.fetch_sidecars.outputs.downloaded_files_count > 0 # Check if files were downloaded
-      #   run: |
-      #     echo "Extracting archives from ./sidecars..."
-      #     find ./sidecars -name "*.zip" -exec unzip -o {} -d ./sidecars \;
-      #     find ./sidecars -name "*.tar.gz" -exec tar -xzf {} -C ./sidecars \;
-      #     # Add other extraction commands as needed
-      #     # You might want to remove the archives after extraction or move contents.
-      #   shell: bash
+      - name: Download and Extract Pandoc (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
+        shell: bash
+        run: |
+          echo "Downloading Pandoc version $PANDOC_TAG for macOS"
+          mkdir -p ./sidecars ./temp_pandoc_extract
+          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-macOS.zip" -o pandoc_macos.zip
+          # Extracts only the pandoc binary from the specific path within the zip
+          # The path inside macOS.zip is pandoc-${PANDOC_TAG}/bin/pandoc
+          unzip pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/
+          mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc" ./sidecars/pandoc # Moves to ./sidecars/pandoc
+          rm pandoc_macos.zip
+          rm -rf ./temp_pandoc_extract
+          echo "Pandoc executable for macOS prepared in ./sidecars/pandoc"
+
+      - name: Download and Extract Pandoc (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
+        shell: bash
+        run: |
+          echo "Downloading Pandoc version $PANDOC_TAG for Windows"
+          mkdir -p ./sidecars ./temp_pandoc_extract
+          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-windows-x86_64.zip" -o pandoc_windows.zip
+          # Extracts only the pandoc.exe binary from the specific path within the zip
+          # The path inside windows-x86_64.zip is pandoc-${PANDOC_TAG}/pandoc.exe
+          unzip pandoc_windows.zip "pandoc-${PANDOC_TAG}/pandoc.exe" -d ./temp_pandoc_extract/
+          mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe" ./sidecars/pandoc.exe # Moves to ./sidecars/pandoc.exe
+          rm pandoc_windows.zip
+          rm -rf ./temp_pandoc_extract
+          echo "Pandoc executable for Windows prepared in ./sidecars/pandoc.exe"
+
+      - name: List all downloaded/extracted sidecar files
+        run: |
+          echo "Listing all files in ./sidecars before renaming:"
+          ls -R ./sidecars
+        shell: bash
 
       - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar
-          echo "Looking for files in ./sidecars and its subdirectories..."
-          # The 'find' command below will search recursively.
-          # If you used 'extract: true' or your own extraction step, the files might be in subdirectories within ./sidecars.
+          echo "Looking for files in ./sidecars to process..."
           
-          # It's safer to iterate over files found by find to handle spaces or special characters in names.
+          # Iterate over files found by find to handle spaces or special characters in names.
           find ./sidecars -type f -print0 | while IFS= read -r -d $'\0' file_path; do
             file_name=$(basename "$file_path")
             echo "Processing file: $file_path with basename: $file_name"
@@ -111,28 +142,37 @@ jobs:
             
             case "${{ matrix.os }}::${{ matrix.arch }}" in
               "macos-latest::x64") prefix="x86_64-apple-darwin" ;;
-              "macos-latest::arm64") prefix="aarch64-apple-darwin" ;;
+              "macos-latest::arm64") prefix="aarch64-apple-darwin" ;; # macOS ARM64 Pandoc is universal binary
               "windows-latest::x64") prefix="x86_64-pc-windows-msvc" ;;
             esac
 
             ext=""
             # Add .exe for Windows executables if not already present and filename matches known patterns
+            # This is especially relevant for Pandoc which is now named pandoc.exe
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              if [[ "$file_name" != *.exe && ("$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"* || "$file_name" == *"pandoc"*) ]]; then
+              # For Pandoc, it's already pandoc.exe. For others, add .exe if it's a binary.
+              if [[ "$file_name" != *.exe && ("$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"*) ]]; then
                  ext=".exe"
+              # If the file IS pandoc.exe, the $ext should remain empty as .exe is part of $file_name
+              elif [[ "$file_name" == "pandoc.exe" ]]; then
+                 ext="" # filename already includes .exe
               fi
             fi
-
-            if [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
+            
+            # Special handling for pandoc as its source name is now exactly 'pandoc' or 'pandoc.exe'
+            if [[ "$file_name" == "pandoc" || "$file_name" == "pandoc.exe" ]]; then
+              target_name="pandoc-$prefix" # Ext will be empty for pandoc.exe due to logic above, or added if needed
+              if [[ "$file_name" == "pandoc.exe" ]]; then # ensure .exe is kept for windows pandoc
+                target_name="pandoc-$prefix.exe"
+              fi
+            elif [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
             elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cpp-$prefix$ext"
             elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext"
-            elif [[ "$file_name" == *"pandoc"* ]]; then target_name="pandoc-$prefix$ext"
+            # No generic 'else if contains pandoc' anymore, it's handled by the explicit "pandoc" or "pandoc.exe" check
             fi
 
             if [[ -n "$target_name" ]]; then
               echo "Moving $file_path to src-tauri/sidecar/$target_name"
-              # Ensure the target directory exists if file_path included subdirs that mv won't create
-              mkdir -p $(dirname "src-tauri/sidecar/$target_name") # Should not be needed if target_name is just a filename
               mv "$file_path" "src-tauri/sidecar/$target_name"
             else
               echo "No matching rule for $file_name from $file_path"
@@ -158,12 +198,11 @@ jobs:
 
       # --- Steps for Setting Up Signing Certificates (Commented Out) ---
       # - name: Setup Windows Signing Certificate
-      #   if: matrix.os == 'windows-latest' && env.TAURI_WINDOWS_PFX_SECRET != ''
       # - name: Setup macOS Signing Certificate
-      #   if: matrix.os == 'macos-latest' && env.TAURI_APPLE_CERTIFICATE_SECRET != ''
 
       - name: Build frontend
         run: |
+          # Ensure yarn.lock is present in your repository for this to work reliably
           yarn install --frozen-lockfile
           yarn build
 
