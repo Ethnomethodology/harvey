@@ -1,0 +1,159 @@
+/* src/app.css */
+
+/*---------------------------------------------------------
+  Tailwind directives
+---------------------------------------------------------*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*---------------------------------------------------------
+  Theme variables
+---------------------------------------------------------*/
+@layer base {
+  :root {
+    /* ---------- Light theme ---------- */
+    --ui-icon-color:      #6b7280;
+    --ui-text-color:      #374151;
+    --ui-select-bg:       #ffffff;
+    --ui-select-border:   #d1d5db;
+    --ui-icon-hover-bg:   #e5e7eb;
+    --ui-option-text:     #1f2937;
+    --ui-option-bg:       #ffffff;
+    --ui-option-hover-bg: #f3f4f6;
+    --ui-optgroup-text:   #374151;
+    --ui-optgroup-bg:     #f9fafb;
+    --ui-separator-text:  #9ca3af;
+    --ui-separator-bg:    #f3f4f6;
+    --ui-disabled-text:   #9ca3af;
+    --ui-disabled-bg:     #f9fafb;
+
+    --app-bg-dark:        #1e1e1e;
+  }
+
+  .dark {
+    /* ---------- Dark theme ---------- */
+    --ui-icon-color:      #ffffff;
+    --ui-text-color:      #ffffff;
+    --ui-select-bg:       #1e1e1e;
+    --ui-select-border:   #3c3c3c;
+    --ui-icon-hover-bg:   #3c3c3c;
+    --ui-option-text:     #ffffff;
+    --ui-option-bg:       #1e1e1e;
+    --ui-option-hover-bg: #3c3c3c;
+    --ui-optgroup-text:   #d1d5db;
+    --ui-optgroup-bg:     #4b5563;
+    --ui-separator-text:  #6b7280;
+    --ui-separator-bg:    #374151;
+    --ui-disabled-text:   #6b7280;
+    --ui-disabled-bg:     #4b5563;
+  }
+}
+
+/*---------------------------------------------------------
+  Re‑usable components
+---------------------------------------------------------*/
+@layer components {
+
+  /* ---------- icon button ---------- */
+  .ui-button-icon {
+    color: var(--ui-icon-color);
+    @apply p-1.5 rounded inline-flex items-center justify-center
+           focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+           dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
+
+    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    &:disabled {
+      color: var(--ui-disabled-text);
+      background-color: transparent;
+      @apply opacity-50 cursor-not-allowed;
+    }
+
+    & svg { @apply w-5 h-5; }
+  }
+
+  /* ---------- select dropdown ---------- */
+  .ui-select {
+    color: var(--ui-text-color);
+    background-color: var(--ui-select-bg);
+    border-color: var(--ui-select-border);
+
+    @apply block w-fit max-w-full
+           border rounded-md shadow-sm text-sm
+           pl-2 pr-6 py-1 leading-tight
+           appearance-none bg-no-repeat
+           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+           dark:focus:ring-blue-500 dark:focus:border-blue-500;
+
+    /* GREY caret for light mode */
+    background-image: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%236b7280">\
+<path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>\
+</svg>');
+    background-size: 1em 1em;
+    background-position: right 0.25rem center;
+
+    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    &:disabled {
+      color: var(--ui-disabled-text);
+      background-color: var(--ui-disabled-bg);
+      @apply opacity-50 cursor-not-allowed border-transparent shadow-none;
+    }
+  }
+
+  /* -- White caret override for dark mode -- */
+  .dark .ui-select {
+    background-image: url('data:image/svg+xml;utf8,\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23ffffff">\
+<path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>\
+</svg>');
+  }
+
+  /* ---------- option / optgroup ---------- */
+  .ui-select option {
+    color: var(--ui-option-text);
+    background-color: var(--ui-option-bg);
+    @apply px-2 py-1;
+  }
+  .ui-select option:hover,
+  .ui-select option:checked { background-color: var(--ui-option-hover-bg); }
+
+  .ui-select option:disabled {
+    color: var(--ui-disabled-text);
+    background-color: var(--ui-option-bg);
+    @apply opacity-75 cursor-not-allowed;
+  }
+  .ui-select optgroup {
+    color: var(--ui-optgroup-text);
+    background-color: var(--ui-optgroup-bg);
+    @apply font-semibold px-2 pt-1;
+  }
+  .ui-select option.separator {
+    color: var(--ui-separator-text);
+    background-color: var(--ui-separator-bg);
+    @apply italic font-normal px-2 py-1 cursor-default;
+
+    &:hover,
+    &:checked { background-color: var(--ui-separator-bg); }
+  }
+
+  /* ---------- inline helper text ---------- */
+  .ui-text {
+    color: var(--ui-text-color);
+    @apply text-sm font-medium;
+  }
+}
+
+/*---------------------------------------------------------
+  Global styles (optional)
+---------------------------------------------------------*/
+
+/* Interactive waveform background colors */
+.interactive-waveform {
+  background-color: #ffffff;
+}
+.dark .interactive-waveform {
+  background-color: #3c3c3c;
+}

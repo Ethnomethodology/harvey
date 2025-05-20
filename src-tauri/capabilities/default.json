@@ -1,0 +1,86 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability set for the main application window and project windows.",
+  "windows": [
+    "main",
+    "project-*"
+  ],
+  "permissions": [
+    "core:default",
+    "core:path:default",
+    "core:event:default",
+    "core:event:allow-listen",
+    "core:event:allow-emit",
+    "core:window:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:webview:default",
+    "core:app:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-ask",
+    "dialog:allow-message",
+    "shell:default",
+    "shell:allow-open",
+    "opener:default",
+    "opener:allow-open-url",
+    "core:webview:allow-create-webview-window",
+    "fs:default",
+    "fs:allow-copy-file",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-write-text-file",
+    "fs:allow-exists",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    "fs:scope-home",
+    "fs:scope-document-recursive",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "sidecar/whisper-cpp",
+          "sidecar": true,
+          "args": [ "-m", { "validator": "\\S+" }, "-f", { "validator": "\\S+" }, "-l", { "validator": "\\S+" }, "-ocsv", "-of", { "validator": "\\S+" } ]
+        },
+        {
+          "name": "sidecar/diarize-cli",
+          "sidecar": true,
+          "args": [ "--audio", { "validator": "\\S+" }, "--output", { "validator": "\\S+" }, { "strategy": "flag", "value": [ "--num_speakers", { "validator": "\\d+" }, "--min_speakers", { "validator": "\\d+" }, "--max_speakers", { "validator": "\\d+" } ] } ]
+        },
+        {
+          "name": "ffmpeg",
+           "args": [
+                {
+                  "strategy": "group",
+                  "value": [
+                    "-i", { "validator": ".+" }, "-vn", "-acodec", "pcm_s16le", "-ar", { "validator": "\\d+" }, "-ac", { "validator": "\\d+" }, "-y", { "validator": ".+" },
+                    "-i", { "validator": ".+" }, "-ss", { "validator": "\\S+" }, "-to", { "validator": "\\S+" }, "-c", "copy", "-map", "0", "-avoid_negative_ts", "make_zero", "-y", { "validator": ".+" }
+                  ]
+                }
+            ]
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "sidecar/whisper-cpp", "sidecar": true, "args": [ "-m", { "validator": "\\S+" }, "-f", { "validator": "\\S+" }, "-l", { "validator": "\\S+" }, "-ocsv", "-of", { "validator": "\\S+" } ] },
+        { "name": "sidecar/diarize-cli", "sidecar": true, "args": [ "--audio", { "validator": "\\S+" }, "--output", { "validator": "\\S+" }, { "strategy": "flag", "value": [ "--num_speakers", { "validator": "\\d+" }, "--min_speakers", { "validator": "\\d+" }, "--max_speakers", { "validator": "\\d+" } ] } ] }
+      ]
+    }
+  ],
+  "globalScope": {}
+}
