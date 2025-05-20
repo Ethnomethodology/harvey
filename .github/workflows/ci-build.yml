@@ -14,6 +14,9 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         arch: [x64, arm64]
+        exclude:
+          - os: windows-latest # Windows ARM64 runners are not typically available by default
+            arch: arm64
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -21,6 +24,19 @@ jobs:
     env:
       SIDECAR_REPO: dipanjan92/harvey-sidecars
       APP_NAME: harvey
+      # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
+      # These would be used if you enable signing in the future.
+      # Values should be stored as GitHub Secrets.
+      #
+      # For Windows signing - PFX file content (Base64 encoded) and its password
+      # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
+      # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+      #
+      # For macOS signing - .p12 certificate (Base64 encoded), its password, Apple Signing Identity and Apple Team ID
+      # TAURI_APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      # TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      # TAURI_APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }} # e.g., "Apple Distribution: Your Name (TEAMID)"
+      # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }} # Your Apple Team ID
 
     steps:
       - name: Checkout code
@@ -36,7 +52,7 @@ jobs:
           target: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'x86_64-apple-darwin' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'aarch64-apple-darwin' ||
-               matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' }}
+               matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}
           override: true
 
       - name: Install Node.js & Yarn
@@ -46,70 +62,127 @@ jobs:
           cache: 'yarn'
 
       - name: Fetch sidecar binaries & pandoc installers
-        uses: dawidd6/action-download-release@v2.1.0
+        uses: cuchi/action-download-release@v1.3.1
         with:
-          token: ${{ secrets.SIDECAR_TOKEN }}
-          repository: ${{ env.SIDECAR_REPO }}
-          tag: ${{ github.event.inputs.ref }}
-          pattern: >-
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '**/macos-x86_64/**' ||
-               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '**/macos-arm64/**' ||
-               matrix.os == 'windows-latest' && '**/windows-x86_64/**' }}
-          output: sidecars
+          token: ${{ secrets.SIDECAR_TOKEN }} # Ensure this token has access to SIDECAR_REPO
+          repo_owner: ${{ split(env.SIDECAR_REPO, '/')[0] }}
+          repo_name: ${{ split(env.SIDECAR_REPO, '/')[1] }}
+          tag_name: ${{ github.event.inputs.ref }}
+          asset_name_pattern: >-
+            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '.*macos-x86_64.*' ||
+               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '.*macos-arm64.*' ||
+               matrix.os == 'windows-latest' && matrix.arch == 'x64' && '.*windows-x86_64.*' }}
+          download_dir: sidecars
+
+      - name: List downloaded files
+        run: |
+          echo "Files in ./sidecars after download:"
+          ls -R ./sidecars
+        shell: bash
+
+      # Optional: Add extraction step here if your release assets are archives (e.g., .zip, .tar.gz)
+      # - name: Extract sidecar archives
+      #   run: |
+      #     find ./sidecars -name "*.zip" -exec unzip -o {} -d ./sidecars \; # Adjust for other archive types
+      #   shell: bash
 
       - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar
-          for file in sidecars/**/*; do
-            base=$(basename "$file")
+          echo "Looking for files in ./sidecars and its subdirectories..."
+          find ./sidecars -type f # List all files found
+
+          for file_path in $(find ./sidecars -type f); do
+            file_name=$(basename "$file_path")
+            echo "Processing file: $file_path with basename: $file_name"
+            target_name=""
+            # Determine prefix based on OS and arch
             case "${{ matrix.os }}::${{ matrix.arch }}" in
-              "macos-latest::x64")
-                prefix="x86_64-apple-darwin"
-                ;;
-              "macos-latest::arm64")
-                prefix="aarch64-apple-darwin"
-                ;;
-              "windows-latest::x64")
-                prefix="x86_64-pc-windows-msvc.exe"
-                ;;
+              "macos-latest::x64") prefix="x86_64-apple-darwin" ;;
+              "macos-latest::arm64") prefix="aarch64-apple-darwin" ;;
+              "windows-latest::x64") prefix="x86_64-pc-windows-msvc" ;; # Base prefix
             esac
-            if [[ "$base" == *"ffmpeg"* ]]; then
-              mv "$file" "src-tauri/sidecar/ffmpeg-$prefix"
-            elif [[ "$base" == *"whisper"* ]]; then
-              mv "$file" "src-tauri/sidecar/whisper-cpp-$prefix"
-            elif [[ "$base" == *"diarize"* ]]; then
-              mv "$file" "src-tauri/sidecar/diarize-cli-$prefix"
-            elif [[ "$base" == *"pandoc"* ]]; then
-              mv "$file" "src-tauri/sidecar/pandoc-$prefix"
+
+            ext=""
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              # Check if the file is already an .exe, or if it's a known binary that needs .exe
+              if [[ "$file_name" != *.exe && ("$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"* || "$file_name" == *"pandoc"*) ]]; then
+                 ext=".exe"
+              fi
+            fi
+
+            if [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
+            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cpp-$prefix$ext"
+            elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext"
+            elif [[ "$file_name" == *"pandoc"* ]]; then target_name="pandoc-$prefix$ext"
+            fi
+
+            if [[ -n "$target_name" ]]; then
+              echo "Moving $file_path to src-tauri/sidecar/$target_name"
+              mv "$file_path" "src-tauri/sidecar/$target_name"
+            else
+              echo "No matching rule for $file_name from $file_path"
             fi
           done
+          echo "Contents of src-tauri/sidecar after renaming:"
+          ls -l src-tauri/sidecar
         shell: bash
 
-      - name: Mark executables
+      - name: Mark executables (macOS)
         if: matrix.os == 'macos-latest'
         run: |
+          echo "Marking executables in src-tauri/sidecar/"
+          ls -l src-tauri/sidecar/
           chmod +x src-tauri/sidecar/*
-          xattr -rc src-tauri/sidecar/*
+          echo "Clearing extended attributes from sidecars (if any)..."
+          xattr -c src-tauri/sidecar/* || echo "xattr -c: No attributes to clear or command not applicable, continuing."
         shell: bash
+
+      # --- Steps for Setting Up Signing Certificates (Commented Out) ---
+      # These steps would decode Base64 encoded certificates stored in GitHub Secrets
+      # and set the appropriate environment variables for Tauri to use during the build.
+      #
+      # - name: Setup Windows Signing Certificate
+      #   if: matrix.os == 'windows-latest' && env.TAURI_WINDOWS_PFX_SECRET != ''
+      #   shell: bash
+      #   run: |
+      #     echo "Setting up Windows signing certificate (if provided)..."
+      #     echo "${{ env.TAURI_WINDOWS_PFX_SECRET }}" | base64 --decode > $RUNNER_TEMP/win_cert.pfx
+      #     echo "TAURI_SIGNING_PRIVATE_KEY=$RUNNER_TEMP/win_cert.pfx" >> $GITHUB_ENV
+      #     echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${{ env.TAURI_WINDOWS_PFX_PASSWORD_SECRET }}" >> $GITHUB_ENV
+      #
+      # - name: Setup macOS Signing Certificate
+      #   if: matrix.os == 'macos-latest' && env.TAURI_APPLE_CERTIFICATE_SECRET != ''
+      #   shell: bash
+      #   run: |
+      #     echo "Setting up macOS signing certificate (if provided)..."
+      #     echo "${{ env.TAURI_APPLE_CERTIFICATE_SECRET }}" | base64 --decode > $RUNNER_TEMP/apple_cert.p12
+      #     echo "TAURI_APPLE_CERTIFICATE=$RUNNER_TEMP/apple_cert.p12" >> $GITHUB_ENV
+      #     echo "TAURI_APPLE_CERTIFICATE_PASSWORD=${{ env.TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET }}" >> $GITHUB_ENV
+      #     echo "TAURI_APPLE_SIGNING_IDENTITY=${{ env.TAURI_APPLE_SIGNING_IDENTITY_SECRET }}" >> $GITHUB_ENV
+      #     echo "TAURI_APPLE_DEVELOPER_TEAM=${{ env.TAURI_APPLE_DEVELOPER_TEAM_SECRET }}" >> $GITHUB_ENV
 
       - name: Build frontend
         run: |
-          yarn install
+          yarn install --frozen-lockfile
           yarn build
 
-      - name: Build Tauri bundle
-        run: |
-          if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            cargo tauri build --target ${{ matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }} --release
-          else
-            cargo tauri build --target x86_64-pc-windows-msvc --release
-          fi
+      - name: Build Tauri bundle (Unsigned)
         env:
-          TAURI_SKIP_SIGN: "true"
+          TAURI_SKIP_SIGNING: "true" # Explicitly skip signing
+        run: |
+          rustc --version
+          cargo --version
+          echo "Building for target: ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}"
+          echo "Signing will be skipped (TAURI_SKIP_SIGNING=true)."
+          
+          cargo tauri build --target ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }} --release
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
+          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}-unsigned
           path: |
-            src-tauri/target/${{ matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos' || 'windows' }}/*
+            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'windows/*.msi' }}
+            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'windows/*.exe' }} # Also upload .dmg / .exe if generated
+            # Add other bundle types if configured (e.g., appimage, deb for Linux if you add it later)
