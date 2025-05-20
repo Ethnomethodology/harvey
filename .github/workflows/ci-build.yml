@@ -2,6 +2,11 @@ name: CI Build (macOS & Windows)
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to build'
+        required: true
+        default: 'main'
 
 jobs:
   build:
@@ -22,6 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
@@ -44,7 +50,7 @@ jobs:
         with:
           token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
-          tag: ${{ github.ref_name }}
+          tag: ${{ github.event.inputs.ref }}
           pattern: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '**/macos-x86_64/**' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '**/macos-arm64/**' ||
