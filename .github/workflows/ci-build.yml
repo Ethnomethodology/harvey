@@ -25,18 +25,12 @@ jobs:
       SIDECAR_REPO: dipanjan92/harvey-sidecars
       APP_NAME: harvey
       # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
-      # These would be used if you enable signing in the future.
-      # Values should be stored as GitHub Secrets.
-      #
-      # For Windows signing - PFX file content (Base64 encoded) and its password
       # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
       # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-      #
-      # For macOS signing - .p12 certificate (Base64 encoded), its password, Apple Signing Identity and Apple Team ID
       # TAURI_APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
       # TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      # TAURI_APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }} # e.g., "Apple Distribution: Your Name (TEAMID)"
-      # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }} # Your Apple Team ID
+      # TAURI_APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }}
 
     steps:
       - name: Checkout code
@@ -61,28 +55,28 @@ jobs:
           node-version: '18'
           cache: 'yarn'
 
-      - name: Parse SIDECAR_REPO owner and name
-        id: parse_repo
-        shell: bash
-        run: |
-          REPO_FULL="${{ env.SIDECAR_REPO }}"
-          echo "SIDECAR_REPO_OWNER=${REPO_FULL%/*}" >> $GITHUB_ENV
-          echo "SIDECAR_REPO_NAME=${REPO_FULL#*/}" >> $GITHUB_ENV
-          echo "Parsed Owner: ${REPO_FULL%/*}"
-          echo "Parsed Name: ${REPO_FULL#*/}"
+      # No longer need to parse SIDECAR_REPO as robinraju/release-downloader takes owner/repo directly
 
       - name: Fetch sidecar binaries & pandoc installers
-        uses: cuchi/action-download-release@v1.3.1
+        uses: robinraju/release-downloader@v1.10 # Using a well-maintained action and a recent version
         with:
           token: ${{ secrets.SIDECAR_TOKEN }} # Ensure this token has access to SIDECAR_REPO
-          repo_owner: ${{ env.SIDECAR_REPO_OWNER }}
-          repo_name: ${{ env.SIDECAR_REPO_NAME }}
-          tag_name: ${{ github.event.inputs.ref }}
-          asset_name_pattern: >-
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '.*macos-x86_64.*' ||
-               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '.*macos-arm64.*' ||
-               matrix.os == 'windows-latest' && matrix.arch == 'x64' && '.*windows-x86_64.*' }}
-          download_dir: sidecars
+          repository: ${{ env.SIDECAR_REPO }} # Format: owner/repo
+          tag: ${{ github.event.inputs.ref }}
+          # This action supports glob patterns for fileName.
+          # We need to construct a pattern that matches your release assets.
+          # Assuming your assets contain these distinguishing strings.
+          # If you have specific filenames, you can list them or use a more precise glob.
+          # This will download ALL assets matching the glob.
+          fileName: >-
+            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
+               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
+               matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
+          # Example: if assets are 'ffmpeg-macos-x86_64.tar.gz', 'whisper-macos-x86_64.bin' both would be downloaded.
+          # If your release has a single archive per platform, e.g., 'sidecars-macos-x86_64.zip', the pattern would be simpler.
+          # For example: 'sidecars-${{ matrix.os == 'macos-latest' && 'macos' || 'windows' }}-${{ matrix.arch }}.*'
+          downloadPath: ./sidecars # Download files into the ./sidecars directory
+          # extract: true # Uncomment this if your downloaded assets are archives (zip, tar.gz) that need extraction
 
       - name: List downloaded files
         run: |
@@ -90,32 +84,40 @@ jobs:
           ls -R ./sidecars
         shell: bash
 
-      # Optional: Add extraction step here if your release assets are archives (e.g., .zip, .tar.gz)
+      # If you uncomment 'extract: true' above, the files in ./sidecars will be the extracted contents.
+      # If assets are archives and you don't use 'extract: true', add your own extraction step here:
       # - name: Extract sidecar archives
+      #   if: steps.fetch_sidecars.outputs.downloaded_files_count > 0 # Check if files were downloaded
       #   run: |
-      #     find ./sidecars -name "*.zip" -exec unzip -o {} -d ./sidecars \; # Adjust for other archive types
+      #     echo "Extracting archives from ./sidecars..."
+      #     find ./sidecars -name "*.zip" -exec unzip -o {} -d ./sidecars \;
+      #     find ./sidecars -name "*.tar.gz" -exec tar -xzf {} -C ./sidecars \;
+      #     # Add other extraction commands as needed
+      #     # You might want to remove the archives after extraction or move contents.
       #   shell: bash
 
       - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar
           echo "Looking for files in ./sidecars and its subdirectories..."
-          find ./sidecars -type f # List all files found
-
-          for file_path in $(find ./sidecars -type f); do
+          # The 'find' command below will search recursively.
+          # If you used 'extract: true' or your own extraction step, the files might be in subdirectories within ./sidecars.
+          
+          # It's safer to iterate over files found by find to handle spaces or special characters in names.
+          find ./sidecars -type f -print0 | while IFS= read -r -d $'\0' file_path; do
             file_name=$(basename "$file_path")
             echo "Processing file: $file_path with basename: $file_name"
             target_name=""
-            # Determine prefix based on OS and arch
+            
             case "${{ matrix.os }}::${{ matrix.arch }}" in
               "macos-latest::x64") prefix="x86_64-apple-darwin" ;;
               "macos-latest::arm64") prefix="aarch64-apple-darwin" ;;
-              "windows-latest::x64") prefix="x86_64-pc-windows-msvc" ;; # Base prefix
+              "windows-latest::x64") prefix="x86_64-pc-windows-msvc" ;;
             esac
 
             ext=""
+            # Add .exe for Windows executables if not already present and filename matches known patterns
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              # Check if the file is already an .exe, or if it's a known binary that needs .exe
               if [[ "$file_name" != *.exe && ("$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"* || "$file_name" == *"pandoc"*) ]]; then
                  ext=".exe"
               fi
@@ -129,11 +131,14 @@ jobs:
 
             if [[ -n "$target_name" ]]; then
               echo "Moving $file_path to src-tauri/sidecar/$target_name"
+              # Ensure the target directory exists if file_path included subdirs that mv won't create
+              mkdir -p $(dirname "src-tauri/sidecar/$target_name") # Should not be needed if target_name is just a filename
               mv "$file_path" "src-tauri/sidecar/$target_name"
             else
               echo "No matching rule for $file_name from $file_path"
             fi
           done
+          
           echo "Contents of src-tauri/sidecar after renaming:"
           ls -l src-tauri/sidecar
         shell: bash
@@ -142,35 +147,20 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           echo "Marking executables in src-tauri/sidecar/"
-          ls -l src-tauri/sidecar/
-          chmod +x src-tauri/sidecar/*
-          echo "Clearing extended attributes from sidecars (if any)..."
-          xattr -c src-tauri/sidecar/* || echo "xattr -c: No attributes to clear or command not applicable, continuing."
+          if [ -d "src-tauri/sidecar" ] && [ "$(ls -A src-tauri/sidecar)" ]; then
+            chmod +x src-tauri/sidecar/*
+            echo "Clearing extended attributes from sidecars (if any)..."
+            xattr -c src-tauri/sidecar/* || echo "xattr -c: No attributes to clear or command not applicable, continuing."
+          else
+            echo "src-tauri/sidecar directory is empty or does not exist. Skipping."
+          fi
         shell: bash
 
       # --- Steps for Setting Up Signing Certificates (Commented Out) ---
-      # These steps would decode Base64 encoded certificates stored in GitHub Secrets
-      # and set the appropriate environment variables for Tauri to use during the build.
-      #
       # - name: Setup Windows Signing Certificate
       #   if: matrix.os == 'windows-latest' && env.TAURI_WINDOWS_PFX_SECRET != ''
-      #   shell: bash
-      #   run: |
-      #     echo "Setting up Windows signing certificate (if provided)..."
-      #     echo "${{ env.TAURI_WINDOWS_PFX_SECRET }}" | base64 --decode > $RUNNER_TEMP/win_cert.pfx
-      #     echo "TAURI_SIGNING_PRIVATE_KEY=$RUNNER_TEMP/win_cert.pfx" >> $GITHUB_ENV
-      #     echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${{ env.TAURI_WINDOWS_PFX_PASSWORD_SECRET }}" >> $GITHUB_ENV
-      #
       # - name: Setup macOS Signing Certificate
       #   if: matrix.os == 'macos-latest' && env.TAURI_APPLE_CERTIFICATE_SECRET != ''
-      #   shell: bash
-      #   run: |
-      #     echo "Setting up macOS signing certificate (if provided)..."
-      #     echo "${{ env.TAURI_APPLE_CERTIFICATE_SECRET }}" | base64 --decode > $RUNNER_TEMP/apple_cert.p12
-      #     echo "TAURI_APPLE_CERTIFICATE=$RUNNER_TEMP/apple_cert.p12" >> $GITHUB_ENV
-      #     echo "TAURI_APPLE_CERTIFICATE_PASSWORD=${{ env.TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET }}" >> $GITHUB_ENV
-      #     echo "TAURI_APPLE_SIGNING_IDENTITY=${{ env.TAURI_APPLE_SIGNING_IDENTITY_SECRET }}" >> $GITHUB_ENV
-      #     echo "TAURI_APPLE_DEVELOPER_TEAM=${{ env.TAURI_APPLE_DEVELOPER_TEAM_SECRET }}" >> $GITHUB_ENV
 
       - name: Build frontend
         run: |
@@ -195,4 +185,3 @@ jobs:
           path: |
             src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'windows/*.msi' }}
             src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'windows/*.exe' }} # Also upload .dmg / .exe if generated
-            # Add other bundle types if configured (e.g., appimage, deb for Linux if you add it later)
