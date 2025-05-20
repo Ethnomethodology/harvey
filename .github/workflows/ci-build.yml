@@ -74,10 +74,9 @@ jobs:
           LATEST_PANDOC_JSON=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest)
           TAG_NAME=$(echo "$LATEST_PANDOC_JSON" | jq -r .tag_name)
           
-          # Check if tag_name was successfully extracted
           if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ] || [ "$TAG_NAME" == "" ]; then
             echo "Failed to fetch latest Pandoc tag dynamically. API response: $LATEST_PANDOC_JSON"
-            echo "Using a fallback version: 3.7.0.1" # Updated fallback to a more recent version
+            echo "Using a fallback version: 3.7.0.1" 
             TAG_NAME="3.7.0.1" 
           fi
           echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
@@ -116,10 +115,20 @@ jobs:
             exit 1
           fi
           
-          echo "Extracting Pandoc for macOS..."
-          # The path inside the arch-specific zips should still be pandoc-${PANDOC_TAG}/bin/pandoc
-          unzip -q pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/
-          mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc" ./sidecars/pandoc
+          echo "Extracting all from Pandoc ZIP for macOS to ./temp_pandoc_extract/"
+          unzip -q pandoc_macos.zip -d ./temp_pandoc_extract/
+
+          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc"
+          echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
+
+          if [ -f "$EXPECTED_PANDOC_PATH" ]; then
+            mv "$EXPECTED_PANDOC_PATH" ./sidecars/pandoc
+          else
+            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
+            echo "Contents of ./temp_pandoc_extract/:"
+            ls -R ./temp_pandoc_extract/ # List contents for debugging
+            exit 1
+          fi
           
           rm pandoc_macos.zip
           rm -rf ./temp_pandoc_extract
@@ -131,7 +140,6 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          # Windows Pandoc asset name pattern for x86_64 seems consistent
           PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-windows-x86_64.zip"
           PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
 
@@ -147,9 +155,20 @@ jobs:
             exit 1
           fi
 
-          echo "Extracting Pandoc for Windows..."
-          unzip -q pandoc_windows.zip "pandoc-${PANDOC_TAG}/pandoc.exe" -d ./temp_pandoc_extract/
-          mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe" ./sidecars/pandoc.exe
+          echo "Extracting all from Pandoc ZIP for Windows to ./temp_pandoc_extract/"
+          unzip -q pandoc_windows.zip -d ./temp_pandoc_extract/
+
+          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe"
+          echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
+          
+          if [ -f "$EXPECTED_PANDOC_PATH" ]; then
+            mv "$EXPECTED_PANDOC_PATH" ./sidecars/pandoc.exe
+          else
+            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
+            echo "Contents of ./temp_pandoc_extract/:"
+            ls -R ./temp_pandoc_extract/ # List contents for debugging
+            exit 1
+          fi
           
           rm pandoc_windows.zip
           rm -rf ./temp_pandoc_extract
