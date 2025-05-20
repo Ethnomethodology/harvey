@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Branch or tag to build'
+        description: 'Branch or tag of your application to build' # Clarified description
         required: true
         default: 'main'
 
@@ -33,11 +33,11 @@ jobs:
       # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout application code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.ref }}
+          ref: ${{ github.event.inputs.ref }} # Checks out the application code based on your input
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
@@ -55,25 +55,26 @@ jobs:
           node-version: '18'
           cache: 'npm' # Cache npm dependencies, requires package-lock.json
 
-      - name: Fetch ffmpeg, whisper, diarize-cli from SIDECAR_REPO
+      - name: Fetch latest ffmpeg, whisper, diarize-cli from SIDECAR_REPO
         uses: robinraju/release-downloader@v1.10
         with:
           token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
-          tag: ${{ github.event.inputs.ref }}
-          fileName: >-
+          latest: true # Fetches assets from the latest release in SIDECAR_REPO
+          # 'tag' input is ignored when 'latest: true'
+          fileName: >- # This glob pattern will select assets from the latest release
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
-          downloadPath: ./sidecars
+          downloadTo: ./sidecars # Corrected input name for output directory
           # extract: true # Uncomment if your assets from SIDECAR_REPO are archives
 
       - name: Get Latest Pandoc Release Tag
         id: get_pandoc_tag
         run: |
           TAG_NAME=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest | jq -r .tag_name)
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ]; then
-            echo "Failed to fetch latest Pandoc tag. Using a fallback version."
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ] || [ "$TAG_NAME" == "" ]; then # Added empty string check
+            echo "Failed to fetch latest Pandoc tag. Using a fallback version: 3.2"
             TAG_NAME="3.2" # Fallback to a known recent version
           fi
           echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
@@ -89,7 +90,7 @@ jobs:
           echo "Downloading Pandoc version $PANDOC_TAG for macOS"
           mkdir -p ./sidecars ./temp_pandoc_extract
           curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-macOS.zip" -o pandoc_macos.zip
-          unzip pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/
+          unzip -q pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/ # Added -q for quieter unzip
           mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc" ./sidecars/pandoc
           rm pandoc_macos.zip
           rm -rf ./temp_pandoc_extract
@@ -104,7 +105,7 @@ jobs:
           echo "Downloading Pandoc version $PANDOC_TAG for Windows"
           mkdir -p ./sidecars ./temp_pandoc_extract
           curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-windows-x86_64.zip" -o pandoc_windows.zip
-          unzip pandoc_windows.zip "pandoc-${PANDOC_TAG}/pandoc.exe" -d ./temp_pandoc_extract/
+          unzip -q pandoc_windows.zip "pandoc-${PANDOC_TAG}/pandoc.exe" -d ./temp_pandoc_extract/ # Added -q for quieter unzip
           mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe" ./sidecars/pandoc.exe
           rm pandoc_windows.zip
           rm -rf ./temp_pandoc_extract
@@ -147,15 +148,15 @@ jobs:
                 target_name="pandoc-$prefix.exe"
               fi
             elif [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
-            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cpp-$prefix$ext"
-            elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext"
+            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cpp-$prefix$ext" # Assuming sidecar filename from repo contains "whisper"
+            elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext" # Assuming sidecar filename from repo contains "diarize"
             fi
 
             if [[ -n "$target_name" ]]; then
               echo "Moving $file_path to src-tauri/sidecar/$target_name"
               mv "$file_path" "src-tauri/sidecar/$target_name"
             else
-              echo "No matching rule for $file_name from $file_path"
+              echo "No matching rule for $file_name (from $file_path)"
             fi
           done
           
