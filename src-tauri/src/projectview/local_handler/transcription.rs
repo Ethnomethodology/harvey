@@ -215,7 +215,10 @@ pub(crate) async fn convert_to_wav_if_needed(
     debug!("[FFmpeg][{}] Command arguments: {:?}", job_id, args);
 
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.command("ffmpeg").args(args).spawn()?;
+    let (mut rx, child) = shell_scope
+        .sidecar("ffmpeg")?
+        .args(args)
+        .spawn()?;
     debug!("[FFmpeg][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();

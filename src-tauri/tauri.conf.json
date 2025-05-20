@@ -45,7 +45,8 @@
     "externalBin": [
       "sidecar/whisper-cpp",
       "sidecar/diarize-cli",
-      "sidecar/pandoc"
+      "sidecar/pandoc",
+      "sidecar/ffmpeg"
     ]
   }
 }

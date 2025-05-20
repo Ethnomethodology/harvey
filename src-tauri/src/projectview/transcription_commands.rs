@@ -97,7 +97,10 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
 
     info!("[Trim Backend] FFmpeg Cmd: ffmpeg {}", args.join(" "));
     let shell_scope = app_handle.shell();
-    let (mut rx, _child) = shell_scope.command("ffmpeg").args(args).spawn()?;
+    let (mut rx, _child) = shell_scope
+        .sidecar("ffmpeg")?
+        .args(args)
+        .spawn()?;
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
     let mut ffmpeg_exit_code: Option<i32> = None;
