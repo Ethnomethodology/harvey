@@ -71,10 +71,14 @@ jobs:
       - name: Get Latest Pandoc Release Tag
         id: get_pandoc_tag
         run: |
-          TAG_NAME=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest | jq -r .tag_name)
+          LATEST_PANDOC_JSON=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest)
+          TAG_NAME=$(echo "$LATEST_PANDOC_JSON" | jq -r .tag_name)
+          
+          # Check if tag_name was successfully extracted
           if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ] || [ "$TAG_NAME" == "" ]; then
-            echo "Failed to fetch latest Pandoc tag. Using a fallback version: 3.2" # You can update this fallback
-            TAG_NAME="3.2" 
+            echo "Failed to fetch latest Pandoc tag dynamically. API response: $LATEST_PANDOC_JSON"
+            echo "Using a fallback version: 3.7.0.1" # Updated fallback to a more recent version
+            TAG_NAME="3.7.0.1" 
           fi
           echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
           echo "Using Pandoc Tag: $TAG_NAME"
@@ -86,20 +90,34 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          echo "Downloading Pandoc version $PANDOC_TAG for macOS..."
+          # Determine architecture suffix for Pandoc macOS asset name
+          ARCH_SUFFIX=""
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            ARCH_SUFFIX="arm64-"
+          elif [[ "${{ matrix.arch }}" == "x64" ]]; then
+            ARCH_SUFFIX="x86_64-"
+          else
+            echo "Error: Unsupported architecture for macOS Pandoc download: ${{ matrix.arch }}"
+            exit 1
+          fi
+
+          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_SUFFIX}macOS.zip"
+          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
+
+          echo "Downloading Pandoc version $PANDOC_TAG for macOS (${{ matrix.arch }})..."
+          echo "Download URL: $PANDOC_DOWNLOAD_URL"
           mkdir -p ./sidecars ./temp_pandoc_extract
-          # Use -f to fail on server errors, -S to show errors, -L to follow redirects
-          curl -fSL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-macOS.zip" -o pandoc_macos.zip
+          
+          curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_macos.zip
           
           echo "Validating downloaded Pandoc ZIP for macOS..."
           if ! unzip -tq pandoc_macos.zip > /dev/null; then
-            echo "Error: Downloaded pandoc_macos.zip is not a valid zip file or is corrupted."
-            # echo "Attempting to display first few lines of the downloaded file (might be an error page):"
-            # head -n 20 pandoc_macos.zip # Be cautious if error pages are large
+            echo "Error: Downloaded pandoc_macos.zip ($PANDOC_ZIP_FILENAME) is not a valid zip file or is corrupted."
             exit 1
           fi
           
           echo "Extracting Pandoc for macOS..."
+          # The path inside the arch-specific zips should still be pandoc-${PANDOC_TAG}/bin/pandoc
           unzip -q pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/
           mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc" ./sidecars/pandoc
           
@@ -113,16 +131,19 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          echo "Downloading Pandoc version $PANDOC_TAG for Windows..."
+          # Windows Pandoc asset name pattern for x86_64 seems consistent
+          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-windows-x86_64.zip"
+          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
+
+          echo "Downloading Pandoc version $PANDOC_TAG for Windows (x86_64)..."
+          echo "Download URL: $PANDOC_DOWNLOAD_URL"
           mkdir -p ./sidecars ./temp_pandoc_extract
-          # Use -f to fail on server errors, -S to show errors, -L to follow redirects
-          curl -fSL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-windows-x86_64.zip" -o pandoc_windows.zip
+          
+          curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_windows.zip
 
           echo "Validating downloaded Pandoc ZIP for Windows..."
           if ! unzip -tq pandoc_windows.zip > /dev/null; then
-            echo "Error: Downloaded pandoc_windows.zip is not a valid zip file or is corrupted."
-            # echo "Attempting to display first few lines of the downloaded file (might be an error page):"
-            # head -n 20 pandoc_windows.zip # Be cautious if error pages are large
+            echo "Error: Downloaded pandoc_windows.zip ($PANDOC_ZIP_FILENAME) is not a valid zip file or is corrupted."
             exit 1
           fi
 
