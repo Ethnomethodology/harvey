@@ -61,12 +61,22 @@ jobs:
           node-version: '18'
           cache: 'yarn'
 
+      - name: Parse SIDECAR_REPO owner and name
+        id: parse_repo
+        shell: bash
+        run: |
+          REPO_FULL="${{ env.SIDECAR_REPO }}"
+          echo "SIDECAR_REPO_OWNER=${REPO_FULL%/*}" >> $GITHUB_ENV
+          echo "SIDECAR_REPO_NAME=${REPO_FULL#*/}" >> $GITHUB_ENV
+          echo "Parsed Owner: ${REPO_FULL%/*}"
+          echo "Parsed Name: ${REPO_FULL#*/}"
+
       - name: Fetch sidecar binaries & pandoc installers
         uses: cuchi/action-download-release@v1.3.1
         with:
           token: ${{ secrets.SIDECAR_TOKEN }} # Ensure this token has access to SIDECAR_REPO
-          repo_owner: ${{ split(env.SIDECAR_REPO, '/')[0] }}
-          repo_name: ${{ split(env.SIDECAR_REPO, '/')[1] }}
+          repo_owner: ${{ env.SIDECAR_REPO_OWNER }}
+          repo_name: ${{ env.SIDECAR_REPO_NAME }}
           tag_name: ${{ github.event.inputs.ref }}
           asset_name_pattern: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '.*macos-x86_64.*' ||
