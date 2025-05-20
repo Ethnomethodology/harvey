@@ -60,21 +60,21 @@ jobs:
         with:
           token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0' # Using the specific tag from your screenshot (harvey-sidecars v0.2.0)
+          tag: 'v0.2.0' 
           fileName: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
           downloadTo: ./sidecars
-          # extract: true # Uncomment if your assets from SIDECAR_REPO are archives
+          # extract: true
 
       - name: Get Latest Pandoc Release Tag
         id: get_pandoc_tag
         run: |
           TAG_NAME=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest | jq -r .tag_name)
           if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ] || [ "$TAG_NAME" == "" ]; then
-            echo "Failed to fetch latest Pandoc tag. Using a fallback version: 3.2"
-            TAG_NAME="3.2"
+            echo "Failed to fetch latest Pandoc tag. Using a fallback version: 3.2" # You can update this fallback
+            TAG_NAME="3.2" 
           fi
           echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
           echo "Using Pandoc Tag: $TAG_NAME"
@@ -86,11 +86,23 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          echo "Downloading Pandoc version $PANDOC_TAG for macOS"
+          echo "Downloading Pandoc version $PANDOC_TAG for macOS..."
           mkdir -p ./sidecars ./temp_pandoc_extract
-          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-macOS.zip" -o pandoc_macos.zip
+          # Use -f to fail on server errors, -S to show errors, -L to follow redirects
+          curl -fSL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-macOS.zip" -o pandoc_macos.zip
+          
+          echo "Validating downloaded Pandoc ZIP for macOS..."
+          if ! unzip -tq pandoc_macos.zip > /dev/null; then
+            echo "Error: Downloaded pandoc_macos.zip is not a valid zip file or is corrupted."
+            # echo "Attempting to display first few lines of the downloaded file (might be an error page):"
+            # head -n 20 pandoc_macos.zip # Be cautious if error pages are large
+            exit 1
+          fi
+          
+          echo "Extracting Pandoc for macOS..."
           unzip -q pandoc_macos.zip "pandoc-${PANDOC_TAG}/bin/pandoc" -d ./temp_pandoc_extract/
           mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/bin/pandoc" ./sidecars/pandoc
+          
           rm pandoc_macos.zip
           rm -rf ./temp_pandoc_extract
           echo "Pandoc executable for macOS prepared in ./sidecars/pandoc"
@@ -101,11 +113,23 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          echo "Downloading Pandoc version $PANDOC_TAG for Windows"
+          echo "Downloading Pandoc version $PANDOC_TAG for Windows..."
           mkdir -p ./sidecars ./temp_pandoc_extract
-          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-windows-x86_64.zip" -o pandoc_windows.zip
+          # Use -f to fail on server errors, -S to show errors, -L to follow redirects
+          curl -fSL "https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/pandoc-${PANDOC_TAG}-windows-x86_64.zip" -o pandoc_windows.zip
+
+          echo "Validating downloaded Pandoc ZIP for Windows..."
+          if ! unzip -tq pandoc_windows.zip > /dev/null; then
+            echo "Error: Downloaded pandoc_windows.zip is not a valid zip file or is corrupted."
+            # echo "Attempting to display first few lines of the downloaded file (might be an error page):"
+            # head -n 20 pandoc_windows.zip # Be cautious if error pages are large
+            exit 1
+          fi
+
+          echo "Extracting Pandoc for Windows..."
           unzip -q pandoc_windows.zip "pandoc-${PANDOC_TAG}/pandoc.exe" -d ./temp_pandoc_extract/
           mv "./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe" ./sidecars/pandoc.exe
+          
           rm pandoc_windows.zip
           rm -rf ./temp_pandoc_extract
           echo "Pandoc executable for Windows prepared in ./sidecars/pandoc.exe"
