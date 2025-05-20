@@ -1,9 +1,6 @@
 name: CI Build (macOS & Windows)
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'    # trigger on new version tags, e.g. v0.1.0
   workflow_dispatch:
 
 jobs:
@@ -11,27 +8,29 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
-        # On macOS we build both x86_64 and arm64:
         arch: [x64, arm64]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
 
     env:
-      SIDECA R_REPO: dipanjan92/harvey-sidecars
+      SIDECAR_REPO: dipanjan92/harvey-sidecars
       APP_NAME: harvey
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed for tag version
+          fetch-depth: 0
 
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.arch == 'x64' && matrix.os.startsWith('macos') && 'x86_64-apple-darwin' || matrix.arch == 'arm64' && 'aarch64-apple-darwin' || matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' }}
+          target: >-
+            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'x86_64-apple-darwin' ||
+               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'aarch64-apple-darwin' ||
+               matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' }}
           override: true
 
       - name: Install Node.js & Yarn
@@ -40,70 +39,67 @@ jobs:
           node-version: '18'
           cache: 'yarn'
 
-      - name: Fetch sidecar binaries from GitHub Releases
+      - name: Fetch sidecar binaries & pandoc installers
         uses: dawidd6/action-download-release@v2
         with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
-          tag: ${{ github.ref_name }}       # assumes your sidecars have identical tags
-          pattern: >                         # pick the matching assets per runner
+          tag: ${{ github.ref_name }}
+          pattern: >-
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '**/macos-x86_64/**' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '**/macos-arm64/**' ||
                matrix.os == 'windows-latest' && '**/windows-x86_64/**' }}
           output: sidecars
 
-      - name: Download Pandoc
-        if: matrix.os == 'macos-latest'
-        run: |
-          curl -L -o pandoc.zip https://github.com/jgm/pandoc/releases/latest/download/pandoc-$(uname -m)-macos.zip
-          unzip pandoc.zip -d pandoc
-        shell: bash
-
-      - name: Download Pandoc (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          curl -L -o pandoc.zip https://github.com/jgm/pandoc/releases/latest/download/pandoc-windows-x86_64.zip
-          tar -xf pandoc.zip -C pandoc
-        shell: bash
-
-      - name: Copy sidecars & pandoc into tauri bundle folder
+      - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar
-          cp sidecars/*/${matrix.os == 'windows-latest' && '*.exe' || matrix.os == 'macos-latest' && '*' } src-tauri/sidecar/
-          cp -R pandoc/*/* src-tauri/sidecar/
+          for file in sidecars/**/*; do
+            base=$(basename "$file")
+            case "${{ matrix.os }}::${{ matrix.arch }}" in
+              "macos-latest::x64")
+                prefix="x86_64-apple-darwin"
+                ;;
+              "macos-latest::arm64")
+                prefix="aarch64-apple-darwin"
+                ;;
+              "windows-latest::x64")
+                prefix="x86_64-pc-windows-msvc.exe"
+                ;;
+            esac
+            if [[ "$base" == *"ffmpeg"* ]]; then
+              mv "$file" "src-tauri/sidecar/ffmpeg-$prefix"
+            elif [[ "$base" == *"whisper"* ]]; then
+              mv "$file" "src-tauri/sidecar/whisper-cpp-$prefix"
+            elif [[ "$base" == *"diarize"* ]]; then
+              mv "$file" "src-tauri/sidecar/diarize-cli-$prefix"
+            elif [[ "$base" == *"pandoc"* ]]; then
+              mv "$file" "src-tauri/sidecar/pandoc-$prefix"
+            fi
+          done
         shell: bash
 
-      - name: Mark executables + strip quarantine on macOS
+      - name: Mark executables
         if: matrix.os == 'macos-latest'
         run: |
           chmod +x src-tauri/sidecar/*
           xattr -rc src-tauri/sidecar/*
         shell: bash
 
-      - name: Mark executables on Windows
-        if: matrix.os == 'windows-latest'
-        run: |
-          # .exe is already executable; no-op
-          echo "Windows sidecars ready"
-        shell: bash
-
-      - name: Install frontend deps & build
+      - name: Build frontend
         run: |
           yarn install
           yarn build
-        working-directory: .
 
       - name: Build Tauri bundle
         run: |
-          # targets: macOS .app, Windows .exe
           if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            # Build universal binary: both archs on same runner?
-            # or separate: per-arch
             cargo tauri build --target ${{ matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }} --release
           else
             cargo tauri build --target x86_64-pc-windows-msvc --release
           fi
         env:
-          TAURI_SKIP_SIGN: "true"   # you’ll sign & notarize later
+          TAURI_SKIP_SIGN: "true"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v3
