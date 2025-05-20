@@ -46,7 +46,7 @@ jobs:
           cache: 'yarn'
 
       - name: Fetch sidecar binaries & pandoc installers
-        uses: dawidd6/action-download-release@v2
+        uses: dawidd6/action-download-release@v2.1.0
         with:
           token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
