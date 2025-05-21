@@ -20,9 +20,8 @@ const config = {
     },
     // Pre-render all routes by default
     prerender: {
-      default: true
-    }
-    // other options...
+      entries: ['*']
+    },
   }
 };
 
