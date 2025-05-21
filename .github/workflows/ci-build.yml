@@ -55,6 +55,9 @@ jobs:
           node-version: '22.14.0'
           cache: 'npm'
 
+      - name: Prepare sidecar directory
+        run: mkdir -p ./sidecar
+
       - name: Fetch ffmpeg, whisper, diarize-cli from SIDECAR_REPO (v0.2.0)
         uses: robinraju/release-downloader@v1.10
         with:
@@ -66,7 +69,7 @@ jobs:
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
           downloadTo: ./sidecar
-          # extract: true
+          extract: true
 
       - name: Get Latest Pandoc Release Tag
         id: get_pandoc_tag
@@ -191,7 +194,7 @@ jobs:
               fi
             fi
             
-            if [[ "$file_name" == "pand" || "$file_name" == "pandoc.exe" ]]; then # Changed "pandoc" to "pand" to be more inclusive of potential temp names
+            if [[ "$file_name" == "pandoc" || "$file_name" == "pandoc.exe" ]]; then
               target_name="pandoc-$prefix" 
               if [[ "$file_name" == "pandoc.exe" ]]; then 
                 target_name="pandoc-$prefix.exe"
@@ -229,10 +232,6 @@ jobs:
 
       - name: Build frontend
         run: |
-          # This step is failing due to a JavaScript build error.
-          # The error "Invalid flags supplied to RegExp constructor 'gmv'"
-          # needs to be resolved in your frontend codebase or its dependencies.
-          # The workflow YAML is correctly invoking the build.
           npm ci 
           npm run build
 
