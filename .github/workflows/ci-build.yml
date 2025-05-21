@@ -68,7 +68,7 @@ jobs:
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
-          downloadTo: ./sidecar
+          out-file-path: ./sidecar
           extract: true
 
       - name: Get Latest Pandoc Release Tag
