@@ -5,9 +5,7 @@ import path from 'path'; // Import the path module
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  preprocess: sveltePreprocess({
-    postcss: true,
-  }),
+  preprocess: sveltePreprocess({ postcss: true }),
   kit: {
     // Use static adapter to generate a static build into `build/`
     adapter: adapter({
@@ -21,7 +19,7 @@ const config = {
     // Pre-render all routes by default
     prerender: {
       entries: ['*']
-    },
+    }
   }
 };
 
