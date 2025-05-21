@@ -65,7 +65,7 @@ jobs:
             ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
                matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
-          downloadTo: ./sidecars
+          downloadTo: ./sidecar
           # extract: true
 
       - name: Get Latest Pandoc Release Tag
@@ -89,54 +89,45 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          # Determine architecture suffix for Pandoc macOS asset name AND internal directory
-          ARCH_ASSET_SUFFIX="" 
-          ARCH_DIR_SUFFIX=""   
-
+          # Determine the archive and directory suffix for macOS
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            ARCH_ASSET_SUFFIX="arm64-"
-            ARCH_DIR_SUFFIX="arm64" 
-          elif [[ "${{ matrix.arch }}" == "x64" ]]; then
-            ARCH_ASSET_SUFFIX="x86_64-"
-            ARCH_DIR_SUFFIX="x86_64"
+            ARCH_DIR_SUFFIX="arm64"
           else
-            echo "Error: Unsupported architecture for macOS Pandoc download: ${{ matrix.arch }}"
-            exit 1
+            ARCH_DIR_SUFFIX="x86_64"
           fi
 
-          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_ASSET_SUFFIX}macOS.zip"
+          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS.zip"
           PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
 
           echo "Downloading Pandoc version $PANDOC_TAG for macOS (${{ matrix.arch }})..."
           echo "Download URL: $PANDOC_DOWNLOAD_URL"
-          mkdir -p ./sidecars ./temp_pandoc_extract
-          
+          mkdir -p ./sidecar ./temp_pandoc_extract
+
           curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_macos.zip
-          
+
           echo "Validating downloaded Pandoc ZIP for macOS..."
           if ! unzip -tq pandoc_macos.zip > /dev/null; then
-            echo "Error: Downloaded pandoc_macos.zip ($PANDOC_ZIP_FILENAME) is not a valid zip file or is corrupted."
+            echo "Error: Downloaded pandoc_macos.zip is invalid."
             exit 1
           fi
-          
-          echo "Extracting all from Pandoc ZIP for macOS to ./temp_pandoc_extract/"
+
+          echo "Extracting Pandoc ZIP to ./temp_pandoc_extract/"
           unzip -q pandoc_macos.zip -d ./temp_pandoc_extract/
 
-          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}/bin/pandoc"
+          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS/bin/pandoc"
           echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
 
           if [ -f "$EXPECTED_PANDOC_PATH" ]; then
-            mv "$EXPECTED_PANDOC_PATH" ./sidecars/pandoc
+            mv "$EXPECTED_PANDOC_PATH" ./sidecar/pandoc
           else
-            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
-            echo "Contents of ./temp_pandoc_extract/:"
-            ls -R ./temp_pandoc_extract/ 
+            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH"
+            ls -R ./temp_pandoc_extract/
             exit 1
           fi
-          
+
           rm pandoc_macos.zip
           rm -rf ./temp_pandoc_extract
-          echo "Pandoc executable for macOS prepared in ./sidecars/pandoc"
+          echo "Pandoc executable for macOS prepared in ./sidecar/pandoc"
 
       - name: Download and Extract Pandoc (Windows)
         if: matrix.os == 'windows-latest'
@@ -149,7 +140,7 @@ jobs:
 
           echo "Downloading Pandoc version $PANDOC_TAG for Windows (x86_64)..."
           echo "Download URL: $PANDOC_DOWNLOAD_URL"
-          mkdir -p ./sidecars ./temp_pandoc_extract
+          mkdir -p ./sidecar ./temp_pandoc_extract
           
           curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_windows.zip
 
@@ -166,7 +157,7 @@ jobs:
           echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
           
           if [ -f "$EXPECTED_PANDOC_PATH" ]; then
-            mv "$EXPECTED_PANDOC_PATH" ./sidecars/pandoc.exe
+            mv "$EXPECTED_PANDOC_PATH" ./sidecar/pandoc.exe
           else
             echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
             echo "Contents of ./temp_pandoc_extract/:"
@@ -176,20 +167,20 @@ jobs:
           
           rm pandoc_windows.zip
           rm -rf ./temp_pandoc_extract
-          echo "Pandoc executable for Windows prepared in ./sidecars/pandoc.exe"
+          echo "Pandoc executable for Windows prepared in ./sidecar/pandoc.exe"
 
       - name: List all downloaded/extracted sidecar files
         run: |
-          echo "Listing all files in ./sidecars before renaming:"
-          ls -R ./sidecars
+          echo "Listing all files in ./sidecar before renaming:"
+          ls -R ./sidecar
         shell: bash
 
       - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar
-          echo "Looking for files in ./sidecars to process..."
+          echo "Looking for files in ./sidecar to process..."
           
-          find ./sidecars -type f -print0 | while IFS= read -r -d $'\0' file_path; do
+          find ./sidecar -type f -print0 | while IFS= read -r -d $'\0' file_path; do
             file_name=$(basename "$file_path")
             echo "Processing file: $file_path with basename: $file_name"
             target_name=""
