@@ -226,6 +226,7 @@ jobs:
           fi
         shell: bash
 
+
       - name: Build frontend
         run: |
           # This step is failing due to a JavaScript build error.
@@ -234,6 +235,9 @@ jobs:
           # The workflow YAML is correctly invoking the build.
           npm ci 
           npm run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
 
       - name: Build Tauri bundle (Unsigned)
         env:
