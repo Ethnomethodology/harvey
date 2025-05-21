@@ -16,6 +16,9 @@ export default {
       },
       gridTemplateColumns: {
         '20': 'repeat(20, minmax(0, 1fr))'
+      },
+      spacing: {
+        '1.5': '0.375rem', // 6px if 1rem = 16px
       }
     },
   },
