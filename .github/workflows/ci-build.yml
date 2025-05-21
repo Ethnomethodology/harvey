@@ -89,45 +89,36 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          # Determine the archive and directory suffix for macOS
+          # Determine architecture suffix
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             ARCH_DIR_SUFFIX="arm64"
           else
             ARCH_DIR_SUFFIX="x86_64"
           fi
 
-          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS.zip"
-          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
+          ZIP="pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS.zip"
+          URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${ZIP}"
+          echo "Downloading $ZIP..."
+          curl -fSL "$URL" -o pandoc_macos.zip
 
-          echo "Downloading Pandoc version $PANDOC_TAG for macOS (${{ matrix.arch }})..."
-          echo "Download URL: $PANDOC_DOWNLOAD_URL"
+          echo "Extracting pandoc archive..."
           mkdir -p ./sidecar ./temp_pandoc_extract
-
-          curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_macos.zip
-
-          echo "Validating downloaded Pandoc ZIP for macOS..."
-          if ! unzip -tq pandoc_macos.zip > /dev/null; then
-            echo "Error: Downloaded pandoc_macos.zip is invalid."
-            exit 1
-          fi
-
-          echo "Extracting Pandoc ZIP to ./temp_pandoc_extract/"
           unzip -q pandoc_macos.zip -d ./temp_pandoc_extract/
 
-          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS/bin/pandoc"
-          echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
-
-          if [ -f "$EXPECTED_PANDOC_PATH" ]; then
-            mv "$EXPECTED_PANDOC_PATH" ./sidecar/pandoc
-          else
-            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH"
-            ls -R ./temp_pandoc_extract/
+          # Find the pandoc binary anywhere under temp_pandoc_extract
+          PANDOC_BIN=$(find ./temp_pandoc_extract -type f -name pandoc | head -n1)
+          if [[ -z "$PANDOC_BIN" ]]; then
+            echo "Error: pandoc binary not found in extraction."
+            ls -R ./temp_pandoc_extract
             exit 1
           fi
 
+          echo "Moving pandoc from $PANDOC_BIN to ./sidecar/pandoc"
+          mv "$PANDOC_BIN" ./sidecar/pandoc
+
+          # Clean up
           rm pandoc_macos.zip
           rm -rf ./temp_pandoc_extract
-          echo "Pandoc executable for macOS prepared in ./sidecar/pandoc"
 
       - name: Download and Extract Pandoc (Windows)
         if: matrix.os == 'windows-latest'
