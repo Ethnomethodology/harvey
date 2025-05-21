@@ -1,7 +1,7 @@
 {
   "name": "harvey",
   "version": "0.1.0",
-  "description": "Desktop Transcription App",
+  "description": "A Desktop Transcription App",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
