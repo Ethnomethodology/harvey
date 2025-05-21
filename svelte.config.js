@@ -1,7 +1,7 @@
-// svelte.config.js
-import adapter from '@sveltejs/adapter-auto';
+// harvey/svelte.config.js
+import adapter from '@sveltejs/adapter-static';
 import { sveltePreprocess } from 'svelte-preprocess';
-import path from 'path';  // Import the path module
+import path from 'path'; // Import the path module
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -9,9 +9,18 @@ const config = {
     postcss: true,
   }),
   kit: {
-    adapter: adapter(),
+    // Use static adapter to generate a static build into `build/`
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: null
+    }),
     alias: {
       $lib: path.resolve('./src/lib') // This sets $lib to src/lib
+    },
+    // Pre-render all routes by default
+    prerender: {
+      default: true
     }
     // other options...
   }
