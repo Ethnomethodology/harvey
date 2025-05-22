@@ -255,7 +255,7 @@ jobs:
           name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'msi/*.msi' }}
-            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'nsis/*.exe' }}
+            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'dmg/*.dmg' || 'nsis/*.exe' }}
 
       - name: Ensure GitHub Release exists
         id: ensure_release
@@ -306,6 +306,16 @@ jobs:
           asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64-setup.exe
           asset_content_type: application/octet-stream
 
+      - name: Find macOS DMG
+        if: matrix.os == 'macos-latest'
+        id: find_dmg
+        run: |
+          dmg_path=$(ls src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/dmg/*.dmg)
+          dmg_name=$(basename "$dmg_path")
+          echo "dmg_path=$dmg_path" >> $GITHUB_OUTPUT
+          echo "dmg_name=$dmg_name" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Upload macOS DMG
         if: matrix.os == 'macos-latest'
         uses: actions/upload-release-asset@v1
@@ -313,6 +323,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/macos/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.dmg
-          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.dmg
+          asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
+          asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
           asset_content_type: application/octet-stream
