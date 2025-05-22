@@ -329,16 +329,15 @@ jobs:
       - name: Zip Windows NSIS Installer
         if: matrix.os == 'windows-latest'
         id: zip_windows_nsis
-        env:
-          NSIS_NAME: ${{ steps.find_nsis.outputs.nsis_name }}
-          NSIS_PATH: ${{ steps.find_nsis.outputs.nsis_path }}
+        shell: pwsh
         run: |
-          dir=$(dirname "${NSIS_PATH}")
-          cd "${dir}"
-          zip_name="${NSIS_NAME%.exe}.zip"
-          zip -j "$zip_name" "$NSIS_NAME"
-          echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
-        shell: bash
+          $nsisPath = '${{ steps.find_nsis.outputs.nsis_path }}'
+          $dir = Split-Path $nsisPath
+          $exeName = Split-Path $nsisPath -Leaf
+          $zipName = $exeName -replace '\.exe$', '.zip'
+          $zipPath = Join-Path $dir $zipName
+          Compress-Archive -Path $nsisPath -DestinationPath $zipPath -Force
+          "zip_name=$zipName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload Windows NSIS Zip
         if: matrix.os == 'windows-latest'
