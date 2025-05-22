@@ -305,6 +305,16 @@ jobs:
           asset_name: ${{ steps.find_msi.outputs.msi_name }}
           asset_content_type: application/octet-stream
 
+      - name: Find Windows NSIS Installer
+        if: matrix.os == 'windows-latest'
+        id: find_nsis
+        run: |
+          exe_path=$(ls src-tauri/target/${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}/release/bundle/nsis/*.exe)
+          exe_name=$(basename "$exe_path")
+          echo "nsis_path=$exe_path" >> $GITHUB_OUTPUT
+          echo "nsis_name=$exe_name" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Upload Windows NSIS Installer
         if: matrix.os == 'windows-latest'
         uses: actions/upload-release-asset@v1
@@ -312,8 +322,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64-setup.exe
-          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64-setup.exe
+          asset_path: ${{ steps.find_nsis.outputs.nsis_path }}
+          asset_name: ${{ steps.find_nsis.outputs.nsis_name }}
           asset_content_type: application/octet-stream
 
       - name: Find macOS DMG
