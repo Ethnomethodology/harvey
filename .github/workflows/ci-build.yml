@@ -284,6 +284,16 @@ jobs:
               return rel.data.upload_url;
             }
 
+      - name: Find Windows MSI
+        if: matrix.os == 'windows-latest'
+        id: find_msi
+        run: |
+          msi_path=$(ls src-tauri/target/${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}/release/bundle/msi/*.msi)
+          msi_name=$(basename "$msi_path")
+          echo "msi_path=$msi_path" >> $GITHUB_OUTPUT
+          echo "msi_name=$msi_name" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Upload Windows MSI
         if: matrix.os == 'windows-latest'
         uses: actions/upload-release-asset@v1
@@ -291,8 +301,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64_en-US.msi
-          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64_en-US.msi
+          asset_path: ${{ steps.find_msi.outputs.msi_path }}
+          asset_name: ${{ steps.find_msi.outputs.msi_name }}
           asset_content_type: application/octet-stream
 
       - name: Upload Windows NSIS Installer
@@ -326,3 +336,22 @@ jobs:
           asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
           asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
           asset_content_type: application/octet-stream
+
+      - name: Zip macOS App
+        if: matrix.os == 'macos-latest'
+        run: |
+          BUNDLE_DIR=src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle
+          cd "$BUNDLE_DIR"
+          zip -r "${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.zip" "macos/${{ env.APP_NAME }}.app"
+        shell: bash
+
+      - name: Upload macOS App Zip
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.zip
+          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.zip
+          asset_content_type: application/zip
