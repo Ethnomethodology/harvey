@@ -254,5 +254,65 @@ jobs:
         with:
           name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'windows/*.msi' }}
-            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'windows/*.exe' }}
+            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'msi/*.msi' }}
+            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'nsis/*.exe' }}
+
+      - name: Ensure GitHub Release exists
+        id: ensure_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const tag = '${{ github.event.inputs.ref }}';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              return rel.data.upload_url;
+            } catch {
+              const rel = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `Release ${tag}`,
+                draft: false,
+                prerelease: false
+              });
+              return rel.data.upload_url;
+            }
+
+      - name: Upload Windows MSI
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64_en-US.msi
+          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64_en-US.msi
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows NSIS Installer
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64-setup.exe
+          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_x64-setup.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS DMG
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/macos/${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.dmg
+          asset_name: ${{ env.APP_NAME }}_${{ github.event.inputs.ref }}_${{ matrix.arch }}.dmg
+          asset_content_type: application/octet-stream
