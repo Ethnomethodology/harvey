@@ -315,16 +315,6 @@ jobs:
           echo "nsis_name=$exe_name" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Upload Windows NSIS Installer
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_nsis.outputs.nsis_path }}
-          asset_name: ${{ steps.find_nsis.outputs.nsis_name }}
-          asset_content_type: application/octet-stream
 
       - name: Zip Windows NSIS Installer
         if: matrix.os == 'windows-latest'
