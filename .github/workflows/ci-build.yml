@@ -171,7 +171,7 @@ jobs:
 
       - name: Copy and rename sidecars
         run: |
-          mkdir -p src-tauri/sidecar
+          mkdir -p src-tauri/sidecar src-tauri/models
           echo "Looking for files in ./sidecar to process..."
           
           find ./sidecar -type f -print0 | while IFS= read -r -d $'\0' file_path; do
@@ -238,7 +238,7 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      - name: Build Tauri bundle (Unsigned)
+      - name: Build Tauri bundle
         env:
           TAURI_SKIP_SIGNING: "true"
         run: |
@@ -252,7 +252,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}-unsigned
+          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'windows/*.msi' }}
             src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.dmg' || 'windows/*.exe' }}
