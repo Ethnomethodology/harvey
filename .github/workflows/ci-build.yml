@@ -187,10 +187,10 @@ jobs:
 
             ext=""
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              if [[ "$file_name" != *.exe && ("$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"*) ]]; then
+              if [[ "$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"* ]]; then
                  ext=".exe"
               elif [[ "$file_name" == "pandoc.exe" ]]; then
-                 ext="" 
+                 ext=""
               fi
             fi
             
