@@ -115,8 +115,114 @@ export function updatePlayerTime(time) { project.update((p) => { let newIndex = 
 export function setPlayerDuration(duration) { project.update((p) => ({ ...p, player: { ...p.player, duration: duration } })); }
 export function togglePlayerPlaying(isPlaying) { project.update((p) => ({ ...p, player: { ...p.player, isPlaying: isPlaying } })); }
 export function updatePlayerCurrentSegmentIndex(index) { const newIndex = (typeof index === 'number' && index >= -1) ? index : -1; project.update((p) => { if (p.player.currentSegmentIndex !== newIndex) { return { ...p, player: { ...p.player, currentSegmentIndex: newIndex } }; } return p; }); }
-export function setTranscriptData(path, data, inferSpeakers = false) { console.log(`[ProjectStore] setTranscriptData called with path: ${path}, inferSpeakers: ${inferSpeakers}`); const newSegments = Array.isArray(data) ? data : []; project.update((p) => { let updatedSpeakers = p.speakers; if (inferSpeakers) { console.warn('[ProjectStore] Speaker inference requested. Overwriting current.'); let inferredSpeakers = { count: 0, names: [] }; if (newSegments.length > 0) { const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))]; const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown'); if (knownSpeakers.length > 0) { knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})); inferredSpeakers = { count: knownSpeakers.length, names: knownSpeakers }; } else { inferredSpeakers = { count: 0, names: [] }; } } updatedSpeakers = inferredSpeakers; console.log('[ProjectStore] Inferred speakers:', updatedSpeakers); } return { ...p, currentTranscriptPath: path, segments: newSegments, transcriptDirty: false, isTranscriptLoading: false, speakers: updatedSpeakers, statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null, player: { ...p.player, currentSegmentIndex: -1 }, transcriptUndoStack: [], transcriptRedoStack: [], }; }); }
-export function updateSegment(index, updatedSegmentData, silent = false) { const currentSegments = get(project).segments; if (index < 0 || index >= currentSegments.length) { console.warn('[ProjectStore] updateSegment invalid index:', index); return; } let segmentToUpdate = { ...currentSegments[index] }; let changed = false; for (const key in updatedSegmentData) { if (Object.hasOwnProperty.call(updatedSegmentData, key)) { let newValue = updatedSegmentData[key]; let currentValue = segmentToUpdate[key]; let valueChanged = false; if (key === 'start_time' || key === 'end_time') { const numVal = Number(newValue); if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) { segmentToUpdate[key] = numVal; valueChanged = true; } } else if (key === 'text') { if (currentValue !== newValue) { segmentToUpdate[key] = newValue; valueChanged = true; } } else if (key === 'speaker') { if (String(currentValue ?? '') !== String(newValue ?? '')) { segmentToUpdate[key] = String(newValue ?? ''); valueChanged = true; } } else { if (currentValue !== newValue) { segmentToUpdate[key] = newValue; valueChanged = true; } } if (valueChanged) changed = true; } } if (changed) { pushToUndoStack(currentSegments); project.update((p) => { const newSegments = [...p.segments]; newSegments[index] = segmentToUpdate; if (!silent) console.log('[ProjectStore] Updated segment', index); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: silent ? p.statusMessage : 'Media transcript modified.', }; }); } else { if (!silent) console.log('[ProjectStore] updateSegment no changes needed index', index); } }
+export function setTranscriptData(path, data, inferSpeakers = false) { 
+    console.log(`[ProjectStore] setTranscriptData called with path: ${path}, inferSpeakers: ${inferSpeakers}`); 
+    const newSegments = Array.isArray(data) ? data : [];
+    if (newSegments.length) {
+      console.log('[DEBUG load‑from‑disk]', {
+        firstSegType: typeof newSegments[0].text,
+        firstSegStart: newSegments[0].start_time,
+        first120: typeof newSegments[0].text === 'string'
+          ? newSegments[0].text.slice(0, 120)
+          : String(newSegments[0].text).slice(0, 120)
+      });
+    }
+    project.update((p) => { 
+        let updatedSpeakers = p.speakers; 
+        if (inferSpeakers) { 
+            console.warn('[ProjectStore] Speaker inference requested. Overwriting current.'); 
+            let inferredSpeakers = { count: 0, names: [] }; 
+            if (newSegments.length > 0) { 
+                const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))]; 
+                const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown'); 
+                if (knownSpeakers.length > 0) { 
+                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})); 
+                    inferredSpeakers = { count: knownSpeakers.length, names: knownSpeakers }; 
+                } else { 
+                    inferredSpeakers = { count: 0, names: [] }; 
+                } 
+            } 
+            updatedSpeakers = inferredSpeakers; 
+            console.log('[ProjectStore] Inferred speakers:', updatedSpeakers); 
+        } 
+        return { 
+            ...p, 
+            currentTranscriptPath: path, 
+            segments: newSegments, 
+            transcriptDirty: false, 
+            isTranscriptLoading: false, 
+            speakers: updatedSpeakers, 
+            statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', 
+            error: null, 
+            player: { ...p.player, currentSegmentIndex: -1 }, 
+            transcriptUndoStack: [], 
+            transcriptRedoStack: [], 
+        }; 
+    }); 
+}
+export function updateSegment(index, updatedSegmentData, silent = false) { 
+    const currentSegments = get(project).segments; 
+    if (index < 0 || index >= currentSegments.length) { 
+        console.warn('[ProjectStore] updateSegment invalid index:', index); 
+        return; 
+    } 
+    let segmentToUpdate = { ...currentSegments[index] }; 
+    let changed = false; 
+    for (const key in updatedSegmentData) { 
+        if (Object.hasOwnProperty.call(updatedSegmentData, key)) { 
+            let newValue = updatedSegmentData[key]; 
+            let currentValue = segmentToUpdate[key]; 
+            let valueChanged = false; 
+            if (key === 'start_time' || key === 'end_time') { 
+                const numVal = Number(newValue); 
+                if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) { 
+                    segmentToUpdate[key] = numVal; 
+                    valueChanged = true; 
+                } 
+            } else if (key === 'text') { 
+                if (currentValue !== newValue) { 
+                    // DEBUG log for text updates
+                    if (key === 'text') {
+                        console.log('[DEBUG store‑updateSegment]', {
+                          idx: index,
+                          typeof: typeof newValue,
+                          first120: typeof newValue === 'string' ? newValue.slice(0, 120) : String(newValue).slice(0, 120)
+                        });
+                    }
+                    segmentToUpdate[key] = newValue; 
+                    valueChanged = true; 
+                } 
+            } else if (key === 'speaker') { 
+                if (String(currentValue ?? '') !== String(newValue ?? '')) { 
+                    segmentToUpdate[key] = String(newValue ?? ''); 
+                    valueChanged = true; 
+                } 
+            } else { 
+                if (currentValue !== newValue) { 
+                    segmentToUpdate[key] = newValue; 
+                    valueChanged = true; 
+                } 
+            } 
+            if (valueChanged) changed = true; 
+        } 
+    } 
+    if (changed) { 
+        pushToUndoStack(currentSegments); 
+        project.update((p) => { 
+            const newSegments = [...p.segments]; 
+            newSegments[index] = segmentToUpdate; 
+            if (!silent) console.log('[ProjectStore] Updated segment', index); 
+            return { 
+                ...p, 
+                segments: newSegments, 
+                transcriptDirty: true, 
+                statusMessage: silent ? p.statusMessage : 'Media transcript modified.', 
+            }; 
+        }); 
+    } else { 
+        if (!silent) console.log('[ProjectStore] updateSegment no changes needed index', index); 
+    } 
+}
 export function deleteTranscriptSegment(index) { const currentSegments = get(project).segments; if (index < 0 || index >= currentSegments.length) { console.warn('[ProjectStore] deleteTranscriptSegment called with invalid index:', index); return; } pushToUndoStack(currentSegments); project.update(p => { const oldIndex = p.player.currentSegmentIndex; const newSegments = p.segments.filter((_, i) => i !== index); let newPlayerIndex = -1; if (newSegments.length > 0) { if (oldIndex === index) { newPlayerIndex = Math.max(-1, index - 1); } else if (oldIndex > index) { newPlayerIndex = oldIndex - 1; } else { newPlayerIndex = oldIndex; } } console.log(`[ProjectStore] Deleted segment index ${index}. New player index: ${newPlayerIndex}`); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: 'Segment deleted (undoable).', player: { ...p.player, currentSegmentIndex: newPlayerIndex } }; }); }
 export function insertTranscriptSegment(index, newSegment) { const currentSegments = get(project).segments; if (index < 0 || index > currentSegments.length) { console.warn('[ProjectStore] insertTranscriptSegment called with invalid index:', index); return; } if (!newSegment || typeof newSegment.start_time !== 'number' || typeof newSegment.end_time !== 'number') { console.error('[ProjectStore] insertTranscriptSegment called with invalid segment data:', newSegment); return; } pushToUndoStack(currentSegments); project.update(p => { const segmentsBefore = p.segments.slice(0, index); const segmentsAfter = p.segments.slice(index); const newSegments = [...segmentsBefore, newSegment, ...segmentsAfter]; const newPlayerIndex = index; console.log(`[ProjectStore] Inserted new segment at index ${index}. New player index: ${newPlayerIndex}`); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: 'Segment inserted (undoable).', player: { ...p.player, currentSegmentIndex: newPlayerIndex } }; }); }
 export function setSelectedModel(modelName) { console.log(`[ProjectStore] Set model: ${modelName}`); project.update((p) => ({ ...p, selectedModelName: modelName || null })); }

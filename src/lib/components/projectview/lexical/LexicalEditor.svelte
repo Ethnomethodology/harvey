@@ -140,7 +140,7 @@
 
   const MIN_COLUMN_WIDTH = 50;
 
-  const editorNodes = [
+  export const editorNodes = [
     ExtendedTextNode,
     { replace: TextNode, with: (node) => _createExtendedTextNode(node.getTextContent()) },
     RootNode, ParagraphNode, LineBreakNode,

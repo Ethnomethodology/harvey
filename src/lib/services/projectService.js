@@ -701,228 +701,64 @@ export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' |
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
 export async function convertAndSaveTranscriptAsDoc() {
-    const projData = get(project);
-    const segments = projData.segments;
-    const selectedMedia = projData.selectedMediaFile;
-    const projectBaseDir = projData.baseDirectory;
-    const projectXmlPath = projData.xmlPath;
+    {
+        const projData = get(project);
+        const transcriptPath = projData.currentTranscriptPath;
+        const selectedMedia = projData.selectedMediaFile;
+        const projectXmlPath = projData.xmlPath;
+        const projectBaseDir = projData.baseDirectory;
 
-    if (!selectedMedia || !selectedMedia.path) { throw new Error("No media file selected."); }
-    if (!segments || segments.length === 0) { throw new Error("No transcript data available."); }
-    if (!projectBaseDir) { throw new Error("Project base directory not found."); }
-    if (!projectXmlPath) { throw new Error("Project XML path not found."); }
+        if (!transcriptPath) {
+            throw new Error("No transcript file loaded.");
+        }
+        if (!selectedMedia || !selectedMedia.path) {
+            throw new Error("No media file selected.");
+        }
+        if (!projectBaseDir) {
+            throw new Error("Project base directory not found.");
+        }
+        if (!projectXmlPath) {
+            throw new Error("Project XML path not found.");
+        }
 
-    let mediaStemIdentifier = selectedMedia.media_xml_identifier;
-    if (!mediaStemIdentifier) {
-        console.warn("[ProjectService Doc Gen] Media XML identifier missing, deriving stem from media name.");
-        const mediaName = selectedMedia.name;
-        mediaStemIdentifier = mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName;
-    }
-    if (!mediaStemIdentifier) { throw new Error("Could not determine a valid identifier for the media file."); }
+        // Determine a safe stem for the document filename
+        const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => {
+            const mediaName = selectedMedia.name;
+            return mediaName.includes('.') 
+                ? mediaName.substring(0, mediaName.lastIndexOf('.')) 
+                : mediaName;
+        })();
+        const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+        const docFilenameBase = `${safeStem}_transcript_doc_${dateStr}_${timeStr}`;
 
-    const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-    const docFilenameBase = `${safeStem}_transcript_doc_${dateStr}_${timeStr}`;
-
-    let targetFullPath;
-    try {
-        targetFullPath = await invoke('get_unique_document_path', {
+        // Update status and get a unique save path
+        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+        const targetFullPath = await invoke('get_unique_document_path', {
             projectBaseDirStr: projectBaseDir,
             baseName: docFilenameBase,
             extension: 'json'
         });
-    } catch(e) {
-        throw new Error(`Failed to determine unique save path: ${e?.message || e}`);
-    }
-    const docFilename = await basename(targetFullPath);
-    console.log(`[ProjectService Doc Gen] Target path for document file: ${targetFullPath}`);
+        const docFilename = await basename(targetFullPath);
 
-    const editor = createConversionEditor('transcript-doc');
-    let generatedJsonString = '';
-    try {
-        await editor.update(() => {
-            const root = _getRoot();
-            root.clear();
-            const heading = _createHeadingNode('h2');
-            heading.append(_createTextNode(`Transcript Document: ${mediaStemIdentifier}`));
-            root.append(heading);
+        // Read existing transcript JSON
+        const transcriptJsonString = await invoke('read_file_content', { path: transcriptPath });
 
-            const subtitle = _createParagraphNode();
-            const italicText = _createTextNode(`Derived from: ${selectedMedia.name}`);
-            italicText.setFormat('italic');
-            subtitle.append(italicText);
-            root.append(subtitle);
-            root.append(_createParagraphNode());
-
-            const tableHeaderRow = _createTableRowNode();
-            tableHeaderRow.append(
-                _createTableCellNode({ headerState: 'column'}).append(_createParagraphNode().append(_createTextNode('#'))),
-                _createTableCellNode({ headerState: 'column'}).append(_createParagraphNode().append(_createTextNode('Time'))),
-                _createTableCellNode({ headerState: 'column'}).append(_createParagraphNode().append(_createTextNode('Speaker'))),
-                _createTableCellNode({ headerState: 'column'}).append(_createParagraphNode().append(_createTextNode('Speech')))
-            );
-
-            const tableRows = [];
-            segments.forEach((seg, index) => {
-                const startTimeFormatted = formatTimestampHtml(seg.start_time);
-                const endTimeFormatted = formatTimestampHtml(seg.end_time);
-                const speaker = seg.speaker || 'Unknown';
-                const speechContent = seg.text || '';
-
-                const row = _createTableRowNode();
-                const indexCell = _createTableCellNode().append(_createParagraphNode().append(_createTextNode(String(index + 1).padStart(2, '0'))));
-                const timestampCell = _createTableCellNode().append(
-                    _createParagraphNode().append(_createTextNode(startTimeFormatted)),
-                    _createParagraphNode().append(_createTextNode('–')),
-                    _createParagraphNode().append(_createTextNode(endTimeFormatted))
-                );
-                const speakerCell = _createTableCellNode().append(_createParagraphNode().append(_createTextNode(`${speaker}:`)));
-                const speechCellNode = _createTableCellNode();
-                speechCellNode.clear();
-
-                if (isLexicalJson(speechContent)) {
-                    try {
-                        const parsedJson = JSON.parse(speechContent);
-                        if (parsedJson && parsedJson.root && Array.isArray(parsedJson.root.children)) {
-                            let contentAdded = false;
-                            parsedJson.root.children.forEach(serializedNodeData => {
-                                const liveNode = _parseSerializedNode(serializedNodeData);
-                                if (liveNode) {
-                                    if (_isElementNode(liveNode) && !liveNode.isInline()) {
-                                        speechCellNode.append(liveNode);
-                                    } else {
-                                        const tempP = _createParagraphNode();
-                                        tempP.append(liveNode);
-                                        speechCellNode.append(tempP);
-                                    }
-                                    contentAdded = true;
-                                } else {
-                                    console.warn(`[ProjectService Doc Gen] Failed to parse serialized node data in segment ${index}:`, serializedNodeData);
-                                }
-                            });
-                             if (!contentAdded) {
-                                speechCellNode.append(_createParagraphNode().append(_createTextNode('[empty_json_content]')));
-                            }
-                        } else {
-                            console.error(`[ProjectService Doc Gen] Parsed JSON for segment ${index} lacks expected root.children structure.`);
-                            speechCellNode.append(_createParagraphNode().append(_createTextNode('[Error: Invalid JSON Structure]')));
-                        }
-                    } catch (parseError) {
-                        console.error(`[ProjectService Doc Gen] Error parsing or processing Lexical JSON content for segment ${index}:`, parseError);
-                        speechCellNode.append(_createParagraphNode().append(_createTextNode('[Error processing JSON content]')));
-                    }
-                } else {
-                    try {
-                        const domParser = new DOMParser();
-                        const dom = domParser.parseFromString(speechContent, 'text/html');
-                        const tempHtmlEditor = createConversionEditor(`temp-html-seg-${index}`);
-                        let generatedNodesJson = [];
-
-                        tempHtmlEditor.update(() => {
-                            const nodes = _generateNodesFromDOM(tempHtmlEditor, dom);
-                            if (nodes && nodes.length > 0) {
-                                nodes.forEach(node => {
-                                    generatedNodesJson.push(node.exportJSON());
-                                });
-                            }
-                        });
-
-                        if (generatedNodesJson.length > 0) {
-                            let contentAdded = false;
-                            generatedNodesJson.forEach(nodeJson => {
-                                try {
-                                    const liveNode = _parseSerializedNode(nodeJson);
-                                    if (liveNode) {
-                                        if (_isElementNode(liveNode) && !liveNode.isInline()) {
-                                            speechCellNode.append(liveNode);
-                                        } else {
-                                            const tempP = _createParagraphNode();
-                                            tempP.append(liveNode);
-                                            speechCellNode.append(tempP);
-                                        }
-                                        contentAdded = true;
-                                    } else {
-                                         console.warn(`[ProjectService Doc Gen] Failed to parse generated node JSON for seg ${index}:`, nodeJson);
-                                    }
-                                } catch (parseErr) {
-                                    console.error(`[ProjectService Doc Gen] Error parsing generated node JSON for seg ${index}:`, parseErr, nodeJson);
-                                }
-                            });
-                            if (!contentAdded) {
-                                 const plainText = dom.body.textContent || dom.body.innerText || '';
-                                 speechCellNode.append(_createParagraphNode().append(_createTextNode(plainText || '[empty_html_content]')));
-                            }
-                        } else {
-                             const plainText = dom.body.textContent || dom.body.innerText || '';
-                             speechCellNode.append(_createParagraphNode().append(_createTextNode(plainText || '[empty_html_content]')));
-                        }
-
-                    } catch (htmlParseError) {
-                        console.error(`[ProjectService Doc Gen] Error processing HTML/Text content for segment ${index}:`, htmlParseError);
-                        const plainText = speechContent.replace(/<[^>]*>?/gm, '');
-                        speechCellNode.append(_createParagraphNode().append(_createTextNode(plainText || '[Error processing text]')));
-                    }
-                }
-                if (speechCellNode.getChildrenSize() === 0) {
-                    speechCellNode.append(_createParagraphNode().append(_createTextNode('[empty_segment_content]')));
-                }
-                row.append(indexCell, timestampCell, speakerCell, speechCellNode);
-                tableRows.push(row);
-            });
-
-            const tableNode = _createTableNode();
-            tableNode.append(tableHeaderRow, ...tableRows);
-            root.append(tableNode);
-
-            console.log(`[ProjectService Doc Gen] After appending all content, root children size: ${root.getChildrenSize()}`);
-            if (root.isEmpty() || root.getChildrenSize() === 0) {
-                console.warn("[ProjectService Doc Gen] Root node empty AFTER appending all content. Adding fallback paragraph.");
-                root.append(_createParagraphNode().append(_createTextNode("[Fallback content - document generation issue]")));
-            } else {
-                console.log("[ProjectService Doc Gen] Document structure generation complete. Children:", root.getChildrenSize());
-            }
-        });
-
-        const editorState = editor.getEditorState();
-        if (editorState.isEmpty()) {
-            console.error("[ProjectService Doc Gen] CRITICAL: Final editor state is empty. Logging state object:", editorState.toJSON());
-            throw new Error("Generated editor state is empty.");
-        }
-        generatedJsonString = JSON.stringify(editorState.toJSON(), null, 2);
-        console.log("[ProjectService Doc Gen] Generated Lexical JSON string for document. Length:", generatedJsonString.length);
-    } catch (error) {
-        console.error("[ProjectService Doc Gen] Error during document structure generation:", error);
-        generatedJsonString = '';
-        throw new Error(`Failed to generate document structure: ${error.message}`);
-    }
-
-    if (!generatedJsonString || generatedJsonString.trim() === '') {
-        throw new Error("Generated JSON string is empty or invalid after conversion.");
-    }
-
-    project.update(p => ({ ...p, statusMessage: `Saving document file ${docFilename}...` }));
-    try {
+        // Save the transcript JSON directly as a document
         await invoke('save_document_and_update_xml', {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             documentName: docFilename,
-            jsonContent: generatedJsonString
+            jsonContent: transcriptJsonString
         });
-        console.log(`[ProjectService Doc Gen] Saved document file (JSON) and updated XML: ${targetFullPath}`);
+
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
         return targetFullPath;
-    } catch (error) {
-        const errorMessage = error?.message || String(error);
-        console.error(`[ProjectService Doc Gen] Failed to save document file ${targetFullPath}:`, error);
-        await message(`Error saving document file: ${errorMessage}`, { title: 'Save Document Error', type: 'error' });
-        project.update(p => ({ ...p, error: `Failed to save document: ${errorMessage}`, statusMessage: 'Error saving document file.' }));
-        throw new Error(`Failed to save document file: ${errorMessage}`);
     }
 }
-
 
 export async function loadActiveDocumentContent() {
     const currentProj = get(project);

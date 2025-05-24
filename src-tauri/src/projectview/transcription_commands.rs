@@ -4,6 +4,40 @@ use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use serde_json;
+use serde_json::json;
+/// Wrap a plain text string in a minimal Lexical JSON document node.
+pub fn generate_lexical_doc(text: &str) -> serde_json::Value {
+    json!({
+        "root": {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "detail": 0,
+                            "format": "",
+                            "mode": "normal",
+                            "style": "",
+                            "text": text,
+                            "type": "text",
+                            "version": 1
+                        }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1
+                }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+        }
+    })
+}
+
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter},
@@ -258,9 +292,18 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
     }
 
     let file = File::create(&transcript_path_buf)?;
-    let writer = BufWriter::new(file);
-    serde_json::to_writer_pretty(writer, &segments).map_err(|e| CommandError::from(format!("Failed to write transcript JSON: {}", e)))?;
-    info!("[Backend Save JSON] Saved {} segments to disk.", segments.len());
+    let mut writer = BufWriter::new(file);
+    // Wrap each segment's plain text in a Lexical document JSON string
+    let lexical_segments: Vec<TranscriptSegment> = segments.into_iter().map(|mut seg| {
+        let doc = generate_lexical_doc(&seg.text);
+        if let Ok(json_str) = serde_json::to_string(&doc) {
+            seg.text = json_str;
+        }
+        seg
+    }).collect();
+    serde_json::to_writer_pretty(&mut writer, &lexical_segments)
+        .map_err(|e| CommandError::from(format!("Failed to write transcript JSON: {}", e)))?;
+    info!("[Backend Save JSON] Saved {} segments to disk.", lexical_segments.len());
 
     let transcript_filename = transcript_path_buf.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename"))?.to_string();
 

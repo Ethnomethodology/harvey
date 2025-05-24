@@ -4,8 +4,9 @@
 use crate::projectview::shared_types::{TranscriptSegment, ProgressPayload, TranscriptionResult}; // Import shared types
 use crate::projectview::shared_utils::{get_project_xml_path_from_item}; // Import shared utils
 use crate::projectview::transcription_commands::{ // Import transcription commands
-    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, // map_speaker... is now here
+    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, generate_lexical_doc,
 };
+use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
 use crate::TranscriptionCancellationState;
 // --- END UPDATED IMPORTS ---
@@ -157,13 +158,22 @@ pub async fn run_transcription(
     ).await?;
     info!("[Transcription][Job '{}'] Final transcript saved.", job_id);
 
+    // Convert returned segments into Lexical JSON strings for UI consumption
+    let lexical_segments: Vec<TranscriptSegment> = whisper_segments.iter().cloned().map(|mut seg| {
+        let doc = generate_lexical_doc(&seg.text);
+        if let Ok(json_str) = serde_json::to_string(&doc) {
+            seg.text = json_str;
+        }
+        seg
+    }).collect();
+
     // Cleanup handled by _cancel_guard
 
     info!("[Transcription][Job '{}'] Process complete.", job_id);
     let _ = emit_progress(&app_handle, &job_id, 100.0, "Transcription complete.").await;
 
     Ok(TranscriptionResult {
-        segments: whisper_segments,
+        segments: lexical_segments,
         transcript_file_path: final_transcript_path.to_string_lossy().to_string(),
     })
 }

@@ -4,18 +4,81 @@
 	import { createEventDispatcher, tick } from 'svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
-	import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
     import { onMount } from 'svelte';
+
+    import { createHeadlessEditor } from '@lexical/headless';
+    import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
+
+    import { RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
+    import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+    import { ListNode, ListItemNode } from '@lexical/list';
+    import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
+    import { LinkNode } from '@lexical/link';
+
+    // headless editor for HTML serialization
+    const htmlEditor = createHeadlessEditor({
+      namespace: 'RichTextHtmlGen',
+      theme: {}, // added to prevent config.theme error
+      nodes: [
+        RootNode,
+        ParagraphNode,
+        TextNode,
+        LineBreakNode,
+        HeadingNode,
+        QuoteNode,
+        ListNode,
+        ListItemNode,
+        LinkNode,
+        TableNode,
+        TableRowNode,
+        TableCellNode,
+        ExtendedTextNode
+      ]
+    });
+
+    // helper to detect Lexical JSON (accepts string or object)
+    function isLexicalJson(value) {
+      if (value === null || value === undefined) return false;
+
+      let data;
+      if (typeof value === 'string') {
+        try {
+          data = JSON.parse(value);
+        } catch {
+          return false;               // invalid JSON string
+        }
+      } else if (typeof value === 'object') {
+        data = value;                 // already parsed
+      } else {
+        return false;                 // unsupported type
+      }
+
+      return !!(data && data.root && data.root.type === 'root');
+    }
+
+    // helper to convert Lexical JSON (string | object) to HTML
+    function lexicalJsonToHtml(json) {
+      const jsonStr = typeof json === 'string' ? json : JSON.stringify(json);
+
+      let html = '';
+      const editorState = htmlEditor.parseEditorState(jsonStr);
+      htmlEditor.setEditorState(editorState);
+      htmlEditor.update(() => {
+        html = generateHtmlFromNodes(htmlEditor, null);
+      });
+      return html;
+    }
 
 	export let previewEditMode = false;
 	const dispatch = createEventDispatcher();
 
 	const defaultEmptyJson = JSON.stringify({
-		root: {
-			children: [{ children: [], direction: null, format: '', indent: 0, type: 'paragraph', version: 1 }],
-			direction: null, format: '', indent: 0, type: 'root', version: 1
-		}
+	  root: {
+	    children: [{ children: [], direction: null, format: '', indent: 0, type: 'paragraph', version: 1 }],
+	    direction: null, format: '', indent: 0, type: 'root', version: 1
+	  }
 	});
 
 	/* ---------------- helpers ---------------- */
@@ -24,18 +87,44 @@
 		const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0');
 		return `${min}:${sec}.${ms}`;
 	}
-	function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && parsed.root && parsed.root.type === 'root'; } catch (e) { return false; } }
+	// isLexicalJson replaced above
 	function extractPlainTextForPreview(inputString) { if (!inputString || typeof inputString !== 'string') return '[empty]'; if (isLexicalJson(inputString)) { console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string, rendering placeholder."); return '[Error: Invalid data format - Expected plain text or HTML]'; } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) { return doc.body.textContent || '[empty]'; } return doc.body.textContent || inputString || '[empty]'; } catch (e) { console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e); return inputString || '[empty]'; } }
 
 	/* ---------------- build segment data for rendering ---------------- */
-	let processedSegments = []; let canUndo = false; let canRedo = false;
-	$: { const segs = $project.segments || []; canUndo = ($project.transcriptUndoStack?.length || 0) > 0; canRedo = ($project.transcriptRedoStack?.length || 0) > 0;
-		processedSegments = segs.map((seg, segIdx) => {
-			const rawContent = seg.text; const isJson = isLexicalJson(rawContent); let plainTextForDisplay = ''; let contentJsonForEditor = defaultEmptyJson;
-			if (isJson) { try { JSON.parse(rawContent); contentJsonForEditor = rawContent; } catch(e) { console.error(`[RichTextPreview] Segment ${segIdx} has invalid JSON content. Using default empty JSON. Error: ${e}`); contentJsonForEditor = defaultEmptyJson; } }
-            else { plainTextForDisplay = extractPlainTextForPreview(rawContent); }
-			return { segmentIndex: segIdx, startTime: formatTimestamp(seg.start_time), endTime: formatTimestamp(seg.end_time), rawStart: seg.start_time, rawEnd: seg.end_time, speaker: seg.speaker || 'Unknown', isJsonContent: isJson, contentJson: contentJsonForEditor, plainText: plainTextForDisplay };
-		});
+	let processedSegments = [];
+	let canUndo = false;
+	let canRedo = false;
+	$: {
+	  const segs = $project.segments || [];
+	  canUndo = ($project.transcriptUndoStack?.length || 0) > 0;
+	  canRedo = ($project.transcriptRedoStack?.length || 0) > 0;
+	  processedSegments = segs.map((seg, segIdx) => {
+	    const rawContent = seg.text;
+	    const isJson = isLexicalJson(rawContent);
+	    let plainTextForDisplay = '';
+	    let contentJsonForEditor = defaultEmptyJson;
+	    if (isJson) {
+	      // ensure we always pass a string to the editor
+	      contentJsonForEditor =
+	        typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+	    } else {
+	      plainTextForDisplay = extractPlainTextForPreview(rawContent);
+	    }
+	    const html = isJson
+	      ? lexicalJsonToHtml(rawContent)
+	      : `<div>${plainTextForDisplay}</div>`;
+	    return {
+	      segmentIndex: segIdx,
+	      startTime: formatTimestamp(seg.start_time),
+	      endTime: formatTimestamp(seg.end_time),
+	      rawStart: seg.start_time,
+	      rawEnd: seg.end_time,
+	      speaker: seg.speaker || 'Unknown',
+	      isJsonContent: isJson,
+	      html,
+	      plainText: plainTextForDisplay
+	    };
+	  });
 	}
 
     // --- Highlight and Scroll Logic ---
@@ -189,7 +278,11 @@
                           class="min-w-0 preview-content-area px-[5.75pt]"
                           style="flex: 0 0 65%; max-width: 65%; white-space: normal; overflow-wrap: anywhere; word-break: break-all;"
                         >
-							{#if seg.isJsonContent} {#key seg.contentJson + seg.segmentIndex} <div class="preview-editor-wrapper"> <LexicalEditor initialJson={seg.contentJson} editable={false} placeholder="" /> </div> {/key} {:else} <div class="speech-plain-text"> {#if seg.plainText === '[empty]'} <span class="text-gray-400 italic">[empty]</span> {:else if seg.plainText.startsWith('[Error:')} <span class="text-red-500 dark:text-red-400">{seg.plainText}</span> {:else} {seg.plainText} {/if} </div> {/if}
+                            {#if seg.isJsonContent}
+                              <div class="speech-rich-text">{@html seg.html}</div>
+                            {:else}
+                              <div class="speech-plain-text">{seg.plainText}</div>
+                            {/if}
                         </div>
                     </div>
                 </div>
@@ -224,6 +317,7 @@
 	.segment-active .preview-editor-wrapper :global(.lexical-editor-root), .segment-active .preview-editor-wrapper :global(.lexical-content) { background-color: transparent !important; }
 	.speech-plain-text { @apply leading-normal whitespace-normal break-all text-gray-900 dark:text-gray-100 pt-px; padding: 0; margin: 0; overflow-wrap: anywhere; word-break: break-all; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
 	.speech-plain-text .italic { @apply not-italic; }
+	.speech-rich-text { @apply leading-normal whitespace-normal break-all text-gray-900 dark:text-gray-100 pt-px; padding: 0; margin: 0; overflow-wrap: anywhere; word-break: break-all; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
     .preview-content-area { overflow-wrap: anywhere; word-break: break-all; }
 	.insert-button-wrapper { position: relative; height: 0px; top: -0.75rem; z-index: 10; opacity: 0.3; transition: opacity 0.15s ease-in-out; }
     .insert-button-wrapper:first-of-type { margin-top: 0.75rem; }

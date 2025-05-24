@@ -1,204 +1,228 @@
 // src/lib/nodes/ExtendedTextNode.js
 import {
-	$applyNodeReplacement as _applyNodeReplacement, // Aliased
-	$isTextNode as _isTextNode, // Aliased
-	TextNode,
-	$getNodeByKey as _getNodeByKey, // Aliased
+  TextNode,
+  $applyNodeReplacement as _applyNodeReplacement,
+  $isTextNode as _isTextNode,
 } from 'lexical';
 
-
-
+/**
+ * ExtendedTextNode
+ * ----------------
+ * A Text node that can store:
+ *   • an arbitrary inline CSS style string (for highlight colours, etc.)
+ *   • an optional highlight‑ID (data‑attribute for UI interactions)
+ *
+ * It knows how to:
+ *   • render itself to the DOM (createDOM / updateDOM)
+ *   • export itself to HTML (exportDOM) as <span style="…">text</span>
+ *   • serialise to / from Lexical JSON (exportJSON / importJSON)
+ */
 export class ExtendedTextNode extends TextNode {
-	__highlightId;
+  /** @type {string|null} */
+  __highlightId;
+  /** @type {string} */
+  __style;
 
-	static getType() {
-		return 'extended-text';
-	}
+  // ---- basic ----------------------------------------------------------------
+  static getType() {
+    return 'extended-text';
+  }
 
-	static clone(node) {
-		const newInstance = new ExtendedTextNode(node.__text, node.__key);
-		newInstance.__highlightId = node.__highlightId;
-		return newInstance;
-	}
+  static clone(node) {
+    const clone = new ExtendedTextNode(node.__text, node.__key);
+    clone.__highlightId = node.__highlightId;
+    clone.__style = node.__style;
+    return clone;
+  }
 
-	constructor(text, key) {
-		super(text, key);
-		this.__highlightId = null;
-	}
+  constructor(text, key) {
+    super(text, key);
+    this.__highlightId = null;
+    this.__style = '';
+  }
 
-	getHighlightId() {
-		const self = this.getLatest();
-		return self.__highlightId;
-	}
+  // ---- highlight‑ID helpers -------------------------------------------------
+  getHighlightId() {
+    return this.getLatest().__highlightId;
+  }
+  setHighlightId(id) {
+    this.getWritable().__highlightId = id ?? null;
+    return this;
+  }
 
-	setHighlightId(id) {
-		const self = this.getWritable();
-		self.__highlightId = id;
-	}
+  // ---- inline style helpers -------------------------------------------------
+  setStyle(style = '') {
+    this.getWritable().__style = style;
+    return this;
+  }
+  getStyle() {
+    // legacy serialisations may store the value on the instance but not initialise __style
+    return this.__style || '';
+  }
 
-	createDOM(config, editor) {
-		const dom = super.createDOM(config, editor);
-		if (this.__highlightId) {
-			dom.setAttribute('data-highlight-id', this.__highlightId);
-		}
-		return dom;
-	}
+  // ---- DOM ------------------------------------------------------------------
+  createDOM(config = { theme: {} }) { // default avoids “config.theme” error
+    const dom = super.createDOM(config);
+    if (this.__highlightId) dom.setAttribute('data-highlight-id', this.__highlightId);
+    if (this.getStyle()) dom.setAttribute('style', this.getStyle());
+    return dom;
+  }
 
-	updateDOM(prevNode, dom, config) {
-		const isUpdated = super.updateDOM(prevNode, dom, config);
-		if (prevNode.__highlightId !== this.__highlightId) {
-			if (this.__highlightId) {
-				dom.setAttribute('data-highlight-id', this.__highlightId);
-			} else {
-				dom.removeAttribute('data-highlight-id');
-			}
-		}
-		return isUpdated;
-	}
+  updateDOM(prev, dom) {
+    let changed = super.updateDOM(prev, dom);
 
-	static importJSON(serializedNode) {
-		const node = $createExtendedTextNode(serializedNode.text); // Using our factory function
-		node.setFormat(serializedNode.format);
-		node.setDetail(serializedNode.detail);
-		node.setMode(serializedNode.mode);
-		node.setStyle(serializedNode.style);
-		if (serializedNode.highlightId !== undefined) {
-			 node.setHighlightId(serializedNode.highlightId);
-		}
-		return node;
-	}
+    if (prev.__highlightId !== this.__highlightId) {
+      if (this.__highlightId) dom.setAttribute('data-highlight-id', this.__highlightId);
+      else dom.removeAttribute('data-highlight-id');
+      changed = true;
+    }
 
-	exportJSON() {
-		const textNodeJSON = super.exportJSON();
-		return {
-			...textNodeJSON,
-			type: 'extended-text',
-			highlightId: this.__highlightId,
-			version: 1, // Explicitly ensure version if not handled by super
-		};
-	}
+    if (prev.getStyle() !== this.getStyle()) {
+      if (this.getStyle()) dom.setAttribute('style', this.getStyle());
+      else dom.removeAttribute('style');
+      changed = true;
+    }
 
-	static importDOM() {
-	  const importers = TextNode.importDOM();
-	  return {
-		...importers,
-		code: () => ({
-		  conversion: patchStyleConversion(importers?.code),
-		  priority: 1
-		}),
-		em: () => ({
-		  conversion: patchStyleConversion(importers?.em),
-		  priority: 1
-		}),
-		i: () => ({
-		  conversion: patchStyleConversion(importers?.i),
-		  priority: 1
-		}),
-		b: () => ({
-		  conversion: patchStyleConversion(importers?.b),
-		  priority: 1
-		}),
-		span: () => ({ // Keep span override for potential data-attribute parsing if needed later
-		  conversion: patchStyleConversion(importers?.span),
-		  priority: 1
-		}),
-		strong: () => ({
-		  conversion: patchStyleConversion(importers?.strong),
-		  priority: 1
-		}),
-		sub: () => ({
-		  conversion: patchStyleConversion(importers?.sub),
-		  priority: 1
-		}),
-		sup: () => ({
-		  conversion: patchStyleConversion(importers?.sup),
-		  priority: 1
-		}),
-		 u: () => ({
-		  conversion: patchStyleConversion(importers?.u),
-		  priority: 1
-		}),
-		 s: () => ({
-		  conversion: patchStyleConversion(importers?.s),
-		  priority: 1
-		}),
-	  };
-	}
+    return changed;
+  }
 
-	isSimpleText() {
-	  return (this.__type === 'extended-text' && this.__mode === 0 && this.__highlightId === null);
-	}
+  // ---- HTML export ----------------------------------------------------------
+  exportDOM() {
+    const span = document.createElement('span');
+    if (this.__highlightId) span.setAttribute('data-highlight-id', this.__highlightId);
+    if (this.getStyle()) span.setAttribute('style', this.getStyle());
+    span.textContent = this.getTextContent();
+    return { element: span };
+  }
+
+  // ---- JSON serialisation ---------------------------------------------------
+  exportJSON() {
+    return {
+      ...super.exportJSON(),
+      type: 'extended-text',
+      highlightId: this.__highlightId,
+      style: this.getStyle(),
+      version: 1,
+    };
+  }
+
+  static importJSON(serialised) {
+    const node = new ExtendedTextNode(serialised.text);
+    node.setFormat(serialised.format);
+    if (serialised.detail !== undefined) node.setDetail(serialised.detail);
+    if (serialised.mode !== undefined) node.setMode(serialised.mode);
+    if (serialised.style !== undefined) node.setStyle(serialised.style);
+    if (serialised.highlightId !== undefined) node.setHighlightId(serialised.highlightId);
+    return node;
+  }
+
+  // ---- misc -----------------------------------------------------------------
+  isSimpleText() {
+    return (
+      this.__type === 'extended-text' &&
+      this.__mode === 0 &&
+      this.__highlightId == null &&
+      !this.getStyle()
+    );
+  }
+
+  // keep existing importDOM override so we can parse style when pasting HTML
+  static importDOM() {
+    const importers = TextNode.importDOM();
+    return {
+      ...importers,
+      span: () => ({
+        conversion: patchStyleConversion(importers?.span),
+        priority: 1,
+      }),
+      // retain overrides for <b>, <strong>, etc. if needed
+      b: () => ({
+        conversion: patchStyleConversion(importers?.b),
+        priority: 1,
+      }),
+      strong: () => ({
+        conversion: patchStyleConversion(importers?.strong),
+        priority: 1,
+      }),
+      i: () => ({
+        conversion: patchStyleConversion(importers?.i),
+        priority: 1,
+      }),
+      em: () => ({
+        conversion: patchStyleConversion(importers?.em),
+        priority: 1,
+      }),
+      u: () => ({
+        conversion: patchStyleConversion(importers?.u),
+        priority: 1,
+      }),
+      s: () => ({
+        conversion: patchStyleConversion(importers?.s),
+        priority: 1,
+      }),
+      sub: () => ({
+        conversion: patchStyleConversion(importers?.sub),
+        priority: 1,
+      }),
+      sup: () => ({
+        conversion: patchStyleConversion(importers?.sup),
+        priority: 1,
+      }),
+      code: () => ({
+        conversion: patchStyleConversion(importers?.code),
+        priority: 1,
+      }),
+    };
+  }
 }
 
+// ----- helpers ---------------------------------------------------------------
 export function $createExtendedTextNode(text = '') {
-	return _applyNodeReplacement(new ExtendedTextNode(text)); // Use aliased import
+  return _applyNodeReplacement(new ExtendedTextNode(text));
+}
+export function $isExtendedTextNode(node) {
+  return node instanceof ExtendedTextNode;
 }
 
-export function $isExtendedTextNode(node) { // Export name is fine, usage in Svelte will alias if needed
-	  return node instanceof ExtendedTextNode;
-}
-
+/**
+ * Patch a DOM‑to‑Lexical converter so it copies inline style attributes onto
+ * the resulting TextNode (background‑color, colour, etc.).
+ */
 function patchStyleConversion(originalDOMConverter) {
-	return (htmlElementNode) => {
-	  const original = originalDOMConverter?.(htmlElementNode);
-	  const originalConversionFn = original && typeof original.conversion === 'function' ? original.conversion : null;
-	  const originalConversionOutput = originalConversionFn ? originalConversionFn(htmlElementNode) : { node: null };
-	  const baseOutput = originalConversionOutput || { node: null };
+  return (htmlElementNode) => {
+    const original = originalDOMConverter?.(htmlElementNode);
 
-	  const stylePatchingForChild = (lexicalNode, parentLexicalNode) => {
-		const originalForChildFn = baseOutput && typeof baseOutput.forChild === 'function' ? baseOutput.forChild : ((ln) => ln);
-		const resultFromOriginalForChild = originalForChildFn(lexicalNode, parentLexicalNode);
+    // Run any existing conversion to get a base Lexical node
+    const baseNode =
+      original?.conversion?.(htmlElementNode)?.node ??
+      original?.node ??
+      $createExtendedTextNode(htmlElementNode.textContent ?? '');
 
-		if (_isTextNode(resultFromOriginalForChild)) { // Use aliased import
-		  const styles = [];
-		  if (htmlElementNode.style) {
-			  if (htmlElementNode.style.backgroundColor) styles.push(`background-color: ${htmlElementNode.style.backgroundColor}`);
-			  if (htmlElementNode.style.color) styles.push(`color: ${htmlElementNode.style.color}`);
-			  if (htmlElementNode.style.fontFamily) styles.push(`font-family: ${htmlElementNode.style.fontFamily}`);
-			  if (htmlElementNode.style.fontWeight) styles.push(`font-weight: ${htmlElementNode.style.fontWeight}`);
-			  if (htmlElementNode.style.fontSize) styles.push(`font-size: ${htmlElementNode.style.fontSize}`);
-			  if (htmlElementNode.style.textDecoration) styles.push(`text-decoration: ${htmlElementNode.style.textDecoration}`);
-		  }
-		  const styleString = styles.filter(Boolean).join('; ');
-		  if (styleString.length > 0) {
-			if (typeof resultFromOriginalForChild.setStyle === 'function') {
-			   return resultFromOriginalForChild.setStyle(styleString);
-			}
-		  }
-		}
-		return resultFromOriginalForChild;
-	  };
+    // Ensure we end up with an ExtendedTextNode instance
+    let node = baseNode;
+    if (_isTextNode(node) && !(node instanceof ExtendedTextNode)) {
+      const upgraded = $createExtendedTextNode(node.getTextContent());
+      upgraded.setFormat(node.getFormat());
+      node = upgraded;
+    }
 
-	  return {
-		...baseOutput,
-		conversion: (nodeWithFormat) => {
-			let outputNode = null;
-			if (baseOutput && typeof baseOutput.conversion === 'function') {
-				const conversionResult = baseOutput.conversion(nodeWithFormat);
-				outputNode = conversionResult?.node;
-			} else if (baseOutput && baseOutput.node) {
-				outputNode = baseOutput.node;
-			} else {
-				outputNode = $createExtendedTextNode(nodeWithFormat.textContent || '');
-			}
+    // Pull selected inline styles from the HTML element
+    const styles = [];
+    const s = htmlElementNode.style;
+    if (s.backgroundColor) styles.push(`background-color: ${s.backgroundColor}`);
+    if (s.color) styles.push(`color: ${s.color}`);
+    if (s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
+    if (s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
+    if (s.fontSize) styles.push(`font-size: ${s.fontSize}`);
+    if (s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
 
-			if (outputNode && TextNode.isTextNode(outputNode) && !(outputNode instanceof ExtendedTextNode)) {
-				const upgradedNode = $createExtendedTextNode(outputNode.getTextContent());
-				upgradedNode.setFormat(outputNode.getFormat());
-				upgradedNode.setStyle(outputNode.getStyle());
-				outputNode = upgradedNode;
-			}
+    const styleString = styles.filter(Boolean).join('; ');
+    if (styleString) node.setStyle(styleString);
 
-			if (outputNode instanceof ExtendedTextNode) {
-				const highlightId = htmlElementNode.getAttribute('data-highlight-id');
-				if (highlightId) {
-					outputNode.setHighlightId(highlightId);
-				}
-			}
-			return { node: outputNode };
-		},
-		forChild: stylePatchingForChild,
-		priority: original?.priority > 0 ? original.priority : 1,
-	  };
-	};
+    // copy highlight id if present
+    const hId = htmlElementNode.getAttribute('data-highlight-id');
+    if (hId && typeof node.setHighlightId === 'function') node.setHighlightId(hId);
+
+    return { node };
+  };
 }

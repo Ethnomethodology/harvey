@@ -12,6 +12,7 @@
     import { ListNode, ListItemNode } from '@lexical/list';
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
     import { LinkNode } from '@lexical/link';
+import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 
     /* --- Keyboard Shortcut --- */
@@ -58,7 +59,21 @@
     let isMounted = false;
     let isEditorVisible = false;
     $: isEditorVisible = segments.length > 0 && currentIndex >= 0 && currentIndex < segments.length;
-    const allNodesForUtilities = [ RootNode, ParagraphNode, TextNode, LineBreakNode, HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, TableNode, TableRowNode, TableCellNode ];
+    const allNodesForUtilities = [
+        RootNode,
+        ParagraphNode,
+        TextNode,
+        LineBreakNode,
+        HeadingNode,
+        QuoteNode,
+        ListNode,
+        ListItemNode,
+        LinkNode,
+        TableNode,
+        TableRowNode,
+        TableCellNode,
+        ExtendedTextNode
+    ];
     const defaultEmptyJsonString = JSON.stringify({ root: { children: [{ children: [], direction: null, format: '', indent: 0, type: 'paragraph', version: 1 }], direction: null, format: '', indent: 0, type: 'root', version: 1 } });
     let plainTextConverterEditor = null;
     function getPlainTextConverter() { if (!plainTextConverterEditor) { plainTextConverterEditor = createHeadlessEditor({ namespace: 'PlainTextConverter', nodes: [RootNode, ParagraphNode, TextNode], onError: (e) => console.error("PlainTextConverter Error:", e), }); } return plainTextConverterEditor; }
@@ -167,7 +182,60 @@
     function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { changed = true; updateSegment(currentIndex, { [field]: parsedTime }); tick().then(dispatchEditState); } else if (parsedTime === null) { if (field === 'start_time') localStart = formatTimestamp(currentTime); if (field === 'end_time') localEnd = formatTimestamp(currentTime); } else { if (field === 'start_time') localStart = formatTimestamp(currentTime); if (field === 'end_time') localEnd = formatTimestamp(currentTime); } return changed; }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
     function handleEditorUpdate(event) { const newJson = event.detail.jsonString; currentEditorJson = newJson; }
-    export function commitCurrentSegmentEdits() { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) { console.warn("Commit skipped: Not ready."); return false; } if (!currentEditorJson) { console.warn("Commit skipped: No editor JSON."); return false; } try { const parsed = JSON.parse(currentEditorJson); if (!parsed || !parsed.root) { throw new Error("Invalid JSON structure"); } } catch(e) { console.warn("Commit skipped: currentEditorJson invalid.", e); console.error("Invalid JSON:", currentEditorJson ? currentEditorJson.substring(0,200) + '...' : 'null'); return false; } const segmentInStore = get(project).segments[currentIndex]; let textChanged = false; let timeStartChanged = false; let timeEndChanged = false; let speakerChanged = false; if (segmentInStore && segmentInStore.text !== currentEditorJson) { updateSegment(currentIndex, { text: currentEditorJson }); textChanged = true; } timeStartChanged = handleBlurTimestamp('start_time', localStart); timeEndChanged = handleBlurTimestamp('end_time', localEnd); speakerChanged = handleSpeakerChange(); const overallChange = textChanged || timeStartChanged || timeEndChanged || speakerChanged; if (overallChange) { console.log("[EditableTranscript] Committed changes segment", currentIndex); } return overallChange; }
+    export function commitCurrentSegmentEdits() {
+        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) {
+            console.warn("Commit skipped: Not ready.");
+            return false;
+        }
+        if (!currentEditorJson) {
+            console.warn("Commit skipped: No editor JSON.");
+            return false;
+        }
+        // --- normalise: ensure we have a single‑encoded JSON string ---
+        const jsonString =
+            typeof currentEditorJson === 'string'
+                ? currentEditorJson
+                : JSON.stringify(currentEditorJson);
+
+        console.log('[DEBUG save]', {
+            idx: currentIndex,
+            first120: jsonString.slice(0, 120),
+            typeof: typeof jsonString
+        });
+
+        // validate it contains a Lexical root
+        try {
+            const parsed = JSON.parse(jsonString);
+            if (!parsed || !parsed.root) {
+                throw new Error("Invalid JSON structure (missing root)");
+            }
+        } catch (e) {
+            console.warn("Commit skipped: currentEditorJson invalid.", e);
+            console.error(
+                "Invalid JSON:",
+                jsonString ? jsonString.substring(0, 200) + "..." : "null"
+            );
+            return false;
+        }
+
+        const segmentInStore = get(project).segments[currentIndex];
+        let textChanged = false;
+        let timeStartChanged = false;
+        let timeEndChanged = false;
+        let speakerChanged = false;
+        if (segmentInStore && segmentInStore.text !== jsonString) {
+            updateSegment(currentIndex, { text: jsonString });
+            textChanged = true;
+        }
+        timeStartChanged = handleBlurTimestamp('start_time', localStart);
+        timeEndChanged = handleBlurTimestamp('end_time', localEnd);
+        speakerChanged = handleSpeakerChange();
+        const overallChange = textChanged || timeStartChanged || timeEndChanged || speakerChanged;
+        if (overallChange) {
+            console.log("[EditableTranscript] Committed changes segment", currentIndex);
+        }
+        return overallChange;
+    }
     function handleEditSaveClick() { if (editEnabled) { console.log("[EditableTranscript] Save clicked, dispatching 'save'."); dispatch('save'); } else { console.log("[EditableTranscript] Edit clicked, dispatching 'toggleedit'."); dispatch('toggleedit'); } }
     const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;

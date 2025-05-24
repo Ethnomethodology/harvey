@@ -4,8 +4,9 @@
 use crate::projectview::shared_types::{TranscriptSegment, TranscriptionResult}; // Shared types
 use crate::projectview::shared_utils::{get_project_xml_path_from_item}; // Shared utils
 use crate::projectview::transcription_commands::{ // Transcription-specific commands/helpers
-    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, // map_speaker... is now here
+    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, generate_lexical_doc,
 };
+use serde_json;
 // Import local_handler helpers needed here
 use crate::projectview::local_handler::transcription::{ // Helpers currently in local_handler
     convert_to_wav_if_needed, emit_progress,
@@ -289,11 +290,20 @@ pub async fn run_cloud_transcription(
     ).await?;
     info!("[Gemini Transcribe][Job '{}'] Final processed transcript saved.", job_id);
 
+    // Convert returned segments into Lexical JSON strings for UI consumption
+    let lexical_segments: Vec<TranscriptSegment> = segments.iter().cloned().map(|mut seg| {
+        let doc = generate_lexical_doc(&seg.text);
+        if let Ok(json_str) = serde_json::to_string(&doc) {
+            seg.text = json_str;
+        }
+        seg
+    }).collect();
+
     info!("[Gemini Transcribe][Job '{}'] Cloud transcription process complete.", job_id);
     let _ = emit_progress(&app_handle, &job_id, 100.0, "Transcription complete.").await;
 
     Ok(TranscriptionResult {
-        segments,
+        segments: lexical_segments,
         transcript_file_path: final_transcript_path.to_string_lossy().to_string(),
     })
 }
