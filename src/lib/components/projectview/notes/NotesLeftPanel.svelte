@@ -13,7 +13,41 @@
     const dispatch = createEventDispatcher();
 
     let prevAutoOpenPath = null;
-    let showImportTranscriptModal = false; 
+    let showImportTranscriptModal = false;
+
+    // Category context menu state
+    let categoryContextMenuVisible = false;
+    let categoryContextMenuX = 0;
+    let categoryContextMenuY = 0;
+    let categoryContextMenuType = null;
+
+    function handleCategoryContextMenu(event, categoryType) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (categoryContextMenuVisible) {
+        closeCategoryContextMenu();
+      }
+      categoryContextMenuType = categoryType;
+      // Position menu to the right of the clicked button
+      const rect = event.currentTarget.getBoundingClientRect();
+      categoryContextMenuX = rect.right + 4;
+      categoryContextMenuY = rect.top;
+      categoryContextMenuVisible = true;
+    }
+
+    function closeCategoryContextMenu() {
+      categoryContextMenuVisible = false;
+      categoryContextMenuType = null;
+    }
+
+    // Automatically close category menu on outside click
+    onMount(() => {
+      const listener = () => {
+        if (categoryContextMenuVisible) closeCategoryContextMenu();
+      };
+      document.addEventListener('click', listener);
+      return () => document.removeEventListener('click', listener);
+    });
 
     const CATEGORIES_BASE = [
         { name: 'Audios', type: 'audio', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`, importEnabled: true },
@@ -98,6 +132,16 @@
             else if (cat.type === 'imported_transcript') { return { ...cat, files: importedTranscripts }; } // Changed category type
             else { return { ...cat, files: [] }; }
         });
+    })();
+
+    // Filter files by search query
+    $: filteredCategories = (() => {
+      const q = searchQuery.trim().toLowerCase();
+      if (!showSearchBox || q === '') return displayCategories;
+      return displayCategories.map(cat => ({
+        ...cat,
+        files: cat.files.filter(file => file.name.toLowerCase().includes(q)),
+      }));
     })();
 
     $: { 
@@ -309,27 +353,101 @@
             dispatch('requestviewchange', { viewType, itemPath: item.path });
         }
     }
+
+    // Search box state
+    let showSearchBox = false;
+    let searchQuery = '';
+
+    function handleSearchClick(event) {
+      event.stopPropagation();
+      showSearchBox = true;
+      // Focus after shown
+      setTimeout(() => document.getElementById('notes-search-input')?.focus(), 0);
+    }
+
+    function handleSearchClear(event) {
+      event.stopPropagation();
+      searchQuery = '';
+      // Re-focus the input after clearing
+      setTimeout(() => document.getElementById('notes-search-input')?.focus(), 0);
+    }
+
+    // Close search when clicking outside, unless there's input
+    onMount(() => {
+      const listener = (e) => {
+        const input = document.getElementById('notes-search-input');
+        if (!showSearchBox) return;
+        if (input && (e.target === input || input.contains(e.target))) return;
+        if (searchQuery.trim() === '') {
+          showSearchBox = false;
+        }
+      };
+      document.addEventListener('click', listener);
+      return () => document.removeEventListener('click', listener);
+    });
+
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath; // Combine for highlighting
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
-	<h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0">
-		Fieldnotes
+	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+		<span>Fieldnotes</span>
+    {#if !showSearchBox}
+      <button
+        type="button"
+        class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+        on:click|stopPropagation={handleSearchClick}
+        title="Search Fieldnotes"
+      >
+        {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
+      </button>
+    {:else}
+      {#if searchQuery.trim() !== ''}
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+          on:click|stopPropagation={handleSearchClear}
+          title="Clear Search"
+        >
+          {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>`}
+        </button>
+      {/if}
+    {/if}
+    <input
+      id="notes-search-input"
+      bind:value={searchQuery}
+      type="text"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      placeholder="Search..."
+      class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-xs pl-2 pr-10 {showSearchBox ? 'opacity-100 w-full' : 'opacity-0 w-0'}"
+      on:click|stopPropagation
+    />
 	</h2>
 
 	<div class="flex-grow overflow-y-auto min-h-0 -mr-2 pr-2">
 		<ul class="space-y-2 text-xs">
-            {#each displayCategories as category (category.type)}
+            {#each filteredCategories as category (category.type)}
                 <li>
                     <div
-                        class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
+                        class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
                         on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
                         <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
                             <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
                             <span class="flex-shrink-0">{@html category.icon}</span>
                             <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
                         </div>
-                        <button type="button" class="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ml-2" title="{category.importEnabled ? `Import ${category.name}` : `${category.name} import not available`}" on:click|stopPropagation={() => handleImportClick(category.type)} disabled="{!category.importEnabled}"> {@html IMPORT_ICON_SVG} </button>
+                        <button
+                          type="button"
+                          class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
+                          title="Options"
+                          on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
+                          disabled={!category.importEnabled}
+                        >
+                          {@html CONTEXT_MENU_ICON_SVG}
+                        </button>
                     </div>
 
                     {#if categoryOpenState[category.type]}
@@ -399,6 +517,32 @@
             {/if}
 		</div>
 	{/if}
+    {#if categoryContextMenuVisible}
+      <div
+        id="notes-left-panel-category-context-menu"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
+        style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
+        on:click|stopPropagation
+      >
+        {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
+          <button
+            on:click|stopPropagation={() => {}}
+            class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+            title="Create New"
+          >
+            Create New
+          </button>
+        {/if}
+        <button
+          on:click|stopPropagation={() => { handleImportClick(categoryContextMenuType); closeCategoryContextMenu(); }}
+          class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+          disabled={!CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.importEnabled}
+          title="Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}"
+        >
+          Import {CATEGORIES_BASE.find(c => c.type === categoryContextMenuType)?.name}
+        </button>
+      </div>
+    {/if}
 </div>
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
