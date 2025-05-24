@@ -3,6 +3,10 @@
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { readFile } from '@tauri-apps/plugin-fs';
     import { v4 as uuidv4 } from 'uuid';
+    import { project } from '$lib/stores/projectStore.js';
+    import { saveCurrentPdfAnnotations } from '$lib/services/projectService.js';
+import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
+import { get } from 'svelte/store';
 
     const dispatch = createEventDispatcher();
 
@@ -83,7 +87,11 @@
         if (!currentPV) {
             currentPV = pdfViewer?.getPageView(pageIndex);
             if (!currentPV) {
-                pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+                try {
+                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+                } catch (_) {
+                    /* pdfViewer may reject the call if pages aren’t ready yet – safe to ignore */
+                }
                 await new Promise(r => setTimeout(r, 300)); 
                 currentPV = pdfViewer?.getPageView(pageIndex);
                 if (!currentPV) {
@@ -401,13 +409,13 @@
         await tick();
         let success = false;
         let actionPayload = { rangeData: null, dataForStorage: null };
-    
+
         if (toolbarMode === 'selection') {
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
             const rangeToUse = selectedRange.cloneRange();
             actionPayload.rangeData = captureRangeDataForUndo(rangeToUse);
             actionPayload.text = actionPayload.rangeData.text;
-    
+
             if (color === 'remove') {
                 const affectedHighlights = await getAffectedHighlightsData(rangeToUse); // Now async
                 removeHighlightFromSelectionDOM(rangeToUse);
@@ -415,6 +423,10 @@
                     dispatch('pdfhighlightevent', { type: 'remove', id: hlStorageData.id });
                     recordAction('removeHighlight', { ...hlStorageData, rangeData: null /* DOM range hard to restore for this */ });
                 });
+                // mark dirty & persist (selection mode)
+                await tick(); // wait for store update from dispatched events
+                markPdfAnnotationsDirty(get(project).currentPdfAnnotations);
+                saveCurrentPdfAnnotations();
                 if (affectedHighlights.length > 0) success = true;
             } else {
                 actionPayload.id = `hl-${uuidv4()}`;
@@ -424,6 +436,9 @@
                 if (actionPayload.dataForStorage) {
                     dispatch('pdfhighlightevent', { type: 'add', ...actionPayload.dataForStorage });
                     recordAction('addHighlight', actionPayload);
+                    // mark dirty & persist
+                    markPdfAnnotationsDirty();
+                    saveCurrentPdfAnnotations();
                     success = true;
                 }
             }
@@ -432,30 +447,37 @@
             actionPayload.id = clickedHighlightId;
             actionPayload.oldColor = clickedHighlightColor;
             actionPayload.text = getTextOfHighlightId(clickedHighlightId);
-            
+
             const clickedSpan = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${clickedHighlightId}"]`);
             let tempRangeForContext = null;
             if (clickedSpan) { tempRangeForContext = document.createRange(); tempRangeForContext.selectNodeContents(clickedSpan); }
-            
+
             const baseData = await createHighlightDataForStorage(actionPayload.id, tempRangeForContext, color === 'remove' ? actionPayload.oldColor : color);
-            actionPayload.dataForStorage = baseData ? {...baseData, text: actionPayload.text } : 
+            actionPayload.dataForStorage = baseData ? {...baseData, text: actionPayload.text } :
                 {id: actionPayload.id, type:'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex:0, prefix:'', suffix:'', occurrenceInPageContext:0};
 
-
             if (color === 'remove') {
-                removeClickedHighlightBlockDOM(clickedHighlightId);
-                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
+                const removeId = clickedHighlightId;  // preserve before DOM clears it
+                removeClickedHighlightBlockDOM(removeId);
+                dispatch('pdfhighlightevent', { type: 'remove', id: removeId });
                 recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: {...actionPayload.dataForStorage, color: actionPayload.oldColor } });
+                // mark dirty & persist (click mode)
+                await tick(); // ensure store is updated after dispatched remove event
+                markPdfAnnotationsDirty(get(project).currentPdfAnnotations);
+                saveCurrentPdfAnnotations();
                 success = true;
-            } else { 
+            } else {
                 actionPayload.newColor = color;
                 changeClickedHighlightColorDOM(clickedHighlightId, color);
                 dispatch('pdfhighlightevent', { type: 'update', ...actionPayload.dataForStorage, color: color });
                 recordAction('changeColor', actionPayload);
+                // mark dirty & persist
+                markPdfAnnotationsDirty();
+                saveCurrentPdfAnnotations();
                 success = true;
             }
         } else { console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode); }
-    
+
         if (success) {
             hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
@@ -471,6 +493,16 @@
         selectedRange = null; // Clear after use
     }
     
+    // --- Helper: Get the combined text of a highlight block by its id ---
+    function getTextOfHighlightId(hlId) {
+        if (!hlId || !viewerContainer) return '';
+        const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${hlId}"]`);
+        if (!spans || spans.length === 0) return '';
+        return Array.from(spans).map(s => s.textContent).join('');
+    }
+
+
+
     // DOM Manipulation functions as provided previously, renamed for clarity
     // applyHighlightToSelectionDOM, handleHighlightingForNodeSegmentDOM, splitSpanAndApplyHighlightDOM,
     // removeHighlightFromSelectionDOM, removePartialHighlightDOM, splitSpanAndUnwrapSegmentDOM,
@@ -726,6 +758,22 @@
         }
     }
 
+    // Wait briefly for annotations to arrive, then apply them
+    async function waitForHighlightsAndApply(maxWaitMs = 3000) {
+        const start = Date.now();
+        while (Date.now() - start < maxWaitMs) {
+            if (initialHighlights && initialHighlights.length > 0) {
+                await applyInitialHighlights();
+                return;
+            }
+            await new Promise(r => setTimeout(r, 100));
+        }
+        // Last‑ditch attempt (handles case where highlights arrive late but within timeout)
+        if (initialHighlights && initialHighlights.length > 0) {
+            await applyInitialHighlights();
+        }
+    }
+
     function setupViewerEvents() {
         if (!eventBus) return;
         // Clear existing listeners on the eventBus instance IF it's being reused
@@ -761,9 +809,7 @@
                 loading = false; pageRendering = false;
                 console.log('[PDFViewerPanel] event: documentloaded - PDF processing complete. Attempting initial highlights.');
                 await tick(); // Ensure UI is updated with new page count etc.
-                if (!initialHighlightsApplied) { // Ensure it runs only once per document load
-                    await applyInitialHighlights();
-                }
+                // (No longer apply highlights here)
             } else {
                 error = "PDF Viewer was not properly initialized with a document after load."; 
                 loading = false;
@@ -784,7 +830,8 @@
                 currentPageNum=pdfViewer.currentPageNumber; 
                 currentScaleValue=String(pdfViewer.currentScaleValue||'auto');
                 loading=false; pageRendering=false;
-                 console.log("[PDFViewerPanel] event: pagesinit (during initial load).");
+                console.log("[PDFViewerPanel] event: pagesinit (during initial load).");
+                waitForHighlightsAndApply();
             } 
             // Ensure scale is consistent if pages reinitialize for some reason (e.g. after scale change)
             if(pdfViewer && !loading && String(pdfViewer.currentScaleValue) !== currentScaleValue) {
@@ -796,12 +843,8 @@
 
     // --- Apply Initial Highlights (More Robust) ---
     async function applyInitialHighlights() {
-        if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement || !initialHighlights || initialHighlights.length === 0) {
-            if ((!initialHighlights || initialHighlights.length === 0) && !initialHighlightsApplied) {
-                initialHighlightsApplied = true; loading = false; // Mark as done, stop loading
-            }
-            return;
-        }
+        if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement) return;
+        if (!initialHighlights || initialHighlights.length === 0) return;
         console.log('[PDFViewerPanel] Applying initial highlights. Count:', initialHighlights.length);
         if(!loading) loading = true; 
         loadingMessage = 'Applying highlights...';
@@ -900,6 +943,7 @@
         console.log('[PDFViewerPanel] Finished applying all initial highlights.');
     }
 
+
     function findRangeInTextLayer(textLayerDiv, overallCharStart, length) {
         const range = document.createRange();
         let accumulatedLength = 0;
@@ -959,6 +1003,27 @@
     }
     function handleSearchKeydown(e) { if (e.key === 'Enter') { e.preventDefault(); runSearch({ findPrevious: e.shiftKey }); } }
     
+    /* ─── Sync with store‑level PDF annotations ─── */
+    $: storePdfAnnotations = (
+        $project.currentPdfAnnotations ??
+        $project.pdfAnnotations ??
+        $project.currentDocumentHighlights ??
+        []
+    );
+
+    $: if (
+        pdfDoc &&
+        pdfViewer &&
+        !initialHighlightsApplied &&
+        storePdfAnnotations &&
+        storePdfAnnotations.length > 0
+    ) {
+        initialHighlights = storePdfAnnotations;
+        if (pdfViewer._pages?.length > 0) {
+            applyInitialHighlights();
+        }
+    }
+
     $: pageNumInput = currentPageNum;
     $: selectScaleValue = (() => { 
         const s = String(currentScaleValue); 

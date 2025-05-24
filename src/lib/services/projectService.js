@@ -63,6 +63,8 @@ import {
     clearDocumentEditorState,
 
     markDocumentMetadataAsSaved,
+    // ADD THIS IMPORT for PDF annotations
+    markPdfAnnotationsAsSaved,
 
     prepareImportedTranscriptView,
     markImportedTranscriptChangesDiscarded,
@@ -73,7 +75,9 @@ import {
     showConversionPrompt,
     hideConversionPrompt,
     
-    setLoadedPdfAnnotations
+    setLoadedPdfAnnotations,
+    // ADD THIS IMPORT for PDF annotations load failure
+    setPdfAnnotationsLoadFailed
 } from '$lib/stores/projectStore.js';
 
 import { getCloudConfig } from './configureActions.js';
@@ -142,6 +146,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
             imageFiles: loadedData.image_files || [],
             importedTranscriptFiles: loadedData.imported_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
+            pdfAnnotationFiles: loadedData.pdf_annotation_files || [], // Make sure this is populated from backend
             isLoading: false,
             error: null,
             statusMessage: `Loaded project: ${loadedData.project_name}`
@@ -355,7 +360,7 @@ export async function importDocumentFile() {
             await refreshProjectFiles();
             const importedPdfName = await basename(tempHtmlPath);
             setAssetImportStatus(false, `Document "${importedPdfName}" imported successfully.`);
-            prepareDocumentView(tempHtmlPath, 'documents');
+            prepareDocumentView(tempHtmlPath, 'documents'); // This will trigger PDF annotation loading
             return;
         }
 
@@ -940,7 +945,62 @@ export async function loadActiveDocumentContent() {
     }
 }
 
+/**
+ * Immediately saves the currently‑selected PDF’s annotations
+ * if they are marked dirty. Used for on‑the‑fly save after
+ * add / remove highlight actions.
+ */
+export async function saveCurrentPdfAnnotations() {
+    const projState = get(project);
+    if (!projState.selectedDocumentPath ||
+        !projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
+        console.warn('[ProjectService] saveCurrentPdfAnnotations called but no PDF is selected.');
+        return;
+    }
+    if (!projState.isPdfAnnotationsDirty) {
+        console.log('[ProjectService] PDF annotations are not dirty – nothing to save.');
+        return;
+    }
+
+    const projectXmlPath = projState.xmlPath;
+    const projectBaseDir = projState.baseDirectory;
+    if (!projectXmlPath || !projectBaseDir) {
+        console.error('[ProjectService] Cannot save PDF annotations: missing project paths.');
+        return;
+    }
+
+    // Build path relative to base dir (mirrors logic in checkUnsavedChanges)
+    let relativePdfPath = projState.selectedDocumentPath;
+    if (relativePdfPath.startsWith(projectBaseDir + sep) || relativePdfPath.startsWith(projectBaseDir + '/')) {
+        relativePdfPath = relativePdfPath.substring(projectBaseDir.length + 1);
+    } else if (relativePdfPath.startsWith(projectBaseDir)) {
+        relativePdfPath = relativePdfPath.substring(projectBaseDir.length);
+    }
+    relativePdfPath = relativePdfPath.replace(/^[\\/]/, '').replace(/\\/g, '/');
+
+    try {
+        // Prefer whichever store field actually holds the annotations
+        const annList = projState.currentPdfAnnotations ?? projState.currentDocumentHighlights ?? [];
+        await invoke('save_pdf_annotations', {
+            projectXmlPathStr: projectXmlPath,
+            originalPdfRelativePathStr: relativePdfPath,
+            annotationsJsonContent: JSON.stringify(annList)
+        });
+        markPdfAnnotationsAsSaved();
+        console.log('[ProjectService] PDF annotations saved immediately.');
+    } catch (error) {
+        console.error('[ProjectService] Failed to save PDF annotations immediately:', error);
+    }
+}
+
 export async function saveDocumentContent(filePath, jsonContent) {
+    // ADDED: Safeguard for PDF paths
+    if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
+        console.warn(`[ProjectService saveDocumentContent] Attempted to save PDF content for ${filePath}. This should be handled by PDF annotation saving logic. Aborting.`);
+        project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'}));
+        throw new Error("PDF content saving is not handled by saveDocumentContent. Use PDF annotation saving.");
+    }
+
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; console.error(`[ProjectService] ${errorMsg}`); await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); }
     try { const parsed = JSON.parse(jsonContent); if (!parsed.root || !parsed.root.children || !Array.isArray(parsed.root.children)) { throw new Error("Invalid Lexical JSON structure."); } } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; console.error(`[ProjectService] ${errorMsg}`); console.error(`[ProjectService] Invalid JSON save attempt:`, jsonContent.substring(0, 500) + "..."); await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); }
     const filename = await basename(filePath);
@@ -1093,7 +1153,6 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) {
     }
 }
 
-
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
     let itemIsDirty = false;
@@ -1109,8 +1168,52 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     const typeDescForLog = providedActionContextDescription || "NO_CONTEXT_DESC_PROVIDED_TO_CHECK_UNSAVED";
     console.log(`[checkUnsavedChanges] Called with newPathToLoad: '${pathDescForLog}', actionContextDescription: '${typeDescForLog}'.`);
 
+    // Check for PDF unsaved changes FIRST
+    if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') &&
+        (projState.isPdfAnnotationsDirty /* Consider if PDF metadata also makes it "dirty" for this check */)) {
+        itemIsDirty = true;
+        itemPath = projState.selectedDocumentPath;
+        itemTypeForPrompt = 'PDF annotations'; // More specific for PDF
+        const projectXmlPath = projState.xmlPath;
+        const projectBaseDir = projState.baseDirectory;
 
-    if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
+        saveFunction = async () => {
+            if (!projectXmlPath || !projectBaseDir) {
+                throw new Error("Project XML path or base directory is missing for saving PDF annotations.");
+            }
+            let relativePdfPath = itemPath;
+            // Ensure itemPath is correctly made relative to projectBaseDir
+            if (itemPath.startsWith(projectBaseDir + sep) || itemPath.startsWith(projectBaseDir + '/')) { // More robust check
+                relativePdfPath = itemPath.substring(projectBaseDir.length + 1);
+            } else if (itemPath.startsWith(projectBaseDir)) {
+                 relativePdfPath = itemPath.substring(projectBaseDir.length);
+                 if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) {
+                    relativePdfPath = relativePdfPath.substring(1);
+                }
+            } else {
+                console.warn(`[checkUnsavedChanges PDF Save] itemPath ${itemPath} does not seem to be absolute under ${projectBaseDir}. Using as is, assuming it's already correctly relative or backend handles it.`);
+                // If backend strictly expects a path relative to projectBaseDir, and itemPath isn't, this could fail.
+                // However, if itemPath can sometimes be already relative, this might be okay.
+            }
+            
+            relativePdfPath = relativePdfPath.replace(/\\/g, '/'); // Normalize to forward slashes
+            
+            const annotationsToSave = get(project).currentPdfAnnotations;
+            await invoke('save_pdf_annotations', {
+                projectXmlPathStr: projectXmlPath,
+                originalPdfRelativePathStr: relativePdfPath,
+                annotationsJsonContent: JSON.stringify(annotationsToSave || [])
+            });
+            markPdfAnnotationsAsSaved(); 
+        };
+        discardFunction = () => {
+            markDocumentChangesDiscarded(); // This resets PDF annotations to initial and clears dirty flag
+        };
+        resetEditorFunction = null; // PDF viewer handles its own reset, store handles data
+        initialContentForReset = projState.initialPdfAnnotations;
+    }
+    // THEN check for Lexical document unsaved changes (if not PDF)
+    else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
         itemTypeForPrompt = 'document';
@@ -1118,15 +1221,15 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             saveFunction = projState.activeDocumentEditorRef.save;
         } else {
              if (projState.isDocumentDirty) saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
-             else if (projState.isDocumentMetadataDirty) saveFunction = () => saveDocumentMetadata(itemPath); // This will save full metadata
+             else if (projState.isDocumentMetadataDirty) saveFunction = () => saveDocumentMetadata(itemPath);
         }
         discardFunction = () => {
             markDocumentChangesDiscarded();
         };
         resetEditorFunction = projState.activeDocumentEditorRef?.resetEditorState;
         initialContentForReset = projState.initialDocumentJson;
-
     }
+    // THEN check for imported transcript unsaved changes
     else if (projState.currentImportedTranscriptPath && projState.isImportedTranscriptDirty) {
         itemIsDirty = true;
         itemPath = projState.currentImportedTranscriptPath;
@@ -1138,6 +1241,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             initialContentForReset = projState.initialImportedTranscriptLexicalJson;
         }
     }
+
 
     if (itemIsDirty && itemPath === newPathToLoad) {
         console.log(`[checkUnsavedChanges] Attempting to load/act on the same item that is dirty ('${itemPath}'). Allowing without prompt.`);
@@ -1220,40 +1324,45 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
     if (!pdfAbsPath) {
         console.warn("[ProjectService loadPdfAnnotationsFromFile] pdfAbsPath is missing.");
         setLoadedPdfAnnotations([]); 
-        project.update(p => { // Ensure loading is stopped if it was started for this
-            if(p.selectedDocumentPath === pdfAbsPath) return {...p, isDocumentLoading: false };
+        project.update(p => {
+            if(p.selectedDocumentPath === pdfAbsPath && p.isDocumentLoading) return {...p, isDocumentLoading: false };
             return p;
         });
         return;
     }
     const filename = await basename(pdfAbsPath);
-    console.log(`[ProjectService] Loading PDF annotations for: ${filename}`);
-    // isDocumentLoading might have been set true by prepareDocumentView
+    console.log(`[ProjectService] Loading PDF annotations for: ${filename} (Path: ${pdfAbsPath})`);
+    // isDocumentLoading should have been set to true by prepareDocumentView if a load is expected
+
     try {
         const annotationsJsonString = await invoke('load_pdf_annotations', {
             originalPdfAbsPathStr: pdfAbsPath
         });
+
+        console.log(`[ProjectService] Received from backend 'load_pdf_annotations' for ${filename}:`, annotationsJsonString);
+
         if (annotationsJsonString && typeof annotationsJsonString === 'string') {
-            const parsedAnnotations = JSON.parse(annotationsJsonString);
-            setLoadedPdfAnnotations(parsedAnnotations || []); 
-            console.log(`[ProjectService] Loaded ${parsedAnnotations?.length || 0} PDF annotations for ${filename}.`);
-            project.update(p => {
-                if (p.selectedDocumentPath === pdfAbsPath) return { ...p, isDocumentLoading: false, documentError: null };
-                return p;
-            });
-        } else {
+            try {
+                const parsedAnnotations = JSON.parse(annotationsJsonString);
+                console.log(`[ProjectService] Parsed annotations for ${filename}:`, parsedAnnotations);
+                setLoadedPdfAnnotations(parsedAnnotations || []); 
+                // isDocumentLoading is set to false inside setLoadedPdfAnnotations
+            } catch (parseError) {
+                console.error(`[ProjectService] Failed to parse annotations JSON string for ${filename}:`, parseError, "\nString was:", annotationsJsonString);
+                setPdfAnnotationsLoadFailed(pdfAbsPath, `Failed to parse loaded annotations: ${parseError.message}`);
+            }
+        } else if (annotationsJsonString === null) {
+            console.log(`[ProjectService] No annotation file found or it was explicitly null for ${filename}. Setting empty.`);
             setLoadedPdfAnnotations([]);
-            console.log(`[ProjectService] No PDF annotation file found or it was empty for ${filename}.`);
-            project.update(p => {
-                if (p.selectedDocumentPath === pdfAbsPath) return { ...p, isDocumentLoading: false, documentError: null };
-                return p;
-            });
+            // isDocumentLoading is set to false inside setLoadedPdfAnnotations
+        } else {
+            console.log(`[ProjectService] Annotation file likely empty or backend returned unexpected non-string for ${filename}. Setting empty.`);
+            setLoadedPdfAnnotations([]);
+            // isDocumentLoading is set to false inside setLoadedPdfAnnotations
         }
     } catch (e) {
         const errorMessage = e.message || String(e);
-        console.error(`[ProjectService] Error loading PDF annotations for ${filename}:`, errorMessage);
-        // Use the new dedicated error handler in the store
-        setPdfAnnotationsLoadFailed(pdfAbsPath, errorMessage); 
-        // isDocumentLoading and documentError are handled by setPdfAnnotationsLoadFailed
+        console.error(`[ProjectService] Error invoking 'load_pdf_annotations' for ${filename}:`, errorMessage);
+        setPdfAnnotationsLoadFailed(pdfAbsPath, `Service call failed: ${errorMessage}`);
     }
 }

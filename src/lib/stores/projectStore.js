@@ -313,6 +313,9 @@ export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
     });
 }
 
+// In your updatePdfAnnotations function, ensure you are using isPdfAnnotationsDirty
+// and that isDocumentDirty is set to true to trigger the autosave/prompt logic
+// (as it was in your provided code)
 export function updatePdfAnnotations(pdfHighlightEvent) {
     project.update(p => {
         if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
@@ -320,40 +323,84 @@ export function updatePdfAnnotations(pdfHighlightEvent) {
         }
         let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : [];
         let { type, id, ...highlightData } = pdfHighlightEvent;
-        // Treat missing or generic type as an "add" action
         if (!type || type === 'pdfHighlight') type = 'add';
 
+        let annotationChanged = false;
         if (type === 'add') {
             const existingIndex = annotations.findIndex(h => h.id === id);
             const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; 
-            if (existingIndex === -1) annotations.push(newAnnotation);
-            else annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation };
-            console.log(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`);
+            if (existingIndex === -1) {
+                annotations.push(newAnnotation);
+                annotationChanged = true;
+            } else {
+                // Basic check if update is meaningful (could be more sophisticated)
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation };
+                    annotationChanged = true;
+                }
+            }
+            if(annotationChanged) console.log(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`);
         } else if (type === 'remove') {
+            const initialLength = annotations.length;
             annotations = annotations.filter(h => h.id !== id);
-            console.log(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`);
+            if (annotations.length < initialLength) {
+                annotationChanged = true;
+                console.log(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`);
+            }
         } else if (type === 'update') { 
              const existingIndex = annotations.findIndex(h => h.id === id);
              if (existingIndex !== -1) {
-                annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
-                console.log(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`);
+                // Basic check if update is meaningful
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
+                    annotationChanged = true;
+                    console.log(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`);
+                }
              }
         }
-        return { 
-            ...p, 
-            currentPdfAnnotations: annotations, 
-            isPdfAnnotationsDirty: true,
-            // Mark generic DocDirty so existing autosave watcher triggers
-            isDocumentDirty: true 
-        };
+
+        if (annotationChanged) {
+            return { 
+                ...p, 
+                currentPdfAnnotations: annotations, 
+                isPdfAnnotationsDirty: true, // Specifically mark PDF annotations as dirty
+                isDocumentDirty: true // Keep this to trigger existing autosave/prompt logic
+            };
+        }
+        return p; // No change
     });
 }
 
+/**
+ * Mark that PDF annotations have unsaved changes.
+ * Optionally pass the updated annotations array so the store stays in sync.
+ */
+export function markPdfAnnotationsDirty(updatedAnnotations = null) {
+    project.update(p => {
+        if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
+            return {
+                ...p,
+                isPdfAnnotationsDirty: true,
+                isDocumentDirty: false,
+                currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations
+            };
+        }
+        return p;
+    });
+}
+
+// Make sure these are correctly defined and imported in projectService.js
 export function markPdfAnnotationsAsSaved() {
     console.log('[ProjectStore] Marking PDF annotations as saved.');
     project.update(p => {
         if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return { ...p, isPdfAnnotationsDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' };
+            return { 
+                ...p, 
+                isPdfAnnotationsDirty: false, 
+                isDocumentDirty: false,
+                initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), // Deep copy current to initial
+                statusMessage: 'PDF annotations saved.' 
+            };
         }
         return p;
     });
@@ -385,7 +432,11 @@ export function setPdfAnnotationsLoadFailed(filePath, errorMsg) {
                 statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`
             };
         }
-        console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Path mismatch or not a PDF. Store: ${p.selectedDocumentPath}, Error for: ${filePath}`);
+        // If the error is for a path that is no longer selected, but was loading, still clear loading.
+        if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){
+             console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`);
+             return { ...p, isDocumentLoading: false };
+        }
         return p;
     });
 }

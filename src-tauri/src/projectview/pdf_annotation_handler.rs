@@ -1,3 +1,4 @@
+// src-tauri/src/projectview/pdf_annotation_handler.rs
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{ProjectXml, PdfAnnotationEntryXml, PDF_ANNOTATIONS_FILE_SUFFIX};
 use crate::projectview::shared_utils::save_project_xml;
