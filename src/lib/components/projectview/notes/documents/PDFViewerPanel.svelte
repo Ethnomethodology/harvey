@@ -300,6 +300,7 @@ import { get } from 'svelte/store';
             document.addEventListener('click', handleClickOutside);
             viewerContainer?.addEventListener('mouseup', handleViewerMouseUp);
             viewerContainer?.addEventListener('click', handleViewerClick);
+            viewerContainer?.addEventListener('mousedown', handleViewerMouseDown, true);
             window.addEventListener('keydown', handleKeydown);
         }, 100); 
     });
@@ -309,6 +310,7 @@ import { get } from 'svelte/store';
         document.removeEventListener('click', handleClickOutside);
         viewerContainer?.removeEventListener('mouseup', handleViewerMouseUp);
         viewerContainer?.removeEventListener('click', handleViewerClick);
+        viewerContainer?.removeEventListener('mousedown', handleViewerMouseDown, true);
         window.removeEventListener('keydown', handleKeydown);
         clearTimeout(hideToolbarTimeoutId);
         if (eventBus && typeof eventBus.destroy === 'function') { eventBus.destroy(); } eventBus = null; 
@@ -499,6 +501,61 @@ import { get } from 'svelte/store';
         const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${hlId}"]`);
         if (!spans || spans.length === 0) return '';
         return Array.from(spans).map(s => s.textContent).join('');
+    }
+
+    /**
+     * When the user begins a drag on whitespace inside the page, move the caret
+     * to the nearest text span so selection behaves like Preview/Acrobat.
+     */
+    function handleViewerMouseDown(event) {
+        // Only react to primary button inside the viewerContainer
+        if (event.button !== 0) return;
+        if (!viewerContainer || !viewerContainer.contains(event.target)) return;
+
+        // If the target is already text or a highlight span, let browser handle it
+        const looksLikeText = n =>
+            n?.nodeType === Node.TEXT_NODE ||
+            n?.classList?.contains('pdf-highlight');
+        if (looksLikeText(event.target) || looksLikeText(event.target.firstChild)) return;
+
+        const { clientX: x, clientY: y } = event;
+        // Try elementFromPoint first
+        let span = document.elementFromPoint(x, y);
+
+        while (span && span !== viewerContainer &&
+               !span.classList?.contains('pdf-highlight') &&
+               span.firstChild?.nodeType !== Node.TEXT_NODE) {
+            span = span.parentElement;
+        }
+
+        // Fallback: find nearest span in page (no distance threshold)
+        if (!span || span === viewerContainer) {
+            const spans = viewerContainer.querySelectorAll('.textLayer span');
+            let best = null, bestDist = Infinity;
+            spans.forEach(s => {
+                const r = s.getBoundingClientRect();
+                if (!r.width || !r.height) return;
+                const cx = Math.max(r.left, Math.min(x, r.right));
+                const cy = Math.max(r.top,  Math.min(y, r.bottom));
+                const dist = (cx - x) ** 2 + (cy - y) ** 2;
+                if (dist < bestDist) { bestDist = dist; best = s; }
+            });
+            span = best; // pick the closest span—even if far from the click
+        }
+
+        if (span && span.firstChild?.nodeType === Node.TEXT_NODE) {
+            // Defer caret correction until after the browser's default anchor,
+            // so we don't have to cancel the native selection behaviour.
+            requestAnimationFrame(() => {
+                const sel = window.getSelection();
+                if (!sel) return;
+                const range = document.createRange();
+                range.setStart(span.firstChild, 0);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            });
+        }
     }
 
 
