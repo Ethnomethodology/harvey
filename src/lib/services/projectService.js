@@ -678,6 +678,143 @@ export async function loadTableData(tablePath) {
     }
 }
 
+// Helper function to parse HH:MM:SS.mmm, MM:SS.mmm, or SS.mmm into seconds
+function parseTimestampStringToSeconds(timestampStr) {
+    if (!timestampStr || typeof timestampStr !== 'string') return 0;
+    const cleanedStr = timestampStr.trim();
+    const parts = cleanedStr.split(':');
+    let seconds = 0;
+    try {
+        if (parts.length === 3) { // HH:MM:SS.mmm
+            seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+        } else if (parts.length === 2) { // MM:SS.mmm
+            seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+        } else if (parts.length === 1) { // SS.mmm or S.mmm
+            seconds = parseFloat(parts[0]);
+        } else {
+            console.warn(`[parseTimestampStringToSeconds] Unexpected timestamp format: ${timestampStr}`);
+            return 0;
+        }
+    } catch (e) {
+        console.error(`[parseTimestampStringToSeconds] Error parsing timestamp: ${timestampStr}`, e);
+        return 0;
+    }
+    // Ensure result is a number and fix to 3 decimal places for milliseconds
+    return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3));
+}
+
+export function parseLexicalTableToSegments(lexicalTableJsonString) {
+    console.log("[ProjectService] Attempting parseLexicalTableToSegments...");
+    let parsedFullEditorState;
+    try {
+        parsedFullEditorState = JSON.parse(lexicalTableJsonString);
+        if (!parsedFullEditorState || !parsedFullEditorState.root || !Array.isArray(parsedFullEditorState.root.children)) {
+            console.error("[ProjectService] Invalid Lexical JSON structure: missing root or root.children. Content snapshot:", lexicalTableJsonString.substring(0, 500));
+            return [];
+        }
+    } catch (error) {
+        console.error("[ProjectService] Failed to parse lexicalTableJsonString:", error, "Content snapshot:", lexicalTableJsonString.substring(0, 500));
+        return [];
+    }
+
+    const cellTextEditor = createHeadlessEditor({
+        nodes: [RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode], // Minimal set for cell text processing
+        namespace: `cell-parser-editor-${Date.now()}`,
+        onError: (e) => console.error("[CellParserEditor] Error:", e),
+    });
+
+    const segmentsArray = [];
+    try {
+        const rootChildren = parsedFullEditorState.root.children;
+        const tableNode = rootChildren.find(node => node.type === 'table');
+
+        if (!tableNode || !tableNode.children || !Array.isArray(tableNode.children)) {
+            console.error("[ProjectService] No 'table' node found or table has no children in parsed JSON.");
+            return [];
+        }
+
+        // Iterate over table rows, skipping the header row (index 0)
+        for (let i = 1; i < tableNode.children.length; i++) {
+            const rowNode = tableNode.children[i];
+            if (rowNode.type !== 'tablerow' || !rowNode.children || !Array.isArray(rowNode.children) || rowNode.children.length < 4) {
+                console.warn(`[ProjectService] Skipping row at index ${i}: not a valid 'tablerow' or has insufficient cells (<4). Row:`, JSON.stringify(rowNode).substring(0,300));
+                continue;
+            }
+
+            try {
+                // --- Timestamp Cell (index 1 of rowNode.children) ---
+                const timestampCellNode = rowNode.children[1]; // This is the TableCellNode
+                if (timestampCellNode.type !== 'tablecell') {
+                     console.warn(`[ProjectService] Row ${i}, Expected Cell 1 (Timestamp) to be 'tablecell', got '${timestampCellNode.type}'. Skipping row.`); continue;
+                }
+                // Construct a valid Lexical JSON string for this cell's content by wrapping its children in a root
+                const timestampCellContentForEditor = {
+                    root: { type: 'root', children: timestampCellNode.children || [], direction: null, format: '', indent: 0, version: 1 }
+                };
+                cellTextEditor.setEditorState(cellTextEditor.parseEditorState(JSON.stringify(timestampCellContentForEditor)));
+                const timestampText = cellTextEditor.getEditorState().read(() => _getRoot().getTextContent());
+                const timeParts = timestampText.split(' - ');
+                const startTime = parseTimestampStringToSeconds(timeParts[0]);
+                const endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
+
+                // --- Speaker Cell (index 2 of rowNode.children) ---
+                const speakerCellNode = rowNode.children[2]; // TableCellNode
+                if (speakerCellNode.type !== 'tablecell') {
+                     console.warn(`[ProjectService] Row ${i}, Expected Cell 2 (Speaker) to be 'tablecell', got '${speakerCellNode.type}'. Skipping row.`); continue;
+                }
+                const speakerCellContentForEditor = {
+                    root: { type: 'root', children: speakerCellNode.children || [], direction: null, format: '', indent: 0, version: 1 }
+                };
+                cellTextEditor.setEditorState(cellTextEditor.parseEditorState(JSON.stringify(speakerCellContentForEditor)));
+                let speakerName = cellTextEditor.getEditorState().read(() => _getRoot().getTextContent()).trim();
+                if (!speakerName) speakerName = "Unknown";
+
+                // --- Text Content Cell (index 3 of rowNode.children) ---
+                const textContentCellNode = rowNode.children[3]; // TableCellNode
+                if (textContentCellNode.type !== 'tablecell') {
+                     console.warn(`[ProjectService] Row ${i}, Expected Cell 3 (Text) to be 'tablecell', got '${textContentCellNode.type}'. Skipping row.`); continue;
+                }
+                // The segment's 'text' field requires a stringified Lexical JSON representing this cell's content.
+                // So, we wrap the cell's children in a root structure.
+                const segmentLexicalContentJson = {
+                    root: {
+                        type: 'root',
+                        children: textContentCellNode.children || [], // These are the actual content nodes (e.g., ParagraphNode)
+                        direction: null,
+                        format: '',
+                        indent: 0,
+                        version: 1
+                    }
+                };
+                const segmentTextJsonString = JSON.stringify(segmentLexicalContentJson);
+
+                segmentsArray.push({
+                    start_time: startTime,
+                    end_time: endTime,
+                    speaker: speakerName,
+                    text: segmentTextJsonString
+                });
+
+            } catch (cellProcessingError) {
+                console.error(`[ProjectService] Error processing cells in row ${i}:`, cellProcessingError, "RowNode snapshot:", JSON.stringify(rowNode).substring(0,300));
+                // Add a placeholder segment to indicate an error for this specific row
+                segmentsArray.push({
+                    start_time: 0,
+                    end_time: 0,
+                    speaker: "Error Processing Row",
+                    text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) // Empty valid Lexical JSON
+                });
+            }
+        }
+    } catch (tableProcessingError) {
+        console.error("[ProjectService] Error processing table structure:", tableProcessingError, "Parsed Full Editor State snapshot:", JSON.stringify(parsedFullEditorState).substring(0,500));
+        return []; // Return empty if there's a major error in table processing
+    }
+    console.log(`[ProjectService] parseLexicalTableToSegments finished. Successfully parsed ${segmentsArray.length} segments.`);
+    return segmentsArray;
+}
+
+
 export async function loadTranscriptFile(transcriptFilePath) { 
     if (!transcriptFilePath) { 
         project.update(p => ({ ...p, isTranscriptLoading: false, error: "Transcript file path is missing." })); 
@@ -690,14 +827,10 @@ export async function loadTranscriptFile(transcriptFilePath) {
     console.log(`[ProjectService] Loading transcript: ${filename}`); 
     project.update(p => ({ ...p, isTranscriptLoading: true, error: null, statusMessage: `Loading transcript ${filename}...` })); 
     try { 
-        // --- MODIFICATION: Expect full Lexical JSON string from backend ---
-        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath }); 
-        // --- END MODIFICATION ---
-
-        // The setTranscriptData function will now need to handle this full Lexical JSON.
-        // It should parse the table and extract segments for the store.
-        setTranscriptData(transcriptFilePath, fullLexicalJsonString, false); 
-        console.log(`[ProjectService] Transcript ${filename} loaded successfully.`); 
+        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath });
+        const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
+        setTranscriptData(transcriptFilePath, segmentsArray, false); 
+        console.log(`[ProjectService] Transcript ${filename} loaded successfully. Parsed ${segmentsArray.length} segments.`); 
     } catch (error) { 
         const errorMessage = error?.message || String(error); 
         console.error(`[ProjectService] Failed to load transcript file ${filename}:`, errorMessage); 
@@ -794,11 +927,17 @@ export async function saveTranscriptData() {
                 const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
                     try {
+                        // The segment.text is already a stringified Lexical JSON for the cell's content.
+                        // We need to parse it and append its root's children to the new cellText.
                         const cellEditorState = editorForTableAssembly.parseEditorState(segment.text);
-                        const cellRoot = cellEditorState.read(_getRoot);
-                        const cellChildren = cellRoot.getChildren();
-                        // Append children of the cell's root to the table cell
+                        
+                        // Create a temporary root in the assembly editor to access children
+                        const tempRoot = cellEditorState.read(() => _getRoot());
+                        const cellChildren = tempRoot.getChildren();
+                        
+                        // Append clones of these children to the actual table cell node
                         cellChildren.forEach(node => cellText.append(node.clone()));
+
                     } catch (parseError) {
                         console.error(`[ProjectService Save] Error parsing cell content for segment ${i}:`, parseError, segment.text.substring(0,100));
                         const pError = _createParagraphNode();
