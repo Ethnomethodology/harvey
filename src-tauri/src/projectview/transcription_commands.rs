@@ -1,4 +1,4 @@
-// src/projectview/transcription_commands.rs
+// src-tauri/src/projectview/transcription_commands.rs
 use super::shared_types::*;
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
@@ -14,7 +14,7 @@ pub fn generate_lexical_doc(text: &str) -> serde_json::Value {
                     "children": [
                         {
                             "detail": 0,
-                            "format": "",
+                            "format": 0, // Ensure format is a number if it represents bitmask
                             "mode": "normal",
                             "style": "",
                             "text": text,
@@ -42,16 +42,13 @@ use std::{
     fs::{self, File},
     io::{BufReader, BufWriter},
     path::{Path, PathBuf},
-    // Removed unused imports:
-    // collections::HashMap,
-    // cmp::Ordering as CmpOrdering,
 };
 use tauri::{AppHandle};
 use tauri_plugin_shell::ShellExt;
 use quick_xml;
 
 
-// --- trim_media Command --- (Unchanged)
+// --- trim_media Command ---
 #[tauri::command]
 pub async fn trim_media( app_handle: AppHandle, original_media_path: String, start_time: f64, end_time: f64) -> Result<Vec<FileEntry>, CommandError> {
     info!("[Trim Backend] Start: Path='{}', Start={:.3}, End={:.3}", original_media_path, start_time, end_time);
@@ -208,7 +205,7 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     super::core_commands::load_project_data(project_xml_path_str).await.map(|data| data.files)
 }
 
-// --- save_speaker_config Command --- (Unchanged)
+// --- save_speaker_config Command ---
 #[tauri::command]
 pub async fn save_speaker_config( project_xml_path: String, media_identifier: String, count: usize, names: Vec<String>) -> Result<(), CommandError> {
     info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}", project_xml_path, media_identifier, count, names);
@@ -257,7 +254,7 @@ pub async fn save_speaker_config( project_xml_path: String, media_identifier: St
     Ok(())
 }
 
-// --- load_transcript_json Command --- (Unchanged)
+// --- load_transcript_json Command ---
 #[tauri::command]
 pub async fn load_transcript_json(transcript_path: String) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Backend Load JSON] Path: {}", transcript_path);
@@ -275,7 +272,7 @@ pub async fn load_transcript_json(transcript_path: String) -> Result<Vec<Transcr
     serde_json::from_reader(reader).map_err(|e| CommandError::from(format!("Failed to parse transcript JSON: {}", e)))
 }
 
-// --- save_transcript_json Command --- (Unchanged)
+// --- save_transcript_json Command ---
 #[tauri::command]
 pub async fn save_transcript_json( project_xml_path: String, transcript_path: String, segments: Vec<TranscriptSegment>) -> Result<(), CommandError> {
     info!("[Backend Save JSON] Transcript Path: {}", transcript_path);
@@ -293,17 +290,43 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
 
     let file = File::create(&transcript_path_buf)?;
     let mut writer = BufWriter::new(file);
-    // Wrap each segment's plain text in a Lexical document JSON string
-    let lexical_segments: Vec<TranscriptSegment> = segments.into_iter().map(|mut seg| {
-        let doc = generate_lexical_doc(&seg.text);
-        if let Ok(json_str) = serde_json::to_string(&doc) {
-            seg.text = json_str;
+
+    // --- MODIFICATION START ---
+    // Process segments: if text is already valid Lexical JSON, use it. Otherwise, wrap it.
+    let processed_segments: Vec<TranscriptSegment> = segments.into_iter().map(|mut seg| {
+        // Try to parse seg.text as a serde_json::Value
+        match serde_json::from_str::<serde_json::Value>(&seg.text) {
+            Ok(json_value) => {
+                // Check if it has a "root" key, a simple heuristic for Lexical JSON
+                if json_value.get("root").is_some() {
+                    // It's likely already Lexical JSON, keep it as is
+                    debug!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is already valid JSON. Using directly.", seg.speaker, seg.start_time);
+                    // seg.text is already the JSON string we want.
+                } else {
+                    // It's some other JSON, or not Lexical. Wrap the original string.
+                    warn!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is JSON but not Lexical root. Wrapping original text.", seg.speaker, seg.start_time);
+                    let doc = generate_lexical_doc(&seg.text); // Wrap the original string
+                    if let Ok(json_str) = serde_json::to_string(&doc) {
+                        seg.text = json_str;
+                    }
+                }
+            }
+            Err(_) => {
+                // It's not valid JSON, so assume it's plain text and wrap it
+                debug!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is plain text. Wrapping.", seg.speaker, seg.start_time);
+                let doc = generate_lexical_doc(&seg.text);
+                if let Ok(json_str) = serde_json::to_string(&doc) {
+                    seg.text = json_str;
+                }
+            }
         }
         seg
     }).collect();
-    serde_json::to_writer_pretty(&mut writer, &lexical_segments)
+    // --- MODIFICATION END ---
+
+    serde_json::to_writer_pretty(&mut writer, &processed_segments) // Save the processed segments
         .map_err(|e| CommandError::from(format!("Failed to write transcript JSON: {}", e)))?;
-    info!("[Backend Save JSON] Saved {} segments to disk.", lexical_segments.len());
+    info!("[Backend Save JSON] Saved {} segments to disk.", processed_segments.len());
 
     let transcript_filename = transcript_path_buf.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename"))?.to_string();
 
@@ -354,7 +377,7 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
     Ok(())
 }
 
-// --- prepare_output_paths Helper Function --- (Unchanged)
+// --- prepare_output_paths Helper Function ---
 pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Result<(String, PathBuf, PathBuf, PathBuf), CommandError> {
     debug!("[prepare_output_paths][{}] Media path: {}", job_id, media_path_str);
     let media_path = PathBuf::from(media_path_str);
@@ -384,7 +407,7 @@ pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Resul
 }
 
 
-// --- Map Speaker IDs to User Names --- (Unchanged)
+// --- Map Speaker IDs to User Names ---
 pub fn map_speaker_ids_to_names(
     segments: &mut Vec<TranscriptSegment>,
     user_names: &[String])

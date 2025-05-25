@@ -11,7 +11,9 @@ import {
     $createLineBreakNode as _createLineBreakNode,
 	$isElementNode as _isElementNode,
 	$isTextNode as _isTextNode,
-	$parseSerializedNode as _parseSerializedNode
+	$parseSerializedNode as _parseSerializedNode,
+    // Import Node types that might be directly used or referenced
+    ParagraphNode, RootNode, TextNode, LineBreakNode, ElementNode
 } from 'lexical';
 import {
     $createTableNode as _createTableNode,
@@ -19,7 +21,9 @@ import {
     $createTableCellNode as _createTableCellNode,
     $isTableNode as _isTableNode,
     $isTableRowNode as _isTableRowNode,
-    $isTableCellNode as _isTableCellNode
+    $isTableCellNode as _isTableCellNode,
+    // Import Node classes for editor configuration
+    TableNode, TableRowNode, TableCellNode
 } from '@lexical/table';
 import {
     $createHeadingNode as _createHeadingNode,
@@ -37,10 +41,9 @@ import {
     $generateNodesFromDOM as _generateNodesFromDOM
 } from '@lexical/html';
 
-import { ParagraphNode, LineBreakNode, RootNode, TextNode, ElementNode } from 'lexical';
-import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
+// LinkNode needs to be imported for ALL_EDITOR_NODES
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
-import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
+import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js'; // Correct path if ExtendedTextNode.js is in $lib/nodes/
 
 import { dirname, basename, sep } from '@tauri-apps/api/path';
 
@@ -63,7 +66,6 @@ import {
     clearDocumentEditorState,
 
     markDocumentMetadataAsSaved,
-    // ADD THIS IMPORT for PDF annotations
     markPdfAnnotationsAsSaved,
 
     prepareImportedTranscriptView,
@@ -76,7 +78,6 @@ import {
     hideConversionPrompt,
     
     setLoadedPdfAnnotations,
-    // ADD THIS IMPORT for PDF annotations load failure
     setPdfAnnotationsLoadFailed
 } from '$lib/stores/projectStore.js';
 
@@ -113,12 +114,12 @@ const wordDocumentFilter = { name: 'Word Documents', extensions: ['docx'] };
 const ALL_EDITOR_NODES = [
     RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
     HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
-    TableNode, TableRowNode, TableCellNode
+    TableNode, TableRowNode, TableCellNode // Ensure TableNode and friends are here
 ];
 
 function createConversionEditor(instanceId) {
     return createHeadlessEditor({
-        nodes: ALL_EDITOR_NODES,
+        nodes: ALL_EDITOR_NODES, // Use the comprehensive list
         namespace: `html-converter-${instanceId}-${Math.random()}`,
         onError: (e) => console.error(`[Lexical HTML Converter ${instanceId}] Error:`, e)
     });
@@ -146,7 +147,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
             imageFiles: loadedData.image_files || [],
             importedTranscriptFiles: loadedData.imported_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
-            pdfAnnotationFiles: loadedData.pdf_annotation_files || [], // Make sure this is populated from backend
+            pdfAnnotationFiles: loadedData.pdf_annotation_files || [],
             isLoading: false,
             error: null,
             statusMessage: `Loaded project: ${loadedData.project_name}`
@@ -299,10 +300,10 @@ export async function importDocumentFile() {
      }
 
     let sourceFilePath = '';
-    let backendResultPathAndOriginalFilename = ''; // Will be "path|original_filename:name.ext"
+    let backendResultPathAndOriginalFilename = ''; 
     let finalJsonPath = '';
     let finalJsonName = '';
-    let originalSourceFilenameForMeta = ''; // To store the original filename for metadata
+    let originalSourceFilenameForMeta = ''; 
 
     try {
         const selected = await open({
@@ -319,7 +320,7 @@ export async function importDocumentFile() {
         }
         sourceFilePath = selected;
         const sourceFilename = await basename(sourceFilePath);
-        originalSourceFilenameForMeta = sourceFilename; // Store for metadata
+        originalSourceFilenameForMeta = sourceFilename; 
         const sourceFilenameStem = sourceFilename.includes('.') ? sourceFilename.substring(0, sourceFilename.lastIndexOf('.')) : sourceFilename;
         const sourceExtension = (sourceFilename.includes('.') ? sourceFilename.substring(sourceFilename.lastIndexOf('.') + 1) : '').toLowerCase();
 
@@ -350,7 +351,6 @@ export async function importDocumentFile() {
         if (backendResultPathAndOriginalFilename.includes("|original_filename:")) {
             const parts = backendResultPathAndOriginalFilename.split("|original_filename:");
             tempHtmlPath = parts[0];
-            // originalSourceFilenameForMeta is already set from sourceFilename
         }
 
 
@@ -360,7 +360,7 @@ export async function importDocumentFile() {
             await refreshProjectFiles();
             const importedPdfName = await basename(tempHtmlPath);
             setAssetImportStatus(false, `Document "${importedPdfName}" imported successfully.`);
-            prepareDocumentView(tempHtmlPath, 'documents'); // This will trigger PDF annotation loading
+            prepareDocumentView(tempHtmlPath, 'documents'); 
             return;
         }
 
@@ -432,11 +432,10 @@ export async function importDocumentFile() {
         console.log(`[ProjectService] Determined final JSON path: ${finalJsonPath} (Name: ${finalJsonName})`);
 
         setAssetImportStatus(true, `Saving document ${finalJsonName}...`);
-        // The backend save_document_and_update_xml will use finalJsonName for metadata.file_name
         await invoke('save_document_and_update_xml', {
             projectXmlPath: projectXmlPath,
             targetPath: finalJsonPath,
-            documentName: finalJsonName, // This name (e.g., MyDoc.json) is used for metadata.file_name
+            documentName: finalJsonName, 
             jsonContent: lexicalJsonString
         });
         console.log(`[ProjectService] Saved final JSON document and updated XML (including metadata entry).`);
@@ -701,27 +700,178 @@ export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' |
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
 export async function convertAndSaveTranscriptAsDoc() {
-    {
-        const projData = get(project);
-        const transcriptPath = projData.currentTranscriptPath;
-        const selectedMedia = projData.selectedMediaFile;
-        const projectXmlPath = projData.xmlPath;
-        const projectBaseDir = projData.baseDirectory;
+    console.log("[ProjectService] convertAndSaveTranscriptAsDoc initiated (TABLE EXPORT v2).");
+    const projData = get(project);
+    const transcriptPath = projData.currentTranscriptPath;
+    const selectedMedia = projData.selectedMediaFile;
+    const projectXmlPath = projData.xmlPath;
+    const projectBaseDir = projData.baseDirectory;
 
-        if (!transcriptPath) {
-            throw new Error("No transcript file loaded.");
-        }
-        if (!selectedMedia || !selectedMedia.path) {
-            throw new Error("No media file selected.");
-        }
-        if (!projectBaseDir) {
-            throw new Error("Project base directory not found.");
-        }
-        if (!projectXmlPath) {
-            throw new Error("Project XML path not found.");
+    if (!transcriptPath) { throw new Error("No transcript file loaded to convert."); }
+    if (!selectedMedia || !selectedMedia.path) { throw new Error("No media file selected to base document name on."); }
+    if (!projectBaseDir) { throw new Error("Project base directory not found."); }
+    if (!projectXmlPath) { throw new Error("Project XML path not found."); }
+
+    project.update(p => ({ ...p, statusMessage: `Converting transcript to table document...` }));
+
+    // Single headless editor for constructing the final table document
+    const finalTableEditor = createHeadlessEditor({
+        nodes: ALL_EDITOR_NODES,
+        namespace: `doc-table-finalizer-${Date.now()}`,
+        onError: (error) => console.error("[DocTableFinalizerEditor] Error:", error),
+    });
+
+    let finalLexicalJsonString = "";
+
+    try {
+        console.log(`[ProjectService] Reading content from transcript file: ${transcriptPath}`);
+        const transcriptFileContentString = await invoke('read_file_content', { path: transcriptPath });
+        if (!transcriptFileContentString) {
+            throw new Error("Transcript file content is empty or could not be read.");
         }
 
-        // Determine a safe stem for the document filename
+        let segmentsArray;
+        try {
+            segmentsArray = JSON.parse(transcriptFileContentString);
+            if (!Array.isArray(segmentsArray)) {
+                throw new Error("Transcript content is not a valid JSON array of segments.");
+            }
+            console.log(`[ProjectService] Parsed ${segmentsArray.length} segments from transcript file.`);
+        } catch (e) {
+            console.error("[ProjectService] Failed to parse transcript file content:", e);
+            throw new Error(`Failed to parse transcript file: ${e.message}`);
+        }
+
+        // All node creation and manipulation for the final document happens in this single update call
+        await finalTableEditor.update(() => {
+            const root = _getRoot();
+            root.clear();
+
+            const tableNode = _createTableNode();
+            // Example: tableNode.setColWidths([60, 120, 120, 450]); // Adjust as needed
+
+            // Create Header Row
+            const headerRow = _createTableRowNode();
+            const headers = ["#", "Timestamp", "Speaker", "Text"];
+            for (const headerText of headers) {
+                const cell = _createTableCellNode({ headerState: 'column' });
+                const paragraph = _createParagraphNode();
+                paragraph.append(_createTextNode(headerText));
+                cell.append(paragraph);
+                headerRow.append(cell);
+            }
+            tableNode.append(headerRow);
+
+            // Create Data Rows
+            let segmentCounter = 0;
+            for (const segment of segmentsArray) {
+                segmentCounter++;
+                const dataRow = _createTableRowNode();
+
+                // 1. Segment Number
+                const cellNum = _createTableCellNode();
+                const pNum = _createParagraphNode();
+                pNum.append(_createTextNode(String(segmentCounter)));
+                cellNum.append(pNum);
+                dataRow.append(cellNum);
+
+                // 2. Timestamp
+                const cellTime = _createTableCellNode();
+                const pTime = _createParagraphNode();
+                const startTime = formatTimestampHtml(segment.start_time || 0);
+                const endTime = formatTimestampHtml(segment.end_time || 0);
+                pTime.append(_createTextNode(`${startTime} - ${endTime}`));
+                cellTime.append(pTime);
+                dataRow.append(cellTime);
+
+                // 3. Speaker
+                const cellSpeaker = _createTableCellNode();
+                const pSpeaker = _createParagraphNode();
+                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
+                cellSpeaker.append(pSpeaker);
+                dataRow.append(cellSpeaker);
+
+                // 4. Text Content (potentially rich)
+                const cellText = _createTableCellNode();
+                if (segment && typeof segment.text === 'string' && segment.text.trim() !== '') {
+                    let segmentLexicalJson = segment.text;
+                    let parsedSegmentRootChildrenJSON = null;
+
+                    try {
+                        const parsedTextData = JSON.parse(segmentLexicalJson);
+                        if (parsedTextData && typeof parsedTextData.root === 'object' && Array.isArray(parsedTextData.root.children)) {
+                            parsedSegmentRootChildrenJSON = parsedTextData.root.children;
+                        } else {
+                            // It's JSON, but not the Lexical structure we want to unpack. Treat as plain text.
+                             console.warn(`[ProjectService] Segment ${segmentCounter} text is JSON but not full Lexical. Treating as plain text: "${segment.text.substring(0,100)}"`);
+                        }
+                    } catch (e) {
+                        // Not JSON, treat as plain text
+                         console.warn(`[ProjectService] Segment ${segmentCounter} text is not JSON. Treating as plain text: "${segment.text.substring(0,100)}"`);
+                    }
+
+                    if (parsedSegmentRootChildrenJSON) {
+                        // It was valid Lexical JSON, iterate its root children (which are block nodes)
+                        for (const blockNodeJSON of parsedSegmentRootChildrenJSON) {
+                            try {
+                                const newBlockNodeInstance = _parseSerializedNode(blockNodeJSON);
+                                if (newBlockNodeInstance) {
+                                    cellText.append(newBlockNodeInstance);
+                                } else {
+                                     console.warn(`[ProjectService] _parseSerializedNode returned null for segment ${segmentCounter}, block:`, blockNodeJSON);
+                                      const pError = _createParagraphNode();
+                                      pError.append(_createTextNode(`[Content error in segment ${segmentCounter}]`));
+                                      cellText.append(pError);
+                                }
+                            } catch (parseErr) {
+                                console.error(`[ProjectService] Error parsing block node JSON for segment ${segmentCounter}:`, parseErr, blockNodeJSON);
+                                const pError = _createParagraphNode();
+                                pError.append(_createTextNode(`[Content parsing error for segment ${segmentCounter}]`));
+                                cellText.append(pError);
+                            }
+                        }
+                    } else { // Treat as plain text
+                        const pContent = _createParagraphNode();
+                        pContent.append(_createTextNode(segment.text)); // segment.text contains the plain text here
+                        cellText.append(pContent);
+                    }
+                } else { // Segment text is empty or invalid
+                    cellText.append(_createParagraphNode()); // Append an empty paragraph
+                }
+                dataRow.append(cellText);
+                tableNode.append(dataRow);
+            } // end for each segment
+
+            root.append(tableNode);
+            root.append(_createParagraphNode()); // Empty para after table
+        }); // end finalTableEditor.update
+
+        finalLexicalJsonString = JSON.stringify(finalTableEditor.getEditorState().toJSON());
+        console.log(`[ProjectService] Final Table Lexical JSON string created (${finalLexicalJsonString.length} bytes).`);
+        
+        // Validation (optional but good)
+        try {
+            const testEditorState = finalTableEditor.parseEditorState(finalLexicalJsonString);
+            let isValid = false;
+            testEditorState.read(() => {
+                const root = _getRoot();
+                if (root && root.getType() === 'root' && Array.isArray(root.getChildren())) {
+                    const firstChild = root.getFirstChild();
+                    if (firstChild && _isTableNode(firstChild)) {
+                        isValid = true;
+                        console.log("[ProjectService] Final JSON table validation: OK, TableNode found.");
+                    } else {
+                        console.warn("[ProjectService] Final JSON table validation: First child not TableNode. Type:", firstChild?.getType());
+                    }
+                }
+            });
+            if (!isValid) throw new Error("Final JSON (table) did not parse to valid root with TableNode.");
+        } catch(e) {
+            console.error("[ProjectService] CRITICAL: Final combined JSON for table is NOT valid!", e);
+            console.error("Final JSON sample:", finalLexicalJsonString.substring(0, 1000) + "...");
+            throw new Error(`Failed to construct valid final table document: ${e.message}`);
+        }
+        
         const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => {
             const mediaName = selectedMedia.name;
             return mediaName.includes('.') 
@@ -732,10 +882,9 @@ export async function convertAndSaveTranscriptAsDoc() {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-        const docFilenameBase = `${safeStem}_transcript_doc_${dateStr}_${timeStr}`;
+        const docFilenameBase = `${safeStem}_transcript_table_${dateStr}_${timeStr}`;
 
-        // Update status and get a unique save path
-        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+        project.update(p => ({ ...p, statusMessage: `Saving transcript table document...` }));
         const targetFullPath = await invoke('get_unique_document_path', {
             projectBaseDirStr: projectBaseDir,
             baseName: docFilenameBase,
@@ -743,20 +892,21 @@ export async function convertAndSaveTranscriptAsDoc() {
         });
         const docFilename = await basename(targetFullPath);
 
-        // Read existing transcript JSON
-        const transcriptJsonString = await invoke('read_file_content', { path: transcriptPath });
-
-        // Save the transcript JSON directly as a document
         await invoke('save_document_and_update_xml', {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             documentName: docFilename,
-            jsonContent: transcriptJsonString
+            jsonContent: finalLexicalJsonString
         });
 
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
         return targetFullPath;
+
+    } catch (error) {
+        console.error("[ProjectService] Error in convertAndSaveTranscriptAsDoc (Table Export):", error);
+        project.update(p => ({ ...p, statusMessage: `Error converting transcript to table: ${error.message || error}` }));
+        throw error; 
     }
 }
 
@@ -781,11 +931,6 @@ export async function loadActiveDocumentContent() {
     }
 }
 
-/**
- * Immediately saves the currently‑selected PDF’s annotations
- * if they are marked dirty. Used for on‑the‑fly save after
- * add / remove highlight actions.
- */
 export async function saveCurrentPdfAnnotations() {
     const projState = get(project);
     if (!projState.selectedDocumentPath ||
@@ -804,8 +949,7 @@ export async function saveCurrentPdfAnnotations() {
         console.error('[ProjectService] Cannot save PDF annotations: missing project paths.');
         return;
     }
-
-    // Build path relative to base dir (mirrors logic in checkUnsavedChanges)
+    
     let relativePdfPath = projState.selectedDocumentPath;
     if (relativePdfPath.startsWith(projectBaseDir + sep) || relativePdfPath.startsWith(projectBaseDir + '/')) {
         relativePdfPath = relativePdfPath.substring(projectBaseDir.length + 1);
@@ -815,8 +959,7 @@ export async function saveCurrentPdfAnnotations() {
     relativePdfPath = relativePdfPath.replace(/^[\\/]/, '').replace(/\\/g, '/');
 
     try {
-        // Prefer whichever store field actually holds the annotations
-        const annList = projState.currentPdfAnnotations ?? projState.currentDocumentHighlights ?? [];
+        const annList = projState.currentPdfAnnotations ?? [];
         await invoke('save_pdf_annotations', {
             projectXmlPathStr: projectXmlPath,
             originalPdfRelativePathStr: relativePdfPath,
@@ -830,7 +973,6 @@ export async function saveCurrentPdfAnnotations() {
 }
 
 export async function saveDocumentContent(filePath, jsonContent) {
-    // ADDED: Safeguard for PDF paths
     if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
         console.warn(`[ProjectService saveDocumentContent] Attempted to save PDF content for ${filePath}. This should be handled by PDF annotation saving logic. Aborting.`);
         project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'}));
@@ -860,7 +1002,7 @@ export async function saveDocumentContent(filePath, jsonContent) {
     if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) {
         console.log(`[ProjectService] Document metadata is dirty for ${filename}. Saving metadata...`);
         try {
-            await saveDocumentMetadata(filePath); // This will now construct and send the full metadata object
+            await saveDocumentMetadata(filePath); 
         } catch (error) {
             metadataSaveError = error;
         }
@@ -909,15 +1051,14 @@ export async function loadDocumentMetadata(originalDocumentAbsPath) {
         });
         if (fullMetadataJsonString && typeof fullMetadataJsonString === 'string') {
             const parsedFullMetadata = JSON.parse(fullMetadataJsonString);
-            // Expecting { metadata: {...}, highlights: [...] }
             if (parsedFullMetadata && typeof parsedFullMetadata.metadata === 'object' && Array.isArray(parsedFullMetadata.highlights)) {
-                return parsedFullMetadata; // Return the whole object
+                return parsedFullMetadata; 
             } else {
                 console.warn("[ProjectService] Loaded metadata is not in expected full structure. Returning null.", parsedFullMetadata);
                 return null;
             }
         }
-        return null; // No metadata file found or empty content
+        return null; 
     } catch (error) {
         console.error(`[ProjectService] Error loading document metadata for ${originalDocumentRelativePathStr}:`, error);
         return null; 
@@ -956,16 +1097,15 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) {
     }
     const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/');
 
-    // Construct the full DocumentHighlightData object to send to backend
     const fullMetadataToSave = {
-        metadata: { // Populate the file-level metadata
-            file_name: docFilename, // The actual name of the document file
-            last_modified: proj.currentDocumentFileLevelMetadata.last_modified || new Date().toISOString(), // Backend will override this
+        metadata: { 
+            file_name: docFilename, 
+            last_modified: proj.currentDocumentFileLevelMetadata.last_modified || new Date().toISOString(), 
             title: proj.currentDocumentFileLevelMetadata.title || "",
             description: proj.currentDocumentFileLevelMetadata.description || "",
             summary: proj.currentDocumentFileLevelMetadata.summary || "",
         },
-        highlights: proj.currentDocumentHighlights || [] // The array of highlight objects
+        highlights: proj.currentDocumentHighlights || [] 
     };
 
     const fullMetadataJsonContent = JSON.stringify(fullMetadataToSave, null, 2);
@@ -975,10 +1115,8 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) {
         await invoke('save_document_metadata', {
             projectXmlPathStr: proj.xmlPath,
             originalDocumentRelativePathStr: originalDocumentRelativePathStr,
-            fullMetadataJsonContent: fullMetadataJsonContent // Send the whole structure
+            fullMetadataJsonContent: fullMetadataJsonContent 
         });
-        // Backend updates last_modified, so ideally, we'd get the updated struct back or reload.
-        // For now, just mark as saved. If we need the backend's timestamp, we'd refetch.
         markDocumentMetadataAsSaved(fullMetadataToSave.metadata); 
         console.log("[ProjectService] Document metadata (full structure) saved successfully.");
     } catch (error) {
@@ -1004,12 +1142,11 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     const typeDescForLog = providedActionContextDescription || "NO_CONTEXT_DESC_PROVIDED_TO_CHECK_UNSAVED";
     console.log(`[checkUnsavedChanges] Called with newPathToLoad: '${pathDescForLog}', actionContextDescription: '${typeDescForLog}'.`);
 
-    // Check for PDF unsaved changes FIRST
     if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') &&
-        (projState.isPdfAnnotationsDirty /* Consider if PDF metadata also makes it "dirty" for this check */)) {
+        (projState.isPdfAnnotationsDirty )) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
-        itemTypeForPrompt = 'PDF annotations'; // More specific for PDF
+        itemTypeForPrompt = 'PDF annotations'; 
         const projectXmlPath = projState.xmlPath;
         const projectBaseDir = projState.baseDirectory;
 
@@ -1018,21 +1155,16 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                 throw new Error("Project XML path or base directory is missing for saving PDF annotations.");
             }
             let relativePdfPath = itemPath;
-            // Ensure itemPath is correctly made relative to projectBaseDir
-            if (itemPath.startsWith(projectBaseDir + sep) || itemPath.startsWith(projectBaseDir + '/')) { // More robust check
+            if (itemPath.startsWith(projectBaseDir + sep) || itemPath.startsWith(projectBaseDir + '/')) { 
                 relativePdfPath = itemPath.substring(projectBaseDir.length + 1);
             } else if (itemPath.startsWith(projectBaseDir)) {
                  relativePdfPath = itemPath.substring(projectBaseDir.length);
                  if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) {
                     relativePdfPath = relativePdfPath.substring(1);
                 }
-            } else {
-                console.warn(`[checkUnsavedChanges PDF Save] itemPath ${itemPath} does not seem to be absolute under ${projectBaseDir}. Using as is, assuming it's already correctly relative or backend handles it.`);
-                // If backend strictly expects a path relative to projectBaseDir, and itemPath isn't, this could fail.
-                // However, if itemPath can sometimes be already relative, this might be okay.
             }
             
-            relativePdfPath = relativePdfPath.replace(/\\/g, '/'); // Normalize to forward slashes
+            relativePdfPath = relativePdfPath.replace(/\\/g, '/'); 
             
             const annotationsToSave = get(project).currentPdfAnnotations;
             await invoke('save_pdf_annotations', {
@@ -1043,12 +1175,11 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             markPdfAnnotationsAsSaved(); 
         };
         discardFunction = () => {
-            markDocumentChangesDiscarded(); // This resets PDF annotations to initial and clears dirty flag
+            markDocumentChangesDiscarded(); 
         };
-        resetEditorFunction = null; // PDF viewer handles its own reset, store handles data
+        resetEditorFunction = null; 
         initialContentForReset = projState.initialPdfAnnotations;
     }
-    // THEN check for Lexical document unsaved changes (if not PDF)
     else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
@@ -1065,7 +1196,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         resetEditorFunction = projState.activeDocumentEditorRef?.resetEditorState;
         initialContentForReset = projState.initialDocumentJson;
     }
-    // THEN check for imported transcript unsaved changes
     else if (projState.currentImportedTranscriptPath && projState.isImportedTranscriptDirty) {
         itemIsDirty = true;
         itemPath = projState.currentImportedTranscriptPath;
@@ -1168,7 +1298,6 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
     }
     const filename = await basename(pdfAbsPath);
     console.log(`[ProjectService] Loading PDF annotations for: ${filename} (Path: ${pdfAbsPath})`);
-    // isDocumentLoading should have been set to true by prepareDocumentView if a load is expected
 
     try {
         const annotationsJsonString = await invoke('load_pdf_annotations', {
@@ -1182,7 +1311,6 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
                 const parsedAnnotations = JSON.parse(annotationsJsonString);
                 console.log(`[ProjectService] Parsed annotations for ${filename}:`, parsedAnnotations);
                 setLoadedPdfAnnotations(parsedAnnotations || []); 
-                // isDocumentLoading is set to false inside setLoadedPdfAnnotations
             } catch (parseError) {
                 console.error(`[ProjectService] Failed to parse annotations JSON string for ${filename}:`, parseError, "\nString was:", annotationsJsonString);
                 setPdfAnnotationsLoadFailed(pdfAbsPath, `Failed to parse loaded annotations: ${parseError.message}`);
@@ -1190,11 +1318,9 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
         } else if (annotationsJsonString === null) {
             console.log(`[ProjectService] No annotation file found or it was explicitly null for ${filename}. Setting empty.`);
             setLoadedPdfAnnotations([]);
-            // isDocumentLoading is set to false inside setLoadedPdfAnnotations
         } else {
             console.log(`[ProjectService] Annotation file likely empty or backend returned unexpected non-string for ${filename}. Setting empty.`);
             setLoadedPdfAnnotations([]);
-            // isDocumentLoading is set to false inside setLoadedPdfAnnotations
         }
     } catch (e) {
         const errorMessage = e.message || String(e);
