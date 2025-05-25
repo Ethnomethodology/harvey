@@ -704,7 +704,7 @@ function parseTimestampStringToSeconds(timestampStr) {
 }
 
 export function parseLexicalTableToSegments(lexicalTableJsonString) {
-    console.log("[ProjectService] Attempting parseLexicalTableToSegments...");
+    console.log("[ProjectService] Attempting parseLexicalTableToSegments (refactored for stability)...");
     let parsedFullEditorState;
     try {
         parsedFullEditorState = JSON.parse(lexicalTableJsonString);
@@ -716,12 +716,6 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
         console.error("[ProjectService] Failed to parse lexicalTableJsonString:", error, "Content snapshot:", lexicalTableJsonString.substring(0, 500));
         return [];
     }
-
-    const cellTextEditor = createHeadlessEditor({
-        nodes: [RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode], // Minimal set for cell text processing
-        namespace: `cell-parser-editor-${Date.now()}`,
-        onError: (e) => console.error("[CellParserEditor] Error:", e),
-    });
 
     const segmentsArray = [];
     try {
@@ -742,51 +736,63 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
             }
 
             try {
+                let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}";
+
                 // --- Timestamp Cell (index 1 of rowNode.children) ---
-                const timestampCellNode = rowNode.children[1]; // This is the TableCellNode
+                const timestampCellNode = rowNode.children[1];
                 if (timestampCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 1 (Timestamp) to be 'tablecell', got '${timestampCellNode.type}'. Skipping row.`); continue;
                 }
-                // Construct a valid Lexical JSON string for this cell's content by wrapping its children in a root
+                const tempTimestampEditor = createHeadlessEditor({ 
+                    nodes: ALL_EDITOR_NODES, // Using ALL_EDITOR_NODES as it includes ExtendedTextNode etc.
+                    namespace: `timestamp-parser-${i}-${Date.now()}`,
+                    onError: (e) => console.error(`[TimestampParserEditor ${i}] Error:`, e)
+                });
+                const clonedTimestampChildren = JSON.parse(JSON.stringify(timestampCellNode.children || []));
                 const timestampCellContentForEditor = {
-                    root: { type: 'root', children: timestampCellNode.children || [], direction: null, format: '', indent: 0, version: 1 }
+                    root: { type: 'root', children: clonedTimestampChildren, direction: null, format: '', indent: 0, version: 1 }
                 };
-                cellTextEditor.setEditorState(cellTextEditor.parseEditorState(JSON.stringify(timestampCellContentForEditor)));
-                const timestampText = cellTextEditor.getEditorState().read(() => _getRoot().getTextContent());
+                tempTimestampEditor.setEditorState(tempTimestampEditor.parseEditorState(JSON.stringify(timestampCellContentForEditor)));
+                const timestampText = tempTimestampEditor.getEditorState().read(() => _getRoot().getTextContent());
                 const timeParts = timestampText.split(' - ');
-                const startTime = parseTimestampStringToSeconds(timeParts[0]);
-                const endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
+                startTime = parseTimestampStringToSeconds(timeParts[0]);
+                endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
 
                 // --- Speaker Cell (index 2 of rowNode.children) ---
-                const speakerCellNode = rowNode.children[2]; // TableCellNode
+                const speakerCellNode = rowNode.children[2]; 
                 if (speakerCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 2 (Speaker) to be 'tablecell', got '${speakerCellNode.type}'. Skipping row.`); continue;
                 }
+                const tempSpeakerEditor = createHeadlessEditor({
+                    nodes: ALL_EDITOR_NODES,
+                    namespace: `speaker-parser-${i}-${Date.now()}`,
+                    onError: (e) => console.error(`[SpeakerParserEditor ${i}] Error:`, e)
+                });
+                const clonedSpeakerChildren = JSON.parse(JSON.stringify(speakerCellNode.children || []));
                 const speakerCellContentForEditor = {
-                    root: { type: 'root', children: speakerCellNode.children || [], direction: null, format: '', indent: 0, version: 1 }
+                    root: { type: 'root', children: clonedSpeakerChildren, direction: null, format: '', indent: 0, version: 1 }
                 };
-                cellTextEditor.setEditorState(cellTextEditor.parseEditorState(JSON.stringify(speakerCellContentForEditor)));
-                let speakerName = cellTextEditor.getEditorState().read(() => _getRoot().getTextContent()).trim();
+                tempSpeakerEditor.setEditorState(tempSpeakerEditor.parseEditorState(JSON.stringify(speakerCellContentForEditor)));
+                speakerName = tempSpeakerEditor.getEditorState().read(() => _getRoot().getTextContent()).trim();
                 if (!speakerName) speakerName = "Unknown";
 
                 // --- Text Content Cell (index 3 of rowNode.children) ---
-                const textContentCellNode = rowNode.children[3]; // TableCellNode
+                const textContentCellNode = rowNode.children[3]; 
                 if (textContentCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 3 (Text) to be 'tablecell', got '${textContentCellNode.type}'. Skipping row.`); continue;
                 }
-                // The segment's 'text' field requires a stringified Lexical JSON representing this cell's content.
-                // So, we wrap the cell's children in a root structure.
+                const clonedTextCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || []));
                 const segmentLexicalContentJson = {
                     root: {
                         type: 'root',
-                        children: textContentCellNode.children || [], // These are the actual content nodes (e.g., ParagraphNode)
+                        children: clonedTextCellChildren, 
                         direction: null,
                         format: '',
                         indent: 0,
                         version: 1
                     }
                 };
-                const segmentTextJsonString = JSON.stringify(segmentLexicalContentJson);
+                segmentTextJsonString = JSON.stringify(segmentLexicalContentJson);
 
                 segmentsArray.push({
                     start_time: startTime,
@@ -797,18 +803,17 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
 
             } catch (cellProcessingError) {
                 console.error(`[ProjectService] Error processing cells in row ${i}:`, cellProcessingError, "RowNode snapshot:", JSON.stringify(rowNode).substring(0,300));
-                // Add a placeholder segment to indicate an error for this specific row
                 segmentsArray.push({
                     start_time: 0,
                     end_time: 0,
                     speaker: "Error Processing Row",
-                    text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) // Empty valid Lexical JSON
+                    text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) 
                 });
             }
         }
     } catch (tableProcessingError) {
         console.error("[ProjectService] Error processing table structure:", tableProcessingError, "Parsed Full Editor State snapshot:", JSON.stringify(parsedFullEditorState).substring(0,500));
-        return []; // Return empty if there's a major error in table processing
+        return []; 
     }
     console.log(`[ProjectService] parseLexicalTableToSegments finished. Successfully parsed ${segmentsArray.length} segments.`);
     return segmentsArray;
