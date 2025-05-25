@@ -1,18 +1,18 @@
 // src-tauri/src/projectview/local_handler/transcription.rs
 
-// --- UPDATED: Imports reflecting new module structure ---
-use crate::projectview::shared_types::{TranscriptSegment, ProgressPayload, TranscriptionResult}; // Import shared types
-use crate::projectview::shared_utils::{get_project_xml_path_from_item}; // Import shared utils
+use crate::projectview::shared_types::{TranscriptSegment, ProgressPayload, TranscriptionResult};
+use crate::projectview::shared_utils::{get_project_xml_path_from_item};
 use crate::projectview::transcription_commands::{ // Import transcription commands
-    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, generate_lexical_doc,
+    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, 
+    create_lexical_paragraph_json_value, // CHANGED: Renamed from generate_lexical_doc
+    create_lexical_table_from_segments // ADDED: New function to import
 };
 use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
 use crate::TranscriptionCancellationState;
-// --- END UPDATED IMPORTS ---
 
 use log::{debug, error, info, warn};
-use serde::{Deserialize}; // Removed Serialize
+use serde::{Deserialize}; 
 use std::{
     cmp::Ordering as CmpOrdering,
     collections::HashMap,
@@ -54,7 +54,6 @@ pub async fn run_transcription(
     let cancel_flag = Arc::new(AtomicBool::new(false));
     cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
 
-    // Use RAII Guard for automatic cleanup of the cancel flag
     let _cancel_guard = CancelGuard { job_id: job_id.clone(), state: cancel_state.0.clone() };
 
     let project_xml_path_buf = get_project_xml_path_from_item(&PathBuf::from(&media_path))?;
@@ -69,9 +68,8 @@ pub async fn run_transcription(
     let whisper_model_path_str = resolve_whisper_model_path(&model_name, &job_id).await?;
     debug!("[Transcription][Job '{}'] Whisper model path: '{}'", job_id, whisper_model_path_str);
 
-    // FIX: Remove .await from non-async function call
     let (output_path_base_str, expected_whisper_output_path, expected_rttm_path, final_transcript_path) =
-        prepare_output_paths(&wav_media_path.to_string_lossy(), &job_id)?; // No await here
+        prepare_output_paths(&wav_media_path.to_string_lossy(), &job_id)?; 
     debug!("[Transcription][Job '{}'] Paths - Base:'{}', Whisper:'{}', RTTM:'{}', Final:'{}'", job_id, output_path_base_str, expected_whisper_output_path.display(), expected_rttm_path.display(), final_transcript_path.display());
 
     let _ = emit_progress(&app_handle, &job_id, 5.0, "Running transcription...").await;
@@ -82,13 +80,14 @@ pub async fn run_transcription(
         &language,
         &job_id,
         &cancel_flag,
-        &output_path_base_str,
-        &expected_whisper_output_path,
+        &output_path_base_str, // This is the base name for whisper output files (e.g., /path/to/transcripts/media_stem)
+        &expected_whisper_output_path, // This is the expected path of the .json file (e.g., /path/to/transcripts/media_stem.json)
     ).await?;
 
     let _ = emit_progress(&app_handle, &job_id, 45.0, "Parsing results...").await;
-    let mut whisper_segments = parse_whisper_json(&whisper_output_path)?;
-    debug!("[Transcription][Job '{}'] Parsed {} segments.", job_id, whisper_segments.len());
+    // These are plain text segments after parsing whisper's raw output
+    let mut whisper_segments_plain = parse_whisper_json(&whisper_output_path)?; 
+    debug!("[Transcription][Job '{}'] Parsed {} plain text segments.", job_id, whisper_segments_plain.len());
 
     let rttm_records: Option<Vec<RttmRecord>> = if num_speakers > 0 {
         let _ = emit_progress(&app_handle, &job_id, 50.0, "Running diarization...").await;
@@ -97,7 +96,7 @@ pub async fn run_transcription(
             "diarize-cli",
             &wav_media_path.to_string_lossy(),
             num_speakers,
-            &expected_rttm_path,
+            &expected_rttm_path, // This is the expected path for the .rttm file
             &job_id,
             &cancel_flag
         ).await {
@@ -118,7 +117,6 @@ pub async fn run_transcription(
             Err(e) => {
                 if e.message.contains("cancelled") || e.message.contains("canceled") {
                     info!("[Transcription][Job '{}'] Diarization explicitly cancelled.", job_id);
-                     // _cancel_guard will handle removal
                      return Err(CommandError::from("Diarization cancelled."));
                  } else {
                     error!("[Transcription][Job '{}'] Diarization failed: {}.", job_id, e.message);
@@ -137,10 +135,9 @@ pub async fn run_transcription(
     if let Some(rttm_data) = &rttm_records {
         if !rttm_data.is_empty() {
             debug!("[Transcription][Job '{}'] Merging diarization results...", job_id);
-            merge_diarization_results(&mut whisper_segments, rttm_data); // Local merge function
+            merge_diarization_results(&mut whisper_segments_plain, rttm_data); 
             let _ = emit_progress(&app_handle, &job_id, 90.0, "Mapping speaker names...").await;
-            // Use map_speaker_ids_to_names from transcription_commands
-            map_speaker_ids_to_names(&mut whisper_segments, &speaker_names);
+            map_speaker_ids_to_names(&mut whisper_segments_plain, &speaker_names);
         } else {
             warn!("[Transcription][Job '{}'] Diarization ran but resulted in 0 RTTM records.", job_id);
             let _ = emit_progress(&app_handle, &job_id, 90.0, "No speaker segments found.").await;
@@ -150,36 +147,49 @@ pub async fn run_transcription(
     }
 
     let _ = emit_progress(&app_handle, &job_id, 95.0, "Saving final transcript...").await;
-    debug!("[Transcription][Job '{}'] Saving final JSON to: {:?}", job_id, final_transcript_path);
+    
+    // --- MODIFICATION: Generate Lexical Table JSON ---
+    let lexical_table_json_value = create_lexical_table_from_segments(&whisper_segments_plain);
+    let lexical_table_json_string = serde_json::to_string_pretty(&lexical_table_json_value)
+        .map_err(|e| CommandError::from(format!("Failed to serialize Lexical Table JSON: {}", e)))?;
+    // --- END MODIFICATION ---
+
+    debug!("[Transcription][Job '{}'] Saving final Lexical Table JSON to: {:?}", job_id, final_transcript_path);
     save_transcript_json(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
-        whisper_segments.clone(),
+        lexical_table_json_string, // MODIFIED: Pass the string representation of the Lexical Table
     ).await?;
     info!("[Transcription][Job '{}'] Final transcript saved.", job_id);
 
-    // Convert returned segments into Lexical JSON strings for UI consumption
-    let lexical_segments: Vec<TranscriptSegment> = whisper_segments.iter().cloned().map(|mut seg| {
-        let doc = generate_lexical_doc(&seg.text);
-        if let Ok(json_str) = serde_json::to_string(&doc) {
-            seg.text = json_str;
-        }
-        seg
-    }).collect();
+    // --- MODIFICATION: Prepare segments for frontend (text field will contain Lexical JSON for the cell's content) ---
+    // The `whisper_segments_plain` still holds the segments with plain text, which is what we want
+    // to use as the basis for the `text` field of each segment in the result.
+    let segments_for_frontend_result: Vec<TranscriptSegment> = whisper_segments_plain.iter().cloned().map(|seg_plain| {
+        // For each plain text segment, create the Lexical JSON for its *text cell content*
+        let cell_content_lexical_value = create_lexical_paragraph_json_value(&seg_plain.text);
+        let cell_content_lexical_string = serde_json::to_string(&cell_content_lexical_value)
+            .unwrap_or_else(|_| serde_json::to_string(&create_lexical_paragraph_json_value("")).unwrap()); // Fallback to empty paragraph
 
-    // Cleanup handled by _cancel_guard
+        TranscriptSegment {
+            start_time: seg_plain.start_time,
+            end_time: seg_plain.end_time,
+            speaker: seg_plain.speaker.clone(),
+            text: cell_content_lexical_string, // This `text` is the Lexical JSON for the cell
+        }
+    }).collect();
+    // --- END MODIFICATION ---
 
     info!("[Transcription][Job '{}'] Process complete.", job_id);
     let _ = emit_progress(&app_handle, &job_id, 100.0, "Transcription complete.").await;
 
     Ok(TranscriptionResult {
-        segments: lexical_segments,
+        segments: segments_for_frontend_result, // MODIFIED
         transcript_file_path: final_transcript_path.to_string_lossy().to_string(),
     })
 }
 
 // --- Helper: Convert to WAV using FFmpeg ---
-// (Keep local)
 pub(crate) async fn convert_to_wav_if_needed(
     app_handle: &AppHandle,
     input_path_str: &str,
@@ -325,8 +335,8 @@ async fn run_whisper_cpp_sidecar(
     language: &str,
     job_id: &str,
     cancel_flag: &Arc<AtomicBool>,
-    output_path_base_str: &str,
-    expected_output_path: &Path
+    output_path_base_str: &str, // Base for whisper's -of flag (e.g., .../transcripts/media_stem_temp_jobid)
+    expected_output_path: &Path // Full path to the .json file whisper should create (e.g., .../media_stem_temp_jobid.whisper.json)
 ) -> Result<PathBuf, CommandError> {
     let sidecar_name = "whisper-cpp";
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
@@ -336,8 +346,8 @@ async fn run_whisper_cpp_sidecar(
         "-m".into(), whisper_model_path_str.to_string(),
         "-f".into(), media_path.to_string(),
         "-l".into(), lang_arg.to_string(),
-        "-oj".into(),
-        "-of".into(), output_path_base_str.to_string(),
+        "-oj".into(), // Output JSON
+        "-of".into(), output_path_base_str.to_string(), // Output file base name
     ];
     debug!("[Transcription][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
 
@@ -465,7 +475,7 @@ fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, Comman
             segments.push(TranscriptSegment {
                 start_time,
                 end_time,
-                speaker: "Unknown".to_string(),
+                speaker: "Unknown".to_string(), // Default speaker
                 text: w_seg.text.trim().to_string(),
             });
         }
@@ -608,6 +618,8 @@ async fn run_diarize_cli_sidecar(
     match output_rttm_path.metadata() {
         Ok(m) if m.len() == 0 => {
             warn!("[DiarizeCLI][{}] Output RTTM file exists but is empty: {:?}", job_id, output_rttm_path);
+            // Don't error out here, an empty RTTM might be valid if no speech turns are found.
+            // parse_rttm_file will return an empty Vec in this case.
         },
         Err(e) => {
             error!("[DiarizeCLI][{}] Failed to get metadata for RTTM output file {}: {}", job_id, output_rttm_path.display(), e);
@@ -675,7 +687,7 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
 
 // --- Helper: Merge Diarization Results ---
 fn merge_diarization_results(
-    whisper_segments: &mut Vec<TranscriptSegment>,
+    whisper_segments: &mut Vec<TranscriptSegment>, // These are plain text segments
     rttm_records: &[RttmRecord])
 {
     if rttm_records.is_empty() {
@@ -703,13 +715,14 @@ fn merge_diarization_results(
             continue;
         }
 
+        // Advance RTTM index past records that end before the current whisper segment starts
         while rttm_index < sorted_rttm.len() {
             let rttm_rec = &sorted_rttm[rttm_index];
             let rttm_turn_end = rttm_rec.start_time + rttm_rec.duration;
             if rttm_turn_end <= whisper_start {
                 rttm_index += 1;
             } else {
-                break;
+                break; // Found a potentially overlapping RTTM record or one that starts later
             }
         }
 
@@ -717,13 +730,15 @@ fn merge_diarization_results(
         let mut speaker_contains_midpoint: Option<String> = None;
         let whisper_mid_point = whisper_start + (whisper_end - whisper_start) / 2.0;
 
+        // Check RTTM records starting from the current rttm_index
         for i in rttm_index..sorted_rttm.len() {
             let rttm_rec = &sorted_rttm[i];
             let rttm_start = rttm_rec.start_time;
             let rttm_end = rttm_rec.start_time + rttm_rec.duration;
 
+            // If RTTM record starts after whisper segment ends, no further RTTM records will overlap
             if rttm_start >= whisper_end {
-                break;
+                break; 
             }
 
             let overlap_start = whisper_start.max(rttm_start);
@@ -734,11 +749,13 @@ fn merge_diarization_results(
                 *speaker_overlaps.entry(rttm_rec.speaker_id.clone()).or_insert(0.0) += overlap_duration;
             }
 
+            // Check if this RTTM record contains the midpoint of the whisper segment
             if speaker_contains_midpoint.is_none() && whisper_mid_point >= rttm_start && whisper_mid_point < rttm_end {
                 speaker_contains_midpoint = Some(rttm_rec.speaker_id.clone());
             }
         }
-
+        
+        // Assign speaker based on max overlap, then midpoint, then keep original
         if let Some((dominant_speaker, max_overlap)) = speaker_overlaps.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(CmpOrdering::Equal)) {
              debug!("[Merge] Assigning '{}' (overlap {:.3}s) to seg {:.3}-{:.3}", dominant_speaker, max_overlap, whisper_start, whisper_end);
             whisper_seg.speaker = dominant_speaker;
@@ -746,6 +763,7 @@ fn merge_diarization_results(
              warn!("[Merge] No overlap found for seg {:.3}-{:.3}. Using midpoint speaker '{}'", whisper_start, whisper_end, midpoint_speaker);
             whisper_seg.speaker = midpoint_speaker;
         } else {
+            // If no overlap and no midpoint speaker, keep the existing speaker (which defaults to "Unknown" or previous assignment)
             debug!("[Merge] No overlap or midpoint speaker found for seg {:.3}-{:.3}. Keeping original speaker '{}'.", whisper_start, whisper_end, whisper_seg.speaker);
         }
     }
@@ -766,7 +784,7 @@ fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
                 if path.is_file() {
                     if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                         let lower_ext = ext.to_lowercase();
-                        if lower_ext == "bin" || lower_ext == "gguf" || lower_ext == "pt" {
+                        if lower_ext == "bin" || lower_ext == "gguf" || lower_ext == "pt" { // Common model file extensions
                             info!("[Helper] Found potential model file: {:?}", path);
                             return Ok(path);
                         }
@@ -779,7 +797,7 @@ fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
         }
     }
 
-    Err(CommandError::from(format!("No model file (.bin, .gguf) found within directory: {}", model_dir.display())))
+    Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
 }
 
 // --- cancel_transcription Command ---

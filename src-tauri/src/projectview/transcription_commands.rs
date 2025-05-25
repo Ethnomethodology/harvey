@@ -1,34 +1,167 @@
 // src-tauri/src/projectview/transcription_commands.rs
+
 use super::shared_types::*;
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
-use serde_json;
 use serde_json::json;
-/// Wrap a plain text string in a minimal Lexical JSON document node.
-pub fn generate_lexical_doc(text: &str) -> serde_json::Value {
+use serde_json::Value as JsonValue;
+
+use std::{
+    fs::{self, File},
+    io::{BufWriter, Write}, 
+    path::{Path, PathBuf},
+};
+use tauri::{AppHandle};
+use tauri_plugin_shell::ShellExt; 
+use quick_xml;
+
+
+/// Creates a Lexical JSON structure for a single paragraph containing the given text.
+/// This is suitable for the content of a single cell, using ExtendedTextNode.
+pub fn create_lexical_paragraph_json_value(text: &str) -> JsonValue {
     json!({
         "root": {
+            "children": [{
+                "type": "paragraph",
+                "version": 1,
+                "children": [{
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "", 
+                    "text": text,
+                    "type": "extended-text", 
+                    "version": 1,
+                    "highlightId": null 
+                }],
+                "direction": "ltr", 
+                "format": "",       
+                "indent": 0
+            }],
+            "direction": "ltr", 
+            "format": "",       
+            "indent": 0,
+            "type": "root",
+            "version": 1
+        }
+    })
+}
+
+/// Helper to format timestamp precisely for display in the table.
+fn format_timestamp_for_table(seconds: f64) -> String {
+    if seconds.is_nan() || seconds.is_infinite() || seconds < 0.0 {
+        return "00:00.000".to_string(); 
+    }
+    let total_millis = (seconds * 1000.0).round() as i64;
+    let millis_part = total_millis % 1000;
+    let total_seconds_part = total_millis / 1000;
+    let secs_part = total_seconds_part % 60;
+    let total_minutes_part = total_seconds_part / 60;
+    format!("{:02}:{:02}.{:03}", total_minutes_part, secs_part, millis_part)
+}
+
+
+/// Creates a Lexical Table JSON Value from an array of `TranscriptSegment`s.
+/// The `text` field in each input `TranscriptSegment` is assumed to be plain text.
+pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> JsonValue {
+    let mut table_rows_json: Vec<JsonValue> = Vec::new();
+
+    let col_widths_json: Vec<JsonValue> = vec![
+        json!(50),  
+        json!(140), 
+        json!(120), 
+        json!(450)  
+    ];
+
+    let header_texts = ["#", "Timestamp", "Speaker", "Text"];
+    let mut header_cells_json: Vec<JsonValue> = Vec::new();
+    for (idx, header_text) in header_texts.iter().enumerate() {
+        header_cells_json.push(json!({
+            "type": "tablecell",
+            "version": 1,
+            "headerState": 2, 
+            "width": col_widths_json.get(idx).cloned().unwrap_or(JsonValue::Null), 
+            "children": [ 
+                create_lexical_paragraph_json_value(header_text).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            ]
+        }));
+    }
+    table_rows_json.push(json!({
+        "type": "tablerow",
+        "version": 1,
+        "children": header_cells_json
+    }));
+
+    for (index, segment) in segments.iter().enumerate() {
+        let mut data_cells_json: Vec<JsonValue> = Vec::new();
+
+        data_cells_json.push(json!({
+            "type": "tablecell",
+            "version": 1,
+            "headerState": 0, 
+             "width": col_widths_json.get(0).cloned().unwrap_or(JsonValue::Null),
             "children": [
-                {
-                    "children": [
-                        {
-                            "detail": 0,
-                            "format": 0, // Ensure format is a number if it represents bitmask
-                            "mode": "normal",
-                            "style": "",
-                            "text": text,
-                            "type": "text",
-                            "version": 1
-                        }
-                    ],
-                    "direction": "ltr",
-                    "format": "",
-                    "indent": 0,
-                    "type": "paragraph",
-                    "version": 1
-                }
-            ],
+                create_lexical_paragraph_json_value(&format!("{}", index + 1)).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            ]
+        }));
+
+        let timestamp_str = format!(
+            "{} - {}",
+            format_timestamp_for_table(segment.start_time),
+            format_timestamp_for_table(segment.end_time)
+        );
+        data_cells_json.push(json!({
+            "type": "tablecell",
+            "version": 1,
+            "headerState": 0,
+             "width": col_widths_json.get(1).cloned().unwrap_or(JsonValue::Null),
+            "children": [
+                create_lexical_paragraph_json_value(&timestamp_str).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            ]
+        }));
+
+        data_cells_json.push(json!({
+            "type": "tablecell",
+            "version": 1,
+            "headerState": 0,
+             "width": col_widths_json.get(2).cloned().unwrap_or(JsonValue::Null),
+            "children": [
+                create_lexical_paragraph_json_value(&segment.speaker).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            ]
+        }));
+
+        data_cells_json.push(json!({
+            "type": "tablecell",
+            "version": 1,
+            "headerState": 0,
+             "width": col_widths_json.get(3).cloned().unwrap_or(JsonValue::Null),
+            "children": [
+                create_lexical_paragraph_json_value(&segment.text).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            ]
+        }));
+
+        table_rows_json.push(json!({
+            "type": "tablerow",
+            "version": 1,
+            "children": data_cells_json
+        }));
+    }
+
+    json!({
+        "root": {
+            "children": [{
+                "type": "table",
+                "version": 1,
+                "children": table_rows_json,
+            }, {
+                "type": "paragraph", 
+                "version": 1,
+                "children": [],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0
+            }],
             "direction": "ltr",
             "format": "",
             "indent": 0,
@@ -37,15 +170,6 @@ pub fn generate_lexical_doc(text: &str) -> serde_json::Value {
         }
     })
 }
-
-use std::{
-    fs::{self, File},
-    io::{BufReader, BufWriter},
-    path::{Path, PathBuf},
-};
-use tauri::{AppHandle};
-use tauri_plugin_shell::ShellExt;
-use quick_xml;
 
 
 // --- trim_media Command ---
@@ -255,9 +379,10 @@ pub async fn save_speaker_config( project_xml_path: String, media_identifier: St
 }
 
 // --- load_transcript_json Command ---
+/// Loads the full Lexical Table JSON string from a transcript file.
 #[tauri::command]
-pub async fn load_transcript_json(transcript_path: String) -> Result<Vec<TranscriptSegment>, CommandError> {
-    info!("[Backend Load JSON] Path: {}", transcript_path);
+pub async fn load_transcript_json(transcript_path: String) -> Result<String, CommandError> {
+    info!("[Backend Load Full Transcript JSON] Path: {}", transcript_path);
     let file_path = PathBuf::from(&transcript_path);
 
     if !file_path.exists() || !file_path.is_file() {
@@ -267,16 +392,33 @@ pub async fn load_transcript_json(transcript_path: String) -> Result<Vec<Transcr
         return Err(CommandError::from("Only .json transcripts are supported for loading.".to_string()));
     }
 
-    let file = File::open(&file_path)?;
-    let reader = BufReader::new(file);
-    serde_json::from_reader(reader).map_err(|e| CommandError::from(format!("Failed to parse transcript JSON: {}", e)))
+    let content = fs::read_to_string(&file_path)
+        .map_err(|e| CommandError::from(format!("Failed to read transcript file {}: {}", transcript_path, e)))?;
+    
+    match serde_json::from_str::<JsonValue>(&content) {
+        Ok(json_value) => {
+            if json_value.get("root").is_some() && json_value.get("root").unwrap().is_object() {
+                Ok(content)
+            } else {
+                Err(CommandError::from("Transcript file content is not a valid Lexical JSON structure (missing root object)."))
+            }
+        }
+        Err(e) => Err(CommandError::from(format!("Failed to parse transcript JSON: {}. File: {}", e, transcript_path))),
+    }
 }
 
-// --- save_transcript_json Command ---
+
+// --- save_transcript_json Command (MODIFIED) ---
+/// Saves the provided full Lexical Table JSON string to the transcript file
+/// and updates the project XML.
 #[tauri::command]
-pub async fn save_transcript_json( project_xml_path: String, transcript_path: String, segments: Vec<TranscriptSegment>) -> Result<(), CommandError> {
-    info!("[Backend Save JSON] Transcript Path: {}", transcript_path);
-    info!("[Backend Save JSON] Project XML Path: {}", project_xml_path);
+pub async fn save_transcript_json(
+    project_xml_path: String,
+    transcript_path: String,
+    lexical_table_json_string: String 
+) -> Result<(), CommandError> {
+    info!("[Backend Save Full Transcript JSON] Transcript Path: {}", transcript_path);
+    info!("[Backend Save Full Transcript JSON] Project XML Path: {}", project_xml_path);
     let transcript_path_buf = PathBuf::from(&transcript_path);
     let project_xml_path_buf = PathBuf::from(&project_xml_path);
 
@@ -288,45 +430,29 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
         return Err(CommandError::from(format!("Invalid transcript path (no parent directory): {}", transcript_path)));
     }
 
-    let file = File::create(&transcript_path_buf)?;
-    let mut writer = BufWriter::new(file);
-
-    // --- MODIFICATION START ---
-    // Process segments: if text is already valid Lexical JSON, use it. Otherwise, wrap it.
-    let processed_segments: Vec<TranscriptSegment> = segments.into_iter().map(|mut seg| {
-        // Try to parse seg.text as a serde_json::Value
-        match serde_json::from_str::<serde_json::Value>(&seg.text) {
-            Ok(json_value) => {
-                // Check if it has a "root" key, a simple heuristic for Lexical JSON
-                if json_value.get("root").is_some() {
-                    // It's likely already Lexical JSON, keep it as is
-                    debug!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is already valid JSON. Using directly.", seg.speaker, seg.start_time);
-                    // seg.text is already the JSON string we want.
-                } else {
-                    // It's some other JSON, or not Lexical. Wrap the original string.
-                    warn!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is JSON but not Lexical root. Wrapping original text.", seg.speaker, seg.start_time);
-                    let doc = generate_lexical_doc(&seg.text); // Wrap the original string
-                    if let Ok(json_str) = serde_json::to_string(&doc) {
-                        seg.text = json_str;
-                    }
-                }
+    match serde_json::from_str::<JsonValue>(&lexical_table_json_string) {
+        Ok(json_value) => {
+            if !(json_value.get("root").is_some() && json_value.get("root").unwrap().is_object()) {
+                 return Err(CommandError::from("Provided string is not a valid Lexical JSON structure (missing root object)."));
             }
-            Err(_) => {
-                // It's not valid JSON, so assume it's plain text and wrap it
-                debug!("[Backend Save JSON] Segment text for speaker '{}' at {:.2}s is plain text. Wrapping.", seg.speaker, seg.start_time);
-                let doc = generate_lexical_doc(&seg.text);
-                if let Ok(json_str) = serde_json::to_string(&doc) {
-                    seg.text = json_str;
+            if let Some(root_children) = json_value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+                if root_children.is_empty() || root_children.first().and_then(|n| n.get("type")).and_then(|t| t.as_str()) != Some("table") {
+                     warn!("[Backend Save Full Transcript JSON] Lexical JSON root does not start with a table node. Saving anyway.");
                 }
+            } else {
+                 warn!("[Backend Save Full Transcript JSON] Lexical JSON root has no children or invalid children structure. Saving anyway.");
             }
         }
-        seg
-    }).collect();
-    // --- MODIFICATION END ---
+        Err(e) => return Err(CommandError::from(format!("Provided string is not valid JSON: {}", e))),
+    }
 
-    serde_json::to_writer_pretty(&mut writer, &processed_segments) // Save the processed segments
+    let file = File::create(&transcript_path_buf)?;
+    let mut writer = BufWriter::new(file);
+    writer.write_all(lexical_table_json_string.as_bytes())
         .map_err(|e| CommandError::from(format!("Failed to write transcript JSON: {}", e)))?;
-    info!("[Backend Save JSON] Saved {} segments to disk.", processed_segments.len());
+    writer.flush()?; 
+    info!("[Backend Save Full Transcript JSON] Saved Lexical Table JSON to disk: {}", transcript_path_buf.display());
+
 
     let transcript_filename = transcript_path_buf.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename"))?.to_string();
 
@@ -334,7 +460,7 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
     let media_identifier = media_identifier_opt.ok_or_else(|| CommandError::from(format!("Could not determine media identifier for transcript path: {}", transcript_path)))?;
     let transcript_relative_path = transcript_relative_path_buf.to_string_lossy().replace("\\", "/");
 
-    info!("[Backend Save JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path);
+    info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path);
 
     let xml_content = fs::read_to_string(&project_xml_path_buf)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
@@ -342,23 +468,23 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
 
     if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
         found_media = true;
-        debug!("[Backend Save JSON] Found media entry '{}' in XML.", media_identifier);
+        debug!("[Backend Save Full Transcript JSON] Found media entry '{}' in XML.", media_identifier);
 
-        let mut found_transcript = false;
-        for transcript_entry in media_entry.transcripts.iter_mut() {
-            if transcript_entry.relative_path == transcript_relative_path {
-                debug!("[Backend Save JSON] Found existing transcript entry for '{}'. Updating name (if needed).", transcript_relative_path);
-                 if transcript_entry.name != transcript_filename {
-                     warn!("[Backend Save JSON] Updating transcript name in XML from '{}' to '{}' for path '{}'", transcript_entry.name, transcript_filename, transcript_relative_path);
-                    transcript_entry.name = transcript_filename.clone();
+        let mut found_transcript_xml_entry = false;
+        for transcript_xml_entry_instance in media_entry.transcripts.iter_mut() {
+            if transcript_xml_entry_instance.relative_path == transcript_relative_path {
+                debug!("[Backend Save Full Transcript JSON] Found existing transcript entry for '{}'. Updating name (if needed).", transcript_relative_path);
+                 if transcript_xml_entry_instance.name != transcript_filename {
+                     warn!("[Backend Save Full Transcript JSON] Updating transcript name in XML from '{}' to '{}' for path '{}'", transcript_xml_entry_instance.name, transcript_filename, transcript_relative_path);
+                    transcript_xml_entry_instance.name = transcript_filename.clone();
                  }
-                found_transcript = true;
+                found_transcript_xml_entry = true;
                 break;
             }
         }
 
-        if !found_transcript {
-            debug!("[Backend Save JSON] Adding new transcript entry for '{}'.", transcript_relative_path);
+        if !found_transcript_xml_entry {
+            debug!("[Backend Save Full Transcript JSON] Adding new transcript entry for '{}'.", transcript_relative_path);
             media_entry.transcripts.push(TranscriptEntryXml {
                 name: transcript_filename.clone(),
                 relative_path: transcript_relative_path.clone(),
@@ -368,12 +494,12 @@ pub async fn save_transcript_json( project_xml_path: String, transcript_path: St
     }
 
     if !found_media {
-        warn!("[Backend Save JSON] Media identifier '{}' not found in XML. XML not updated.", media_identifier);
+        warn!("[Backend Save Full Transcript JSON] Media identifier '{}' not found in XML. XML not updated.", media_identifier);
          return Err(CommandError::from(format!("Media identifier '{}' not found in XML. Could not link saved transcript.", media_identifier)));
     }
 
     save_project_xml(&project_xml_path_buf, &project_data)?;
-    info!("[Backend Save JSON] Project XML updated.");
+    info!("[Backend Save Full Transcript JSON] Project XML updated.");
     Ok(())
 }
 
@@ -394,16 +520,20 @@ pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Resul
     fs::create_dir_all(&transcripts_dir)?;
     debug!("[prepare_output_paths][{}] Transcripts dir ensured: {:?}", job_id, transcripts_dir);
 
-    let output_base_in_transcripts = transcripts_dir.join(&media_filename_stem);
-    let output_path_base_str = output_base_in_transcripts.to_string_lossy().to_string();
+    let temp_output_base_in_transcripts = transcripts_dir.join(format!("{}_temp_{}", media_filename_stem, job_id));
+    let temp_output_path_base_str = temp_output_base_in_transcripts.to_string_lossy().to_string();
 
-    let expected_whisper_output_path = output_base_in_transcripts.with_extension("json");
-    let expected_rttm_path = output_base_in_transcripts.with_extension("rttm");
-    let final_transcript_path = expected_whisper_output_path.clone();
+    // EXPECTED path for Whisper's JSON output, assuming "-of <base>" and "-oj" results in "<base>.json"
+    let expected_whisper_temp_output_path = temp_output_base_in_transcripts.with_extension("json"); // CORRECTED
+    
+    let expected_rttm_temp_path = temp_output_base_in_transcripts.with_extension("rttm");
+    
+    let final_transcript_path = transcripts_dir.join(format!("{}.json", media_filename_stem));
 
-    debug!("[prepare_output_paths][{}] Base: '{}', Whisper JSON: '{}', RTTM: '{}', Final JSON: '{}'", job_id, output_path_base_str, expected_whisper_output_path.display(), expected_rttm_path.display(), final_transcript_path.display());
+    debug!("[prepare_output_paths][{}] Temp Base: '{}', Whisper JSON (temp): '{}', RTTM (temp): '{}', Final Transcript JSON: '{}'", 
+        job_id, temp_output_path_base_str, expected_whisper_temp_output_path.display(), expected_rttm_temp_path.display(), final_transcript_path.display());
 
-    Ok((output_path_base_str, expected_whisper_output_path, expected_rttm_path, final_transcript_path))
+    Ok((temp_output_path_base_str, expected_whisper_temp_output_path, expected_rttm_temp_path, final_transcript_path))
 }
 
 
@@ -424,12 +554,11 @@ pub fn map_speaker_ids_to_names(
         let number_part_opt = if original_speaker.starts_with("SPEAKER_") {
             original_speaker.get("SPEAKER_".len()..)
                 .and_then(|num_str| num_str.parse::<usize>().ok())
-                .map(|index_0| index_0)
         } else if original_speaker.starts_with("speaker_") {
             original_speaker.get("speaker_".len()..)
                 .and_then(|num_str| num_str.parse::<usize>().ok())
                 .filter(|&index_1| index_1 > 0)
-                .map(|index_1| index_1 - 1)
+                .map(|index_1| index_1 - 1) 
         } else {
             None
         };
@@ -448,8 +577,8 @@ pub fn map_speaker_ids_to_names(
                       user_name_index, original_speaker, user_names.len());
             }
         } else {
-             if original_speaker != "Unknown" {
-                 debug!("[Name Map] Speaker ID '{}' is not in a recognized generic format ('SPEAKER_XX' or 'speaker_X'). Skipping mapping for this segment.", original_speaker);
+             if original_speaker != "Unknown" && !user_names.contains(&original_speaker.to_string()) {
+                 debug!("[Name Map] Speaker ID '{}' not in generic format & not in user_names. Skipping mapping for this segment.", original_speaker);
              }
         }
     }

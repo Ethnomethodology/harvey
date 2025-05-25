@@ -1,19 +1,19 @@
 // src-tauri/src/projectview/cloud_handler/cloud_transcribe.rs
 
-// --- UPDATED: Imports reflecting new module structure ---
-use crate::projectview::shared_types::{TranscriptSegment, TranscriptionResult}; // Shared types
-use crate::projectview::shared_utils::{get_project_xml_path_from_item}; // Shared utils
-use crate::projectview::transcription_commands::{ // Transcription-specific commands/helpers
-    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, generate_lexical_doc,
+use crate::projectview::shared_types::{TranscriptSegment, TranscriptionResult}; 
+use crate::projectview::shared_utils::{get_project_xml_path_from_item}; 
+use crate::projectview::transcription_commands::{ 
+    prepare_output_paths, save_transcript_json, map_speaker_ids_to_names, 
+    create_lexical_paragraph_json_value, // CHANGED: Renamed from generate_lexical_doc
+    create_lexical_table_from_segments  // ADDED: New function to import
 };
 use serde_json;
 // Import local_handler helpers needed here
-use crate::projectview::local_handler::transcription::{ // Helpers currently in local_handler
+use crate::projectview::local_handler::transcription::{ 
     convert_to_wav_if_needed, emit_progress,
 };
 use crate::welcome::config::CommandError;
 use crate::TranscriptionCancellationState;
-// --- END UPDATED IMPORTS ---
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use log::{debug, error, info, warn};
@@ -56,7 +56,7 @@ fn parse_hhmmss_ms_to_seconds(timestamp_str: &str) -> Result<f64, CommandError> 
     let parts: Vec<&str> = timestamp_str.split(':').collect();
 
     let total_seconds = match parts.len() {
-        3 => {
+        3 => { // hh:mm:ss.ms
             let hours_str = parts[0];
             let minutes_str = parts[1];
             let seconds_ms_str = parts[2];
@@ -73,7 +73,7 @@ fn parse_hhmmss_ms_to_seconds(timestamp_str: &str) -> Result<f64, CommandError> 
 
             (hours * 3600 + minutes * 60 + sec) as f64 + (ms as f64 / 1000.0)
         },
-        2 => {
+        2 => { // mm:ss.ms
             let minutes_str = parts[0];
             let seconds_ms_str = parts[1];
 
@@ -87,7 +87,7 @@ fn parse_hhmmss_ms_to_seconds(timestamp_str: &str) -> Result<f64, CommandError> 
 
             (minutes * 60 + sec) as f64 + (ms as f64 / 1000.0)
         },
-        _ => {
+        _ => { // Attempt to parse as float seconds directly
              match f64::from_str(timestamp_str) {
                  Ok(float_seconds) => float_seconds,
                  Err(_) => {
@@ -98,7 +98,7 @@ fn parse_hhmmss_ms_to_seconds(timestamp_str: &str) -> Result<f64, CommandError> 
              }
         }
     };
-    Ok(total_seconds.max(0.0))
+    Ok(total_seconds.max(0.0)) // Ensure time is not negative
 }
 
 
@@ -108,18 +108,17 @@ pub async fn run_cloud_transcription(
     app_handle: AppHandle,
     media_path: String,
     cloud_model_id: String,
-    _language: String,
-    num_speakers: usize,
+    _language: String, // Language often handled by model/API implicitly or via different param
+    _num_speakers: usize, // Gemini's default model might do diarization without this hint, or might have other ways to specify.
     speaker_names: Vec<String>,
     api_key: String,
     job_id: String,
     cancel_state: State<'_, TranscriptionCancellationState>)
 -> Result<TranscriptionResult, CommandError> {
-    info!( "[Gemini Transcribe] Start Job '{}': Media='{}', Model='{}', Speakers={}", job_id, media_path, cloud_model_id, num_speakers);
+    info!( "[Gemini Transcribe] Start Job '{}': Media='{}', Model='{}'", job_id, media_path, cloud_model_id);
     let cancel_flag = Arc::new(AtomicBool::new(false));
     cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
 
-    // FIX: Correctly clone the Arc<DashMap> for the guard
     let _cancel_guard = CancelGuard { job_id: job_id.clone(), state: cancel_state.0.clone() };
 
     let project_xml_path_buf = get_project_xml_path_from_item(&PathBuf::from(&media_path))?;
@@ -146,7 +145,7 @@ pub async fn run_cloud_transcription(
         }
     };
     let audio_base64 = BASE64_STANDARD.encode(&audio_content_bytes);
-    drop(audio_content_bytes);
+    drop(audio_content_bytes); // Free memory
     let audio_mime_type = "audio/wav".to_string();
     let _ = emit_progress(&app_handle, &job_id, 10.0, "Preparing API request...").await;
     debug!("[Gemini Transcribe][Job '{}'] Encoded {} bytes of audio data (mime: {})", job_id, audio_base64.len(), audio_mime_type);
@@ -204,8 +203,7 @@ pub async fn run_cloud_transcription(
     let response_text = response.text().await.map_err(|e| CommandError::from(format!("Failed to read Gemini response body: {}", e)))?;
     debug!("[Gemini Transcribe][Job '{}'] API Response Body snippet:\n{}", job_id, response_text.chars().take(1000).collect::<String>());
 
-    // FIX: Remove .await from non-async function call
-    let (_, _, _, final_transcript_path) = prepare_output_paths(&media_path, &job_id)?; // No await here
+    let (_, _, _, final_transcript_path) = prepare_output_paths(&media_path, &job_id)?; 
     let raw_json_path = final_transcript_path.with_file_name(format!(
         "{}_gemini_raw.json",
         final_transcript_path.file_stem().unwrap_or_default().to_string_lossy()
@@ -258,16 +256,17 @@ pub async fn run_cloud_transcription(
         }
     };
 
-    let mut segments: Vec<TranscriptSegment> = Vec::new();
+    // Convert GeminiJsonSegment to our internal TranscriptSegment (plain text for now)
+    let mut plain_text_segments: Vec<TranscriptSegment> = Vec::new();
     for (idx, gs) in gemini_segments_raw.iter().enumerate() {
         match (parse_hhmmss_ms_to_seconds(&gs.start_time), parse_hhmmss_ms_to_seconds(&gs.end_time)) {
             (Ok(start), Ok(end)) => {
                 if end > start {
-                    segments.push(TranscriptSegment {
+                    plain_text_segments.push(TranscriptSegment {
                         start_time: start,
                         end_time: end,
-                        speaker: gs.speaker_no.clone(),
-                        text: gs.text.clone(),
+                        speaker: gs.speaker_no.clone(), // This is like "speaker_1", "speaker_2"
+                        text: gs.text.clone(),          // Plain text from Gemini
                     });
                 } else {
                     warn!("[Gemini Parse][Job '{}'] Skipping segment {} due to end time ({}) <= start time ({}): Text='{}...'", job_id, idx, gs.end_time, gs.start_time, gs.text.chars().take(30).collect::<String>());
@@ -277,33 +276,46 @@ pub async fn run_cloud_transcription(
             (_, Err(e_end)) => { error!("[Gemini Parse][Job '{}'] Failed parsing end time '{}' for segment {}: {}", job_id, gs.end_time, idx, e_end.message); }
         }
     }
-    info!("[Gemini Transcribe][Job '{}'] Successfully parsed {} segments from Gemini response.", job_id, segments.len());
+    info!("[Gemini Transcribe][Job '{}'] Successfully parsed {} plain text segments from Gemini response.", job_id, plain_text_segments.len());
 
     let _ = emit_progress(&app_handle, &job_id, 90.0, "Mapping speaker names...").await;
-    map_speaker_ids_to_names(&mut segments, &speaker_names);
+    map_speaker_ids_to_names(&mut plain_text_segments, &speaker_names); // Map generic "speaker_X" to actual names
 
-    debug!("[Gemini Transcribe][Job '{}'] Saving final processed transcript JSON to: {:?}", job_id, final_transcript_path);
+    // --- MODIFICATION: Generate Lexical Table JSON ---
+    let lexical_table_json_value = create_lexical_table_from_segments(&plain_text_segments);
+    let lexical_table_json_string = serde_json::to_string_pretty(&lexical_table_json_value)
+        .map_err(|e| CommandError::from(format!("Failed to serialize Lexical Table JSON: {}", e)))?;
+    // --- END MODIFICATION ---
+
+    debug!("[Gemini Transcribe][Job '{}'] Saving final processed transcript Lexical Table JSON to: {:?}", job_id, final_transcript_path);
     save_transcript_json(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
-        segments.clone(),
+        lexical_table_json_string, // MODIFIED: Pass the string representation of the Lexical Table
     ).await?;
     info!("[Gemini Transcribe][Job '{}'] Final processed transcript saved.", job_id);
 
-    // Convert returned segments into Lexical JSON strings for UI consumption
-    let lexical_segments: Vec<TranscriptSegment> = segments.iter().cloned().map(|mut seg| {
-        let doc = generate_lexical_doc(&seg.text);
-        if let Ok(json_str) = serde_json::to_string(&doc) {
-            seg.text = json_str;
+    // --- MODIFICATION: Prepare segments for frontend result ---
+    // Each segment's `text` field should contain Lexical JSON for its individual cell content.
+    let segments_for_frontend_result: Vec<TranscriptSegment> = plain_text_segments.iter().cloned().map(|seg_plain| {
+        let cell_content_lexical_value = create_lexical_paragraph_json_value(&seg_plain.text);
+        let cell_content_lexical_string = serde_json::to_string(&cell_content_lexical_value)
+            .unwrap_or_else(|_| serde_json::to_string(&create_lexical_paragraph_json_value("")).unwrap());
+
+        TranscriptSegment {
+            start_time: seg_plain.start_time,
+            end_time: seg_plain.end_time,
+            speaker: seg_plain.speaker.clone(),
+            text: cell_content_lexical_string,
         }
-        seg
     }).collect();
+    // --- END MODIFICATION ---
 
     info!("[Gemini Transcribe][Job '{}'] Cloud transcription process complete.", job_id);
     let _ = emit_progress(&app_handle, &job_id, 100.0, "Transcription complete.").await;
 
     Ok(TranscriptionResult {
-        segments: lexical_segments,
+        segments: segments_for_frontend_result, // MODIFIED
         transcript_file_path: final_transcript_path.to_string_lossy().to_string(),
     })
 }
@@ -356,9 +368,9 @@ struct CancelGuard {
 impl Drop for CancelGuard {
     fn drop(&mut self) {
         if self.state.remove(&self.job_id).is_some() {
-            debug!("[CancelGuard] Removed cancel flag for job '{}' on drop.", self.job_id);
+            debug!("[CancelGuard Cloud] Removed cancel flag for job '{}' on drop.", self.job_id);
         } else {
-             warn!("[CancelGuard] Attempted to remove flag for job '{}' on drop, but it was already gone.", self.job_id);
+             warn!("[CancelGuard Cloud] Attempted to remove flag for job '{}' on drop, but it was already gone.", self.job_id);
         }
     }
 }

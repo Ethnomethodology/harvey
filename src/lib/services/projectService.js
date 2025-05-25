@@ -12,7 +12,6 @@ import {
 	$isElementNode as _isElementNode,
 	$isTextNode as _isTextNode,
 	$parseSerializedNode as _parseSerializedNode,
-    // Import Node types that might be directly used or referenced
     ParagraphNode, RootNode, TextNode, LineBreakNode, ElementNode
 } from 'lexical';
 import {
@@ -22,7 +21,6 @@ import {
     $isTableNode as _isTableNode,
     $isTableRowNode as _isTableRowNode,
     $isTableCellNode as _isTableCellNode,
-    // Import Node classes for editor configuration
     TableNode, TableRowNode, TableCellNode
 } from '@lexical/table';
 import {
@@ -41,9 +39,8 @@ import {
     $generateNodesFromDOM as _generateNodesFromDOM
 } from '@lexical/html';
 
-// LinkNode needs to be imported for ALL_EDITOR_NODES
 import { LinkNode, $isLinkNode as _isLinkNode } from '@lexical/link';
-import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js'; // Correct path if ExtendedTextNode.js is in $lib/nodes/
+import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js'; 
 
 import { dirname, basename, sep } from '@tauri-apps/api/path';
 
@@ -114,12 +111,12 @@ const wordDocumentFilter = { name: 'Word Documents', extensions: ['docx'] };
 const ALL_EDITOR_NODES = [
     RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
     HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
-    TableNode, TableRowNode, TableCellNode // Ensure TableNode and friends are here
+    TableNode, TableRowNode, TableCellNode 
 ];
 
 function createConversionEditor(instanceId) {
     return createHeadlessEditor({
-        nodes: ALL_EDITOR_NODES, // Use the comprehensive list
+        nodes: ALL_EDITOR_NODES, 
         namespace: `html-converter-${instanceId}-${Math.random()}`,
         onError: (e) => console.error(`[Lexical HTML Converter ${instanceId}] Error:`, e)
     });
@@ -681,8 +678,168 @@ export async function loadTableData(tablePath) {
     }
 }
 
-export async function loadTranscriptFile(transcriptFilePath) { if (!transcriptFilePath) { project.update(p => ({ ...p, isTranscriptLoading: false, error: "Transcript file path is missing." })); throw new Error("Transcript file path is required."); } if (!transcriptFilePath.toLowerCase().endsWith('.json')) { console.warn(`[ProjectService] Attempting to load non-JSON file as transcript: ${transcriptFilePath}. Proceeding, but might fail.`); } const filename = transcriptFilePath.split(/[\\/]/).pop(); console.log(`[ProjectService] Loading transcript: ${filename}`); project.update(p => ({ ...p, isTranscriptLoading: true, error: null, statusMessage: `Loading transcript ${filename}...` })); try { const loadedSegments = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath }); setTranscriptData(transcriptFilePath, loadedSegments, false); console.log(`[ProjectService] Transcript ${filename} loaded successfully.`); } catch (error) { const errorMessage = error?.message || String(error); console.error(`[ProjectService] Failed to load transcript file ${filename}:`, errorMessage); project.update(p => ({ ...p, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.` })); throw new Error(`Failed to load transcript: ${errorMessage}`); } }
-export async function saveTranscriptData() { const projData = get(project); const transcriptPath = projData.currentTranscriptPath; const transcriptSegments = projData.segments; const projectXmlPath = projData.xmlPath; if (!transcriptPath) { console.error("[ProjectService] Save failed: No transcript path is currently set in the store."); project.update(p => ({ ...p, statusMessage: 'Error: Cannot save, no transcript loaded.' })); throw new Error("Cannot save, no transcript loaded."); } if (!projectXmlPath) { console.error("[ProjectService] Save failed: Project XML path is missing in the store."); project.update(p => ({ ...p, statusMessage: 'Error: Cannot save, project path unknown.' })); throw new Error("Cannot save, project path unknown."); } if (!transcriptPath.toLowerCase().endsWith('.json')) { console.error(`[ProjectService] Attempting to save transcript to non-JSON file: ${transcriptPath}. Aborting.`); project.update(p => ({ ...p, statusMessage: 'Error: Transcript must be saved as .json.'})); throw new Error("Transcript must be saved as .json."); } const filename = transcriptPath.split(/[\\/]/).pop(); console.log(`[ProjectService] Saving transcript: ${filename}`); project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` })); try { await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, segments: transcriptSegments }); console.log("[ProjectService] Transcript save invoke successful."); markTranscriptAsSaved(); } catch (error) { const errorMessage = error?.message || String(error); console.error("[ProjectService] Failed to save transcript:", errorMessage); project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` })); throw new Error(`Failed to save transcript: ${errorMessage}`); } }
+export async function loadTranscriptFile(transcriptFilePath) { 
+    if (!transcriptFilePath) { 
+        project.update(p => ({ ...p, isTranscriptLoading: false, error: "Transcript file path is missing." })); 
+        throw new Error("Transcript file path is required."); 
+    } 
+    if (!transcriptFilePath.toLowerCase().endsWith('.json')) { 
+        console.warn(`[ProjectService] Attempting to load non-JSON file as transcript: ${transcriptFilePath}. Proceeding, but might fail.`); 
+    } 
+    const filename = transcriptFilePath.split(/[\\/]/).pop(); 
+    console.log(`[ProjectService] Loading transcript: ${filename}`); 
+    project.update(p => ({ ...p, isTranscriptLoading: true, error: null, statusMessage: `Loading transcript ${filename}...` })); 
+    try { 
+        // --- MODIFICATION: Expect full Lexical JSON string from backend ---
+        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath }); 
+        // --- END MODIFICATION ---
+
+        // The setTranscriptData function will now need to handle this full Lexical JSON.
+        // It should parse the table and extract segments for the store.
+        setTranscriptData(transcriptFilePath, fullLexicalJsonString, false); 
+        console.log(`[ProjectService] Transcript ${filename} loaded successfully.`); 
+    } catch (error) { 
+        const errorMessage = error?.message || String(error); 
+        console.error(`[ProjectService] Failed to load transcript file ${filename}:`, errorMessage); 
+        project.update(p => ({ ...p, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.` })); 
+        throw new Error(`Failed to load transcript: ${errorMessage}`); 
+    } 
+}
+
+export async function saveTranscriptData() {
+    const projData = get(project);
+    const transcriptPath = projData.currentTranscriptPath;
+    const transcriptSegments = projData.segments; // These segments now have Lexical JSON in their .text field for each cell
+    const projectXmlPath = projData.xmlPath;
+
+    if (!transcriptPath) {
+        console.error("[ProjectService] Save failed: No transcript path is currently set in the store.");
+        project.update(p => ({ ...p, statusMessage: 'Error: Cannot save, no transcript loaded.' }));
+        throw new Error("Cannot save, no transcript loaded.");
+    }
+    if (!projectXmlPath) {
+        console.error("[ProjectService] Save failed: Project XML path is missing in the store.");
+        project.update(p => ({ ...p, statusMessage: 'Error: Cannot save, project path unknown.' }));
+        throw new Error("Cannot save, project path unknown.");
+    }
+    if (!transcriptPath.toLowerCase().endsWith('.json')) {
+        console.error(`[ProjectService] Attempting to save transcript to non-JSON file: ${transcriptPath}. Aborting.`);
+        project.update(p => ({ ...p, statusMessage: 'Error: Transcript must be saved as .json.'}));
+        throw new Error("Transcript must be saved as .json.");
+    }
+    const filename = transcriptPath.split(/[\\/]/).pop();
+    console.log(`[ProjectService] Saving transcript: ${filename}`);
+    project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
+
+    // --- MODIFICATION: Construct the full Lexical Table JSON from store segments ---
+    let fullLexicalTableJsonString = "";
+    try {
+        const editorForTableAssembly = createHeadlessEditor({
+            nodes: ALL_EDITOR_NODES,
+            namespace: `table-assembly-editor-${Date.now()}`,
+            onError: (e) => console.error("[TableAssemblyEditor] Error:", e),
+        });
+
+        await editorForTableAssembly.update(() => {
+            const root = _getRoot();
+            root.clear();
+            const tableNode = _createTableNode();
+            // Assuming colWidths were set when the table was first created/loaded,
+            // or handle default widths here if needed.
+            // const colWidths = [50, 140, 120, 450]; // Example
+            // tableNode.setColWidths?.(colWidths);
+
+
+            // Header Row (assuming it's static and not stored in `transcriptSegments`)
+            const headerRow = _createTableRowNode();
+            const headers = ["#", "Timestamp", "Speaker", "Text"];
+            for (const headerText of headers) {
+                const cell = _createTableCellNode({ headerState: 'column' });
+                const paragraph = _createParagraphNode();
+                paragraph.append(_createTextNode(headerText));
+                cell.append(paragraph);
+                headerRow.append(cell);
+            }
+            tableNode.append(headerRow);
+
+            // Data Rows from store's segments
+            for (let i = 0; i < transcriptSegments.length; i++) {
+                const segment = transcriptSegments[i];
+                const dataRow = _createTableRowNode();
+
+                // Segment Number Cell
+                const cellNum = _createTableCellNode();
+                const pNum = _createParagraphNode();
+                pNum.append(_createTextNode(String(i + 1)));
+                cellNum.append(pNum);
+                dataRow.append(cellNum);
+
+                // Timestamp Cell
+                const cellTime = _createTableCellNode();
+                const pTime = _createParagraphNode();
+                const startTime = formatTimestampHtml(segment.start_time || 0);
+                const endTime = formatTimestampHtml(segment.end_time || 0);
+                pTime.append(_createTextNode(`${startTime} - ${endTime}`));
+                cellTime.append(pTime);
+                dataRow.append(cellTime);
+
+                // Speaker Cell
+                const cellSpeaker = _createTableCellNode();
+                const pSpeaker = _createParagraphNode();
+                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
+                cellSpeaker.append(pSpeaker);
+                dataRow.append(cellSpeaker);
+
+                // Text Content Cell (segment.text is already Lexical JSON for the cell's content)
+                const cellText = _createTableCellNode();
+                if (segment.text && typeof segment.text === 'string') {
+                    try {
+                        const cellEditorState = editorForTableAssembly.parseEditorState(segment.text);
+                        const cellRoot = cellEditorState.read(_getRoot);
+                        const cellChildren = cellRoot.getChildren();
+                        // Append children of the cell's root to the table cell
+                        cellChildren.forEach(node => cellText.append(node.clone()));
+                    } catch (parseError) {
+                        console.error(`[ProjectService Save] Error parsing cell content for segment ${i}:`, parseError, segment.text.substring(0,100));
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error rendering cell content]"));
+                        cellText.append(pError);
+                    }
+                } else {
+                    cellText.append(_createParagraphNode()); // Empty if no text
+                }
+                dataRow.append(cellText);
+                tableNode.append(dataRow);
+            }
+            root.append(tableNode);
+            root.append(_createParagraphNode()); // Trailing paragraph
+        });
+        fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
+        console.log("[ProjectService] Successfully assembled full Lexical Table JSON for saving.");
+    } catch (assemblyError) {
+        console.error("[ProjectService] Error assembling full Lexical Table JSON:", assemblyError);
+        project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
+        throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
+    }
+    // --- END MODIFICATION ---
+
+    try {
+        // Corrected invoke: arguments should be in an object
+        await invoke('save_transcript_json', {
+            projectXmlPath: projectXmlPath,
+            transcriptPath: transcriptPath,
+            lexicalTableJsonString: fullLexicalTableJsonString // Pass the assembled string
+        });
+        console.log("[ProjectService] Transcript save invoke successful.");
+        markTranscriptAsSaved(); 
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        console.error("[ProjectService] Failed to save transcript:", errorMessage);
+        project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` }));
+        throw new Error(`Failed to save transcript: ${errorMessage}`);
+    }
+}
+
 
 export async function refreshProjectFiles() { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { console.warn('[ProjectService] Cannot refresh: No project path loaded.'); return; } console.log('[ProjectService] Refreshing file list (via load_project_data) for project:', projectXmlPath); project.update(p => ({ ...p, statusMessage: 'Refreshing file list...' })); try { await loadProjectDataAndUpdateStore(projectXmlPath); console.log('[ProjectService] File list refreshed successfully via reload.'); project.update(p => ({ ...p, statusMessage: 'Project refreshed.' })); } catch (error) { const errorMessage = error?.message || String(error); console.error('[ProjectService] Failed to refresh project files:', error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.' })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...` })); try { console.log(`[ProjectService Rename] Calling backend: rename_project_item`, { itemPath, newName, projectXmlPath }); await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath }); console.log(`[ProjectService Rename] Item renamed successfully. Refreshing file list.`); project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}. Refreshing...` })); await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); console.error(`[ProjectService Rename] Failed to rename item ${oldFilename}:`, error); await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' }); project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.` })); throw error; } }
@@ -714,7 +871,6 @@ export async function convertAndSaveTranscriptAsDoc() {
 
     project.update(p => ({ ...p, statusMessage: `Converting transcript to table document...` }));
 
-    // Single headless editor for constructing the final table document
     const finalTableEditor = createHeadlessEditor({
         nodes: ALL_EDITOR_NODES,
         namespace: `doc-table-finalizer-${Date.now()}`,
@@ -725,152 +881,19 @@ export async function convertAndSaveTranscriptAsDoc() {
 
     try {
         console.log(`[ProjectService] Reading content from transcript file: ${transcriptPath}`);
-        const transcriptFileContentString = await invoke('read_file_content', { path: transcriptPath });
-        if (!transcriptFileContentString) {
-            throw new Error("Transcript file content is empty or could not be read.");
-        }
-
-        let segmentsArray;
-        try {
-            segmentsArray = JSON.parse(transcriptFileContentString);
-            if (!Array.isArray(segmentsArray)) {
-                throw new Error("Transcript content is not a valid JSON array of segments.");
-            }
-            console.log(`[ProjectService] Parsed ${segmentsArray.length} segments from transcript file.`);
-        } catch (e) {
-            console.error("[ProjectService] Failed to parse transcript file content:", e);
-            throw new Error(`Failed to parse transcript file: ${e.message}`);
-        }
-
-        // All node creation and manipulation for the final document happens in this single update call
-        await finalTableEditor.update(() => {
-            const root = _getRoot();
-            root.clear();
-
-            const tableNode = _createTableNode();
-            // Example: tableNode.setColWidths([60, 120, 120, 450]); // Adjust as needed
-
-            // Create Header Row
-            const headerRow = _createTableRowNode();
-            const headers = ["#", "Timestamp", "Speaker", "Text"];
-            for (const headerText of headers) {
-                const cell = _createTableCellNode({ headerState: 'column' });
-                const paragraph = _createParagraphNode();
-                paragraph.append(_createTextNode(headerText));
-                cell.append(paragraph);
-                headerRow.append(cell);
-            }
-            tableNode.append(headerRow);
-
-            // Create Data Rows
-            let segmentCounter = 0;
-            for (const segment of segmentsArray) {
-                segmentCounter++;
-                const dataRow = _createTableRowNode();
-
-                // 1. Segment Number
-                const cellNum = _createTableCellNode();
-                const pNum = _createParagraphNode();
-                pNum.append(_createTextNode(String(segmentCounter)));
-                cellNum.append(pNum);
-                dataRow.append(cellNum);
-
-                // 2. Timestamp
-                const cellTime = _createTableCellNode();
-                const pTime = _createParagraphNode();
-                const startTime = formatTimestampHtml(segment.start_time || 0);
-                const endTime = formatTimestampHtml(segment.end_time || 0);
-                pTime.append(_createTextNode(`${startTime} - ${endTime}`));
-                cellTime.append(pTime);
-                dataRow.append(cellTime);
-
-                // 3. Speaker
-                const cellSpeaker = _createTableCellNode();
-                const pSpeaker = _createParagraphNode();
-                pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
-                cellSpeaker.append(pSpeaker);
-                dataRow.append(cellSpeaker);
-
-                // 4. Text Content (potentially rich)
-                const cellText = _createTableCellNode();
-                if (segment && typeof segment.text === 'string' && segment.text.trim() !== '') {
-                    let segmentLexicalJson = segment.text;
-                    let parsedSegmentRootChildrenJSON = null;
-
-                    try {
-                        const parsedTextData = JSON.parse(segmentLexicalJson);
-                        if (parsedTextData && typeof parsedTextData.root === 'object' && Array.isArray(parsedTextData.root.children)) {
-                            parsedSegmentRootChildrenJSON = parsedTextData.root.children;
-                        } else {
-                            // It's JSON, but not the Lexical structure we want to unpack. Treat as plain text.
-                             console.warn(`[ProjectService] Segment ${segmentCounter} text is JSON but not full Lexical. Treating as plain text: "${segment.text.substring(0,100)}"`);
-                        }
-                    } catch (e) {
-                        // Not JSON, treat as plain text
-                         console.warn(`[ProjectService] Segment ${segmentCounter} text is not JSON. Treating as plain text: "${segment.text.substring(0,100)}"`);
-                    }
-
-                    if (parsedSegmentRootChildrenJSON) {
-                        // It was valid Lexical JSON, iterate its root children (which are block nodes)
-                        for (const blockNodeJSON of parsedSegmentRootChildrenJSON) {
-                            try {
-                                const newBlockNodeInstance = _parseSerializedNode(blockNodeJSON);
-                                if (newBlockNodeInstance) {
-                                    cellText.append(newBlockNodeInstance);
-                                } else {
-                                     console.warn(`[ProjectService] _parseSerializedNode returned null for segment ${segmentCounter}, block:`, blockNodeJSON);
-                                      const pError = _createParagraphNode();
-                                      pError.append(_createTextNode(`[Content error in segment ${segmentCounter}]`));
-                                      cellText.append(pError);
-                                }
-                            } catch (parseErr) {
-                                console.error(`[ProjectService] Error parsing block node JSON for segment ${segmentCounter}:`, parseErr, blockNodeJSON);
-                                const pError = _createParagraphNode();
-                                pError.append(_createTextNode(`[Content parsing error for segment ${segmentCounter}]`));
-                                cellText.append(pError);
-                            }
-                        }
-                    } else { // Treat as plain text
-                        const pContent = _createParagraphNode();
-                        pContent.append(_createTextNode(segment.text)); // segment.text contains the plain text here
-                        cellText.append(pContent);
-                    }
-                } else { // Segment text is empty or invalid
-                    cellText.append(_createParagraphNode()); // Append an empty paragraph
-                }
-                dataRow.append(cellText);
-                tableNode.append(dataRow);
-            } // end for each segment
-
-            root.append(tableNode);
-            root.append(_createParagraphNode()); // Empty para after table
-        }); // end finalTableEditor.update
-
-        finalLexicalJsonString = JSON.stringify(finalTableEditor.getEditorState().toJSON());
-        console.log(`[ProjectService] Final Table Lexical JSON string created (${finalLexicalJsonString.length} bytes).`);
+        // Assuming loadTranscriptFile now loads the *full lexical table string* from the JSON file
+        const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         
-        // Validation (optional but good)
-        try {
-            const testEditorState = finalTableEditor.parseEditorState(finalLexicalJsonString);
-            let isValid = false;
-            testEditorState.read(() => {
-                const root = _getRoot();
-                if (root && root.getType() === 'root' && Array.isArray(root.getChildren())) {
-                    const firstChild = root.getFirstChild();
-                    if (firstChild && _isTableNode(firstChild)) {
-                        isValid = true;
-                        console.log("[ProjectService] Final JSON table validation: OK, TableNode found.");
-                    } else {
-                        console.warn("[ProjectService] Final JSON table validation: First child not TableNode. Type:", firstChild?.getType());
-                    }
-                }
-            });
-            if (!isValid) throw new Error("Final JSON (table) did not parse to valid root with TableNode.");
-        } catch(e) {
-            console.error("[ProjectService] CRITICAL: Final combined JSON for table is NOT valid!", e);
-            console.error("Final JSON sample:", finalLexicalJsonString.substring(0, 1000) + "...");
-            throw new Error(`Failed to construct valid final table document: ${e.message}`);
+        if (!fullLexicalTableString) {
+            throw new Error("Transcript file content is empty or could not be read as Lexical Table JSON.");
         }
+
+        // At this point, fullLexicalTableString IS the content we want to save as a new document.
+        // No further complex parsing or segment-by-segment reconstruction is needed here,
+        // as the source file already contains the desired Lexical Table.
+        finalLexicalJsonString = fullLexicalTableString;
+        
+        console.log(`[ProjectService] Using existing Lexical Table JSON for new document (${finalLexicalJsonString.length} bytes).`);
         
         const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => {
             const mediaName = selectedMedia.name;
@@ -882,9 +905,9 @@ export async function convertAndSaveTranscriptAsDoc() {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-        const docFilenameBase = `${safeStem}_transcript_table_${dateStr}_${timeStr}`;
+        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`; // Changed name slightly
 
-        project.update(p => ({ ...p, statusMessage: `Saving transcript table document...` }));
+        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
         const targetFullPath = await invoke('get_unique_document_path', {
             projectBaseDirStr: projectBaseDir,
             baseName: docFilenameBase,
@@ -896,7 +919,7 @@ export async function convertAndSaveTranscriptAsDoc() {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             documentName: docFilename,
-            jsonContent: finalLexicalJsonString
+            jsonContent: finalLexicalJsonString // Save the full table JSON
         });
 
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
@@ -905,7 +928,7 @@ export async function convertAndSaveTranscriptAsDoc() {
 
     } catch (error) {
         console.error("[ProjectService] Error in convertAndSaveTranscriptAsDoc (Table Export):", error);
-        project.update(p => ({ ...p, statusMessage: `Error converting transcript to table: ${error.message || error}` }));
+        project.update(p => ({ ...p, statusMessage: `Error converting transcript to document: ${error.message || error}` }));
         throw error; 
     }
 }
@@ -954,9 +977,13 @@ export async function saveCurrentPdfAnnotations() {
     if (relativePdfPath.startsWith(projectBaseDir + sep) || relativePdfPath.startsWith(projectBaseDir + '/')) {
         relativePdfPath = relativePdfPath.substring(projectBaseDir.length + 1);
     } else if (relativePdfPath.startsWith(projectBaseDir)) {
-        relativePdfPath = relativePdfPath.substring(projectBaseDir.length);
+         relativePdfPath = relativePdfPath.substring(projectBaseDir.length);
+         if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) {
+            relativePdfPath = relativePdfPath.substring(1);
+        }
     }
-    relativePdfPath = relativePdfPath.replace(/^[\\/]/, '').replace(/\\/g, '/');
+    
+    relativePdfPath = relativePdfPath.replace(/\\/g, '/'); 
 
     try {
         const annList = projState.currentPdfAnnotations ?? [];
