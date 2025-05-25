@@ -703,8 +703,29 @@ function parseTimestampStringToSeconds(timestampStr) {
     return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3));
 }
 
+// New helper function to recursively extract plain text from a Lexical node object
+function extractPlainTextFromLexicalNode(node) {
+    if (!node) {
+        return '';
+    }
+    if (node.type === 'text' || node.type === 'extended-text') { // Add other text-bearing node types if any
+        return node.text || '';
+    }
+    let text = '';
+    if (node.children && Array.isArray(node.children)) {
+        for (const child of node.children) {
+            text += extractPlainTextFromLexicalNode(child);
+        }
+    }
+    // For nodes like line breaks, we might want to represent them as a space or newline
+    if (node.type === 'linebreak') {
+        return '\n'; // Or ' ' depending on desired output for text extraction
+    }
+    return text;
+}
+
 export function parseLexicalTableToSegments(lexicalTableJsonString) {
-    console.log("[ProjectService] Attempting parseLexicalTableToSegments (refactored for stability)...");
+    console.log("[ProjectService] Attempting parseLexicalTableToSegments (with extractPlainTextFromLexicalNode helper)...");
     let parsedFullEditorState;
     try {
         parsedFullEditorState = JSON.parse(lexicalTableJsonString);
@@ -739,22 +760,17 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}";
 
                 // --- Timestamp Cell (index 1 of rowNode.children) ---
-                const timestampCellNode = rowNode.children[1];
+                const timestampCellNode = rowNode.children[1]; 
                 if (timestampCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 1 (Timestamp) to be 'tablecell', got '${timestampCellNode.type}'. Skipping row.`); continue;
                 }
-                const tempTimestampEditor = createHeadlessEditor({ 
-                    nodes: ALL_EDITOR_NODES, // Using ALL_EDITOR_NODES as it includes ExtendedTextNode etc.
-                    namespace: `timestamp-parser-${i}-${Date.now()}`,
-                    onError: (e) => console.error(`[TimestampParserEditor ${i}] Error:`, e)
-                });
-                const clonedTimestampChildren = JSON.parse(JSON.stringify(timestampCellNode.children || []));
-                const timestampCellContentForEditor = {
-                    root: { type: 'root', children: clonedTimestampChildren, direction: null, format: '', indent: 0, version: 1 }
-                };
-                tempTimestampEditor.setEditorState(tempTimestampEditor.parseEditorState(JSON.stringify(timestampCellContentForEditor)));
-                const timestampText = tempTimestampEditor.getEditorState().read(() => _getRoot().getTextContent());
-                const timeParts = timestampText.split(' - ');
+                let timestampFullText = '';
+                if (timestampCellNode.children && Array.isArray(timestampCellNode.children)) {
+                    for (const childOfCell of timestampCellNode.children) {
+                        timestampFullText += extractPlainTextFromLexicalNode(childOfCell);
+                    }
+                }
+                const timeParts = timestampFullText.split(' - ');
                 startTime = parseTimestampStringToSeconds(timeParts[0]);
                 endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
 
@@ -763,17 +779,13 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 if (speakerCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 2 (Speaker) to be 'tablecell', got '${speakerCellNode.type}'. Skipping row.`); continue;
                 }
-                const tempSpeakerEditor = createHeadlessEditor({
-                    nodes: ALL_EDITOR_NODES,
-                    namespace: `speaker-parser-${i}-${Date.now()}`,
-                    onError: (e) => console.error(`[SpeakerParserEditor ${i}] Error:`, e)
-                });
-                const clonedSpeakerChildren = JSON.parse(JSON.stringify(speakerCellNode.children || []));
-                const speakerCellContentForEditor = {
-                    root: { type: 'root', children: clonedSpeakerChildren, direction: null, format: '', indent: 0, version: 1 }
-                };
-                tempSpeakerEditor.setEditorState(tempSpeakerEditor.parseEditorState(JSON.stringify(speakerCellContentForEditor)));
-                speakerName = tempSpeakerEditor.getEditorState().read(() => _getRoot().getTextContent()).trim();
+                let tempSpeakerName = '';
+                if (speakerCellNode.children && Array.isArray(speakerCellNode.children)) {
+                    for (const childOfCell of speakerCellNode.children) {
+                        tempSpeakerName += extractPlainTextFromLexicalNode(childOfCell);
+                    }
+                }
+                speakerName = tempSpeakerName.trim();
                 if (!speakerName) speakerName = "Unknown";
 
                 // --- Text Content Cell (index 3 of rowNode.children) ---
@@ -781,11 +793,11 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 if (textContentCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 3 (Text) to be 'tablecell', got '${textContentCellNode.type}'. Skipping row.`); continue;
                 }
-                const clonedTextCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || []));
+                const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || []));
                 const segmentLexicalContentJson = {
                     root: {
                         type: 'root',
-                        children: clonedTextCellChildren, 
+                        children: deepClonedCellChildren, 
                         direction: null,
                         format: '',
                         indent: 0,
