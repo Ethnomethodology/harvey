@@ -947,9 +947,9 @@ export async function saveTranscriptData() {
                     try {
                         parsedSegmentState = JSON.parse(segment.text);
                     } catch (e) {
-                        console.error(`[ProjectService Save V5] JSON.parse failed for segment ${i} content:`, String(segment.text).substring(0,200), e);
+                        console.error(`[ProjectService Save V6] JSON.parse failed for segment ${i} content:`, String(segment.text).substring(0,200), e);
                         const pError = _createParagraphNode();
-                        pError.append(_createTextNode("[Error V5: Malformed cell JSON]"));
+                        pError.append(_createTextNode("[Error V6: Malformed cell JSON]"));
                         cellText.append(pError);
                         dataRow.append(cellText); 
                         tableNode.append(dataRow); 
@@ -961,47 +961,63 @@ export async function saveTranscriptData() {
                     if (Array.isArray(serializedChildNodes) && serializedChildNodes.length > 0) {
                         serializedChildNodes.forEach(serializedNodeObject => {
                             if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) {
-                                console.error(`[ProjectService Save V5] Segment ${i}: serializedNodeObject is not an object:`, serializedNodeObject);
+                                console.error(`[ProjectService Save V6] Segment ${i}: serializedNodeObject is not an object:`, serializedNodeObject);
                                 const pError = _createParagraphNode();
-                                pError.append(_createTextNode("[Error V5: Invalid node object found]"));
+                                pError.append(_createTextNode("[Error V6: Invalid node object found]"));
                                 cellText.append(pError);
                                 return; 
                             }
-                            // V4 log removed as per instruction to replace, not add to existing V4 logs for this specific line.
-                            // The new V5 log after _parseSerializedNode is more specific.
                             try {
                                 const liveNode = _parseSerializedNode(serializedNodeObject);
-                                console.log(`[ProjectService Save V5] Segment ${i}: liveNode from _parseSerializedNode. Type via .getType():`, liveNode ? liveNode.getType() : (liveNode === null ? 'null' : typeof liveNode), ". Serialized type was:", serializedNodeObject?.type);
+                                
+                                let instanceCheckResult = 'N/A';
+                                let nodeTypeString = 'N/A'; 
+
+                                if (liveNode && typeof liveNode.getType === 'function') {
+                                    nodeTypeString = liveNode.getType(); 
+                                    if (nodeTypeString === ParagraphNode.getType()) {
+                                        instanceCheckResult = liveNode instanceof ParagraphNode; 
+                                    } else if (nodeTypeString === ExtendedTextNode.getType()) {
+                                        instanceCheckResult = liveNode instanceof ExtendedTextNode;
+                                    } else if (nodeTypeString === TextNode.getType()) { 
+                                        instanceCheckResult = liveNode instanceof TextNode;
+                                    } 
+                                } else if (liveNode === null) {
+                                    nodeTypeString = 'null';
+                                } else {
+                                    nodeTypeString = typeof liveNode;
+                                }
+                                console.log(`[ProjectService Save V6] Segment ${i}: liveNode from _parseSerializedNode. Type: ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Serialized type from input: ${serializedNodeObject?.type}`);
                                 
                                 if (liveNode && typeof liveNode.clone === 'function') {
                                     cellText.append(liveNode.clone());
                                 } else {
-                                    console.error(`[ProjectService Save V5] Segment ${i}: Node parsing/cloning failed. liveNode.getType():`, liveNode ? liveNode.getType() : (liveNode === null ? 'null' : typeof liveNode), ". Does liveNode have clone method?", liveNode ? typeof liveNode.clone : 'N/A', ". From Serialized Object:", JSON.stringify(serializedNodeObject).substring(0,150));
+                                    console.error(`[ProjectService Save V6] Segment ${i}: Node parsing/cloning failed. liveNode.getType(): ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Does liveNode have clone method? ${liveNode ? typeof liveNode.clone : 'N/A'}. From Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
                                     const pError = _createParagraphNode();
-                                    let errorText = "[Error V5: Node parsing/cloning failed]";
-                                    if (liveNode && typeof liveNode.getType === 'function') { 
-                                        errorText = `[Error V5: Clone failed on type ${liveNode.getType()}]`;
+                                    let errorText = `[Error V6: Clone failed on type ${nodeTypeString}]`;
+                                    if (instanceCheckResult === false) { 
+                                        errorText = `[Error V6: Clone failed on type ${nodeTypeString}, instanceof check failed]`;
                                     } else if (liveNode === null) {
-                                        errorText = "[Error V5: Parsed node is null]";
+                                        errorText = "[Error V6: Parsed node is null]";
                                     } else if (typeof liveNode !== 'object') {
-                                        errorText = `[Error V5: Parsed node not object (${typeof liveNode})]`;
+                                        errorText = `[Error V6: Parsed node not object (${typeof liveNode})]`;
                                     }
                                     pError.append(_createTextNode(errorText));
                                     cellText.append(pError);
                                 }
                             } catch (e) {
-                                console.error(`[ProjectService Save V5] Segment ${i}: Exception during _parseSerializedNode for:`, JSON.stringify(serializedNodeObject).substring(0,150), e);
+                                console.error(`[ProjectService Save V6] Segment ${i}: Exception during _parseSerializedNode for:`, JSON.stringify(serializedNodeObject).substring(0,150), e);
                                 const pError = _createParagraphNode();
-                                pError.append(_createTextNode("[Error V5: _parseSerializedNode exception]"));
+                                pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]"));
                                 cellText.append(pError);
                             }
                         });
                     } else {
-                        console.warn(`[ProjectService Save V5] Segment ${i}: No valid serializedChildNodes found in segment. Data:`, String(segment.text).substring(0, 200));
+                        console.warn(`[ProjectService Save V6] Segment ${i}: No valid serializedChildNodes found in segment. Data:`, String(segment.text).substring(0, 200));
                         cellText.append(_createParagraphNode());
                     }
                 } else {
-                    console.warn(`[ProjectService Save V5] Segment ${i}: segment.text is empty or not a string. Value:`, segment.text);
+                    console.warn(`[ProjectService Save V6] Segment ${i}: segment.text is empty or not a string. Value:`, segment.text);
                     cellText.append(_createParagraphNode()); 
                 }
                 dataRow.append(cellText);
