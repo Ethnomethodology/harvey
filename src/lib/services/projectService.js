@@ -943,52 +943,62 @@ export async function saveTranscriptData() {
                 // Text Content Cell (segment.text is already Lexical JSON for the cell's content)
                 const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
+                    let parsedSegmentState;
                     try {
-                        // --- NEW SIMPLIFIED LOGIC STARTS HERE ---
-                        const segmentJsonString = segment.text; // This is '{"root":{...}}'
-                        
-                        // Parse the segment's JSON string directly using the main editorForTableAssembly's context.
-                        // This creates live nodes within editorForTableAssembly's state temporarily.
-                        const newEditorStateForCell = editorForTableAssembly.parseEditorState(segmentJsonString);
+                        parsedSegmentState = JSON.parse(segment.text);
+                    } catch (e) {
+                        console.error(`[ProjectService Save V4] JSON.parse failed for segment ${i} content:`, String(segment.text).substring(0,200), e);
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error V4: Malformed cell JSON]"));
+                        cellText.append(pError);
+                        // Add this cell to dataRow and continue to next segment in the outer loop
+                        dataRow.append(cellText); 
+                        // tableNode.append(dataRow); // This line was in the instructions, but it seems more appropriate to append the full dataRow later
+                        // continue; // This would skip appending the dataRow to the tableNode if there's a JSON parse error.
+                                 // The row *should* be added, even if the cell has an error.
+                                 // The original instructions had tableNode.append(dataRow) then continue. Let's stick to that.
+                        tableNode.append(dataRow); // Appending the row with error cell
+                        continue; // Critical: continue to next iteration of the transcriptSegments loop
+                    }
 
-                        // Read the children nodes from this newly parsed state.
-                        // _getRoot() here will operate on the newEditorStateForCell that was just parsed
-                        // into editorForTableAssembly.
-                        const childrenForCell = newEditorStateForCell.read(() => {
-                            const root = _getRoot(); 
-                            return root.getChildren(); 
-                        });
+                    const serializedChildNodes = parsedSegmentState?.root?.children;
 
-                        if (childrenForCell && childrenForCell.length > 0) {
-                            childrenForCell.forEach(childNode => {
-                                // These childNode instances are now live Lexical nodes within editorForTableAssembly's context.
-                                if (childNode && typeof childNode.clone === 'function') {
-                                    cellText.append(childNode.clone());
+                    if (Array.isArray(serializedChildNodes) && serializedChildNodes.length > 0) {
+                        serializedChildNodes.forEach(serializedNodeObject => {
+                            if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) {
+                                console.error(`[ProjectService Save V4] Segment ${i}: serializedNodeObject is not an object:`, serializedNodeObject);
+                                const pError = _createParagraphNode();
+                                pError.append(_createTextNode("[Error V4: Invalid node object found]"));
+                                cellText.append(pError);
+                                return; // continue to next serializedNodeObject
+                            }
+                            console.log(`[ProjectService Save V4] Segment ${i}: Processing serializedNodeObject:`, JSON.stringify(serializedNodeObject).substring(0,150));
+                            try {
+                                const liveNode = _parseSerializedNode(serializedNodeObject); // _parseSerializedNode is $parseSerializedNode from lexical
+                                
+                                if (liveNode && typeof liveNode.clone === 'function') {
+                                    cellText.append(liveNode.clone());
                                 } else {
-                                    console.error(`[ProjectService Save] Segment ${i}: Node from parsed cell content is invalid or missing clone. Node:`, JSON.stringify(childNode));
+                                    console.error(`[ProjectService Save V4] Segment ${i}: _parseSerializedNode did not return a valid clonable node. Parsed liveNode:`, liveNode, "From:", JSON.stringify(serializedNodeObject).substring(0,150));
                                     const pError = _createParagraphNode();
-                                    pError.append(_createTextNode("[Error: Invalid node in cell assembly]"));
+                                    pError.append(_createTextNode("[Error V4: Node parsing/cloning failed]"));
                                     cellText.append(pError);
                                 }
-                            });
-                        } else {
-                            // If segmentJsonString was valid but resulted in an empty state (e.g., {"root":{"children":[]}})
-                            // or if childrenForCell is empty for other reasons after parsing.
-                            console.log(`[ProjectService Save] Segment ${i}: No children found after parsing cell content. Appending empty paragraph. Content snapshot:`, segmentJsonString.substring(0,100));
-                            cellText.append(_createParagraphNode());
-                        }
-                        // --- NEW SIMPLIFIED LOGIC ENDS HERE ---
-
-                    } catch (e) { // Catch errors from parsing segmentJsonString or processing its nodes
-                        console.error(`[ProjectService Save] Error processing cell content for segment ${i}:`, e, "Content snapshot:", String(segment.text).substring(0,100));
-                        const pError = _createParagraphNode();
-                        pError.append(_createTextNode("[Error parsing cell content during save]")); 
-                        cellText.append(pError);
+                            } catch (e) {
+                                console.error(`[ProjectService Save V4] Segment ${i}: Error calling _parseSerializedNode on:`, JSON.stringify(serializedNodeObject).substring(0,150), e);
+                                const pError = _createParagraphNode();
+                                pError.append(_createTextNode("[Error V4: _parseSerializedNode exception]"));
+                                cellText.append(pError);
+                            }
+                        });
+                    } else {
+                        console.warn(`[ProjectService Save V4] Segment ${i}: No valid serializedChildNodes found in segment. Data:`, String(segment.text).substring(0, 200));
+                        cellText.append(_createParagraphNode());
                     }
                 } else {
-                    // If segment.text is empty or not a string
-                    console.log(`[ProjectService Save] Segment ${i}: segment.text is empty or not a string. Appending empty paragraph.`);
-                    cellText.append(_createParagraphNode());
+                    // segment.text is null, undefined, or not a string
+                    console.warn(`[ProjectService Save V4] Segment ${i}: segment.text is empty or not a string. Value:`, segment.text);
+                    cellText.append(_createParagraphNode()); // Append an empty paragraph
                 }
                 dataRow.append(cellText);
                 tableNode.append(dataRow);
