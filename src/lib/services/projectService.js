@@ -959,35 +959,41 @@ export async function saveTranscriptData() {
                         
                         // 2. Read the live children nodes from the temporary editor's state.
                         //    It's crucial that _getRoot() is called within the read callback of the correct editor state.
-                        const cellChildren = tempEditorState.read(() => {
+                        const cellChildrenObjects = tempEditorState.read(() => { // Renamed to cellChildrenObjects
                             const tempRoot = _getRoot(); // _getRoot from lexical, operating on tempSegmentParserEditor's state
-                            return tempRoot.getChildren(); // These are LIVE Lexical nodes
+                            return tempRoot.getChildren(); // These are plain JS objects representing nodes
                         });
                         
-                        // 3. Clone these live children and append them to cellText.
-                        if (cellChildren && cellChildren.length > 0) {
-                            cellChildren.forEach(liveNode => { 
-                                // ADD THESE LOGGING LINES:
-                                console.log(`[ProjectService Save Debug] Segment ${i}: Processing liveNode. Typeof:`, typeof liveNode);
-                                if (liveNode && liveNode.constructor) {
-                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode.constructor.name:`, liveNode.constructor.name);
-                                } else if (liveNode) {
-                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode has no constructor.name. Keys:`, Object.keys(liveNode).join(', '));
-                                } else {
-                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode is null or undefined.`);
-                                }
-                                console.log(`[ProjectService Save Debug] Segment ${i}: liveNode value:`, JSON.stringify(liveNode)); // Stringify to see its properties if it's an object
-                                console.log(`[ProjectService Save Debug] Segment ${i}: typeof liveNode.clone:`, typeof liveNode?.clone);
-
-                                // Existing safeguard and logic:
-                                if (typeof liveNode?.clone !== 'function') { // Added optional chaining for safety
-                                    console.error(`[ProjectService Save] Error: node in cellChildren for segment ${i} is not a live Lexical node or clone method missing. Skipping clone. Node type reported: ${liveNode?.constructor?.name || typeof liveNode}`);
+                        // 3. Parse these plain JS objects into live Lexical nodes and append their clones to cellText.
+                        if (cellChildrenObjects && cellChildrenObjects.length > 0) {
+                            cellChildrenObjects.forEach(nodeObject => {
+                                // Ensure nodeObject is valid before attempting to parse
+                                if (!nodeObject || typeof nodeObject.type !== 'string') {
+                                    console.warn(`[ProjectService Save] Segment ${i}: nodeObject is invalid or missing type. Skipping.`, nodeObject);
                                     const pError = _createParagraphNode();
-                                    pError.append(_createTextNode("[Error: Invalid node structure in segment data during save]")); // Clarified error message
+                                    pError.append(_createTextNode("[Error: Invalid node data in segment]"));
                                     cellText.append(pError);
-                                    return; 
+                                    return;
                                 }
-                                cellText.append(liveNode.clone()); 
+
+                                try {
+                                    const liveNode = _parseSerializedNode(nodeObject); // Use imported _parseSerializedNode
+                                    
+                                    // Verify the parsed node is valid and has a clone method
+                                    if (liveNode && typeof liveNode.clone === 'function') {
+                                        cellText.append(liveNode.clone());
+                                    } else {
+                                        console.error(`[ProjectService Save] Segment ${i}: Parsed node is invalid or missing clone method. Type: ${liveNode?.getType()}, Object:`, liveNode);
+                                        const pError = _createParagraphNode();
+                                        pError.append(_createTextNode("[Error: Failed to correctly parse node structure during save]"));
+                                        cellText.append(pError);
+                                    }
+                                } catch (parsingError) {
+                                    console.error(`[ProjectService Save] Segment ${i}: Error parsing serialized node. Object:`, nodeObject, "Error:", parsingError);
+                                    const pError = _createParagraphNode();
+                                    pError.append(_createTextNode("[Error: Node parsing failed during save]"));
+                                    cellText.append(pError);
+                                }
                             });
                         } else {
                             // If parsing segment.text results in no children, add an empty paragraph
@@ -997,10 +1003,11 @@ export async function saveTranscriptData() {
                     } catch (parseError) {
                         console.error(`[ProjectService Save] Error processing cell content for segment ${i}:`, parseError, String(segment.text).substring(0,100));
                         const pError = _createParagraphNode();
-                        pError.append(_createTextNode("[Error parsing cell content]"));
+                        pError.append(_createTextNode("[Error parsing cell content during save]")); // Added "during save" for clarity
                         cellText.append(pError);
                     }
                 } else {
+                    // If segment.text is empty or not a string, add an empty paragraph
                     cellText.append(_createParagraphNode()); 
                 }
                 dataRow.append(cellText);
