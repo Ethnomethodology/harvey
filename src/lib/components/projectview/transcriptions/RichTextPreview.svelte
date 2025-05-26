@@ -11,7 +11,7 @@
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
 
-    import { RootNode, ParagraphNode, TextNode, LineBreakNode, $getRoot, $parseSerializedNode } from 'lexical';
+    import { RootNode, ParagraphNode, TextNode, LineBreakNode, $getRoot as lexicalGetRoot, $parseSerializedNode as lexicalParseSerializedNode } from 'lexical';
     import { HeadingNode, QuoteNode } from '@lexical/rich-text';
     import { ListNode, ListItemNode } from '@lexical/list';
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
@@ -70,7 +70,7 @@
           const serializedNodes = parsedJson.root.children;
 
           htmlEditor.update(() => {
-            const root = $getRoot();
+            const root = lexicalGetRoot();
             root.clear();
             // Filter out any null/undefined items from serializedNodes just in case,
             // though ideally this array should already be clean.
@@ -78,7 +78,7 @@
             const newNodes = validSerializedNodes.map(serializedNode => {
               // ADD THIS LOGGING LINE:
               console.log('[RichTextPreview] Attempting to parse serializedNode:', JSON.stringify(serializedNode));
-              return $parseSerializedNode(serializedNode);
+              return lexicalParseSerializedNode(serializedNode);
             });
             root.append(...newNodes);
             html = generateHtmlFromNodes(htmlEditor, null);
