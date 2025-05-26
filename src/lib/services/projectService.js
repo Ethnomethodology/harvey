@@ -994,7 +994,7 @@ export async function saveTranscriptData() {
                                         cellText.append(liveNode.clone());
                                     } else if (typeof liveNode.constructor?.clone === 'function') {
                                         // If instance clone is missing, try static clone (common in Lexical)
-                                        console.warn(`[ProjectService Save V6] Segment ${i}: liveNode.clone (instance method) is undefined. Attempting liveNode.constructor.clone(liveNode). Node type: ${nodeTypeString}`);
+                                        // console.warn(`[ProjectService Save V6] Segment ${i}: liveNode.clone (instance method) is undefined. Attempting liveNode.constructor.clone(liveNode). Node type: ${nodeTypeString}`);
                                         cellText.append(liveNode.constructor.clone(liveNode));
                                     } else {
                                         // Both instance and static clone methods are missing
