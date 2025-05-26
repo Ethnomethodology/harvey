@@ -70,19 +70,31 @@
           const serializedNodes = parsedJson.root.children;
 
           htmlEditor.update(() => {
-            const root = lexicalGetRoot();
-            root.clear();
-            // Filter out any null/undefined items from serializedNodes just in case,
-            // though ideally this array should already be clean.
+            const editorRoot = lexicalGetRoot(); // Get the root of the htmlEditor
+            editorRoot.clear();
+            
+            const nodesToAppend = [];
             const validSerializedNodes = serializedNodes.filter(Boolean);
-            const newNodes = validSerializedNodes.map(serializedNode => {
-              // ADD THIS LOGGING LINE:
-              console.log('[RichTextPreview] Attempting to parse serializedNode:', JSON.stringify(serializedNode));
-              return lexicalParseSerializedNode(serializedNode);
-            });
-            root.append(...newNodes);
+
+            for (const serializedNodeObj of validSerializedNodes) {
+              // The console.log for diagnostics can be kept or removed. For this fix, let's keep it for now.
+              console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj));
+
+              if (serializedNodeObj.type === 'root' && serializedNodeObj.children && Array.isArray(serializedNodeObj.children)) {
+                // If the serializedNodeObj is a RootNode itself, process its children
+                for (const childOfNestedRoot of serializedNodeObj.children) {
+                  if (childOfNestedRoot) { // Ensure child is not null/undefined
+                    nodesToAppend.push(lexicalParseSerializedNode(childOfNestedRoot));
+                  }
+                }
+              } else {
+                // Otherwise, parse the serializedNodeObj directly (assuming it's a Paragraph, List, etc.)
+                nodesToAppend.push(lexicalParseSerializedNode(serializedNodeObj));
+              }
+            }
+            editorRoot.append(...nodesToAppend);
             html = generateHtmlFromNodes(htmlEditor, null);
-          }, { discrete: true }); // discrete: true might be useful if updates are complex
+          }, { discrete: true });
         } else {
           // Fallback for invalid structure, though isLexicalJson should catch most.
           console.warn('[RichTextPreview] lexicalJsonToHtml: parsedJson or parsedJson.root.children is invalid. Rendering empty.', parsedJson);
