@@ -321,7 +321,7 @@ export class ExtendedTextNode extends TextNode {
 
 // ----- helpers ---------------------------------------------------------------
 export function $createExtendedTextNode(text = '') {
-  return _applyNodeReplacement(new ExtendedTextNode(text));
+  return new ExtendedTextNode(text);
 }
 export function $isExtendedTextNode(node) {
   return node instanceof ExtendedTextNode;
