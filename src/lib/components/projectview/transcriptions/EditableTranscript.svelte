@@ -107,9 +107,56 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         } else {
             localStart = formatTimestamp(seg.start_time); localEnd = formatTimestamp(seg.end_time); localSpeaker = seg.speaker || 'Unknown'; let segmentText = seg.text || ''; let isValidLexicalJson = false;
             if (segmentText && typeof segmentText === 'string') { try { const parsed = JSON.parse(segmentText); if (parsed && parsed.root && parsed.root.type === 'root') { isValidLexicalJson = true; } } catch (e) { isValidLexicalJson = false; } }
-            if (isValidLexicalJson) { initialJsonForEditor = segmentText; if (!initialJsonForEditor || initialJsonForEditor.trim() === '') { initialJsonForEditor = defaultEmptyJsonString; } }
-            else { const plainTextContent = extractPlainText(segmentText); initialJsonForEditor = createJsonFromPlainText(plainTextContent); }
-            console.log(`[EditableTranscript] Prepared initial JSON for index ${idx}`);
+            
+            if (isValidLexicalJson) {
+                let jsonToProcess = segmentText;
+                if (!jsonToProcess || jsonToProcess.trim() === '') {
+                    jsonToProcess = defaultEmptyJsonString;
+                }
+
+                try {
+                    const parsedOriginal = JSON.parse(jsonToProcess);
+                    let finalChildren = [];
+
+                    if (parsedOriginal.root && parsedOriginal.root.children && Array.isArray(parsedOriginal.root.children)) {
+                        for (const nodeObj of parsedOriginal.root.children) {
+                            if (nodeObj && nodeObj.type === 'root' && nodeObj.children && Array.isArray(nodeObj.children)) {
+                                // If nodeObj is a root, take its children
+                                finalChildren.push(...nodeObj.children.filter(Boolean));
+                            } else if (nodeObj) {
+                                // Otherwise, take the nodeObj itself (e.g., a paragraph)
+                                finalChildren.push(nodeObj);
+                            }
+                        }
+                    } else {
+                         // Fallback if structure is unexpected
+                        finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
+                    }
+                    
+                    // Reconstruct a new clean root object for the editor state
+                    const sanitizedEditorState = {
+                        root: {
+                            children: finalChildren,
+                            direction: parsedOriginal.root?.direction || 'ltr', // Preserve original direction if possible
+                            format: parsedOriginal.root?.format || '',
+                            indent: parsedOriginal.root?.indent || 0,
+                            type: 'root',
+                            version: 1
+                        }
+                    };
+                    initialJsonForEditor = JSON.stringify(sanitizedEditorState);
+                    console.log(`[EditableTranscript] Sanitized initialJSON for index ${idx}. Preview of children types: ${finalChildren.map(c => c.type).join(', ')}`);
+
+                } catch (e) {
+                    console.error(`[EditableTranscript] Error sanitizing segment text for index ${idx}:`, e, ". Using default empty JSON.");
+                    initialJsonForEditor = defaultEmptyJsonString;
+                }
+
+            } else { // if not isValidLexicalJson
+                const plainTextContent = extractPlainText(segmentText);
+                initialJsonForEditor = createJsonFromPlainText(plainTextContent);
+            }
+            // console.log(`[EditableTranscript] Prepared initial JSON for index ${idx}`); // Original log, can be removed or kept
         }
         currentEditorJson = initialJsonForEditor;
         dispatchEditState(); await tick(); // Ensure UI updates before potential editor focus/interaction
