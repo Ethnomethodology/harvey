@@ -989,20 +989,33 @@ export async function saveTranscriptData() {
                                 }
                                 console.log(`[ProjectService Save V6] Segment ${i}: liveNode from _parseSerializedNode. Type: ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Serialized type from input: ${serializedNodeObject?.type}`);
                                 
-                                if (liveNode && typeof liveNode.clone === 'function') {
-                                    cellText.append(liveNode.clone());
-                                } else {
-                                    console.error(`[ProjectService Save V6] Segment ${i}: Node parsing/cloning failed. liveNode.getType(): ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Does liveNode have clone method? ${liveNode ? typeof liveNode.clone : 'N/A'}. From Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
-                                    const pError = _createParagraphNode();
-                                    let errorText = `[Error V6: Clone failed on type ${nodeTypeString}]`;
-                                    if (instanceCheckResult === false) { 
-                                        errorText = `[Error V6: Clone failed on type ${nodeTypeString}, instanceof check failed]`;
-                                    } else if (liveNode === null) {
-                                        errorText = "[Error V6: Parsed node is null]";
-                                    } else if (typeof liveNode !== 'object') {
-                                        errorText = `[Error V6: Parsed node not object (${typeof liveNode})]`;
+                                if (liveNode) {
+                                    if (typeof liveNode.clone === 'function') {
+                                        cellText.append(liveNode.clone());
+                                    } else if (typeof liveNode.constructor?.clone === 'function') {
+                                        // If instance clone is missing, try static clone (common in Lexical)
+                                        console.warn(`[ProjectService Save V6] Segment ${i}: liveNode.clone (instance method) is undefined. Attempting liveNode.constructor.clone(liveNode). Node type: ${nodeTypeString}`);
+                                        cellText.append(liveNode.constructor.clone(liveNode));
+                                    } else {
+                                        // Both instance and static clone methods are missing
+                                        console.error(`[ProjectService Save V6] Segment ${i}: Node parsing/cloning failed. BOTH liveNode.clone and liveNode.constructor.clone are undefined. liveNode.getType(): ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
+                                        const pError = _createParagraphNode();
+                                        let errorText = `[Error V6: Clone totally failed on type ${nodeTypeString}]`;
+                                        if (instanceCheckResult === false) {
+                                            errorText = `[Error V6: Clone failed on type ${nodeTypeString}, instanceof check failed]`;
+                                        } else if (liveNode === null) {
+                                            errorText = "[Error V6: Parsed node is null]";
+                                        } else if (typeof liveNode !== 'object') {
+                                            errorText = `[Error V6: Parsed node not object (${typeof liveNode})]`;
+                                        }
+                                        pError.append(_createTextNode(errorText));
+                                        cellText.append(pError);
                                     }
-                                    pError.append(_createTextNode(errorText));
+                                } else {
+                                    // liveNode is null or undefined (parsing failed earlier)
+                                    console.error(`[ProjectService Save V6] Segment ${i}: liveNode is null or undefined before attempting clone. Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
+                                    const pError = _createParagraphNode();
+                                    pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]"));
                                     cellText.append(pError);
                                 }
                             } catch (e) {
