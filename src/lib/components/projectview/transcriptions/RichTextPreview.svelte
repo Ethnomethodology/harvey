@@ -75,7 +75,11 @@
             // Filter out any null/undefined items from serializedNodes just in case,
             // though ideally this array should already be clean.
             const validSerializedNodes = serializedNodes.filter(Boolean);
-            const newNodes = validSerializedNodes.map(serializedNode => $parseSerializedNode(serializedNode));
+            const newNodes = validSerializedNodes.map(serializedNode => {
+              // ADD THIS LOGGING LINE:
+              console.log('[RichTextPreview] Attempting to parse serializedNode:', JSON.stringify(serializedNode));
+              return $parseSerializedNode(serializedNode);
+            });
             root.append(...newNodes);
             html = generateHtmlFromNodes(htmlEditor, null);
           }, { discrete: true }); // discrete: true might be useful if updates are complex
