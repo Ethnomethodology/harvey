@@ -941,47 +941,66 @@ export async function saveTranscriptData() {
                 dataRow.append(cellSpeaker);
 
                 // Text Content Cell (segment.text is already Lexical JSON for the cell's content)
-                const cellText = _createTableCellNode(); // Assuming _createTableCellNode is correctly imported/defined
+                const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
                     try {
                         // Create a new temporary editor for parsing this specific segment's text
                         const tempSegmentParserEditor = createHeadlessEditor({
-                            nodes: ALL_EDITOR_NODES, // Use the existing ALL_EDITOR_NODES array
-                            namespace: `segment-parser-${i}-${Date.now()}`, // Unique namespace
+                            nodes: ALL_EDITOR_NODES,
+                            namespace: `segment-parser-${i}-${Date.now()}`,
                             onError: (e) => console.error(`[TempSegmentParserEditor seg ${i}] Error:`, e),
                         });
 
-                        const segmentJsonString = segment.text; // This is already {"root":{...}}
+                        const segmentJsonString = segment.text; // This is '{"root":{...}}'
 
-                        // Parse the segment's JSON into the temporary editor
+                        // 1. Parse the segment's JSON string into the temporary editor.
+                        //    This creates live nodes within tempSegmentParserEditor's state.
                         const tempEditorState = tempSegmentParserEditor.parseEditorState(segmentJsonString);
                         
-                        // Read children from the temporary editor's state
+                        // 2. Read the live children nodes from the temporary editor's state.
+                        //    It's crucial that _getRoot() is called within the read callback of the correct editor state.
                         const cellChildren = tempEditorState.read(() => {
-                            const tempRoot = _getRoot(); // _getRoot from lexical
-                            return tempRoot.getChildren();
+                            const tempRoot = _getRoot(); // _getRoot from lexical, operating on tempSegmentParserEditor's state
+                            return tempRoot.getChildren(); // These are LIVE Lexical nodes
                         });
                         
-                        // Clone these children and append them to the cellText node (which belongs to editorForTableAssembly)
+                        // 3. Clone these live children and append them to cellText.
                         if (cellChildren && cellChildren.length > 0) {
-                            cellChildren.forEach(node => {
-                                // Ensure node.clone() is available and works as expected for nodes from a different editor context
-                                // This should generally be fine as .clone() creates a new node object.
-                                cellText.append(node.clone());
+                            cellChildren.forEach(liveNode => { 
+                                // ADD THESE LOGGING LINES:
+                                console.log(`[ProjectService Save Debug] Segment ${i}: Processing liveNode. Typeof:`, typeof liveNode);
+                                if (liveNode && liveNode.constructor) {
+                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode.constructor.name:`, liveNode.constructor.name);
+                                } else if (liveNode) {
+                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode has no constructor.name. Keys:`, Object.keys(liveNode).join(', '));
+                                } else {
+                                    console.log(`[ProjectService Save Debug] Segment ${i}: liveNode is null or undefined.`);
+                                }
+                                console.log(`[ProjectService Save Debug] Segment ${i}: liveNode value:`, JSON.stringify(liveNode)); // Stringify to see its properties if it's an object
+                                console.log(`[ProjectService Save Debug] Segment ${i}: typeof liveNode.clone:`, typeof liveNode?.clone);
+
+                                // Existing safeguard and logic:
+                                if (typeof liveNode?.clone !== 'function') { // Added optional chaining for safety
+                                    console.error(`[ProjectService Save] Error: node in cellChildren for segment ${i} is not a live Lexical node or clone method missing. Skipping clone. Node type reported: ${liveNode?.constructor?.name || typeof liveNode}`);
+                                    const pError = _createParagraphNode();
+                                    pError.append(_createTextNode("[Error: Invalid node structure in segment data during save]")); // Clarified error message
+                                    cellText.append(pError);
+                                    return; 
+                                }
+                                cellText.append(liveNode.clone()); 
                             });
                         } else {
-                            // If parsing segment.text results in no children (e.g. empty root), add an empty paragraph
-                            cellText.append(_createParagraphNode()); // _createParagraphNode from lexical
+                            // If parsing segment.text results in no children, add an empty paragraph
+                            cellText.append(_createParagraphNode());
                         }
 
                     } catch (parseError) {
-                        console.error(`[ProjectService Save] Error parsing cell content for segment ${i}:`, parseError, String(segment.text).substring(0,100));
-                        const pError = _createParagraphNode(); // _createParagraphNode from lexical
-                        pError.append(_createTextNode("[Error parsing cell content]")); // _createTextNode from lexical
+                        console.error(`[ProjectService Save] Error processing cell content for segment ${i}:`, parseError, String(segment.text).substring(0,100));
+                        const pError = _createParagraphNode();
+                        pError.append(_createTextNode("[Error parsing cell content]"));
                         cellText.append(pError);
                     }
                 } else {
-                    // If segment.text is empty or not a string, append an empty paragraph
                     cellText.append(_createParagraphNode()); 
                 }
                 dataRow.append(cellText);
