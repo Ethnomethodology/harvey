@@ -944,87 +944,51 @@ export async function saveTranscriptData() {
                 const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
                     try {
-                        // Create a new temporary editor for parsing this specific segment's text
-                        const tempSegmentParserEditor = createHeadlessEditor({
-                            nodes: ALL_EDITOR_NODES,
-                            namespace: `segment-parser-${i}-${Date.now()}`,
-                            onError: (e) => console.error(`[TempSegmentParserEditor seg ${i}] Error:`, e),
-                        });
-
+                        // --- NEW SIMPLIFIED LOGIC STARTS HERE ---
                         const segmentJsonString = segment.text; // This is '{"root":{...}}'
-
-                        // 1. Parse the segment's JSON string into the temporary editor.
-                        //    This creates live nodes within tempSegmentParserEditor's state.
-                        const tempEditorState = tempSegmentParserEditor.parseEditorState(segmentJsonString);
                         
-                        // 2. Read the live children nodes from the temporary editor's state.
-                        //    It's crucial that _getRoot() is called within the read callback of the correct editor state.
-                        const cellChildrenObjects = tempEditorState.read(() => { // Renamed to cellChildrenObjects
-                            const tempRoot = _getRoot(); // _getRoot from lexical, operating on tempSegmentParserEditor's state
-                            return tempRoot.getChildren(); // These are plain JS objects representing nodes
+                        // Parse the segment's JSON string directly using the main editorForTableAssembly's context.
+                        // This creates live nodes within editorForTableAssembly's state temporarily.
+                        const newEditorStateForCell = editorForTableAssembly.parseEditorState(segmentJsonString);
+
+                        // Read the children nodes from this newly parsed state.
+                        // _getRoot() here will operate on the newEditorStateForCell that was just parsed
+                        // into editorForTableAssembly.
+                        const childrenForCell = newEditorStateForCell.read(() => {
+                            const root = _getRoot(); 
+                            return root.getChildren(); 
                         });
-                        
-                        // 3. Parse these plain JS objects into live Lexical nodes and append their clones to cellText.
-                        if (cellChildrenObjects && cellChildrenObjects.length > 0) {
-                            cellChildrenObjects.forEach(nodeInTempEditor => { // Renamed nodeObject to nodeInTempEditor
-                                console.log("[ProjectService Save Debug] Processing node from temp editor:", JSON.stringify(nodeInTempEditor));
-                                console.log("[ProjectService Save Debug] typeof nodeInTempEditor.exportJSON:", typeof nodeInTempEditor?.exportJSON);
 
-                                if (nodeInTempEditor && typeof nodeInTempEditor.exportJSON === 'function') {
-                                    const serializedNode = nodeInTempEditor.exportJSON();
-                                    console.log("[ProjectService Save Debug] Serialized node object (from exportJSON):", JSON.stringify(serializedNode));
-                                    try {
-                                        const liveNodeForMainEditor = _parseSerializedNode(serializedNode);
-                                        if (liveNodeForMainEditor && typeof liveNodeForMainEditor.clone === 'function') {
-                                            cellText.append(liveNodeForMainEditor.clone());
-                                        } else {
-                                            console.error("[ProjectService Save] Primary: Parsed node from exportJSON is invalid or missing clone. Serialized:", serializedNode, "Parsed:", liveNodeForMainEditor);
-                                            const pError = _createParagraphNode();
-                                            pError.append(_createTextNode("[Error: Node conversion failed (P1)]"));
-                                            cellText.append(pError);
-                                        }
-                                    } catch (parsingError) {
-                                        console.error("[ProjectService Save] Primary: Error parsing serializedNode from exportJSON. Serialized:", serializedNode, "Error:", parsingError);
-                                        const pError = _createParagraphNode();
-                                        pError.append(_createTextNode("[Error: Node parsing failed (P2)]"));
-                                        cellText.append(pError);
-                                    }
+                        if (childrenForCell && childrenForCell.length > 0) {
+                            childrenForCell.forEach(childNode => {
+                                // These childNode instances are now live Lexical nodes within editorForTableAssembly's context.
+                                if (childNode && typeof childNode.clone === 'function') {
+                                    cellText.append(childNode.clone());
                                 } else {
-                                    console.warn("[ProjectService Save Debug] Fallback: nodeInTempEditor.exportJSON not found. Attempting direct parse of:", JSON.stringify(nodeInTempEditor));
-                                    try {
-                                        // nodeInTempEditor here is likely a plain JS object if exportJSON wasn't found.
-                                        // _parseSerializedNode expects a plain JS object.
-                                        const liveNodeForMainEditor = _parseSerializedNode(nodeInTempEditor);
-                                        if (liveNodeForMainEditor && typeof liveNodeForMainEditor.clone === 'function') {
-                                            cellText.append(liveNodeForMainEditor.clone());
-                                        } else {
-                                            console.error("[ProjectService Save] Fallback: Parsed node from direct input is invalid or missing clone. Input:", nodeInTempEditor, "Parsed:", liveNodeForMainEditor);
-                                            const pError = _createParagraphNode();
-                                            pError.append(_createTextNode("[Error: Node conversion failed (F1)]"));
-                                            cellText.append(pError);
-                                        }
-                                    } catch (parsingError) {
-                                        console.error("[ProjectService Save] Fallback: Error parsing nodeInTempEditor directly. Input:", nodeInTempEditor, "Error:", parsingError);
-                                        const pError = _createParagraphNode();
-                                        pError.append(_createTextNode("[Error: Node parsing failed (F2)]"));
-                                        cellText.append(pError);
-                                    }
+                                    console.error(`[ProjectService Save] Segment ${i}: Node from parsed cell content is invalid or missing clone. Node:`, JSON.stringify(childNode));
+                                    const pError = _createParagraphNode();
+                                    pError.append(_createTextNode("[Error: Invalid node in cell assembly]"));
+                                    cellText.append(pError);
                                 }
                             });
                         } else {
-                            // If parsing segment.text results in no children, add an empty paragraph
+                            // If segmentJsonString was valid but resulted in an empty state (e.g., {"root":{"children":[]}})
+                            // or if childrenForCell is empty for other reasons after parsing.
+                            console.log(`[ProjectService Save] Segment ${i}: No children found after parsing cell content. Appending empty paragraph. Content snapshot:`, segmentJsonString.substring(0,100));
                             cellText.append(_createParagraphNode());
                         }
+                        // --- NEW SIMPLIFIED LOGIC ENDS HERE ---
 
-                    } catch (parseError) {
-                        console.error(`[ProjectService Save] Error processing cell content for segment ${i}:`, parseError, String(segment.text).substring(0,100));
+                    } catch (e) { // Catch errors from parsing segmentJsonString or processing its nodes
+                        console.error(`[ProjectService Save] Error processing cell content for segment ${i}:`, e, "Content snapshot:", String(segment.text).substring(0,100));
                         const pError = _createParagraphNode();
-                        pError.append(_createTextNode("[Error parsing cell content during save]")); // Added "during save" for clarity
+                        pError.append(_createTextNode("[Error parsing cell content during save]")); 
                         cellText.append(pError);
                     }
                 } else {
-                    // If segment.text is empty or not a string, add an empty paragraph
-                    cellText.append(_createParagraphNode()); 
+                    // If segment.text is empty or not a string
+                    console.log(`[ProjectService Save] Segment ${i}: segment.text is empty or not a string. Appending empty paragraph.`);
+                    cellText.append(_createParagraphNode());
                 }
                 dataRow.append(cellText);
                 tableNode.append(dataRow);
