@@ -11,7 +11,7 @@
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
 
-    import { RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
+    import { RootNode, ParagraphNode, TextNode, LineBreakNode, $getRoot, $parseSerializedNode } from 'lexical';
     import { HeadingNode, QuoteNode } from '@lexical/rich-text';
     import { ListNode, ListItemNode } from '@lexical/list';
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
@@ -61,13 +61,33 @@
     // helper to convert Lexical JSON (string | object) to HTML
     function lexicalJsonToHtml(json) {
       const jsonStr = typeof json === 'string' ? json : JSON.stringify(json);
-
       let html = '';
-      const editorState = htmlEditor.parseEditorState(jsonStr);
-      htmlEditor.setEditorState(editorState);
-      htmlEditor.update(() => {
-        html = generateHtmlFromNodes(htmlEditor, null);
-      });
+
+      try {
+        const parsedJson = JSON.parse(jsonStr); // Parse the JSON string into an object
+
+        if (parsedJson && parsedJson.root && Array.isArray(parsedJson.root.children)) {
+          const serializedNodes = parsedJson.root.children;
+
+          htmlEditor.update(() => {
+            const root = $getRoot();
+            root.clear();
+            // Filter out any null/undefined items from serializedNodes just in case,
+            // though ideally this array should already be clean.
+            const validSerializedNodes = serializedNodes.filter(Boolean);
+            const newNodes = validSerializedNodes.map(serializedNode => $parseSerializedNode(serializedNode));
+            root.append(...newNodes);
+            html = generateHtmlFromNodes(htmlEditor, null);
+          }, { discrete: true }); // discrete: true might be useful if updates are complex
+        } else {
+          // Fallback for invalid structure, though isLexicalJson should catch most.
+          console.warn('[RichTextPreview] lexicalJsonToHtml: parsedJson or parsedJson.root.children is invalid. Rendering empty.', parsedJson);
+          html = ''; // Or some default error HTML
+        }
+      } catch (e) {
+        console.error('[RichTextPreview] lexicalJsonToHtml: Error processing JSON string. jsonStr:', jsonStr.substring(0, 500), 'Error:', e);
+        html = '<!-- error rendering segment content -->'; // Fallback HTML
+      }
       return html;
     }
 
