@@ -133,11 +133,23 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
                     }
                     
-                    // Reconstruct a new clean root object for the editor state
+                    // Ensure finalChildren is not empty for a valid Lexical state
+                    if (finalChildren.length === 0) {
+                        finalChildren.push({ 
+                            type: 'paragraph', 
+                            version: 1, 
+                            children: [], 
+                            direction: null, 
+                            format: '', 
+                            indent: 0 
+                        });
+                        console.log(`[EditableTranscript] Sanitization for index ${idx} resulted in empty children; added default paragraph.`);
+                    }
+            
                     const sanitizedEditorState = {
                         root: {
                             children: finalChildren,
-                            direction: parsedOriginal.root?.direction || 'ltr', // Preserve original direction if possible
+                            direction: parsedOriginal.root?.direction || 'ltr',
                             format: parsedOriginal.root?.format || '',
                             indent: parsedOriginal.root?.indent || 0,
                             type: 'root',
@@ -145,7 +157,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         }
                     };
                     initialJsonForEditor = JSON.stringify(sanitizedEditorState);
-                    console.log(`[EditableTranscript] Sanitized initialJSON for index ${idx}. Preview of children types: ${finalChildren.map(c => c.type).join(', ')}`);
+                    // Updated log to reflect actual children being passed (could be the default paragraph)
+                    console.log(`[EditableTranscript] Sanitized initialJSON for index ${idx}. Preview of final children types: ${finalChildren.map(c => c.type).join(', ')}`);
 
                 } catch (e) {
                     console.error(`[EditableTranscript] Error sanitizing segment text for index ${idx}:`, e, ". Using default empty JSON.");

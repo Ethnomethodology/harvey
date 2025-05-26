@@ -84,14 +84,45 @@
                 // If the serializedNodeObj is a RootNode itself, process its children
                 for (const childOfNestedRoot of serializedNodeObj.children) {
                   if (childOfNestedRoot) { // Ensure child is not null/undefined
-                    nodesToAppend.push(lexicalParseSerializedNode(childOfNestedRoot));
+                    try {
+                        nodesToAppend.push(lexicalParseSerializedNode(childOfNestedRoot));
+                    } catch (parseErr) {
+                        console.error('[RichTextPreview] Error parsing childOfNestedRoot:', childOfNestedRoot, parseErr);
+                        // Optionally add a placeholder or skip if a child fails
+                    }
                   }
                 }
               } else {
                 // Otherwise, parse the serializedNodeObj directly (assuming it's a Paragraph, List, etc.)
-                nodesToAppend.push(lexicalParseSerializedNode(serializedNodeObj));
+                try {
+                    nodesToAppend.push(lexicalParseSerializedNode(serializedNodeObj));
+                } catch (parseErr) {
+                    console.error('[RichTextPreview] Error parsing serializedNodeObj:', serializedNodeObj, parseErr);
+                    // Optionally add a placeholder or skip
+                }
               }
             }
+
+            // Ensure nodesToAppend is not empty for a valid Lexical state before appending
+            if (nodesToAppend.length === 0) {
+                try {
+                    const defaultParagraphNode = lexicalParseSerializedNode({ 
+                        type: 'paragraph', 
+                        version: 1, 
+                        children: [], 
+                        direction: null, 
+                        format: '', 
+                        indent: 0 
+                    });
+                    nodesToAppend.push(defaultParagraphNode);
+                    console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.');
+                } catch (defaultNodeErr) {
+                    console.error('[RichTextPreview] Error creating default paragraph node:', defaultNodeErr);
+                    // If even creating a default node fails, the HTML might end up empty or malformed.
+                    // This situation should be rare if lexicalParseSerializedNode and basic paragraph structure are sound.
+                }
+            }
+
             editorRoot.append(...nodesToAppend);
             html = generateHtmlFromNodes(htmlEditor, null);
           }, { discrete: true });

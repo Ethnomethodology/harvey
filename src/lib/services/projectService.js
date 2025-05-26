@@ -941,28 +941,48 @@ export async function saveTranscriptData() {
                 dataRow.append(cellSpeaker);
 
                 // Text Content Cell (segment.text is already Lexical JSON for the cell's content)
-                const cellText = _createTableCellNode();
+                const cellText = _createTableCellNode(); // Assuming _createTableCellNode is correctly imported/defined
                 if (segment.text && typeof segment.text === 'string') {
                     try {
-                        // The segment.text is already a stringified Lexical JSON for the cell's content.
-                        // We need to parse it and append its root's children to the new cellText.
-                        const cellEditorState = editorForTableAssembly.parseEditorState(segment.text);
+                        // Create a new temporary editor for parsing this specific segment's text
+                        const tempSegmentParserEditor = createHeadlessEditor({
+                            nodes: ALL_EDITOR_NODES, // Use the existing ALL_EDITOR_NODES array
+                            namespace: `segment-parser-${i}-${Date.now()}`, // Unique namespace
+                            onError: (e) => console.error(`[TempSegmentParserEditor seg ${i}] Error:`, e),
+                        });
+
+                        const segmentJsonString = segment.text; // This is already {"root":{...}}
+
+                        // Parse the segment's JSON into the temporary editor
+                        const tempEditorState = tempSegmentParserEditor.parseEditorState(segmentJsonString);
                         
-                        // Create a temporary root in the assembly editor to access children
-                        const tempRoot = cellEditorState.read(() => _getRoot());
-                        const cellChildren = tempRoot.getChildren();
+                        // Read children from the temporary editor's state
+                        const cellChildren = tempEditorState.read(() => {
+                            const tempRoot = _getRoot(); // _getRoot from lexical
+                            return tempRoot.getChildren();
+                        });
                         
-                        // Append clones of these children to the actual table cell node
-                        cellChildren.forEach(node => cellText.append(node.clone()));
+                        // Clone these children and append them to the cellText node (which belongs to editorForTableAssembly)
+                        if (cellChildren && cellChildren.length > 0) {
+                            cellChildren.forEach(node => {
+                                // Ensure node.clone() is available and works as expected for nodes from a different editor context
+                                // This should generally be fine as .clone() creates a new node object.
+                                cellText.append(node.clone());
+                            });
+                        } else {
+                            // If parsing segment.text results in no children (e.g. empty root), add an empty paragraph
+                            cellText.append(_createParagraphNode()); // _createParagraphNode from lexical
+                        }
 
                     } catch (parseError) {
-                        console.error(`[ProjectService Save] Error parsing cell content for segment ${i}:`, parseError, segment.text.substring(0,100));
-                        const pError = _createParagraphNode();
-                        pError.append(_createTextNode("[Error rendering cell content]"));
+                        console.error(`[ProjectService Save] Error parsing cell content for segment ${i}:`, parseError, String(segment.text).substring(0,100));
+                        const pError = _createParagraphNode(); // _createParagraphNode from lexical
+                        pError.append(_createTextNode("[Error parsing cell content]")); // _createTextNode from lexical
                         cellText.append(pError);
                     }
                 } else {
-                    cellText.append(_createParagraphNode()); // Empty if no text
+                    // If segment.text is empty or not a string, append an empty paragraph
+                    cellText.append(_createParagraphNode()); 
                 }
                 dataRow.append(cellText);
                 tableNode.append(dataRow);
