@@ -116,36 +116,29 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
                 try {
                     const parsedOriginal = JSON.parse(jsonToProcess);
-                    let finalChildren = [];
+                    // Recursive flatten to remove any nested root wrappers
+                    function flattenChildren(nodes) {
+                      return nodes.flatMap(n =>
+                        n.type === 'root' && Array.isArray(n.children)
+                          ? flattenChildren(n.children)
+                          : [n]
+                      );
+                    }
 
-                    if (parsedOriginal.root && parsedOriginal.root.children && Array.isArray(parsedOriginal.root.children)) {
-                        for (const nodeObj of parsedOriginal.root.children) {
-                            if (nodeObj && nodeObj.type === 'root' && nodeObj.children && Array.isArray(nodeObj.children)) {
-                                // If nodeObj is a root, take its children
-                                finalChildren.push(...nodeObj.children.filter(Boolean));
-                            } else if (nodeObj) {
-                                // Otherwise, take the nodeObj itself (e.g., a paragraph)
-                                finalChildren.push(nodeObj);
-                            }
-                        }
-                    } else {
-                         // Fallback if structure is unexpected
-                        finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
-                    }
-                    
-                    // Ensure finalChildren is not empty for a valid Lexical state
+                    // Build finalChildren by fully flattening any nested roots
+                    let finalChildren = flattenChildren(parsedOriginal.root.children || []);
                     if (finalChildren.length === 0) {
-                        finalChildren.push({ 
-                            type: 'paragraph', 
-                            version: 1, 
-                            children: [], 
-                            direction: null, 
-                            format: '', 
-                            indent: 0 
-                        });
-                        console.log(`[EditableTranscript] Sanitization for index ${idx} resulted in empty children; added default paragraph.`);
+                      finalChildren.push({
+                        type: 'paragraph',
+                        version: 1,
+                        children: [],
+                        direction: null,
+                        format: '',
+                        indent: 0
+                      });
+                      console.log("[EditableTranscript] Sanitization resulted in empty children; added default paragraph.");
                     }
-            
+
                     const sanitizedEditorState = {
                         root: {
                             children: finalChildren,
@@ -251,11 +244,42 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             console.warn("Commit skipped: No editor JSON.");
             return false;
         }
-        // --- normalise: ensure we have a single‑encoded JSON string ---
-        const jsonString =
+        // --- normalize and sanitize JSON: flatten nested root wrappers ---
+        let jsonStringRaw =
             typeof currentEditorJson === 'string'
                 ? currentEditorJson
                 : JSON.stringify(currentEditorJson);
+        let jsonString;
+        try {
+          const obj = JSON.parse(jsonStringRaw);
+          if (obj && obj.root && Array.isArray(obj.root.children)) {
+            function flattenChildren(nodes) {
+              return nodes.flatMap(n =>
+                n.type === 'root' && Array.isArray(n.children)
+                  ? flattenChildren(n.children)
+                  : [n]
+              );
+            }
+            let finalChildren = flattenChildren(obj.root.children);
+            if (finalChildren.length === 0) {
+              finalChildren.push({
+                type: 'paragraph',
+                version: 1,
+                children: [],
+                direction: null,
+                format: '',
+                indent: 0
+              });
+            }
+            obj.root.children = finalChildren;
+            jsonString = JSON.stringify(obj);
+          } else {
+            jsonString = jsonStringRaw;
+          }
+        } catch (e) {
+          console.error("[EditableTranscript] Error sanitizing JSON on save:", e);
+          jsonString = jsonStringRaw;
+        }
 
         console.log('[DEBUG save]', {
             idx: currentIndex,

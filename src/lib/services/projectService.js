@@ -956,9 +956,17 @@ export async function saveTranscriptData() {
                         continue; 
                     }
 
-                    const serializedChildNodes = parsedSegmentState?.root?.children;
-
-                    if (Array.isArray(serializedChildNodes) && serializedChildNodes.length > 0) {
+                    // Flatten nested root wrappers to prevent infinite recursion in getTextContent
+                    function flattenNodes(nodes) {
+                        return nodes.flatMap(n =>
+                            n.type === 'root' && Array.isArray(n.children)
+                                ? flattenNodes(n.children)
+                                : [n]
+                        );
+                    }
+                    const rawChildren = parsedSegmentState?.root?.children || [];
+                    const serializedChildNodes = flattenNodes(rawChildren);
+                    if (serializedChildNodes.length > 0) {
                         serializedChildNodes.forEach(serializedNodeObject => {
                             if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) {
                                 console.error(`[ProjectService Save V6] Segment ${i}: serializedNodeObject is not an object:`, serializedNodeObject);
