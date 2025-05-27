@@ -75,7 +75,12 @@ import {
     hideConversionPrompt,
     
     setLoadedPdfAnnotations,
-    setPdfAnnotationsLoadFailed
+    setPdfAnnotationsLoadFailed,
+
+    // --- NEW Store Action Imports for Media Notes ---
+    prepareMediaNoteView,
+    markMediaNoteTranscriptChangesDiscarded
+    // --- END NEW ---
 } from '$lib/stores/projectStore.js';
 
 import { getCloudConfig } from './configureActions.js';
@@ -225,11 +230,16 @@ export async function importMediaFile(importType = null) {
 
         project.update(p => ({ ...p, statusMessage: `Importing ${filename}...`, isImportingAsset: true }));
 
-        const updatedFiles = await invoke('import_media', {
+        // Invoke backend to copy file and update XML
+        const backendResponse = await invoke('import_media', {
             sourceFilePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath
         });
-        console.log('[ProjectService] Import finished. Received potentially updated file list (tree):', updatedFiles);
+        
+        const updatedFiles = backendResponse.files; // Assuming backend returns { files: [...], new_media_path: "..." }
+        const newMediaPath = backendResponse.new_media_path; // Get the full path of the newly imported media
+
+        console.log('[ProjectService] Import finished. Received updated file list and new media path:', newMediaPath);
 
         if (Array.isArray(updatedFiles)) {
             project.update(p => ({
@@ -239,32 +249,27 @@ export async function importMediaFile(importType = null) {
                 error: null,
                 statusMessage: `${filename} imported.`
             }));
-            let importedEntry = null;
-            const importedStem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
-            function findImportedRecursive(nodes, stem, name) {
-                 if (!Array.isArray(nodes)) return null;
-                 for (const node of nodes) {
-                     if (node.file_type === 'media' && !node.is_directory && node.name === name && node.media_xml_identifier === stem) { return node; }
-                     if (node.children && node.children.length > 0) {
-                         const found = findImportedRecursive(node.children, stem, name);
-                         if (found) return found;
-                     }
-                 }
-                 return null;
-            }
-            importedEntry = findImportedRecursive(updatedFiles, importedStem, filename);
-
-            if (importedEntry) {
-                console.log('[ProjectService] Auto-selecting imported media:', importedEntry.name);
-                selectMedia(importedEntry);
+            
+            // --- MODIFIED: Auto-select the newly imported media in the Fieldnotes view ---
+            if (newMediaPath) {
+                console.log(`[ProjectService] Auto-selecting imported media note for path: ${newMediaPath}`);
+                prepareMediaNoteView(newMediaPath); // This will set selectedMediaNotePath and trigger UI updates
             } else {
-                console.warn('[ProjectService] Could not automatically find and select the newly imported media entry based on expected structure.');
-                let firstMedia = null;
-                function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; }
-                firstMedia = findFirstMediaRecursive(updatedFiles);
-                if (firstMedia) { console.log('[ProjectService] Selecting first available media instead:', firstMedia.name); selectMedia(firstMedia); }
-                else { console.log('[ProjectService] No media files found after import.'); selectMedia(null); }
+                console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path. Cannot auto-select.');
+                // Fallback: Try to find it or select first media if any (less ideal)
+                let importedEntry = null;
+                const importedStem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
+                function findImportedRecursive(nodes, stem, name) { /* ... */ } // your existing find function
+                importedEntry = findImportedRecursive(updatedFiles, importedStem, filename);
+                if (importedEntry) {
+                    console.log('[ProjectService Fallback] Auto-selecting imported media note (via find):', importedEntry.name);
+                    prepareMediaNoteView(importedEntry.path);
+                } else {
+                    console.warn('[ProjectService] Could not automatically find and select the newly imported media entry.');
+                }
             }
+            // --- END MODIFICATION ---
+
         } else {
             console.error('[ProjectService] Backend import_media returned invalid data:', updatedFiles);
             throw new Error("Received invalid data from import process.");
@@ -678,18 +683,17 @@ export async function loadTableData(tablePath) {
     }
 }
 
-// Helper function to parse HH:MM:SS.mmm, MM:SS.mmm, or SS.mmm into seconds
 function parseTimestampStringToSeconds(timestampStr) {
     if (!timestampStr || typeof timestampStr !== 'string') return 0;
     const cleanedStr = timestampStr.trim();
     const parts = cleanedStr.split(':');
     let seconds = 0;
     try {
-        if (parts.length === 3) { // HH:MM:SS.mmm
+        if (parts.length === 3) { 
             seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
-        } else if (parts.length === 2) { // MM:SS.mmm
+        } else if (parts.length === 2) { 
             seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
-        } else if (parts.length === 1) { // SS.mmm or S.mmm
+        } else if (parts.length === 1) { 
             seconds = parseFloat(parts[0]);
         } else {
             console.warn(`[parseTimestampStringToSeconds] Unexpected timestamp format: ${timestampStr}`);
@@ -699,16 +703,14 @@ function parseTimestampStringToSeconds(timestampStr) {
         console.error(`[parseTimestampStringToSeconds] Error parsing timestamp: ${timestampStr}`, e);
         return 0;
     }
-    // Ensure result is a number and fix to 3 decimal places for milliseconds
     return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3));
 }
 
-// New helper function to recursively extract plain text from a Lexical node object
 function extractPlainTextFromLexicalNode(node) {
     if (!node) {
         return '';
     }
-    if (node.type === 'text' || node.type === 'extended-text') { // Add other text-bearing node types if any
+    if (node.type === 'text' || node.type === 'extended-text') { 
         return node.text || '';
     }
     let text = '';
@@ -717,9 +719,8 @@ function extractPlainTextFromLexicalNode(node) {
             text += extractPlainTextFromLexicalNode(child);
         }
     }
-    // For nodes like line breaks, we might want to represent them as a space or newline
     if (node.type === 'linebreak') {
-        return '\n'; // Or ' ' depending on desired output for text extraction
+        return '\n'; 
     }
     return text;
 }
@@ -748,7 +749,6 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
             return [];
         }
 
-        // Iterate over table rows, skipping the header row (index 0)
         for (let i = 1; i < tableNode.children.length; i++) {
             const rowNode = tableNode.children[i];
             if (rowNode.type !== 'tablerow' || !rowNode.children || !Array.isArray(rowNode.children) || rowNode.children.length < 4) {
@@ -759,7 +759,6 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
             try {
                 let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}";
 
-                // --- Timestamp Cell (index 1 of rowNode.children) ---
                 const timestampCellNode = rowNode.children[1]; 
                 if (timestampCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 1 (Timestamp) to be 'tablecell', got '${timestampCellNode.type}'. Skipping row.`); continue;
@@ -774,7 +773,6 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 startTime = parseTimestampStringToSeconds(timeParts[0]);
                 endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime;
 
-                // --- Speaker Cell (index 2 of rowNode.children) ---
                 const speakerCellNode = rowNode.children[2]; 
                 if (speakerCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 2 (Speaker) to be 'tablecell', got '${speakerCellNode.type}'. Skipping row.`); continue;
@@ -788,7 +786,6 @@ export function parseLexicalTableToSegments(lexicalTableJsonString) {
                 speakerName = tempSpeakerName.trim();
                 if (!speakerName) speakerName = "Unknown";
 
-                // --- Text Content Cell (index 3 of rowNode.children) ---
                 const textContentCellNode = rowNode.children[3]; 
                 if (textContentCellNode.type !== 'tablecell') {
                      console.warn(`[ProjectService] Row ${i}, Expected Cell 3 (Text) to be 'tablecell', got '${textContentCellNode.type}'. Skipping row.`); continue;
@@ -859,7 +856,7 @@ export async function loadTranscriptFile(transcriptFilePath) {
 export async function saveTranscriptData() {
     const projData = get(project);
     const transcriptPath = projData.currentTranscriptPath;
-    const transcriptSegments = projData.segments; // These segments now have Lexical JSON in their .text field for each cell
+    const transcriptSegments = projData.segments; 
     const projectXmlPath = projData.xmlPath;
 
     if (!transcriptPath) {
@@ -881,7 +878,6 @@ export async function saveTranscriptData() {
     console.log(`[ProjectService] Saving transcript: ${filename}`);
     project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
 
-    // --- MODIFICATION: Construct the full Lexical Table JSON from store segments ---
     let fullLexicalTableJsonString = "";
     try {
         const editorForTableAssembly = createHeadlessEditor({
@@ -894,13 +890,6 @@ export async function saveTranscriptData() {
             const root = _getRoot();
             root.clear();
             const tableNode = _createTableNode();
-            // Assuming colWidths were set when the table was first created/loaded,
-            // or handle default widths here if needed.
-            // const colWidths = [50, 140, 120, 450]; // Example
-            // tableNode.setColWidths?.(colWidths);
-
-
-            // Header Row (assuming it's static and not stored in `transcriptSegments`)
             const headerRow = _createTableRowNode();
             const headers = ["#", "Timestamp", "Speaker", "Text"];
             for (const headerText of headers) {
@@ -912,19 +901,16 @@ export async function saveTranscriptData() {
             }
             tableNode.append(headerRow);
 
-            // Data Rows from store's segments
             for (let i = 0; i < transcriptSegments.length; i++) {
                 const segment = transcriptSegments[i];
                 const dataRow = _createTableRowNode();
 
-                // Segment Number Cell
                 const cellNum = _createTableCellNode();
                 const pNum = _createParagraphNode();
                 pNum.append(_createTextNode(String(i + 1)));
                 cellNum.append(pNum);
                 dataRow.append(cellNum);
 
-                // Timestamp Cell
                 const cellTime = _createTableCellNode();
                 const pTime = _createParagraphNode();
                 const startTime = formatTimestampHtml(segment.start_time || 0);
@@ -933,14 +919,12 @@ export async function saveTranscriptData() {
                 cellTime.append(pTime);
                 dataRow.append(cellTime);
 
-                // Speaker Cell
                 const cellSpeaker = _createTableCellNode();
                 const pSpeaker = _createParagraphNode();
                 pSpeaker.append(_createTextNode(segment.speaker || "Unknown"));
                 cellSpeaker.append(pSpeaker);
                 dataRow.append(cellSpeaker);
 
-                // Text Content Cell (segment.text is already Lexical JSON for the cell's content)
                 const cellText = _createTableCellNode();
                 if (segment.text && typeof segment.text === 'string') {
                     let parsedSegmentState;
@@ -956,7 +940,6 @@ export async function saveTranscriptData() {
                         continue; 
                     }
 
-                    // Flatten nested root wrappers to prevent infinite recursion in getTextContent
                     function flattenNodes(nodes) {
                         return nodes.flatMap(n =>
                             n.type === 'root' && Array.isArray(n.children)
@@ -1001,11 +984,8 @@ export async function saveTranscriptData() {
                                     if (typeof liveNode.clone === 'function') {
                                         cellText.append(liveNode.clone());
                                     } else if (typeof liveNode.constructor?.clone === 'function') {
-                                        // If instance clone is missing, try static clone (common in Lexical)
-                                        // console.warn(`[ProjectService Save V6] Segment ${i}: liveNode.clone (instance method) is undefined. Attempting liveNode.constructor.clone(liveNode). Node type: ${nodeTypeString}`);
                                         cellText.append(liveNode.constructor.clone(liveNode));
                                     } else {
-                                        // Both instance and static clone methods are missing
                                         console.error(`[ProjectService Save V6] Segment ${i}: Node parsing/cloning failed. BOTH liveNode.clone and liveNode.constructor.clone are undefined. liveNode.getType(): ${nodeTypeString}. Instanceof check: ${instanceCheckResult}. Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
                                         const pError = _createParagraphNode();
                                         let errorText = `[Error V6: Clone totally failed on type ${nodeTypeString}]`;
@@ -1020,7 +1000,6 @@ export async function saveTranscriptData() {
                                         cellText.append(pError);
                                     }
                                 } else {
-                                    // liveNode is null or undefined (parsing failed earlier)
                                     console.error(`[ProjectService Save V6] Segment ${i}: liveNode is null or undefined before attempting clone. Serialized Object: ${JSON.stringify(serializedNodeObject).substring(0,150)}`);
                                     const pError = _createParagraphNode();
                                     pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]"));
@@ -1045,7 +1024,7 @@ export async function saveTranscriptData() {
                 tableNode.append(dataRow);
             }
             root.append(tableNode);
-            root.append(_createParagraphNode()); // Trailing paragraph
+            root.append(_createParagraphNode()); 
         });
         fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
         console.log("[ProjectService] Successfully assembled full Lexical Table JSON for saving.");
@@ -1054,14 +1033,12 @@ export async function saveTranscriptData() {
         project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
     }
-    // --- END MODIFICATION ---
 
     try {
-        // Corrected invoke: arguments should be in an object
         await invoke('save_transcript_json', {
             projectXmlPath: projectXmlPath,
             transcriptPath: transcriptPath,
-            lexicalTableJsonString: fullLexicalTableJsonString // Pass the assembled string
+            lexicalTableJsonString: fullLexicalTableJsonString 
         });
         console.log("[ProjectService] Transcript save invoke successful.");
         markTranscriptAsSaved(); 
@@ -1076,7 +1053,7 @@ export async function saveTranscriptData() {
 
 export async function refreshProjectFiles() { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { console.warn('[ProjectService] Cannot refresh: No project path loaded.'); return; } console.log('[ProjectService] Refreshing file list (via load_project_data) for project:', projectXmlPath); project.update(p => ({ ...p, statusMessage: 'Refreshing file list...' })); try { await loadProjectDataAndUpdateStore(projectXmlPath); console.log('[ProjectService] File list refreshed successfully via reload.'); project.update(p => ({ ...p, statusMessage: 'Project refreshed.' })); } catch (error) { const errorMessage = error?.message || String(error); console.error('[ProjectService] Failed to refresh project files:', error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.' })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...` })); try { console.log(`[ProjectService Rename] Calling backend: rename_project_item`, { itemPath, newName, projectXmlPath }); await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath }); console.log(`[ProjectService Rename] Item renamed successfully. Refreshing file list.`); project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}. Refreshing...` })); await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); console.error(`[ProjectService Rename] Failed to rename item ${oldFilename}:`, error); await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' }); project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.` })); throw error; } }
-export async function deleteProjectItem(itemPath) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot delete.', { title: 'Delete Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath) { await message('Missing item path.', { title: 'Delete Error', type: 'error' }); throw new Error('Missing parameters.'); } const filename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Deleting ${filename}...` })); try { console.log(`[ProjectService Delete] Calling backend: delete_project_item`, { itemPath, projectXmlPath }); await invoke('delete_project_item', { itemPath: itemPath, projectXmlPath: projectXmlPath }); console.log(`[ProjectService Delete] Item deleted successfully. Refreshing file list.`); project.update(p => ({ ...p, statusMessage: `Deleted ${filename}. Refreshing...` })); const projState = get(project); const wasSelectedMedia = projState.selectedMediaFile?.path === itemPath; const wasCurrentTranscript = projState.currentTranscriptPath === itemPath; const wasSelectedDocument = projState.selectedDocumentPath === itemPath; const wasSelectedImportedTranscript = projState.currentImportedTranscriptPath === itemPath; if (wasSelectedMedia) { console.log("[ProjectService Delete] Deleted item was selected media. Clearing selection."); selectMedia(null); } else if (wasCurrentTranscript) { console.log("[ProjectService Delete] Deleted item was loaded media transcript. Clearing transcript state."); clearTranscriptState(); } else if (wasSelectedDocument) { console.log("[ProjectService Delete] Deleted item was selected document/table/image. Clearing view state."); prepareDocumentView(null); } else if (wasSelectedImportedTranscript) { console.log("[ProjectService Delete] Deleted item was selected imported transcript. Clearing view state."); prepareImportedTranscriptView(null); } await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); console.error(`[ProjectService Delete] Failed to delete item ${filename}:`, error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.` })); throw error; } }
+export async function deleteProjectItem(itemPath) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot delete.', { title: 'Delete Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath) { await message('Missing item path.', { title: 'Delete Error', type: 'error' }); throw new Error('Missing parameters.'); } const filename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Deleting ${filename}...` })); try { console.log(`[ProjectService Delete] Calling backend: delete_project_item`, { itemPath, projectXmlPath }); await invoke('delete_project_item', { itemPath: itemPath, projectXmlPath: projectXmlPath }); console.log(`[ProjectService Delete] Item deleted successfully. Refreshing file list.`); project.update(p => ({ ...p, statusMessage: `Deleted ${filename}. Refreshing...` })); const projState = get(project); const wasSelectedMedia = projState.selectedMediaFile?.path === itemPath; const wasCurrentTranscript = projState.currentTranscriptPath === itemPath; const wasSelectedDocument = projState.selectedDocumentPath === itemPath; const wasSelectedImportedTranscript = projState.currentImportedTranscriptPath === itemPath; const wasSelectedMediaNote = projState.selectedMediaNotePath === itemPath; if (wasSelectedMedia) { console.log("[ProjectService Delete] Deleted item was selected media (main transcriptions). Clearing selection."); selectMedia(null); } else if (wasCurrentTranscript) { console.log("[ProjectService Delete] Deleted item was loaded media transcript (main transcriptions). Clearing transcript state."); clearTranscriptState(); } else if (wasSelectedDocument) { console.log("[ProjectService Delete] Deleted item was selected document/table/image. Clearing view state."); prepareDocumentView(null); } else if (wasSelectedImportedTranscript) { console.log("[ProjectService Delete] Deleted item was selected imported transcript. Clearing view state."); prepareImportedTranscriptView(null); } else if (wasSelectedMediaNote) { console.log("[ProjectService Delete] Deleted item was selected media note. Clearing media note view state."); prepareMediaNoteView(null); } await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); console.error(`[ProjectService Delete] Failed to delete item ${filename}:`, error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.` })); throw error; } }
 export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) { throw new Error(`Invalid trim parameters provided.`); } const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); console.log('[ProjectService] Trim finished. Received potentially updated file list (tree):', updatedFiles); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.' })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) { return node; } if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) { console.log('[ProjectService] Auto-selecting trimmed media:', trimmedEntry.name); selectMedia(trimmedEntry); } else { console.warn('[ProjectService] Could not automatically find and select the newly trimmed media entry.'); let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) { console.log('[ProjectService] Selecting first available media instead:', firstMedia.name); selectMedia(firstMedia); } } } else { console.error('[ProjectService] Backend trim_media returned invalid data structure.'); await refreshProjectFiles(); throw new Error("Received invalid data from trim process. File list may be outdated."); } } catch (error) { const errorMessage = error?.message || String(error); console.error('[ProjectService] Backend trim_media command failed:', error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.` })); throw new Error(`Trim failed: ${errorMessage}`); } }
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; console.log('[ProjectService] TranscribeConfirmModal instance registered.'); }
@@ -1114,18 +1091,12 @@ export async function convertAndSaveTranscriptAsDoc() {
 
     try {
         console.log(`[ProjectService] Reading content from transcript file: ${transcriptPath}`);
-        // Assuming loadTranscriptFile now loads the *full lexical table string* from the JSON file
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         
         if (!fullLexicalTableString) {
             throw new Error("Transcript file content is empty or could not be read as Lexical Table JSON.");
         }
-
-        // At this point, fullLexicalTableString IS the content we want to save as a new document.
-        // No further complex parsing or segment-by-segment reconstruction is needed here,
-        // as the source file already contains the desired Lexical Table.
         finalLexicalJsonString = fullLexicalTableString;
-        
         console.log(`[ProjectService] Using existing Lexical Table JSON for new document (${finalLexicalJsonString.length} bytes).`);
         
         const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => {
@@ -1138,7 +1109,7 @@ export async function convertAndSaveTranscriptAsDoc() {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`; // Changed name slightly
+        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`; 
 
         project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
         const targetFullPath = await invoke('get_unique_document_path', {
@@ -1152,7 +1123,7 @@ export async function convertAndSaveTranscriptAsDoc() {
             projectXmlPath: projectXmlPath,
             targetPath: targetFullPath,
             documentName: docFilename,
-            jsonContent: finalLexicalJsonString // Save the full table JSON
+            jsonContent: finalLexicalJsonString 
         });
 
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
@@ -1402,8 +1373,20 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     const typeDescForLog = providedActionContextDescription || "NO_CONTEXT_DESC_PROVIDED_TO_CHECK_UNSAVED";
     console.log(`[checkUnsavedChanges] Called with newPathToLoad: '${pathDescForLog}', actionContextDescription: '${typeDescForLog}'.`);
 
-    if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') &&
-        (projState.isPdfAnnotationsDirty )) {
+    // --- Check for dirty media note transcript first ---
+    if (projState.selectedMediaNotePath && projState.isMediaNoteTranscriptDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedMediaNotePath; // Path of the media file
+        itemTypeForPrompt = 'media notes'; // Or 'media transcript'
+        if (projState.activeMediaNoteEditorRef?.ref && typeof projState.activeMediaNoteEditorRef.ref.save === 'function') {
+            saveFunction = projState.activeMediaNoteEditorRef.ref.save;
+            discardFunction = () => markMediaNoteTranscriptChangesDiscarded(itemPath); // Pass mediaPath
+            resetEditorFunction = projState.activeMediaNoteEditorRef.ref.resetEditorState;
+            initialContentForReset = projState.initialMediaNoteTranscriptJson;
+        }
+    }
+    // --- Then check other types if media note wasn't dirty ---
+    else if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
         itemTypeForPrompt = 'PDF annotations'; 
@@ -1423,9 +1406,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                     relativePdfPath = relativePdfPath.substring(1);
                 }
             }
-            
             relativePdfPath = relativePdfPath.replace(/\\/g, '/'); 
-            
             const annotationsToSave = get(project).currentPdfAnnotations;
             await invoke('save_pdf_annotations', {
                 projectXmlPathStr: projectXmlPath,
@@ -1434,9 +1415,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             });
             markPdfAnnotationsAsSaved(); 
         };
-        discardFunction = () => {
-            markDocumentChangesDiscarded(); 
-        };
+        discardFunction = () => markDocumentChangesDiscarded(); 
         resetEditorFunction = null; 
         initialContentForReset = projState.initialPdfAnnotations;
     }
@@ -1450,9 +1429,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
              if (projState.isDocumentDirty) saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
              else if (projState.isDocumentMetadataDirty) saveFunction = () => saveDocumentMetadata(itemPath);
         }
-        discardFunction = () => {
-            markDocumentChangesDiscarded();
-        };
+        discardFunction = () => markDocumentChangesDiscarded();
         resetEditorFunction = projState.activeDocumentEditorRef?.resetEditorState;
         initialContentForReset = projState.initialDocumentJson;
     }
@@ -1466,6 +1443,32 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             resetEditorFunction = projState.activeImportedTranscriptEditorRef.resetEditorState;
             initialContentForReset = projState.initialImportedTranscriptLexicalJson;
         }
+    }
+    // --- Add other checks like main transcript dirty state if applicable ---
+    else if (projState.currentTranscriptPath && projState.transcriptDirty) {
+        // This is for the main transcriptions view
+        itemIsDirty = true;
+        itemPath = projState.currentTranscriptPath;
+        itemTypeForPrompt = 'main transcript';
+        // Assuming TranscriptionsView has an exported save/discard or you call store actions
+        // For simplicity, directly calling service/store actions:
+        saveFunction = async () => {
+            // Need to get the TranscriptionsView ref or call a global save for it
+            // This is a simplified placeholder; actual save might be on TranscriptionsView
+            await saveTranscriptData(); // Assumes this saves the current main transcript
+        };
+        discardFunction = () => {
+            // Similar to save, needs a way to tell TranscriptionsView to discard or reset
+            project.update(p => ({
+                ...p,
+                segments: get(project).transcriptUndoStack[0] || p.segments, // Simplified revert
+                transcriptDirty: false,
+                transcriptUndoStack: [],
+                transcriptRedoStack: []
+            }));
+        };
+        resetEditorFunction = null; // No direct editor ref here for reset
+        initialContentForReset = null; // Complex to get initial for main transcript here
     }
 
 

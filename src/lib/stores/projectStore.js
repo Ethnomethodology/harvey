@@ -65,12 +65,11 @@ const initialState = {
     currentDocumentFileLevelMetadata: { 
         file_name: '', last_modified: '', title: '', description: '', summary: '',
     },
-    currentDocumentHighlights: [], // For Lexical JSON documents
+    currentDocumentHighlights: [], 
     isDocumentMetadataDirty: false, 
 
-    // PDF Specific Annotation State
     currentPdfAnnotations: [], 
-    initialPdfAnnotations: [], // To store initially loaded PDF annotations for discard operations
+    initialPdfAnnotations: [], 
     isPdfAnnotationsDirty: false,
 
     currentImportedTranscriptPath: null,
@@ -80,6 +79,16 @@ const initialState = {
     isImportedTranscriptLoading: false,
     importedTranscriptError: null,
     activeImportedTranscriptEditorRef: null,
+
+    // --- NEW: State for Media Notes in Fieldnotes view ---
+    selectedMediaNotePath: null, // Path to the media file for MediaEditorPanel in Notes
+    currentMediaNoteTranscriptJson: null, // Content of the associated .json note/transcript
+    initialMediaNoteTranscriptJson: null,
+    isMediaNoteTranscriptDirty: false,
+    isMediaNoteTranscriptLoading: false,
+    mediaNoteTranscriptError: null,
+    activeMediaNoteEditorRef: null, // Stores { path: mediaPath, ref: editorInstance }
+    // --- END NEW ---
 
     autosaveEnabled: true,
     transcriptUndoStack: [],
@@ -104,7 +113,7 @@ export const project = writable({ ...initialState });
 
 const MAX_UNDO_STACK_SIZE = 50;
 
-// --- Functions for Media-Associated Transcripts ---
+// --- Functions for Media-Associated Transcripts (Main Transcription View) ---
 function pushToUndoStack(currentSegments) { project.update(p => { const newUndoStack = [...p.transcriptUndoStack, currentSegments]; if (newUndoStack.length > MAX_UNDO_STACK_SIZE) { newUndoStack.shift(); } return { ...p, transcriptUndoStack: newUndoStack, transcriptRedoStack: [] }; }); }
 export function undoTranscriptChange() { const undoStack = get(project).transcriptUndoStack; if (undoStack.length === 0) { console.log('[ProjectStore] Undo stack empty.'); return; } project.update(p => { const currentSegments = p.segments; const newUndoStack = [...p.transcriptUndoStack]; const previousSegments = newUndoStack.pop(); const newRedoStack = [...p.transcriptRedoStack, currentSegments]; let newIndex = -1; const time = p.player.currentTime; if (previousSegments.length > 0 && p.player.duration > 0 && time >= 0) { const idx = previousSegments.findIndex((s, index) => { const isLastSegment = index === previousSegments.length - 1; const startTimeCheck = time >= (s.start_time - 0.001); const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time; return startTimeCheck && endTimeCheck; }); newIndex = idx; } console.log('[ProjectStore] Undoing transcript change.'); return { ...p, segments: previousSegments, transcriptUndoStack: newUndoStack, transcriptRedoStack: newRedoStack, transcriptDirty: true, statusMessage: 'Undo successful.', player: { ...p.player, currentSegmentIndex: newIndex } }; }); }
 export function redoTranscriptChange() { const redoStack = get(project).transcriptRedoStack; if (redoStack.length === 0) { console.log('[ProjectStore] Redo stack empty.'); return; } project.update(p => { const currentSegments = p.segments; const newRedoStack = [...p.transcriptRedoStack]; const nextSegments = newRedoStack.pop(); const newUndoStack = [...p.transcriptUndoStack, currentSegments]; let newIndex = -1; const time = p.player.currentTime; if (nextSegments.length > 0 && p.player.duration > 0 && time >= 0) { const idx = nextSegments.findIndex((s, index) => { const isLastSegment = index === nextSegments.length - 1; const startTimeCheck = time >= (s.start_time - 0.001); const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time; return startTimeCheck && endTimeCheck; }); newIndex = idx; } console.log('[ProjectStore] Redoing transcript change.'); return { ...p, segments: nextSegments, transcriptUndoStack: newUndoStack, transcriptRedoStack: newRedoStack, transcriptDirty: true, statusMessage: 'Redo successful.', player: { ...p.player, currentSegmentIndex: newIndex } }; }); }
@@ -115,114 +124,8 @@ export function updatePlayerTime(time) { project.update((p) => { let newIndex = 
 export function setPlayerDuration(duration) { project.update((p) => ({ ...p, player: { ...p.player, duration: duration } })); }
 export function togglePlayerPlaying(isPlaying) { project.update((p) => ({ ...p, player: { ...p.player, isPlaying: isPlaying } })); }
 export function updatePlayerCurrentSegmentIndex(index) { const newIndex = (typeof index === 'number' && index >= -1) ? index : -1; project.update((p) => { if (p.player.currentSegmentIndex !== newIndex) { return { ...p, player: { ...p.player, currentSegmentIndex: newIndex } }; } return p; }); }
-export function setTranscriptData(path, data, inferSpeakers = false) { 
-    console.log(`[ProjectStore] setTranscriptData called with path: ${path}, inferSpeakers: ${inferSpeakers}`); 
-    const newSegments = Array.isArray(data) ? data : [];
-    if (newSegments.length) {
-      console.log('[DEBUG load‑from‑disk]', {
-        firstSegType: typeof newSegments[0].text,
-        firstSegStart: newSegments[0].start_time,
-        first120: typeof newSegments[0].text === 'string'
-          ? newSegments[0].text.slice(0, 120)
-          : String(newSegments[0].text).slice(0, 120)
-      });
-    }
-    project.update((p) => { 
-        let updatedSpeakers = p.speakers; 
-        if (inferSpeakers) { 
-            console.warn('[ProjectStore] Speaker inference requested. Overwriting current.'); 
-            let inferredSpeakers = { count: 0, names: [] }; 
-            if (newSegments.length > 0) { 
-                const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))]; 
-                const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown'); 
-                if (knownSpeakers.length > 0) { 
-                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})); 
-                    inferredSpeakers = { count: knownSpeakers.length, names: knownSpeakers }; 
-                } else { 
-                    inferredSpeakers = { count: 0, names: [] }; 
-                } 
-            } 
-            updatedSpeakers = inferredSpeakers; 
-            console.log('[ProjectStore] Inferred speakers:', updatedSpeakers); 
-        } 
-        return { 
-            ...p, 
-            currentTranscriptPath: path, 
-            segments: newSegments, 
-            transcriptDirty: false, 
-            isTranscriptLoading: false, 
-            speakers: updatedSpeakers, 
-            statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', 
-            error: null, 
-            player: { ...p.player, currentSegmentIndex: -1 }, 
-            transcriptUndoStack: [], 
-            transcriptRedoStack: [], 
-        }; 
-    }); 
-}
-export function updateSegment(index, updatedSegmentData, silent = false) { 
-    const currentSegments = get(project).segments; 
-    if (index < 0 || index >= currentSegments.length) { 
-        console.warn('[ProjectStore] updateSegment invalid index:', index); 
-        return; 
-    } 
-    let segmentToUpdate = { ...currentSegments[index] }; 
-    let changed = false; 
-    for (const key in updatedSegmentData) { 
-        if (Object.hasOwnProperty.call(updatedSegmentData, key)) { 
-            let newValue = updatedSegmentData[key]; 
-            let currentValue = segmentToUpdate[key]; 
-            let valueChanged = false; 
-            if (key === 'start_time' || key === 'end_time') { 
-                const numVal = Number(newValue); 
-                if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) { 
-                    segmentToUpdate[key] = numVal; 
-                    valueChanged = true; 
-                } 
-            } else if (key === 'text') { 
-                if (currentValue !== newValue) { 
-                    // DEBUG log for text updates
-                    if (key === 'text') {
-                        console.log('[DEBUG store‑updateSegment]', {
-                          idx: index,
-                          typeof: typeof newValue,
-                          first120: typeof newValue === 'string' ? newValue.slice(0, 120) : String(newValue).slice(0, 120)
-                        });
-                    }
-                    segmentToUpdate[key] = newValue; 
-                    valueChanged = true; 
-                } 
-            } else if (key === 'speaker') { 
-                if (String(currentValue ?? '') !== String(newValue ?? '')) { 
-                    segmentToUpdate[key] = String(newValue ?? ''); 
-                    valueChanged = true; 
-                } 
-            } else { 
-                if (currentValue !== newValue) { 
-                    segmentToUpdate[key] = newValue; 
-                    valueChanged = true; 
-                } 
-            } 
-            if (valueChanged) changed = true; 
-        } 
-    } 
-    if (changed) { 
-        pushToUndoStack(currentSegments); 
-        project.update((p) => { 
-            const newSegments = [...p.segments]; 
-            newSegments[index] = segmentToUpdate; 
-            if (!silent) console.log('[ProjectStore] Updated segment', index); 
-            return { 
-                ...p, 
-                segments: newSegments, 
-                transcriptDirty: true, 
-                statusMessage: silent ? p.statusMessage : 'Media transcript modified.', 
-            }; 
-        }); 
-    } else { 
-        if (!silent) console.log('[ProjectStore] updateSegment no changes needed index', index); 
-    } 
-}
+export function setTranscriptData(path, data, inferSpeakers = false) { console.log(`[ProjectStore] setTranscriptData called with path: ${path}, inferSpeakers: ${inferSpeakers}`); const newSegments = Array.isArray(data) ? data : []; if (newSegments.length) { console.log('[DEBUG load‑from‑disk]', { firstSegType: typeof newSegments[0].text, firstSegStart: newSegments[0].start_time, first120: typeof newSegments[0].text === 'string' ? newSegments[0].text.slice(0, 120) : String(newSegments[0].text).slice(0, 120) }); } project.update((p) => { let updatedSpeakers = p.speakers; if (inferSpeakers) { console.warn('[ProjectStore] Speaker inference requested. Overwriting current.'); let inferredSpeakers = { count: 0, names: [] }; if (newSegments.length > 0) { const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))]; const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown'); if (knownSpeakers.length > 0) { knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})); inferredSpeakers = { count: knownSpeakers.length, names: knownSpeakers }; } else { inferredSpeakers = { count: 0, names: [] }; } } updatedSpeakers = inferredSpeakers; console.log('[ProjectStore] Inferred speakers:', updatedSpeakers); } return { ...p, currentTranscriptPath: path, segments: newSegments, transcriptDirty: false, isTranscriptLoading: false, speakers: updatedSpeakers, statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null, player: { ...p.player, currentSegmentIndex: -1 }, transcriptUndoStack: [], transcriptRedoStack: [], }; }); }
+export function updateSegment(index, updatedSegmentData, silent = false) { const currentSegments = get(project).segments; if (index < 0 || index >= currentSegments.length) { console.warn('[ProjectStore] updateSegment invalid index:', index); return; } let segmentToUpdate = { ...currentSegments[index] }; let changed = false; for (const key in updatedSegmentData) { if (Object.hasOwnProperty.call(updatedSegmentData, key)) { let newValue = updatedSegmentData[key]; let currentValue = segmentToUpdate[key]; let valueChanged = false; if (key === 'start_time' || key === 'end_time') { const numVal = Number(newValue); if (!isNaN(numVal) && Math.abs(numVal - (Number(currentValue) || 0)) > 0.0001) { segmentToUpdate[key] = numVal; valueChanged = true; } } else if (key === 'text') { if (currentValue !== newValue) { if (key === 'text') { console.log('[DEBUG store‑updateSegment]', { idx: index, typeof: typeof newValue, first120: typeof newValue === 'string' ? newValue.slice(0, 120) : String(newValue).slice(0, 120) }); } segmentToUpdate[key] = newValue; valueChanged = true; } } else if (key === 'speaker') { if (String(currentValue ?? '') !== String(newValue ?? '')) { segmentToUpdate[key] = String(newValue ?? ''); valueChanged = true; } } else { if (currentValue !== newValue) { segmentToUpdate[key] = newValue; valueChanged = true; } } if (valueChanged) changed = true; } } if (changed) { pushToUndoStack(currentSegments); project.update((p) => { const newSegments = [...p.segments]; newSegments[index] = segmentToUpdate; if (!silent) console.log('[ProjectStore] Updated segment', index); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: silent ? p.statusMessage : 'Media transcript modified.', }; }); } else { if (!silent) console.log('[ProjectStore] updateSegment no changes needed index', index); } }
 export function deleteTranscriptSegment(index) { const currentSegments = get(project).segments; if (index < 0 || index >= currentSegments.length) { console.warn('[ProjectStore] deleteTranscriptSegment called with invalid index:', index); return; } pushToUndoStack(currentSegments); project.update(p => { const oldIndex = p.player.currentSegmentIndex; const newSegments = p.segments.filter((_, i) => i !== index); let newPlayerIndex = -1; if (newSegments.length > 0) { if (oldIndex === index) { newPlayerIndex = Math.max(-1, index - 1); } else if (oldIndex > index) { newPlayerIndex = oldIndex - 1; } else { newPlayerIndex = oldIndex; } } console.log(`[ProjectStore] Deleted segment index ${index}. New player index: ${newPlayerIndex}`); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: 'Segment deleted (undoable).', player: { ...p.player, currentSegmentIndex: newPlayerIndex } }; }); }
 export function insertTranscriptSegment(index, newSegment) { const currentSegments = get(project).segments; if (index < 0 || index > currentSegments.length) { console.warn('[ProjectStore] insertTranscriptSegment called with invalid index:', index); return; } if (!newSegment || typeof newSegment.start_time !== 'number' || typeof newSegment.end_time !== 'number') { console.error('[ProjectStore] insertTranscriptSegment called with invalid segment data:', newSegment); return; } pushToUndoStack(currentSegments); project.update(p => { const segmentsBefore = p.segments.slice(0, index); const segmentsAfter = p.segments.slice(index); const newSegments = [...segmentsBefore, newSegment, ...segmentsAfter]; const newPlayerIndex = index; console.log(`[ProjectStore] Inserted new segment at index ${index}. New player index: ${newPlayerIndex}`); return { ...p, segments: newSegments, transcriptDirty: true, statusMessage: 'Segment inserted (undoable).', player: { ...p.player, currentSegmentIndex: newPlayerIndex } }; }); }
 export function setSelectedModel(modelName) { console.log(`[ProjectStore] Set model: ${modelName}`); project.update((p) => ({ ...p, selectedModelName: modelName || null })); }
@@ -233,7 +136,6 @@ export function toggleTranscribeModal(show) { project.update((p) => ({ ...p, sho
 export function setTranscriptionStatus(isTranscribing, jobId = null, statusMessage = '') { project.update((p) => ({ ...p, isTranscribing: !!isTranscribing, transcriptionJobId: jobId, statusMessage: statusMessage || (isTranscribing ? 'Starting transcription...' : 'Ready'), transcriptionProgress: isTranscribing ? { percent: 0, message: '' } : p.transcriptionProgress, error: isTranscribing ? null : p.error })); }
 export function updateTranscriptionProgress(progressPayload) { project.update((p) => { if (p.isTranscribing && p.transcriptionJobId && progressPayload?.jobId === p.transcriptionJobId) { const newMessage = progressPayload?.message ?? p.transcriptionProgress.message; return { ...p, transcriptionProgress: { percent: progressPayload?.percent ?? 0, message: newMessage }, }; } return p; }); }
 export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = null) { project.update((p) => ({ ...p, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' }, transcriptionJobId: null, statusMessage: finalStatusMessage, error: error })); }
-
 
 // --- General Document (.json files) and PDF Functions ---
 export function prepareDocumentView(filePath, itemType = 'document') {
@@ -250,48 +152,47 @@ export function prepareDocumentView(filePath, itemType = 'document') {
     project.update(p => {
         const selectingSamePath = p.selectedDocumentPath === filePath;
         
-        // Determine loading state based on type
         let newIsDocumentLoading = false;
         if (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) {
-            newIsDocumentLoading = true; // Load if new JSON doc or current one isn't loaded
+            newIsDocumentLoading = true; 
         } else if (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations ) ) { 
-             // Load if new PDF, or current PDF's annotations aren't loaded (and not explicitly empty from a previous load)
             newIsDocumentLoading = true;
         }
-
 
         return {
             ...p,
             selectedDocumentPath: filePath,
-
-            // Lexical JSON document states
             currentDocumentJson: (isJsonDocument && selectingSamePath) ? p.currentDocumentJson : (isJsonDocument ? null : null),
             initialDocumentJson: (isJsonDocument && selectingSamePath) ? p.initialDocumentJson : (isJsonDocument ? null : null),
             isDocumentDirty: (isJsonDocument && selectingSamePath) ? p.isDocumentDirty : false,
             activeDocumentEditorRef: (isJsonDocument && selectingSamePath) ? p.activeDocumentEditorRef : null,
-            
             currentDocumentFileLevelMetadata: (isJsonDocument && selectingSamePath) ? p.currentDocumentFileLevelMetadata : { ...defaultFileLevelMetadata },
             currentDocumentHighlights: (isJsonDocument && selectingSamePath) ? p.currentDocumentHighlights : [],
             isDocumentMetadataDirty: (isJsonDocument && selectingSamePath) ? p.isDocumentMetadataDirty : false,
-
-            // PDF specific annotation states
             currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [], 
             initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [], 
             isPdfAnnotationsDirty: (isPdf && selectingSamePath) ? p.isPdfAnnotationsDirty : false,
-
             isDocumentLoading: newIsDocumentLoading,
             documentError: null,
-            
             statusMessage: filePath ? `Loading ${itemType}: ${filePath.split(/[\\/]/).pop()}` : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} selection cleared.`,
             
-            // Reset other types if a new document/pdf is selected
-            currentImportedTranscriptPath: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? null : p.currentImportedTranscriptPath, 
-            currentImportedTranscriptLexicalJson: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? null : p.currentImportedTranscriptLexicalJson,
-            initialImportedTranscriptLexicalJson: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? null : p.initialImportedTranscriptLexicalJson,
-            isImportedTranscriptDirty: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? false : p.isImportedTranscriptDirty,
-            activeImportedTranscriptEditorRef: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? null : p.activeImportedTranscriptEditorRef,
-            importedTranscriptError: (isJsonDocument || isPdf || isTable || isImage || !filePath) ? null : p.importedTranscriptError,
+            // --- Clear other views ---
+            currentImportedTranscriptPath: null, 
+            currentImportedTranscriptLexicalJson: null,
+            initialImportedTranscriptLexicalJson: null,
+            isImportedTranscriptDirty: false,
+            activeImportedTranscriptEditorRef: null,
+            importedTranscriptError: null,
+            isImportedTranscriptLoading: false,
 
+            selectedMediaNotePath: null, // Also clear media note view
+            currentMediaNoteTranscriptJson: null,
+            initialMediaNoteTranscriptJson: null,
+            isMediaNoteTranscriptDirty: false,
+            mediaNoteTranscriptError: null,
+            isMediaNoteTranscriptLoading: false,
+            activeMediaNoteEditorRef: null,
+            // --- End Clear other views ---
         };
     });
 
@@ -304,7 +205,6 @@ export function prepareDocumentView(filePath, itemType = 'document') {
                 console.error("[ProjectStore] loadActiveDocumentContent function not found in projectService.");
                 project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error: LADC service missing."}); return p; });
             }
-            // Load Lexical-specific metadata (which includes Lexical highlights)
             if (service.loadDocumentMetadata && filePath) {
                 try {
                     const fullMetadataObject = await service.loadDocumentMetadata(filePath); 
@@ -335,10 +235,9 @@ export function prepareDocumentView(filePath, itemType = 'document') {
         });
     } else if (isPdf && filePath) {
          console.log(`[ProjectStore] prepareDocumentView: Path is PDF. Initiating PDF annotation load.`);
-         // isDocumentLoading was set true in the main update above
          import('$lib/services/projectService.js').then(async service => {
             if (service.loadPdfAnnotationsFromFile) {
-                await service.loadPdfAnnotationsFromFile(filePath); // This will set isDocumentLoading to false on completion/error
+                await service.loadPdfAnnotationsFromFile(filePath); 
             } else {
                 console.error("[ProjectStore] loadPdfAnnotationsFromFile function not found in projectService.");
                 project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error: LPAF service missing."}); return p;});
@@ -352,203 +251,26 @@ export function prepareDocumentView(filePath, itemType = 'document') {
          project.update(p => ({ ...p, isDocumentLoading: false }));
     } else if (!filePath) {
          console.log(`[ProjectStore] prepareDocumentView: No path. States already cleared.`);
-         project.update(p => ({ ...p, isDocumentLoading: false })); // Ensure loading is false if path is cleared
+         project.update(p => ({ ...p, isDocumentLoading: false })); 
     }
 }
-// --- (Rest of your projectStore.js functions from your provided file) ...
-// setLoadedDocumentData, setDocumentLoadFailed, setDocumentEditorContent, 
-// markDocumentAsSaved, markDocumentChangesDiscarded, clearDocumentEditorState, 
-// setActiveDocumentEditorRef, clearActiveDocumentEditorRef, updateDocumentHighlights,
-// markDocumentMetadataAsSaved, PDF Annotation functions, Imported Transcript functions,
-// Shared/Generic Store Functions
 export function setLoadedDocumentData(filePath, jsonContent) { console.log(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}` }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false }; } return p; } }); }
 export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false }; } return p; }); }
 export function setDocumentEditorContent(newJsonContent) { project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { const initial = p.initialDocumentJson; const current = p.currentDocumentJson; const isNewDifferentFromInitial = initial !== newJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newJsonContent || p.isDocumentDirty !== newDirtyState) { return { ...p, currentDocumentJson: newJsonContent, isDocumentDirty: newDirtyState, }; } } return p; }); }
 export function markDocumentAsSaved(savedJsonContent) { console.log('[ProjectStore] Marking document as saved (JSON).'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); }
-export function markDocumentChangesDiscarded() { console.log('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, /* Keep PDF content if any, reset Lexical */ isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, /* Keep file level metadata */ currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, /* Clear Lexical highlights if PDF or if metadata was dirty */ isDocumentMetadataDirty: false, /* Always reset this on discard */ currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, /* Reset PDF annots to initial */ isPdfAnnotationsDirty: false, /* Reset PDF dirty flag */ }; } return p; }); } 
+export function markDocumentChangesDiscarded() { console.log('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); } 
 export function clearDocumentEditorState() { console.log('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
+export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; console.log(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`); } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); console.log(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; console.log(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`); } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
+export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.log('[ProjectStore] Marking Lexical document metadata as saved.'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isDocumentMetadataDirty: false, currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata }; } return p; }); }
+export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } if(annotationChanged) console.log(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`); } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; console.log(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`); } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true; console.log(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`); } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); }
+export function markPdfAnnotationsDirty(updatedAnnotations = null) { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: true, isDocumentDirty: false, currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations }; } return p; }); }
+export function markPdfAnnotationsAsSaved() { console.log('[ProjectStore] Marking PDF annotations as saved.'); project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
+export function setLoadedPdfAnnotations(annotationsArray) { console.log(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false }));}
+export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.` }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false }; } return p; }); }
 
-export function updateDocumentHighlights(newHighlightEvent) {
-    // If the active document is a PDF, delegate to updatePdfAnnotations instead
-    const currentPath = get(project).selectedDocumentPath;
-    if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) {
-        updatePdfAnnotations(newHighlightEvent);
-        return;
-    }
-    project.update(p => {
-        if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return p; 
-        }
-        let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); 
-        const { type, id, text, nodeKey, color } = newHighlightEvent; 
-        if (type === 'add') {
-            if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; }
-            const existingIndex = highlights.findIndex(h => h.id === id);
-            const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() };
-            if (existingIndex === -1) highlights.push(newHighlightData);
-            else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] };
-            console.log(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`);
-        } else if (type === 'remove') {
-            highlights = highlights.filter(h => h.id !== id);
-            console.log(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`);
-        } else if (type === 'update') { 
-             if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; }
-             const existingIndex = highlights.findIndex(h => h.id === id);
-             if (existingIndex !== -1) {
-                highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() };
-                console.log(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`);
-             }
-        }
-        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
-    });
-}
-
-export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
-    console.log('[ProjectStore] Marking Lexical document metadata as saved.');
-    project.update(p => {
-        if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return { 
-                ...p, 
-                isDocumentMetadataDirty: false,
-                currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata
-            };
-        }
-        return p;
-    });
-}
-
-// In your updatePdfAnnotations function, ensure you are using isPdfAnnotationsDirty
-// and that isDocumentDirty is set to true to trigger the autosave/prompt logic
-// (as it was in your provided code)
-export function updatePdfAnnotations(pdfHighlightEvent) {
-    project.update(p => {
-        if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return p;
-        }
-        let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : [];
-        let { type, id, ...highlightData } = pdfHighlightEvent;
-        if (!type || type === 'pdfHighlight') type = 'add';
-
-        let annotationChanged = false;
-        if (type === 'add') {
-            const existingIndex = annotations.findIndex(h => h.id === id);
-            const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; 
-            if (existingIndex === -1) {
-                annotations.push(newAnnotation);
-                annotationChanged = true;
-            } else {
-                // Basic check if update is meaningful (could be more sophisticated)
-                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) {
-                    annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation };
-                    annotationChanged = true;
-                }
-            }
-            if(annotationChanged) console.log(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`);
-        } else if (type === 'remove') {
-            const initialLength = annotations.length;
-            annotations = annotations.filter(h => h.id !== id);
-            if (annotations.length < initialLength) {
-                annotationChanged = true;
-                console.log(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`);
-            }
-        } else if (type === 'update') { 
-             const existingIndex = annotations.findIndex(h => h.id === id);
-             if (existingIndex !== -1) {
-                // Basic check if update is meaningful
-                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) {
-                    annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
-                    annotationChanged = true;
-                    console.log(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`);
-                }
-             }
-        }
-
-        if (annotationChanged) {
-            return { 
-                ...p, 
-                currentPdfAnnotations: annotations, 
-                isPdfAnnotationsDirty: true, // Specifically mark PDF annotations as dirty
-                isDocumentDirty: true // Keep this to trigger existing autosave/prompt logic
-            };
-        }
-        return p; // No change
-    });
-}
-
-/**
- * Mark that PDF annotations have unsaved changes.
- * Optionally pass the updated annotations array so the store stays in sync.
- */
-export function markPdfAnnotationsDirty(updatedAnnotations = null) {
-    project.update(p => {
-        if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return {
-                ...p,
-                isPdfAnnotationsDirty: true,
-                isDocumentDirty: false,
-                currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations
-            };
-        }
-        return p;
-    });
-}
-
-// Make sure these are correctly defined and imported in projectService.js
-export function markPdfAnnotationsAsSaved() {
-    console.log('[ProjectStore] Marking PDF annotations as saved.');
-    project.update(p => {
-        if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            return { 
-                ...p, 
-                isPdfAnnotationsDirty: false, 
-                isDocumentDirty: false,
-                initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), // Deep copy current to initial
-                statusMessage: 'PDF annotations saved.' 
-            };
-        }
-        return p;
-    });
-}
-
-export function setLoadedPdfAnnotations(annotationsArray) {
-     console.log(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`);
-     project.update(p => ({ 
-        ...p, 
-        currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], 
-        initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [],
-        isPdfAnnotationsDirty: false,
-        isDocumentLoading: false // Assuming this is called after PDF annotations are loaded
-    }));
-}
-
-// ADDED: New function for PDF annotation load failure
-export function setPdfAnnotationsLoadFailed(filePath, errorMsg) {
-    console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg);
-    project.update(p => {
-        if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) {
-            return {
-                ...p,
-                currentPdfAnnotations: [],
-                initialPdfAnnotations: [],
-                isPdfAnnotationsDirty: false,
-                isDocumentLoading: false, 
-                documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`,
-                statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`
-            };
-        }
-        // If the error is for a path that is no longer selected, but was loading, still clear loading.
-        if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){
-             console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`);
-             return { ...p, isDocumentLoading: false };
-        }
-        return p;
-    });
-}
-
-// --- Imported Transcript Functions (Keep existing) ---
-// ...
+// --- Imported Transcript Functions ---
 export function prepareImportedTranscriptView(filePath) {
     console.log(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`);
     project.update(p => ({
@@ -561,96 +283,186 @@ export function prepareImportedTranscriptView(filePath) {
         importedTranscriptError: null,
         activeImportedTranscriptEditorRef: p.currentImportedTranscriptPath === filePath ? p.activeImportedTranscriptEditorRef : null,
         statusMessage: filePath ? `Loading imported transcript: ${filePath.split(/[\\/]/).pop()}` : 'Imported transcript selection cleared.',
-        // Clear other document/PDF states
+        
+        // --- Clear other views ---
         selectedDocumentPath: null, 
         currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
         currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, 
         currentDocumentHighlights: [], isDocumentMetadataDirty: false, 
         currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+
+        selectedMediaNotePath: null, // Also clear media note view
+        currentMediaNoteTranscriptJson: null,
+        initialMediaNoteTranscriptJson: null,
+        isMediaNoteTranscriptDirty: false,
+        mediaNoteTranscriptError: null,
+        isMediaNoteTranscriptLoading: false,
+        activeMediaNoteEditorRef: null,
+        // --- End Clear other views ---
     }));
 }
-export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) {
-    console.log(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`);
-    const minimalValidJson = createMinimalValidLexicalJson();
-    project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2;
-            return {
-                ...p,
-                currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson,
-                initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson,
-                isImportedTranscriptDirty: false,
-                isImportedTranscriptLoading: false,
-                importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.",
-                statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`
-            };
-        } else {
-            if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { // Loading was for this path but it changed
-                 return { ...p, isImportedTranscriptLoading: false };
-            }
-            return p;
-        }
-    });
-}
-export function setImportedTranscriptLoadFailed(filePath, errorMsg) {
-    console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg);
-    project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            return {
-                ...p,
-                currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(),
-                initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(),
-                isImportedTranscriptDirty: false,
-                isImportedTranscriptLoading: false,
-                importedTranscriptError: `Failed to load transcript: ${errorMsg}`,
-                statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`,
-                activeImportedTranscriptEditorRef: null
-            };
-        }
-        else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) {
-             return { ...p, isImportedTranscriptLoading: false };
-        }
-        return p;
-    });
-}
-export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) {
-    project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            const initial = p.initialImportedTranscriptLexicalJson;
-            const current = p.currentImportedTranscriptLexicalJson;
-            const isNewDifferentFromInitial = initial !== newLexicalJsonContent;
-            const newDirtyState = isNewDifferentFromInitial;
-            if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) {
-                return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, };
-            }
-        }
-        return p;
-    });
-}
-export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) {
-    console.log(`[ProjectStore] Marking imported transcript as saved: ${filePath}`);
-    project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` };
-        }
-        return p;
-    });
-}
-export function markImportedTranscriptChangesDiscarded(filePath) {
-    console.log(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`);
-    project.update(p => {
-        if (p.currentImportedTranscriptPath === filePath) {
-            return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'};
-        }
-        return p;
-    });
-}
+export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.log(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}` }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false }; } return p; } }); }
+export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false }; } return p; }); }
+export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
+export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) { console.log(`[ProjectStore] Marking imported transcript as saved: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` }; } return p; }); }
+export function markImportedTranscriptChangesDiscarded(filePath) { console.log(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); }
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
+// --- NEW: Functions for Media Notes in Fieldnotes ---
+export function prepareMediaNoteView(mediaPath) {
+    console.log(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}`);
+    project.update(p => {
+        // Clear other main view states
+        const otherViewStates = {
+            selectedDocumentPath: null,
+            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false,
+            isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
+            currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+            currentDocumentHighlights: [], isDocumentMetadataDirty: false,
+            currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
 
-// --- Shared/Generic Store Functions (Keep existing) ---
-// ...
+            currentImportedTranscriptPath: null,
+            currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null,
+            isImportedTranscriptDirty: false, isImportedTranscriptLoading: false,
+            importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
+            
+            // If main "Transcriptions" tab has distinct state, clear that too (already partly covered by selectMedia in some cases)
+            // selectedMediaFile: null, // Potentially keep this if the media player in MediaEditorPanel should sync with main player selection
+            // segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false,
+        };
+
+        if (p.selectedMediaNotePath !== mediaPath || !p.selectedMediaNotePath) {
+            return {
+                ...p,
+                ...otherViewStates,
+                selectedMediaNotePath: mediaPath,
+                isMediaNoteTranscriptLoading: true, // MediaEditorPanel will set this to false
+                mediaNoteTranscriptError: null,
+                isMediaNoteTranscriptDirty: false,
+                currentMediaNoteTranscriptJson: null, // To be loaded by MediaEditorPanel
+                initialMediaNoteTranscriptJson: null,
+                activeMediaNoteEditorRef: null,
+                statusMessage: mediaPath ? `Loading media note for ${mediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
+            };
+        }
+        // If clicking the same media note again, just ensure other views are inactive
+        return { ...p, ...otherViewStates, selectedMediaNotePath: mediaPath, statusMessage: `Viewing media note ${mediaPath.split(/[\\/]/).pop()}` };
+    });
+}
+
+export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
+    console.log(`[ProjectStore] Setting loaded media note transcript data for media: ${mediaPath}`);
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            const content = jsonString || defaultEmptyJson;
+            return {
+                ...p,
+                currentMediaNoteTranscriptJson: content,
+                initialMediaNoteTranscriptJson: content,
+                isMediaNoteTranscriptDirty: false,
+                isMediaNoteTranscriptLoading: false,
+                mediaNoteTranscriptError: null,
+                statusMessage: `Loaded notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
+            };
+        }
+        return p;
+    });
+}
+
+export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg) {
+    console.error(`[ProjectStore] Media note transcript load failed for media: ${mediaPath}`, errorMsg);
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            return {
+                ...p,
+                currentMediaNoteTranscriptJson: defaultEmptyJson, // Show empty editor on error
+                initialMediaNoteTranscriptJson: defaultEmptyJson,
+                isMediaNoteTranscriptDirty: false,
+                isMediaNoteTranscriptLoading: false,
+                mediaNoteTranscriptError: `Failed to load notes: ${errorMsg}`,
+                statusMessage: `Error loading notes for ${mediaPath.split(/[\\/]/).pop()}.`,
+                activeMediaNoteEditorRef: null, // Clear ref on load error
+            };
+        }
+        return p;
+    });
+}
+
+export function setMediaNoteTranscriptEditorContent(mediaPath, newJsonContent) {
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            const initial = p.initialMediaNoteTranscriptJson;
+            const current = p.currentMediaNoteTranscriptJson;
+            const isNewDifferentFromInitial = initial !== newJsonContent;
+            const newDirtyState = isNewDifferentFromInitial;
+
+            if (current !== newJsonContent || p.isMediaNoteTranscriptDirty !== newDirtyState) {
+                return {
+                    ...p,
+                    currentMediaNoteTranscriptJson: newJsonContent,
+                    isMediaNoteTranscriptDirty: newDirtyState,
+                };
+            }
+        }
+        return p;
+    });
+}
+
+export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
+    console.log(`[ProjectStore] Marking media note transcript as saved for media: ${mediaPath}`);
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            return {
+                ...p,
+                initialMediaNoteTranscriptJson: savedJsonContent,
+                currentMediaNoteTranscriptJson: savedJsonContent,
+                isMediaNoteTranscriptDirty: false,
+                mediaNoteTranscriptError: null, // Clear "not found" error if it was there
+                statusMessage: `Notes for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
+            };
+        }
+        return p;
+    });
+}
+
+export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
+    console.log(`[ProjectStore] Marking media note transcript changes as discarded for media: ${mediaPath}`);
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            return {
+                ...p,
+                currentMediaNoteTranscriptJson: p.initialMediaNoteTranscriptJson,
+                isMediaNoteTranscriptDirty: false,
+                mediaNoteTranscriptError: null,
+                statusMessage: `Changes to notes for media ${mediaPath.split(/[\\/]/).pop()} discarded.`,
+            };
+        }
+        return p;
+    });
+}
+
+export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) {
+    project.update(p => {
+        if (p.selectedMediaNotePath === mediaPath) {
+            return { ...p, activeMediaNoteEditorRef: { path: mediaPath, ref: editorRefInstance } };
+        }
+        return p;
+    });
+}
+
+export function clearActiveMediaNoteEditorRef() {
+    project.update(p => {
+        if (p.activeMediaNoteEditorRef) { // Only update if there was an active ref
+            return { ...p, activeMediaNoteEditorRef: null };
+        }
+        return p;
+    });
+}
+// --- END NEW Media Notes Functions ---
+
+
+// --- Shared/Generic Store Functions ---
 export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; console.log(`[ProjectStore] Toggling autosave to: ${newState}`); return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { console.log(`[ProjectStore] Showing unsaved changes prompt for: ${itemName} (type: ${itemType})`); project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { console.log('[ProjectStore] Hiding unsaved changes prompt.'); project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }

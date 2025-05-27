@@ -7,17 +7,16 @@
     import TableView from './tables/TableView.svelte';
     import ImageView from './images/ImageView.svelte';
     import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte'; 
-    import { project, prepareDocumentView, prepareImportedTranscriptView } from '$lib/stores/projectStore.js'; 
+    import MediaView from './media/MediaView.svelte'; // Import MediaView
+    import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
     import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js'; 
     import { get } from 'svelte/store';
-    // import { convertFileSrc } from '@tauri-apps/api/core'; // Not used here directly
 
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
         if (event.type === 'requestviewchange') {
             // Event is already handled directly by NotesView's on:requestviewchange
-            // console.log("[NotesView forwardEvent] requestviewchange should be handled by NotesView directly now.");
         } else {
 		    dispatch(event.type, event.detail);
         }
@@ -26,14 +25,21 @@
     let activeViewType = 'placeholder'; 
     let activeItemPath = null;
 
-    const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']); // Renamed for clarity
+    const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
+    const AUDIO_EXTENSIONS_SET = new Set(['mp3','wav','m4a','ogg','aac','flac']);
+    const VIDEO_EXTENSIONS_SET = new Set(['mp4','mov','avi','mkv','webm']);
+
 
     project.subscribe(value => {
         let pathFromStore = null;
         let typeFromStore = 'placeholder';
 
         // Determine the single active item and its type from the store
-        if (value.currentImportedTranscriptPath) {
+        // Prioritize media_note if selectedMediaNotePath is set
+        if (value.selectedMediaNotePath) {
+            pathFromStore = value.selectedMediaNotePath;
+            typeFromStore = 'media_note'; 
+        } else if (value.currentImportedTranscriptPath) {
             pathFromStore = value.currentImportedTranscriptPath;
             typeFromStore = 'imported_transcript';
         } else if (value.selectedDocumentPath) { 
@@ -41,10 +47,8 @@
             const lowerPath = pathFromStore.toLowerCase();
             const extension = lowerPath.split('.').pop();
             
-            // Ensure this logic correctly identifies .json documents vs. .json imported_transcripts
-            // This relies on currentImportedTranscriptPath being null if it's a regular document
             if (lowerPath.endsWith('.pdf') || 
-                (lowerPath.endsWith('.json') && value.importedTranscriptFiles?.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore) ) || 
+                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore)) && (!value.selectedMediaNotePath) ) || 
                  lowerPath.endsWith('.txt') || 
                  lowerPath.endsWith('.md')) {
                 typeFromStore = 'documents';
@@ -52,16 +56,12 @@
                 typeFromStore = 'tables';
             } else if (IMAGE_EXTENSIONS_SET.has(extension)) {
                 typeFromStore = 'images';
-            } else if (value.importedTranscriptFiles?.some(f => `${value.baseDirectory}/${f.relativePath}` === pathFromStore)) {
-                // This case might be redundant if currentImportedTranscriptPath is correctly set
-                typeFromStore = 'imported_transcript';
             } else {
-                console.warn(`[NotesView Store Sub] Path ${pathFromStore} is selectedDocumentPath but type couldn't be determined.`);
-                typeFromStore = 'placeholder'; // Fallback if type is ambiguous from selectedDocumentPath
+                console.warn(`[NotesView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
+                typeFromStore = 'placeholder'; 
             }
         }
         
-        // Only update local Svelte state if it truly differs from the store's derived state
         if (activeItemPath !== pathFromStore || activeViewType !== typeFromStore) {
             activeItemPath = pathFromStore;
             activeViewType = typeFromStore;
@@ -70,7 +70,6 @@
     });
 
     async function handleViewChangeRequest(eventDetailFromDispatch) {
-        // Capture values at the start of the function scope
         const pathForView = eventDetailFromDispatch?.itemPath;
         const typeForView = eventDetailFromDispatch?.viewType;
 
@@ -78,13 +77,13 @@
         
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
             console.error(`[NotesView] ABORTING: Invalid path or type from event. Path: '${pathForView}', Type: '${typeForView}'.`);
-            // Clear views if essential info is missing
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
+            prepareMediaNoteView(null); // Also clear media note view
             return;
         }
 
-        const canProceed = await checkUnsavedChangesThenProceed(pathForView, typeForView); // typeForView here is for action context description
+        const canProceed = await checkUnsavedChangesThenProceed(pathForView, typeForView);
         if (!canProceed) {
             console.log('[NotesView] View change cancelled by unsaved changes check.');
             return;
@@ -92,29 +91,27 @@
         
         console.log(`[NotesView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
-        // These calls update the global Svelte store.
-        // The `project.subscribe` block above will react to these store changes
-        // to update local `activeItemPath` and `activeViewType` for the {#key}.
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
             console.log(`[NotesView] Calling prepareDocumentView for Path: ${pathForView}, Type: ${typeForView}`);
             prepareDocumentView(pathForView, typeForView); 
         } else if (typeForView === 'imported_transcript') {
             console.log(`[NotesView] Calling prepareImportedTranscriptView for Path: ${pathForView}`);
             prepareImportedTranscriptView(pathForView); 
+        } else if (typeForView === 'media_note') { // New type for media files in Fieldnotes
+            console.log(`[NotesView] Calling prepareMediaNoteView for Path: ${pathForView}`);
+            prepareMediaNoteView(pathForView);
         } else {
             console.warn(`[NotesView] Unknown typeForView: '${typeForView}'. Clearing all specific views.`);
             prepareDocumentView(null, 'placeholder'); 
             prepareImportedTranscriptView(null);
+            prepareMediaNoteView(null); // Clear media note view too
         }
-        // The local activeItemPath and activeViewType will be updated by the project.subscribe block.
         console.log(`[NotesView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
     }
 
 
 	onMount(() => {
 		console.log('[NotesView] Component container mounted.');
-        // The project.subscribe block will handle setting the initial activeItemPath and activeViewType
-        // based on the store's state when the component mounts.
 	});
 
 </script>
@@ -146,12 +143,15 @@
                      <ImageView itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
                      <ImportedTranscriptView itemPath={activeItemPath} /> 
+                {:else if activeViewType === 'media_note'}
+                     <MediaView itemPath={activeItemPath} />  
                  {:else if activeViewType === 'audio'}
-                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Audio View Placeholder</span></div>
+                     <!-- This 'audio' type might be from a different context (e.g. main transcriptions), handle as placeholder for now if it appears -->
+                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Audio View Placeholder (NotesView)</span></div>
                  {:else if activeViewType === 'video'}
-                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Video View Placeholder</span></div>
+                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Video View Placeholder (NotesView)</span></div>
                  {:else if activeViewType === 'transcripts'} 
-                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Media Transcript View Placeholder</span></div>
+                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Media Transcript View Placeholder (NotesView - this shouldn't normally be active here)</span></div>
                 {:else}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Selected view type '{activeViewType}' not recognized or item path invalid.</span>
@@ -168,4 +168,3 @@
     .w-\[15\%\] { width: 15%; }
     .w-\[85\%\] { width: 85%; }
 </style>
-

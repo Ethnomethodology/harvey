@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/NotesLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView might be replaced for imported transcripts
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
 	import { get } from 'svelte/store';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
@@ -15,7 +15,6 @@
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
 
-    // Category context menu state
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -28,7 +27,6 @@
         closeCategoryContextMenu();
       }
       categoryContextMenuType = categoryType;
-      // Position menu to the right of the clicked button
       const rect = event.currentTarget.getBoundingClientRect();
       categoryContextMenuX = rect.right + 4;
       categoryContextMenuY = rect.top;
@@ -40,7 +38,6 @@
       categoryContextMenuType = null;
     }
 
-    // Automatically close category menu on outside click
     onMount(() => {
       const listener = () => {
         if (categoryContextMenuVisible) closeCategoryContextMenu();
@@ -129,12 +126,11 @@
             else if (cat.type === 'document') { return { ...cat, files: documents }; }
             else if (cat.type === 'table') { return { ...cat, files: tables }; }
             else if (cat.type === 'image') { return { ...cat, files: images }; }
-            else if (cat.type === 'imported_transcript') { return { ...cat, files: importedTranscripts }; } // Changed category type
+            else if (cat.type === 'imported_transcript') { return { ...cat, files: importedTranscripts }; } 
             else { return { ...cat, files: [] }; }
         });
     })();
 
-    // Filter files by search query
     $: filteredCategories = (() => {
       const q = searchQuery.trim().toLowerCase();
       if (!showSearchBox || q === '') return displayCategories;
@@ -145,14 +141,23 @@
     })();
 
     $: { 
-        const autoPath = $project.selectedDocumentPath; // This store variable is used for various Fieldnotes items
+        let autoPath = null;
+        if ($project.selectedMediaNotePath) {
+            autoPath = $project.selectedMediaNotePath;
+        } else if ($project.selectedDocumentPath) {
+            autoPath = $project.selectedDocumentPath;
+        } else if ($project.currentImportedTranscriptPath) {
+            autoPath = $project.currentImportedTranscriptPath;
+        }
+
         if (autoPath && autoPath !== prevAutoOpenPath) {
             const lowerPath = autoPath.toLowerCase();
             let itemCategoryType = null;
             const extension = lowerPath.split('.').pop();
 
-            // Check if it's an imported transcript first
-            if ($project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}/${f.relativePath}` === autoPath)) {
+            if (AUDIO_EXTENSIONS.has(extension) || VIDEO_EXTENSIONS.has(extension)) {
+                itemCategoryType = 'media_note'; 
+            } else if ($project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}/${f.relativePath}` === autoPath)) {
                 itemCategoryType = 'imported_transcript';
             } else if (lowerPath.endsWith('.pdf') || (lowerPath.endsWith('.json') && !itemCategoryType) || lowerPath.endsWith('.txt') || lowerPath.endsWith('.md')) {
                 itemCategoryType = 'document';
@@ -163,10 +168,18 @@
             }
 
             if (itemCategoryType) {
-                const itemCategory = displayCategories.find(c => c.type === itemCategoryType);
+                const itemCategory = displayCategories.find(c => {
+                    if (itemCategoryType === 'media_note') {
+                        return (c.type === 'audio' || c.type === 'video');
+                    }
+                    return c.type === itemCategoryType;
+                });
+
                  if (itemCategory && itemCategory.files.some(f => f.path === autoPath)) {
                     console.log(`[NotesLeftPanel] Auto open path ${autoPath} matches category ${itemCategoryType}. NotesView will handle it.`);
                     prevAutoOpenPath = autoPath;
+                } else {
+                    console.warn(`[NotesLeftPanel] Auto open path ${autoPath} (type ${itemCategoryType}) NOT FOUND in current displayCategories.`);
                 }
             }
         }
@@ -181,14 +194,16 @@
         }
 
         if (categoryType === 'video' || categoryType === 'audio') {
-            try { await importMediaFile(categoryType); } catch (e) { console.error(`[NotesLeftPanel] Error importMediaFile ${categoryType}:`, e); }
+            try { 
+                await importMediaFile(categoryType); 
+            } catch (e) { console.error(`[NotesLeftPanel] Error importMediaFile ${categoryType}:`, e); }
         } else if (categoryType === 'document') {
             try { await importDocumentFile(); } catch (e) { console.error(`[NotesLeftPanel] Error importDocumentFile:`, e); }
         } else if (categoryType === 'table') {
             try { await importTableFile(); } catch (e) { console.error(`[NotesLeftPanel] Error importTableFile:`, e); }
         } else if (categoryType === 'image') {
             try { await importImageFile(); } catch (e) { console.error(`[NotesLeftPanel] Error importImageFile:`, e); }
-        } else if (categoryType === 'imported_transcript') { // Changed category type
+        } else if (categoryType === 'imported_transcript') { 
             showImportTranscriptModal = true;
         } else {
             message(`Specific import for ${categoryInfo.name} not implemented.`, { title: 'Coming Soon', type: 'info' });
@@ -210,7 +225,6 @@
         }
     }
 
-
     function handleItemContextMenu(event, item) { event.preventDefault(); event.stopPropagation(); console.log(`[NotesLeftPanel] Context menu for ${item.file_type} item:`, item); if (contextMenuVisible) { closeContextMenu(); } contextMenuItem = item; contextMenuX = event.clientX; contextMenuY = event.clientY; contextMenuVisible = true; setTimeout(() => { if (closeContextMenuListener) { document.removeEventListener('click', closeContextMenuListener, { capture: true }); } closeContextMenuListener = (e) => { const menuElement = document.getElementById('notes-left-panel-context-menu'); if (menuElement && !menuElement.contains(e.target)) { closeContextMenu(); } }; document.addEventListener('click', closeContextMenuListener, { capture: true, once: true }); }, 0); }
     function closeContextMenu() { if (contextMenuVisible) { contextMenuVisible = false; contextMenuItem = null; if (closeContextMenuListener) { document.removeEventListener('click', closeContextMenuListener, { capture: true }); closeContextMenuListener = null; } } }
 
@@ -224,8 +238,12 @@
         const isPdf = item.name?.toLowerCase().endsWith('.pdf');
         closeContextMenu();
 
-        if (itemType === 'media') {
+        if (itemType === 'media') { 
             switch (action) {
+                case 'Open': 
+                    console.log(`[NotesLeftPanel] 'Open' action for media: ${item.name}`);
+                    dispatch('requestviewchange', { viewType: 'media_note', itemPath: item.path });
+                    break;
                 case 'Rename': itemToRename = { path: item.path, name: item.media_xml_identifier, file_type: 'media', media_xml_identifier: item.media_xml_identifier }; showRenameModal = true; break;
                 case 'Delete': const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name); const confirmMsg = `Delete media "${stemName}"? This deletes the entire folder (media, transcripts, notes). Cannot be undone.`; const options = { title: 'Confirm Media Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmMsg, options); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${stemName}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${stemName}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error confirm/delete:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
                 case 'Transcribe': if (!item.path) { console.error("[NotesLeftPanel] Cannot transcribe: Media path missing."); await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
@@ -256,7 +274,7 @@
              switch (action) {
                 case 'Open': 
                     console.log(`[NotesLeftPanel] 'Open' action for imported transcript: ${item.name}`);
-                    dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); // <-- MODIFIED
+                    dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
                     break;
                 case 'Rename': 
                     const nameWithoutExt = item.name.toLowerCase().endsWith('.json') 
@@ -290,7 +308,7 @@
     }
 
     async function handleRenameConfirm(event) {
-        const { newName } = event.detail; // This is the base name from the modal for imported_transcript
+        const { newName } = event.detail; 
         const item = itemToRename;
         if (!item || !newName || newName.trim() === '') { console.error("[NotesLeftPanel] Rename failed: Invalid input."); showRenameModal = false; itemToRename = null; return; }
 
@@ -341,38 +359,33 @@
     function handleRenameModalClose() { showRenameModal = false; itemToRename = null; }
 
     async function handleItemClick(item) {
-        // Handle document, table, image, or imported_transcript items
-        if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript') { // <-- ADDED imported_transcript
+        if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript' || item.file_type === 'media') { 
             console.log(`[NotesLeftPanel] Clicked ${item.file_type}: ${item.name}. Requesting view change.`);
-            let viewType = item.file_type; // Use the file_type directly
+            let viewType = item.file_type; 
             if (item.file_type === 'doc') viewType = 'documents';
             else if (item.file_type === 'table') viewType = 'tables';
             else if (item.file_type === 'image') viewType = 'images';
-            // For 'imported_transcript', viewType will be 'imported_transcript'
+            else if (item.file_type === 'media') viewType = 'media_note'; 
 
             dispatch('requestviewchange', { viewType, itemPath: item.path });
         }
     }
 
-    // Search box state
     let showSearchBox = false;
     let searchQuery = '';
 
     function handleSearchClick(event) {
       event.stopPropagation();
       showSearchBox = true;
-      // Focus after shown
       setTimeout(() => document.getElementById('notes-search-input')?.focus(), 0);
     }
 
     function handleSearchClear(event) {
       event.stopPropagation();
       searchQuery = '';
-      // Re-focus the input after clearing
       setTimeout(() => document.getElementById('notes-search-input')?.focus(), 0);
     }
 
-    // Close search when clicking outside, unless there's input
     onMount(() => {
       const listener = (e) => {
         const input = document.getElementById('notes-search-input');
@@ -386,7 +399,7 @@
       return () => document.removeEventListener('click', listener);
     });
 
-    $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath; // Combine for highlighting
+    $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
@@ -484,7 +497,8 @@
 	{#if contextMenuVisible && contextMenuItem}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
-                <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open in Editor</button>
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe (Main)</button>
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
