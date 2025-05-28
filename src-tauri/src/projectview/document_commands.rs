@@ -63,12 +63,22 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
         .ok_or_else(|| CommandError::from("Could not get project base dir from XML path"))?;
 
     if let Some(parent) = target_path_buf.parent() {
-         if parent != project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR) {
-             return Err(CommandError::from(format!("Document save path is not directly inside the '{}' directory: {}", DOCS_DIR, target_path_buf.display())));
-         }
-        fs::create_dir_all(parent).map_err(|e| CommandError::from(format!("Failed create parent dir for doc: {}", e)))?;
+        let docs_root = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
+        if !parent.starts_with(&docs_root) {
+            return Err(CommandError::from(format!(
+                "Document save path must be inside '{}' or its subfolders, got: {}",
+                docs_root.display(),
+                target_path_buf.display()
+            )));
+        }
+        // Ensure the document’s folder exists (allows nested per-document folders)
+        fs::create_dir_all(parent).map_err(|e| CommandError::from(format!(
+            "Failed to create parent dir for doc: {}", e
+        )))?;
     } else {
-        return Err(CommandError::from(format!("Invalid target document path (no parent directory): {}", target_path)));
+        return Err(CommandError::from(format!(
+            "Invalid target document path (no parent directory): {}", target_path
+        )));
     }
 
     match serde_json::from_str::<serde_json::Value>(&json_content) {
@@ -191,6 +201,21 @@ pub async fn delete_temporary_file(path: String) -> Result<(), CommandError> {
     fs::remove_file(&file_path)
         .map_err(|e| CommandError::from(format!("Failed to delete temporary file {}: {}", path, e)))?;
     info!("[delete_temporary_file] Successfully deleted: {}", path);
+    // Remove the parent '.tmp' folder if it is now empty
+    if let Some(parent_dir) = file_path.parent() {
+        if parent_dir.file_name().map_or(false, |n| n == TEMP_SUBDIR_DOCS) {
+            if let Ok(mut entries) = fs::read_dir(&parent_dir) {
+                if entries.next().is_none() {
+                    // Directory is empty, remove it
+                    if let Err(e) = fs::remove_dir(&parent_dir) {
+                        warn!("[delete_temporary_file] Failed to remove tmp directory {}: {}", parent_dir.display(), e);
+                    } else {
+                        info!("[delete_temporary_file] Removed empty tmp directory: {}", parent_dir.display());
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }
 

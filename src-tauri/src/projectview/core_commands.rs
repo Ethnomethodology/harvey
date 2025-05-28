@@ -544,74 +544,33 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete] XML updated for imported transcript and its metadata.");
             }
         },
-        "doc" => { // Handles .json, .pdf, .md, .txt
-            info!("[Backend Delete] Deleting document file: {}", item_path_buf.display());
-            fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete file {}: {}", item_path_buf.display(), e)))?;
-
-            // Delete app metadata (.filename.metadata.json)
-            match get_document_metadata_path_for_doc(&item_path_buf) {
-                Ok(metadata_path) => {
-                    if metadata_path.exists() {
-                        info!("[Backend Delete] Deleting document app metadata file: {}", metadata_path.display());
-                        if let Err(e) = fs::remove_file(&metadata_path) {
-                            warn!("[Backend Delete] Failed to delete document app metadata file {}: {}", metadata_path.display(), e);
-                        }
-                    }
-                }
-                Err(e) => warn!("[Backend Delete] Could not determine app metadata path for doc {}: {:?}", item_path, e),
-            }
-            
-            // If it's a PDF, also delete its PDF annotation file (.filename.annotations.json)
-            if item_path_buf.extension().map_or(false, |ext| ext == "pdf") {
-                match get_pdf_annotation_file_path(&item_path_buf) {
-                    Ok(pdf_annot_path) => {
-                        if pdf_annot_path.exists() {
-                            info!("[Backend Delete] Deleting PDF annotation file: {}", pdf_annot_path.display());
-                            if let Err(e) = fs::remove_file(&pdf_annot_path) {
-                                warn!("[Backend Delete] Failed to delete PDF annotation file {}: {}", pdf_annot_path.display(), e);
-                            }
-                        }
-                    }
-                    Err(e) => warn!("[Backend Delete] Could not determine PDF annotation path for PDF {}: {:?}", item_path, e),
-                }
-            }
-
-            info!("[Backend Delete] Updating XML to remove document link with path '{}'", item_relative_path);
-            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut xml_changed = false;
-
-            // Remove main document entry
-            let initial_doc_len = project_data.document_files.files.len();
-            project_data.document_files.files.retain(|d| d.relative_path != item_relative_path);
-            if project_data.document_files.files.len() < initial_doc_len {
-                info!("[Backend Delete] Document entry removed from XML.");
-                xml_changed = true;
+        "doc" => {
+            // Delete entire document folder (file, metadata, annotations, .tmp)
+            let stem = item_path_buf.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get document stem: {}", item_path_buf.display())))?;
+            let docs_root = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
+            let doc_folder = docs_root.join(stem);
+            if doc_folder.exists() && doc_folder.is_dir() {
+                info!("[Backend Delete] Deleting document folder: {}", doc_folder.display());
+                fs::remove_dir_all(&doc_folder)
+                    .map_err(|e| CommandError::from(format!("Failed to delete document folder {}: {}", doc_folder.display(), e)))?;
             } else {
-                warn!("[Backend Delete] Deleted document file, but no matching entry found in XML for path '{}'.", item_relative_path);
+                info!("[Backend Delete] Document folder not found, deleting single file: {}", item_path_buf.display());
+                fs::remove_file(&item_path_buf)
+                    .map_err(|e| CommandError::from(format!("Failed to delete document file {}: {}", item_path_buf.display(), e)))?;
             }
-
-            // Remove app metadata entry
-            let initial_meta_len = project_data.document_metadata_files.files.len();
-            project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path);
-            if project_data.document_metadata_files.files.len() < initial_meta_len {
-                info!("[Backend Delete] Document app metadata entry removed from XML for original doc '{}'.", item_relative_path);
-                xml_changed = true;
-            }
-
-            // Remove PDF annotation entry if it was a PDF
-            if item_path_buf.extension().map_or(false, |ext| ext == "pdf") {
-                let initial_pdf_annot_len = project_data.pdf_annotation_files.files.len();
-                project_data.pdf_annotation_files.files.retain(|pa| pa.original_document_relative_path != item_relative_path);
-                if project_data.pdf_annotation_files.files.len() < initial_pdf_annot_len {
-                    info!("[Backend Delete] PDF annotation entry removed from XML for original PDF '{}'.", item_relative_path);
-                    xml_changed = true;
-                }
-            }
-
-            if xml_changed {
-                save_project_xml(&xml_path_buf, &project_data)?;
-                info!("[Backend Delete] XML updated for document and its associated files.");
-            }
+            // Prune XML entries for this document
+            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            // Match XML entries which include the full "harvey_files/Documents/<stem>" path
+            let prefix = format!("{}/{}/{}", HARVEY_FILES_DIR, DOCS_DIR, stem);
+            project_data.document_files.files.retain(|d| !d.relative_path.starts_with(&prefix));
+            project_data.document_metadata_files.files
+                .retain(|m| !m.original_document_relative_path.starts_with(&prefix));
+            project_data.pdf_annotation_files.files
+                .retain(|p| !p.original_document_relative_path.starts_with(&prefix));
+            save_project_xml(&xml_path_buf, &project_data)?;
+            info!("[Backend Delete] XML entries removed for document '{}'", stem);
         },
         "table" => {
             info!("[Backend Delete] Deleting table file: {}", item_path_buf.display());

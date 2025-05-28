@@ -91,6 +91,8 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
     };
 
     let file_type = match (asset_type_dir, sub_folder, extension.as_str()) {
+        // Treat files inside Documents/<folder>/ as documents
+        (Some(DOCS_DIR), Some(_), ext) if ["json", "pdf", "md", "txt"].contains(&ext) => "doc".to_string(),
         (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac", "mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
         (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(), 
 

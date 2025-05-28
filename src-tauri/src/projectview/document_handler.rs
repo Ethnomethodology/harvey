@@ -24,7 +24,7 @@ use serde_json;
 use chrono::Utc;
 
 fn get_unique_temp_path_for_conversion(base_dir: &Path, prefix: &str, extension: &str) -> Result<PathBuf, CommandError> {
-    let temp_dir = base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR).join(TEMP_SUBDIR_DOCS);
+    let temp_dir = base_dir.join(TEMP_SUBDIR_DOCS);
     fs::create_dir_all(&temp_dir)?;
 
     let unique_id = Uuid::new_v4().to_string();
@@ -59,6 +59,11 @@ pub async fn import_document(
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from("Could not get filename stem"))?;
     
+    // Create per-document folder under Documents
+    let docs_base = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
+    let doc_folder = docs_base.join(source_filename_stem);
+    fs::create_dir_all(&doc_folder)?;
+    
     let source_filename_with_ext = source_path.file_name()
         .and_then(|s| s.to_str())
         .unwrap_or_default()
@@ -76,13 +81,10 @@ pub async fn import_document(
         "pdf" => {
             info!("[import_document] Handling PDF direct import for .pdf file");
 
-            let final_pdf_path_str = get_unique_document_path(
-                project_base_dir.to_string_lossy().to_string(),
-                source_filename_stem.to_string(),
-                "pdf".to_string(),
-            )?;
-            let final_pdf_path = PathBuf::from(&final_pdf_path_str);
-            let final_pdf_name = final_pdf_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            // Copy PDF into its own document folder
+            let final_pdf_path = doc_folder.join(&source_filename_with_ext);
+            let final_pdf_name = source_filename_with_ext.clone();
+            let final_pdf_path_str = final_pdf_path.to_string_lossy().to_string();
 
             info!("[import_document] Copying PDF from '{}' to '{}'", source_path.display(), final_pdf_path.display());
             fs::copy(&source_path, &final_pdf_path).map_err(|e| CommandError::from(format!("Failed to copy PDF: {}", e)))?;
@@ -176,7 +178,7 @@ pub async fn import_document(
         "txt" | "md" | "rtf" | "docx" => {
             let conversion_type = if source_extension == "docx" { "docx" } else { "text/markdown/rtf" };
             info!("[import_document] Handling Pandoc conversion for .{} file ({}) -> HTML", source_extension, conversion_type);
-            let temp_html_path: PathBuf = get_unique_temp_path_for_conversion(project_base_dir, source_filename_stem, "html")?;
+            let temp_html_path: PathBuf = get_unique_temp_path_for_conversion(&doc_folder, source_filename_stem, "html")?;
 
             let source_format_arg = match source_extension.as_str() {
                 "txt" => "plain",
@@ -204,7 +206,6 @@ pub async fn import_document(
                 media_extract_path_option = Some(media_extract_path);
             }
 
-
             info!("[import_document] Running Pandoc sidecar: pandoc {}", pandoc_args.join(" "));
 
             let (mut rx, _child) = app_handle.shell().sidecar("pandoc")?.args(&pandoc_args).spawn()
@@ -230,7 +231,6 @@ pub async fn import_document(
                 }
             }
 
-
             if exit_code != Some(0) {
                  error!("[import_document] Pandoc {} failed. Code:{:?}\nStderr:{}", conversion_type, exit_code, tool_stderr);
                  let _ = fs::remove_file(&temp_html_path);
@@ -243,7 +243,6 @@ pub async fn import_document(
 
             info!("[import_document] Pandoc {} successful to temp HTML: {}", conversion_type, temp_html_path.display());
             final_or_temp_path = format!("{}|original_filename:{}", temp_html_path.to_string_lossy(), source_filename_with_ext);
-
         }
 
         _ => {
