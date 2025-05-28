@@ -21,30 +21,21 @@ use quick_xml;
 /// This is suitable for the content of a single cell, using ExtendedTextNode.
 pub fn create_lexical_paragraph_json_value(text: &str) -> JsonValue {
     json!({
-        "root": {
-            "children": [{
-                "type": "paragraph",
-                "version": 1,
-                "children": [{
-                    "detail": 0,
-                    "format": 0,
-                    "mode": "normal",
-                    "style": "", 
-                    "text": text,
-                    "type": "extended-text", 
-                    "version": 1,
-                    "highlightId": null 
-                }],
-                "direction": "ltr", 
-                "format": "",       
-                "indent": 0
-            }],
-            "direction": "ltr", 
-            "format": "",       
-            "indent": 0,
-            "type": "root",
-            "version": 1
-        }
+        "type": "paragraph",
+        "version": 1,
+        "children": [{
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": text,
+            "type": "extended-text",
+            "version": 1,
+            "highlightId": null
+        }],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0
     })
 }
 
@@ -80,10 +71,10 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
         header_cells_json.push(json!({
             "type": "tablecell",
             "version": 1,
-            "headerState": 2, 
-            "width": col_widths_json.get(idx).cloned().unwrap_or(JsonValue::Null), 
-            "children": [ 
-                create_lexical_paragraph_json_value(header_text).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+            "headerState": 2,
+            "width": col_widths_json.get(idx).cloned().unwrap_or(JsonValue::Null),
+            "children": [
+                create_lexical_paragraph_json_value(header_text)
             ]
         }));
     }
@@ -99,10 +90,10 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
         data_cells_json.push(json!({
             "type": "tablecell",
             "version": 1,
-            "headerState": 0, 
-             "width": col_widths_json.get(0).cloned().unwrap_or(JsonValue::Null),
+            "headerState": 0,
+            "width": col_widths_json.get(0).cloned().unwrap_or(JsonValue::Null),
             "children": [
-                create_lexical_paragraph_json_value(&format!("{}", index + 1)).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+                create_lexical_paragraph_json_value(&format!("{}", index + 1))
             ]
         }));
 
@@ -115,9 +106,9 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "type": "tablecell",
             "version": 1,
             "headerState": 0,
-             "width": col_widths_json.get(1).cloned().unwrap_or(JsonValue::Null),
+            "width": col_widths_json.get(1).cloned().unwrap_or(JsonValue::Null),
             "children": [
-                create_lexical_paragraph_json_value(&timestamp_str).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+                create_lexical_paragraph_json_value(&timestamp_str)
             ]
         }));
 
@@ -125,9 +116,9 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "type": "tablecell",
             "version": 1,
             "headerState": 0,
-             "width": col_widths_json.get(2).cloned().unwrap_or(JsonValue::Null),
+            "width": col_widths_json.get(2).cloned().unwrap_or(JsonValue::Null),
             "children": [
-                create_lexical_paragraph_json_value(&segment.speaker).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+                create_lexical_paragraph_json_value(&segment.speaker)
             ]
         }));
 
@@ -135,9 +126,9 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
             "type": "tablecell",
             "version": 1,
             "headerState": 0,
-             "width": col_widths_json.get(3).cloned().unwrap_or(JsonValue::Null),
+            "width": col_widths_json.get(3).cloned().unwrap_or(JsonValue::Null),
             "children": [
-                create_lexical_paragraph_json_value(&segment.text).get("root").cloned().unwrap_or_else(|| json!({"children": [], "type": "root", "version": 1}))
+                create_lexical_paragraph_json_value(&segment.text)
             ]
         }));
 
@@ -172,7 +163,6 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
 }
 
 
-// --- trim_media Command ---
 #[tauri::command]
 pub async fn trim_media( app_handle: AppHandle, original_media_path: String, start_time: f64, end_time: f64) -> Result<Vec<FileEntry>, CommandError> {
     info!("[Trim Backend] Start: Path='{}', Start={:.3}, End={:.3}", original_media_path, start_time, end_time);
@@ -329,7 +319,7 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     super::core_commands::load_project_data(project_xml_path_str).await.map(|data| data.files)
 }
 
-// --- save_speaker_config Command ---
+
 #[tauri::command]
 pub async fn save_speaker_config( project_xml_path: String, media_identifier: String, count: usize, names: Vec<String>) -> Result<(), CommandError> {
     info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}", project_xml_path, media_identifier, count, names);
@@ -378,8 +368,7 @@ pub async fn save_speaker_config( project_xml_path: String, media_identifier: St
     Ok(())
 }
 
-// --- load_transcript_json Command ---
-/// Loads the full Lexical Table JSON string from a transcript file.
+
 #[tauri::command]
 pub async fn load_transcript_json(transcript_path: String) -> Result<String, CommandError> {
     info!("[Backend Load Full Transcript JSON] Path: {}", transcript_path);
@@ -408,9 +397,7 @@ pub async fn load_transcript_json(transcript_path: String) -> Result<String, Com
 }
 
 
-// --- save_transcript_json Command (MODIFIED) ---
-/// Saves the provided full Lexical Table JSON string to the transcript file
-/// and updates the project XML.
+
 #[tauri::command]
 pub async fn save_transcript_json(
     project_xml_path: String,

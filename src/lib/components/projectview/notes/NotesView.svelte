@@ -6,23 +6,25 @@
     import DocumentView from './documents/DocumentView.svelte';
     import TableView from './tables/TableView.svelte';
     import ImageView from './images/ImageView.svelte';
-    import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte'; 
-    import MediaView from './media/MediaView.svelte'; // Import MediaView
-    import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
-    import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js'; 
+    import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte';
+    import MediaView from './media/MediaView.svelte';
+    import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
+    import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
 
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
-        if (event.type === 'requestviewchange') {
-            // Event is already handled directly by NotesView's on:requestviewchange
-        } else {
-		    dispatch(event.type, event.detail);
+        // Check if the event is one of the new ones to be forwarded, or a generic one.
+        if (event.type === 'requestviewchange' || event.type === 'requestmediaselection' ||
+            event.type === 'requestTranscriptionTabWithMedia' || event.type === 'requestTrimInTranscriptionTab') {
+            // Specific events handled by ProjectView or this component
+             console.log(`[NotesView] Forwarding event: ${event.type} with detail:`, event.detail);
         }
+		dispatch(event.type, event.detail);
 	}
 
-    let activeViewType = 'placeholder'; 
+    let activeViewType = 'placeholder';
     let activeItemPath = null;
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
@@ -34,22 +36,20 @@
         let pathFromStore = null;
         let typeFromStore = 'placeholder';
 
-        // Determine the single active item and its type from the store
-        // Prioritize media_note if selectedMediaNotePath is set
         if (value.selectedMediaNotePath) {
             pathFromStore = value.selectedMediaNotePath;
-            typeFromStore = 'media_note'; 
+            typeFromStore = 'media_note';
         } else if (value.currentImportedTranscriptPath) {
             pathFromStore = value.currentImportedTranscriptPath;
             typeFromStore = 'imported_transcript';
-        } else if (value.selectedDocumentPath) { 
+        } else if (value.selectedDocumentPath) {
             pathFromStore = value.selectedDocumentPath;
             const lowerPath = pathFromStore.toLowerCase();
             const extension = lowerPath.split('.').pop();
-            
-            if (lowerPath.endsWith('.pdf') || 
-                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore)) && (!value.selectedMediaNotePath) ) || 
-                 lowerPath.endsWith('.txt') || 
+
+            if (lowerPath.endsWith('.pdf') ||
+                (lowerPath.endsWith('.json') && (!value.importedTranscriptFiles || value.importedTranscriptFiles.every(f => `${value.baseDirectory}/${f.relativePath}` !== pathFromStore)) && (!value.selectedMediaNotePath) ) ||
+                 lowerPath.endsWith('.txt') ||
                  lowerPath.endsWith('.md')) {
                 typeFromStore = 'documents';
             } else if (lowerPath.endsWith('.csv') || lowerPath.endsWith('.xlsx')) {
@@ -58,10 +58,10 @@
                 typeFromStore = 'images';
             } else {
                 console.warn(`[NotesView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
-                typeFromStore = 'placeholder'; 
+                typeFromStore = 'placeholder';
             }
         }
-        
+
         if (activeItemPath !== pathFromStore || activeViewType !== typeFromStore) {
             activeItemPath = pathFromStore;
             activeViewType = typeFromStore;
@@ -74,12 +74,12 @@
         const typeForView = eventDetailFromDispatch?.viewType;
 
         console.log(`[NotesView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
-        
+
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
             console.error(`[NotesView] ABORTING: Invalid path or type from event. Path: '${pathForView}', Type: '${typeForView}'.`);
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
-            prepareMediaNoteView(null); // Also clear media note view
+            prepareMediaNoteView(null);
             return;
         }
 
@@ -88,23 +88,23 @@
             console.log('[NotesView] View change cancelled by unsaved changes check.');
             return;
         }
-        
+
         console.log(`[NotesView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
             console.log(`[NotesView] Calling prepareDocumentView for Path: ${pathForView}, Type: ${typeForView}`);
-            prepareDocumentView(pathForView, typeForView); 
+            prepareDocumentView(pathForView, typeForView);
         } else if (typeForView === 'imported_transcript') {
             console.log(`[NotesView] Calling prepareImportedTranscriptView for Path: ${pathForView}`);
-            prepareImportedTranscriptView(pathForView); 
-        } else if (typeForView === 'media_note') { // New type for media files in Fieldnotes
+            prepareImportedTranscriptView(pathForView);
+        } else if (typeForView === 'media_note') {
             console.log(`[NotesView] Calling prepareMediaNoteView for Path: ${pathForView}`);
             prepareMediaNoteView(pathForView);
         } else {
             console.warn(`[NotesView] Unknown typeForView: '${typeForView}'. Clearing all specific views.`);
-            prepareDocumentView(null, 'placeholder'); 
+            prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
-            prepareMediaNoteView(null); // Clear media note view too
+            prepareMediaNoteView(null);
         }
         console.log(`[NotesView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
     }
@@ -130,7 +130,7 @@
 		</div>
 
         <div class="w-[85%] h-full">
-            {#key activeItemPath + activeViewType} 
+            {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Select an item from the Fieldnotes panel to view or edit.</span>
@@ -142,15 +142,18 @@
                  {:else if activeViewType === 'images'}
                      <ImageView itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
-                     <ImportedTranscriptView itemPath={activeItemPath} /> 
+                     <ImportedTranscriptView itemPath={activeItemPath} />
                 {:else if activeViewType === 'media_note'}
-                     <MediaView itemPath={activeItemPath} />  
+                     <MediaView
+                        itemPath={activeItemPath}
+                        on:requestTranscriptionTabWithMedia={forwardEvent}
+                        on:requestTrimInTranscriptionTab={forwardEvent}
+                     />
                  {:else if activeViewType === 'audio'}
-                     <!-- This 'audio' type might be from a different context (e.g. main transcriptions), handle as placeholder for now if it appears -->
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Audio View Placeholder (NotesView)</span></div>
                  {:else if activeViewType === 'video'}
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Video View Placeholder (NotesView)</span></div>
-                 {:else if activeViewType === 'transcripts'} 
+                 {:else if activeViewType === 'transcripts'}
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Media Transcript View Placeholder (NotesView - this shouldn't normally be active here)</span></div>
                 {:else}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">

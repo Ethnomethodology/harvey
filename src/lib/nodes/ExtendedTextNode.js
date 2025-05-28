@@ -197,15 +197,13 @@ export class ExtendedTextNode extends TextNode {
   }
 
   static importJSON(serializedNode) {
-    // Create a new ExtendedTextNode using the text from the serializedNode
-    const node = $createExtendedTextNode(serializedNode.text);
-    // Apply properties from TextNode's serialization
+    // Preserve the original key to allow Lexical to reconcile nodes correctly
+    const node = new ExtendedTextNode(serializedNode.text, serializedNode.key);
     node.setFormat(serializedNode.format);
     node.setDetail(serializedNode.detail);
     node.setMode(serializedNode.mode);
-    // Apply properties specific to ExtendedTextNode
-    node.setStyle(serializedNode.style || ''); // Ensure style is always a string
-    node.setHighlightId(serializedNode.highlightId || null); // Ensure highlightId is null if undefined
+    node.setStyle(serializedNode.style || '');
+    node.setHighlightId(serializedNode.highlightId || null);
     return node;
   }
 
@@ -320,8 +318,8 @@ export class ExtendedTextNode extends TextNode {
 }
 
 // ----- helpers ---------------------------------------------------------------
-export function $createExtendedTextNode(text = '') {
-  return new ExtendedTextNode(text);
+export function $createExtendedTextNode(text = '', key) {
+  return new ExtendedTextNode(text, key);
 }
 export function $isExtendedTextNode(node) {
   return node instanceof ExtendedTextNode;

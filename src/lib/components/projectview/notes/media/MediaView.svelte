@@ -3,14 +3,14 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import LeftInfoPanel from '../shared_panels/LeftInfoPanel.svelte';
     import RightInfoPanel from '../shared_panels/RightInfoPanel.svelte';
-    import MediaEditorPanel from './MediaEditorPanel.svelte'; 
+    import MediaEditorPanel from './MediaEditorPanel.svelte';
 
-    export let itemPath = null; // Receives the full media file path from NotesView
+    export let itemPath = null;
 
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
-        console.log(`[MediaView] Forwarding event: ${event.type}`);
+        console.log(`[MediaView] Forwarding event: ${event.type} with detail:`, event.detail);
 		dispatch(event.type, event.detail);
 	}
 
@@ -18,7 +18,7 @@
 		console.log('[MediaView] Component container mounted. Media path:', itemPath);
 	});
 
-    $: { 
+    $: {
         console.log(`[MediaView] Path is now ${itemPath}`);
     }
 
@@ -32,7 +32,11 @@
     <div class="w-[58.824%] h-full">
         {#key itemPath}
             {#if itemPath}
-                <MediaEditorPanel mediaPath={itemPath} />
+                <MediaEditorPanel
+                    mediaPath={itemPath}
+                    on:requestTranscriptionTabWithMedia={forwardEvent}
+                    on:requestTrimInTranscriptionTab={forwardEvent}
+                />
             {:else}
              <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
                  <span>No media file path provided to MediaView.</span>

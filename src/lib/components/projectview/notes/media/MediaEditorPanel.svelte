@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/media/MediaEditorPanel.svelte -->
 <script>
-    import { onMount, onDestroy, tick } from 'svelte';
+    import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
     import {
         project,
@@ -14,15 +14,17 @@
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
-    import { basename, dirname, join, sep } from '@tauri-apps/api/path';
+    import { basename, dirname, join } from '@tauri-apps/api/path';
 
-    import MediaPlayer from '../../transcriptions/MediaPlayer.svelte';
+    import MediaPlayer from '../../MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
-    export let mediaPath = null; 
+    export let mediaPath = null;
+
+    const dispatch = createEventDispatcher();
 
     let lexicalEditorRef;
-    let mediaPlayerInNotesRef; 
+    let mediaPlayerInNotesRef;
 
     let localEditorJsonState = '';
     let associatedTranscriptPath = null;
@@ -31,8 +33,10 @@
     let currentTranscriptJson = null;
     let initialTranscriptJson = null;
     let isTranscriptDirty = false;
-    let isTranscriptLoading = true; 
-    let transcriptLoadError = null;
+    let isTranscriptLoading = true;
+    let transcriptLoadError = null; // Can be "INFO:FILE_NOT_FOUND" or actual error string
+    
+    $: isFileNotFoundInfo = transcriptLoadError === "INFO:FILE_NOT_FOUND";
 
     const defaultEmptyJson = JSON.stringify({
         root: {
@@ -46,7 +50,6 @@
             if (currentTranscriptJson !== p.currentMediaNoteTranscriptJson) {
                 currentTranscriptJson = p.currentMediaNoteTranscriptJson;
                 if (lexicalEditorRef && localEditorJsonState !== currentTranscriptJson) {
-                    console.log(`[MediaEditorPanel Store Sub - ${mediaPath || 'NO_PATH'}] Updating editorRef state from store.`);
                     lexicalEditorRef.resetEditorState(currentTranscriptJson || defaultEmptyJson);
                     localEditorJsonState = currentTranscriptJson || defaultEmptyJson;
                 }
@@ -63,9 +66,6 @@
             if (transcriptLoadError !== p.mediaNoteTranscriptError) {
                 transcriptLoadError = p.mediaNoteTranscriptError;
             }
-        } else if (mediaPath && p.selectedMediaNotePath !== mediaPath && (currentTranscriptJson !== null || transcriptLoadError !== null || isTranscriptLoading )) {
-            // This panel is no longer the active one, or has become active but path changed.
-            // We don't clear its data here; the reactive block below handles loading for the new mediaPath.
         }
     });
 
@@ -74,17 +74,17 @@
         try {
             const mediaFilename = await basename(currentMediaPath);
             const mediaStem = mediaFilename.includes('.') ? mediaFilename.substring(0, mediaFilename.lastIndexOf('.')) : mediaFilename;
-            
-            const mediaDir = await dirname(currentMediaPath); 
-            const mediaStemDir = await dirname(mediaDir);   
-            
-            if (!mediaStemDir) {
-                console.error(`[MediaEditorPanel] Could not derive mediaStemDir from ${mediaDir}`);
+            transcriptName = mediaStem;
+
+            const mediaDir = await dirname(currentMediaPath);
+            const mediaParentDir = await dirname(mediaDir);
+
+            if (!mediaParentDir) {
+                console.error(`[MediaEditorPanel] Could not derive mediaParentDir from ${mediaDir}`);
                 return null;
             }
-            const transcriptsDir = await join(mediaStemDir, 'transcripts'); // Assuming notes are stored in 'transcripts' subfolder
-            transcriptName = `${mediaStem}.json`;
-            return await join(transcriptsDir, transcriptName);
+            const notesDir = await join(mediaParentDir, 'transcripts');
+            return await join(notesDir, `${mediaStem}.json`);
         } catch (e) {
             console.error(`[MediaEditorPanel] Error deriving transcript path for ${currentMediaPath}:`, e);
             return null;
@@ -93,50 +93,48 @@
 
     async function loadTranscript(path) {
         if (!path) {
-            setMediaNoteTranscriptLoadFailed(mediaPath, "Associated transcript/note path could not be determined.");
+            setMediaNoteTranscriptLoadFailed(mediaPath, "Associated transcript/note path could not be determined.", false);
             return;
         }
-        
+
         project.update(p => {
             if (p.selectedMediaNotePath === mediaPath) {
                 return { ...p, isMediaNoteTranscriptLoading: true, mediaNoteTranscriptError: null };
             }
             return p;
         });
-        localEditorJsonState = defaultEmptyJson; 
+        localEditorJsonState = defaultEmptyJson;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
 
         try {
-            console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Loading transcript/note from derived path: ${path}`);
+            console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Loading notes from derived path: ${path}`);
             const jsonContent = await invoke('load_note_json', { filePath: path });
 
             if (!jsonContent || jsonContent.trim() === '') {
-                console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Transcript/note file is empty or not found at ${path}.`);
-                setLoadedMediaNoteTranscriptData(mediaPath, defaultEmptyJson);
-                transcriptLoadError = `No notes found. An empty file will be created on save.`;
+                console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Notes file is empty or not found at ${path}. Setting as INFO:FILE_NOT_FOUND.`);
+                setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true); // isFileNotFound = true
             } else {
                 let parsed;
                 try {
                     parsed = JSON.parse(jsonContent);
                     if (parsed && parsed.root && parsed.root.children) {
                         setLoadedMediaNoteTranscriptData(mediaPath, jsonContent);
-                        transcriptLoadError = null; 
                     } else {
                         throw new Error("Invalid Lexical JSON structure.");
                     }
                 } catch (e) {
                     console.warn(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Content at ${path} is not valid Lexical JSON. Error: ${e.message}.`);
-                    setMediaNoteTranscriptLoadFailed(mediaPath, "Note file contains invalid data.");
+                    setMediaNoteTranscriptLoadFailed(mediaPath, "Note file contains invalid data.", false);
                 }
             }
         } catch (error) {
-            console.error(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Error loading transcript/note from ${path}:`, error);
-            if (error.message && error.message.toLowerCase().includes('file not found')) {
-                 console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Transcript/note file not found at ${path}.`);
-                 setLoadedMediaNoteTranscriptData(mediaPath, defaultEmptyJson); 
-                 transcriptLoadError = `No notes found. An empty file will be created on save.`;
+            console.error(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Error loading notes from ${path}:`, error);
+            const errorMessage = error.message || String(error);
+            if (errorMessage.toLowerCase().includes('file not found') || errorMessage.toLowerCase().includes('json file not found')) {
+                 console.log(`[MediaEditorPanel - ${mediaPath || 'NO_PATH'}] Notes file not found at ${path}. Setting as INFO:FILE_NOT_FOUND.`);
+                 setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load attempt.", true); // isFileNotFound = true
             } else {
-                setMediaNoteTranscriptLoadFailed(mediaPath, error.message || "Failed to load notes.");
+                setMediaNoteTranscriptLoadFailed(mediaPath, errorMessage, false);
             }
         }
     }
@@ -145,16 +143,14 @@
     $: if (mediaPath && mediaPath !== previousMediaPath) {
         previousMediaPath = mediaPath;
         console.log(`[MediaEditorPanel] mediaPath changed to: ${mediaPath}`);
-        transcriptLoadError = null; 
-        isTranscriptLoading = true;
 
         deriveTranscriptPath(mediaPath).then(path => {
             associatedTranscriptPath = path;
             if (path) {
                 loadTranscript(path);
             } else {
-                console.error(`[MediaEditorPanel - ${mediaPath}] Failed to derive transcript/note path.`);
-                setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.");
+                console.error(`[MediaEditorPanel - ${mediaPath}] Failed to derive notes path.`);
+                setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false);
             }
         });
     } else if (!mediaPath && previousMediaPath) {
@@ -168,9 +164,9 @@
         transcriptLoadError = null;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         localEditorJsonState = defaultEmptyJson;
-        
+
         if (get(project).selectedMediaNotePath === previousMediaPath) {
-            project.update(p => ({
+             project.update(p => ({
                 ...p,
                 selectedMediaNotePath: null,
                 currentMediaNoteTranscriptJson: null,
@@ -183,11 +179,16 @@
         }
     }
 
+
     function handleEditorChange(event) {
         const newJson = event.detail.jsonString;
         if (localEditorJsonState !== newJson) {
             localEditorJsonState = newJson;
             if (get(project).selectedMediaNotePath === mediaPath) {
+                // If it was "file not found", typing makes it dirty against an empty initial state
+                if (isFileNotFoundInfo && initialTranscriptJson === defaultEmptyJson) {
+                    project.update(p => ({...p, initialMediaNoteTranscriptJson: defaultEmptyJson, mediaNoteTranscriptError: null}));
+                }
                 setMediaNoteTranscriptEditorContent(mediaPath, newJson);
             }
         }
@@ -200,12 +201,13 @@
             return;
         }
         if (!associatedTranscriptPath) {
-            console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated transcript/note path is not determined.`);
+            console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated notes path is not determined.`);
             await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" });
             return;
         }
-        if (isTranscriptLoading || (transcriptLoadError && !transcriptLoadError.startsWith("No notes found"))) {
-            console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state.`);
+
+        if (isTranscriptLoading || (transcriptLoadError && !isFileNotFoundInfo)) {
+            console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state (and not file not found info).`);
             await message(`Cannot save: ${isTranscriptLoading ? 'Note is still loading.' : `Note failed to load (${transcriptLoadError})`}`, { title: "Save Error", type: "error" });
             return;
         }
@@ -224,7 +226,6 @@
             if (get(project).selectedMediaNotePath === mediaPath) {
                 markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave);
             }
-            transcriptLoadError = null; 
             console.log(`[MediaEditorPanel - ${mediaPath}] Notes save successful to ${associatedTranscriptPath}.`);
             project.update(p => ({ ...p, statusMessage: `Notes for ${transcriptName} saved.`}));
 
@@ -243,7 +244,7 @@
             const userConfirmed = await confirm(`Discard unsaved changes to the notes for "${mediaPath.split(/[\\/]/).pop()}"?`, { type: 'warning', title: 'Discard Changes' });
             if (userConfirmed) {
                 if (get(project).selectedMediaNotePath === mediaPath) {
-                    markMediaNoteTranscriptChangesDiscarded(mediaPath); 
+                    markMediaNoteTranscriptChangesDiscarded(mediaPath);
                 }
                 console.log(`[MediaEditorPanel - ${mediaPath}] Changes discarded.`);
             }
@@ -251,18 +252,20 @@
             console.log(`[MediaEditorPanel - ${mediaPath}] Discard skipped: No changes detected in store for this item.`);
         }
     }
-    
+
 
     onMount(() => {
         console.log(`[MediaEditorPanel] Mounted with mediaPath: ${mediaPath}`);
-        setActiveMediaNoteEditorRef(mediaPath, self); 
-        
+        setActiveMediaNoteEditorRef(mediaPath, self);
+
         if (mediaPath && !currentTranscriptJson && !isTranscriptLoading && !transcriptLoadError) {
             console.log(`[MediaEditorPanel onMount - ${mediaPath}] Path exists, no data, not loading -> Triggering load.`);
             deriveTranscriptPath(mediaPath).then(path => {
                 associatedTranscriptPath = path;
                 if (path) loadTranscript(path);
-                else setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.");
+                else {
+                    setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false);
+                }
             });
         } else if (mediaPath && currentTranscriptJson) {
             console.log(`[MediaEditorPanel onMount - ${mediaPath}] Path and data exist. Ensuring editor state.`);
@@ -295,63 +298,75 @@
             localEditorJsonState = jsonString || defaultEmptyJson;
         }
     }
-     export function getItemPath() { return mediaPath; } 
+    export function getItemPath() { return mediaPath; }
 
     const self = { save, discard, resetEditorState, getItemPath };
+
+    function handleRequestNotesTranscribe(event) {
+        console.log('[MediaEditorPanel] Requesting Transcribe Tab with media:', event.detail.mediaPath);
+        dispatch('requestTranscriptionTabWithMedia', { mediaPath: event.detail.mediaPath });
+    }
+
+    function handleRequestNotesTrim(event) {
+        console.log('[MediaEditorPanel] Requesting Trim in Transcribe Tab for media:', event.detail.mediaPath);
+        dispatch('requestTrimInTranscriptionTab', { mediaPath: event.detail.mediaPath });
+    }
 
 </script>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
     <div class="flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
-        <MediaPlayer 
-            bind:this={mediaPlayerInNotesRef}
-            mediaPath={mediaPath} 
-            isTrimming={false} 
-            trimStartTime={0}
-            trimEndTime={0}
-            isEditingSegment={false} 
-            editSegmentStartTime={0}
-            editSegmentEndTime={0}
-            context="notesView" 
-        />
+        {#if mediaPath}
+            <MediaPlayer
+                bind:this={mediaPlayerInNotesRef}
+                explicitMediaPath={mediaPath}
+                showLoopPauseButton={false}
+                showNotesTranscribeButton={true}
+                showNotesTrimButton={true}
+                on:requestNotesTranscribe={handleRequestNotesTranscribe}
+                on:requestNotesTrim={handleRequestNotesTrim}
+                on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
+            />
+        {:else}
+            <div class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <span>Media player requires a path.</span>
+            </div>
+        {/if}
     </div>
 
     <div class="flex-grow min-h-0 overflow-hidden">
         {#if isTranscriptLoading && mediaPath}
             <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
-                Loading notes for <span class="font-semibold ml-1">{mediaPath.split(/[\\/]/).pop()}</span>...
+                Loading notes for <span class="font-semibold ml-1">{transcriptName}</span>...
             </div>
         {:else if transcriptLoadError && mediaPath}
-            <div class="flex-grow flex flex-col items-center justify-center text-orange-600 dark:text-orange-400 p-4 text-center">
-                <p class="font-semibold">Error Loading Notes</p>
-                <p class="text-xs mt-1">{transcriptLoadError}</p>
-                {#if transcriptLoadError.startsWith("No notes found")}
-                    <div class="mt-3 lexical-editor-wrapper-style-placeholder is-disabled w-full flex-grow min-h-[100px]">
-                         {#key mediaPath}
-                            <LexicalEditor
-                                bind:this={lexicalEditorRef}
-                                initialJson={defaultEmptyJson}
-                                editable={true} 
-                                placeholder="No notes found. Start typing notes here. Changes will be saved to an associated JSON file."
-                                on:change={handleEditorChange}
-                            />
-                        {/key}
-                    </div>
-                {:else}
-                     <p class="text-xs mt-2">Please check the file or try again.</p>
-                {/if}
-            </div>
+            {#if isFileNotFoundInfo}
+                <div class="flex-grow flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-4 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+                    <p class="font-semibold">No Transcription Yet</p>
+                    <p class="text-xs mt-1">
+                        Please click on the <span class="font-medium">Transcribe</span> button above the player to open this media in the Transcriptions tab and generate one.
+                    </p>
+                    <!-- LexicalEditor is NOT shown in this specific informational state -->
+                </div>
+            {:else}
+                <div class="flex-grow flex flex-col items-center justify-center text-orange-600 dark:text-orange-400 p-4 text-center">
+                    <p class="font-semibold">Error Loading Notes</p>
+                    <p class="text-xs mt-1">{transcriptLoadError}</p>
+                    <p class="text-xs mt-2">Please check the file or try again.</p>
+                </div>
+            {/if}
         {:else if !mediaPath}
             <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
                 Select an audio or video file from the Fieldnotes panel to view its player and notes.
             </div>
         {:else}
             <div class="lexical-editor-wrapper-style w-full h-full">
-                {#key mediaPath} 
+                {#key mediaPath}
                     <LexicalEditor
                         bind:this={lexicalEditorRef}
                         initialJson={currentTranscriptJson || defaultEmptyJson}
-                        editable={true} 
+                        editable={true}
                         placeholder="Enter notes for this media file..."
                         on:change={handleEditorChange}
                     />
@@ -365,7 +380,7 @@
     .lexical-editor-wrapper-style {
         display: flex;
         flex-direction: column;
-        @apply border-none shadow-none overflow-hidden; 
+        @apply border-none shadow-none overflow-hidden;
     }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
         flex-grow: 1;
@@ -379,7 +394,7 @@
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
         overflow-y: auto;
         height: 100%;
-        @apply p-3; 
+        @apply p-3;
     }
     .lexical-editor-wrapper-style :global(.lexical-content) {
         @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100;

@@ -15,7 +15,8 @@
         importDocumentFile,
         importTableFile,
         importImageFile,
-        importTranscriptFile 
+        importTranscriptFile,
+        requestTranscription as requestTranscriptionService
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -25,8 +26,8 @@
         hideConversionPrompt,
         clearTranscriptState,
         prepareDocumentView,
-        prepareImportedTranscriptView, 
-        clearDocumentEditorState,
+        prepareImportedTranscriptView,
+        prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -43,10 +44,10 @@
 
 
 	let transcribeModalRef;
-    let transcriptionsViewRef; 
-    let mediaPlayerRef = null;
+    let transcriptionsViewRef;
+    let notesViewRef;
 
-	let selectedTab = 'notes'; 
+	let selectedTab = 'notes';
     let importMenuVisible = false;
     let importMenuX = 0;
     let importMenuY = 0;
@@ -54,7 +55,7 @@
     let appWindow = null;
     let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
-    let showImportTranscriptSourceModal = false; 
+    let showImportTranscriptSourceModal = false;
 
 
 	onMount(async () => {
@@ -96,410 +97,321 @@
 		console.log('[ProjectView] onDestroy: Cleaned up listeners.');
 	});
 
-	function handleGlobalKeys(event) { 
-        const proj = get(project); 
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0; 
-        const modKey = isMac ? event.metaKey : event.ctrlKey; 
-        if (modKey && event.key.toLowerCase() === 's') { 
-            event.preventDefault(); 
-            if (selectedTab === 'transcriptions' && transcriptionsViewRef) { 
-                transcriptionsViewRef.handleSaveTranscript(); 
-            } else if (selectedTab === 'notes') { 
-                const activeDocEditor = proj.activeDocumentEditorRef;
-                const activeImpTsEditor = proj.activeImportedTranscriptEditorRef;
+	function handleGlobalKeys(event) {
+        const proj = get(project);
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? event.metaKey : event.ctrlKey;
+        if (modKey && event.key.toLowerCase() === 's') {
+            event.preventDefault();
+            if (selectedTab === 'transcriptions' && transcriptionsViewRef) {
+                transcriptionsViewRef.handleSaveTranscript();
+            } else if (selectedTab === 'notes') {
+                const activeDocEditor = proj.activeDocumentEditorRef?.ref;
+                const activeImpTsEditor = proj.activeImportedTranscriptEditorRef?.ref;
+                const activeMediaNoteEditor = proj.activeMediaNoteEditorRef?.ref;
 
                 if (!proj.autosaveEnabled) {
-                    if (proj.isDocumentDirty && activeDocEditor && typeof activeDocEditor.save === 'function') {
-                        console.log('[ProjectView Ctrl+S] Triggering save for Document Editor...');
+                    if ((proj.isDocumentDirty || proj.isDocumentMetadataDirty) && activeDocEditor && typeof activeDocEditor.save === 'function') {
                         activeDocEditor.save().catch(e => console.error("Ctrl+S document save failed", e));
                     } else if (proj.isImportedTranscriptDirty && activeImpTsEditor && typeof activeImpTsEditor.save === 'function') {
-                        console.log('[ProjectView Ctrl+S] Triggering save for Imported Transcript Editor...');
                         activeImpTsEditor.save().catch(e => console.error("Ctrl+S imported transcript save failed", e));
+                    } else if (proj.isMediaNoteTranscriptDirty && activeMediaNoteEditor && typeof activeMediaNoteEditor.save === 'function') {
+                        activeMediaNoteEditor.save().catch(e => console.error("Ctrl+S media note save failed", e));
                     }
                 }
-            } return; 
-        } 
-        if (modKey && event.key.toLowerCase() === 'e') { if (selectedTab === 'transcriptions' && transcriptionsViewRef) { event.preventDefault(); transcriptionsViewRef.handleToggleEditMode(); } return; } 
-        if (modKey && event.key.toLowerCase() === 'z' && !event.shiftKey) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptUndoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleUndoRequest(); } return; } 
-        if (modKey && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptRedoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleRedoRequest(); } return; } 
-        if (event.key === 'F8') { if (selectedTab === 'transcriptions' && mediaPlayerRef) { event.preventDefault(); mediaPlayerRef.handleTogglePlay(); } return; } 
+            } return;
+        }
+        if (modKey && event.key.toLowerCase() === 'e') { if (selectedTab === 'transcriptions' && transcriptionsViewRef) { event.preventDefault(); transcriptionsViewRef.handleToggleEditMode(); } return; }
+        if (modKey && event.key.toLowerCase() === 'z' && !event.shiftKey) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptUndoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleUndoRequest(); } return; }
+        if (modKey && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptRedoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleRedoRequest(); } return; }
+        if (event.key === 'F8') { if (selectedTab === 'transcriptions' && transcriptionsViewRef && transcriptionsViewRef.mediaPlayerRef) { event.preventDefault(); transcriptionsViewRef.mediaPlayerRef.handleTogglePlay(); } return; }
     }
 
+
 	function handleModalClose() { toggleTranscribeModal(false); }
-    function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback found for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } }
-    function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback found for conversion action: ${action}`); hideConversionPrompt(); } }
+    function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } }
+    function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for conversion action: ${action}`); hideConversionPrompt(); } }
 
     async function handleWindowCloseRequest() {
-        if (handlingCloseRequest) {
-            console.log('[ProjectView handleWindowCloseRequest] Already handling close request, ignoring re-entry.');
-            return;
-        }
+        if (handlingCloseRequest) return;
         handlingCloseRequest = true;
-        console.log(`[ProjectView handleWindowCloseRequest] Listener invoked. Current tab: ${selectedTab}.`);
-
         let canProceed = false;
-
         try {
             if (selectedTab === 'notes') {
-                console.log("[ProjectView] Checking unsaved Fieldnotes item before close...");
-                canProceed = await checkUnsavedChangesThenProceed(null, "closing the project window"); 
+                canProceed = await checkUnsavedChangesThenProceed(null, "closing the project window");
             } else if (selectedTab === 'transcriptions') {
-                console.log("[ProjectView] Checking unsaved media transcript before close...");
                 const isDirty = get(project).transcriptDirty;
                 if (isDirty) {
-                    const confirmClose = await confirm(
-                        "You have unsaved media transcript changes. Discard them and close the project window?",
-                        { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Close", cancelLabel: "Cancel" }
-                    );
-                    if (confirmClose) {
-                        console.log("[ProjectView] User chose to discard media transcript changes.");
-                        clearTranscriptState(); 
-                        canProceed = true;
-                    } else {
-                        console.log("[ProjectView] User cancelled closing due to unsaved media transcript.");
-                        canProceed = false;
-                    }
-                } else {
-                    console.log("[ProjectView] Media transcript is not dirty.");
-                    canProceed = true;
-                }
-            } else {
-                console.warn(`[ProjectView] Unknown tab '${selectedTab}' during close request. Assuming safe to proceed.`);
-                canProceed = true;
-            }
-        } catch (error) {
-             console.error("[ProjectView handleWindowCloseRequest] Error during checks:", error);
-             canProceed = false; 
-        }
-
+                    const confirmClose = await confirm("You have unsaved media transcript changes. Discard them and close?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Close", cancelLabel: "Cancel" });
+                    if (confirmClose) { clearTranscriptState(); canProceed = true; } else { canProceed = false; }
+                } else { canProceed = true; }
+            } else { canProceed = true; }
+        } catch (error) { canProceed = false; }
         if (canProceed) {
-            console.log("[ProjectView] All checks passed. Attempting to close project window.");
-            if (removeCloseRequestListener) {
-                removeCloseRequestListener(); 
-                removeCloseRequestListener = null; 
-                console.log('[ProjectView] Removed close listener before closing window.');
-            }
-            if (appWindow) {
-                try {
-                    await appWindow.close(); 
-                    console.log("[ProjectView] Window close command issued.");
-                } catch (error) {
-                    console.error("[ProjectView] Error attempting to close window:", error);
-                     await message(`Error closing project window: ${error}`, {title: "Error", type: "error"});
-                }
-            } else {
-                console.error("[ProjectView] Cannot close window: appWindow reference is null.");
-                 await message("Internal error: Could not get window reference to close.", {title: "Error", type: "error"});
-            }
-        } else {
-            console.log("[ProjectView] Window close aborted by checks or user cancellation.");
+            if (removeCloseRequestListener) { removeCloseRequestListener(); removeCloseRequestListener = null; }
+            if (appWindow) { try { await appWindow.close(); } catch (error) { await message(`Error closing project window: ${error}`, {title: "Error", type: "error"});}}
+            else { await message("Internal error: Could not get window reference to close.", {title: "Error", type: "error"});}
         }
-
-        handlingCloseRequest = false; 
+        handlingCloseRequest = false;
     }
 
 
 	async function handleTabClick(tabName) {
         if (selectedTab === tabName) {
-            console.log(`[ProjectView] handleTabClick called for already selected tab: ${tabName}. No switch.`);
+            const projState = get(project);
+            if (!projState.isDocumentLoading && !projState.isImportedTranscriptLoading && !projState.isMediaNoteTranscriptLoading && !projState.isTranscribing && !projState.isImportingAsset) {
+                 project.update(p => ({...p, isLoading: false}));
+            }
             return;
         }
-        console.log(`[ProjectView] Requesting tab switch from ${selectedTab} to ${tabName}`);
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
 
         let canProceed = true;
-
         if (selectedTab === 'notes') {
             canProceed = await checkUnsavedChangesThenProceed(null, "switching tabs");
         } else if (selectedTab === 'transcriptions') {
-            const isDirty = get(project).transcriptDirty; 
+            const isDirty = get(project).transcriptDirty;
             if (isDirty && transcriptionsViewRef) {
-                const confirmSwitch = await confirm(
-                    "You have unsaved media transcript changes. Discard them and switch tabs?",
-                    { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Switch", cancelLabel: "Cancel Switch" }
-                );
-                if (!confirmSwitch) {
-                    canProceed = false;
-                } else {
-                    clearTranscriptState(); 
-                    if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); 
-                }
+                const confirmSwitch = await confirm( "You have unsaved media transcript changes. Discard them and switch tabs?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Switch", cancelLabel: "Cancel Switch" });
+                if (!confirmSwitch) canProceed = false;
+                else { clearTranscriptState(); if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
             }
         }
 
         if (!canProceed) {
-            console.log('[ProjectView] Tab switch cancelled by unsaved changes check or user.');
+            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
             return;
         }
 
-        const playerInstanceToPause = mediaPlayerRef; 
+        const oldSelectedTab = selectedTab;
         selectedTab = tabName;
-        console.log(`[ProjectView] Switched selectedTab state to: ${selectedTab}`);
+        console.log(`[ProjectView] Switched selectedTab state from ${oldSelectedTab} to: ${selectedTab}`);
 
-        // Clear state of the *other* tab when switching
+        project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
+
         if (selectedTab === 'notes') {
-            clearTranscriptState(); 
-        } else if (selectedTab === 'transcriptions') {
-            prepareDocumentView(null); 
-            prepareImportedTranscriptView(null); 
-        }
-
-
-        if (selectedTab !== 'transcriptions') { 
-            if (playerInstanceToPause && typeof playerInstanceToPause.pause === 'function') {
-                const videoElement = playerInstanceToPause.videoElement; 
-                if (videoElement && !videoElement.paused) {
-                    try {
-                        await videoElement.pause();
-                        console.log("[ProjectView] Paused media player on tab switch away from transcriptions.");
-                    } catch(e) {
-                        console.warn("[ProjectView] Error pausing video element:", e);
-                        try {
-                            await playerInstanceToPause.pause();
-                        } catch (e2) {
-                             console.warn("[ProjectView] Error pausing via component method:", e2);
-                        }
-                    }
-                }
+            if (!get(project).selectedDocumentPath && !get(project).currentImportedTranscriptPath && !get(project).selectedMediaNotePath) {
+                prepareDocumentView(null);
             }
+        } else if (selectedTab === 'transcriptions') {
+            prepareDocumentView(null);
         }
-        await tick(); 
+
+        if (tabName !== 'transcriptions' && transcriptionsViewRef?.mediaPlayerRef?.videoElement && !transcriptionsViewRef.mediaPlayerRef.videoElement.paused) {
+            try { await transcriptionsViewRef.mediaPlayerRef.videoElement.pause(); } catch(e) { console.warn("Error pausing main video on tab switch:", e); }
+        }
+        await tick();
+        project.update(p => ({...p, isLoading: false, statusMessage: `Switched to ${tabName} tab.`}));
     }
 
-    // --- MODIFIED ---
-	async function handleRequestOpenTab(event) { 
-        // Extract path using the key used in RichTextPreview dispatch
+	async function handleRequestOpenTab(event) {
         const { tabName, loadNotePath } = event.detail;
-        const path = loadNotePath; // Use the correct key
-
-        console.log(`[ProjectView] Received requestopentab event: tab=${tabName}, path=${path}`);
+        const path = loadNotePath;
+        const itemLogName = path ? path.split(/[\\/]/).pop() : 'no specific item';
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Opening ${itemLogName} in ${tabName} tab...` }));
 
         if (!tabName) {
-            console.warn('[ProjectView] requestopentab event missing tabName.');
+            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Error: Tab name missing.' }));
             return;
         }
 
         let canProceed = true;
-        let actionContext = path ? `loading item ${path?.split(/[\\/]/).pop()}` : "switching tabs";
+        let actionContext = path ? `loading item '${itemLogName}'` : "switching tabs";
 
         if (selectedTab === 'notes') {
             canProceed = await checkUnsavedChangesThenProceed(path, actionContext);
         } else if (selectedTab === 'transcriptions') {
-            const isDirty = get(project).transcriptDirty;
-            if (isDirty && transcriptionsViewRef) {
-                const confirmSwitch = await confirm(
-                    `Discard unsaved media transcript changes to ${path ? 'load the requested item' : 'switch tabs'}?`,
-                    { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Proceed", cancelLabel: "Cancel"});
-                if (!confirmSwitch) {
-                    canProceed = false;
-                } else {
-                    clearTranscriptState(); 
-                    if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false);
-                }
+            if (get(project).transcriptDirty && transcriptionsViewRef) {
+                const confirmSwitch = await confirm( `Discard unsaved transcript changes to ${actionContext}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Proceed", cancelLabel: "Cancel"});
+                if (!confirmSwitch) canProceed = false;
+                else { clearTranscriptState(); if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
             }
         }
 
         if (!canProceed) {
-            console.log(`[ProjectView] requestopentab/tab switch cancelled by unsaved changes check or user.`);
+            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Action cancelled.' }));
             return;
         }
 
-        // If switching to 'notes' tab (regardless of whether a path is provided yet)
-        if (tabName === 'notes') {
-            if (selectedTab !== 'notes') {
-                 await handleTabClick(tabName); // Switch to Notes tab first if not already there
-                 await tick(); // Wait for tab switch UI changes
-            }
-            // *After* potentially switching tabs, prepare the view if a path exists
-            if (path) {
-                const proj = get(project);
-                const isImportedTranscript = proj.importedTranscriptFiles.some(f => `${proj.baseDirectory}/${f.relativePath}` === path);
+        if (selectedTab !== tabName) {
+            await handleTabClick(tabName); // This should set isLoading: false
+            await tick();
+        } else {
+             project.update(p => ({...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false}));
+        }
 
-                if (isImportedTranscript) {
-                    prepareImportedTranscriptView(path);
-                } else {
-                    const extension = path.split('.').pop()?.toLowerCase();
-                    let itemType = 'documents'; 
-                    if (['csv', 'xlsx'].includes(extension)) itemType = 'tables';
-                    else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'].includes(extension)) itemType = 'images';
-                    prepareDocumentView(path, itemType);
-                }
-            } else {
-                 // Switched to notes tab without a specific item, clear selections
-                 prepareDocumentView(null);
-                 prepareImportedTranscriptView(null);
+        if (tabName === 'notes' && path) {
+            const proj = get(project);
+            const isImportedTranscript = proj.importedTranscriptFiles.some(f => `${proj.baseDirectory}/${f.relativePath}` === path);
+            const isMediaNote = proj.files.some(f => f.path === path && (f.file_type === 'media'));
+            if (isImportedTranscript) prepareImportedTranscriptView(path);
+            else if (isMediaNote) prepareMediaNoteView(path);
+            else {
+                const extension = path.split('.').pop()?.toLowerCase();
+                let itemType = 'documents';
+                if (['csv', 'xlsx'].includes(extension)) itemType = 'tables';
+                else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'].includes(extension)) itemType = 'images';
+                prepareDocumentView(path, itemType);
             }
-        } else { // Switching to a non-notes tab (e.g. Transcriptions)
-             project.update(p => ({ ...p, requestedNoteToLoad: null })); 
-             await handleTabClick(tabName); 
+        } else if (tabName === 'notes' && !path) {
+            prepareDocumentView(null);
+        }
+
+        const projState = get(project);
+        if (!projState.isDocumentLoading && !projState.isImportedTranscriptLoading && !projState.isMediaNoteTranscriptLoading && !projState.isTranscribing && !projState.isImportingAsset) {
+            project.update(p => ({...p, isLoading: false, statusMessage: path ? p.statusMessage : `Switched to ${tabName} tab.`}));
         }
     }
-    // --- END MODIFIED ---
 
-    async function handleRequestMediaSelection(event) { 
+    async function handleRequestMediaSelection(event) {
         const { mediaPath } = event.detail;
-        console.log(`[ProjectView] Received requestmediaselection for path: ${mediaPath}`);
+        const mediaName = mediaPath ? mediaPath.split(/[\\/]/).pop() : "Unknown Media";
         if (!mediaPath) {
-            console.warn("[ProjectView] requestmediaselection missing mediaPath.");
+            project.update(p => ({...p, isLoading: false, statusMessage: 'Error: Media path missing.'}));
             return;
         }
+        project.update(p => ({...p, isLoading: true, statusMessage: `Selecting media ${mediaName}...`}));
 
         let canProceed = true;
         if (selectedTab === 'notes') {
-            canProceed = await checkUnsavedChangesThenProceed(mediaPath, "selecting media");
+            canProceed = await checkUnsavedChangesThenProceed(mediaPath, "selecting media for transcription tab");
         }
-        
+
         if (!canProceed) {
-            console.log('[ProjectView] Media selection cancelled by unsaved changes check.');
+            project.update(p => ({...p, isLoading: false, statusMessage: 'Media selection cancelled.'}));
             return;
         }
 
         if (selectedTab !== 'transcriptions') {
-            console.log(`[ProjectView] Switching tab from ${selectedTab} to transcriptions...`);
-            await handleTabClick('transcriptions'); 
-            console.log(`[ProjectView] Tab switched, current selectedTab state: ${selectedTab}`);
-             await tick(); // Ensure tab is rendered before selecting media
+            await handleTabClick('transcriptions'); // This sets isLoading: false on its completion
+            await tick();
         } else {
-            const currentMediaPath = get(project).selectedMediaFile?.path;
-            if (currentMediaPath !== mediaPath) {
-                console.log('[ProjectView] Media path changed while on transcriptions tab, clearing old transcript state.');
-                clearTranscriptState(); 
+            if (get(project).selectedMediaFile?.path !== mediaPath && get(project).selectedMediaFile?.path) { // Only clear if different and something was selected
+                clearTranscriptState();
             }
         }
+        project.update(p => ({...p, isLoading: true, statusMessage: `Loading ${mediaName} in Transcriptions...`})); // Set loading true again before selectMedia
+        await tick();
 
         let fileEntry = null;
         function findMediaByPathRecursive(nodes, path) {
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
-                if (node.file_type === 'media' && !node.is_directory && node.path === path) {
-                    return node; 
-                }
-                if (node.children && node.children.length > 0) {
-                    const found = findMediaByPathRecursive(node.children, path);
-                    if (found) return found; 
-                }
+                if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
+                if (node.children?.length > 0) { const found = findMediaByPathRecursive(node.children, path); if (found) return found; }
             }
-            return null; 
+            return null;
         }
-
-        const currentFiles = get(project).files || [];
-        fileEntry = findMediaByPathRecursive(currentFiles, mediaPath);
+        fileEntry = findMediaByPathRecursive(get(project).files || [], mediaPath);
 
         if (fileEntry) {
-            console.log(`[ProjectView] Found media entry for path ${mediaPath}. Selecting with store action...`);
-            selectMediaStoreAction(fileEntry); 
+            selectMediaStoreAction(fileEntry); // This updates statusMessage
         } else {
-            console.error(`[ProjectView] Could not find media file entry for path ${mediaPath} in the project store.`);
-            await message(`Error: Could not find the requested media file (${mediaPath.split(/[\\/]/).pop()}) in the project data.`, {title: "Error", type:"error"});
+            await message(`Error: Could not find media file (${mediaName}).`, {title: "Error", type:"error"});
+            project.update(p => ({...p, statusMessage: `Error selecting ${mediaName}.`}));
+        }
+        // selectMediaStoreAction might have its own loading/status logic.
+        // Ensure isLoading is false after this entire sequence.
+        await tick(); // Allow store to update from selectMediaStoreAction
+        project.update(p => ({...p, isLoading: false }));
+    }
+
+    async function handleRequestTranscriptionTabWithMedia(event) {
+        const { mediaPath } = event.detail;
+        const mediaName = mediaPath.split(/[\\/]/).pop();
+        console.log(`[ProjectView] Handling requestTranscriptionTabWithMedia for: ${mediaName}`);
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to transcribe ${mediaName}...` }));
+
+        await handleTabClick('transcriptions'); // Should set isLoading:false
+        await tick();
+        await handleRequestMediaSelection({ detail: { mediaPath } }); // Should also set isLoading:false
+        await tick();
+
+        project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Please select model and language.` }));
+        console.log(`[ProjectView] Switched to Transcriptions tab for ${mediaName}. User to initiate transcription manually.`);
+    }
+
+    async function handleRequestTrimInTranscriptionTab(event) {
+        const { mediaPath } = event.detail;
+        const mediaName = mediaPath.split(/[\\/]/).pop();
+        console.log(`[ProjectView] Handling requestTrimInTranscriptionTab for: ${mediaName}`);
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Preparing to trim ${mediaName}...` }));
+
+        // Step 1: Switch to the Transcriptions tab
+        if (selectedTab !== 'transcriptions') {
+            await handleTabClick('transcriptions');
+            await tick(); // Allow UI to update
+        }
+
+        // Step 2: Select the media in the Transcriptions tab's player
+        // We need to ensure handleRequestMediaSelection completes and the player is ready
+        const currentSelectedMedia = get(project).selectedMediaFile?.path;
+        if (currentSelectedMedia !== mediaPath) {
+            await handleRequestMediaSelection({ detail: { mediaPath } });
+            await tick(); // Allow media selection and potential transcript load to process
+            await tick(); // Extra tick for good measure
+        } else {
+            console.log(`[ProjectView] Media ${mediaName} already selected in Transcriptions tab.`);
+            project.update(p => ({ ...p, statusMessage: `Media ${mediaName} already selected.`}));
+        }
+        
+        // Step 3: Activate trim mode
+        if (transcriptionsViewRef && typeof transcriptionsViewRef.activateTrimModeOnPlayer === 'function') {
+            console.log(`[ProjectView] Activating trim mode on main player for ${mediaName}.`);
+            transcriptionsViewRef.activateTrimModeOnPlayer();
+            project.update(p => ({ ...p, isLoading: false, statusMessage: `Trim mode activated for ${mediaName}.` }));
+        } else {
+            console.warn("[ProjectView] transcriptionsViewRef or activateTrimModeOnPlayer is not available.");
+            project.update(p => ({ ...p, isLoading: false, statusMessage: `Could not activate trim mode for ${mediaName}.` }));
         }
     }
 
+
 	function handleImportMediaInSidebar(event) {
-        console.log('[ProjectView] Sidebar Import icon clicked');
-        event.preventDefault();
-        event.stopPropagation();
-        if (importMenuVisible) {
-            closeImportMenu();
-            return;
-        }
-        importMenuX = event.clientX;
-        importMenuY = event.clientY;
-        importMenuVisible = true;
+        event.preventDefault(); event.stopPropagation();
+        if (importMenuVisible) { closeImportMenu(); return; }
+        importMenuX = event.clientX; importMenuY = event.clientY; importMenuVisible = true;
         setTimeout(() => {
-            if (closeImportMenuListener) {
-                 document.removeEventListener('click', closeImportMenuListener, { capture: true });
-            }
-            closeImportMenuListener = (e) => {
-                const menuElement = document.getElementById('import-context-menu-div');
-                if (menuElement && !menuElement.contains(e.target)) {
-                    closeImportMenu();
-                }
-            };
+            if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true });
+            closeImportMenuListener = (e) => { const menu = document.getElementById('import-context-menu-div'); if (menu && !menu.contains(e.target)) closeImportMenu(); };
             document.addEventListener('click', closeImportMenuListener, { capture: true, once: true });
         }, 0);
     }
 
     async function triggerMediaImport(importType = null) {
-        console.log(`[ProjectView] Triggering import process (Type: ${importType || 'generic'})...`);
+        project.update(p => ({...p, isLoading: true, statusMessage: `Preparing import...`}));
         let canProceed = true;
-
-        if (selectedTab === 'notes') {
-            canProceed = await checkUnsavedChangesThenProceed(null, `importing ${importType || 'asset'}`);
-        } else if (selectedTab === 'transcriptions') {
-            const isDirty = get(project).transcriptDirty;
-            if (isDirty) {
-                const confirmImport = await confirm(
-                    `Discard unsaved media transcript changes to import new ${importType || 'asset'}?`,
-                    { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel Import" }
-                );
-                if (!confirmImport) {
-                    canProceed = false;
-                } else {
-                    clearTranscriptState(); 
-                    if (transcriptionsViewRef && transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); 
-                }
+        if (selectedTab === 'notes') canProceed = await checkUnsavedChangesThenProceed(null, `importing ${importType || 'asset'}`);
+        else if (selectedTab === 'transcriptions') {
+            if (get(project).transcriptDirty) {
+                const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${importType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
+                if (!confirmImport) canProceed = false;
+                else { clearTranscriptState(); if (transcriptionsViewRef?.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
             }
         }
-
-        if (!canProceed) {
-            console.log(`[ProjectView] Import cancelled due to unsaved changes check.`);
-            return;
-        }
-        
+        if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            if (importType === 'audio' || importType === 'video') {
-                await importMediaFile(importType);
-            } else if (importType === 'document') {
-                await importDocumentFile();
-            } else if (importType === 'table') {
-                await importTableFile();
-            } else if (importType === 'image') { 
-                await importImageFile();
-            } else if (importType === 'transcript') { 
-                showImportTranscriptSourceModal = true; 
-            } else {
-                console.warn(`[ProjectView] Unknown import type requested: ${importType}`);
-                await message(`The requested import type (${importType}) is not recognized.`, {title: "Import Error", type: "error"});
-            }
-        } catch (e) {
-            console.error('[ProjectView] Error during import service call:', e);
-        }
+            if (importType === 'audio' || importType === 'video') await importMediaFile(importType);
+            else if (importType === 'document') await importDocumentFile();
+            else if (importType === 'table') await importTableFile();
+            else if (importType === 'image') await importImageFile();
+            else if (importType === 'transcript') { showImportTranscriptSourceModal = true; project.update(p => ({...p, isLoading: false})); } // Modal shown, not a long load
+            else { await message(`Import type (${importType}) not recognized.`, {title: "Import Error", type: "error"}); project.update(p => ({...p, isLoading: false}));}
+        } catch (e) { project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Import failed.`}));}
+        if (importType !== 'transcript' && !get(project).isImportingAsset) project.update(p => ({...p, isLoading: false}));
     }
 
     async function handleImportTranscriptSourceConfirm(event) {
-        const { sourceType } = event.detail;
-        showImportTranscriptSourceModal = false; 
-
-        if (sourceType === 'msWord') {
-            try {
-                await importTranscriptFile('msWord'); 
-            } catch (e) {
-                console.error('[ProjectView] Error calling importTranscriptFile (msWord):', e);
-            }
-        } else {
-            console.warn(`[ProjectView] Unknown transcript import source type from modal: ${sourceType}`);
-            await message(`Import from "${sourceType}" is not supported yet.`, { title: 'Import Error', type: 'error' });
-        }
+        const { sourceType } = event.detail; showImportTranscriptSourceModal = false;
+        if (sourceType === 'msWord') { try { await importTranscriptFile('msWord'); } catch (e) { project.update(p => ({...p, isImportingAsset: false, isLoading: false}));}}
+        else await message(`Import from "${sourceType}" not supported.`, { title: 'Import Error', type: 'error' });
     }
 
-
-    function closeImportMenu() {
-        if (importMenuVisible) {
-            importMenuVisible = false;
-            if (closeImportMenuListener) {
-                 document.removeEventListener('click', closeImportMenuListener, { capture: true });
-                 closeImportMenuListener = null;
-            }
-        }
-    }
-
-    function handleImportMenuAction(actionType) {
-        console.log(`[ProjectView] Import menu action selected: ${actionType}`);
-        closeImportMenu(); 
-        triggerMediaImport(actionType); 
-    }
+    function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
+    function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
 	$: modalProps = { fileName: $project.selectedMediaFile?.name ?? 'N/A', modelName: $project.selectedModelName ?? 'None Selected', language: $project.selectedLanguage ?? 'N/A', speakers: $project.speakers, jobId: $project.transcriptionJobId };
-    $: showLoadingOverlay = $project.isImportingAsset || $project.isLoading || $project.isDocumentLoading || $project.isImportedTranscriptLoading;
+    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $project.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 
@@ -515,9 +427,18 @@
 	<div class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden min-w-0">
 		<div class="flex flex-col flex-grow min-h-0 overflow-hidden">
 			{#if selectedTab === 'transcriptions'}
-                <TranscriptionsView bind:this={transcriptionsViewRef} bind:mediaPlayerRef={mediaPlayerRef} on:requestopentab={handleRequestOpenTab} on:requestmediaselection={handleRequestMediaSelection} />
+                <TranscriptionsView
+                    bind:this={transcriptionsViewRef}
+                    on:requestopentab={handleRequestOpenTab}
+                    on:requestmediaselection={handleRequestMediaSelection}
+                />
 			{:else if selectedTab === 'notes'}
-				 <NotesView on:requestmediaselection={handleRequestMediaSelection} />
+				 <NotesView
+                    bind:this={notesViewRef}
+                    on:requestmediaselection={handleRequestMediaSelection}
+                    on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
+                    on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}
+                 />
 			{/if}
 		</div>
 		<BottomBar />

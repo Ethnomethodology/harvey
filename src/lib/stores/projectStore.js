@@ -34,7 +34,7 @@ const initialState = {
     tableFiles: [],
     imageFiles: [],
     importedTranscriptFiles: [],
-    documentMetadataFiles: [], 
+    documentMetadataFiles: [],
     segments: [],
     currentTranscriptPath: null,
     transcriptDirty: false,
@@ -62,14 +62,14 @@ const initialState = {
     documentError: null,
     activeDocumentEditorRef: null,
 
-    currentDocumentFileLevelMetadata: { 
+    currentDocumentFileLevelMetadata: {
         file_name: '', last_modified: '', title: '', description: '', summary: '',
     },
-    currentDocumentHighlights: [], 
-    isDocumentMetadataDirty: false, 
+    currentDocumentHighlights: [],
+    isDocumentMetadataDirty: false,
 
-    currentPdfAnnotations: [], 
-    initialPdfAnnotations: [], 
+    currentPdfAnnotations: [],
+    initialPdfAnnotations: [],
     isPdfAnnotationsDirty: false,
 
     currentImportedTranscriptPath: null,
@@ -80,15 +80,13 @@ const initialState = {
     importedTranscriptError: null,
     activeImportedTranscriptEditorRef: null,
 
-    // --- NEW: State for Media Notes in Fieldnotes view ---
-    selectedMediaNotePath: null, // Path to the media file for MediaEditorPanel in Notes
-    currentMediaNoteTranscriptJson: null, // Content of the associated .json note/transcript
+    selectedMediaNotePath: null,
+    currentMediaNoteTranscriptJson: null,
     initialMediaNoteTranscriptJson: null,
-    isMediaNoteTranscriptDirty: false,
+    isMediaNoteTranscriptDirty: false, // Key change: ensure this is false if file not found
     isMediaNoteTranscriptLoading: false,
     mediaNoteTranscriptError: null,
-    activeMediaNoteEditorRef: null, // Stores { path: mediaPath, ref: editorInstance }
-    // --- END NEW ---
+    activeMediaNoteEditorRef: null,
 
     autosaveEnabled: true,
     transcriptUndoStack: [],
@@ -113,12 +111,11 @@ export const project = writable({ ...initialState });
 
 const MAX_UNDO_STACK_SIZE = 50;
 
-// --- Functions for Media-Associated Transcripts (Main Transcription View) ---
 function pushToUndoStack(currentSegments) { project.update(p => { const newUndoStack = [...p.transcriptUndoStack, currentSegments]; if (newUndoStack.length > MAX_UNDO_STACK_SIZE) { newUndoStack.shift(); } return { ...p, transcriptUndoStack: newUndoStack, transcriptRedoStack: [] }; }); }
 export function undoTranscriptChange() { const undoStack = get(project).transcriptUndoStack; if (undoStack.length === 0) { console.log('[ProjectStore] Undo stack empty.'); return; } project.update(p => { const currentSegments = p.segments; const newUndoStack = [...p.transcriptUndoStack]; const previousSegments = newUndoStack.pop(); const newRedoStack = [...p.transcriptRedoStack, currentSegments]; let newIndex = -1; const time = p.player.currentTime; if (previousSegments.length > 0 && p.player.duration > 0 && time >= 0) { const idx = previousSegments.findIndex((s, index) => { const isLastSegment = index === previousSegments.length - 1; const startTimeCheck = time >= (s.start_time - 0.001); const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time; return startTimeCheck && endTimeCheck; }); newIndex = idx; } console.log('[ProjectStore] Undoing transcript change.'); return { ...p, segments: previousSegments, transcriptUndoStack: newUndoStack, transcriptRedoStack: newRedoStack, transcriptDirty: true, statusMessage: 'Undo successful.', player: { ...p.player, currentSegmentIndex: newIndex } }; }); }
 export function redoTranscriptChange() { const redoStack = get(project).transcriptRedoStack; if (redoStack.length === 0) { console.log('[ProjectStore] Redo stack empty.'); return; } project.update(p => { const currentSegments = p.segments; const newRedoStack = [...p.transcriptRedoStack]; const nextSegments = newRedoStack.pop(); const newUndoStack = [...p.transcriptUndoStack, currentSegments]; let newIndex = -1; const time = p.player.currentTime; if (nextSegments.length > 0 && p.player.duration > 0 && time >= 0) { const idx = nextSegments.findIndex((s, index) => { const isLastSegment = index === nextSegments.length - 1; const startTimeCheck = time >= (s.start_time - 0.001); const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time; return startTimeCheck && endTimeCheck; }); newIndex = idx; } console.log('[ProjectStore] Redoing transcript change.'); return { ...p, segments: nextSegments, transcriptUndoStack: newUndoStack, transcriptRedoStack: newRedoStack, transcriptDirty: true, statusMessage: 'Redo successful.', player: { ...p.player, currentSegmentIndex: newIndex } }; }); }
 export function markTranscriptAsSaved() { console.log('[ProjectStore] Marking media transcript as saved, clearing undo/redo stacks.'); project.update(p => ({ ...p, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [], statusMessage: 'Media transcript saved.', error: null, })); }
-export function clearTranscriptState() { console.log('[ProjectStore] Clearing media transcript state.'); project.update(p => { if (p.currentTranscriptPath || p.segments.length > 0 || p.transcriptDirty || p.isTranscriptLoading || p.transcriptUndoStack.length > 0 || p.transcriptRedoStack.length > 0) { return { ...p, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, statusMessage: 'Media transcript cleared.', player: { ...p.player, currentSegmentIndex: -1 }, transcriptUndoStack: [], transcriptRedoStack: [], }; } return p; }); }
+export function clearTranscriptState() { console.log('[ProjectStore] Clearing media transcript state (main TranscriptionsView).'); project.update(p => { if (p.currentTranscriptPath || p.segments.length > 0 || p.transcriptDirty || p.isTranscriptLoading || p.transcriptUndoStack.length > 0 || p.transcriptRedoStack.length > 0 || p.selectedMediaFile) { return { ...p, selectedMediaFile: null, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, statusMessage: 'Media transcript cleared.', player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 }, audioBuffer: null, transcriptUndoStack: [], transcriptRedoStack: [], speakers: { count: 0, names: [] } }; } return p; }); }
 export function selectMedia(fileEntry) { console.log('[ProjectStore selectMedia] ACTION START. Received fileEntry:', fileEntry ? `Name: ${fileEntry.name}, Path: ${fileEntry.path}` : 'null'); const currentSelectedPath = get(project).selectedMediaFile?.path; const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path); let speakersToLoad = { count: 0, names: [] }; if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') { const loadedCount = Number(fileEntry.speakers['@count']) || 0; const loadedNamesRaw = fileEntry.speakers.name; const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []); speakersToLoad = { count: loadedCount, names: [...loadedNames] }; if (speakersToLoad.count !== speakersToLoad.names.length) { console.warn(`[ProjectStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`); speakersToLoad.count = speakersToLoad.names.length; speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count); } console.log(`[ProjectStore selectMedia] Speakers FOUND on FileEntry '${fileEntry.name}':`, JSON.stringify(speakersToLoad)); } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) { console.log(`[ProjectStore selectMedia] No valid speaker config on entry '${fileEntry.name}'. Using default.`); speakersToLoad = { count: 0, names: [] }; } else { console.log('[ProjectStore selectMedia] No valid media file selected or clearing. Using default speakers.'); speakersToLoad = { count: 0, names: [] }; } const currentStoreSpeakers = get(project).speakers; const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad); if (shouldUpdateSelection || speakersChanged) { console.log(`[ProjectStore selectMedia] Updating store. SelectionChanged: ${shouldUpdateSelection}, SpeakersChanged: ${speakersChanged}`); const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? fileEntry : null; if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) { console.error("[ProjectStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia); } if (newSelectedMedia && !newSelectedMedia.media_xml_identifier) { console.warn("[ProjectStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia); } project.update((p) => ({ ...p, selectedMediaFile: newSelectedMedia, audioBuffer: null, player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 }, speakers: speakersToLoad, statusMessage: newSelectedMedia ? `Selected media: ${newSelectedMedia.name}` : 'Media selection cleared.', segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, transcriptUndoStack: [], transcriptRedoStack: [], })); console.log('[ProjectStore selectMedia] Store update complete for media selection/resets.'); const newlySelectedMedia = get(project).selectedMediaFile; console.log(`[ProjectStore selectMedia] Checking associated transcripts for: ${newlySelectedMedia?.name ?? 'null'}`); console.log(`[ProjectStore selectMedia]   -> associated_transcripts object:`, newlySelectedMedia?.associated_transcripts); if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) { const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0]; console.log(`[ProjectStore selectMedia]   -> First transcript info object:`, firstTranscriptInfo); const firstTranscriptRelativePath = firstTranscriptInfo?.relativePath; if (firstTranscriptRelativePath && typeof firstTranscriptRelativePath === 'string') { console.log(`[ProjectStore selectMedia] First associated transcript relative path: ${firstTranscriptRelativePath}`); const allFiles = get(project).files; let transcriptNodeToLoad = null; function findTranscriptNodeByRelativePath(nodes, relPath) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'transcript' && node.relative_path === relPath) { return node; } if (node.children && node.children.length > 0) { const found = findTranscriptNodeByRelativePath(node.children, relPath); if (found) return found; } } return null; } transcriptNodeToLoad = findTranscriptNodeByRelativePath(allFiles, firstTranscriptRelativePath); if (transcriptNodeToLoad && transcriptNodeToLoad.path) { console.log(`[ProjectStore selectMedia] Found first transcript node: ${transcriptNodeToLoad.path}. Auto-loading...`); project.update(p => ({ ...p, currentTranscriptPath: transcriptNodeToLoad.path })); import('$lib/services/projectService.js').then(service => { if (typeof service.loadTranscriptFile === 'function') { service.loadTranscriptFile(transcriptNodeToLoad.path) .catch(error => { console.error(`[ProjectStore] Auto-load first transcript failed:`, error); }); } else { console.error("[ProjectStore] loadTranscriptFile function not found in service."); } }).catch(err => { console.error("[ProjectStore] Failed import projectService for transcript load:", err); }); } else { console.warn(`[ProjectStore selectMedia] Could not find FileEntry node for first transcript relative path: ${firstTranscriptRelativePath}`); } } else { console.warn(`[ProjectStore selectMedia] First associated transcript entry exists but lacks a valid 'relativePath' property. Entry:`, firstTranscriptInfo); } } else { console.log(`[ProjectStore selectMedia] No associated transcripts found for ${newlySelectedMedia?.name ?? 'selected media'}.`); } } else { console.log(`[ProjectStore selectMedia] Selection/speakers unchanged for ${fileEntry?.name ?? 'File'}.`); } console.log('[ProjectStore selectMedia] ACTION END.'); }
 export function updatePlayerTime(time) { project.update((p) => { let newIndex = -1; if (p.segments.length > 0 && p.player.duration > 0 && time >= 0) { const idx = p.segments.findIndex((s, index) => { const isLastSegment = index === p.segments.length - 1; const startTimeCheck = time >= (s.start_time - 0.001); const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time; return startTimeCheck && endTimeCheck; }); newIndex = idx; } if (p.player.currentTime !== time || p.player.currentSegmentIndex !== newIndex) { return { ...p, player: { ...p.player, currentTime: time, currentSegmentIndex: newIndex } }; } return p; }); }
 export function setPlayerDuration(duration) { project.update((p) => ({ ...p, player: { ...p.player, duration: duration } })); }
@@ -137,7 +134,6 @@ export function setTranscriptionStatus(isTranscribing, jobId = null, statusMessa
 export function updateTranscriptionProgress(progressPayload) { project.update((p) => { if (p.isTranscribing && p.transcriptionJobId && progressPayload?.jobId === p.transcriptionJobId) { const newMessage = progressPayload?.message ?? p.transcriptionProgress.message; return { ...p, transcriptionProgress: { percent: progressPayload?.percent ?? 0, message: newMessage }, }; } return p; }); }
 export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = null) { project.update((p) => ({ ...p, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' }, transcriptionJobId: null, statusMessage: finalStatusMessage, error: error })); }
 
-// --- General Document (.json files) and PDF Functions ---
 export function prepareDocumentView(filePath, itemType = 'document') {
     console.log(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`);
     const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
@@ -151,13 +147,8 @@ export function prepareDocumentView(filePath, itemType = 'document') {
 
     project.update(p => {
         const selectingSamePath = p.selectedDocumentPath === filePath;
-        
-        let newIsDocumentLoading = false;
-        if (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) {
-            newIsDocumentLoading = true; 
-        } else if (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations ) ) { 
-            newIsDocumentLoading = true;
-        }
+        const newIsDocumentLoading = isJsonDocument && (!selectingSamePath || !p.currentDocumentJson) ||
+                                   isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations) );
 
         return {
             ...p,
@@ -169,15 +160,15 @@ export function prepareDocumentView(filePath, itemType = 'document') {
             currentDocumentFileLevelMetadata: (isJsonDocument && selectingSamePath) ? p.currentDocumentFileLevelMetadata : { ...defaultFileLevelMetadata },
             currentDocumentHighlights: (isJsonDocument && selectingSamePath) ? p.currentDocumentHighlights : [],
             isDocumentMetadataDirty: (isJsonDocument && selectingSamePath) ? p.isDocumentMetadataDirty : false,
-            currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [], 
-            initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [], 
+            currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [],
+            initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [],
             isPdfAnnotationsDirty: (isPdf && selectingSamePath) ? p.isPdfAnnotationsDirty : false,
             isDocumentLoading: newIsDocumentLoading,
             documentError: null,
             statusMessage: filePath ? `Loading ${itemType}: ${filePath.split(/[\\/]/).pop()}` : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} selection cleared.`,
-            
-            // --- Clear other views ---
-            currentImportedTranscriptPath: null, 
+            isLoading: newIsDocumentLoading || p.isLoading, // If specific document starts loading, global isLoading should reflect this or stay true
+
+            currentImportedTranscriptPath: null,
             currentImportedTranscriptLexicalJson: null,
             initialImportedTranscriptLexicalJson: null,
             isImportedTranscriptDirty: false,
@@ -185,80 +176,38 @@ export function prepareDocumentView(filePath, itemType = 'document') {
             importedTranscriptError: null,
             isImportedTranscriptLoading: false,
 
-            selectedMediaNotePath: null, // Also clear media note view
+            selectedMediaNotePath: null,
             currentMediaNoteTranscriptJson: null,
             initialMediaNoteTranscriptJson: null,
             isMediaNoteTranscriptDirty: false,
             mediaNoteTranscriptError: null,
             isMediaNoteTranscriptLoading: false,
             activeMediaNoteEditorRef: null,
-            // --- End Clear other views ---
         };
     });
 
     if (isJsonDocument && filePath) {
-        console.log(`[ProjectStore] prepareDocumentView: Path is JSON document, attempting JSON load and Lexical metadata load.`);
         import('$lib/services/projectService.js').then(async service => {
-            if (service.loadActiveDocumentContent) {
-                await service.loadActiveDocumentContent(); 
-            } else {
-                console.error("[ProjectStore] loadActiveDocumentContent function not found in projectService.");
-                project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error: LADC service missing."}); return p; });
-            }
-            if (service.loadDocumentMetadata && filePath) {
-                try {
-                    const fullMetadataObject = await service.loadDocumentMetadata(filePath); 
-                    project.update(p => {
-                        if (p.selectedDocumentPath === filePath && !isPdf) { 
-                           return { 
-                               ...p, 
-                               currentDocumentFileLevelMetadata: fullMetadataObject?.metadata || { ...defaultFileLevelMetadata },
-                               currentDocumentHighlights: fullMetadataObject?.highlights || [], 
-                               isDocumentMetadataDirty: false 
-                           };
-                        }
-                        return p;
-                     });
-                } catch (metaError) { 
-                    console.error("[ProjectStore] Failed to load Lexical document metadata:", metaError);
-                     project.update(p => {
-                        if (p.selectedDocumentPath === filePath && !isPdf) {
-                           return { ...p, documentError: (p.documentError || '') + ` Lexical Metadata load failed: ${metaError.message || metaError}` };
-                        }
-                        return p;
-                    });
-                }
-            }
-        }).catch(err => { 
-            console.error("[ProjectStore] Failed import projectService for JSON document/metadata load:", err);
-            project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error loading document service."}); return p; });
-        });
+            if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
+            else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
+            if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(filePath); project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
+        }).catch(err => project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
     } else if (isPdf && filePath) {
-         console.log(`[ProjectStore] prepareDocumentView: Path is PDF. Initiating PDF annotation load.`);
          import('$lib/services/projectService.js').then(async service => {
-            if (service.loadPdfAnnotationsFromFile) {
-                await service.loadPdfAnnotationsFromFile(filePath); 
-            } else {
-                console.error("[ProjectStore] loadPdfAnnotationsFromFile function not found in projectService.");
-                project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error: LPAF service missing."}); return p;});
-            }
-         }).catch(err => {
-            console.error("[ProjectStore] Failed import projectService for PDF annotations:", err);
-            project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Failed to load PDF annotation service."}); return p; });
-         });
+            if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(filePath);
+            else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
+         }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
     } else if (filePath && (isTable || isImage)) {
-         console.log(`[ProjectStore] prepareDocumentView: Path is Table or Image. Viewer will handle rendering. No specific loading here.`);
-         project.update(p => ({ ...p, isDocumentLoading: false }));
+         project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false })); // No specific loading, so turn off global too
     } else if (!filePath) {
-         console.log(`[ProjectStore] prepareDocumentView: No path. States already cleared.`);
-         project.update(p => ({ ...p, isDocumentLoading: false })); 
+         project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
     }
 }
-export function setLoadedDocumentData(filePath, jsonContent) { console.log(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}` }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false }; } return p; } }); }
-export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false }; } return p; }); }
+export function setLoadedDocumentData(filePath, jsonContent) { console.log(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); }
+export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, isLoading: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; }); }
 export function setDocumentEditorContent(newJsonContent) { project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { const initial = p.initialDocumentJson; const current = p.currentDocumentJson; const isNewDifferentFromInitial = initial !== newJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newJsonContent || p.isDocumentDirty !== newDirtyState) { return { ...p, currentDocumentJson: newJsonContent, isDocumentDirty: newDirtyState, }; } } return p; }); }
 export function markDocumentAsSaved(savedJsonContent) { console.log('[ProjectStore] Marking document as saved (JSON).'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); }
-export function markDocumentChangesDiscarded() { console.log('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); } 
+export function markDocumentChangesDiscarded() { console.log('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); }
 export function clearDocumentEditorState() { console.log('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
@@ -267,54 +216,55 @@ export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.
 export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } if(annotationChanged) console.log(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`); } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; console.log(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`); } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true; console.log(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`); } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); }
 export function markPdfAnnotationsDirty(updatedAnnotations = null) { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: true, isDocumentDirty: false, currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations }; } return p; }); }
 export function markPdfAnnotationsAsSaved() { console.log('[ProjectStore] Marking PDF annotations as saved.'); project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
-export function setLoadedPdfAnnotations(annotationsArray) { console.log(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false }));}
-export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.` }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false }; } return p; }); }
+export function setLoadedPdfAnnotations(annotationsArray) { console.log(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));}
+export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`, isLoading: false }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false, isLoading:false }; } return p; }); }
 
-// --- Imported Transcript Functions ---
 export function prepareImportedTranscriptView(filePath) {
     console.log(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`);
+    const newIsLoading = !!filePath;
     project.update(p => ({
         ...p,
         currentImportedTranscriptPath: filePath,
         currentImportedTranscriptLexicalJson: p.currentImportedTranscriptPath === filePath ? p.currentImportedTranscriptLexicalJson : null,
         initialImportedTranscriptLexicalJson: p.currentImportedTranscriptPath === filePath ? p.initialImportedTranscriptLexicalJson : null,
         isImportedTranscriptDirty: p.currentImportedTranscriptPath === filePath ? p.isImportedTranscriptDirty : false,
-        isImportedTranscriptLoading: !!filePath,
+        isImportedTranscriptLoading: newIsLoading,
         importedTranscriptError: null,
         activeImportedTranscriptEditorRef: p.currentImportedTranscriptPath === filePath ? p.activeImportedTranscriptEditorRef : null,
         statusMessage: filePath ? `Loading imported transcript: ${filePath.split(/[\\/]/).pop()}` : 'Imported transcript selection cleared.',
-        
-        // --- Clear other views ---
-        selectedDocumentPath: null, 
+        isLoading: newIsLoading || p.isLoading,
+
+        selectedDocumentPath: null,
         currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
-        currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, 
-        currentDocumentHighlights: [], isDocumentMetadataDirty: false, 
+        currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+        currentDocumentHighlights: [], isDocumentMetadataDirty: false,
         currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
 
-        selectedMediaNotePath: null, // Also clear media note view
+        selectedMediaNotePath: null,
         currentMediaNoteTranscriptJson: null,
         initialMediaNoteTranscriptJson: null,
         isMediaNoteTranscriptDirty: false,
         mediaNoteTranscriptError: null,
         isMediaNoteTranscriptLoading: false,
         activeMediaNoteEditorRef: null,
-        // --- End Clear other views ---
     }));
+    if (!filePath) {
+        project.update(p => ({ ...p, isImportedTranscriptLoading: false, isLoading: false }));
+    }
 }
-export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.log(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}` }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false }; } return p; } }); }
-export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false }; } return p; }); }
+export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.log(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
+export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
 export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) { console.log(`[ProjectStore] Marking imported transcript as saved: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` }; } return p; }); }
 export function markImportedTranscriptChangesDiscarded(filePath) { console.log(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); }
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
-// --- NEW: Functions for Media Notes in Fieldnotes ---
 export function prepareMediaNoteView(mediaPath) {
     console.log(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}`);
+    const newIsMediaNoteLoading = !!mediaPath;
     project.update(p => {
-        // Clear other main view states
-        const otherViewStates = {
+        const otherFieldnotesStatesToClear = {
             selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false,
             isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
@@ -326,29 +276,35 @@ export function prepareMediaNoteView(mediaPath) {
             currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null,
             isImportedTranscriptDirty: false, isImportedTranscriptLoading: false,
             importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
-            
-            // If main "Transcriptions" tab has distinct state, clear that too (already partly covered by selectMedia in some cases)
-            // selectedMediaFile: null, // Potentially keep this if the media player in MediaEditorPanel should sync with main player selection
-            // segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false,
         };
 
         if (p.selectedMediaNotePath !== mediaPath || !p.selectedMediaNotePath) {
             return {
                 ...p,
-                ...otherViewStates,
+                ...otherFieldnotesStatesToClear,
                 selectedMediaNotePath: mediaPath,
-                isMediaNoteTranscriptLoading: true, // MediaEditorPanel will set this to false
+                isMediaNoteTranscriptLoading: newIsMediaNoteLoading,
                 mediaNoteTranscriptError: null,
-                isMediaNoteTranscriptDirty: false,
-                currentMediaNoteTranscriptJson: null, // To be loaded by MediaEditorPanel
+                isMediaNoteTranscriptDirty: false, // Explicitly false when preparing a new/different view
+                currentMediaNoteTranscriptJson: null,
                 initialMediaNoteTranscriptJson: null,
                 activeMediaNoteEditorRef: null,
-                statusMessage: mediaPath ? `Loading media note for ${mediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
+                statusMessage: mediaPath ? `Loading notes for media: ${mediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
+                isLoading: newIsMediaNoteLoading || p.isLoading,
             };
         }
-        // If clicking the same media note again, just ensure other views are inactive
-        return { ...p, ...otherViewStates, selectedMediaNotePath: mediaPath, statusMessage: `Viewing media note ${mediaPath.split(/[\\/]/).pop()}` };
+        // If re-selecting the same, just ensure other fieldnotes are clear
+        return {
+            ...p,
+            ...otherFieldnotesStatesToClear,
+            selectedMediaNotePath: mediaPath,
+            statusMessage: `Viewing notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
+            isMediaNoteTranscriptLoading: p.selectedMediaNotePath !== mediaPath ? newIsMediaNoteLoading : p.isMediaNoteTranscriptLoading, // Re-trigger loading if path changed
+        };
     });
+    if (!mediaPath) {
+        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false }));
+    }
 }
 
 export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
@@ -360,29 +316,31 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
                 ...p,
                 currentMediaNoteTranscriptJson: content,
                 initialMediaNoteTranscriptJson: content,
-                isMediaNoteTranscriptDirty: false,
+                isMediaNoteTranscriptDirty: false, // Not dirty on fresh load
                 isMediaNoteTranscriptLoading: false,
                 mediaNoteTranscriptError: null,
                 statusMessage: `Loaded notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
+                isLoading: false, // Turn off general loading indicator
             };
         }
         return p;
     });
 }
 
-export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg) {
+export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg, isFileNotFound = false) {
     console.error(`[ProjectStore] Media note transcript load failed for media: ${mediaPath}`, errorMsg);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             return {
                 ...p,
-                currentMediaNoteTranscriptJson: defaultEmptyJson, // Show empty editor on error
+                currentMediaNoteTranscriptJson: defaultEmptyJson,
                 initialMediaNoteTranscriptJson: defaultEmptyJson,
-                isMediaNoteTranscriptDirty: false,
+                isMediaNoteTranscriptDirty: false, // Not dirty if load failed or file not found
                 isMediaNoteTranscriptLoading: false,
-                mediaNoteTranscriptError: `Failed to load notes: ${errorMsg}`,
-                statusMessage: `Error loading notes for ${mediaPath.split(/[\\/]/).pop()}.`,
-                activeMediaNoteEditorRef: null, // Clear ref on load error
+                mediaNoteTranscriptError: isFileNotFound ? "INFO:FILE_NOT_FOUND" : `Failed to load notes: ${errorMsg}`,
+                statusMessage: isFileNotFound ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.` : `Error loading notes for ${mediaPath.split(/[\\/]/).pop()}.`,
+                activeMediaNoteEditorRef: null,
+                isLoading: false, // Turn off general loading indicator
             };
         }
         return p;
@@ -394,6 +352,7 @@ export function setMediaNoteTranscriptEditorContent(mediaPath, newJsonContent) {
         if (p.selectedMediaNotePath === mediaPath) {
             const initial = p.initialMediaNoteTranscriptJson;
             const current = p.currentMediaNoteTranscriptJson;
+            // A new file (initially defaultEmptyJson) becomes dirty as soon as user types *anything* different.
             const isNewDifferentFromInitial = initial !== newJsonContent;
             const newDirtyState = isNewDifferentFromInitial;
 
@@ -418,7 +377,7 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
                 initialMediaNoteTranscriptJson: savedJsonContent,
                 currentMediaNoteTranscriptJson: savedJsonContent,
                 isMediaNoteTranscriptDirty: false,
-                mediaNoteTranscriptError: null, // Clear "not found" error if it was there
+                mediaNoteTranscriptError: null,
                 statusMessage: `Notes for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
             };
         }
@@ -430,12 +389,20 @@ export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
     console.log(`[ProjectStore] Marking media note transcript changes as discarded for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
+            // If the initial state was "file not found", discarding means resetting to that state.
+            const errorToKeep = p.initialMediaNoteTranscriptJson === defaultEmptyJson && p.mediaNoteTranscriptError === "INFO:FILE_NOT_FOUND"
+                ? "INFO:FILE_NOT_FOUND"
+                : null;
+            const statusToKeep = errorToKeep === "INFO:FILE_NOT_FOUND"
+                ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.`
+                : `Changes to notes for media ${mediaPath.split(/[\\/]/).pop()} discarded.`;
+
             return {
                 ...p,
-                currentMediaNoteTranscriptJson: p.initialMediaNoteTranscriptJson,
+                currentMediaNoteTranscriptJson: p.initialMediaNoteTranscriptJson, // Revert to initial content (which might be defaultEmptyJson)
                 isMediaNoteTranscriptDirty: false,
-                mediaNoteTranscriptError: null,
-                statusMessage: `Changes to notes for media ${mediaPath.split(/[\\/]/).pop()} discarded.`,
+                mediaNoteTranscriptError: errorToKeep,
+                statusMessage: statusToKeep,
             };
         }
         return p;
@@ -447,25 +414,23 @@ export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) {
         if (p.selectedMediaNotePath === mediaPath) {
             return { ...p, activeMediaNoteEditorRef: { path: mediaPath, ref: editorRefInstance } };
         }
+        if (p.activeMediaNoteEditorRef && p.activeMediaNoteEditorRef.path !== mediaPath) {}
         return p;
     });
 }
 
 export function clearActiveMediaNoteEditorRef() {
     project.update(p => {
-        if (p.activeMediaNoteEditorRef) { // Only update if there was an active ref
+        if (p.activeMediaNoteEditorRef) {
             return { ...p, activeMediaNoteEditorRef: null };
         }
         return p;
     });
 }
-// --- END NEW Media Notes Functions ---
 
-
-// --- Shared/Generic Store Functions ---
 export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; console.log(`[ProjectStore] Toggling autosave to: ${newState}`); return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { console.log(`[ProjectStore] Showing unsaved changes prompt for: ${itemName} (type: ${itemType})`); project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { console.log('[ProjectStore] Hiding unsaved changes prompt.'); project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
-export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError })); }
+export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting })); } // isLoading also true during import
 export function showConversionPrompt(fileName, onConfirm, onCancel) { console.log(`[ProjectStore] Showing conversion prompt for: ${fileName}`); project.update(p => ({ ...p, showConfirmConversionModal: true, conversionFileName: fileName, onConversionConfirm: onConfirm, onConversionCancel: onCancel, })); }
 export function hideConversionPrompt() { console.log('[ProjectStore] Hiding conversion prompt.'); project.update(p => ({ ...p, showConfirmConversionModal: false, conversionFileName: '', onConversionConfirm: () => {}, onConversionCancel: () => {}, })); }
