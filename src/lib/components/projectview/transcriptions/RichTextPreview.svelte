@@ -167,18 +167,39 @@
 	  canRedo = ($project.transcriptRedoStack?.length || 0) > 0;
 	  processedSegments = segs.map((seg, segIdx) => {
 	    const rawContent = seg.text;
-	    const isJson = isLexicalJson(rawContent);
+	    // --- Begin: detect and wrap bare node JSON if needed ---
+	    let contentForParsing = rawContent;
+	    try {
+	      const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+	      // If the JSON is a single node with children but no root, wrap it
+	      if (parsed && !parsed.root && Array.isArray(parsed.children)) {
+	        contentForParsing = JSON.stringify({
+	          root: {
+	            type: 'root',
+	            version: 1,
+	            format: '',
+	            indent: 0,
+	            direction: null,
+	            children: [parsed]
+	          }
+	        });
+	      }
+	    } catch (e) {
+	      // Not valid JSON or other error: leave contentForParsing as rawContent
+	    }
+	    // --- End: detect and wrap bare node JSON if needed ---
+	    const isJson = isLexicalJson(contentForParsing);
 	    let plainTextForDisplay = '';
 	    let contentJsonForEditor = defaultEmptyJson;
 	    if (isJson) {
 	      // ensure we always pass a string to the editor
 	      contentJsonForEditor =
-	        typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent);
+	        typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
 	    } else {
 	      plainTextForDisplay = extractPlainTextForPreview(rawContent);
 	    }
 	    const html = isJson
-	      ? lexicalJsonToHtml(rawContent)
+	      ? lexicalJsonToHtml(contentForParsing)
 	      : `<div>${plainTextForDisplay}</div>`;
 	    return {
 	      segmentIndex: segIdx,
