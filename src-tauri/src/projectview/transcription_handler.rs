@@ -273,14 +273,22 @@ pub async fn import_word_transcript(
     fs::create_dir_all(&target_standalone_transcripts_dir)
         .map_err(|e| CommandError::from(format!("Failed to create standalone transcripts dir: {}", e)))?;
 
+    // Create a dedicated subdirectory for this imported transcript
+    let import_dir = target_standalone_transcripts_dir.join(&docx_filename_stem);
+    fs::create_dir_all(&import_dir)
+        .map_err(|e| CommandError::from(format!(
+            "Failed to create imported transcript dir {}: {}", 
+            import_dir.display(), e
+        )))?;
+
     let mut counter = 0;
     let final_transcript_path = loop {
         let file_name_part = if counter == 0 {
-            format!("{}_imported.json", docx_filename_stem) 
+            format!("{}.json", docx_filename_stem)
         } else {
-            format!("{}_imported_{}.json", docx_filename_stem, counter)
+            format!("{}_{}.json", docx_filename_stem, counter)
         };
-        let path_candidate = target_standalone_transcripts_dir.join(&file_name_part);
+        let path_candidate = import_dir.join(&file_name_part);
         if !path_candidate.exists() {
             break path_candidate;
         }

@@ -83,6 +83,21 @@ import {
 
 import { getCloudConfig } from './configureActions.js';
 
+// Helper to locate the imported media's actual path in the project tree
+function findMediaPathByName(nodes, filename) {
+  if (!Array.isArray(nodes)) return null;
+  for (const node of nodes) {
+    if (node.file_type === 'media' && !node.is_directory && node.name === filename) {
+      return node.path;
+    }
+    if (node.children) {
+      const found = findMediaPathByName(node.children, filename);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 const HARVEY_FILES_DIR = 'harvey_files';
 const MEDIA_DIR_NAME = 'Media';
 const MEDIA_SUBDIR = 'media';
@@ -136,6 +151,28 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
         console.log('[ProjectService] Raw Data received from backend:', loadedData);
+
+        // --- Inject transcript paths from XML into media nodes ---
+        if (Array.isArray(loadedData.files)) {
+          const attachTranscripts = (nodes) => {
+            for (const node of nodes) {
+              if (node.file_type === 'media' && node.transcripts) {
+                // Map XML transcripts to full and relative paths
+                node.transcripts = node.transcripts.map(t => ({
+                  path: loadedData.base_directory
+                    ? `${loadedData.base_directory}/${t.relativePath}`
+                    : t.relativePath,
+                  relativePath: t.relativePath
+                }));
+              }
+              if (Array.isArray(node.children)) {
+                attachTranscripts(node.children);
+              }
+            }
+          };
+          attachTranscripts(loadedData.files);
+        }
+        // --- End transcript injection ---
 
         const dataToSet = {
             name: loadedData.project_name,
@@ -234,8 +271,51 @@ export async function importMediaFile(importType = null) {
             projectXmlPathStr: projectXmlPath
         });
 
-        const updatedFiles = backendResponse.files;
-        const newMediaPath = backendResponse.new_media_path;
+        // Guard against undefined or invalid backend response
+        if (!backendResponse || typeof backendResponse !== 'object') {
+            console.warn('[ProjectService] import_media returned invalid response:', backendResponse);
+            // Refresh the project so the newly imported file appears
+            await refreshProjectFiles();
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: `${filename} imported (no metadata returned).`
+            }));
+            // Auto-select imported media
+            await refreshProjectFiles(); // ensure project.files is updated
+            const proj = get(project);
+            const realPath = findMediaPathByName(proj.files, filename);
+            if (realPath) {
+              console.log('[ProjectService] Auto-selecting imported media at real path:', realPath);
+              prepareMediaNoteView(realPath);
+            }
+            return;
+        }
+
+        const updatedFiles = backendResponse.files || backendResponse.updatedFiles;
+        const newMediaPath = backendResponse.new_media_path || backendResponse.newMediaPath;
+
+        // If backend did not return an updated files array, just refresh and exit gracefully
+        if (!Array.isArray(updatedFiles)) {
+            console.warn('[ProjectService] import_media returned no updatedFiles. Falling back to refresh.');
+            await refreshProjectFiles();
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: `${filename} imported (refresh applied).`
+            }));
+            // Auto-select imported media
+            await refreshProjectFiles(); // ensure project.files is updated
+            const proj = get(project);
+            const realPath = findMediaPathByName(proj.files, filename);
+            if (realPath) {
+              console.log('[ProjectService] Auto-selecting imported media at real path:', realPath);
+              prepareMediaNoteView(realPath);
+            }
+            return;
+        }
 
         console.log('[ProjectService] Import finished. Received updated file list and new media path:', newMediaPath);
 
@@ -474,6 +554,32 @@ export async function importTranscriptFile(sourceType = 'msWord') {
         await message(`Error importing transcript: ${errorMessage}`, { title: 'Import Error', type: 'error' });
         setAssetImportStatus(false, `Error during transcript import: ${errorMessage}`);
     }
+}
+
+/**
+ * Deletes an imported transcript JSON file and its containing folder,
+ * and updates the project manifest accordingly.
+ *
+ * @param {string} transcriptAbsolutePath - Full path to the imported transcript JSON file.
+ */
+export async function deleteImportedTranscript(transcriptAbsolutePath) {
+    const currentProject = get(project);
+    const projectXmlPath = currentProject.xmlPath;
+    if (!projectXmlPath) {
+        throw new Error('Project path is missing. Cannot delete imported transcript.');
+    }
+    const projectBaseDir = currentProject.baseDirectory;
+    // Derive relative path inside project XML
+    const relativePath = transcriptAbsolutePath.startsWith(projectBaseDir)
+        ? transcriptAbsolutePath.substring(projectBaseDir.length + 1).replace(/\\/g, '/')
+        : transcriptAbsolutePath;
+    project.update(p => ({ ...p, statusMessage: 'Deleting imported transcript...', isLoading: true }));
+    await invoke('delete_imported_transcript', {
+        projectXmlPathStr: projectXmlPath,
+        transcriptRelativePathStr: relativePath
+    });
+    await refreshProjectFiles();
+    project.update(p => ({ ...p, statusMessage: 'Imported transcript deleted.', isLoading: false }));
 }
 
 

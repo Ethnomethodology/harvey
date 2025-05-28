@@ -10,6 +10,7 @@ use std::{
 use quick_xml;
 use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for delete/rename
 
+
 // Helper function to get annotation metadata path for an image (from existing code)
 fn get_annotation_metadata_path_for_image(image_path: &Path) -> Result<PathBuf, CommandError> {
     let parent_dir = image_path.parent().ok_or_else(|| {
@@ -1167,5 +1168,57 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
     }
 
     info!("[Backend Rename] Success for: {}", item_path);
+    Ok(())
+}
+
+/// Deletes an imported transcript JSON file and its containing folder,
+/// then removes the entry from project.xml.
+#[tauri::command]
+pub fn delete_imported_transcript(
+    project_xml_path_str: String,
+    transcript_relative_path_str: String,
+) -> Result<(), CommandError> {
+    // Resolve project and transcript paths
+    let project_xml_path = Path::new(&project_xml_path_str);
+    let project_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Invalid project XML path"))?;
+    let transcript_abs_path = project_dir.join(&transcript_relative_path_str);
+
+    // 1. Delete the transcript JSON file
+    fs::remove_file(&transcript_abs_path)
+        .map_err(|e| CommandError::from(format!("Failed to delete transcript file: {}", e)))?;
+
+    // 2. Delete its containing folder if empty
+    if let Some(folder) = transcript_abs_path.parent() {
+        if folder.exists() {
+            match fs::remove_dir(folder) {
+                Ok(_) => (),
+                Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
+                Err(err) => return Err(CommandError::from(format!("Failed to delete transcript folder: {}", err))),
+            }
+        }
+    }
+
+    // 3. Update project.xml to remove the transcript entry
+    let mut project_data: ProjectXml = quick_xml::de::from_str(
+        &fs::read_to_string(&project_xml_path)
+            .map_err(|e| CommandError::from(format!("Failed to read project XML: {}", e)))?
+    ).map_err(|e| CommandError::from(format!("Failed to parse project XML: {:?}", e)))?;
+
+    let before_len = project_data.imported_transcript_files.files.len();
+    project_data.imported_transcript_files.files.retain(|entry| entry.relative_path != transcript_relative_path_str);
+    if project_data.document_metadata_files.files.iter()
+        .any(|m| m.original_document_relative_path == transcript_relative_path_str) {
+        project_data.document_metadata_files.files
+            .retain(|m| m.original_document_relative_path != transcript_relative_path_str);
+    }
+    if project_data.imported_transcript_files.files.len() == before_len {
+        // No entry removed: warn but continue
+        warn!("[Backend DeleteImportedTranscript] No matching XML entry for '{}'", transcript_relative_path_str);
+    }
+
+    // Save updated XML
+    save_project_xml(project_xml_path, &project_data)
+        .map_err(|e| CommandError::from(format!("Failed to save project XML: {:?}", e)))?;
+
     Ok(())
 }

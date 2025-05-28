@@ -2,7 +2,7 @@
 <script>
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
 	import { get } from 'svelte/store';
-	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile } from '$lib/services/projectService.js';
+import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
     import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -271,7 +271,7 @@
                 default: console.warn(`[NotesLeftPanel] Unknown action for image: ${action}`); await message(`Action '${action}' not implemented for images.`, { title: 'Not Implemented', type: 'info' });
             }
         } else if (itemType === 'imported_transcript') { 
-             switch (action) {
+            switch (action) {
                 case 'Open': 
                     console.log(`[NotesLeftPanel] 'Open' action for imported transcript: ${item.name}`);
                     dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
@@ -283,22 +283,27 @@
                     itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
                     showRenameModal = true; 
                     break;
-                case 'Delete': 
-                    const confirmImpTsMsg = `Delete imported transcript "${item.name}"? This cannot be undone.`; 
-                    const impTsOptions = { title: 'Confirm Transcript Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; 
-                    try { 
-                        const confirmed = await confirm(confirmImpTsMsg, impTsOptions); 
-                        if (confirmed) { 
-                            console.log(`[NotesLeftPanel] Deleting imported transcript: ${itemPathForClosure}`); 
-                            project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); 
-                            try { await deleteProjectItem(itemPathForClosure); } 
-                            catch (err) { console.error(`[NotesLeftPanel] Delete failed for imported transcript ${item.name}:`, err); await message(`Error deleting transcript: ${err}`, { title: "Delete Error", type: "error" }); } 
-                        } else { 
-                            project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' })); 
-                        } 
-                    } catch (e) { 
-                        console.error("[NotesLeftPanel] Error during confirm/delete imported transcript:", e); await message(`Error deleting transcript: ${e}`, { title: "Delete Error", type: "error" }); 
-                    } 
+                case 'Delete':
+                    const confirmTranscriptMsg = "Are you sure you want to delete this transcript? This cannot be undone.";
+                    const transcriptOptions = { title: 'Confirm Transcript Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' };
+                    try {
+                        const confirmed = await confirm(confirmTranscriptMsg, transcriptOptions);
+                        if (confirmed) {
+                            try {
+                                await deleteImportedTranscript(item.path);
+                                // Clear any open transcript view so the panel updates
+                                project.update(p => ({ ...p, currentImportedTranscriptPath: null }));
+                            } catch (err) {
+                                console.error('[NotesLeftPanel] Error deleting imported transcript:', err);
+                                await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' });
+                            }
+                        } else {
+                            project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' }));
+                        }
+                    } catch (e) {
+                        console.error('[NotesLeftPanel] Error during confirm/delete imported transcript:', e);
+                        await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });
+                    }
                     break;
                 default: 
                     console.warn(`[NotesLeftPanel] Unknown action for imported transcript: ${action}`); 
@@ -497,8 +502,8 @@
 	{#if contextMenuVisible && contextMenuItem}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
-                <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open in Editor</button>
-                <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe (Main)</button>
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -506,23 +511,23 @@
                  {#if contextMenuItem.name?.toLowerCase().endsWith('.pdf')}
                      <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open Externally</button>
                  {:else}
-                     <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open in Editor</button>
+                     <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  {/if}
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
-                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open (View)</button>
+                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
-                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open (View)</button>
+                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
-                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open in Editor</button>
+                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>

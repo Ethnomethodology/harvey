@@ -80,6 +80,7 @@ pub fn run() {
             projectview::core_commands::import_media,
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
+            projectview::core_commands::delete_imported_transcript,
 
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,
