@@ -563,23 +563,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
  * @param {string} transcriptAbsolutePath - Full path to the imported transcript JSON file.
  */
 export async function deleteImportedTranscript(transcriptAbsolutePath) {
-    const currentProject = get(project);
-    const projectXmlPath = currentProject.xmlPath;
-    if (!projectXmlPath) {
-        throw new Error('Project path is missing. Cannot delete imported transcript.');
-    }
-    const projectBaseDir = currentProject.baseDirectory;
-    // Derive relative path inside project XML
-    const relativePath = transcriptAbsolutePath.startsWith(projectBaseDir)
-        ? transcriptAbsolutePath.substring(projectBaseDir.length + 1).replace(/\\/g, '/')
-        : transcriptAbsolutePath;
-    project.update(p => ({ ...p, statusMessage: 'Deleting imported transcript...', isLoading: true }));
-    await invoke('delete_imported_transcript', {
-        projectXmlPathStr: projectXmlPath,
-        transcriptRelativePathStr: relativePath
-    });
-    await refreshProjectFiles();
-    project.update(p => ({ ...p, statusMessage: 'Imported transcript deleted.', isLoading: false }));
+    return deleteProjectItem(transcriptAbsolutePath);
 }
 
 
