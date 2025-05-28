@@ -489,33 +489,33 @@
     }
 
     // --- Mount/Destroy and Exported Functions (Unchanged) ---
-    onMount(() => {
-        console.log('[TranscriptEditorPanel] Mounted with path:', itemPath);
-        setActiveImportedTranscriptEditorRef(self);
-        if (itemPath && !currentLexicalJson && !isLoading) {
-            console.log("[TranscriptEditorPanel onMount] Path exists, no data, not loading -> Triggering load.");
-            loadAndConvertTranscript(itemPath);
-        } else if (itemPath && currentLexicalJson && isValidLexicalState(currentLexicalJson)) {
-            console.log("[TranscriptEditorPanel onMount] Path exists, valid data exists -> Setting editor state.");
-            editorJsonState = currentLexicalJson;
-            if (editorRef) editorRef.resetEditorState(currentLexicalJson);
-            if(isLoading) isLoading = false;
-             if(errorMessage) errorMessage = null;
-        } else if (itemPath && currentLexicalJson && !isValidLexicalState(currentLexicalJson)) {
-             console.error("[TranscriptEditorPanel onMount] Path exists, but existing data is invalid. Setting error state.");
-             errorMessage = "Stored transcript data is invalid.";
-             setImportedTranscriptLoadFailed(itemPath, errorMessage);
-             if(editorRef) editorRef.resetEditorState('');
-             editorJsonState = '';
-             isLoading = false;
-        } else {
-             console.log("[TranscriptEditorPanel onMount] No path or already loading (or initial load has not provided currentLexicalJson yet).");
-             isLoading = !!itemPath && !currentLexicalJson;
-             errorMessage = null;
-             editorJsonState = '';
-             if(editorRef) editorRef.resetEditorState('');
-        }
-    });
+onMount(() => {
+    console.log('[TranscriptEditorPanel] Mounted with path:', itemPath);
+    setActiveImportedTranscriptEditorRef({ ref: self });
+    if (itemPath && !currentLexicalJson && !isLoading) {
+        console.log("[TranscriptEditorPanel onMount] Path exists, no data, not loading -> Triggering load.");
+        loadAndConvertTranscript(itemPath);
+    } else if (itemPath && currentLexicalJson && isValidLexicalState(currentLexicalJson)) {
+        console.log("[TranscriptEditorPanel onMount] Path exists, valid data exists -> Setting editor state.");
+        editorJsonState = currentLexicalJson;
+        if (editorRef) editorRef.resetEditorState(currentLexicalJson);
+        if(isLoading) isLoading = false;
+         if(errorMessage) errorMessage = null;
+    } else if (itemPath && currentLexicalJson && !isValidLexicalState(currentLexicalJson)) {
+         console.error("[TranscriptEditorPanel onMount] Path exists, but existing data is invalid. Setting error state.");
+         errorMessage = "Stored transcript data is invalid.";
+         setImportedTranscriptLoadFailed(itemPath, errorMessage);
+         if(editorRef) editorRef.resetEditorState('');
+         editorJsonState = '';
+         isLoading = false;
+    } else {
+         console.log("[TranscriptEditorPanel onMount] No path or already loading (or initial load has not provided currentLexicalJson yet).");
+         isLoading = !!itemPath && !currentLexicalJson;
+         errorMessage = null;
+         editorJsonState = '';
+         if(editorRef) editorRef.resetEditorState('');
+    }
+});
 
 	onDestroy(() => {
         console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
