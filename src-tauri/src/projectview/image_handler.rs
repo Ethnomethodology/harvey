@@ -18,39 +18,7 @@ const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp
 
 
 // Helper to get a unique path in the Images directory
-fn get_unique_image_path(
-    project_base_dir: &Path,
-    base_name: &str,
-    extension: &str,
-) -> Result<PathBuf, CommandError> {
-    let target_dir = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
-
-    // Ensure the Images directory exists
-    if !target_dir.exists() {
-        warn!("Target images directory {} not found. Attempting to create.", target_dir.display());
-        fs::create_dir_all(&target_dir).map_err(|e| CommandError::from(format!("Failed to create images directory {}: {}", target_dir.display(), e)))?;
-        info!("Created images directory: {}", target_dir.display());
-    }
-
-    let mut counter = 0;
-    loop {
-        let file_name = if counter == 0 {
-            format!("{}.{}", base_name, extension)
-        } else {
-            format!("{}_{}.{}", base_name, counter, extension)
-        };
-        let target_path = target_dir.join(&file_name);
-
-        if !target_path.exists() {
-            debug!("Found unique image path: {}", target_path.display());
-            return Ok(target_path);
-        }
-        counter += 1;
-        if counter > 1000 { // Safety break
-            return Err(CommandError::from(format!("Could not find unique filename for image base '{}' after {} attempts.", base_name, counter)));
-        }
-    }
-}
+// Removed get_unique_image_path function as it is no longer used
 
 // Import command for image files
 #[tauri::command]
@@ -86,13 +54,37 @@ pub async fn import_image_file(
         return Err(CommandError::from(format!("Unsupported image file type: .{}", source_extension)));
     }
 
-    // Get the final path where the image will be stored
-    let final_image_path = get_unique_image_path(
-        project_base_dir,
-        source_filename_stem,
-        &source_extension,
-    )?;
-    let final_image_name = final_image_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+    // Create folder under Images named after file stem
+    let images_base = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
+    let folder_path = images_base.join(source_filename_stem);
+    if !folder_path.exists() {
+        fs::create_dir_all(&folder_path)
+            .map_err(|e| CommandError::from(format!("Failed to create image folder {}: {}", folder_path.display(), e)))?;
+    }
+    // Choose unique filename inside folder
+    let mut counter = 0;
+    let final_image_path = loop {
+        let file_name = if counter == 0 {
+            format!("{}.{}", source_filename_stem, source_extension)
+        } else {
+            format!("{}_{}.{}", source_filename_stem, counter, source_extension)
+        };
+        let candidate = folder_path.join(&file_name);
+        if !candidate.exists() {
+            break candidate;
+        }
+        counter += 1;
+        if counter > 1000 {
+            return Err(CommandError::from(format!(
+                "Could not find unique filename for image base '{}' after {} attempts.",
+                source_filename_stem, counter
+            )));
+        }
+    };
+    let final_image_name = final_image_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
 
     // Copy the file
     info!("[import_image_file] Copying image from '{}' to '{}'", source_path.display(), final_image_path.display());
@@ -128,6 +120,14 @@ pub async fn import_image_file(
     // Save the modified XML
     save_project_xml(&project_xml_path, &project_data)?;
     info!("[import_image_file] Project XML updated successfully for image.");
+
+    // Create an empty annotations file for this image
+    let annotations_file_name = format!(".{}.annotations.json", source_filename_stem);
+    let annotations_path = folder_path.join(&annotations_file_name);
+    if !annotations_path.exists() {
+        info!("[import_image_file] Creating empty annotations file: {}", annotations_path.display());
+        fs::write(&annotations_path, "").map_err(|e| CommandError::from(format!("Failed to create annotations file {}: {}", annotations_path.display(), e)))?;
+    }
 
     // Return the absolute path of the newly imported image
     Ok(final_image_path.to_string_lossy().to_string())

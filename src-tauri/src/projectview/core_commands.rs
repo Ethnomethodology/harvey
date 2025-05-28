@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::*;
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -304,11 +304,25 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         let (item_type_guess, media_stem_opt_guess, item_relative_path_buf_guess) = match get_item_details(&item_path_buf, project_base_dir) {
             Ok(details) => details,
             Err(_) => {
-                 warn!("[Backend Delete] Could not determine item details for non-existent path '{}'. Skipping XML cleanup.", item_path);
-                 return Ok(());
+                warn!("[Backend Delete] Could not determine item details for non-existent path '{}'. Skipping XML cleanup.", item_path);
+                return Ok(());
             }
         };
-         let item_relative_path_guess = item_relative_path_buf_guess.to_string_lossy().replace("\\", "/");
+        let item_relative_path_guess = item_relative_path_buf_guess.to_string_lossy().replace("\\", "/");
+        // Enhanced detection for imported transcripts and tables in non-existent path cleanup
+        let item_type_guess = {
+            let path_lower = item_relative_path_guess.to_lowercase();
+            let transcripts_folder = format!("{}/", TRANSCRIPTS_SUBDIR.to_lowercase());
+            let tables_folder = format!("{}/", TABLES_DIR.to_lowercase());
+            let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            if item_type_guess == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
+                "imported_transcript".to_string()
+            } else if item_type_guess == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
+                "table".to_string()
+            } else {
+                item_type_guess
+            }
+        };
         let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
         let mut xml_changed = false;
 
@@ -343,7 +357,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     xml_changed = true;
                 }
                 let initial_meta_len = project_data.document_metadata_files.files.len();
-                project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path == item_relative_path_guess);
+                project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path_guess);
                 if project_data.document_metadata_files.files.len() < initial_meta_len {
                     info!("[Backend Delete] Cleaned up XML document metadata entry for original imported transcript '{}'.", item_relative_path_guess);
                     xml_changed = true;
@@ -367,7 +381,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if item_relative_path_guess.to_lowercase().ends_with(".pdf") {
                     let initial_pdf_annot_len = project_data.pdf_annotation_files.files.len();
                     project_data.pdf_annotation_files.files.retain(|pa| pa.original_document_relative_path != item_relative_path_guess);
-                     if project_data.pdf_annotation_files.files.len() < initial_pdf_annot_len {
+                    if project_data.pdf_annotation_files.files.len() < initial_pdf_annot_len {
                         info!("[Backend Delete] Cleaned up XML PDF annotation entry for original PDF '{}'.", item_relative_path_guess);
                         xml_changed = true;
                     }
@@ -408,6 +422,25 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
     let (item_type, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
     let item_relative_path = item_relative_path_buf.to_string_lossy().replace("\\", "/");
+    // Enhanced detection for imported transcripts, tables, and images
+    let item_type = {
+        let path_lower = item_relative_path.to_lowercase();
+        let transcripts_folder = format!("{}/", TRANSCRIPTS_SUBDIR.to_lowercase());
+        let tables_folder = format!("{}/", TABLES_DIR.to_lowercase());
+        let images_folder = format!("{}/", IMAGES_DIR.to_lowercase());
+        let ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        if item_type == "other" && path_lower.contains(&transcripts_folder) && ext == "json" {
+            "imported_transcript".to_string()
+        } else if item_type == "other" && path_lower.contains(&tables_folder) && (ext == "csv" || ext == "xlsx") {
+            "table".to_string()
+        } else if item_type == "other" && path_lower.contains(&images_folder)
+            && matches!(ext.as_str(), "jpg"|"jpeg"|"png"|"gif"|"bmp"|"webp"|"tiff")
+        {
+            "image".to_string()
+        } else {
+            item_type
+        }
+    };
     info!("[Backend Delete] Item type: '{}', Media Stem: {:?}, Rel Path: '{}'", item_type, media_stem_opt, item_relative_path);
 
     match item_type.as_str() {
@@ -472,42 +505,41 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         },
         "imported_transcript" => {
             info!("[Backend Delete] Deleting standalone imported transcript file: {}", item_path_buf.display());
-            fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete imported transcript file {}: {}", item_path_buf.display(), e)))?;
+            fs::remove_file(&item_path_buf)
+                .map_err(|e| CommandError::from(format!("Failed to delete imported transcript file {}: {}", item_path_buf.display(), e)))?;
 
-            match get_document_metadata_path_for_doc(&item_path_buf) {
-                Ok(metadata_path) => {
-                    if metadata_path.exists() {
-                        info!("[Backend Delete] Deleting metadata file for imported transcript: {}", metadata_path.display());
-                        if let Err(e) = fs::remove_file(&metadata_path) {
-                            warn!("[Backend Delete] Failed to delete metadata file for imported transcript {}: {}", metadata_path.display(), e);
-                        }
+            // 1. Delete containing folder if empty
+            if let Some(folder) = item_path_buf.parent() {
+                if folder.exists() {
+                    match fs::remove_dir(folder) {
+                        Ok(_) => (),
+                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
+                        Err(err) => return Err(CommandError::from(format!("Failed to delete transcript folder: {}", err))),
                     }
                 }
-                Err(e) => warn!("[Backend Delete] Could not determine metadata path for imported transcript {}: {:?}", item_path, e),
             }
 
+            // 2. Delete its metadata file, if present
+            if let Ok(metadata_path) = get_document_metadata_path_for_doc(&item_path_buf) {
+                if metadata_path.exists() {
+                    info!("[Backend Delete] Deleting metadata file for imported transcript: {}", metadata_path.display());
+                    if let Err(e) = fs::remove_file(&metadata_path) {
+                        warn!("[Backend Delete] Failed to delete metadata file for imported transcript {}: {}", metadata_path.display(), e);
+                    }
+                }
+            }
 
-            info!("[Backend Delete] Updating XML to remove imported transcript link with path '{}'", item_relative_path);
+            // 3. Update project XML to remove the transcript and metadata entries
+            info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut xml_changed = false;
-            let initial_len = project_data.imported_transcript_files.files.len();
+            let initial_entries = project_data.imported_transcript_files.files.len();
             project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
-            if project_data.imported_transcript_files.files.len() < initial_len {
-                info!("[Backend Delete] Imported transcript entry removed from XML.");
-                xml_changed = true;
-            } else {
-                warn!("[Backend Delete] Deleted imported transcript file, but no matching entry found in XML for path '{}'.", item_relative_path);
-            }
-
-            let initial_meta_len = project_data.document_metadata_files.files.len();
+            let initial_meta = project_data.document_metadata_files.files.len();
             project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path);
-            if project_data.document_metadata_files.files.len() < initial_meta_len {
-                info!("[Backend Delete] Document metadata entry removed from XML for original imported transcript '{}'.", item_relative_path);
-                xml_changed = true;
-            }
 
-
-            if xml_changed {
+            if project_data.imported_transcript_files.files.len() < initial_entries
+                || project_data.document_metadata_files.files.len() < initial_meta
+            {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Delete] XML updated for imported transcript and its metadata.");
             }
@@ -582,9 +614,25 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         },
         "table" => {
-             info!("[Backend Delete] Deleting table file: {}", item_path_buf.display());
-            fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete table file {}: {}", item_path_buf.display(), e)))?;
+            info!("[Backend Delete] Deleting table file: {}", item_path_buf.display());
 
+            // Construct folder path
+            let file_stem = item_path_buf.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get table filename stem for deletion: {}", item_path_buf.display())))?;
+
+            let tables_dir = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
+            let folder_path = tables_dir.join(file_stem);
+
+            // Delete folder and its contents
+            if folder_path.exists() && folder_path.is_dir() {
+                info!("[Backend Delete] Deleting table folder: {}", folder_path.display());
+                fs::remove_dir_all(&folder_path).map_err(|e| CommandError::from(format!("Failed to delete table folder {}: {}", folder_path.display(), e)))?;
+            } else {
+                warn!("[Backend Delete] Table folder {} not found. Assuming already deleted.", folder_path.display());
+            }
+
+            // XML update (no need to remove file separately, folder deletion suffices)
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_table_len = project_data.table_files.files.len();
@@ -597,34 +645,41 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         },
         "image" => {
-            info!("[Backend Delete] Deleting image file: {}", item_path_buf.display());
-            fs::remove_file(&item_path_buf).map_err(|e| CommandError::from(format!("Failed to delete image file {}: {}", item_path_buf.display(), e)))?;
+            info!("[Backend Delete] Deleting standalone image file: {}", item_path_buf.display());
+            // 1. Delete the image file itself
+            fs::remove_file(&item_path_buf)
+                .map_err(|e| CommandError::from(format!("Failed to delete image file {}: {}", item_path_buf.display(), e)))?;
 
-            match get_annotation_metadata_path_for_image(&item_path_buf) {
-                Ok(metadata_path) => {
-                    if metadata_path.exists() {
-                        info!("[Backend Delete] Attempting to delete image annotation metadata file: {}", metadata_path.display());
-                        if let Err(e) = fs::remove_file(&metadata_path) {
-                            warn!("[Backend Delete] Failed to delete image annotation metadata file {}: {}", metadata_path.display(), e);
-                        } else {
-                            info!("[Backend Delete] Successfully deleted image annotation metadata file: {}", metadata_path.display());
-                        }
-                    } else {
-                        debug!("[Backend Delete] Image annotation metadata file not found, no need to delete: {}", metadata_path.display());
+            // 2. Delete containing folder if empty
+            if let Some(folder) = item_path_buf.parent() {
+                if folder.exists() {
+                    match fs::remove_dir(folder) {
+                        Ok(_) => (),
+                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
+                        Err(err) => return Err(CommandError::from(format!("Failed to delete image folder: {}", err))),
                     }
-                }
-                Err(e) => {
-                    warn!("[Backend Delete] Could not determine image annotation metadata path for {}: {:?}. Skipping metadata deletion.", item_path_buf.display(), e);
                 }
             }
 
-            info!("[Backend Delete] Updating XML to remove image link with path '{}'", item_relative_path);
+            // 3. Delete annotation metadata file, if present
+            if let Ok(metadata_path) = get_annotation_metadata_path_for_image(&item_path_buf) {
+                if metadata_path.exists() {
+                    info!("[Backend Delete] Deleting image annotation metadata file: {}", metadata_path.display());
+                    if let Err(e) = fs::remove_file(&metadata_path) {
+                        warn!("[Backend Delete] Failed to delete image annotation metadata file {}: {}", metadata_path.display(), e);
+                    }
+                }
+            }
+
+            // 4. Update project XML to remove image entry
+            info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let initial_image_len = project_data.image_files.files.len();
+            let initial_len = project_data.image_files.files.len();
             project_data.image_files.files.retain(|i| i.relative_path != item_relative_path);
-            if project_data.image_files.files.len() < initial_image_len {
+
+            if project_data.image_files.files.len() < initial_len {
                 save_project_xml(&xml_path_buf, &project_data)?;
-                info!("[Backend Delete] Image entry removed from XML.");
+                info!("[Backend Delete] XML updated for image.");
             } else {
                 warn!("[Backend Delete] Deleted image file, but no matching entry found in XML for path '{}'.", item_relative_path);
             }
@@ -1168,57 +1223,5 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
     }
 
     info!("[Backend Rename] Success for: {}", item_path);
-    Ok(())
-}
-
-/// Deletes an imported transcript JSON file and its containing folder,
-/// then removes the entry from project.xml.
-#[tauri::command]
-pub fn delete_imported_transcript(
-    project_xml_path_str: String,
-    transcript_relative_path_str: String,
-) -> Result<(), CommandError> {
-    // Resolve project and transcript paths
-    let project_xml_path = Path::new(&project_xml_path_str);
-    let project_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Invalid project XML path"))?;
-    let transcript_abs_path = project_dir.join(&transcript_relative_path_str);
-
-    // 1. Delete the transcript JSON file
-    fs::remove_file(&transcript_abs_path)
-        .map_err(|e| CommandError::from(format!("Failed to delete transcript file: {}", e)))?;
-
-    // 2. Delete its containing folder if empty
-    if let Some(folder) = transcript_abs_path.parent() {
-        if folder.exists() {
-            match fs::remove_dir(folder) {
-                Ok(_) => (),
-                Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
-                Err(err) => return Err(CommandError::from(format!("Failed to delete transcript folder: {}", err))),
-            }
-        }
-    }
-
-    // 3. Update project.xml to remove the transcript entry
-    let mut project_data: ProjectXml = quick_xml::de::from_str(
-        &fs::read_to_string(&project_xml_path)
-            .map_err(|e| CommandError::from(format!("Failed to read project XML: {}", e)))?
-    ).map_err(|e| CommandError::from(format!("Failed to parse project XML: {:?}", e)))?;
-
-    let before_len = project_data.imported_transcript_files.files.len();
-    project_data.imported_transcript_files.files.retain(|entry| entry.relative_path != transcript_relative_path_str);
-    if project_data.document_metadata_files.files.iter()
-        .any(|m| m.original_document_relative_path == transcript_relative_path_str) {
-        project_data.document_metadata_files.files
-            .retain(|m| m.original_document_relative_path != transcript_relative_path_str);
-    }
-    if project_data.imported_transcript_files.files.len() == before_len {
-        // No entry removed: warn but continue
-        warn!("[Backend DeleteImportedTranscript] No matching XML entry for '{}'", transcript_relative_path_str);
-    }
-
-    // Save updated XML
-    save_project_xml(project_xml_path, &project_data)
-        .map_err(|e| CommandError::from(format!("Failed to save project XML: {:?}", e)))?;
-
     Ok(())
 }

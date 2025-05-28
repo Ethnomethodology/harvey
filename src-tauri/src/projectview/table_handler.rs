@@ -50,7 +50,7 @@ fn get_unique_table_path(
 }
 
 
-// Import command (Unchanged)
+// Import command (Modified)
 #[tauri::command]
 pub async fn import_table_file(
     source_path_str: String,
@@ -82,12 +82,37 @@ pub async fn import_table_file(
         return Err(CommandError::from(format!("Unsupported table file type: .{}", source_extension)));
     }
 
-    let final_table_path = get_unique_table_path(
-        project_base_dir,
-        source_filename_stem,
-        &source_extension,
-    )?;
-    let final_table_name = final_table_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+    // Create a folder under Tables named after the file stem
+    let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
+    let folder_path = tables_base.join(source_filename_stem);
+    if !folder_path.exists() {
+        fs::create_dir_all(&folder_path)?;
+    }
+    // Pick unique filename inside that folder
+    let mut counter = 0;
+    let final_table_path = loop {
+        let file_name = if counter == 0 {
+            format!("{}.{}", source_filename_stem, source_extension)
+        } else {
+            format!("{}_{}.{}", source_filename_stem, counter, source_extension)
+        };
+        let candidate = folder_path.join(&file_name);
+        if !candidate.exists() {
+            break candidate;
+        }
+        counter += 1;
+        if counter > 1000 {
+            return Err(CommandError::from(format!(
+                "Could not find unique filename for table base '{}' after {} attempts.",
+                source_filename_stem, counter
+            )));
+        }
+    };
+    let final_table_name = final_table_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
 
     info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
     fs::copy(&source_path, &final_table_path).map_err(|e| CommandError::from(format!("Failed to copy table file: {}", e)))?;
