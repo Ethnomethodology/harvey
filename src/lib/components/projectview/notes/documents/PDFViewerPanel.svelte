@@ -551,19 +551,21 @@ import { get } from 'svelte/store';
             actionPayload.oldColor = clickedHighlightColor;
             actionPayload.text = getTextOfHighlightId(clickedHighlightId);
 
-            const clickedSpan = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${clickedHighlightId}"]`);
-            let tempRangeForContext = null;
-            if (clickedSpan) { tempRangeForContext = document.createRange(); tempRangeForContext.selectNodeContents(clickedSpan); }
-
-            const baseData = await createHighlightDataForStorage(actionPayload.id, tempRangeForContext, color === 'remove' ? actionPayload.oldColor : color);
-            actionPayload.dataForStorage = baseData ? {...baseData, text: actionPayload.text } :
-                {id: actionPayload.id, type:'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex:0, prefix:'', suffix:'', occurrenceInPageContext:0};
+            // No longer recompute dataForStorage for color changes; use original highlight data from initialHighlights
 
             if (color === 'remove') {
-                const removeId = clickedHighlightId;  // preserve before DOM clears it
-                removeClickedHighlightBlockDOM(removeId);
-                dispatch('pdfhighlightevent', { type: 'remove', id: removeId });
-                recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: {...actionPayload.dataForStorage, color: actionPayload.oldColor } });
+                const clickedSpan = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${clickedHighlightId}"]`);
+                let tempRangeForContext = null;
+                if (clickedSpan) { tempRangeForContext = document.createRange(); tempRangeForContext.selectNodeContents(clickedSpan); }
+                // For remove, still need to provide dataForStorage for undo stack
+                // Use original highlight data if available, fallback to minimal
+                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
+                const dataForStorage = originalHighlight
+                    ? { ...originalHighlight }
+                    : { id: clickedHighlightId, type: 'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex: 0, prefix: '', suffix: '', occurrenceInPageContext: 0 };
+                removeClickedHighlightBlockDOM(clickedHighlightId);
+                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
+                recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: { ...dataForStorage, color: actionPayload.oldColor } });
                 // mark dirty & persist (click mode)
                 await tick(); // ensure store is updated after dispatched remove event
                 markPdfAnnotationsDirty(get(project).currentPdfAnnotations);
@@ -572,7 +574,13 @@ import { get } from 'svelte/store';
             } else {
                 actionPayload.newColor = color;
                 changeClickedHighlightColorDOM(clickedHighlightId, color);
-                dispatch('pdfhighlightevent', { type: 'update', ...actionPayload.dataForStorage, color: color });
+                // Update only the color of the existing highlight data
+                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
+                if (originalHighlight) {
+                    dispatch('pdfhighlightevent', { type: 'update', ...originalHighlight, color });
+                } else {
+                    console.warn(`[PDFViewerPanel] changeColor: original data not found for ID ${clickedHighlightId}`);
+                }
                 recordAction('changeColor', actionPayload);
                 // mark dirty & persist
                 markPdfAnnotationsDirty();
@@ -1060,24 +1068,29 @@ import { get } from 'svelte/store';
 
             for (const highlight of pageHighlights) {
                 // highlight.text, .prefix, .suffix are already normalized from storage
-                if (!highlight.text || !highlight.color || !highlight.id) continue; 
+                if (!highlight.text || !highlight.color || !highlight.id) continue;
                 let startIndex = -1;
                 let currentOccurrences = 0;
                 const targetOccurrence = highlight.occurrenceInPageContext || 0;
-                const searchStrNormalized = highlight.text; // Already normalized
-
-                // Build a regex with lookbehind/lookahead so match.index is at the highlight text
-                const prefix = highlight.prefix || "";
-                const suffix = highlight.suffix || "";
-                let pattern = "";
-                if (prefix) {
-                    pattern += `(?<=${escapeRegExp(prefix)})`;
+                // Normalize stored highlight text and context
+                const searchStrRaw = highlight.text;
+                const searchStrNormalized = normalizeTextForMatching(searchStrRaw).replace(/\s+/g, ' ');
+                const prefixNorm = highlight.prefix
+                    ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ')
+                    : '';
+                const suffixNorm = highlight.suffix
+                    ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ')
+                    : '';
+                // Build regex with lookbehind/lookahead if context exists
+                let pattern = '';
+                if (prefixNorm) {
+                    pattern += `(?<=${escapeRegExp(prefixNorm)})`;
                 }
                 pattern += escapeRegExp(searchStrNormalized);
-                if (suffix) {
-                    pattern += `(?=${escapeRegExp(suffix)})`;
+                if (suffixNorm) {
+                    pattern += `(?=${escapeRegExp(suffixNorm)})`;
                 }
-                const regex = new RegExp(pattern, 'g');
+                let regex = new RegExp(pattern, 'g');
 
                 let match;
                 while ((match = regex.exec(fullPageTextNormalized)) !== null) {
@@ -1087,14 +1100,26 @@ import { get } from 'svelte/store';
                     }
                     currentOccurrences++;
                 }
-
+                // Fallback: simple search without context if not found
+                if (startIndex === -1) {
+                    const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
+                    let simpleMatch;
+                    let simpleCount = 0;
+                    while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
+                        if (simpleCount === targetOccurrence) {
+                            startIndex = simpleMatch.index;
+                            break;
+                        }
+                        simpleCount++;
+                    }
+                }
                 if (startIndex !== -1) {
                     // Pass the normalized expected text for verification
                     const range = findRangeInTextLayer(
-                        pageTextLayerDiv, 
-                        startIndex, // This is normalizedOverallCharStart
-                        highlight.text.length, // This is normalizedOverallLength
-                        searchStrNormalized    // This is normalizedExpectedText
+                        pageTextLayerDiv,
+                        startIndex,
+                        searchStrNormalized.length,
+                        searchStrNormalized
                     );
                     if (range) {
                         // Add a check to see if the found range's text (when normalized) matches the expected normalized text
@@ -1102,16 +1127,16 @@ import { get } from 'svelte/store';
                         if (domTextNormalized === searchStrNormalized) {
                             applyHighlightToSelectionDOM(range, highlight.color, highlight.id);
                             // Throttle per-highlight rendering
-                            // await tick(); 
-                            // await new Promise(resolve => setTimeout(resolve, 50)); 
+                            // await tick();
+                            // await new Promise(resolve => setTimeout(resolve, 50));
                         } else {
                             console.warn(`[ApplyInitial] Range found for ID ${highlight.id}, but text mismatch after DOM normalization. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
                         }
                     } else {
-                         console.warn(`[ApplyInitial] Failed to create DOM range (findRangeInTextLayer returned null) for ID ${highlight.id} on page ${pageIndex + 1} (norm. offset ${startIndex}). Text: "${searchStrNormalized.substring(0,20)}..."`);
+                        console.warn(`[ApplyInitial] Failed to create DOM range (findRangeInTextLayer returned null) for ID ${highlight.id} on page ${pageIndex + 1} (norm. offset ${startIndex}). Text: "${searchStrNormalized.substring(0,20)}..."`);
                     }
                 } else {
-                     console.warn(`[ApplyInitial] Text not found (normalized search) for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefix.substring(0,10)}", Sfx: "${suffix.substring(0,10)}")`);
+                    console.warn(`[ApplyInitial] Text not found (normalized search) for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
                 }
             }
             // Allow highlights from this page to render before processing the next page in the initial pass
