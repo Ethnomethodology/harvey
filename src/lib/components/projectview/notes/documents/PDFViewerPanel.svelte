@@ -936,6 +936,8 @@ import { get } from 'svelte/store';
         while (Date.now() - start < maxWaitMs) {
             if (initialHighlights && initialHighlights.length > 0) {
                 await applyInitialHighlights();
+                // Prevent re-running on first user highlight: mark initial annotation pass done
+                initialHighlightsApplied = true;
                 return;
             }
             await new Promise(r => setTimeout(r, 100));
@@ -944,6 +946,8 @@ import { get } from 'svelte/store';
         if (initialHighlights && initialHighlights.length > 0) {
             await applyInitialHighlights();
         }
+        // Prevent re-running on first user highlight: mark initial annotation pass done
+        initialHighlightsApplied = true;
     }
 
     function setupViewerEvents() {
