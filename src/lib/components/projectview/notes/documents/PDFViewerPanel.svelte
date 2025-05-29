@@ -459,17 +459,44 @@ import { get } from 'svelte/store';
 
     async function handleViewerClick(event) {
         if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
-        const highlightSpan = event.target.closest?.('.pdf-highlight');
+        // Detect click on either old span or new overlay rectangles
+        let highlightSpan = event.target.closest?.('.pdf-highlight');
+        if (!highlightSpan) {
+            const els = document.elementsFromPoint(event.clientX, event.clientY);
+            highlightSpan = els.find(el => el.classList?.contains('overlay-part')) || null;
+        }
         const sel = window.getSelection();
         if (highlightSpan && viewerContainer.contains(highlightSpan)) {
             clearTimeout(hideToolbarTimeoutId);
-            const id = highlightSpan.dataset.hlId; const color = highlightSpan.dataset.hlColor;
+            // For overlay-part, get id and color from dataset
+            const id = highlightSpan.dataset.hlId; 
+            const color = highlightSpan.dataset.hlColor || highlightSpan.style.backgroundColor;
             if (id !== clickedHighlightId || !showSelectionToolbar) {
                 clickedHighlightId = id; clickedHighlightColor = color; selectedRange = null; toolbarMode = 'click';
-                const clickRange = document.createRange(); clickRange.selectNodeContents(highlightSpan);
-                showSelectionToolbar = true; 
-                await tick(); 
-                positionAndShowSelectionToolbar(clickRange); 
+                // Try to select the corresponding highlight span, else use overlay's bounding rect
+                let clickRange = null;
+                const span = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${id}"]`);
+                if (span) {
+                    clickRange = document.createRange(); clickRange.selectNodeContents(span);
+                } else if (highlightSpan.getBoundingClientRect) {
+                    // Fallback: create a fake range for overlay rect (for toolbar positioning)
+                    clickRange = document.createRange();
+                    // Find nearest textLayer for this page
+                    let pageDiv = highlightSpan.closest?.('.page');
+                    let textLayer = pageDiv?.querySelector('.textLayer');
+                    if (textLayer && textLayer.firstChild) {
+                        clickRange.selectNodeContents(textLayer.firstChild);
+                    }
+                }
+                showSelectionToolbar = true;
+                await tick();
+                // PATCH: toolbarMode-aware toolbar positioning
+                if (toolbarMode === 'selection' && clickRange) {
+                    positionAndShowSelectionToolbar(clickRange);
+                } else if (toolbarMode === 'click') {
+                    // Anchor toolbar at click position
+                    positionToolbarAtPoint(event.clientX, event.clientY);
+                }
             }
             event.stopPropagation();
         } else if (!sel || sel.isCollapsed) { hideSelectionToolbar(); }
@@ -497,6 +524,25 @@ import { get } from 'svelte/store';
             selectionToolbarElement.style.top = `${targetTop}px`; selectionToolbarElement.style.left = `${targetLeft}px`;
             selectionToolbarElement.style.opacity = '1'; selectionToolbarElement.style.visibility = 'visible';
         });
+    }
+
+    /** Position toolbar at given client coordinates (for click-mode) */
+    function positionToolbarAtPoint(clientX, clientY) {
+        if (!selectionToolbarElement || !pdfViewerWrapperElement) return;
+        const containerRect = pdfViewerWrapperElement.getBoundingClientRect();
+        const toolbarRect = selectionToolbarElement.getBoundingClientRect();
+        // Center horizontally at click
+        let left = clientX - containerRect.left - (toolbarRect.width / 2);
+        left = Math.max(0, Math.min(containerRect.width - toolbarRect.width - 5, left));
+        // Place above pointer, or below if not enough space
+        let top = clientY - containerRect.top - toolbarRect.height - 8;
+        if (top < 0) {
+            top = clientY - containerRect.top + 8;
+        }
+        selectionToolbarLeft = left;
+        selectionToolbarTop = top;
+        selectionToolbarElement.style.left = `${left}px`;
+        selectionToolbarElement.style.top = `${top}px`;
     }
 
     function hideSelectionToolbar() {
@@ -554,17 +600,14 @@ import { get } from 'svelte/store';
             // No longer recompute dataForStorage for color changes; use original highlight data from initialHighlights
 
             if (color === 'remove') {
-                const clickedSpan = viewerContainer.querySelector(`.pdf-highlight[data-hl-id="${clickedHighlightId}"]`);
-                let tempRangeForContext = null;
-                if (clickedSpan) { tempRangeForContext = document.createRange(); tempRangeForContext.selectNodeContents(clickedSpan); }
-                // For remove, still need to provide dataForStorage for undo stack
-                // Use original highlight data if available, fallback to minimal
+                // Remove the visual overlay for this highlight
+                removeHighlightOverlay(clickedHighlightId);
+                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
+                // For undo, need to provide dataForStorage
                 const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
                 const dataForStorage = originalHighlight
                     ? { ...originalHighlight }
                     : { id: clickedHighlightId, type: 'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex: 0, prefix: '', suffix: '', occurrenceInPageContext: 0 };
-                removeClickedHighlightBlockDOM(clickedHighlightId);
-                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
                 recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: { ...dataForStorage, color: actionPayload.oldColor } });
                 // mark dirty & persist (click mode)
                 await tick(); // ensure store is updated after dispatched remove event
@@ -573,16 +616,14 @@ import { get } from 'svelte/store';
                 success = true;
             } else {
                 actionPayload.newColor = color;
-                changeClickedHighlightColorDOM(clickedHighlightId, color);
-                // Update only the color of the existing highlight data
+                // Update overlay visual color
+                updateHighlightOverlayColor(clickedHighlightId, color);
+                // Inform store of color update
                 const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
                 if (originalHighlight) {
                     dispatch('pdfhighlightevent', { type: 'update', ...originalHighlight, color });
-                } else {
-                    console.warn(`[PDFViewerPanel] changeColor: original data not found for ID ${clickedHighlightId}`);
                 }
                 recordAction('changeColor', actionPayload);
-                // mark dirty & persist
                 markPdfAnnotationsDirty();
                 saveCurrentPdfAnnotations();
                 success = true;
@@ -680,53 +721,15 @@ import { get } from 'svelte/store';
     
     // Re-inserting refined DOM manipulation functions from previous correct version
     function applyHighlightToSelectionDOM(range, color, overrideId) {
-        // console.log('[applyHighlightToSelectionDOM] CALLED. Range Text:', range?.toString().substring(0, 70), 'Color:', color, 'ID:', overrideId);
-        if (!range || range.collapsed || !color || !viewerElement) { return null; }
-        removePartialHighlightDOM(range); 
-        const uniqueId = overrideId || `hl-${uuidv4()}`;
-        const nodesToProcess = [];
-        try {
-            const commonAncestor = range.commonAncestorContainer;
-            const commonAncestorTextLayer = (commonAncestor.nodeType === Node.ELEMENT_NODE ? commonAncestor : commonAncestor.parentNode)?.closest('.textLayer');
-            if (!commonAncestorTextLayer) { return null; }
-            const walker = document.createTreeWalker(commonAncestorTextLayer, NodeFilter.SHOW_TEXT, { 
-                acceptNode: (node) => {
-                    const nodeRange = document.createRange();
-                    nodeRange.selectNodeContents(node);
-                    return !(range.compareBoundaryPoints(Range.END_TO_START, nodeRange) >= 0 || range.compareBoundaryPoints(Range.START_TO_END, nodeRange) <= 0) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-                } 
-            });
-            let currentNode; while (currentNode = walker.nextNode()) { nodesToProcess.push(currentNode); }
-        } catch (e) { console.error("[applyHighlightToSelectionDOM] Walker error:", e); return null; }
-        // console.log('[applyHighlightToSelectionDOM] Nodes to process count:', nodesToProcess.length);
-        if (nodesToProcess.length === 0) { return null; }
-
-        nodesToProcess.forEach((textNode, idx) => {
-            const nodeFullRange = document.createRange(); nodeFullRange.selectNodeContents(textNode);
-            const actualIntersectionRange = document.createRange();
-            actualIntersectionRange.setStart(
-                range.compareBoundaryPoints(Range.START_TO_START, nodeFullRange) > 0 ? range.startContainer : nodeFullRange.startContainer,
-                range.compareBoundaryPoints(Range.START_TO_START, nodeFullRange) > 0 ? range.startOffset : nodeFullRange.startOffset
-            );
-            actualIntersectionRange.setEnd(
-                range.compareBoundaryPoints(Range.END_TO_END, nodeFullRange) < 0 ? range.endContainer : nodeFullRange.endContainer,
-                range.compareBoundaryPoints(Range.END_TO_END, nodeFullRange) < 0 ? range.endOffset : nodeFullRange.endOffset
-            );
-            
-            // Further refinement to ensure offsets are within the current textNode
-            if (actualIntersectionRange.startContainer !== textNode) actualIntersectionRange.setStart(textNode, 0);
-            if (actualIntersectionRange.endContainer !== textNode) actualIntersectionRange.setEnd(textNode, textNode.textContent.length);
-
-
-            // console.log(`[applyHighlightToSelectionDOM] Node ${idx} ("${textNode.textContent.substring(0,30)}"). Actual Intersection: "${actualIntersectionRange.toString().substring(0,30)}", Collapsed? ${actualIntersectionRange.collapsed}`);
-            if (!actualIntersectionRange.collapsed) { 
-                handleHighlightingForNodeSegmentDOM(textNode, actualIntersectionRange, color, uniqueId); 
-            }
-        });
-        try { range.commonAncestorContainer?.closest('.textLayer')?.normalize?.(); } 
-        catch (e) { console.warn("[applyHighlightToSelectionDOM] Final normalize apply failed:", e); }
-        // console.log('[applyHighlightToSelectionDOM] FINISHED. ID created/used:', uniqueId);
-        return uniqueId;
+        if (!range || range.collapsed || !color || !viewerElement || !pdfViewer) return null;
+        // Generate or use provided ID
+        const hlId = overrideId || `hl-${uuidv4()}`;
+        // Determine page of range
+        const { pageIndex } = getRangePageInfo(range);
+        if (pageIndex < 0) return null;
+        // Draw continuous overlay rectangles
+        renderHighlightOverlay(range, color, hlId, pageIndex);
+        return hlId;
     }
 
     function handleHighlightingForNodeSegmentDOM(textNode, segmentRange, newColor, newId) {
@@ -841,6 +844,8 @@ import { get } from 'svelte/store';
         try { if (commonAncestor) { commonAncestor.normalize(); } else { viewerElement?.normalize(); } }
         catch(e) { console.warn("Normalization failed in removeClickedHighlightBlockDOM", e); }
         if (clickedHighlightId === id) clickedHighlightId = null;
+        // Remove overlay parts
+        removeHighlightOverlay(id);
     }
 
     function changeClickedHighlightColorDOM(id, color) {
@@ -849,6 +854,8 @@ import { get } from 'svelte/store';
         if (spans.length === 0) return;
         spans.forEach(span => { span.style.backgroundColor = color; span.dataset.hlColor = color; });
         if (clickedHighlightId === id) clickedHighlightColor = color;
+        // Update overlay parts as well
+        updateHighlightOverlayColor(id, color);
     }
 
     function unwrapNodeDOM(node) {
@@ -1129,10 +1136,7 @@ import { get } from 'svelte/store';
                         // Add a check to see if the found range's text (when normalized) matches the expected normalized text
                         const domTextNormalized = normalizeTextForMatching(range.toString());
                         if (domTextNormalized === searchStrNormalized) {
-                            applyHighlightToSelectionDOM(range, highlight.color, highlight.id);
-                            // Throttle per-highlight rendering
-                            // await tick();
-                            // await new Promise(resolve => setTimeout(resolve, 50));
+                            renderHighlightOverlay(range, highlight.color, highlight.id, pageIndex);
                         } else {
                             console.warn(`[ApplyInitial] Range found for ID ${highlight.id}, but text mismatch after DOM normalization. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
                         }
@@ -1230,9 +1234,84 @@ async function applyHighlightsForPage(pageIndex) {
             hl.text
         );
         if (range) {
-            applyHighlightToSelectionDOM(range, hl.color, hl.id);
+            renderHighlightOverlay(range, hl.color, hl.id, pageIndex);
         }
     }
+}
+// --- Continuous Highlight Overlay Helpers ---
+/** Ensure each PDF page div has a relative-positioned overlay container */
+function ensureHighlightOverlayContainer(pageIndex) {
+    const pageView = pdfViewer.getPageView(pageIndex);
+    if (!pageView || !pageView.div) return null;
+    const pageDiv = pageView.div;
+    let overlay = pageDiv.querySelector('.highlight-overlay');
+    if (!overlay) {
+        pageDiv.style.position = 'relative';
+        overlay = document.createElement('div');
+        overlay.className = 'highlight-overlay';
+        Object.assign(overlay.style, {
+            position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5
+        });
+        pageDiv.appendChild(overlay);
+    }
+    return overlay;
+}
+
+/** Draws highlight overlay rectangles for the given text range */
+function renderHighlightOverlay(range, color, id, pageIndex) {
+    const overlay = ensureHighlightOverlayContainer(pageIndex);
+    if (!overlay) return;
+    // Remove any existing parts for this highlight id
+    overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`).forEach(el => el.remove());
+    const pageView = pdfViewer.getPageView(pageIndex);
+    const pageRect = pageView.div.getBoundingClientRect();
+    // Group client rects by line (client rects with similar top) and draw one rectangle per line
+    const rects = Array.from(range.getClientRects());
+    const lines = [];
+    const LINE_THRESHOLD = 3; // pixels
+    rects.forEach(r => {
+        // Try to find an existing line group whose top is within threshold
+        let group = lines.find(line => Math.abs(line.top - r.top) < LINE_THRESHOLD);
+        if (!group) {
+            group = { top: r.top, rects: [] };
+            lines.push(group);
+        }
+        group.rects.push(r);
+    });
+    // Draw one overlay rectangle per line group
+    lines.forEach(line => {
+        const left = Math.min(...line.rects.map(r => r.left));
+        const right = Math.max(...line.rects.map(r => r.right));
+        const topPx = Math.min(...line.rects.map(r => r.top));
+        const bottomPx = Math.max(...line.rects.map(r => r.bottom));
+        const rectEl = document.createElement('div');
+        rectEl.className = 'overlay-part';
+        rectEl.dataset.hlId = id;
+        rectEl.dataset.hlColor = color;
+        rectEl.style.pointerEvents = 'auto';
+        Object.assign(rectEl.style, {
+            position: 'absolute',
+            left: `${left - pageRect.left}px`,
+            top: `${topPx - pageRect.top}px`,
+            width: `${right - left}px`,
+            height: `${bottomPx - topPx}px`,
+            backgroundColor: color,
+            borderRadius: '2px'
+        });
+        overlay.appendChild(rectEl);
+    });
+}
+
+/** Remove overlay parts for a given highlight id across all pages */
+function removeHighlightOverlay(id) {
+    document.querySelectorAll(`.highlight-overlay .overlay-part[data-hl-id="${id}"]`).forEach(el => el.remove());
+}
+
+/** Update overlay color when highlight color changes */
+function updateHighlightOverlayColor(id, color) {
+    document.querySelectorAll(`.highlight-overlay .overlay-part[data-hl-id="${id}"]`).forEach(el => {
+        el.style.backgroundColor = color;
+    });
 }
 
     // Helper: Maps a normalized offset within a node's normalized text to a raw offset within its raw text.
