@@ -68,6 +68,13 @@ import { get } from 'svelte/store';
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
+    // --- Helper: Normalize text for matching (ligatures, etc.) ---
+    function normalizeTextForMatching(text) {
+        if (!text) return "";
+        // Replace common ligatures. Add more as needed (e.g., ﬀ, ﬃ, ﬄ).
+        return text.replace(/ﬁ/g, 'fi').replace(/ﬂ/g, 'fl');
+    }
+
     // --- Helper: Get Page Info from a DOM Range ---
     function getRangePageInfo(range) {
         if (!range || !viewerElement || !pdfViewer) return { pageIndex: -1, pageElement: null, pageView: null };
@@ -80,69 +87,123 @@ import { get } from 'svelte/store';
         // console.warn("[getRangePageInfo] Could not find page for range.");
         return { pageIndex: -1, pageElement: null, pageView: null };
     }
-    
-    // --- Helper: Ensure Text Layer and basic PageView components are ready ---
-    async function ensureTextLayerReady(pageView, pageIndex) {
-        let currentPV = pageView;
-        if (!currentPV) {
-            currentPV = pdfViewer?.getPageView(pageIndex);
-            if (!currentPV) {
-                try {
-                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
-                } catch (_) {
-                    /* pdfViewer may reject the call if pages aren’t ready yet – safe to ignore */
-                }
-                await new Promise(r => setTimeout(r, 300)); 
-                currentPV = pdfViewer?.getPageView(pageIndex);
-                if (!currentPV) {
-                    console.error(`[ensureTextLayerReady] Critical: No PageView for page ${pageIndex + 1} after attempt to make it visible.`);
-                    throw new Error(`No PageView for page ${pageIndex + 1}`);
-                }
+
+    // Helper function to finalize PageView once textLayerDiv is confirmed
+    async function finalizePageView(pv, pageIndex) {
+        if (!pv) return null; // Should not happen if called correctly
+
+        if (pv.div?.querySelector('.textLayer')) { // Ensure div exists for textLayer
+            if (pv.textLayer && !pv.textLayer.textLayerDiv) {
+                pv.textLayer.textLayerDiv = pv.div.querySelector('.textLayer');
+            } else if (!pv.textLayer) {
+                pv.textLayer = { 
+                    textLayerDiv: pv.div.querySelector('.textLayer'), 
+                    renderingDone: false, // PDF.js might update this
+                    textContentItemsStr: [] // PDF.js might update this
+                };
             }
         }
+        // Ensure pdfPage is loaded, as it's needed for getTextContent
+        if (!pv.pdfPage && pdfDoc) {
+            try { 
+                pv.pdfPage = await pdfDoc.getPage(pageIndex + 1); 
+            } catch (e) { 
+                console.error(`[finalizePageView] Failed to get pdfPage for page ${pageIndex + 1}: ${e.message}`);
+                throw new Error(`Failed to get pdfPage for page ${pageIndex + 1}: ${e.message}`); 
+            }
+        }
+        return pv;
+    }
 
-        if (currentPV.textLayer?.textLayerDiv || currentPV.div?.querySelector('.textLayer')) {
-            if (currentPV.textLayer && !currentPV.textLayer.textLayerDiv && currentPV.div?.querySelector('.textLayer')) {
-                currentPV.textLayer.textLayerDiv = currentPV.div.querySelector('.textLayer');
-            } else if (!currentPV.textLayer && currentPV.div?.querySelector('.textLayer')) {
-                 currentPV.textLayer = { textLayerDiv: currentPV.div.querySelector('.textLayer'), renderingDone: false, textContentItemsStr: [] };
-            }
-            if (!currentPV.pdfPage && pdfDoc) {
-                try { currentPV.pdfPage = await pdfDoc.getPage(pageIndex + 1); } 
-                catch (e) { throw new Error(`Failed to get pdfPage for page ${pageIndex + 1}: ${e.message}`); }
-            }
-            return currentPV;
+    async function ensureTextLayerReady(pageViewFromCaller, pageIndex) {
+        let pv = pageViewFromCaller || pdfViewer?.getPageView(pageIndex);
+
+        // Check 1: Is it already good?
+        if (pv?.textLayer?.textLayerDiv || pv?.div?.querySelector('.textLayer')) {
+            return finalizePageView(pv, pageIndex);
         }
 
+        // If PageView object itself doesn't exist, try to make it exist.
+        if (!pv) {
+            try {
+                pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+            } catch (_) { /* ignore scroll errors if viewer is busy */ }
+            await new Promise(r => setTimeout(r, 350)); // Initial wait for PageView creation
+            pv = pdfViewer?.getPageView(pageIndex);
+            if (!pv) {
+                console.error(`[ensureTextLayerReady] Critical: No PageView object for page ${pageIndex + 1} after initial scroll.`);
+                throw new Error(`No PageView object for page ${pageIndex + 1}`);
+            }
+            // Re-check after PageView creation
+            if (pv.textLayer?.textLayerDiv || pv.div?.querySelector('.textLayer')) {
+                return finalizePageView(pv, pageIndex);
+            }
+        }
+        
+        // Check 2: PageView exists, but textLayer not ready. Try scrolling and waiting a bit more.
+        // This also covers the case where pv was just created above but its textLayer isn't ready.
+        if (pv) { // pv should exist here
+            try {
+                pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+            } catch (_) { /* ignore scroll errors */ }
+
+            await new Promise(r => setTimeout(r, 600)); // Wait a bit longer after scroll
+            let freshPv = pdfViewer?.getPageView(pageIndex); 
+            if (freshPv && (freshPv.textLayer?.textLayerDiv || freshPv.div?.querySelector('.textLayer'))) {
+                return finalizePageView(freshPv, pageIndex);
+            }
+            pv = freshPv || pv; // Use freshPv if available, otherwise fallback to the pv we had.
+        }
+
+        // Check 3: Fallback to polling
         return new Promise((resolve, reject) => {
-            const MAX_WAIT_TEXTLAYER = 5000; // Increased timeout slightly
+            const MAX_WAIT_TEXTLAYER = 30000; // Further Increased timeout to 30 seconds
             let totalWait = 0;
-            const interval = 150;
+            const interval = 250; // Slightly increased interval
+            let checkIntervalId = null;
+
+            const cleanupInterval = () => {
+                if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+            };
 
             const checkTextLayerAvailability = async () => {
-                let pv = pdfViewer.getPageView(pageIndex);
-                let div = pv?.textLayer?.textLayerDiv || pv?.div?.querySelector('.textLayer');
+                if (!pdfViewer) { // Guard against pdfViewer being null
+                    cleanupInterval();
+                    console.warn(`[ensureTextLayerReady] pdfViewer became null during check for page ${pageIndex + 1}. Aborting text layer wait.`);
+                    reject(new Error(`pdfViewer became null while waiting for textLayer on page ${pageIndex + 1}`));
+                    return;
+                }
 
+                let currentPolledPv = pdfViewer.getPageView(pageIndex); // Always get fresh PageView
+                let div = currentPolledPv?.textLayer?.textLayerDiv || currentPolledPv?.div?.querySelector('.textLayer');
+
+                // console.debug(`[ensureTextLayerReady Polling] Page ${pageIndex + 1}: totalWait=${totalWait}, pv=${!!currentPolledPv}, div=${!!div}`);
                 if (div) {
-                    clearInterval(checkIntervalId);
-                    if (pv && !pv.textLayer) pv.textLayer = { textLayerDiv: div, renderingDone: false, textContentItemsStr: []};
-                    else if (pv && pv.textLayer && !pv.textLayer.textLayerDiv) pv.textLayer.textLayerDiv = div;
-                    
-                    if (pv && !pv.pdfPage && pdfDoc) {
-                        try { pv.pdfPage = await pdfDoc.getPage(pageIndex + 1); } catch (e) { /* ignore */ }
+                    cleanupInterval();
+                    try {
+                        const finalPv = await finalizePageView(currentPolledPv, pageIndex);
+                        resolve(finalPv);
+                    } catch (e) {
+                        reject(e); // finalizePageView might throw if getPage fails
                     }
-                    resolve(pv || currentPV);
                 } else {
                     totalWait += interval;
                     if (totalWait >= MAX_WAIT_TEXTLAYER) {
-                        clearInterval(checkIntervalId);
-                        console.error(`[ensureTextLayerReady] Timeout waiting for textLayer div on page ${pageIndex + 1}.`);
-                        reject(new Error(`Timeout waiting for textLayer div on page ${pageIndex + 1}`));
+                        cleanupInterval(); // Ensure interval is cleared on timeout
+                        console.error(`[ensureTextLayerReady Polling] Timeout waiting for textLayer div on page ${pageIndex + 1} after ${MAX_WAIT_TEXTLAYER}ms.`);
+                        reject(new Error(`Timeout waiting for textLayer div on page ${pageIndex + 1} (polling)`));
+                    } else if (!currentPolledPv && pdfViewer) { // Check if pageView itself disappeared
+                        // This case might occur if the PDF document is changed/closed during polling.
+                        // The !pdfViewer check at the top handles viewer disappearing, but this is a specific PageView check.
+                        cleanupInterval();
+                        console.error(`[ensureTextLayerReady Polling] PageView for page ${pageIndex + 1} became null.`);
+                        reject(new Error(`PageView for page ${pageIndex + 1} became null during polling`));
                     }
                 }
             };
-            const checkIntervalId = setInterval(checkTextLayerAvailability, interval);
-            checkTextLayerAvailability(); 
+            // Start the interval
+            checkIntervalId = setInterval(checkTextLayerAvailability, interval);
+            checkTextLayerAvailability(); // Perform an initial check immediately
         });
     }
     
@@ -150,13 +211,19 @@ import { get } from 'svelte/store';
         if (!range || pageIndex < 0 || !pdfViewer || !pdfDoc) {
             return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
         }
-        const selectedText = range.toString().trim();
-        if (!selectedText) return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
+        const rawSelectedText = range.toString().trim();
+        const normalizedSelectedText = normalizeTextForMatching(rawSelectedText);
+        if (!normalizedSelectedText) return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
 
         let pageView, pdfPage, pageTextLayerDiv;
         try {
             pageView = pdfViewer.getPageView(pageIndex);
-            pageView = await ensureTextLayerReady(pageView, pageIndex);
+            // Pass the potentially existing pageView to ensureTextLayerReady
+            pageView = await ensureTextLayerReady(pageView, pageIndex); 
+            if (!pageView) { // Should be caught by ensureTextLayerReady throwing, but as a safeguard:
+                throw new Error(`ensureTextLayerReady returned null for page ${pageIndex + 1}`);
+            }
+
             pdfPage = pageView.pdfPage;
             pageTextLayerDiv = pageView.textLayer?.textLayerDiv;
 
@@ -165,8 +232,10 @@ import { get } from 'svelte/store';
             const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
             if (!textContent?.items?.length) return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
 
-            const fullPageText = textContent.items.map(item => item.str).join('');
+            const rawFullPageText = textContent.items.map(item => item.str).join('');
             let prefix = '', suffix = '', occurrenceInPageContext = 0, selectionStartInPage = -1;
+            // Use normalized full page text for matching context and occurrence calculation
+            const normalizedFullPageText = normalizeTextForMatching(rawFullPageText);
 
             if (pageTextLayerDiv) {
                 const walker = document.createTreeWalker(pageTextLayerDiv, NodeFilter.SHOW_TEXT, null, false);
@@ -177,32 +246,48 @@ import { get } from 'svelte/store';
                         break;
                     }
                     currentOffset += currentNode.textContent.length;
+                    // selectionStartInPage is an offset in the *raw* concatenated DOM text.
                 }
             }
 
+            // Determine prefix and suffix from the normalized full page text
+            // We need to estimate where the normalizedSelectedText starts in normalizedFullPageText
+            let estimatedNormalizedSelectionStart = -1;
             if (selectionStartInPage !== -1) {
-                prefix = fullPageText.substring(Math.max(0, selectionStartInPage - CONTEXT_LENGTH), selectionStartInPage);
-                const selectionEndInPage = selectionStartInPage + selectedText.length;
-                suffix = fullPageText.substring(selectionEndInPage, Math.min(fullPageText.length, selectionEndInPage + CONTEXT_LENGTH));
-                
-                let count = 0;
-                const escapedSelectedText = escapeRegExp(selectedText);
-                const targetRegex = new RegExp((prefix ? escapeRegExp(prefix) : "") + `(${escapedSelectedText})` + (suffix ? escapeRegExp(suffix) : ""), 'g');
-                let match;
-                while ((match = targetRegex.exec(fullPageText)) !== null) {
-                    const matchStartOfSelected = match.index + (prefix ? prefix.length : 0);
-                    if (matchStartOfSelected === selectionStartInPage) {
-                        occurrenceInPageContext = count;
-                        break;
-                    }
-                    count++;
-                }
-            } else {
-                // Fallback if precise offset not found (less reliable)
-                if (range.startContainer.nodeType === Node.TEXT_NODE) prefix = range.startContainer.textContent.substring(Math.max(0, range.startOffset - CONTEXT_LENGTH), range.startOffset);
-                if (range.endContainer.nodeType === Node.TEXT_NODE) suffix = range.endContainer.textContent.substring(range.endOffset, Math.min(range.endContainer.textContent.length, range.endOffset + CONTEXT_LENGTH));
+                // This is an approximation: normalize the part of raw text leading up to the selection
+                estimatedNormalizedSelectionStart = normalizeTextForMatching(rawFullPageText.substring(0, selectionStartInPage)).length;
             }
-            return { prefix, suffix, occurrenceInPageContext };
+
+            if (selectionStartInPage !== -1) {
+                prefix = normalizedFullPageText.substring(Math.max(0, estimatedNormalizedSelectionStart - CONTEXT_LENGTH), estimatedNormalizedSelectionStart);
+                const normalizedSelectionEnd = estimatedNormalizedSelectionStart + normalizedSelectedText.length;
+                suffix = normalizedFullPageText.substring(normalizedSelectionEnd, Math.min(normalizedFullPageText.length, normalizedSelectionEnd + CONTEXT_LENGTH));
+            } else { // Fallback if we couldn't get a precise start (e.g. selection spans multiple complex nodes)
+                // Try to find the text and derive context around its first occurrence if no specific offset.
+                const firstMatchIndex = normalizedFullPageText.indexOf(normalizedSelectedText);
+                if (firstMatchIndex !== -1) {
+                    prefix = normalizedFullPageText.substring(Math.max(0, firstMatchIndex - CONTEXT_LENGTH), firstMatchIndex);
+                    const endOfText = firstMatchIndex + normalizedSelectedText.length;
+                    suffix = normalizedFullPageText.substring(endOfText, Math.min(normalizedFullPageText.length, endOfText + CONTEXT_LENGTH));
+                }
+            }
+
+            // Calculate occurrenceInPageContext using normalized values
+            let count = 0;
+            const targetRegex = new RegExp((prefix ? escapeRegExp(prefix) : "") + `(${escapeRegExp(normalizedSelectedText)})` + (suffix ? escapeRegExp(suffix) : ""), 'g');
+            let match;
+            while ((match = targetRegex.exec(normalizedFullPageText)) !== null) {
+                const currentMatchStartForSelectedText = match.index + (prefix ? prefix.length : 0);
+                if (estimatedNormalizedSelectionStart !== -1 && currentMatchStartForSelectedText === estimatedNormalizedSelectionStart) {
+                    occurrenceInPageContext = count;
+                    break;
+                } else if (estimatedNormalizedSelectionStart === -1 && count === 0) { // If no specific start, assume the first found occurrence is the target
+                    occurrenceInPageContext = count; // Should be 0
+                    break;
+                }
+                count++;
+            }
+            return { prefix, suffix, occurrenceInPageContext }; // prefix & suffix are normalized
         } catch (e) {
             console.error(`[getContextualDataForRange] Error for page ${pageIndex + 1}:`, e.message);
             return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
@@ -211,15 +296,18 @@ import { get } from 'svelte/store';
 
     async function createHighlightDataForStorage(id, range, color) {
         if (!range) return null;
-        const text = range.toString().trim();
-        if (!text) return null;
+        const rawText = range.toString().trim();
+        const normalizedText = normalizeTextForMatching(rawText); // Normalize text before storage
+        if (!normalizedText) return null;
+
         const { pageIndex } = getRangePageInfo(range);
         let actualPageIndex = pageIndex;
         if (pageIndex === -1) {
             actualPageIndex = pdfViewer?.currentPageNumber ? pdfViewer.currentPageNumber - 1 : 0;
         }
+        // getContextualDataForRange now returns normalized prefix/suffix
         const { prefix, suffix, occurrenceInPageContext } = await getContextualDataForRange(range, actualPageIndex);
-        return { id, type: 'pdfHighlight', color, text, pageIndex: actualPageIndex, prefix, suffix, occurrenceInPageContext }; // Added type
+        return { id, type: 'pdfHighlight', color, text: normalizedText, pageIndex: actualPageIndex, prefix, suffix, occurrenceInPageContext };
     }
     
     function recordAction(type, payload) {
@@ -751,8 +839,21 @@ import { get } from 'svelte/store';
     /* ─────────────────────────── PDF Loading / Setup (User's latest version) ──────────────── */
     async function loadPdfAndLibraries(containerElement) {
         loading = true; error = null; loadingMessage = 'Loading PDF libraries...'; 
-        pdfDoc = null; pdfViewer = null; initialHighlightsApplied = false;
+        initialHighlightsApplied = false;
         undoStack = []; redoStack = [];
+
+        // Ensure old viewer and doc are cleaned up if they exist BEFORE nulling them
+        if (pdfViewer) { 
+            pdfViewer.cleanup(); 
+            pdfViewer.setDocument(null);
+            // pdfViewer.eventBus = null; // PDFViewer might handle its own eventBus unlinking on cleanup/setDocument(null)
+        }
+        if (pdfDoc) {
+            pdfDoc.destroy();
+        }
+        // Now set them to null
+        pdfDoc = null; 
+        pdfViewer = null;
 
         try {
             if (!pdfjsLib) {
@@ -779,13 +880,6 @@ import { get } from 'svelte/store';
             pdfDoc = await loadingTask.promise;
             numPages = pdfDoc.numPages;
             
-            // Ensure old viewer is cleaned up if it exists
-            if (pdfViewer) { 
-                pdfViewer.cleanup(); 
-                pdfViewer.setDocument(null);
-                // pdfViewer.eventBus = null; // PDFViewer might handle its own eventBus unlinking on cleanup/setDocument(null)
-            }
-
             const linkService = new PDFLinkService({ eventBus }); // Use the new eventBus
             const findController = new PDFFindController({ linkService: linkService, eventBus: eventBus });
             pdfViewer = new PDFViewer({ 
@@ -873,10 +967,9 @@ import { get } from 'svelte/store';
             }
         });
 
-        eventBus.on('textlayerrendered', (evt) => {
-            // console.log(`[PDFViewerPanel] event: textlayerrendered for page ${evt.pageNumber}`);
-            // This event is useful for incremental application of highlights if needed,
-            // but applyInitialHighlights is called on 'documentloaded' for a batch application.
+        eventBus.on('textlayerrendered', async (evt) => {
+            // Re-apply highlights for this page whenever its text layer renders
+            await applyHighlightsForPage(evt.pageNumber - 1);
         });
 
         eventBus.on('pagesinit', () => { 
@@ -918,6 +1011,7 @@ import { get } from 'svelte/store';
         const pageIndicesWithHighlights = Object.keys(highlightsByPage).map(idx => parseInt(idx, 10));
 
         for (const pageIndex of pageIndicesWithHighlights) {
+            console.log(`[ApplyInitial] Processing page ${pageIndex + 1} for highlights.`);
             const pageHighlights = highlightsByPage[pageIndex];
             if (!pageHighlights || pageHighlights.length === 0) continue;
 
@@ -935,20 +1029,23 @@ import { get } from 'svelte/store';
                  console.warn(`[ApplyInitial] Could not get PDFPage object for page ${pageIndex + 1}. Skipping.`);
                  continue;
             }
+            // Get text content once for the page
             const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
 
             if (!pageTextLayerDiv || !textContent?.items?.length) {
                 console.warn(`[ApplyInitial] No textLayerDiv or text items for page ${pageIndex + 1}. Skipping highlights for this page.`);
                 continue;
             }
-            const fullPageText = textContent.items.map(item => item.str).join('');
+            // Normalize the full page text for matching
+            const fullPageTextNormalized = normalizeTextForMatching(textContent.items.map(item => item.str).join(''));
 
             for (const highlight of pageHighlights) {
-                if (!highlight.text || !highlight.color || !highlight.id) continue;
+                // highlight.text, .prefix, .suffix are already normalized from storage
+                if (!highlight.text || !highlight.color || !highlight.id) continue; 
                 let startIndex = -1;
                 let currentOccurrences = 0;
                 const targetOccurrence = highlight.occurrenceInPageContext || 0;
-                const searchStr = highlight.text;
+                const searchStrNormalized = highlight.text; // Already normalized
                 
                 // Prioritize match with context if available
                 const prefix = highlight.prefix || "";
@@ -958,41 +1055,68 @@ import { get } from 'svelte/store';
                 if (prefix || suffix) {
                     regex = new RegExp(
                         (prefix ? escapeRegExp(prefix) : "") +
-                        `(${escapeRegExp(searchStr)})` +
+                        `(${escapeRegExp(searchStrNormalized)})` + // Ensure this captures the main text
                         (suffix ? escapeRegExp(suffix) : ""),
                         'g'
                     );
                 } else {
-                    regex = new RegExp(escapeRegExp(searchStr), 'g');
+                    regex = new RegExp(`(${escapeRegExp(searchStrNormalized)})`, 'g'); // Ensure capture
                 }
                 
                 let match;
-                while ((match = regex.exec(fullPageText)) !== null) {
+                while ((match = regex.exec(fullPageTextNormalized)) !== null) {
                     if (currentOccurrences === targetOccurrence) {
                         startIndex = match.index + (prefix && (prefix || suffix) ? prefix.length : 0); // Adjust if prefix was part of regex but not part of captured group 1
                         if (!(prefix || suffix) && match[1]) { // If no context, group 1 is not there.
                              startIndex = match.index;
-                        } else if ((prefix || suffix) && !match[1] && match[0].includes(searchStr)){ // if context used, and match[1] is undefined but main text is there.
-                            startIndex = match[0].indexOf(searchStr) + match.index;
+                        } else if ((prefix || suffix) && !match[1] && match[0].includes(searchStrNormalized)){ // if context used, and match[1] is undefined but main text is there.
+                            startIndex = match[0].indexOf(searchStrNormalized) + match.index;
                         }
-
-
+                        // More robust way to get start of the core text (captured group 1)
+                        if (match[1]) { // If we have a capture group for the text itself
+                            let actualPrefixInRegex = "";
+                            if (prefix) actualPrefixInRegex = escapeRegExp(prefix);
+                            // Find where match[1] (the core text) starts relative to match[0] (the whole pattern)
+                            const tempRegexForPrefix = new RegExp("^" + actualPrefixInRegex);
+                            const prefixMatchInFull = tempRegexForPrefix.exec(match[0]);
+                            startIndex = match.index + (prefixMatchInFull ? prefixMatchInFull[0].length : 0);
+                        }
                         break;
                     }
                     currentOccurrences++;
                 }
 
                 if (startIndex !== -1) {
-                    const range = findRangeInTextLayer(pageTextLayerDiv, startIndex, highlight.text.length);
+                    // Pass the normalized expected text for verification
+                    const range = findRangeInTextLayer(
+                        pageTextLayerDiv, 
+                        startIndex, // This is normalizedOverallCharStart
+                        highlight.text.length, // This is normalizedOverallLength
+                        searchStrNormalized    // This is normalizedExpectedText
+                    );
                     if (range) {
-                        applyHighlightToSelectionDOM(range, highlight.color, highlight.id);
+                        // Add a check to see if the found range's text (when normalized) matches the expected normalized text
+                        const domTextNormalized = normalizeTextForMatching(range.toString());
+                        if (domTextNormalized === searchStrNormalized) {
+                            applyHighlightToSelectionDOM(range, highlight.color, highlight.id);
+                            // Throttle per-highlight rendering
+                            await tick();
+                            // allow highlight to render before next
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        } else {
+                            console.warn(`[ApplyInitial] Range found for ID ${highlight.id}, but text mismatch after DOM normalization. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
+                            // This warning will now primarily indicate issues if findRangeInTextLayer's internal verification fails.
+                        }
                     } else {
-                         console.warn(`[ApplyInitial] Failed to create DOM range for highlight ID ${highlight.id} on page ${pageIndex + 1} at char offset ${startIndex}. Text: "${highlight.text.substring(0,20)}..."`);
+                         console.warn(`[ApplyInitial] Failed to create DOM range (findRangeInTextLayer returned null) for ID ${highlight.id} on page ${pageIndex + 1} (norm. offset ${startIndex}). Text: "${searchStrNormalized.substring(0,20)}..."`);
                     }
                 } else {
-                     console.warn(`[ApplyInitial] Text not found for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${highlight.text.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefix.substring(0,10)}", Sfx: "${suffix.substring(0,10)}")`);
+                     console.warn(`[ApplyInitial] Text not found (normalized search) for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefix.substring(0,10)}", Sfx: "${suffix.substring(0,10)}")`);
                 }
             }
+            // allow highlights from this page to render before scrolling to the next
+            await tick();
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
         initialHighlightsApplied = true;
         loading = false;
@@ -1000,49 +1124,160 @@ import { get } from 'svelte/store';
         console.log('[PDFViewerPanel] Finished applying all initial highlights.');
     }
 
+// Re-apply stored highlights on a single page whenever its text layer renders
+async function applyHighlightsForPage(pageIndex) {
+    if (!initialHighlights?.length || !pdfViewer || !pdfDoc) return;
+    // grab only the highlights for this page
+    const pageHighlights = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
+    if (!pageHighlights.length) return;
 
-    function findRangeInTextLayer(textLayerDiv, overallCharStart, length) {
+    // ensure textLayer is ready
+    let pageView = pdfViewer.getPageView(pageIndex);
+    try {
+        pageView = await ensureTextLayerReady(pageView, pageIndex);
+    } catch {
+        return;
+    }
+    const layerDiv = pageView.textLayer?.textLayerDiv;
+    const pdfPage = pageView.pdfPage || await pdfDoc.getPage(pageIndex + 1);
+    if (!layerDiv || !pdfPage) return;
+
+    // re-index text and re-apply each highlight
+    const items = (await pdfPage.getTextContent({ normalizeWhitespace: true })).items;
+    const txt = items.map(i => i.str).join('');
+    const normTxt = normalizeTextForMatching(txt);
+
+    for (const hl of pageHighlights) {
+        // find its start in the normalized page text
+        const re = hl.prefix || hl.suffix
+            ? new RegExp(
+                (hl.prefix ? escapeRegExp(hl.prefix) : '') +
+                `(${escapeRegExp(hl.text)})` +
+                (hl.suffix ? escapeRegExp(hl.suffix) : ''),
+                'g'
+            )
+            : new RegExp(`(${escapeRegExp(hl.text)})`, 'g');
+        let m, occ = 0, start = -1;
+        while ((m = re.exec(normTxt))) {
+            if (occ === (hl.occurrenceInPageContext || 0)) {
+                start = m.index + ((hl.prefix && m[1]) ? hl.prefix.length : 0);
+                break;
+            }
+            occ++;
+        }
+        if (start < 0) continue;
+
+        const range = findRangeInTextLayer(
+            layerDiv,
+            start,
+            hl.text.length,
+            hl.text
+        );
+        if (range) {
+            applyHighlightToSelectionDOM(range, hl.color, hl.id);
+        }
+    }
+}
+
+    // Helper: Maps a normalized offset within a node's normalized text to a raw offset within its raw text.
+    function mapNormalizedOffsetInNodeToRawOffset(rawTextNodeContent, targetNormalizedOffsetInNode) {
+        if (targetNormalizedOffsetInNode === 0) return 0;
+        
+        for (let r = 0; r < rawTextNodeContent.length; r++) { // r is the raw character index
+            // Normalized length of raw text *before* char at r
+            const normLenBeforeR = (r > 0) ? normalizeTextForMatching(rawTextNodeContent.substring(0, r)).length : 0;
+            // Normalized length of raw text *including* char at r
+            const normLenIncludingR = normalizeTextForMatching(rawTextNodeContent.substring(0, r + 1)).length;
+
+            // If the target offset is less than the normalized length *after* including this raw char,
+            // AND the target offset is greater than or equal to the normalized length *before* this raw char,
+            // then this raw char 'r' is the one that starts the target normalized character.
+            if (normLenIncludingR > targetNormalizedOffsetInNode && normLenBeforeR <= targetNormalizedOffsetInNode) {
+                return r;
+            }
+        }
+        
+        // If targetNormalizedOffsetInNode is equal to the total normalized length of the node,
+        // it means the offset is at the end of the node (raw length).
+        if (normalizeTextForMatching(rawTextNodeContent).length === targetNormalizedOffsetInNode) {
+            return rawTextNodeContent.length;
+        }
+        // console.warn(`[mapNormToRaw] Could not map norm offset ${targetNormalizedOffsetInNode} in raw "${rawTextNodeContent.substring(0,20)}" (norm len: ${normalizeTextForMatching(rawTextNodeContent).length})`);
+        return rawTextNodeContent.length; // Fallback, indicates an issue if used for a start offset not at end of node.
+    }
+
+    function findRangeInTextLayer(textLayerDiv, normalizedOverallCharStart, normalizedOverallLength, normalizedExpectedText) {
         const range = document.createRange();
-        let accumulatedLength = 0;
-        let startNode = null, startOffset = 0;
-        let endNode = null, endOffset = 0;
+        let accumulatedNormalizedCharsBeforeNode = 0;
+        let startNode = null, startOffsetRaw = -1;
+        let endNode = null, endOffsetRaw = -1;
         let foundStart = false;
+
         const walker = document.createTreeWalker(textLayerDiv, NodeFilter.SHOW_TEXT, null, false);
-        let currentNode, lastTextNode = null;
+        let currentNode;
 
         while (currentNode = walker.nextNode()) {
-            lastTextNode = currentNode;
-            const nodeTextLength = currentNode.textContent.length;
-            if (!foundStart && overallCharStart >= accumulatedLength && overallCharStart < accumulatedLength + nodeTextLength) {
+            const nodeTextRaw = currentNode.textContent;
+            if (!nodeTextRaw) continue;
+
+            const nodeNormalizedText = normalizeTextForMatching(nodeTextRaw);
+            const nodeNormalizedLength = nodeNormalizedText.length;
+
+            if (!foundStart && normalizedOverallCharStart >= accumulatedNormalizedCharsBeforeNode && normalizedOverallCharStart < accumulatedNormalizedCharsBeforeNode + nodeNormalizedLength) {
                 startNode = currentNode;
-                startOffset = overallCharStart - accumulatedLength;
+                const normalizedStartInNode = normalizedOverallCharStart - accumulatedNormalizedCharsBeforeNode;
+                startOffsetRaw = mapNormalizedOffsetInNodeToRawOffset(nodeTextRaw, normalizedStartInNode);
                 foundStart = true;
             }
-            if (foundStart && (overallCharStart + length) <= (accumulatedLength + nodeTextLength)) {
-                endNode = currentNode;
-                endOffset = (overallCharStart + length) - accumulatedLength;
-                break; 
+
+            if (foundStart) {
+                const targetEndNormalizedGlobal = normalizedOverallCharStart + normalizedOverallLength;
+                if (targetEndNormalizedGlobal <= accumulatedNormalizedCharsBeforeNode + nodeNormalizedLength) {
+                    // Highlight ends in this node
+                    endNode = currentNode;
+                    const normalizedEndInNode = targetEndNormalizedGlobal - accumulatedNormalizedCharsBeforeNode;
+                    endOffsetRaw = mapNormalizedOffsetInNodeToRawOffset(nodeTextRaw, normalizedEndInNode);
+                    break; // Found start and end node
+                }
             }
-            accumulatedLength += nodeTextLength;
+            accumulatedNormalizedCharsBeforeNode += nodeNormalizedLength;
         }
-        if (foundStart && !endNode && lastTextNode && (overallCharStart + length) === accumulatedLength) {
-            endNode = lastTextNode; endOffset = lastTextNode.textContent.length;
-        }
-        if (startNode && endNode) {
+
+        if (startNode && endNode && startOffsetRaw !== -1 && endOffsetRaw !== -1) {
             try {
-                range.setStart(startNode, startOffset);
-                range.setEnd(endNode, endOffset);
-                // Basic validation of extracted text length if it's a simple case.
-                // Note: Range.toString() can differ from input `length` due to normalization, whitespace, etc.
-                // A strict length check here might be too fragile.
-                // if (range.toString().length !== length && range.toString().replace(/\s+/g, '').length !== searchStr.replace(/\s+/g, '').length) { 
-                // console.warn(`[findRangeInTextLayer] Length mismatch. Expected: ${length}, Got: ${range.toString().length}. Text: "${range.toString().substring(0,30)}" vs expected length ${length}`);
-                // }
-                return range;
-            } catch (e) { console.error("[findRangeInTextLayer] Error setting range:", e); return null; }
+                range.setStart(startNode, startOffsetRaw);
+                range.setEnd(endNode, endOffsetRaw);
+
+                const actualNormalizedTextFromRange = normalizeTextForMatching(range.toString());
+                if (actualNormalizedTextFromRange === normalizedExpectedText) {
+                    return range;
+                } else {
+                    // This is the critical point for the "text mismatch" warning.
+                    // console.warn(`[findRangeInTextLayer] Verification failed. Expected: "${normalizedExpectedText.substring(0,30)}", Got: "${actualNormalizedTextFromRange.substring(0,30)}". NormStart: ${normalizedOverallCharStart}, NormLen: ${normalizedOverallLength}. Raw offsets: ${startOffsetRaw}-${endOffsetRaw}.`);
+                    return null; // Strict: if text doesn't match, don't return range.
+                }
+            } catch (e) { console.error("[findRangeInTextLayer] Error setting/verifying range:", e, {startNode, startOffsetRaw, endNode, endOffsetRaw}); return null; }
+        } else {
+            // console.warn(`[findRangeInTextLayer] Could not determine start/end node/offset. NormStart: ${normalizedOverallCharStart}, NormLen: ${normalizedOverallLength}. FoundStart: ${foundStart}`);
         }
         return null;
     }
+
+    // Helper for findRangeInTextLayer to get accumulated normalized length up to a specific node (exclusive of the node itself)
+    // This helper was part of a previous thought process and might not be strictly needed with the current findRangeInTextLayer structure
+    // but can be useful for debugging or alternative mapping strategies.
+    /*
+    function findAccumulatedNormLengthForNode(textLayerDiv, targetNode) {
+        const walker = document.createTreeWalker(textLayerDiv, NodeFilter.SHOW_TEXT, null, false);
+        let currentNode;
+        let accumulated = 0;
+        while(currentNode = walker.nextNode()) {
+            if (currentNode === targetNode) break;
+            accumulated += normalizeTextForMatching(currentNode.textContent).length;
+        }
+        return accumulated;
+    }
+    */
 
     /* ─────────────────────────── Toolbar Actions (from your complete version) ────────────────── */
     function goToPrevPage() { if (pdfViewer && currentPageNum > 1) pdfViewer.previousPage(); }
