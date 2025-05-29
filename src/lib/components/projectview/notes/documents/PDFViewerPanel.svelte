@@ -68,11 +68,24 @@ import { get } from 'svelte/store';
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    // --- Helper: Normalize text for matching (ligatures, etc.) ---
+    // --- Helper: Normalize text for matching (Unicode-aware, ligatures, hyphenation, dashes, quotes, ellipsis) ---
     function normalizeTextForMatching(text) {
         if (!text) return "";
-        // Replace common ligatures. Add more as needed (e.g., ﬀ, ﬃ, ﬄ).
-        return text.replace(/ﬁ/g, 'fi').replace(/ﬂ/g, 'fl');
+        // Unicode compatibility decomposition replaces ligatures (e.g., ﬁ, ﬀ, ﬂ, ﬃ, ﬄ).
+        let result = text.normalize('NFKC');
+        // Remove soft hyphens introduced by PDF hyphenation.
+        result = result.replace(/\u00AD/g, '');
+        // Replace non-breaking spaces with regular spaces.
+        result = result.replace(/[\u00A0\u2007\u202F]/g, ' ');
+        // Normalize ellipsis, dashes, and curly quotes to ASCII.
+        result = result
+            .replace(/\u2026/g, '...')       // ellipsis
+            .replace(/[–—]/g, '-')           // en dash, em dash
+            .replace(/[‘’]/g, "'")           // curly single quotes
+            .replace(/[“”]/g, '"');          // curly double quotes
+        // Remove hyphens at line breaks only, keep whitespace as-is.
+        result = result.replace(/-\s+/g, '');
+        return result;
     }
 
     // --- Helper: Get Page Info from a DOM Range ---
@@ -995,17 +1008,10 @@ import { get } from 'svelte/store';
     async function applyInitialHighlights() {
         if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement) return;
         if (!initialHighlights || initialHighlights.length === 0) return;
-        // If initialHighlights can be empty and loading was set externally, ensure it's reset.
-        // However, current logic (reactive block) ensures initialHighlights is non-empty here.
-        // if (!initialHighlights || initialHighlights.length === 0) {
-        //     initialHighlightsApplied = true; // Prevent re-runs
-        //     return;
-        // }
         loading = true; 
-        loadingMessage = 'Loading Annotations...'; // Updated message as per request
+        loadingMessage = 'Loading Annotations...';
         console.log(`[PDFViewerPanel] ${loadingMessage} Count:`, initialHighlights.length);
         await tick(); 
-
 
         const highlightsByPage = initialHighlights.reduce((acc, hl) => {
             const pageIdx = hl.pageIndex;
@@ -1043,8 +1049,14 @@ import { get } from 'svelte/store';
                 console.warn(`[ApplyInitial] No textLayerDiv or text items for page ${pageIndex + 1}. Skipping highlights for this page.`);
                 continue;
             }
-            // Normalize the full page text for matching
-            const fullPageTextNormalized = normalizeTextForMatching(textContent.items.map(item => item.str).join(''));
+            // Use textLayer DOM when available, fall back to PDF.js items
+            let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
+            // Clean raw text: replace NBSP, remove line-break hyphens, then normalize.
+            rawFullPageText = rawFullPageText
+                .replace(/\u00A0/g, ' ')
+                .replace(/-\s+/g, '');        // Remove hyphens at line breaks only
+            // Normalize ligatures and punctuation, then collapse whitespace for the page search
+            const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
 
             for (const highlight of pageHighlights) {
                 // highlight.text, .prefix, .suffix are already normalized from storage
@@ -1053,41 +1065,24 @@ import { get } from 'svelte/store';
                 let currentOccurrences = 0;
                 const targetOccurrence = highlight.occurrenceInPageContext || 0;
                 const searchStrNormalized = highlight.text; // Already normalized
-                
-                // Prioritize match with context if available
+
+                // Build a regex with lookbehind/lookahead so match.index is at the highlight text
                 const prefix = highlight.prefix || "";
                 const suffix = highlight.suffix || "";
-                let regex;
-
-                if (prefix || suffix) {
-                    regex = new RegExp(
-                        (prefix ? escapeRegExp(prefix) : "") +
-                        `(${escapeRegExp(searchStrNormalized)})` + // Ensure this captures the main text
-                        (suffix ? escapeRegExp(suffix) : ""),
-                        'g'
-                    );
-                } else {
-                    regex = new RegExp(`(${escapeRegExp(searchStrNormalized)})`, 'g'); // Ensure capture
+                let pattern = "";
+                if (prefix) {
+                    pattern += `(?<=${escapeRegExp(prefix)})`;
                 }
-                
+                pattern += escapeRegExp(searchStrNormalized);
+                if (suffix) {
+                    pattern += `(?=${escapeRegExp(suffix)})`;
+                }
+                const regex = new RegExp(pattern, 'g');
+
                 let match;
                 while ((match = regex.exec(fullPageTextNormalized)) !== null) {
                     if (currentOccurrences === targetOccurrence) {
-                        startIndex = match.index + (prefix && (prefix || suffix) ? prefix.length : 0); // Adjust if prefix was part of regex but not part of captured group 1
-                        if (!(prefix || suffix) && match[1]) { // If no context, group 1 is not there.
-                             startIndex = match.index;
-                        } else if ((prefix || suffix) && !match[1] && match[0].includes(searchStrNormalized)){ // if context used, and match[1] is undefined but main text is there.
-                            startIndex = match[0].indexOf(searchStrNormalized) + match.index;
-                        }
-                        // More robust way to get start of the core text (captured group 1)
-                        if (match[1]) { // If we have a capture group for the text itself
-                            let actualPrefixInRegex = "";
-                            if (prefix) actualPrefixInRegex = escapeRegExp(prefix);
-                            // Find where match[1] (the core text) starts relative to match[0] (the whole pattern)
-                            const tempRegexForPrefix = new RegExp("^" + actualPrefixInRegex);
-                            const prefixMatchInFull = tempRegexForPrefix.exec(match[0]);
-                            startIndex = match.index + (prefixMatchInFull ? prefixMatchInFull[0].length : 0);
-                        }
+                        startIndex = match.index;
                         break;
                     }
                     currentOccurrences++;
@@ -1169,10 +1164,15 @@ async function applyHighlightsForPage(pageIndex) {
     const pdfPage = pageView.pdfPage || await pdfDoc.getPage(pageIndex + 1);
     if (!layerDiv || !pdfPage) return;
 
-    // re-index text and re-apply each highlight
+    // Use DOM text if rendered, otherwise items
     const items = (await pdfPage.getTextContent({ normalizeWhitespace: true })).items;
-    const txt = items.map(i => i.str).join('');
-    const normTxt = normalizeTextForMatching(txt);
+    let rawTxt = pageView.textLayer?.textLayerDiv?.textContent || items.map(i => i.str).join('');
+    // Clean raw node text: replace NBSP, remove line-break hyphens
+    rawTxt = rawTxt
+        .replace(/\u00A0/g, ' ')
+        .replace(/-\s+/g, '');        // Remove hyphens at line breaks only
+    // Normalize ligatures and punctuation, then collapse whitespace for matching
+    const normTxt = normalizeTextForMatching(rawTxt).replace(/\s+/g, ' ');
 
     for (const hl of pageHighlights) {
         // find its start in the normalized page text
@@ -1276,13 +1276,13 @@ async function applyHighlightsForPage(pageIndex) {
                 range.setEnd(endNode, endOffsetRaw);
 
                 const actualNormalizedTextFromRange = normalizeTextForMatching(range.toString());
-                if (actualNormalizedTextFromRange === normalizedExpectedText) {
-                    return range;
-                } else {
-                    // This is the critical point for the "text mismatch" warning.
-                    // console.warn(`[findRangeInTextLayer] Verification failed. Expected: "${normalizedExpectedText.substring(0,30)}", Got: "${actualNormalizedTextFromRange.substring(0,30)}". NormStart: ${normalizedOverallCharStart}, NormLen: ${normalizedOverallLength}. Raw offsets: ${startOffsetRaw}-${endOffsetRaw}.`);
-                    return null; // Strict: if text doesn't match, don't return range.
+                if (actualNormalizedTextFromRange !== normalizedExpectedText) {
+                    console.warn(
+                        `[findRangeInTextLayer] Verification mismatch. Expected: "${normalizedExpectedText.substring(0,30)}...", Got: "${actualNormalizedTextFromRange.substring(0,30)}...".`
+                    );
                 }
+                // Return range even if verification fails to ensure simple highlights are applied
+                return range;
             } catch (e) { console.error("[findRangeInTextLayer] Error setting/verifying range:", e, {startNode, startOffsetRaw, endNode, endOffsetRaw}); return null; }
         } else {
             // console.warn(`[findRangeInTextLayer] Could not determine start/end node/offset. NormStart: ${normalizedOverallCharStart}, NormLen: ${normalizedOverallLength}. FoundStart: ${foundStart}`);
