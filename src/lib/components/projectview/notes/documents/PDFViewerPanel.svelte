@@ -995,10 +995,17 @@ import { get } from 'svelte/store';
     async function applyInitialHighlights() {
         if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement) return;
         if (!initialHighlights || initialHighlights.length === 0) return;
-        console.log('[PDFViewerPanel] Applying initial highlights. Count:', initialHighlights.length);
-        if(!loading) loading = true; 
-        loadingMessage = 'Applying highlights...';
+        // If initialHighlights can be empty and loading was set externally, ensure it's reset.
+        // However, current logic (reactive block) ensures initialHighlights is non-empty here.
+        // if (!initialHighlights || initialHighlights.length === 0) {
+        //     initialHighlightsApplied = true; // Prevent re-runs
+        //     return;
+        // }
+        loading = true; 
+        loadingMessage = 'Loading Annotations...'; // Updated message as per request
+        console.log(`[PDFViewerPanel] ${loadingMessage} Count:`, initialHighlights.length);
         await tick(); 
+
 
         const highlightsByPage = initialHighlights.reduce((acc, hl) => {
             const pageIdx = hl.pageIndex;
@@ -1100,12 +1107,10 @@ import { get } from 'svelte/store';
                         if (domTextNormalized === searchStrNormalized) {
                             applyHighlightToSelectionDOM(range, highlight.color, highlight.id);
                             // Throttle per-highlight rendering
-                            await tick();
-                            // allow highlight to render before next
-                            await new Promise(resolve => setTimeout(resolve, 50));
+                            // await tick(); 
+                            // await new Promise(resolve => setTimeout(resolve, 50)); 
                         } else {
                             console.warn(`[ApplyInitial] Range found for ID ${highlight.id}, but text mismatch after DOM normalization. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
-                            // This warning will now primarily indicate issues if findRangeInTextLayer's internal verification fails.
                         }
                     } else {
                          console.warn(`[ApplyInitial] Failed to create DOM range (findRangeInTextLayer returned null) for ID ${highlight.id} on page ${pageIndex + 1} (norm. offset ${startIndex}). Text: "${searchStrNormalized.substring(0,20)}..."`);
@@ -1114,13 +1119,35 @@ import { get } from 'svelte/store';
                      console.warn(`[ApplyInitial] Text not found (normalized search) for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefix.substring(0,10)}", Sfx: "${suffix.substring(0,10)}")`);
                 }
             }
-            // allow highlights from this page to render before scrolling to the next
+            // Allow highlights from this page to render before processing the next page in the initial pass
             await tick();
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
         }
+
+        // --- Scroll-through to ensure all highlights render correctly ---
+        // The "Loading Annotations..." overlay remains active during this.
+        if (numPages > 0 && pdfViewer) {
+            console.log('[PDFViewerPanel] Starting scroll-through refresh for all pages.');
+
+            // Scroll to the last page
+            pdfViewer.scrollPageIntoView({ pageNumber: numPages });
+            await new Promise(resolve => setTimeout(resolve, 250 + (numPages * 5))); // Delay for jump and initial render
+
+            // Scroll back to the top, one page at a time
+            for (let i = numPages; i >= 1; i--) {
+                if (!pdfViewer) break; // Safety check
+                pdfViewer.scrollPageIntoView({ pageNumber: i });
+                await new Promise(resolve => setTimeout(resolve, 120)); // Delay for each page to render/trigger textlayerrendered
+            }
+
+            // Ensure view is settled at page 1
+            if (pdfViewer) { pdfViewer.scrollPageIntoView({ pageNumber: 1 }); await new Promise(resolve => setTimeout(resolve, 200)); }
+            console.log('[PDFViewerPanel] Finished scroll-through refresh.');
+        }
+
         initialHighlightsApplied = true;
         loading = false;
-        loadingMessage = '';
+        loadingMessage = ''; // Reset loading message
         console.log('[PDFViewerPanel] Finished applying all initial highlights.');
     }
 
@@ -1406,7 +1433,18 @@ async function applyHighlightsForPage(pageIndex) {
 </div>
 
 <div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-gray-700 relative pdf-viewer-wrapper">
-    {#if error} <div class="absolute inset-0 flex items-center justify-center p-4 z-40 pointer-events-none"><div class="text-red-700 dark:text-red-300 p-4 bg-red-100 dark:bg-red-900/80 rounded border border-red-400 dark:border-red-600 max-w-lg text-center shadow-lg"><p class="font-semibold mb-2">Error:</p><p class="text-sm break-words">{@html error}</p></div></div> {:else if loading} <div class="absolute inset-0 flex items-center justify-center z-40 pointer-events-none"><div class="text-gray-600 dark:text-gray-400 text-lg font-medium bg-white/50 dark:bg-gray-800/50 px-4 py-2 rounded shadow">{loadingMessage}</div></div> {/if}
+    {#if error}
+        <div class="absolute inset-0 flex items-center justify-center p-4 z-40 pointer-events-none"><div class="text-red-700 dark:text-red-300 p-4 bg-red-100 dark:bg-red-900/80 rounded border border-red-400 dark:border-red-600 max-w-lg text-center shadow-lg"><p class="font-semibold mb-2">Error:</p><p class="text-sm break-words">{@html error}</p></div></div>
+    {:else if loading}
+        <div class="absolute inset-0 flex flex-col items-center justify-center z-50 bg-gray-900/75 dark:bg-black/75 pointer-events-auto">
+            <!-- Replace this SVG with your GIF: <img src="/path/to/your-loading.gif" alt="Loading..." class="w-16 h-16 mb-4" /> -->
+            <svg class="animate-spin h-12 w-12 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <div class="text-white text-xl font-medium p-2 rounded">{loadingMessage}</div>
+        </div>
+    {/if}
 
     {#if showSelectionToolbar}
         <div class="floating-toolbar absolute bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-500 rounded shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
