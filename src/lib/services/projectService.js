@@ -436,9 +436,17 @@ export async function importDocumentFile() {
         }
         if (!lexicalJsonString) throw new Error("Failed to generate Lexical JSON from HTML.");
 
-        finalJsonPath = await invoke('get_unique_document_path', { projectBaseDirStr: projectBaseDir, baseName: sourceFilenameStem, extension: 'json' });
+        // Place JSON in its own folder under Documents
+        const docsFolderPath = `${projectBaseDir}/${HARVEY_FILES_DIR}/${DOCS_DIR_NAME}/${sourceFilenameStem}`;
+        // Backend will create folder if needed
+        finalJsonPath = `${docsFolderPath}/${sourceFilenameStem}.json`;
         finalJsonName = await basename(finalJsonPath);
-        await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: finalJsonPath, documentName: finalJsonName, jsonContent: lexicalJsonString });
+        await invoke('save_document_and_update_xml', {
+            projectXmlPath: projectXmlPath,
+            targetPath: finalJsonPath,
+            documentName: finalJsonName,
+            jsonContent: lexicalJsonString
+        });
         await refreshProjectFiles();
         setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
         if (finalJsonPath) prepareDocumentView(finalJsonPath, 'documents');
