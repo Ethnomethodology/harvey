@@ -3,7 +3,7 @@
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS};
 use crate::projectview::shared_utils::ensure_base_asset_dirs;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -274,8 +274,79 @@ pub async fn export_transcript_to_docx(
     }
 
     let json_content = fs::read_to_string(&source_path)?;
-    let entries: Vec<Value> = serde_json::from_str(&json_content)
+    let json_value: Value = serde_json::from_str(&json_content)
         .map_err(|e| CommandError::from(format!("Failed to parse transcript JSON: {}", e)))?;
+
+    let entries: Vec<Value> = if let Value::Array(arr) = json_value {
+        arr
+    } else if let Some(root) = json_value.get("root") {
+        // Lexical JSON table format
+        let children = root.get("children")
+            .and_then(|c| c.as_array())
+            .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing root.children"))?;
+        let table_node = children.get(0)
+            .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table node"))?;
+        if table_node.get("type").and_then(|t| t.as_str()) != Some("table") {
+            return Err(CommandError::from("Invalid Lexical JSON: first child is not a table"));
+        }
+        let rows = table_node.get("children")
+            .and_then(|r| r.as_array())
+            .ok_or_else(|| CommandError::from("Invalid Lexical JSON: missing table children"))?;
+        // Helper to parse timestamp range "mm:ss.mmm - mm:ss.mmm"
+        fn parse_ts_range(range: &str) -> (f64, f64) {
+            let parts: Vec<&str> = range.split(" - ").collect();
+            fn parse_one(s: &str) -> f64 {
+                let parts: Vec<&str> = s.split(':').collect();
+                match parts.len() {
+                    2 => {
+                        let m: f64 = parts[0].parse().unwrap_or(0.0);
+                        let s: f64 = parts[1].parse().unwrap_or(0.0);
+                        m * 60.0 + s
+                    }
+                    3 => {
+                        let h: f64 = parts[0].parse().unwrap_or(0.0);
+                        let m: f64 = parts[1].parse().unwrap_or(0.0);
+                        let s: f64 = parts[2].parse().unwrap_or(0.0);
+                        h * 3600.0 + m * 60.0 + s
+                    }
+                    _ => 0.0,
+                }
+            }
+            if parts.len() == 2 {
+                (parse_one(parts[0]), parse_one(parts[1]))
+            } else {
+                (0.0, 0.0)
+            }
+        }
+        let mut segs = Vec::new();
+        for row in rows.iter().skip(1) {
+            if let Some(cells) = row.get("children").and_then(|c| c.as_array()) {
+                // Extract cell texts
+                let texts: Vec<String> = cells.iter().map(|cell| {
+                    cell.get("children").and_then(|p| p.as_array())
+                        .and_then(|ps| ps.get(0))
+                        .and_then(|p| p.get("children"))
+                        .and_then(|ts| ts.as_array())
+                        .and_then(|ts| ts.get(0))
+                        .and_then(|t| t.get("text"))
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                }).collect();
+                let (start, end) = parse_ts_range(&texts[1]);
+                let seg = json!({
+                    "start_time": start,
+                    "end_time": end,
+                    "speaker": texts.get(2).cloned().unwrap_or_default(),
+                    "text": texts.get(3).cloned().unwrap_or_default(),
+                });
+                segs.push(seg);
+            }
+        }
+        segs
+    } else {
+        return Err(CommandError::from("Transcript JSON must be an array or Lexical JSON table"));
+    };
 
     let mut html_output = String::new();
     html_output.push_str("<!DOCTYPE html>\n");

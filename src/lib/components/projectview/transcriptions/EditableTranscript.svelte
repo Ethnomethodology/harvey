@@ -105,11 +105,38 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
             console.error(`[EditableTranscript] Invalid segment data at index ${idx}:`, seg); localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error'; initialJsonForEditor = defaultEmptyJsonString;
         } else {
-            localStart = formatTimestamp(seg.start_time); localEnd = formatTimestamp(seg.end_time); localSpeaker = seg.speaker || 'Unknown'; let segmentText = seg.text || ''; let isValidLexicalJson = false;
-            if (segmentText && typeof segmentText === 'string') { try { const parsed = JSON.parse(segmentText); if (parsed && parsed.root && parsed.root.type === 'root') { isValidLexicalJson = true; } } catch (e) { isValidLexicalJson = false; } }
-            
+            localStart = formatTimestamp(seg.start_time);
+            localEnd = formatTimestamp(seg.end_time);
+            localSpeaker = seg.speaker || 'Unknown';
+            let segmentText = seg.text || '';
+            let jsonToProcess = segmentText;
+            let isValidLexicalJson = false;
+            if (segmentText && typeof segmentText === 'string') {
+                try {
+                    const parsed = JSON.parse(segmentText);
+                    if (parsed && parsed.root && parsed.root.type === 'root') {
+                        isValidLexicalJson = true;
+                        jsonToProcess = segmentText;
+                    } else if (parsed && Array.isArray(parsed.children)) {
+                        isValidLexicalJson = true;
+                        const fullState = {
+                            root: {
+                                children: [parsed],
+                                direction: parsed.direction || 'ltr',
+                                format: parsed.format || '',
+                                indent: parsed.indent || 0,
+                                type: 'root',
+                                version: 1
+                            }
+                        };
+                        jsonToProcess = JSON.stringify(fullState);
+                    }
+                } catch (e) {
+                    isValidLexicalJson = false;
+                }
+            }
+
             if (isValidLexicalJson) {
-                let jsonToProcess = segmentText;
                 if (!jsonToProcess || jsonToProcess.trim() === '') {
                     jsonToProcess = defaultEmptyJsonString;
                 }
