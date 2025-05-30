@@ -14,11 +14,12 @@
 
 	const dispatch = createEventDispatcher();
 
-	$: isExtensionFixed = itemType === 'media' || itemType === 'note' || itemType === 'transcript' || itemType === 'doc';
+	// Determines if the user should only input a base name (stem).
+	// 'transcript' here refers to media-associated transcripts which become .json.
+	$: isStemInputMode = ['media', 'doc', 'table', 'image', 'imported_transcript', 'note', 'transcript'].includes(itemType);
 
 	let currentBaseName = '';
 	let currentExtension = '';
-    // --- NEW: Reactive variable for display name ---
     let currentDisplayName = '';
 
 	function updateNameParts() {
@@ -28,9 +29,9 @@
 				// Found a likely extension
 				currentBaseName = currentName.substring(0, lastDotIndex);
 				currentExtension = currentName.substring(lastDotIndex);
-                // --- Display logic based on type ---
-                if (itemType === 'media' || itemType === 'doc') {
-                    currentDisplayName = currentBaseName; // Show only base for media and doc
+                // Show only stem for types where user provides stem
+                if (isStemInputMode) {
+                    currentDisplayName = currentBaseName;
                 } else {
                     currentDisplayName = currentName; // Show full name for others by default
                 }
@@ -39,9 +40,7 @@
 				currentBaseName = currentName;
 				currentExtension = '';
 				currentDisplayName = currentName; // Show the full name if no extension
-                if (isExtensionFixed && itemType !== 'media') { // Don't warn for media stem identifier
-                     console.warn(`[Rename Modal] Could not extract extension from '${currentName}' for fixed type '${itemType}'.`);
-                }
+                // console.warn(`[Rename Modal] Could not extract extension from '${currentName}' for itemType '${itemType}'.`);
 			}
 		} else {
             // No current name provided
@@ -65,69 +64,62 @@
 		});
 	}
 
-	function validateName(nameToCheck) {
-		const base = nameToCheck.trim();
-		if (!base) {
-			return 'Name cannot be empty.';
-		}
-		if (/[<>:"/\\|?*]/.test(base)) {
-			return 'Name contains invalid characters (< > : " / \\ | ? *).';
-		}
-		if (base.startsWith('.')) {
-			return 'Name cannot start with a dot.';
-		}
-		// Allow dots in transcript base names, but not others where extension is fixed
-		if (isExtensionFixed && base.includes('.') && itemType !== 'transcript') {
-			return `Base name cannot contain dots for ${itemType} items (extension '${currentExtension || '(.ext)'}' is added automatically).`;
-		}
-        if (!isExtensionFixed && !base.includes('.')) {
-             return 'Filename must include an extension.';
-        }
-		return '';
-	}
-
 	function handleConfirm() {
-		errorMessage = validateName(newNameBase);
+		const baseNameInput = newNameBase.trim();
+		errorMessage = ''; // Clear previous error
+
+		if (!baseNameInput) {
+			errorMessage = 'Name cannot be empty.';
+		} else if (/[<>:"/\\|?*]/.test(baseNameInput)) {
+			errorMessage = 'Name contains invalid characters (< > : " / \\ | ? *).';
+		} else if (baseNameInput.startsWith('.')) {
+			errorMessage = 'Name cannot start with a dot.';
+		}
+
+		if (isStemInputMode) {
+			// For stem inputs, disallow dots in the stem itself,
+			// except for media-associated 'transcript' type where stem can have dots before .json is added.
+			if (baseNameInput.includes('.') && itemType !== 'transcript') {
+				errorMessage = `Base name for ${itemType} cannot contain dots. Extension is handled automatically.`;
+			}
+		} else {
+			// User provides full name, must include an extension.
+			if (!baseNameInput.includes('.')) {
+				errorMessage = 'Filename must include an extension.';
+			}
+		}
+
 		if (errorMessage) {
 			return;
 		}
 
-        // Construct final name, ensuring correct extension for fixed types
-        let finalNewName = '';
-        if(isExtensionFixed) {
-            // Determine the *correct* expected extension based on type
-            let expectedExtension = '';
-            if (itemType === 'doc' || itemType === 'transcript' || itemType === 'note') {
-                 // Assuming notes are also JSON for now based on previous context
-                 expectedExtension = '.json';
-            } else if (itemType === 'media') {
-                // Media uses original extension derived earlier, or might be complex if format changed
-                 expectedExtension = currentExtension; // Use the derived extension
-            }
-            // Handle cases where original extension might be missing but type is fixed
-            if (!expectedExtension && (itemType === 'doc' || itemType === 'transcript' || itemType === 'note')) {
-                console.warn(`[Rename Modal] Missing original extension for fixed type '${itemType}', defaulting to '.json'`);
-                expectedExtension = '.json';
-            } else if (!expectedExtension && itemType === 'media') {
-                 console.error(`[Rename Modal] Cannot determine original extension for media type rename. Aborting.`);
-                 errorMessage = 'Cannot determine original file type for media.';
-                 return;
-            }
-             finalNewName = `${newNameBase.trim()}${expectedExtension}`;
-        } else {
-            finalNewName = newNameBase.trim(); // User provided full name with extension
-        }
+		let nameToSend = '';
+		let isSameName = false;
 
+		if (itemType === 'media' || itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript') {
+			nameToSend = baseNameInput; // Send stem
+			if (nameToSend === currentBaseName) {
+				isSameName = true;
+			}
+		} else if (itemType === 'note' || itemType === 'transcript') { // 'transcript' here is media-associated
+			// These types have a fixed .json extension added to the stem.
+			nameToSend = `${baseNameInput}.json`;
+			if (nameToSend === currentName) {
+				isSameName = true;
+			}
+		} else { // User provided full name (e.g., a generic file type not explicitly handled as stem input)
+			nameToSend = baseNameInput;
+			if (nameToSend === currentName) {
+				isSameName = true;
+			}
+		}
 
-		if (finalNewName === currentName) {
+		if (isSameName) {
 			errorMessage = 'New name is the same as the current name.';
 			return;
 		}
 
-        // For media, still send only the base name (stem)
-		const nameToSend = itemType === 'media' ? newNameBase.trim() : finalNewName;
-
-		console.log(`[Rename Modal] Dispatching confirm. Item Type: '${itemType}', Name to Send: '${nameToSend}' (Final constructed: '${finalNewName}', Original: '${currentName}')`);
+		console.log(`[Rename Modal] Dispatching confirm. Item Type: '${itemType}', Name to Send: '${nameToSend}' (Original Full: '${currentName}', Original Base: '${currentBaseName}')`);
 		dispatch('confirm', { newName: nameToSend });
 		closeModal();
 	}
@@ -176,7 +168,6 @@
 			</div>
 
 			<div class="mb-4">
-                <!-- UPDATED: Removed "(without extension)" text -->
 				<label for="new-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300"
 					>New name:</label
 				>
@@ -190,26 +181,23 @@
 					class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
 					aria-describedby="newNameHelp"
 				/>
-				{#if isExtensionFixed}
+				{#if isStemInputMode}
 					<p id="newNameHelp" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-						{#if currentExtension}
-                            The extension '<code>{currentExtension}</code>' will be automatically appended.
-                        {:else if itemType === 'media'}
-                            Renaming media source. Extension determined automatically.
-                        {:else if itemType === 'doc' || itemType === 'transcript' || itemType === 'note'}
-                            The extension '<code>.json</code>' will be automatically appended.
+						{#if (itemType === 'doc' || itemType === 'table' || itemType === 'image') && currentExtension}
+                            Enter the new file name.
+						{:else if itemType === 'note' || itemType === 'transcript'}
+                            Enter the new file name.
+						{:else if itemType === 'media' || itemType === 'imported_transcript'}
+							Enter the new file name.
                         {:else}
-                            Enter the base name. Extension will be added.
+                            Enter just the file name. The original extension '<code>{currentExtension || '.ext'}</code>' will be used.
                         {/if}
-						{#if itemType === 'media'}
+						<!-- {#if itemType === 'media'}
 							<br>This also renames the folder and primary transcript.
 						{/if}
-                        {#if itemType === 'transcript'}
-                             <br>Renaming primary transcript may break auto-loading.
-                        {/if}
-                         {#if itemType === 'doc'}
-                             <br>Documents are saved with a '.json' extension.
-                        {/if}
+                        {#if itemType === 'doc' || itemType === 'table' || itemType === 'image' || itemType === 'imported_transcript'}
+                             <br>This also renames the item's dedicated folder.
+                        {/if} -->
 					</p>
 				{:else}
 					<p id="newNameHelp" class="mt-1 text-xs text-gray-500 dark:text-gray-400">

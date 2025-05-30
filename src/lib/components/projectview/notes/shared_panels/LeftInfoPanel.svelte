@@ -14,7 +14,7 @@
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
     <h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0">
-        Info / Outline
+        Metadata
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0">
         <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">

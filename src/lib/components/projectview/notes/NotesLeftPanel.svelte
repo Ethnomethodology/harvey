@@ -326,28 +326,49 @@ import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFi
             if (!confirmRename) { console.log("[NotesLeftPanel] Media rename cancelled."); itemToRename = null; return; }
             try { await renameProjectItem(item.path, finalNewStemName, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.media_xml_identifier}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'doc') {
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
-            const newNameWithOriginalExt = finalNewNameFromModal.includes('.') ? finalNewNameFromModal : `${finalNewNameFromModal}${originalExtension}`;
-            const newExtension = newNameWithOriginalExt.includes('.') ? newNameWithOriginalExt.substring(newNameWithOriginalExt.lastIndexOf('.')) : '';
+            const stemNameFromModal = finalNewNameFromModal;
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".pdf"
+
+            if (!originalExtension) {
+                await message(`Error: Original file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
+                itemToRename = null; return;
+            }
+
             const allowedExts = ['.json', '.pdf', '.md', '.txt'];
             if (!allowedExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original file type '${originalExtension}' cannot be renamed via this interface.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            if (originalExtension.toLowerCase() !== newExtension.toLowerCase()) { await message(`Error: Cannot change file extension. Expected '${originalExtension}'.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
+            
+            const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
+
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'table') {
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
-            const newNameWithOriginalExt = finalNewNameFromModal.includes('.') ? finalNewNameFromModal : `${finalNewNameFromModal}${originalExtension}`;
-            const newExtension = newNameWithOriginalExt.includes('.') ? newNameWithOriginalExt.substring(newNameWithOriginalExt.lastIndexOf('.')) : '';
+            const stemNameFromModal = finalNewNameFromModal;
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".csv"
+
+            if (!originalExtension) {
+                await message(`Error: Original table file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
+                itemToRename = null; return;
+            }
+
             const allowedTableExts = ['.csv', '.xlsx'];
             if (!allowedTableExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original table file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            if (originalExtension.toLowerCase() !== newExtension.toLowerCase() && newExtension) { await message(`Error: Cannot change table file extension. Expected '${originalExtension}'.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
+            
+            const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
+
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for table ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'image') {
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
-            const newNameWithOriginalExt = finalNewNameFromModal.includes('.') ? finalNewNameFromModal : `${finalNewNameFromModal}${originalExtension}`;
-            const newExtension = newNameWithOriginalExt.includes('.') ? newNameWithOriginalExt.substring(newNameWithOriginalExt.lastIndexOf('.')) : '';
+            const stemNameFromModal = finalNewNameFromModal;
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".png"
+
+            if (!originalExtension) {
+                await message(`Error: Original image file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
+                itemToRename = null; return;
+            }
+
             const allowedImageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
             if (!allowedImageExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original image file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            if (originalExtension.toLowerCase() !== newExtension.toLowerCase() && newExtension) { await message(`Error: Cannot change image file extension. Expected '${originalExtension}'.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
+            
+            const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
+
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
             const nameForBackend = finalNewNameFromModal; 

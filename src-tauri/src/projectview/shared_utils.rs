@@ -91,11 +91,20 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
     };
 
     let file_type = match (asset_type_dir, sub_folder, extension.as_str()) {
-        // Treat files inside Documents/<folder>/ as documents
+        // --- Rules for files within dedicated stem folders ---
+        // For these, `sub_folder` (components[3]) is the filename itself.
         (Some(DOCS_DIR), Some(_), ext) if ["json", "pdf", "md", "txt"].contains(&ext) => "doc".to_string(),
-        (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac", "mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
-        (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(), 
+        (Some(IMAGES_DIR), Some(_), ext) if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"].contains(&ext) => "image".to_string(),
+        (Some(TABLES_DIR), Some(_), ext) if ["csv", "xlsx"].contains(&ext) => "table".to_string(),
+        (Some(TRANSCRIPTS_DIR), Some(_), "json") => "imported_transcript".to_string(), // Standalone imported transcripts
 
+        // --- Rules for files within specific subdirectories of a MEDIA stem folder ---
+        // For these, `sub_folder` (components[3]) is "media" or "transcripts".
+        (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), ext) if ["mp3", "wav", "m4a", "ogg", "aac", "flac", "mp4", "mov", "avi", "mkv", "webm"].contains(&ext) => "media".to_string(),
+        (Some(MEDIA_DIR), Some(TRANSCRIPTS_SUBDIR), "json") => "transcript".to_string(), // Media-associated transcript
+
+        // --- Legacy/Fallback rules for files directly under asset type dirs (NO dedicated stem folder) ---
+        // For these, `sub_folder` (components[3]) would be None.
         (Some(IMAGES_DIR), None, ext) if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"].contains(&ext) => "image".to_string(),
         (Some(DOCS_DIR), None, "json") => "doc".to_string(),
         (Some(DOCS_DIR), None, "pdf") => "doc".to_string(),
@@ -103,7 +112,7 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         (Some(DOCS_DIR), None, "txt") => "doc".to_string(),
         (Some(TABLES_DIR), None, "csv") => "table".to_string(),
         (Some(TABLES_DIR), None, "xlsx") => "table".to_string(),
-        (Some(TRANSCRIPTS_DIR), None, "json") => "imported_transcript".to_string(), 
+        (Some(TRANSCRIPTS_DIR), None, "json") => "imported_transcript".to_string(), // Legacy standalone
 
         (Some(MEDIA_DIR), None, _) if components.len() == 3 && item_path.is_dir() => "directory_media_stem".to_string(),
         (Some(MEDIA_DIR), Some(MEDIA_SUBDIR), _) if components.len() == 4 && item_path.is_dir() => "directory".to_string(),
@@ -158,4 +167,3 @@ pub fn ensure_base_asset_dirs(project_base_dir: &Path) -> Result<(), CommandErro
     debug!("Base asset directories ensured within {}", base_path.display());
     Ok(())
 }
-
