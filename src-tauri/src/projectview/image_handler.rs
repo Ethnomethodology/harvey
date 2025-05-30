@@ -2,6 +2,10 @@
 use super::shared_types::*;
 use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
 use crate::welcome::config::CommandError; // Assuming this is your custom error type
+use crate::projectview::core_commands::get_image_asset_metadata_path;
+use chrono::Utc;
+use serde_json;
+use serde::{Serialize, Deserialize};
 use log::{info, warn, debug, error}; // Added error
 use std::{
     fs,
@@ -16,6 +20,22 @@ const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp
 // const HARVEY_FILES_DIR: &str = ".harvey_files";
 // const IMAGES_DIR: &str = "Images";
 
+// Duplicated struct definitions (to be refactored to shared_types later)
+#[derive(Serialize, Deserialize, Debug)]
+struct FileMetadata {
+    file_name: String,
+    file_path: String,
+    last_modified: String,
+    title: String,
+    description: String,
+    summary: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct StandardAssetMetadata {
+    metadata: FileMetadata,
+    highlights: Vec<String>,
+}
 
 // Helper to get a unique path in the Images directory
 // Removed get_unique_image_path function as it is no longer used
@@ -120,6 +140,45 @@ pub async fn import_image_file(
     // Save the modified XML
     save_project_xml(&project_xml_path, &project_data)?;
     info!("[import_image_file] Project XML updated successfully for image.");
+
+    info!("[import_image_file] Creating standard asset metadata for image: {}", final_image_path.display());
+    match get_image_asset_metadata_path(&final_image_path) {
+        Ok(asset_metadata_path) => {
+            let image_file_name = final_image_path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            let asset_metadata_content = StandardAssetMetadata {
+                metadata: FileMetadata {
+                    file_name: image_file_name,
+                    file_path: final_image_path.to_string_lossy().into_owned(), // Absolute path
+                    last_modified: Utc::now().to_rfc3339(),
+                    title: "".to_string(),
+                    description: "".to_string(),
+                    summary: "".to_string(),
+                },
+                highlights: Vec::new(),
+            };
+
+            match serde_json::to_string_pretty(&asset_metadata_content) {
+                Ok(json_string) => {
+                    if let Err(e) = fs::write(&asset_metadata_path, json_string) {
+                        warn!("[import_image_file] Failed to write asset metadata file {}: {}", asset_metadata_path.display(), e);
+                    } else {
+                        info!("[import_image_file] Created asset metadata file: {}", asset_metadata_path.display());
+                    }
+                }
+                Err(e) => {
+                    warn!("[import_image_file] Failed to serialize asset metadata for {}: {}", asset_metadata_path.display(), e);
+                }
+            }
+        }
+        Err(e) => {
+            warn!("[import_image_file] Failed to get asset metadata path for {}: {:?}", final_image_path.display(), e);
+            // Do not block import if metadata path generation fails
+        }
+    }
 
     // Create an empty annotations file for this image
     let annotations_file_name = format!(".{}.annotations.json", source_filename_stem);

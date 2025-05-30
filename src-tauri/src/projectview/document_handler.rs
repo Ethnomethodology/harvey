@@ -20,8 +20,27 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use uuid::Uuid;
 use quick_xml;
-use serde_json;
-use chrono::Utc;
+// serde_json and chrono::Utc are already imported below, ensure serde is for local structs
+use serde::{Serialize, Deserialize};
+// use serde_json; // Already present
+// use chrono::Utc; // Already present
+
+// Temporary struct definitions - to be moved to shared_types.rs and reconciled in Step 8
+#[derive(Serialize, Deserialize, Debug)]
+struct FileMetadata {
+    file_name: String,
+    file_path: String, // Ensure this field exists
+    last_modified: String,
+    title: String,
+    description: String,
+    summary: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct StandardAssetMetadata {
+    metadata: FileMetadata,
+    highlights: Vec<String>,
+}
 
 fn get_unique_temp_path_for_conversion(base_dir: &Path, prefix: &str, extension: &str) -> Result<PathBuf, CommandError> {
     let temp_dir = base_dir.join(TEMP_SUBDIR_DOCS);
@@ -113,19 +132,23 @@ pub async fn import_document(
             // --- Handle .metadata.json (our app's general metadata) ---
             let app_metadata_path = get_document_metadata_path(&final_pdf_path)?;
             if !app_metadata_path.exists() {
-                let initial_doc_highlight_data = DocumentHighlightData {
-                    metadata: FileLevelMetadata {
-                        file_name: final_pdf_name.clone(),
+                // Create new StandardAssetMetadata instead of DocumentHighlightData
+                let new_standard_metadata = StandardAssetMetadata {
+                    metadata: FileMetadata {
+                        file_name: final_pdf_name.clone(), // final_pdf_name is from the existing PDF logic
+                        file_path: final_pdf_path.to_string_lossy().into_owned(), // final_pdf_path is existing
                         last_modified: Utc::now().to_rfc3339(),
-                        title: String::new(), description: String::new(), summary: String::new(),
+                        title: "".to_string(),
+                        description: "".to_string(),
+                        summary: "".to_string(),
                     },
-                    highlights: Vec::new(),
+                    highlights: Vec::new(), // Standardized, starts empty
                 };
-                let app_metadata_json_content = serde_json::to_string_pretty(&initial_doc_highlight_data)
-                    .map_err(|e| CommandError::from(format!("Failed to serialize initial app metadata for PDF: {}",e)))?;
+                let app_metadata_json_content = serde_json::to_string_pretty(&new_standard_metadata)
+                    .map_err(|e| CommandError::from(format!("Failed to serialize standard asset metadata for PDF: {}",e)))?;
                 fs::write(&app_metadata_path, app_metadata_json_content)
-                    .map_err(|e| CommandError::from(format!("Failed to write initial app metadata for PDF: {}", e)))?;
-                info!("[import_document] Created initial app metadata file for PDF: {}", app_metadata_path.display());
+                    .map_err(|e| CommandError::from(format!("Failed to write standard asset metadata for PDF: {}", e)))?;
+                info!("[import_document] Created standard asset metadata file for PDF: {}", app_metadata_path.display());
             }
             let app_metadata_filename_xml = app_metadata_path.file_name().unwrap_or_default().to_string_lossy().to_string();
             let app_metadata_relative_path_xml = app_metadata_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
