@@ -48,6 +48,25 @@ fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, Comman
     Ok(doc_parent_dir.join(metadata_filename))
 }
 
+// Helper function to get media metadata path
+pub fn get_media_metadata_path(media_path: &Path) -> Result<PathBuf, CommandError> {
+    let parent_dir = media_path.parent().ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get parent directory for media file: {}",
+            media_path.display()
+        ))
+    })?;
+    let media_stem = media_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get file stem for media file: {}",
+            media_path.display()
+        ))
+    })?;
+
+    let metadata_filename = format!("{}.metadata.json", media_stem);
+    Ok(parent_dir.join(metadata_filename))
+}
+
 
 #[tauri::command]
 pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewData, CommandError> {
@@ -258,6 +277,20 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
 
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
+
+    // Create an empty metadata file
+    match get_media_metadata_path(&destination_media_path) {
+        Ok(metadata_path) => {
+            match fs::write(&metadata_path, "{}") {
+                Ok(_) => info!("[Backend Import] Created metadata file: {}", metadata_path.display()),
+                Err(e) => error!("[Backend Import] Failed to create metadata file {}: {}", metadata_path.display(), e),
+            }
+        }
+        Err(e) => {
+            error!("[Backend Import] Failed to get media metadata path for {}: {}", destination_media_path.display(), e);
+            // Do not block import if metadata path generation fails
+        }
+    }
 
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
@@ -737,6 +770,31 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 warn!("[Backend Rename] Media file not found at expected path {} inside renamed directory {}. Reverting directory rename.", old_media_path_in_new_dir.display(), new_stem_dir_path.display());
                 let _ = fs::rename(&new_stem_dir_path, &old_stem_dir_path);
                 return Err(CommandError::from(format!("Original media file structure inconsistent after directory rename. Expected file at {}", old_media_path_in_new_dir.display())));
+            }
+
+            // Rename media metadata file
+            match get_media_metadata_path(&old_media_path_in_new_dir) {
+                Ok(old_metadata_path) => {
+                    if old_metadata_path.exists() {
+                        match get_media_metadata_path(&new_media_path) {
+                            Ok(new_metadata_path) => {
+                                if let Err(e) = fs::rename(&old_metadata_path, &new_metadata_path) {
+                                    warn!("[Backend Rename] Failed to rename media metadata file {} to {}: {}", old_metadata_path.display(), new_metadata_path.display(), e);
+                                } else {
+                                    info!("[Backend Rename] Renamed media metadata file {} -> {}", old_metadata_path.display(), new_metadata_path.display());
+                                }
+                            }
+                            Err(e) => {
+                                warn!("[Backend Rename] Could not determine new media metadata path for {}: {}", new_media_path.display(), e);
+                            }
+                        }
+                    } else {
+                        info!("[Backend Rename] Old media metadata file {} does not exist, skipping rename.", old_metadata_path.display());
+                    }
+                }
+                Err(e) => {
+                    warn!("[Backend Rename] Could not determine old media metadata path for {}: {}", old_media_path_in_new_dir.display(), e);
+                }
             }
 
             let old_transcript_filename = format!("{}.json", old_stem);
