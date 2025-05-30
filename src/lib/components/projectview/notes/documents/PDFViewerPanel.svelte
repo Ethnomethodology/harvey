@@ -17,6 +17,7 @@ import { get } from 'svelte/store';
     // { id: string, color: string, pageIndex: number, text: string, 
     //   prefix?: string, suffix?: string, occurrenceInPageContext?: number }
 
+    let autosaveIntervalId = null;
     let loading = true; let loadingMessage = 'Loading PDF...'; let error = null;
     let pdfDoc = null; let pdfViewer = null; let eventBus = null; let numPages = 0; let currentPageNum = 1; let currentScaleValue = 'auto'; // Default to auto
     const PRESET_SCALES = ['auto', 'page-actual', 'page-fit', 'page-width', '0.5', '0.75', '1', '1.25', '1.5', '2', '3', '4'];
@@ -341,6 +342,19 @@ import { get } from 'svelte/store';
     function handleKeydown(e) {
       if (e.metaKey && !e.shiftKey && e.key === 'z') { undo(); e.preventDefault(); } 
       else if (e.metaKey && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { redo(); e.preventDefault(); }
+      else if (e.metaKey && e.key === 's') {
+        e.preventDefault(); // Always prevent browser save dialog
+        const currentProjectState = get(project);
+        if (!currentProjectState.autosaveEnabled && currentProjectState.isPdfAnnotationsDirty && pdfPath === currentProjectState.selectedDocumentPath) {
+            console.log('[PDFViewerPanel Manual Save Shortcut] Saving PDF annotations...');
+            saveCurrentPdfAnnotations().then(() => {
+                console.log('[PDFViewerPanel Manual Save Shortcut] PDF annotations saved successfully.');
+            }).catch(error => {
+                console.error('[PDFViewerPanel Manual Save Shortcut] Error during save:', error);
+                // Optionally, dispatch a non-intrusive notification here
+            });
+        }
+      }
     }
 
     onMount(async () => {
@@ -360,10 +374,31 @@ import { get } from 'svelte/store';
             viewerContainer?.addEventListener('click', handleViewerClick);
             viewerContainer?.addEventListener('mousedown', handleViewerMouseDown, true);
             window.addEventListener('keydown', handleKeydown);
+
+            // Setup autosave interval
+            autosaveIntervalId = setInterval(async () => {
+                const currentProjectState = get(project);
+                if (currentProjectState.autosaveEnabled && 
+                    currentProjectState.isPdfAnnotationsDirty && 
+                    pdfPath === currentProjectState.selectedDocumentPath) {
+                    console.log('[PDFViewerPanel Autosave] Dirty PDF annotations detected. Autosaving...');
+                    try {
+                        await saveCurrentPdfAnnotations();
+                        console.log('[PDFViewerPanel Autosave] PDF annotations autosaved successfully.');
+                    } catch (error) {
+                        console.error('[PDFViewerPanel Autosave] Error during autosave:', error);
+                        // Optionally, dispatch a non-intrusive notification to the user about the failed autosave
+                    }
+                }
+            }, 60000); // 60,000 milliseconds = 1 minute
+
         }, 100); 
     });
 
     onDestroy(() => {
+        if (autosaveIntervalId) {
+            clearInterval(autosaveIntervalId);
+        }
         if (pdfJsStyleElement && pdfJsStyleElement.parentNode) { pdfJsStyleElement.parentNode.removeChild(pdfJsStyleElement); }
         document.removeEventListener('click', handleClickOutside);
         viewerContainer?.removeEventListener('mouseup', handleViewerMouseUp);
@@ -549,10 +584,10 @@ import { get } from 'svelte/store';
                     dispatch('pdfhighlightevent', { type: 'remove', id: hlStorageData.id });
                     recordAction('removeHighlight', { ...hlStorageData, rangeData: null /* DOM range hard to restore for this */ });
                 });
-                // mark dirty & persist (selection mode)
+                // mark dirty (selection mode, remove action)
                 await tick(); // wait for store update from dispatched events
-                markPdfAnnotationsDirty(get(project).currentPdfAnnotations);
-                saveCurrentPdfAnnotations();
+                markPdfAnnotationsDirty(); // Pass current annotations from store if needed by the function, or it gets them itself.
+                // saveCurrentPdfAnnotations(); // Removed for manual save
                 if (affectedHighlights.length > 0) success = true;
             } else {
                 actionPayload.id = `hl-${uuidv4()}`;
@@ -562,9 +597,9 @@ import { get } from 'svelte/store';
                 if (actionPayload.dataForStorage) {
                     dispatch('pdfhighlightevent', { type: 'add', ...actionPayload.dataForStorage });
                     recordAction('addHighlight', actionPayload);
-                    // mark dirty & persist
+                    // mark dirty
                     markPdfAnnotationsDirty();
-                    saveCurrentPdfAnnotations();
+                    // saveCurrentPdfAnnotations(); // Removed for manual save
                     success = true;
                 }
             }
@@ -586,10 +621,10 @@ import { get } from 'svelte/store';
                     ? { ...originalHighlight }
                     : { id: clickedHighlightId, type: 'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex: 0, prefix: '', suffix: '', occurrenceInPageContext: 0 };
                 recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: { ...dataForStorage, color: actionPayload.oldColor } });
-                // mark dirty & persist (click mode)
+                // mark dirty (click mode, remove action)
                 await tick(); // ensure store is updated after dispatched remove event
-                markPdfAnnotationsDirty(get(project).currentPdfAnnotations);
-                saveCurrentPdfAnnotations();
+                markPdfAnnotationsDirty();
+                // saveCurrentPdfAnnotations(); // Removed for manual save
                 success = true;
             } else {
                 actionPayload.newColor = color;
@@ -602,7 +637,7 @@ import { get } from 'svelte/store';
                 }
                 recordAction('changeColor', actionPayload);
                 markPdfAnnotationsDirty();
-                saveCurrentPdfAnnotations();
+                // saveCurrentPdfAnnotations(); // Removed for manual save
                 success = true;
             }
         } else { console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode); }
@@ -1592,6 +1627,27 @@ function updateHighlightOverlayColor(id, color) {
         <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
       </svg>
     </button>
+    <div class="separator"></div>
+    {#if !$project.autosaveEnabled && $project.isPdfAnnotationsDirty && pdfPath === $project.selectedDocumentPath}
+        <button class="mini-toolbar-button !text-blue-600 dark:!text-blue-400 !border-blue-500 flex items-center space-x-1" 
+                on:click={async () => { 
+                    try { 
+                        await saveCurrentPdfAnnotations(); 
+                        console.log('[PDFViewerPanel Manual Save] Saved PDF annotations.'); 
+                    } catch (e) { 
+                        console.error('[PDFViewerPanel Manual Save] Error saving PDF annotations:', e); 
+                        // Optionally dispatch a user-facing error message here
+                    } 
+                }} 
+                title="Save PDF annotations (⌘+S)">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                <path d="M9.25 13.25a.75.75 0 0 01.5 0l5-2.5a.75.75 0 0 0-.042-1.412l-1.316-.333-3.034-4.046a1.75 1.75 0 0 0-3.02.022L5.09 9.005l-1.317.333a.75.75 0 0 0-.042 1.412l5 2.5Z" />
+                <path d="M3.513 10.173 2.22 9.84A.75.75 0 0 0 1.173 11.03l3.91 1.563a.75.75 0 0 0 .868-.003l3.91-1.563a.75.75 0 0 0-.707-1.387l-1.29.323L5.81 7.38a.75.75 0 0 0-1.299.028l-1 2.765Z" />
+            </svg>
+            <span>Save</span>
+        </button>
+        <div class="separator"></div>
+    {/if}
 </div>
 
 <div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-gray-700 relative pdf-viewer-wrapper">

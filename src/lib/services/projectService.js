@@ -636,14 +636,20 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             // Provide a way to discard at least
             discardFunction = () => markMediaNoteTranscriptChangesDiscarded(itemPath);
         }
+    // PDF ANNOTATIONS CHECK - MODIFIED BLOCK
     } else if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
-        itemTypeForPrompt = 'PDF annotations';
-        saveFunction = async () => saveCurrentPdfAnnotations(); // Direct service call
-        discardFunction = () => markDocumentChangesDiscarded(); // Resets PDF annotations too
-        initialContentForReset = projState.initialPdfAnnotations; // For visual reset if needed
-        // No direct editor ref for PDF annotations' content reset usually
+        // itemName will be set later if itemIsDirty is true
+        itemTypeForPrompt = 'PDF annotations'; // Used by showUnsavedChangesPrompt
+
+        // Specific handling for PDF annotations within the main if/else for autosave
+        // This section will be skipped if autosave is ON and save succeeds early.
+        // For autosave OFF, or if autosave ON fails, these specific functions will be used by showUnsavedChangesPrompt
+        saveFunction = async () => saveCurrentPdfAnnotations();
+        discardFunction = () => markDocumentChangesDiscarded(); // This store function should also clear PDF annotation dirty state and reset them.
+        initialContentForReset = projState.initialPdfAnnotations; // PDF viewer might not use this like Lexical, but good to have
+        // resetEditorFunction is not typically used for PDF annotations directly via an editor ref like lexical
     } else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
@@ -707,7 +713,34 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
 
 
     if (projState.autosaveEnabled) {
-        console.log(`[checkUnsavedChanges] Autosave ON. Attempting implicit save for "${itemName}"...`);
+        // PDF Annotations Autosave Handling (SPECIAL CASE WITHIN AUTOSAVE ON)
+        // itemName and actionContextDisplay are already defined before this block if itemIsDirty is true.
+        if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
+            // itemName and actionContextDisplay are assumed to be set correctly by this point.
+            console.log(`[checkUnsavedChanges] Autosave ON. Attempting implicit save for PDF annotations on "${itemName}".`);
+            try {
+                await saveCurrentPdfAnnotations();
+                console.log(`[checkUnsavedChanges] Implicit save for PDF annotations successful for "${itemName}". Proceeding.`);
+                return true; // PDF annotations saved, proceed with the original action
+            } catch (error) {
+                console.error('[checkUnsavedChanges] Implicit save for PDF annotations failed:', error);
+                const proceedAfterFail = await confirm(
+                    `Failed to automatically save changes for PDF annotations on "${itemName}".\nError: ${error.message || error}\n\nDiscard unsaved changes and continue to ${actionContextDisplay}?`,
+                    { title: 'Autosave Failed', type: 'error', okLabel: 'Discard and Continue', cancelLabel: 'Cancel Action' }
+                );
+                if (proceedAfterFail) {
+                    console.log('[checkUnsavedChanges] User chose to discard PDF annotations after failed autosave.');
+                    markDocumentChangesDiscarded(); // This should clear PDF dirty state and reset annotations
+                    return true; // Proceed with the original action
+                } else {
+                    console.log('[checkUnsavedChanges] User chose to cancel action after failed PDF autosave.');
+                    return false; // Cancel the original action
+                }
+            }
+        } // END OF PDF Annotations Autosave Handling
+
+        // Generic Autosave for other item types
+        console.log(`[checkUnsavedChanges] Autosave ON. Attempting implicit save for "${itemName}" (${itemTypeForPrompt})...`);
         if (saveFunction) {
             try {
                 await saveFunction();
@@ -722,7 +755,10 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                 if (proceedAfterFail) {
                     console.log(`[checkUnsavedChanges] User chose to discard after failed autosave.`);
                     if (discardFunction) discardFunction();
-                    if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null) resetEditorFunction(initialContentForReset);
+                    // Reset editor if applicable for non-PDF items
+                    if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null && itemTypeForPrompt !== 'PDF annotations') {
+                         resetEditorFunction(initialContentForReset);
+                    }
                     return true;
                 } else {
                     console.log(`[checkUnsavedChanges] User chose to cancel action after failed autosave.`);
@@ -735,7 +771,9 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             return false;
         }
     } else { // Autosave is OFF
-        console.log(`[checkUnsavedChanges] Autosave OFF. Triggering unsaved changes modal for "${itemName}"...`);
+        // For PDF annotations with autosave OFF, the generic showUnsavedChangesPrompt will use
+        // the saveFunction and discardFunction defined in the PDF annotations `else if` block earlier.
+        console.log(`[checkUnsavedChanges] Autosave OFF. Triggering unsavedChanges modal for "${itemName}" (${itemTypeForPrompt})...`);
         return new Promise((resolve) => {
             showUnsavedChangesPrompt(itemName, itemTypeForPrompt,
                 async () => { // Save action
