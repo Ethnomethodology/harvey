@@ -2,6 +2,10 @@
 use super::shared_types::*;
 use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
 use crate::welcome::config::CommandError;
+use crate::projectview::core_commands::get_table_asset_metadata_path;
+use chrono::Utc;
+use serde_json; // Already used for Value, json, but good to ensure it's available for to_string_pretty
+use serde::{Serialize, Deserialize};
 use log::{info, warn, debug};
 use std::{
     fs,
@@ -14,6 +18,22 @@ use csv;
 // Error as CalamineError might be needed if there's ambiguity, but usually not if not aliased.
 use calamine::{Reader, Xlsx, open_workbook, Data};
 
+// Duplicated struct definitions (to be refactored to shared_types later)
+#[derive(Serialize, Deserialize, Debug)]
+struct FileMetadata {
+    file_name: String,
+    file_path: String,
+    last_modified: String,
+    title: String,
+    description: String,
+    summary: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct StandardAssetMetadata {
+    metadata: FileMetadata,
+    highlights: Vec<String>, // Assuming highlights are strings
+}
 
 // Helper to get a unique path in the Tables directory (Unchanged)
 fn get_unique_table_path(
@@ -143,6 +163,40 @@ pub async fn import_table_file(
 
     save_project_xml(&project_xml_path, &project_data)?;
     info!("[import_table_file] Project XML updated successfully for table.");
+
+    info!("[import_table_file] Creating standard asset metadata for table: {}", final_table_path.display());
+    match get_table_asset_metadata_path(&final_table_path) {
+        Ok(asset_metadata_path) => {
+            // final_table_name is already defined in this function
+            let asset_metadata_content = StandardAssetMetadata {
+                metadata: FileMetadata {
+                    file_name: final_table_name.clone(), // Use final_table_name
+                    file_path: final_table_path.to_string_lossy().into_owned(), // Absolute path
+                    last_modified: Utc::now().to_rfc3339(),
+                    title: "".to_string(),
+                    description: "".to_string(),
+                    summary: "".to_string(),
+                },
+                highlights: Vec::new(),
+            };
+
+            match serde_json::to_string_pretty(&asset_metadata_content) {
+                Ok(json_string) => {
+                    if let Err(e) = fs::write(&asset_metadata_path, json_string) {
+                        warn!("[import_table_file] Failed to write asset metadata file {}: {}", asset_metadata_path.display(), e);
+                    } else {
+                        info!("[import_table_file] Created asset metadata file: {}", asset_metadata_path.display());
+                    }
+                }
+                Err(e) => {
+                    warn!("[import_table_file] Failed to serialize asset metadata for {}: {}", asset_metadata_path.display(), e);
+                }
+            }
+        }
+        Err(e) => {
+            warn!("[import_table_file] Failed to get asset metadata path for {}: {:?}", final_table_path.display(), e);
+        }
+    }
 
     Ok(final_table_path.to_string_lossy().to_string())
 }

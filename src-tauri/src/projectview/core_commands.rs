@@ -9,7 +9,25 @@ use std::{
 };
 use quick_xml;
 use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for delete/rename
+use chrono::Utc;
+use serde_json;
+use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize, Debug)]
+struct FileMetadata {
+    file_name: String,
+    file_path: String,
+    last_modified: String,
+    title: String,
+    description: String,
+    summary: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct StandardAssetMetadata {
+    metadata: FileMetadata,
+    highlights: Vec<String>,
+}
 
 // Helper function to get annotation metadata path for an image (from existing code)
 fn get_annotation_metadata_path_for_image(image_path: &Path) -> Result<PathBuf, CommandError> {
@@ -46,6 +64,63 @@ fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, Comman
     })?;
     let metadata_filename = format!(".{}.{}", doc_stem, METADATA_FILE_SUFFIX);
     Ok(doc_parent_dir.join(metadata_filename))
+}
+
+// Helper function to get media metadata path
+pub fn get_media_metadata_path(media_path: &Path) -> Result<PathBuf, CommandError> {
+    let parent_dir = media_path.parent().ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get parent directory for media file: {}",
+            media_path.display()
+        ))
+    })?;
+    let media_stem = media_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get file stem for media file: {}",
+            media_path.display()
+        ))
+    })?;
+
+    let metadata_filename = format!(".{}.metadata.json", media_stem);
+    Ok(parent_dir.join(metadata_filename))
+}
+
+// Helper function to get asset metadata path for an image
+pub fn get_image_asset_metadata_path(image_path: &Path) -> Result<PathBuf, CommandError> {
+    let parent_dir = image_path.parent().ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get parent directory for image asset: {}",
+            image_path.display()
+        ))
+    })?;
+    let image_stem = image_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get file stem for image asset: {}",
+            image_path.display()
+        ))
+    })?;
+
+    let metadata_filename = format!(".{}.metadata.json", image_stem); // Hidden file
+    Ok(parent_dir.join(metadata_filename))
+}
+
+// Helper function to get asset metadata path for a table
+pub fn get_table_asset_metadata_path(table_path: &Path) -> Result<PathBuf, CommandError> {
+    let parent_dir = table_path.parent().ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get parent directory for table asset: {}",
+            table_path.display()
+        ))
+    })?;
+    let table_stem = table_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
+        CommandError::from(format!(
+            "Could not get file stem for table asset: {}",
+            table_path.display()
+        ))
+    })?;
+
+    let metadata_filename = format!(".{}.metadata.json", table_stem); // Hidden file
+    Ok(parent_dir.join(metadata_filename))
 }
 
 
@@ -258,6 +333,45 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
 
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
+
+    // Create a structured metadata file
+    match get_media_metadata_path(&destination_media_path) {
+        Ok(metadata_path) => {
+            let file_name = destination_media_path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            let metadata_content = StandardAssetMetadata {
+                metadata: FileMetadata {
+                    file_name,
+                    file_path: destination_media_path.to_string_lossy().into_owned(),
+                    last_modified: Utc::now().to_rfc3339(),
+                    title: "".to_string(),
+                    description: "".to_string(),
+                    summary: "".to_string(),
+                },
+                highlights: Vec::new(),
+            };
+
+            match serde_json::to_string_pretty(&metadata_content) {
+                Ok(json_string) => {
+                    if let Err(e) = fs::write(&metadata_path, json_string) {
+                        error!("[Backend Import] Failed to write metadata file {}: {}", metadata_path.display(), e);
+                    } else {
+                        info!("[Backend Import] Created metadata file: {}", metadata_path.display());
+                    }
+                }
+                Err(e) => {
+                    error!("[Backend Import] Failed to serialize metadata for {}: {}", metadata_path.display(), e);
+                }
+            }
+        }
+        Err(e) => {
+            error!("[Backend Import] Failed to get media metadata path for {}: {:?}", destination_media_path.display(), e);
+            // Do not block import if metadata path generation fails
+        }
+    }
 
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
@@ -604,33 +718,33 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         },
         "image" => {
-            info!("[Backend Delete] Deleting standalone image file: {}", item_path_buf.display());
-            // 1. Delete the image file itself
-            fs::remove_file(&item_path_buf)
-                .map_err(|e| CommandError::from(format!("Failed to delete image file {}: {}", item_path_buf.display(), e)))?;
+            info!("[Backend Delete] Request to delete image and its folder for: {}", item_path_buf.display());
 
-            // 2. Delete containing folder if empty
-            if let Some(folder) = item_path_buf.parent() {
-                if folder.exists() {
-                    match fs::remove_dir(folder) {
-                        Ok(_) => (),
-                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
-                        Err(err) => return Err(CommandError::from(format!("Failed to delete image folder: {}", err))),
-                    }
-                }
+            // Get the parent folder of the image file. This is the folder to be deleted.
+            let image_folder_to_delete = item_path_buf.parent().ok_or_else(|| {
+                CommandError::from(format!(
+                    "Could not get parent directory for image file: {}",
+                    item_path_buf.display()
+                ))
+            })?;
+
+            if image_folder_to_delete.exists() && image_folder_to_delete.is_dir() {
+                info!("[Backend Delete] Deleting image folder: {}", image_folder_to_delete.display());
+                fs::remove_dir_all(image_folder_to_delete).map_err(|e| {
+                    CommandError::from(format!(
+                        "Failed to delete image folder {}: {}",
+                        image_folder_to_delete.display(),
+                        e
+                    ))
+                })?;
+            } else {
+                warn!(
+                    "[Backend Delete] Image folder {} not found. Assuming already deleted or structure is unexpected. Proceeding with XML cleanup.",
+                    image_folder_to_delete.display()
+                );
             }
 
-            // 3. Delete annotation metadata file, if present
-            if let Ok(metadata_path) = get_annotation_metadata_path_for_image(&item_path_buf) {
-                if metadata_path.exists() {
-                    info!("[Backend Delete] Deleting image annotation metadata file: {}", metadata_path.display());
-                    if let Err(e) = fs::remove_file(&metadata_path) {
-                        warn!("[Backend Delete] Failed to delete image annotation metadata file {}: {}", metadata_path.display(), e);
-                    }
-                }
-            }
-
-            // 4. Update project XML to remove image entry
+            // Update project XML to remove image entry
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_len = project_data.image_files.files.len();
@@ -640,7 +754,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Delete] XML updated for image.");
             } else {
-                warn!("[Backend Delete] Deleted image file, but no matching entry found in XML for path '{}'.", item_relative_path);
+                warn!("[Backend Delete] Deleted image folder (or it was already gone), but no matching entry found in XML for path '{}'.", item_relative_path);
             }
         },
         _ => {
@@ -737,6 +851,86 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 warn!("[Backend Rename] Media file not found at expected path {} inside renamed directory {}. Reverting directory rename.", old_media_path_in_new_dir.display(), new_stem_dir_path.display());
                 let _ = fs::rename(&new_stem_dir_path, &old_stem_dir_path);
                 return Err(CommandError::from(format!("Original media file structure inconsistent after directory rename. Expected file at {}", old_media_path_in_new_dir.display())));
+            }
+
+            // Enhanced media metadata handling: read, update, and rewrite, or create new.
+            let old_metadata_path_result = get_media_metadata_path(&old_media_path_in_new_dir);
+            let new_metadata_path_result = get_media_metadata_path(&new_media_path);
+
+            match (old_metadata_path_result, new_metadata_path_result) {
+                (Ok(old_metadata_path), Ok(new_metadata_path)) => {
+                    let mut metadata_content: Option<StandardAssetMetadata> = None;
+
+                    if old_metadata_path.exists() {
+                        info!("[Backend Rename] Attempting to read old media metadata file: {}", old_metadata_path.display());
+                        match fs::read_to_string(&old_metadata_path) {
+                            Ok(old_json_content) => {
+                                match serde_json::from_str::<StandardAssetMetadata>(&old_json_content) {
+                                    Ok(mut parsed_metadata) => {
+                                        // Successfully parsed, now update fields
+                                        parsed_metadata.metadata.file_name = new_media_path.file_name()
+                                            .and_then(|s| s.to_str()).unwrap_or("").to_string();
+                                        parsed_metadata.metadata.file_path = new_media_path.to_string_lossy().into_owned();
+                                        parsed_metadata.metadata.last_modified = Utc::now().to_rfc3339();
+                                        metadata_content = Some(parsed_metadata);
+                                        info!("[Backend Rename] Successfully parsed and updated old media metadata.");
+                                    }
+                                    Err(e) => {
+                                        warn!("[Backend Rename] Failed to parse old media metadata file {}: {}. A new one will be created.", old_metadata_path.display(), e);
+                                        // Proceed to create new metadata below
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("[Backend Rename] Failed to read old media metadata file {}: {}. A new one will be created.", old_metadata_path.display(), e);
+                                // Proceed to create new metadata below
+                            }
+                        }
+                        // Attempt to remove the old metadata file if it was read or if parsing failed (to replace it)
+                        if let Err(e) = fs::remove_file(&old_metadata_path) {
+                            warn!("[Backend Rename] Failed to remove old media metadata file {}: {}", old_metadata_path.display(), e);
+                        }
+                    } else {
+                        info!("[Backend Rename] Old media metadata file {} not found. A new one will be created.", old_metadata_path.display());
+                    }
+
+                    // If metadata wasn't loaded and updated, create new default metadata
+                    let final_metadata_to_write = metadata_content.unwrap_or_else(|| {
+                        info!("[Backend Rename] Creating new media metadata content for {}.", new_media_path.display());
+                        StandardAssetMetadata {
+                            metadata: FileMetadata {
+                                file_name: new_media_path.file_name()
+                                    .and_then(|s| s.to_str()).unwrap_or("").to_string(),
+                                file_path: new_media_path.to_string_lossy().into_owned(),
+                                last_modified: Utc::now().to_rfc3339(),
+                                title: "".to_string(),
+                                description: "".to_string(),
+                                summary: "".to_string(),
+                            },
+                            highlights: Vec::new(),
+                        }
+                    });
+
+                    // Write the (potentially updated or new) metadata to the new path
+                    match serde_json::to_string_pretty(&final_metadata_to_write) {
+                        Ok(json_string) => {
+                            if let Err(e) = fs::write(&new_metadata_path, json_string) {
+                                warn!("[Backend Rename] Failed to write media metadata file {}: {}", new_metadata_path.display(), e);
+                            } else {
+                                info!("[Backend Rename] Successfully wrote media metadata to {}", new_metadata_path.display());
+                            }
+                        }
+                        Err(e) => {
+                            warn!("[Backend Rename] Failed to serialize media metadata for {}: {}", new_metadata_path.display(), e);
+                        }
+                    }
+                }
+                (Err(e_old), _) => {
+                    warn!("[Backend Rename] Could not determine old media metadata path for {}: {:?}", old_media_path_in_new_dir.display(), e_old);
+                }
+                (_, Err(e_new)) => {
+                    warn!("[Backend Rename] Could not determine new media metadata path for {}: {:?}", new_media_path.display(), e_new);
+                }
             }
 
             let old_transcript_filename = format!("{}.json", old_stem);
@@ -939,9 +1133,92 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             let final_new_transcript_file_abs_path = current_transcript_folder_path_for_xml_update.join(&new_transcript_filename_pathbuf);
             let new_relative_path_for_transcript_xml = final_new_transcript_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
+            // Standardize or update the .metadata.json file (previously app-specific, now StandardAssetMetadata)
+            // Note: old_transcript_file_path is the original absolute path of the transcript before any renames.
+            // final_new_transcript_file_abs_path is the new absolute path after all renames.
+            let old_asset_metadata_path_result = get_document_metadata_path_for_doc(old_transcript_file_path);
+            let new_asset_metadata_path_result = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path);
+
+            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
+                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
+                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
+
+                    if old_asset_meta_path.exists() && old_asset_meta_path != new_asset_meta_path {
+                        info!("[Backend Rename] Attempting to read old imported transcript asset metadata: {}", old_asset_meta_path.display());
+                        match fs::read_to_string(&old_asset_meta_path) {
+                            Ok(json_content) => {
+                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
+                                    Ok(mut parsed_meta) => {
+                                        parsed_meta.metadata.file_name = new_transcript_filename_with_ext_str.clone();
+                                        parsed_meta.metadata.file_path = final_new_transcript_file_abs_path.to_string_lossy().into_owned();
+                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
+                                        asset_metadata_to_write = Some(parsed_meta);
+                                        info!("[Backend Rename] Parsed and updated old imported transcript asset metadata.");
+                                    }
+                                    Err(e) => warn!("[Backend Rename] Failed to parse old imported transcript asset metadata as StandardAssetMetadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                                }
+                            }
+                            Err(e) => warn!("[Backend Rename] Failed to read old imported transcript asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                        }
+                        if old_asset_meta_path != new_asset_meta_path { // Only remove if paths are different
+                            if let Err(e) = fs::remove_file(&old_asset_meta_path) {
+                                warn!("[Backend Rename] Failed to remove old imported transcript asset metadata {}: {}", old_asset_meta_path.display(), e);
+                            }
+                        }
+                    } else if new_asset_meta_path.exists() { // Handles case where old and new path are same (e.g. case change of main file)
+                         info!("[Backend Rename] Attempting to read existing imported transcript asset metadata for in-place update: {}", new_asset_meta_path.display());
+                         match fs::read_to_string(&new_asset_meta_path) {
+                            Ok(json_content) => {
+                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
+                                    Ok(mut parsed_meta) => {
+                                        parsed_meta.metadata.file_name = new_transcript_filename_with_ext_str.clone();
+                                        parsed_meta.metadata.file_path = final_new_transcript_file_abs_path.to_string_lossy().into_owned();
+                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
+                                        asset_metadata_to_write = Some(parsed_meta);
+                                        info!("[Backend Rename] Parsed and updated existing imported transcript asset metadata for in-place update.");
+                                    }
+                                    Err(e) => warn!("[Backend Rename] Failed to parse existing imported transcript asset metadata as StandardAssetMetadata {}: {}. It will be overwritten.", new_asset_meta_path.display(), e),
+                                }
+                            }
+                            Err(e) => warn!("[Backend Rename] Failed to read existing imported transcript asset metadata {}: {}. It will be overwritten.", new_asset_meta_path.display(), e),
+                        }
+                    } else {
+                         info!("[Backend Rename] Old imported transcript asset metadata {} not found or same as new path. New one will be created/overwritten at {}.", old_asset_meta_path.display(), new_asset_meta_path.display());
+                    }
+
+                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
+                        StandardAssetMetadata {
+                            metadata: FileMetadata {
+                                file_name: new_transcript_filename_with_ext_str.clone(),
+                                file_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
+                                last_modified: Utc::now().to_rfc3339(),
+                                title: "".to_string(),
+                                description: "".to_string(),
+                                summary: "".to_string(),
+                            },
+                            highlights: Vec::new(),
+                        }
+                    });
+
+                    match serde_json::to_string_pretty(&final_asset_metadata) {
+                        Ok(json_string) => {
+                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
+                                warn!("[Backend Rename] Failed to write imported transcript asset metadata to {}: {}", new_asset_meta_path.display(), e);
+                            } else {
+                                info!("[Backend Rename] Wrote imported transcript asset metadata to {}", new_asset_meta_path.display());
+                            }
+                        }
+                        Err(e) => warn!("[Backend Rename] Failed to serialize imported transcript asset metadata for {}: {}", new_asset_meta_path.display(), e),
+                    }
+                }
+                (Err(e), _) => warn!("[Backend Rename] Could not determine old imported transcript asset metadata path: {:?}", e),
+                (_, Err(e)) => warn!("[Backend Rename] Could not determine new imported transcript asset metadata path: {:?}", e),
+            }
+
+            // This is where the XML path for the .<name>.metadata.json (DocumentMetadataEntry) is determined
             let mut new_app_metadata_relative_path_for_xml: Option<String> = None;
             if let Ok(final_new_app_metadata_abs_path) = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path) {
-                if final_new_app_metadata_abs_path.exists() {
+                if final_new_app_metadata_abs_path.exists() { // Check if it exists after our write attempt
                     new_app_metadata_relative_path_for_xml = Some(final_new_app_metadata_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
                 }
             }
@@ -1248,6 +1525,67 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for table rename.");
             }
+
+            // Handle standard asset metadata for the table
+            let old_asset_metadata_path_result = get_table_asset_metadata_path(&item_path_buf); // item_path_buf is the old absolute path
+            let new_asset_metadata_path_result = get_table_asset_metadata_path(&new_path); // new_path is the new absolute path
+
+            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
+                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
+                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
+
+                    if old_asset_meta_path.exists() {
+                        info!("[Backend Rename] Attempting to read old table asset metadata: {}", old_asset_meta_path.display());
+                        match fs::read_to_string(&old_asset_meta_path) {
+                            Ok(json_content) => {
+                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
+                                    Ok(mut parsed_meta) => {
+                                        parsed_meta.metadata.file_name = new_filename_with_ext.to_string();
+                                        parsed_meta.metadata.file_path = new_path.to_string_lossy().into_owned();
+                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
+                                        asset_metadata_to_write = Some(parsed_meta);
+                                        info!("[Backend Rename] Parsed and updated old table asset metadata.");
+                                    }
+                                    Err(e) => warn!("[Backend Rename] Failed to parse old table asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                                }
+                            }
+                            Err(e) => warn!("[Backend Rename] Failed to read old table asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                        }
+                        if let Err(e) = fs::remove_file(&old_asset_meta_path) {
+                            warn!("[Backend Rename] Failed to remove old table asset metadata {}: {}", old_asset_meta_path.display(), e);
+                        }
+                    } else {
+                        info!("[Backend Rename] Old table asset metadata {} not found. New one will be created.", old_asset_meta_path.display());
+                    }
+
+                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
+                        StandardAssetMetadata {
+                            metadata: FileMetadata {
+                                file_name: new_filename_with_ext.to_string(),
+                                file_path: new_path.to_string_lossy().into_owned(),
+                                last_modified: Utc::now().to_rfc3339(),
+                                title: "".to_string(),
+                                description: "".to_string(),
+                                summary: "".to_string(),
+                            },
+                            highlights: Vec::new(),
+                        }
+                    });
+
+                    match serde_json::to_string_pretty(&final_asset_metadata) {
+                        Ok(json_string) => {
+                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
+                                warn!("[Backend Rename] Failed to write table asset metadata to {}: {}", new_asset_meta_path.display(), e);
+                            } else {
+                                info!("[Backend Rename] Wrote table asset metadata to {}", new_asset_meta_path.display());
+                            }
+                        }
+                        Err(e) => warn!("[Backend Rename] Failed to serialize table asset metadata for {}: {}", new_asset_meta_path.display(), e),
+                    }
+                }
+                (Err(e), _) => warn!("[Backend Rename] Could not determine old table asset metadata path: {:?}", e),
+                (_, Err(e)) => warn!("[Backend Rename] Could not determine new table asset metadata path: {:?}", e),
+            }
         },
         "image" => {
             let new_image_filename_with_ext_str = new_name_trimmed; // e.g., "NewImage.png"
@@ -1372,6 +1710,67 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for image rename.");
+            }
+
+            // Handle standard asset metadata for the image
+            let old_asset_metadata_path_result = get_image_asset_metadata_path(old_image_file_path);
+            let new_asset_metadata_path_result = get_image_asset_metadata_path(&final_new_image_file_abs_path);
+
+            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
+                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
+                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
+
+                    if old_asset_meta_path.exists() {
+                        info!("[Backend Rename] Attempting to read old image asset metadata: {}", old_asset_meta_path.display());
+                        match fs::read_to_string(&old_asset_meta_path) {
+                            Ok(json_content) => {
+                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
+                                    Ok(mut parsed_meta) => {
+                                        parsed_meta.metadata.file_name = new_image_filename_pathbuf.file_name().and_then(|s|s.to_str()).unwrap_or("").to_string();
+                                        parsed_meta.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
+                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
+                                        asset_metadata_to_write = Some(parsed_meta);
+                                        info!("[Backend Rename] Parsed and updated old image asset metadata.");
+                                    }
+                                    Err(e) => warn!("[Backend Rename] Failed to parse old image asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                                }
+                            }
+                            Err(e) => warn!("[Backend Rename] Failed to read old image asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
+                        }
+                        if let Err(e) = fs::remove_file(&old_asset_meta_path) {
+                            warn!("[Backend Rename] Failed to remove old image asset metadata {}: {}", old_asset_meta_path.display(), e);
+                        }
+                    } else {
+                        info!("[Backend Rename] Old image asset metadata {} not found. New one will be created.", old_asset_meta_path.display());
+                    }
+
+                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
+                        StandardAssetMetadata {
+                            metadata: FileMetadata {
+                                file_name: new_image_filename_pathbuf.file_name().and_then(|s|s.to_str()).unwrap_or("").to_string(),
+                                file_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
+                                last_modified: Utc::now().to_rfc3339(),
+                                title: "".to_string(),
+                                description: "".to_string(),
+                                summary: "".to_string(),
+                            },
+                            highlights: Vec::new(),
+                        }
+                    });
+
+                    match serde_json::to_string_pretty(&final_asset_metadata) {
+                        Ok(json_string) => {
+                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
+                                warn!("[Backend Rename] Failed to write image asset metadata to {}: {}", new_asset_meta_path.display(), e);
+                            } else {
+                                info!("[Backend Rename] Wrote image asset metadata to {}", new_asset_meta_path.display());
+                            }
+                        }
+                        Err(e) => warn!("[Backend Rename] Failed to serialize image asset metadata for {}: {}", new_asset_meta_path.display(), e),
+                    }
+                }
+                (Err(e), _) => warn!("[Backend Rename] Could not determine old image asset metadata path: {:?}", e),
+                (_, Err(e)) => warn!("[Backend Rename] Could not determine new image asset metadata path: {:?}", e),
             }
 
         },
