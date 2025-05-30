@@ -102,6 +102,8 @@
     highlight: true,
     clearFormatting: true
   };
+  export let enableTableCellMenu = false;
+  export let enableTableCellResize = false;
 
   let editorWrapper;
   let editorContainer;
@@ -1104,6 +1106,12 @@
 
   function handleContextMenu(event) {
       if (!editor || !editor.isEditable()) return;
+      // Prevent table cell menu if disabled
+      if (!enableTableCellMenu) {
+          closeTableCellMenu(false);
+          return;
+      }
+
       let tableCellNode = null;
       let domNode = null;
       try {
@@ -1173,6 +1181,10 @@
   function handlePointerDownOnContainer(event) {
       if (!editable || !editor || !editorContainer) return;
       const target = event.target;
+
+      // Prevent table cell resizing if disabled
+      if (!enableTableCellResize) return;
+
       if (!(target instanceof HTMLElement)) return;
       const cellElement = target.closest('.editor-table-cell');
       if (!cellElement) return;
@@ -1571,6 +1583,7 @@
     <div class="resizer-line" style={resizerLineStyle}></div>
   </div>
 
+  {#if enableTableCellMenu}
     <TableCellActionMenu
       editor={editor}
       anchorElement={editorWrapper}
@@ -1579,6 +1592,7 @@
       bind:position={tableCellMenuPosition}
       on:close={handleTableCellMenuClose}
     />
+  {/if}
 </div>
 
 <LinkModal

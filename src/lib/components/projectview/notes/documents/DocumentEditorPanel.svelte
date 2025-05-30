@@ -158,6 +158,8 @@
                      initialJson={currentJson}
                      editable={true}
                      placeholder="Start typing your document..."
+                     enableTableCellMenu={true}
+                     enableTableCellResize={true}
                      on:change={handleEditorChange}
                      on:highlightevent={handleHighlightEvent}
                  />
