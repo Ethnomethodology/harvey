@@ -287,7 +287,7 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
             }
         }
         Err(e) => {
-            error!("[Backend Import] Failed to get media metadata path for {}: {}", destination_media_path.display(), e);
+            error!("[Backend Import] Failed to get media metadata path for {}: {:?}", destination_media_path.display(), e);
             // Do not block import if metadata path generation fails
         }
     }
@@ -785,7 +785,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                                 }
                             }
                             Err(e) => {
-                                warn!("[Backend Rename] Could not determine new media metadata path for {}: {}", new_media_path.display(), e);
+                                warn!("[Backend Rename] Could not determine new media metadata path for {}: {:?}", new_media_path.display(), e);
                             }
                         }
                     } else {
@@ -793,7 +793,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                     }
                 }
                 Err(e) => {
-                    warn!("[Backend Rename] Could not determine old media metadata path for {}: {}", old_media_path_in_new_dir.display(), e);
+                    warn!("[Backend Rename] Could not determine old media metadata path for {}: {:?}", old_media_path_in_new_dir.display(), e);
                 }
             }
 
