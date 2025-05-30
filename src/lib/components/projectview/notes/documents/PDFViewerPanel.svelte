@@ -220,107 +220,64 @@ import { get } from 'svelte/store';
         });
     }
     
-    async function getContextualDataForRange(range, pageIndex) {
-        if (!range || pageIndex < 0 || !pdfViewer || !pdfDoc) {
-            return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
-        }
-        const rawSelectedText = range.toString().trim();
-        const normalizedSelectedText = normalizeTextForMatching(rawSelectedText);
-        if (!normalizedSelectedText) return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
-
-        let pageView, pdfPage, pageTextLayerDiv;
-        try {
-            pageView = pdfViewer.getPageView(pageIndex);
-            // Pass the potentially existing pageView to ensureTextLayerReady
-            pageView = await ensureTextLayerReady(pageView, pageIndex); 
-            if (!pageView) { // Should be caught by ensureTextLayerReady throwing, but as a safeguard:
-                throw new Error(`ensureTextLayerReady returned null for page ${pageIndex + 1}`);
-            }
-
-            pdfPage = pageView.pdfPage;
-            pageTextLayerDiv = pageView.textLayer?.textLayerDiv;
-
-            if (!pdfPage) throw new Error(`pdfPage could not be obtained for page ${pageIndex + 1}`);
-            
-            const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
-            if (!textContent?.items?.length) return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
-
-            const rawFullPageText = textContent.items.map(item => item.str).join('');
-            let prefix = '', suffix = '', occurrenceInPageContext = 0, selectionStartInPage = -1;
-            // Use normalized full page text for matching context and occurrence calculation
-            const normalizedFullPageText = normalizeTextForMatching(rawFullPageText);
-
-            if (pageTextLayerDiv) {
-                const walker = document.createTreeWalker(pageTextLayerDiv, NodeFilter.SHOW_TEXT, null, false);
-                let currentNode, currentOffset = 0;
-                while (currentNode = walker.nextNode()) {
-                    if (range.startContainer.isSameNode(currentNode)) {
-                        selectionStartInPage = currentOffset + range.startOffset;
-                        break;
-                    }
-                    currentOffset += currentNode.textContent.length;
-                    // selectionStartInPage is an offset in the *raw* concatenated DOM text.
-                }
-            }
-
-            // Determine prefix and suffix from the normalized full page text
-            // We need to estimate where the normalizedSelectedText starts in normalizedFullPageText
-            let estimatedNormalizedSelectionStart = -1;
-            if (selectionStartInPage !== -1) {
-                // This is an approximation: normalize the part of raw text leading up to the selection
-                estimatedNormalizedSelectionStart = normalizeTextForMatching(rawFullPageText.substring(0, selectionStartInPage)).length;
-            }
-
-            if (selectionStartInPage !== -1) {
-                prefix = normalizedFullPageText.substring(Math.max(0, estimatedNormalizedSelectionStart - CONTEXT_LENGTH), estimatedNormalizedSelectionStart);
-                const normalizedSelectionEnd = estimatedNormalizedSelectionStart + normalizedSelectedText.length;
-                suffix = normalizedFullPageText.substring(normalizedSelectionEnd, Math.min(normalizedFullPageText.length, normalizedSelectionEnd + CONTEXT_LENGTH));
-            } else { // Fallback if we couldn't get a precise start (e.g. selection spans multiple complex nodes)
-                // Try to find the text and derive context around its first occurrence if no specific offset.
-                const firstMatchIndex = normalizedFullPageText.indexOf(normalizedSelectedText);
-                if (firstMatchIndex !== -1) {
-                    prefix = normalizedFullPageText.substring(Math.max(0, firstMatchIndex - CONTEXT_LENGTH), firstMatchIndex);
-                    const endOfText = firstMatchIndex + normalizedSelectedText.length;
-                    suffix = normalizedFullPageText.substring(endOfText, Math.min(normalizedFullPageText.length, endOfText + CONTEXT_LENGTH));
-                }
-            }
-
-            // Calculate occurrenceInPageContext using normalized values
-            let count = 0;
-            const targetRegex = new RegExp((prefix ? escapeRegExp(prefix) : "") + `(${escapeRegExp(normalizedSelectedText)})` + (suffix ? escapeRegExp(suffix) : ""), 'g');
-            let match;
-            while ((match = targetRegex.exec(normalizedFullPageText)) !== null) {
-                const currentMatchStartForSelectedText = match.index + (prefix ? prefix.length : 0);
-                if (estimatedNormalizedSelectionStart !== -1 && currentMatchStartForSelectedText === estimatedNormalizedSelectionStart) {
-                    occurrenceInPageContext = count;
-                    break;
-                } else if (estimatedNormalizedSelectionStart === -1 && count === 0) { // If no specific start, assume the first found occurrence is the target
-                    occurrenceInPageContext = count; // Should be 0
-                    break;
-                }
-                count++;
-            }
-            return { prefix, suffix, occurrenceInPageContext }; // prefix & suffix are normalized
-        } catch (e) {
-            console.error(`[getContextualDataForRange] Error for page ${pageIndex + 1}:`, e.message);
-            return { prefix: '', suffix: '', occurrenceInPageContext: 0 };
-        }
-    }
+    // getContextualDataForRange was removed as it's no longer used.
+    // The new implementation of createHighlightDataForStorage uses quadPoints for positioning.
 
     async function createHighlightDataForStorage(id, range, color) {
         if (!range) return null;
         const rawText = range.toString().trim();
-        const normalizedText = normalizeTextForMatching(rawText); // Normalize text before storage
-        if (!normalizedText) return null;
+        // The 'text' field should store raw selected text. Normalization was for matching, not primary purpose here.
+        if (!rawText) return null; // If raw text is empty, probably not a valid highlight
 
-        const { pageIndex } = getRangePageInfo(range);
+        const { pageIndex, pageElement } = getRangePageInfo(range);
         let actualPageIndex = pageIndex;
-        if (pageIndex === -1) {
+        let actualPageElement = pageElement;
+
+        if (actualPageIndex === -1) {
             actualPageIndex = pdfViewer?.currentPageNumber ? pdfViewer.currentPageNumber - 1 : 0;
+            // If pageElement was not found via range, try to get it via page number
+            if (pdfViewer && actualPageIndex !== -1) {
+                const pageView = pdfViewer.getPageView(actualPageIndex);
+                actualPageElement = pageView?.div;
+            }
         }
-        // getContextualDataForRange now returns normalized prefix/suffix
-        const { prefix, suffix, occurrenceInPageContext } = await getContextualDataForRange(range, actualPageIndex);
-        return { id, type: 'pdfHighlight', color, text: normalizedText, pageIndex: actualPageIndex, prefix, suffix, occurrenceInPageContext };
+
+        if (!actualPageElement) {
+            console.warn('[createHighlightDataForStorage] Could not obtain pageElement. QuadPoints will be relative to viewport.');
+            // Fallback or error, as pageRect is crucial. For now, let it proceed, quadpoints will be incorrect.
+        }
+        
+        const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
+
+        const clientRects = range.getClientRects();
+        const quadPoints = [];
+
+        for (let i = 0; i < clientRects.length; i++) {
+            const rect = clientRects[i];
+            // Coordinates relative to the page
+            const x1 = rect.left - pageRect.left;
+            const y1 = rect.top - pageRect.top;
+            const x2 = rect.right - pageRect.left;
+            const y2 = rect.top - pageRect.top; // y2 is same as y1 for top-right
+            const x3 = rect.left - pageRect.left; // x3 is same as x1 for bottom-left
+            const y3 = rect.bottom - pageRect.top;
+            const x4 = rect.right - pageRect.left; // x4 is same as x2 for bottom-right
+            const y4 = rect.bottom - pageRect.top; // y4 is same as y3 for bottom-right
+            
+            quadPoints.push([x1, y1, x2, y2, x3, y3, x4, y4]);
+        }
+        
+        // Note: normalizeTextForMatching(rawText) was used for 'text' before.
+        // The requirement is to store raw text for 'text', and quadPoints for positioning.
+        // If normalizedText is needed for OTHER purposes by the caller, that's outside this function's direct responsibility for the 'text' field.
+        return { 
+            id, 
+            type: 'pdfHighlight', 
+            color, 
+            text: rawText, // Store raw text as per new requirement
+            pageIndex: actualPageIndex, 
+            quadPoints 
+        };
     }
     
     function recordAction(type, payload) {
@@ -722,13 +679,36 @@ import { get } from 'svelte/store';
     // Re-inserting refined DOM manipulation functions from previous correct version
     function applyHighlightToSelectionDOM(range, color, overrideId) {
         if (!range || range.collapsed || !color || !viewerElement || !pdfViewer) return null;
-        // Generate or use provided ID
         const hlId = overrideId || `hl-${uuidv4()}`;
-        // Determine page of range
-        const { pageIndex } = getRangePageInfo(range);
+        
+        const { pageIndex, pageElement } = getRangePageInfo(range);
         if (pageIndex < 0) return null;
-        // Draw continuous overlay rectangles
-        renderHighlightOverlay(range, color, hlId, pageIndex);
+
+        let actualPageElement = pageElement;
+        if (!actualPageElement) {
+            const pageView = pdfViewer.getPageView(pageIndex);
+            actualPageElement = pageView?.div;
+        }
+
+        if (!actualPageElement) {
+            console.warn('[applyHighlightToSelectionDOM] Could not obtain pageElement for quadPoints calculation.');
+            return null; 
+        }
+        const pageRect = actualPageElement.getBoundingClientRect();
+        const clientRects = range.getClientRects();
+        const quadPoints = [];
+
+        for (let i = 0; i < clientRects.length; i++) {
+            const rect = clientRects[i];
+            quadPoints.push([
+                rect.left - pageRect.left, rect.top - pageRect.top,
+                rect.right - pageRect.left, rect.top - pageRect.top,
+                rect.left - pageRect.left, rect.bottom - pageRect.top,
+                rect.right - pageRect.left, rect.bottom - pageRect.top
+            ]);
+        }
+        
+        renderHighlightOverlay(quadPoints, color, hlId, pageIndex);
         return hlId;
     }
 
@@ -1134,17 +1114,56 @@ import { get } from 'svelte/store';
                     );
                     if (range) {
                         // Add a check to see if the found range's text (when normalized) matches the expected normalized text
-                        const domTextNormalized = normalizeTextForMatching(range.toString());
-                        if (domTextNormalized === searchStrNormalized) {
-                            renderHighlightOverlay(range, highlight.color, highlight.id, pageIndex);
+                        // Assuming highlight object now contains quadPoints
+                        if (highlight.quadPoints) {
+                            renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
+                            // Optional: Verify text if range was also found by findRangeInTextLayer
+                            if (range) {
+                                const domTextNormalized = normalizeTextForMatching(range.toString());
+                                if (domTextNormalized !== searchStrNormalized) {
+                                    console.warn(`[ApplyInitial] Text mismatch for ID ${highlight.id}. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
+                                }
+                            }
+                        } else if (range) { // Fallback for old data that might not have quadPoints but we found a range
+                            console.warn(`[ApplyInitial] Missing quadPoints for ID ${highlight.id}. Generating from range for rendering.`);
+                            const pageView = pdfViewer.getPageView(pageIndex);
+                            if (pageView && pageView.div) {
+                                const pageRect = pageView.div.getBoundingClientRect();
+                                const clientRects = range.getClientRects();
+                                const quadPoints = [];
+                                for (let i = 0; i < clientRects.length; i++) {
+                                    const rect = clientRects[i];
+                                    quadPoints.push([
+                                        rect.left - pageRect.left, rect.top - pageRect.top,
+                                        rect.right - pageRect.left, rect.top - pageRect.top,
+                                        rect.left - pageRect.left, rect.bottom - pageRect.top,
+                                        rect.right - pageRect.left, rect.bottom - pageRect.top
+                                    ]);
+                                }
+                                renderHighlightOverlay(quadPoints, highlight.color, highlight.id, pageIndex);
+                            } else {
+                                 console.warn(`[ApplyInitial] Could not generate fallback quadPoints for ${highlight.id} due to missing pageView/div.`);
+                            }
                         } else {
-                            console.warn(`[ApplyInitial] Range found for ID ${highlight.id}, but text mismatch after DOM normalization. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
+                             console.warn(`[ApplyInitial] No quadPoints and no range for highlight ID ${highlight.id}. Cannot render.`);
                         }
-                    } else {
-                        console.warn(`[ApplyInitial] Failed to create DOM range (findRangeInTextLayer returned null) for ID ${highlight.id} on page ${pageIndex + 1} (norm. offset ${startIndex}). Text: "${searchStrNormalized.substring(0,20)}..."`);
+                    } else { // Range not found by findRangeInTextLayer
+                         // If quadPoints exist, we might still try to render if findRangeInTextLayer was just for context/verification
+                        if (highlight.quadPoints) {
+                            console.warn(`[ApplyInitial] Text not found by findRangeInTextLayer for highlight ID ${highlight.id}, but quadPoints exist. Rendering with quadPoints.`);
+                            renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
+                        } else {
+                            console.warn(`[ApplyInitial] Text not found (normalized search) and no quadPoints for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
+                        }
                     }
-                } else {
-                    console.warn(`[ApplyInitial] Text not found (normalized search) for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
+                } else { // startIndex === -1 (text not found with context or simple search in normalized page text)
+                     // If quadPoints exist, maybe the text changed but quadpoints are still valid? Or from a different source.
+                    if (highlight.quadPoints) {
+                        console.warn(`[ApplyInitial] Text not found for highlight ID ${highlight.id} (norm. search), but quadPoints exist. Rendering with quadPoints.`);
+                        renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
+                    } else {
+                        console.warn(`[ApplyInitial] Text not found (normalized search) and no quadPoints for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
+                    }
                 }
             }
             // Allow highlights from this page to render before processing the next page in the initial pass
@@ -1233,8 +1252,31 @@ async function applyHighlightsForPage(pageIndex) {
             hl.text.length,
             hl.text
         );
-        if (range) {
-            renderHighlightOverlay(range, hl.color, hl.id, pageIndex);
+
+        if (hl.quadPoints) {
+            renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
+        } else if (range) { // Fallback for old data if quadPoints are missing
+            console.warn(`[applyHighlightsForPage] Missing quadPoints for ID ${hl.id}. Generating from range for rendering.`);
+            const pageView = pdfViewer.getPageView(pageIndex);
+            if (pageView && pageView.div) {
+                const pageRect = pageView.div.getBoundingClientRect();
+                const clientRects = range.getClientRects();
+                const quadPoints = [];
+                for (let i = 0; i < clientRects.length; i++) {
+                    const rect = clientRects[i];
+                    quadPoints.push([
+                        rect.left - pageRect.left, rect.top - pageRect.top,
+                        rect.right - pageRect.left, rect.top - pageRect.top,
+                        rect.left - pageRect.left, rect.bottom - pageRect.top,
+                        rect.right - pageRect.left, rect.bottom - pageRect.top
+                    ]);
+                }
+                renderHighlightOverlay(quadPoints, hl.color, hl.id, pageIndex);
+            } else {
+                console.warn(`[applyHighlightsForPage] Could not generate fallback quadPoints for ${hl.id} due to missing pageView/div.`);
+            }
+        } else {
+            console.warn(`[applyHighlightsForPage] No quadPoints and no range for highlight ID ${hl.id}. Cannot render.`);
         }
     }
 }
@@ -1257,46 +1299,45 @@ function ensureHighlightOverlayContainer(pageIndex) {
     return overlay;
 }
 
-/** Draws highlight overlay rectangles for the given text range */
-function renderHighlightOverlay(range, color, id, pageIndex) {
+/** Draws highlight overlay rectangles using pre-calculated quadPoints. */
+function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
     const overlay = ensureHighlightOverlayContainer(pageIndex);
     if (!overlay) return;
-    // Remove any existing parts for this highlight id
+
+    // Remove any existing parts for this highlight id to prevent duplicates
     overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`).forEach(el => el.remove());
-    const pageView = pdfViewer.getPageView(pageIndex);
-    const pageRect = pageView.div.getBoundingClientRect();
-    // Group client rects by line (client rects with similar top) and draw one rectangle per line
-    const rects = Array.from(range.getClientRects());
-    const lines = [];
-    const LINE_THRESHOLD = 3; // pixels
-    rects.forEach(r => {
-        // Try to find an existing line group whose top is within threshold
-        let group = lines.find(line => Math.abs(line.top - r.top) < LINE_THRESHOLD);
-        if (!group) {
-            group = { top: r.top, rects: [] };
-            lines.push(group);
-        }
-        group.rects.push(r);
-    });
-    // Draw one overlay rectangle per line group
-    lines.forEach(line => {
-        const left = Math.min(...line.rects.map(r => r.left));
-        const right = Math.max(...line.rects.map(r => r.right));
-        const topPx = Math.min(...line.rects.map(r => r.top));
-        const bottomPx = Math.max(...line.rects.map(r => r.bottom));
+
+    if (!quadPoints || quadPoints.length === 0) {
+        // console.warn(`[renderHighlightOverlay] No quadPoints provided for id ${id} on page ${pageIndex}. Nothing to render.`);
+        return;
+    }
+
+    quadPoints.forEach(quad => {
+        // quad is [x1, y1, x2, y2, x3, y3, x4, y4]
+        // These are already page-relative coordinates.
+        const x1 = quad[0];
+        const y1 = quad[1];
+        const x2 = quad[2];
+        // y2 is quad[3]
+        // x3 is quad[4]
+        const y3 = quad[5];
+        // x4 is quad[6]
+        // y4 is quad[7]
+
         const rectEl = document.createElement('div');
         rectEl.className = 'overlay-part';
         rectEl.dataset.hlId = id;
         rectEl.dataset.hlColor = color;
-        rectEl.style.pointerEvents = 'auto';
+        
         Object.assign(rectEl.style, {
             position: 'absolute',
-            left: `${left - pageRect.left}px`,
-            top: `${topPx - pageRect.top}px`,
-            width: `${right - left}px`,
-            height: `${bottomPx - topPx}px`,
+            left: `${x1}px`,
+            top: `${y1}px`, // y1 is the top-left y, y2 is the top-right y. For axis-aligned, they are the same.
+            width: `${x2 - x1}px`, // x2-x1 is width
+            height: `${y3 - y1}px`, // y3-y1 is height (y3 is bottom-left y)
             backgroundColor: color,
-            borderRadius: '2px'
+            borderRadius: '2px',
+            pointerEvents: 'auto' // Allow clicks on the overlay part
         });
         overlay.appendChild(rectEl);
     });
