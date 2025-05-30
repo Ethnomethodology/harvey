@@ -20,10 +20,8 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use uuid::Uuid;
 use quick_xml;
-// serde_json and chrono::Utc are already imported below, ensure serde is for local structs
 use serde::{Serialize, Deserialize};
-// use serde_json; // Already present
-// use chrono::Utc; // Already present
+use chrono::Utc;
 
 // Temporary struct definitions - to be moved to shared_types.rs and reconciled in Step 8
 #[derive(Serialize, Deserialize, Debug)]

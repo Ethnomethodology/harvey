@@ -9,12 +9,9 @@ use std::{
 };
 use quick_xml;
 use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for delete/rename
-use serde::{Serialize, Deserialize};
 use chrono::Utc;
 use serde_json;
 use serde::{Serialize, Deserialize};
-use chrono::Utc;
-use serde_json;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FileMetadata {
@@ -721,33 +718,33 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         },
         "image" => {
-            info!("[Backend Delete] Deleting standalone image file: {}", item_path_buf.display());
-            // 1. Delete the image file itself
-            fs::remove_file(&item_path_buf)
-                .map_err(|e| CommandError::from(format!("Failed to delete image file {}: {}", item_path_buf.display(), e)))?;
+            info!("[Backend Delete] Request to delete image and its folder for: {}", item_path_buf.display());
 
-            // 2. Delete containing folder if empty
-            if let Some(folder) = item_path_buf.parent() {
-                if folder.exists() {
-                    match fs::remove_dir(folder) {
-                        Ok(_) => (),
-                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
-                        Err(err) => return Err(CommandError::from(format!("Failed to delete image folder: {}", err))),
-                    }
-                }
+            // Get the parent folder of the image file. This is the folder to be deleted.
+            let image_folder_to_delete = item_path_buf.parent().ok_or_else(|| {
+                CommandError::from(format!(
+                    "Could not get parent directory for image file: {}",
+                    item_path_buf.display()
+                ))
+            })?;
+
+            if image_folder_to_delete.exists() && image_folder_to_delete.is_dir() {
+                info!("[Backend Delete] Deleting image folder: {}", image_folder_to_delete.display());
+                fs::remove_dir_all(image_folder_to_delete).map_err(|e| {
+                    CommandError::from(format!(
+                        "Failed to delete image folder {}: {}",
+                        image_folder_to_delete.display(),
+                        e
+                    ))
+                })?;
+            } else {
+                warn!(
+                    "[Backend Delete] Image folder {} not found. Assuming already deleted or structure is unexpected. Proceeding with XML cleanup.",
+                    image_folder_to_delete.display()
+                );
             }
 
-            // 3. Delete annotation metadata file, if present
-            if let Ok(metadata_path) = get_annotation_metadata_path_for_image(&item_path_buf) {
-                if metadata_path.exists() {
-                    info!("[Backend Delete] Deleting image annotation metadata file: {}", metadata_path.display());
-                    if let Err(e) = fs::remove_file(&metadata_path) {
-                        warn!("[Backend Delete] Failed to delete image annotation metadata file {}: {}", metadata_path.display(), e);
-                    }
-                }
-            }
-
-            // 4. Update project XML to remove image entry
+            // Update project XML to remove image entry
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_len = project_data.image_files.files.len();
@@ -757,7 +754,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Delete] XML updated for image.");
             } else {
-                warn!("[Backend Delete] Deleted image file, but no matching entry found in XML for path '{}'.", item_relative_path);
+                warn!("[Backend Delete] Deleted image folder (or it was already gone), but no matching entry found in XML for path '{}'.", item_relative_path);
             }
         },
         _ => {
