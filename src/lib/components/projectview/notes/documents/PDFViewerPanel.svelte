@@ -389,29 +389,30 @@ import { get } from 'svelte/store';
 
     async function handleViewerMouseUp(event) {
         if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
-        await tick(); // Allow selection to finalize
-        setTimeout(async () => {
-            selectedRange = null; 
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-                const range = sel.getRangeAt(0);
-                let isInTextLayer = false;
-                const ancestor = range.commonAncestorContainer;
-                if (ancestor && viewerElement?.contains(ancestor)) {
-                    const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
-                    if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
-                }
-                if (isInTextLayer && range.toString().trim().length > 0) {
-                    clearTimeout(hideToolbarTimeoutId); selectedRange = range.cloneRange(); 
-                    clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
-                    showSelectionToolbar = true; 
-                    await tick(); 
-                    positionAndShowSelectionToolbar(selectedRange); 
-                    return;
-                }
+        await tick(); // Allow selection to finalize in the DOM
+
+        selectedRange = null; 
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+            const range = sel.getRangeAt(0);
+            let isInTextLayer = false;
+            const ancestor = range.commonAncestorContainer;
+            if (ancestor && viewerElement?.contains(ancestor)) {
+                const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
+                if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
             }
-            selectedRange = null; if (toolbarMode === 'selection' && showSelectionToolbar) hideSelectionToolbar();
-        }, 30); // Reduced delay
+            if (isInTextLayer && range.toString().trim().length > 0) {
+                clearTimeout(hideToolbarTimeoutId); 
+                selectedRange = range.cloneRange(); 
+                clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
+                showSelectionToolbar = true; 
+                await tick(); // Ensure Svelte renders the toolbar if it was hidden
+                // Call directly after tick for more immediate appearance
+                positionToolbarAtPoint(event.clientX, event.clientY);
+                return;
+            }
+        }
+        selectedRange = null; if (toolbarMode === 'selection' && showSelectionToolbar) hideSelectionToolbar();
     }
 
     async function handleViewerClick(event) {
@@ -447,12 +448,12 @@ import { get } from 'svelte/store';
                 }
                 showSelectionToolbar = true;
                 await tick();
-                // PATCH: toolbarMode-aware toolbar positioning
-                if (toolbarMode === 'selection' && clickRange) {
-                    positionAndShowSelectionToolbar(clickRange);
-                } else if (toolbarMode === 'click') {
-                    // Anchor toolbar at click position
+                
+                if (toolbarMode === 'click') { // This should be the mode when clicking an existing highlight
+                    // Call directly after tick for more immediate appearance
                     positionToolbarAtPoint(event.clientX, event.clientY);
+                } else if (toolbarMode === 'selection' && clickRange) { // Fallback or other scenario
+                    positionAndShowSelectionToolbar(clickRange);
                 }
             }
             event.stopPropagation();
@@ -485,21 +486,40 @@ import { get } from 'svelte/store';
 
     /** Position toolbar at given client coordinates (for click-mode) */
     function positionToolbarAtPoint(clientX, clientY) {
-        if (!selectionToolbarElement || !pdfViewerWrapperElement) return;
+        if (!selectionToolbarElement || !pdfViewerWrapperElement) {
+            // console.warn('[positionToolbarAtPoint] Missing elements');
+            return;
+        }
+        
         const containerRect = pdfViewerWrapperElement.getBoundingClientRect();
         const toolbarRect = selectionToolbarElement.getBoundingClientRect();
-        // Center horizontally at click
-        let left = clientX - containerRect.left - (toolbarRect.width / 2);
-        left = Math.max(0, Math.min(containerRect.width - toolbarRect.width - 5, left));
-        // Place above pointer, or below if not enough space
-        let top = clientY - containerRect.top - toolbarRect.height - 8;
-        if (top < 0) {
-            top = clientY - containerRect.top + 8;
+        const toolbarHeight = toolbarRect.height;
+        const toolbarWidth = toolbarRect.width;
+
+        if (!toolbarHeight || !toolbarWidth) { /* console.warn('Toolbar no dimensions'); */ return; }
+
+        // Horizontal centering
+        let left = clientX - containerRect.left - (toolbarWidth / 2);
+        left = Math.max(0, Math.min(containerRect.width - toolbarWidth - 5, left));
+
+        // Vertical positioning
+        let top = clientY - containerRect.top - toolbarHeight - 8; // Try above cursor
+
+        const spaceAbove = clientY - containerRect.top;
+        const spaceBelow = containerRect.height - (clientY - containerRect.top);
+
+        if (top < 0 || (spaceAbove < toolbarHeight + 8 && spaceBelow > toolbarHeight + 8)) {
+            top = clientY - containerRect.top + 8; // Position below cursor
         }
+
+        top = Math.max(0, top); 
+        if (top + toolbarHeight > containerRect.height - 5) { 
+            top = containerRect.height - toolbarHeight - 5;
+            if (top < 0) top = 0; 
+        }
+        
         selectionToolbarLeft = left;
         selectionToolbarTop = top;
-        selectionToolbarElement.style.left = `${left}px`;
-        selectionToolbarElement.style.top = `${top}px`;
     }
 
     function hideSelectionToolbar() {
@@ -1006,12 +1026,16 @@ import { get } from 'svelte/store';
     // --- Apply Initial Highlights (More Robust) ---
     async function applyInitialHighlights() {
         if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement) return;
-        if (!initialHighlights || initialHighlights.length === 0) return;
+        if (!initialHighlights || initialHighlights.length === 0) {
+            initialHighlightsApplied = true; // Mark as applied even if no highlights
+            loading = false; // Ensure loading is false if we return early
+            return;
+        }
         loading = true; 
         loadingMessage = 'Loading Annotations...';
         console.log(`[PDFViewerPanel] ${loadingMessage} Count:`, initialHighlights.length);
         await tick(); 
-
+    
         const highlightsByPage = initialHighlights.reduce((acc, hl) => {
             const pageIdx = hl.pageIndex;
             if (typeof pageIdx !== 'number' || pageIdx < 0) { return acc; }
@@ -1020,176 +1044,165 @@ import { get } from 'svelte/store';
             return acc;
         }, {});
 
-        const pageIndicesWithHighlights = Object.keys(highlightsByPage).map(idx => parseInt(idx, 10));
+        const pageIndicesWithHighlights = Object.keys(highlightsByPage).map(idx => parseInt(idx, 10)).sort((a,b) => a - b);
 
         for (const pageIndex of pageIndicesWithHighlights) {
             console.log(`[ApplyInitial] Processing page ${pageIndex + 1} for highlights.`);
             const pageHighlights = highlightsByPage[pageIndex];
             if (!pageHighlights || pageHighlights.length === 0) continue;
 
-            let pageView = pdfViewer.getPageView(pageIndex);
+            let pageView;
             try {
-                pageView = await ensureTextLayerReady(pageView, pageIndex);
+                // Ensure page view and its div exist for overlay container
+                pageView = pdfViewer.getPageView(pageIndex);
+                if (!pageView || !pageView.div) {
+                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+                    await new Promise(r => setTimeout(r, 150)); 
+                    pageView = pdfViewer.getPageView(pageIndex);
+                }
+                if (!pageView || !pageView.div) {
+                    console.warn(`[ApplyInitial] Could not obtain PageView.div for page ${pageIndex + 1}. Skipping highlights for this page.`);
+                    continue;
+                }
+                // ensureTextLayerReady is crucial if we need to access textLayerDiv or pdfPage for fallbacks/verification
+                pageView = await ensureTextLayerReady(pageView, pageIndex); 
             } catch(e) {
                 console.error(`[ApplyInitial] Failed to ensure text layer for page ${pageIndex + 1}. Skipping highlights for this page. Error: ${e.message}`);
                 continue; 
             }
             
-            const pageTextLayerDiv = pageView.textLayer?.textLayerDiv;
             const pdfPage = pageView.pdfPage || await pdfDoc.getPage(pageIndex + 1);
             if (!pdfPage) {
                  console.warn(`[ApplyInitial] Could not get PDFPage object for page ${pageIndex + 1}. Skipping.`);
                  continue;
             }
-            // Get text content once for the page
-            const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
-
-            if (!pageTextLayerDiv || !textContent?.items?.length) {
-                console.warn(`[ApplyInitial] No textLayerDiv or text items for page ${pageIndex + 1}. Skipping highlights for this page.`);
-                continue;
-            }
-            // Use textLayer DOM when available, fall back to PDF.js items
-            let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
-            // Clean raw text: replace NBSP, remove line-break hyphens, then normalize.
-            rawFullPageText = rawFullPageText
-                .replace(/\u00A0/g, ' ')
-                .replace(/-\s+/g, '');        // Remove hyphens at line breaks only
-            // Normalize ligatures and punctuation, then collapse whitespace for the page search
-            const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
 
             for (const highlight of pageHighlights) {
-                // highlight.text, .prefix, .suffix are already normalized from storage
-                if (!highlight.text || !highlight.color || !highlight.id) continue;
-                let startIndex = -1;
-                let currentOccurrences = 0;
-                const targetOccurrence = highlight.occurrenceInPageContext || 0;
-                // Normalize stored highlight text and context
-                const searchStrRaw = highlight.text;
-                const searchStrNormalized = normalizeTextForMatching(searchStrRaw).replace(/\s+/g, ' ');
-                const prefixNorm = highlight.prefix
-                    ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ')
-                    : '';
-                const suffixNorm = highlight.suffix
-                    ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ')
-                    : '';
-                // Build regex with lookbehind/lookahead if context exists
-                let pattern = '';
-                if (prefixNorm) {
-                    pattern += `(?<=${escapeRegExp(prefixNorm)})`;
+                if (!highlight.id || !highlight.color) {
+                    console.warn(`[ApplyInitial] Skipping highlight with missing id or color on page ${pageIndex + 1}.`, highlight);
+                    continue;
                 }
-                pattern += escapeRegExp(searchStrNormalized);
-                if (suffixNorm) {
-                    pattern += `(?=${escapeRegExp(suffixNorm)})`;
-                }
-                let regex = new RegExp(pattern, 'g');
 
-                let match;
-                while ((match = regex.exec(fullPageTextNormalized)) !== null) {
-                    if (currentOccurrences === targetOccurrence) {
-                        startIndex = match.index;
-                        break;
-                    }
-                    currentOccurrences++;
-                }
-                // Fallback: simple search without context if not found
-                if (startIndex === -1) {
-                    const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
-                    let simpleMatch;
-                    let simpleCount = 0;
-                    while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
-                        if (simpleCount === targetOccurrence) {
-                            startIndex = simpleMatch.index;
-                            break;
+                if (highlight.quadPoints && highlight.quadPoints.length > 0) {
+                    // console.debug(`[ApplyInitial] Rendering ID ${highlight.id} on page ${pageIndex + 1} using quadPoints.`);
+                    renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
+
+                    // Optional: Verification against text if text is also stored and textLayer is available
+                    if (highlight.text && pageView.textLayer?.textLayerDiv && pdfPage) {
+                        const pageTextLayerDiv = pageView.textLayer.textLayerDiv;
+                        const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
+                        let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
+                        rawFullPageText = rawFullPageText.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
+                        const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
+
+                        const searchStrNormalized = normalizeTextForMatching(highlight.text).replace(/\s+/g, ' ');
+                        const prefixNorm = highlight.prefix ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ') : '';
+                        const suffixNorm = highlight.suffix ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ') : '';
+                        let pattern = '';
+                        if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
+                        pattern += escapeRegExp(searchStrNormalized);
+                        if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
+                        let regex = new RegExp(pattern, 'g');
+                        let match, currentOccurrences = 0, startIndex = -1;
+                        const targetOccurrence = highlight.occurrenceInPageContext || 0;
+
+                        while ((match = regex.exec(fullPageTextNormalized)) !== null) {
+                            if (currentOccurrences === targetOccurrence) { startIndex = match.index; break; }
+                            currentOccurrences++;
                         }
-                        simpleCount++;
-                    }
-                }
-                if (startIndex !== -1) {
-                    // Pass the normalized expected text for verification
-                    const range = findRangeInTextLayer(
-                        pageTextLayerDiv,
-                        startIndex,
-                        searchStrNormalized.length,
-                        searchStrNormalized
-                    );
-                    if (range) {
-                        // Add a check to see if the found range's text (when normalized) matches the expected normalized text
-                        // Assuming highlight object now contains quadPoints
-                        if (highlight.quadPoints) {
-                            renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
-                            // Optional: Verify text if range was also found by findRangeInTextLayer
-                            if (range) {
-                                const domTextNormalized = normalizeTextForMatching(range.toString());
-                                if (domTextNormalized !== searchStrNormalized) {
-                                    console.warn(`[ApplyInitial] Text mismatch for ID ${highlight.id}. Expected (norm): "${searchStrNormalized.substring(0,30)}", Found (norm): "${domTextNormalized.substring(0,30)}"`);
-                                }
+                        if (startIndex === -1 && searchStrNormalized.length > 0) { // Fallback simple search if context search failed
+                            const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
+                            let simpleMatch, simpleCount = 0;
+                            while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
+                                if (simpleCount === targetOccurrence) { startIndex = simpleMatch.index; break; }
+                                simpleCount++;
                             }
-                        } else if (range) { // Fallback for old data that might not have quadPoints but we found a range
-                            console.warn(`[ApplyInitial] Missing quadPoints for ID ${highlight.id}. Generating from range for rendering.`);
-                            const pageView = pdfViewer.getPageView(pageIndex);
-                            if (pageView && pageView.div) {
-                                const pageRect = pageView.div.getBoundingClientRect();
-                                const clientRects = range.getClientRects();
-                                const quadPoints = [];
-                                for (let i = 0; i < clientRects.length; i++) {
-                                    const rect = clientRects[i];
-                                    quadPoints.push([
-                                        rect.left - pageRect.left, rect.top - pageRect.top,
-                                        rect.right - pageRect.left, rect.top - pageRect.top,
-                                        rect.left - pageRect.left, rect.bottom - pageRect.top,
-                                        rect.right - pageRect.left, rect.bottom - pageRect.top
-                                    ]);
-                                }
-                                renderHighlightOverlay(quadPoints, highlight.color, highlight.id, pageIndex);
+                        }
+
+                        if (startIndex === -1 && searchStrNormalized.length > 0) {
+                            console.warn(`[ApplyInitial] Verification failed for ID ${highlight.id} (quadPoints used): Text (norm: "${searchStrNormalized.substring(0,30)}") not found at expected occurrence ${targetOccurrence} on page ${pageIndex + 1}. Highlight rendered via quadPoints may be on outdated text.`);
+                        }
+                    }
+                } else if (highlight.text && pageView.textLayer?.textLayerDiv && pdfPage) { // Fallback: No quadPoints, try to use text matching
+                    console.warn(`[ApplyInitial] Missing quadPoints for ID ${highlight.id} on page ${pageIndex + 1}. Attempting text match fallback.`);
+                    const pageTextLayerDiv = pageView.textLayer.textLayerDiv;
+                    const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
+                    let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
+                    rawFullPageText = rawFullPageText.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
+                    const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
+
+                    const searchStrNormalized = normalizeTextForMatching(highlight.text).replace(/\s+/g, ' ');
+                    if (!searchStrNormalized) {
+                        console.warn(`[ApplyInitial] Skipping fallback for ${highlight.id}: normalized search text is empty.`);
+                        continue;
+                    }
+                    const prefixNorm = highlight.prefix ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ') : '';
+                    const suffixNorm = highlight.suffix ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ') : '';
+                    let pattern = '';
+                    if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
+                    pattern += escapeRegExp(searchStrNormalized);
+                    if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
+                    let regex = new RegExp(pattern, 'g');
+                    let match, currentOccurrences = 0, startIndex = -1;
+                    const targetOccurrence = highlight.occurrenceInPageContext || 0;
+
+                    while ((match = regex.exec(fullPageTextNormalized)) !== null) {
+                        if (currentOccurrences === targetOccurrence) { startIndex = match.index; break; }
+                        currentOccurrences++;
+                    }
+                    if (startIndex === -1) { // Fallback simple search
+                        const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
+                        let simpleMatch, simpleCount = 0;
+                        while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
+                            if (simpleCount === targetOccurrence) { startIndex = simpleMatch.index; break; }
+                            simpleCount++;
+                        }
+                    }
+
+                    if (startIndex !== -1) {
+                        const range = findRangeInTextLayer(pageTextLayerDiv, startIndex, searchStrNormalized.length, searchStrNormalized);
+                        if (range) {
+                            const pageRect = pageView.div.getBoundingClientRect();
+                            const clientRects = range.getClientRects();
+                            const newQuadPoints = [];
+                            for (let i = 0; i < clientRects.length; i++) {
+                                const rect = clientRects[i];
+                                newQuadPoints.push([
+                                    rect.left - pageRect.left, rect.top - pageRect.top,
+                                    rect.right - pageRect.left, rect.top - pageRect.top,
+                                    rect.left - pageRect.left, rect.bottom - pageRect.top,
+                                    rect.right - pageRect.left, rect.bottom - pageRect.top
+                                ]);
+                            }
+                            if (newQuadPoints.length > 0) {
+                                renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
+                                console.log(`[ApplyInitial] Fallback: Rendered ID ${highlight.id} via text match and generated quadPoints.`);
+                                // Consider dispatching an update to store these newQuadPoints
                             } else {
-                                 console.warn(`[ApplyInitial] Could not generate fallback quadPoints for ${highlight.id} due to missing pageView/div.`);
+                                console.warn(`[ApplyInitial] Fallback: Text found for ID ${highlight.id}, but failed to generate quadPoints from range.`);
                             }
                         } else {
-                             console.warn(`[ApplyInitial] No quadPoints and no range for highlight ID ${highlight.id}. Cannot render.`);
+                            console.warn(`[ApplyInitial] Fallback: Text found for ID ${highlight.id}, but findRangeInTextLayer failed to create range.`);
                         }
-                    } else { // Range not found by findRangeInTextLayer
-                         // If quadPoints exist, we might still try to render if findRangeInTextLayer was just for context/verification
-                        if (highlight.quadPoints) {
-                            console.warn(`[ApplyInitial] Text not found by findRangeInTextLayer for highlight ID ${highlight.id}, but quadPoints exist. Rendering with quadPoints.`);
-                            renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
-                        } else {
-                            console.warn(`[ApplyInitial] Text not found (normalized search) and no quadPoints for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
-                        }
-                    }
-                } else { // startIndex === -1 (text not found with context or simple search in normalized page text)
-                     // If quadPoints exist, maybe the text changed but quadpoints are still valid? Or from a different source.
-                    if (highlight.quadPoints) {
-                        console.warn(`[ApplyInitial] Text not found for highlight ID ${highlight.id} (norm. search), but quadPoints exist. Rendering with quadPoints.`);
-                        renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
                     } else {
-                        console.warn(`[ApplyInitial] Text not found (normalized search) and no quadPoints for highlight ID ${highlight.id} on page ${pageIndex + 1}: "${searchStrNormalized.substring(0,30)}..." (Occ: ${targetOccurrence}, Pfx: "${prefixNorm.substring(0,10)}", Sfx: "${suffixNorm.substring(0,10)}")`);
+                        console.warn(`[ApplyInitial] Fallback: Text not found for ID ${highlight.id} on page ${pageIndex + 1} (norm: "${searchStrNormalized.substring(0,30)}", occ: ${targetOccurrence}).`);
                     }
+                } else {
+                    console.warn(`[ApplyInitial] Skipping highlight ID ${highlight.id} on page ${pageIndex + 1}: No quadPoints and no text (or textLayer/pdfPage unavailable for fallback).`);
                 }
             }
-            // Allow highlights from this page to render before processing the next page in the initial pass
+            // Allow highlights from this page to render before processing the next page
             await tick();
-            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
+            await new Promise(resolve => setTimeout(resolve, 50)); // Shorter delay
         }
 
-        // --- Scroll-through to ensure all highlights render correctly ---
-        // The "Loading Annotations..." overlay remains active during this.
-        if (numPages > 0 && pdfViewer) {
-            console.log('[PDFViewerPanel] Starting scroll-through refresh for all pages.');
-
-            // Scroll to the last page
-            pdfViewer.scrollPageIntoView({ pageNumber: numPages });
-            await new Promise(resolve => setTimeout(resolve, 250 + (numPages * 5))); // Delay for jump and initial render
-
-            // Scroll back to the top, one page at a time
-            for (let i = numPages; i >= 1; i--) {
-                if (!pdfViewer) break; // Safety check
-                pdfViewer.scrollPageIntoView({ pageNumber: i });
-                await new Promise(resolve => setTimeout(resolve, 120)); // Delay for each page to render/trigger textlayerrendered
+        // --- Scroll to first page after all highlights are applied ---
+        if (pdfViewer && numPages > 0) {
+            console.log('[PDFViewerPanel] All initial highlights applied. Scrolling to first page.');
+            if (pdfViewer.currentPageNumber !== 1) { // Only scroll if not already on page 1
+                pdfViewer.scrollPageIntoView({ pageNumber: 1 });
+                await new Promise(resolve => setTimeout(resolve, 200)); 
             }
-
-            // Ensure view is settled at page 1
-            if (pdfViewer) { pdfViewer.scrollPageIntoView({ pageNumber: 1 }); await new Promise(resolve => setTimeout(resolve, 200)); }
-            console.log('[PDFViewerPanel] Finished scroll-through refresh.');
         }
 
         initialHighlightsApplied = true;
@@ -1205,78 +1218,106 @@ async function applyHighlightsForPage(pageIndex) {
     const pageHighlights = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
     if (!pageHighlights.length) return;
 
-    // ensure textLayer is ready
+    // console.debug(`[applyHighlightsForPage] Page ${pageIndex + 1} textlayerrendered. Re-applying ${pageHighlights.length} highlights.`);
+
     let pageView = pdfViewer.getPageView(pageIndex);
     try {
-        pageView = await ensureTextLayerReady(pageView, pageIndex);
-    } catch {
+        pageView = await ensureTextLayerReady(pageView, pageIndex); // Ensures pageView.div and pageView.pdfPage
+    } catch(e) {
+        console.warn(`[applyHighlightsForPage] Failed to ensure page ${pageIndex + 1} ready. Error: ${e.message}`);
         return;
     }
-    const layerDiv = pageView.textLayer?.textLayerDiv;
-    const pdfPage = pageView.pdfPage || await pdfDoc.getPage(pageIndex + 1);
-    if (!layerDiv || !pdfPage) return;
 
-    // Use DOM text if rendered, otherwise items
-    const items = (await pdfPage.getTextContent({ normalizeWhitespace: true })).items;
-    let rawTxt = pageView.textLayer?.textLayerDiv?.textContent || items.map(i => i.str).join('');
-    // Clean raw node text: replace NBSP, remove line-break hyphens
-    rawTxt = rawTxt
-        .replace(/\u00A0/g, ' ')
-        .replace(/-\s+/g, '');        // Remove hyphens at line breaks only
-    // Normalize ligatures and punctuation, then collapse whitespace for matching
-    const normTxt = normalizeTextForMatching(rawTxt).replace(/\s+/g, ' ');
+    const layerDiv = pageView?.textLayer?.textLayerDiv; 
+    const pdfPage = pageView?.pdfPage; 
+
+    if (!pageView?.div) { 
+        console.warn(`[applyHighlightsForPage] No pageView.div for page ${pageIndex + 1}. Cannot apply highlights.`);
+        return;
+    }
+    // pdfPage is needed for text content if we do fallback or verification
+    if (!pdfPage && pageHighlights.some(hl => !hl.quadPoints || !hl.quadPoints.length)) {
+         console.warn(`[applyHighlightsForPage] No pdfPage for page ${pageIndex + 1}, text-based fallbacks will fail.`);
+    }
 
     for (const hl of pageHighlights) {
-        // find its start in the normalized page text
-        const re = hl.prefix || hl.suffix
-            ? new RegExp(
-                (hl.prefix ? escapeRegExp(hl.prefix) : '') +
-                `(${escapeRegExp(hl.text)})` +
-                (hl.suffix ? escapeRegExp(hl.suffix) : ''),
-                'g'
-            )
-            : new RegExp(`(${escapeRegExp(hl.text)})`, 'g');
-        let m, occ = 0, start = -1;
-        while ((m = re.exec(normTxt))) {
-            if (occ === (hl.occurrenceInPageContext || 0)) {
-                start = m.index + ((hl.prefix && m[1]) ? hl.prefix.length : 0);
-                break;
-            }
-            occ++;
-        }
-        if (start < 0) continue;
+        if (!hl.id || !hl.color) continue;
 
-        const range = findRangeInTextLayer(
-            layerDiv,
-            start,
-            hl.text.length,
-            hl.text
-        );
-
-        if (hl.quadPoints) {
+        if (hl.quadPoints && hl.quadPoints.length > 0) {
+            // console.debug(`[applyHighlightsForPage] Rendering ID ${hl.id} on page ${pageIndex + 1} using quadPoints.`);
             renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
-        } else if (range) { // Fallback for old data if quadPoints are missing
-            console.warn(`[applyHighlightsForPage] Missing quadPoints for ID ${hl.id}. Generating from range for rendering.`);
-            const pageView = pdfViewer.getPageView(pageIndex);
-            if (pageView && pageView.div) {
-                const pageRect = pageView.div.getBoundingClientRect();
-                const clientRects = range.getClientRects();
-                const quadPoints = [];
-                for (let i = 0; i < clientRects.length; i++) {
-                    const rect = clientRects[i];
-                    quadPoints.push([
-                        rect.left - pageRect.left, rect.top - pageRect.top,
-                        rect.right - pageRect.left, rect.top - pageRect.top,
-                        rect.left - pageRect.left, rect.bottom - pageRect.top,
-                        rect.right - pageRect.left, rect.bottom - pageRect.top
-                    ]);
-                }
-                renderHighlightOverlay(quadPoints, hl.color, hl.id, pageIndex);
-            } else {
-                console.warn(`[applyHighlightsForPage] Could not generate fallback quadPoints for ${hl.id} due to missing pageView/div.`);
+        } else if (hl.text && layerDiv && pdfPage) { // Fallback: No quadPoints, try text match
+            console.warn(`[applyHighlightsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match fallback.`);
+            
+            const items = (await pdfPage.getTextContent({ normalizeWhitespace: true })).items;
+            let rawTxt = layerDiv.textContent || items.map(i => i.str).join('');
+            rawTxt = rawTxt.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
+            const normTxt = normalizeTextForMatching(rawTxt).replace(/\s+/g, ' ');
+
+            const searchStrNormalized = normalizeTextForMatching(hl.text).replace(/\s+/g, ' ');
+            if (!searchStrNormalized) {
+                console.warn(`[applyHighlightsForPage] Skipping fallback for ${hl.id}: normalized search text is empty.`);
+                continue;
             }
-        } else {
-            console.warn(`[applyHighlightsForPage] No quadPoints and no range for highlight ID ${hl.id}. Cannot render.`);
+            const prefixNorm = hl.prefix ? normalizeTextForMatching(hl.prefix).replace(/\s+/g, ' ') : '';
+            const suffixNorm = hl.suffix ? normalizeTextForMatching(hl.suffix).replace(/\s+/g, ' ') : '';
+
+            let pattern = '';
+            if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
+            pattern += escapeRegExp(searchStrNormalized);
+            if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
+            const regex = new RegExp(pattern, 'g');
+
+            let m, occ = 0, start = -1;
+            const targetOccurrence = hl.occurrenceInPageContext || 0;
+
+            while ((m = regex.exec(normTxt))) {
+                if (occ === targetOccurrence) {
+                    start = m.index; 
+                    break;
+                }
+                occ++;
+            }
+             if (start === -1) { // Fallback simple search if context search failed
+                const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
+                let simpleMatch, simpleCount = 0;
+                while ((simpleMatch = simpleRegex.exec(normTxt)) !== null) {
+                    if (simpleCount === targetOccurrence) { start = simpleMatch.index; break; }
+                    simpleCount++;
+                }
+            }
+
+            if (start !== -1) {
+                const range = findRangeInTextLayer(layerDiv, start, searchStrNormalized.length, searchStrNormalized);
+                if (range) {
+                    const pageRect = pageView.div.getBoundingClientRect();
+                    const clientRects = range.getClientRects();
+                    const newQuadPoints = [];
+                    for (let i = 0; i < clientRects.length; i++) {
+                        const rect = clientRects[i];
+                        newQuadPoints.push([
+                            rect.left - pageRect.left, rect.top - pageRect.top,
+                            rect.right - pageRect.left, rect.top - pageRect.top,
+                            rect.left - pageRect.left, rect.bottom - pageRect.top,
+                            rect.right - pageRect.left, rect.bottom - pageRect.top
+                        ]);
+                    }
+                    if (newQuadPoints.length > 0) {
+                        renderHighlightOverlay(newQuadPoints, hl.color, hl.id, pageIndex);
+                        // console.log(`[applyHighlightsForPage] Fallback: Rendered ID ${hl.id} via text match and generated quadPoints.`);
+                    } else {
+                         console.warn(`[applyHighlightsForPage] Fallback: Text found for ID ${hl.id}, but failed to generate quadPoints from range.`);
+                    }
+                } else {
+                     console.warn(`[applyHighlightsForPage] Fallback: Text found for ID ${hl.id}, but findRangeInTextLayer failed to create range.`);
+                }
+            } else {
+                console.warn(`[applyHighlightsForPage] Fallback: Text not found for ID ${hl.id} on page ${pageIndex + 1} (norm: "${searchStrNormalized.substring(0,30)}", occ: ${targetOccurrence}).`);
+            }
+        } else if (!hl.quadPoints && !hl.text) {
+            console.warn(`[applyHighlightsForPage] Skipping highlight ID ${hl.id} on page ${pageIndex + 1}: No quadPoints and no text.`);
+        } else if (!layerDiv && hl.text && (!hl.quadPoints || hl.quadPoints.length === 0)) {
+            console.warn(`[applyHighlightsForPage] Cannot attempt text match for ${hl.id} on page ${pageIndex + 1}: textLayerDiv not available.`);
         }
     }
 }
@@ -1360,26 +1401,18 @@ function updateHighlightOverlayColor(id, color) {
         if (targetNormalizedOffsetInNode === 0) return 0;
         
         for (let r = 0; r < rawTextNodeContent.length; r++) { // r is the raw character index
-            // Normalized length of raw text *before* char at r
             const normLenBeforeR = (r > 0) ? normalizeTextForMatching(rawTextNodeContent.substring(0, r)).length : 0;
-            // Normalized length of raw text *including* char at r
             const normLenIncludingR = normalizeTextForMatching(rawTextNodeContent.substring(0, r + 1)).length;
 
-            // If the target offset is less than the normalized length *after* including this raw char,
-            // AND the target offset is greater than or equal to the normalized length *before* this raw char,
-            // then this raw char 'r' is the one that starts the target normalized character.
             if (normLenIncludingR > targetNormalizedOffsetInNode && normLenBeforeR <= targetNormalizedOffsetInNode) {
                 return r;
             }
         }
         
-        // If targetNormalizedOffsetInNode is equal to the total normalized length of the node,
-        // it means the offset is at the end of the node (raw length).
         if (normalizeTextForMatching(rawTextNodeContent).length === targetNormalizedOffsetInNode) {
             return rawTextNodeContent.length;
         }
-        // console.warn(`[mapNormToRaw] Could not map norm offset ${targetNormalizedOffsetInNode} in raw "${rawTextNodeContent.substring(0,20)}" (norm len: ${normalizeTextForMatching(rawTextNodeContent).length})`);
-        return rawTextNodeContent.length; // Fallback, indicates an issue if used for a start offset not at end of node.
+        return rawTextNodeContent.length; 
     }
 
     function findRangeInTextLayer(textLayerDiv, normalizedOverallCharStart, normalizedOverallLength, normalizedExpectedText) {
@@ -1409,11 +1442,10 @@ function updateHighlightOverlayColor(id, color) {
             if (foundStart) {
                 const targetEndNormalizedGlobal = normalizedOverallCharStart + normalizedOverallLength;
                 if (targetEndNormalizedGlobal <= accumulatedNormalizedCharsBeforeNode + nodeNormalizedLength) {
-                    // Highlight ends in this node
                     endNode = currentNode;
                     const normalizedEndInNode = targetEndNormalizedGlobal - accumulatedNormalizedCharsBeforeNode;
                     endOffsetRaw = mapNormalizedOffsetInNodeToRawOffset(nodeTextRaw, normalizedEndInNode);
-                    break; // Found start and end node
+                    break; 
                 }
             }
             accumulatedNormalizedCharsBeforeNode += nodeNormalizedLength;
@@ -1425,35 +1457,16 @@ function updateHighlightOverlayColor(id, color) {
                 range.setEnd(endNode, endOffsetRaw);
 
                 const actualNormalizedTextFromRange = normalizeTextForMatching(range.toString());
-                if (actualNormalizedTextFromRange !== normalizedExpectedText) {
+                if (actualNormalizedTextFromRange !== normalizedExpectedText && normalizedExpectedText.length > 0) { // Only warn if expected text was provided
                     console.warn(
                         `[findRangeInTextLayer] Verification mismatch. Expected: "${normalizedExpectedText.substring(0,30)}...", Got: "${actualNormalizedTextFromRange.substring(0,30)}...".`
                     );
                 }
-                // Return range even if verification fails to ensure simple highlights are applied
                 return range;
             } catch (e) { console.error("[findRangeInTextLayer] Error setting/verifying range:", e, {startNode, startOffsetRaw, endNode, endOffsetRaw}); return null; }
-        } else {
-            // console.warn(`[findRangeInTextLayer] Could not determine start/end node/offset. NormStart: ${normalizedOverallCharStart}, NormLen: ${normalizedOverallLength}. FoundStart: ${foundStart}`);
         }
         return null;
     }
-
-    // Helper for findRangeInTextLayer to get accumulated normalized length up to a specific node (exclusive of the node itself)
-    // This helper was part of a previous thought process and might not be strictly needed with the current findRangeInTextLayer structure
-    // but can be useful for debugging or alternative mapping strategies.
-    /*
-    function findAccumulatedNormLengthForNode(textLayerDiv, targetNode) {
-        const walker = document.createTreeWalker(textLayerDiv, NodeFilter.SHOW_TEXT, null, false);
-        let currentNode;
-        let accumulated = 0;
-        while(currentNode = walker.nextNode()) {
-            if (currentNode === targetNode) break;
-            accumulated += normalizeTextForMatching(currentNode.textContent).length;
-        }
-        return accumulated;
-    }
-    */
 
     /* ─────────────────────────── Toolbar Actions (from your complete version) ────────────────── */
     function goToPrevPage() { if (pdfViewer && currentPageNum > 1) pdfViewer.previousPage(); }
