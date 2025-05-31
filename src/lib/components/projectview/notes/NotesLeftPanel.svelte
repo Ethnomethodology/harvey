@@ -2,18 +2,24 @@
 <script>
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
 	import { get } from 'svelte/store';
-import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
+	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
-    import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
+	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { convertFileSrc } from '@tauri-apps/api/core'; 
+    import { convertFileSrc } from '@tauri-apps/api/core';
 
     const dispatch = createEventDispatcher();
 
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
+
+    // Metadata related variables removed
+    // let currentFileMetadata = null;
+    // let fullLoadedMetadataObject = null;
+    // let isEditing = false;
+    // let editableMetadata = { ... };
 
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
@@ -65,6 +71,10 @@ import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFi
 
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_NOTES_PANEL_STATE = 'harveyNotesPanelCategoryState';
+
+    // SVG Icon constants for metadata edit/cancel removed
+    // const EDIT_ICON_SVG = ...
+    // const CANCEL_ICON_SVG = ...
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_NOTES_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[NotesLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
     function toggleCategory(categoryType) { if (categoryOpenState.hasOwnProperty(categoryType)) { categoryOpenState[categoryType] = !categoryOpenState[categoryType]; categoryOpenState = categoryOpenState; } else { console.warn(`[NotesLeftPanel] Toggle unknown category: ${categoryType}`); } }
@@ -426,6 +436,11 @@ import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFi
     });
 
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
+
+    // Metadata related functions (loadMetadata, toggleEditMode, handleSaveMetadata) and reactive blocks removed.
+    // selectedItemPathInStore is kept for now, assuming it might be used for other UI elements like selection highlighting.
+    $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
+
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
@@ -519,6 +534,8 @@ import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFi
         </ul>
         {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
 	</div>
+
+    <!-- Metadata Display Section Removed -->
 
 	{#if contextMenuVisible && contextMenuItem}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>

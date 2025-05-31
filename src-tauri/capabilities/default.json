@@ -48,38 +48,70 @@
     "fs:scope-home",
     "fs:scope-document-recursive",
     {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$DOCUMENT/**/.*.metadata.json"
+        }
+      ]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         {
           "name": "sidecar/whisper-cpp",
           "sidecar": true,
-          "args": [ "-m", { "validator": "\\S+" }, "-f", { "validator": "\\S+" }, "-l", { "validator": "\\S+" }, "-ocsv", "-of", { "validator": "\\S+" } ]
+          "args": [
+            "-m",
+            {
+              "validator": "\\S+"
+            },
+            "-f",
+            {
+              "validator": "\\S+"
+            },
+            "-l",
+            {
+              "validator": "\\S+"
+            },
+            "-ocsv",
+            "-of",
+            {
+              "validator": "\\S+"
+            }
+          ]
         },
         {
           "name": "sidecar/diarize-cli",
           "sidecar": true,
-          "args": [ "--audio", { "validator": "\\S+" }, "--output", { "validator": "\\S+" }, { "strategy": "flag", "value": [ "--num_speakers", { "validator": "\\d+" }, "--min_speakers", { "validator": "\\d+" }, "--max_speakers", { "validator": "\\d+" } ] } ]
-        },
-        {
-          "name": "sidecar/ffmpeg",
-          "sidecar": true,
-           "args": [
+          "args": [
+            "--audio",
+            {
+              "validator": "\\S+"
+            },
+            "--output",
+            {
+              "validator": "\\S+"
+            },
+            {
+              "strategy": "flag",
+              "value": [
+                "--num_speakers",
                 {
-                  "strategy": "group",
-                  "value": [
-                    "-i", { "validator": ".+" }, "-vn", "-acodec", "pcm_s16le", "-ar", { "validator": "\\d+" }, "-ac", { "validator": "\\d+" }, "-y", { "validator": ".+" },
-                    "-i", { "validator": ".+" }, "-ss", { "validator": "\\S+" }, "-to", { "validator": "\\S+" }, "-c", "copy", "-map", "0", "-avoid_negative_ts", "make_zero", "-y", { "validator": ".+" }
-                  ]
+                  "validator": "\\d+"
+                },
+                "--min_speakers",
+                {
+                  "validator": "\\d+"
+                },
+                "--max_speakers",
+                {
+                  "validator": "\\d+"
                 }
-            ]
-        }
-      ]
-    },
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        { "name": "sidecar/whisper-cpp", "sidecar": true, "args": [ "-m", { "validator": "\\S+" }, "-f", { "validator": "\\S+" }, "-l", { "validator": "\\S+" }, "-ocsv", "-of", { "validator": "\\S+" } ] },
-        { "name": "sidecar/diarize-cli", "sidecar": true, "args": [ "--audio", { "validator": "\\S+" }, "--output", { "validator": "\\S+" }, { "strategy": "flag", "value": [ "--num_speakers", { "validator": "\\d+" }, "--min_speakers", { "validator": "\\d+" }, "--max_speakers", { "validator": "\\d+" } ] } ] },
+              ]
+            }
+          ]
+        },
         {
           "name": "sidecar/ffmpeg",
           "sidecar": true,
@@ -87,8 +119,158 @@
             {
               "strategy": "group",
               "value": [
-                "-i", { "validator": ".+" }, "-vn", "-acodec", "pcm_s16le", "-ar", { "validator": "\\d+" }, "-ac", { "validator": "\\d+" }, "-y", { "validator": ".+" },
-                "-i", { "validator": ".+" }, "-ss", { "validator": "\\S+" }, "-to", { "validator": "\\S+" }, "-c", "copy", "-map", "0", "-avoid_negative_ts", "make_zero", "-y", { "validator": ".+" }
+                "-i",
+                {
+                  "validator": ".+"
+                },
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                {
+                  "validator": "\\d+"
+                },
+                "-ac",
+                {
+                  "validator": "\\d+"
+                },
+                "-y",
+                {
+                  "validator": ".+"
+                },
+                "-i",
+                {
+                  "validator": ".+"
+                },
+                "-ss",
+                {
+                  "validator": "\\S+"
+                },
+                "-to",
+                {
+                  "validator": "\\S+"
+                },
+                "-c",
+                "copy",
+                "-map",
+                "0",
+                "-avoid_negative_ts",
+                "make_zero",
+                "-y",
+                {
+                  "validator": ".+"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "sidecar/whisper-cpp",
+          "sidecar": true,
+          "args": [
+            "-m",
+            {
+              "validator": "\\S+"
+            },
+            "-f",
+            {
+              "validator": "\\S+"
+            },
+            "-l",
+            {
+              "validator": "\\S+"
+            },
+            "-ocsv",
+            "-of",
+            {
+              "validator": "\\S+"
+            }
+          ]
+        },
+        {
+          "name": "sidecar/diarize-cli",
+          "sidecar": true,
+          "args": [
+            "--audio",
+            {
+              "validator": "\\S+"
+            },
+            "--output",
+            {
+              "validator": "\\S+"
+            },
+            {
+              "strategy": "flag",
+              "value": [
+                "--num_speakers",
+                {
+                  "validator": "\\d+"
+                },
+                "--min_speakers",
+                {
+                  "validator": "\\d+"
+                },
+                "--max_speakers",
+                {
+                  "validator": "\\d+"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "sidecar/ffmpeg",
+          "sidecar": true,
+          "args": [
+            {
+              "strategy": "group",
+              "value": [
+                "-i",
+                {
+                  "validator": ".+"
+                },
+                "-vn",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                {
+                  "validator": "\\d+"
+                },
+                "-ac",
+                {
+                  "validator": "\\d+"
+                },
+                "-y",
+                {
+                  "validator": ".+"
+                },
+                "-i",
+                {
+                  "validator": ".+"
+                },
+                "-ss",
+                {
+                  "validator": "\\S+"
+                },
+                "-to",
+                {
+                  "validator": "\\S+"
+                },
+                "-c",
+                "copy",
+                "-map",
+                "0",
+                "-avoid_negative_ts",
+                "make_zero",
+                "-y",
+                {
+                  "validator": ".+"
+                }
               ]
             }
           ]
