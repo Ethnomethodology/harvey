@@ -123,97 +123,64 @@
 
             const editedFileNameWithoutExtension = editableMetadata.file_name.trim();
 
-            const newFileNameWithExtension = originalFileExtension.length > 0
-                ? editedFileNameWithoutExtension + "." + originalFileExtension
-                : editedFileNameWithoutExtension;
-
             const originalDir = await dirname(originalFilePath);
             const currentSep = sep();
-            // originalFileNameWithoutExtension is already calculated earlier correctly
-            const originalMetadataPath = `${originalDir}${currentSep}.${originalFileNameWithoutExtension}.metadata.json`;
-
-            let wasRenamed = false;
-            let finalFilePath = originalFilePath;
-            let finalMetadataPath = originalMetadataPath;
 
             if (editedFileNameWithoutExtension !== originalFileNameWithoutExtension) {
                 if (!editedFileNameWithoutExtension) {
                     await message('File name cannot be empty.', { title: 'Invalid File Name', type: 'error' });
+                    isEditing = true; // Stay in edit mode as user needs to correct it
+                    return;
+                }
+
+                let nameToSendToService;
+                if (currentItemType === 'doc' || currentItemType === 'image' || currentItemType === 'table') {
+                    nameToSendToService = originalFileExtension.length > 0
+                        ? editedFileNameWithoutExtension + "." + originalFileExtension
+                        : editedFileNameWithoutExtension;
+                } else {
+                    // For 'media', 'imported_transcript', send only the stem.
+                    nameToSendToService = editedFileNameWithoutExtension;
+                }
+
+                try {
+                    console.log(`[LeftInfoPanel] Calling renameProjectItem: path=${originalFilePath}, nameToSend=${nameToSendToService}, type=${currentItemType}`);
+                    await renameProjectItem(originalFilePath, nameToSendToService, currentItemType);
+
+                    // If renameProjectItem is successful, it should trigger a project refresh.
+                    // This refresh will update selectedItemPathInStore, which in turn will trigger loadMetadata.
+                    // Therefore, we exit edit mode and let the reactive flow handle the new state.
+                    await message("File renamed. If you wish to edit metadata for the new name, please ensure it's selected and click edit again.", { title: 'Rename Successful' });
+                    isEditing = false;
+                    return; // Exit handleSaveMetadata, further metadata save is not needed here for the old item.
+                } catch (err) {
+                    console.error(`[LeftInfoPanel] renameProjectItem failed:`, err);
+                    await message(`Error renaming item: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
+                    // Do not revert editableMetadata.file_name here, allow user to see and correct their input if desired or cancel.
                     isEditing = true; // Stay in edit mode
                     return;
                 }
-                // Assuming renameProjectItem handles confirmation or it's handled upstream.
-                try {
-                    console.log(`[LeftInfoPanel] Calling renameProjectItem: path=${originalFilePath}, newName=${editedFileNameWithoutExtension}, type=${currentItemType}`);
-                    await renameProjectItem(originalFilePath, editedFileNameWithoutExtension, currentItemType);
-
-                    wasRenamed = true;
-
-                    // Update paths for saving metadata to the new location
-                    // newFileNameWithExtension was already calculated based on editedFileNameWithoutExtension
-                    finalFilePath = `${originalDir}${currentSep}${newFileNameWithExtension}`;
-                    finalMetadataPath = `${originalDir}${currentSep}.${editedFileNameWithoutExtension}.metadata.json`;
-
-                    // The project store should refresh via events triggered by renameProjectItem.
-                    // This should lead to selectedItemPathInStore updating, and loadMetadata re-running for the new path.
-                    // If not, manual update of currentFileMetadata might be needed, but ideally the reactive flow handles it.
-                    await message("File renamed via project service. Metadata will be saved to the new location.", { title: 'Rename Successful' });
-
-                } catch (err) {
-                    console.error(`[LeftInfoPanel] renameProjectItem failed:`, err);
-                    await message(`Error renaming item via project service: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
-                    isEditing = true; // Stay in edit mode if rename fails
-                    return; // Stop the save process
-                }
             }
 
-            let updatedFileMetadata = { ...currentFileMetadata }; // currentFileMetadata might be stale if rename happened and store hasn't updated yet
-            // If wasRenamed, currentFileMetadata's name/path are old. The new name/path are in newFileNameWithExtension and finalFilePath
-            // However, the metadata content (title, desc, summary) is from the *original* metadata object (fullLoadedMetadataObject)
-            // or from currentFileMetadata if not renamed.
+            // If no rename occurred, or if rename logic is to be followed by immediate metadata save to new file (which we now avoid)
+            // The metadata save logic for non-rename case:
+            const metadataPathForSave = `${originalDir}${currentSep}.${originalFileNameWithoutExtension}.metadata.json`;
 
-            // Let's ensure we are working with the correct base metadata if a rename happened.
-            // If renamed, fullLoadedMetadataObject still holds the *content* of the *original* metadata file.
-            // We want to save the *editable changes* to the *new* metadata file location.
-            // updatedFileMetadata should reflect the state of *editableMetadata* applied to the *original* structure.
-
-            if (wasRenamed && fullLoadedMetadataObject && fullLoadedMetadataObject.metadata) {
-                 // If a rename happened, the metadata structure (like highlights) should be from the original file's content,
-                 // but file_name and file_path should be updated.
-                 updatedFileMetadata = { ...fullLoadedMetadataObject.metadata };
-                 updatedFileMetadata.file_name = newFileNameWithExtension;
-                 updatedFileMetadata.file_path = finalFilePath;
-            } else if (currentFileMetadata) {
-                 updatedFileMetadata = { ...currentFileMetadata };
-            }
-            // else: should not happen due to initial checks, but as a fallback, it would be an empty object.
-
+            let updatedFileMetadata = { ...currentFileMetadata }; // Start with currently loaded metadata for this path
             updatedFileMetadata.title = editableMetadata.title.trim();
             updatedFileMetadata.description = editableMetadata.description.trim();
             updatedFileMetadata.summary = editableMetadata.summary.trim();
             updatedFileMetadata.last_modified = new Date().toISOString();
+            // file_name and file_path in updatedFileMetadata remain unchanged as no rename happened here.
 
-            if (wasRenamed) {
-                updatedFileMetadata.file_name = newFileNameWithExtension; // Save new full name with ext
-                updatedFileMetadata.file_path = finalFilePath;
-            }
-            // Apply changes from editableMetadata
-            updatedFileMetadata.title = editableMetadata.title.trim();
-            updatedFileMetadata.description = editableMetadata.description.trim();
-            updatedFileMetadata.summary = editableMetadata.summary.trim();
-            updatedFileMetadata.last_modified = new Date().toISOString();
-            // file_name and file_path are handled by rename logic if 'wasRenamed' is true
-
-            let objectToWrite = { ...fullLoadedMetadataObject }; // Start with the original full object
-            objectToWrite.metadata = updatedFileMetadata; // Replace the metadata part
+            let objectToWrite = { ...fullLoadedMetadataObject };
+            objectToWrite.metadata = updatedFileMetadata;
             objectToWrite.version = objectToWrite.version || "1.0";
             objectToWrite.last_modified_harvey = new Date().toISOString();
 
-            console.log(`[LeftInfoPanel] Writing metadata to: ${finalMetadataPath}`);
-            await writeTextFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
+            console.log(`[LeftInfoPanel] Writing metadata to: ${metadataPathForSave}`);
+            await writeTextFile(metadataPathForSave, JSON.stringify(objectToWrite, null, 2));
 
-            // After successful save, update the local state to reflect the saved data.
-            // This is important if loadMetadata doesn't immediately re-run (e.g., if path didn't change but content did)
             currentFileMetadata = { ...updatedFileMetadata };
             fullLoadedMetadataObject = { ...objectToWrite };
 
