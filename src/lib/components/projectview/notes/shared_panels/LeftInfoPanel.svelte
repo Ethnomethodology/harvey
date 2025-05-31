@@ -154,7 +154,6 @@
 
                     // NEW LOGIC:
                     console.log('[LeftInfoPanel] Rename successful via renameProjectItem. Waiting for store update and reactive reload.');
-                    await message("File rename initiated. The view will refresh with the new information.", { title: 'Rename Initiated' });
                     isEditing = false;
                     renameProcessed = true; // Set the flag
                 } catch (err) {
