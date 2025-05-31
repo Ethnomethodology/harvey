@@ -13,6 +13,7 @@ use chrono::Utc;
 use serde_json;
 use serde::{Serialize, Deserialize};
 use tauri::Manager; // Added for app_handle.emit
+use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FileMetadata {
