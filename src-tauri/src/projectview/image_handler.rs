@@ -5,12 +5,12 @@ use crate::welcome::config::CommandError; // Assuming this is your custom error 
 use crate::projectview::core_commands::get_image_asset_metadata_path;
 use chrono::Utc;
 use serde_json;
-use serde::{Serialize, Deserialize};
+// serde::{Serialize, Deserialize} removed
 use log::{info, warn, debug, error}; // Added error
 use std::{
     fs,
     io::{Read, Write}, // Added for file operations
-    path::{Path, PathBuf},
+    path::PathBuf, // Path removed
 };
 use quick_xml;
 

@@ -5,7 +5,7 @@ use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf, // Path removed
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
 use tauri::AppHandle;

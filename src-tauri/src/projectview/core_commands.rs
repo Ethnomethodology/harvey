@@ -4,15 +4,13 @@ use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use std::{
-    fs::{self, remove_file},
+    fs::{self}, // Removed remove_file
     path::{Path, PathBuf},
 };
 use quick_xml;
-use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for delete/rename
 use chrono::Utc;
 use serde_json;
-use serde::{Serialize, Deserialize};
-use tauri::Manager; // Added for app_handle.emit
+use serde::Serialize; // Deserialize removed, Manager removed
 use super::db_handler::{delete_annotations_from_db, rename_annotations_in_db}; // DB Handler
 use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
 
@@ -273,7 +271,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     file_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
     log::debug!(
-        "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}, PDF Annotation Files: {}",
+        "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}",
             file_entries.len(),
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
@@ -1308,8 +1306,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                   return Err(CommandError::from(format!("Changing document file extension from '.{}' to '.{}' is not allowed.", old_ext, new_ext)));
              }
             if new_filename_with_ext_str.starts_with('.') &&
-               !new_filename_with_ext_str.ends_with(METADATA_FILE_SUFFIX) &&
-               !new_filename_with_ext_str.ends_with(PDF_ANNOTATIONS_FILE_SUFFIX) {
+               !new_filename_with_ext_str.ends_with(METADATA_FILE_SUFFIX) {
                 return Err(CommandError::from("Document filename cannot start with a dot unless it's a designated metadata or annotation file."));
             }
 
@@ -1506,26 +1503,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
             
-            // Update PDF annotation XML entry if it's a PDF and was renamed
-            if old_ext == "pdf" {
-                if let Some(new_rel_annot_path) = new_pdf_annotation_relative_path_for_xml {
-                    if let Some(pdf_annot_entry) = project_data.pdf_annotation_files.files.iter_mut().find(|pa| pa.original_document_relative_path == item_relative_path) {
-                        let new_pdf_annot_filename = PathBuf::from(&new_rel_annot_path).file_name().unwrap_or_default().to_string_lossy().to_string();
-                        pdf_annot_entry.name = new_pdf_annot_filename;
-                        pdf_annot_entry.original_document_relative_path = new_relative_path_for_doc.clone();
-                        pdf_annot_entry.relative_path = new_rel_annot_path;
-                        updated_xml = true;
-                        info!("[Backend Rename] XML PDF annotation entry updated.");
-                    } else {
-                        warn!("[Backend Rename] PDF annotation file renamed/moved, but could not find matching old original_document_relative_path '{}' in XML for PDF annotation.", item_relative_path);
-                    }
-                }
-            }
+            // PDF Annotation XML entry is no longer managed
 
             if updated_xml {
                 project_data.document_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                project_data.pdf_annotation_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+                // project_data.pdf_annotation_files.files.sort_by(|a,b| a.name.cmp(&b.name)); // No longer exists
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for document and its associated files.");
 

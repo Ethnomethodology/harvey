@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result, params, OptionalExtension};
 use std::path::PathBuf;
 use std::fs;
 use crate::welcome::config::get_config_dir; // Assuming this function gives PathBuf
-use log::{info, error, debug};
+use log::{info, debug}; // error removed
 
 const DB_FILE_NAME: &str = "harvey_annotations.sqlite";
 
@@ -50,7 +50,7 @@ pub fn load_annotations_from_db(pdf_document_path: &str) -> Result<Option<String
         debug!("[DB] Database file not found at {}. Returning None.", db_path.display());
         return Ok(None);
     }
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(&db_path)?;
     let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = ?1")?;
     let result = stmt.query_row(params![pdf_document_path], |row| row.get(0)).optional()?;
     debug!("[DB] Load result for {}: {}", pdf_document_path, if result.is_some() { "Some(...)" } else { "None" });
@@ -60,7 +60,7 @@ pub fn load_annotations_from_db(pdf_document_path: &str) -> Result<Option<String
 pub fn save_annotations_to_db(pdf_document_path: &str, annotations_json: &str) -> Result<()> {
     debug!("[DB] Saving annotations for: {}", pdf_document_path);
     let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(&db_path)?;
 
     // Ensure the config directory exists
     if let Some(parent_dir) = db_path.parent() {
@@ -87,7 +87,7 @@ pub fn delete_annotations_from_db(pdf_document_path: &str) -> Result<()> {
         debug!("[DB] Database file not found at {}. Nothing to delete for {}.", db_path.display(), pdf_document_path);
         return Ok(());
     }
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(&db_path)?;
     let changes = conn.execute("DELETE FROM pdf_annotations WHERE pdf_document_path = ?1", params![pdf_document_path])?;
     if changes > 0 {
         info!("[DB] Annotations deleted successfully for: {} ({} rows affected)", pdf_document_path, changes);
@@ -104,7 +104,7 @@ pub fn rename_annotations_in_db(old_pdf_document_path: &str, new_pdf_document_pa
         debug!("[DB] Database file not found at {}. Nothing to rename for {}.", db_path.display(), old_pdf_document_path);
         return Ok(());
     }
-    let conn = Connection::open(db_path)?;
+    let conn = Connection::open(&db_path)?;
     let changes = conn.execute(
         "UPDATE pdf_annotations SET pdf_document_path = ?1 WHERE pdf_document_path = ?2",
         params![new_pdf_document_path, old_pdf_document_path],
@@ -236,14 +236,14 @@ mod tests {
         }
 
         let pdf_path1 = "test/doc1.pdf";
-        let annots1 = "[{"id":"1"}]";
+        let annots1 = "[{\"id\":\"1\"}]";
         assert!(save_annotations_to_db_at_path(&test_db_path, pdf_path1, annots1).is_ok());
 
         let loaded_annots1 = load_annotations_from_db_at_path(&test_db_path, pdf_path1).unwrap();
         assert_eq!(loaded_annots1, Some(annots1.to_string()));
 
         // Test update
-        let annots1_updated = "[{"id":"1", "text":"updated"}]";
+        let annots1_updated = "[{\"id\":\"1\", \"text\":\"updated\"}]";
         assert!(save_annotations_to_db_at_path(&test_db_path, pdf_path1, annots1_updated).is_ok());
         let loaded_annots1_updated = load_annotations_from_db_at_path(&test_db_path, pdf_path1).unwrap();
         assert_eq!(loaded_annots1_updated, Some(annots1_updated.to_string()));

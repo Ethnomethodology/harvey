@@ -1,8 +1,8 @@
 // src-tauri/src/projectview/pdf_annotation_handler.rs
 use crate::welcome::config::CommandError;
 use crate::projectview::db_handler::{load_annotations_from_db, save_annotations_to_db};
-use log::{info, warn, error, debug};
-use std::path::PathBuf;
+use log::{info, warn, error}; // debug removed
+// PathBuf removed
 
 #[tauri::command]
 pub async fn load_pdf_annotations(
@@ -32,7 +32,7 @@ pub async fn save_pdf_annotations(
 ) -> Result<(), CommandError> {
     info!(
         "[PDF Annots DB] Saving for PDF (rel path expected): '{}'",
-        original_pdf_relative_path_str, project_xml_path_str
+        original_pdf_relative_path_str
     );
 
     // The project_xml_path_str is no longer strictly needed here for XML updates regarding annotations.

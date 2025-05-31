@@ -1,6 +1,6 @@
 // src-tauri/src/projectview/shared_types.rs
 use serde::{Deserialize, Serialize};
-use chrono::{Utc, DateTime};
+use chrono::Utc; // DateTime removed
 
 // --- Constants ---
 pub const HARVEY_FILES_DIR: &str = "harvey_files";

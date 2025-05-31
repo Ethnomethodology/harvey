@@ -1,11 +1,11 @@
 // src-tauri/src/projectview/document_handler.rs
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{
-    ProjectXml, DocumentEntryXml, DocumentHighlightData, DocumentMetadataEntryXml, FileLevelMetadata,
+    ProjectXml, DocumentEntryXml, DocumentMetadataEntryXml,
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS
 };
 use crate::projectview::shared_utils::{save_project_xml, ensure_base_asset_dirs};
-use crate::projectview::document_commands::{get_unique_document_path, get_document_metadata_path};
+use crate::projectview::document_commands::{get_document_metadata_path};
 
 use std::{
     fs,
@@ -162,7 +162,7 @@ pub async fn import_document(
 
             // --- PDF Annotations are now handled by the database, no file creation or XML entry needed here ---
             info!("[import_document] PDF annotation file/XML entry is no longer created for PDF: {}", relative_path_for_pdf_xml);
-            let pdf_annotation_xml_changed = false; // Ensure this doesn't interfere with save_project_xml logic
+            let _pdf_annotation_xml_changed = false; // Ensure this doesn't interfere with save_project_xml logic
 
             if main_doc_xml_changed || app_metadata_xml_changed { // Removed pdf_annotation_xml_changed
                 save_project_xml(&project_xml_path, &project_data)?;
