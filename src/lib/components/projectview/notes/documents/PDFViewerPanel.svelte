@@ -59,6 +59,14 @@ import { get } from 'svelte/store';
     let annotationMatcherWorker = null; // For text matching fallback
     let pendingWorkerTasks = new Set(); // Tracks annotations being processed by the worker: `${pageIndex}-${annotationId}`
 
+    function deferTask(taskFn) {
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(taskFn, { timeout: 1000 }); // Added a timeout for safety
+        } else {
+            setTimeout(taskFn, 0);
+        }
+    }
+
     // --- Helper: Capture DOM Range Data for Undo/Redo (Visual Only) ---
     function captureRangeDataForUndo(range) {
         if (!range) return null;
@@ -643,85 +651,122 @@ import { get } from 'svelte/store';
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
 
     async function handleHighlightAction(color) {
-        await tick();
-        let success = false;
-        let actionPayload = { rangeData: null, dataForStorage: null };
+        // Removed initial await tick() to prioritize immediate UI response.
+        // Ticks for store updates will be handled within deferred tasks if necessary.
 
-        if (toolbarMode === 'selection') {
+        if (toolbarMode === 'selection') { // ADDING NEW HIGHLIGHT
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
-            const rangeToUse = selectedRange.cloneRange();
-            actionPayload.rangeData = captureRangeDataForUndo(rangeToUse);
-            actionPayload.text = actionPayload.rangeData.text;
 
-            if (color === 'remove') {
-                const affectedHighlights = await getAffectedHighlightsData(rangeToUse); // Now async
-                removeHighlightFromSelectionDOM(rangeToUse);
-                affectedHighlights.forEach(hlStorageData => {
-                    dispatch('pdfhighlightevent', { type: 'remove', id: hlStorageData.id });
-                    recordAction('removeHighlight', { ...hlStorageData, rangeData: null /* DOM range hard to restore for this */ });
-                });
-                // mark dirty (selection mode, remove action)
-                await tick(); // wait for store update from dispatched events
-                markPdfAnnotationsDirty(); // Pass current annotations from store if needed by the function, or it gets them itself.
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                if (affectedHighlights.length > 0) success = true;
-            } else {
-                actionPayload.id = `hl-${uuidv4()}`;
-                actionPayload.color = color;
-                applyHighlightToSelectionDOM(rangeToUse, color, actionPayload.id);
-                actionPayload.dataForStorage = await createHighlightDataForStorage(actionPayload.id, rangeToUse, color);
-                if (actionPayload.dataForStorage) {
-                    dispatch('pdfhighlightevent', { type: 'add', ...actionPayload.dataForStorage });
-                    recordAction('addHighlight', actionPayload);
-                    // mark dirty
-                    markPdfAnnotationsDirty();
-                    // saveCurrentPdfAnnotations(); // Removed for manual save
-                    success = true;
-                }
-            }
-        } else if (toolbarMode === 'click') {
-            if (!clickedHighlightId) { console.warn("Highlight Action (Click Mode): clickedHighlightId is null!"); return; }
-            actionPayload.id = clickedHighlightId;
-            actionPayload.oldColor = clickedHighlightColor;
-            actionPayload.text = getTextOfHighlightId(clickedHighlightId);
+            const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
+            const newHighlightId = `hl-${uuidv4()}`;
 
-            // No longer recompute dataForStorage for color changes; use original highlight data from initialHighlights
+            // --- Immediate Visual Update ---
+            const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
+            // applyHighlightToSelectionDOM now primarily focuses on calling renderHighlightOverlay
+            // which should be relatively fast.
 
-            if (color === 'remove') {
-                // Remove the visual overlay for this highlight
-                removeHighlightOverlay(clickedHighlightId);
-                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
-                // For undo, need to provide dataForStorage
-                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
-                const dataForStorage = originalHighlight
-                    ? { ...originalHighlight }
-                    : { id: clickedHighlightId, type: 'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex: 0, prefix: '', suffix: '', occurrenceInPageContext: 0 };
-                recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: { ...dataForStorage, color: actionPayload.oldColor } });
-                // mark dirty (click mode, remove action)
-                await tick(); // ensure store is updated after dispatched remove event
-                markPdfAnnotationsDirty();
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                success = true;
-            } else {
-                actionPayload.newColor = color;
-                // Update overlay visual color
-                updateHighlightOverlayColor(clickedHighlightId, color);
-                // Inform store of color update
-                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
-                if (originalHighlight) {
-                    dispatch('pdfhighlightevent', { type: 'update', ...originalHighlight, color });
-                }
-                recordAction('changeColor', actionPayload);
-                markPdfAnnotationsDirty();
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                success = true;
-            }
-        } else { console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode); }
-
-        if (success) {
             hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
+
+            if (!visualRendered) { // If applyHighlightToSelectionDOM failed (e.g. no page context)
+                console.warn("Visual rendering of new highlight failed. Aborting deferred tasks.");
+                return;
+            }
+
+            // --- Deferred Data Processing & State Updates ---
+            deferTask(async () => {
+                try {
+                    const dataForStorage = await createHighlightDataForStorage(newHighlightId, rangeToUse, color);
+                    if (dataForStorage) {
+                        dispatch('pdfhighlightevent', { type: 'add', ...dataForStorage });
+                        // For undo, capture necessary info. rangeData might be complex to restore perfectly,
+                        // but text and context are good.
+                        const rangeDataForUndo = captureRangeDataForUndo(rangeToUse);
+                        recordAction('addHighlight', { id: newHighlightId, color, rangeData: rangeDataForUndo, dataForStorage });
+
+                        await tick(); // Allow store dispatch to settle if needed by markPdfAnnotationsDirty
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Added highlight ${newHighlightId}`);
+                    } else {
+                        console.warn(`[Highlight Action Defer] Failed to create dataForStorage for ${newHighlightId}. Highlight might not be saved correctly.`);
+                        // Potentially remove the visual highlight here if data creation is critical
+                        // removeHighlightOverlay(newHighlightId); // Or removeClickedHighlightBlockDOM if spans were created
+                    }
+                } catch (e) {
+                    console.error(`[Highlight Action Defer] Error processing new highlight ${newHighlightId}:`, e);
+                }
+            });
+
+        } else if (toolbarMode === 'click') { // MODIFYING OR REMOVING EXISTING HIGHLIGHT
+            if (!clickedHighlightId) { console.warn("Highlight Action (Click Mode): clickedHighlightId is null!"); return; }
+
+            const currentHighlightId = clickedHighlightId;
+            const originalColor = clickedHighlightColor; // Stored when highlight was clicked
+            const originalHighlightData = initialHighlights.find(h => h.id === currentHighlightId);
+
+            if (!originalHighlightData && color !== 'remove') {
+                console.warn(`[Highlight Action] Original data for highlight ${currentHighlightId} not found. Cannot update color.`);
+                hideSelectionToolbar();
+                return;
+            }
+
+            if (color === 'remove') {
+                // --- Immediate Visual Update ---
+                removeHighlightOverlay(currentHighlightId);
+                // removeClickedHighlightBlockDOM(currentHighlightId); // If we need to remove old span structure too
+
+                hideSelectionToolbar();
+
+                // --- Deferred Data Processing & State Updates ---
+                deferTask(async () => {
+                    try {
+                        dispatch('pdfhighlightevent', { type: 'remove', id: currentHighlightId });
+                        const dataForStorageUndo = originalHighlightData
+                            ? { ...originalHighlightData }
+                            : { id: currentHighlightId, type: 'pdfHighlight', color: originalColor, text: '', pageIndex: 0 }; // Basic fallback for undo
+                        recordAction('removeHighlight', { id: currentHighlightId, color: originalColor, dataForStorage: dataForStorageUndo });
+
+                        await tick();
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Removed highlight ${currentHighlightId}`);
+                    } catch (e) {
+                        console.error(`[Highlight Action Defer] Error processing highlight removal ${currentHighlightId}:`, e);
+                    }
+                });
+
+            } else { // Changing color
+                // --- Immediate Visual Update ---
+                updateHighlightOverlayColor(currentHighlightId, color);
+                // changeClickedHighlightColorDOM(currentHighlightId, color); // If old span structure needs update
+
+                hideSelectionToolbar();
+
+                // --- Deferred Data Processing & State Updates ---
+                deferTask(async () => {
+                    try {
+                        const updatedDataForStorage = { ...originalHighlightData, color };
+                        dispatch('pdfhighlightevent', { type: 'update', ...updatedDataForStorage });
+                        recordAction('changeColor', {
+                            id: currentHighlightId,
+                            oldColor: originalColor,
+                            newColor: color,
+                            dataForStorage: updatedDataForStorage
+                        });
+
+                        await tick();
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Changed color for highlight ${currentHighlightId}`);
+                    } catch (e) {
+                        console.error(`[Highlight Action Defer] Error processing highlight color change ${currentHighlightId}:`, e);
+                    }
+                });
+            }
+        } else {
+            console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode);
+            hideSelectionToolbar(); // Hide toolbar if mode is invalid
         }
+        // `success` flag removed as visual part is immediate, deferred part handles its own errors.
+        // Hiding toolbar and clearing selection (for new highlights) is done immediately.
     }
     
     async function handleDropdownHighlightAction(color) {
