@@ -48,6 +48,14 @@
     "fs:scope-home",
     "fs:scope-document-recursive",
     {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$DOCUMENT/**/.*.metadata.json"
+        }
+      ]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         {
