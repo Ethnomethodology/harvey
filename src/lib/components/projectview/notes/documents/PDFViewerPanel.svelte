@@ -1078,22 +1078,36 @@ import { get } from 'svelte/store';
         // A simple _listeners = {} might work for the default EventBus but isn't a public API.
         // eventBus._listeners = {}; // Risky, internal property.
 
-        eventBus.on('pagechanging', (e) => {
+        eventBus.on('pagechanging', async (e) => {
             if (e.pageNumber && e.pageNumber !== currentPageNum) {
-                currentPageNum = e.pageNumber;
+                const newPageNum = e.pageNumber;
+                currentPageNum = newPageNum;
                 pageRendering = true;
                 hideSelectionToolbar();
-                // Load annotations for the new page range
+
                 if (pdfViewer && pdfDoc && numPages > 0) {
-                    // console.log(`[pagechanging] event for page ${e.pageNumber}. Triggering annotation load.`);
-                    loadAnnotationsForPageRange(e.pageNumber - 1); // 0-based index
+                    // console.log(`[pagechanging] event for page ${newPageNum}. Triggering annotation load.`);
+                    await loadAnnotationsForPageRange(newPageNum - 1); // Load new/missing annotations in range
+
+                    // After loading, ensure all *loaded* annotations in the new visible buffer are re-rendered
+                    const pageBuffer = 2;
+                    const startRenderPage = Math.max(0, newPageNum - 1 - pageBuffer);
+                    const endRenderPage = Math.min(numPages - 1, newPageNum - 1 + pageBuffer);
+                    // console.log(`[pagechanging] Re-rendering visible loaded pages: ${startRenderPage + 1} to ${endRenderPage + 1}`);
+                    for (let i = startRenderPage; i <= endRenderPage; i++) {
+                        if (loadedPagesWithAnnotations.has(i)) {
+                            // console.log(`[pagechanging] Re-applying highlights for already loaded page ${i + 1}`);
+                            await applyHighlightsForPage(i); // Re-render this page's highlights
+                        }
+                    }
                 }
             }
         });
         eventBus.on('pagerendered', (e) => { 
+            // This event signifies that a page's main rendering (canvas) is done.
+            // Text layer and annotations are handled by 'textlayerrendered' and 'pagechanging'.
             if (e.pageNumber === currentPageNum) pageRendering = false; 
-            // console.log(`Page ${e.pageNumber} rendered.`);
-            // Potentially trigger range load here too if textlayerrendered isn't enough
+            // console.log(`Page ${e.pageNumber} rendered (main content).`);
         });
         eventBus.on('scalechanging', (e) => { 
             let s = currentScaleValue; 
@@ -1124,11 +1138,11 @@ import { get } from 'svelte/store';
         });
 
         eventBus.on('textlayerrendered', async (evt) => {
-            // Re-apply highlights for this page whenever its text layer renders
-            // await applyHighlightsForPage(evt.pageNumber - 1); // Old logic
             if (pdfViewer && pdfDoc && numPages > 0) {
-                // console.log(`[textlayerrendered] event for page ${evt.pageNumber}. Triggering annotation load.`);
-                await loadAnnotationsForPageRange(evt.pageNumber - 1); // 0-based index
+                const pageIndex = evt.pageNumber - 1; // 0-based
+                // console.log(`[textlayerrendered] event for page ${evt.pageNumber}. Loading range and then applying highlights for this page.`);
+                await loadAnnotationsForPageRange(pageIndex); // Ensure annotations in range are loaded (if not already)
+                await applyHighlightsForPage(pageIndex);     // Then, specifically re-render this page's highlights
             }
         });
 
@@ -1288,14 +1302,21 @@ async function renderAnnotationsForPage(pageIndex) {
 // It's kept for potential direct calls if needed, but should respect loadedPagesWithAnnotations.
 // Or it can be removed if renderAnnotationsForPage and loadAnnotationsForPageRange cover all needs.
 async function applyHighlightsForPage(pageIndex) {
-    // console.log(`[applyHighlightsForPage] request for page ${pageIndex + 1}. Checking if already loaded.`);
-    if (loadedPagesWithAnnotations.has(pageIndex)) {
-        // console.log(`[applyHighlightsForPage] Page ${pageIndex + 1} annotations already loaded. Skipping re-render from this path.`);
-        return;
-    }
-    // console.log(`[applyHighlightsForPage] Page ${pageIndex + 1} not yet loaded. Proceeding to render.`);
-    await renderAnnotationsForPage(pageIndex);
-    if (initialHighlights.some(hl => hl.pageIndex === pageIndex)) { // Add to set only if there were highlights for this page
+    // console.log(`[applyHighlightsForPage] Re-applying highlights for page ${pageIndex + 1}.`);
+    // This function is now primarily for re-rendering.
+    // It assumes that if a page is in loadedPagesWithAnnotations, its data is ready in initialHighlights.
+    // If quadPoints were missing and generated by worker, they'd be in initialHighlights now.
+
+    // We don't check loadedPagesWithAnnotations here because this function is explicitly called
+    // to re-render pages that *are* considered loaded and visible.
+    // The `loadAnnotationsForPageRange` function is responsible for initially populating `loadedPagesWithAnnotations`.
+
+    await renderAnnotationsForPage(pageIndex); // This will render using initialHighlights data
+
+    // Ensure the page is marked as loaded if it wasn't (e.g. if called directly for some reason)
+    // and it actually has highlights.
+    if (!loadedPagesWithAnnotations.has(pageIndex) && initialHighlights.some(hl => hl.pageIndex === pageIndex)) {
+        // console.log(`[applyHighlightsForPage] Marking page ${pageIndex+1} as loaded after direct render.`);
         loadedPagesWithAnnotations.add(pageIndex);
     }
 }
