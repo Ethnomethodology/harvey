@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata}; // Added FileMetadata, StandardAssetMetadata
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -12,21 +12,15 @@ use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for de
 use chrono::Utc;
 use serde_json;
 use serde::{Serialize, Deserialize};
+use tauri::Manager; // Added for app_handle.emit
+use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
 
-#[derive(Serialize, Deserialize, Debug)]
-struct FileMetadata {
-    file_name: String,
-    file_path: String,
-    last_modified: String,
-    title: String,
-    description: String,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct StandardAssetMetadata {
-    metadata: FileMetadata,
-    highlights: Vec<String>,
+#[derive(Clone, serde::Serialize)]
+struct MediaRenamedPayload {
+    old_media_stem: String,
+    new_media_stem: String,
+    new_media_file_relative_path: String,
+    new_absolute_path: String,
 }
 
 // Helper function to get annotation metadata path for an image (from existing code)
@@ -769,7 +763,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
 
 #[tauri::command]
-pub async fn rename_project_item( item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
+pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
     info!("[Backend Rename] Request: Item='{}', NewNameParam='{}'", item_path, new_name);
     let item_path_buf = PathBuf::from(&item_path);
     let xml_path_buf = PathBuf::from(&project_xml_path);
@@ -956,7 +950,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
             if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
                 entry.name = new_stem.clone();
-                entry.relative_path = primary_media_new_relative_path;
+                entry.relative_path = primary_media_new_relative_path.clone();
 
                 for transcript_entry in entry.transcripts.iter_mut() {
                     let old_t_path = PathBuf::from(&transcript_entry.relative_path);
@@ -983,6 +977,18 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 project_data.media_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved.");
+
+                // Emit the media_renamed event
+                let payload = MediaRenamedPayload {
+                    old_media_stem: old_stem.clone(),
+                    new_media_stem: new_stem.clone(),
+                    new_media_file_relative_path: primary_media_new_relative_path.clone(),
+                    new_absolute_path: new_media_path.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("media_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit media_renamed event for new stem {}: {}", new_stem, e);
+                }
+
             } else {
                 error!("[Backend Rename] CRITICAL: Failed find XML entry for '{}' after file operations. File system may be inconsistent.", old_stem);
                 return Err(CommandError::from(format!("XML entry for '{}' not found after successful file renames. Project state potentially inconsistent.", old_stem)));
@@ -1476,115 +1482,258 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             }
         },
         "table" => {
-            let new_filename_with_ext = new_name_trimmed;
-            let new_path = parent_dir.join(new_filename_with_ext);
+            // --- Path Definitions ---
+            let old_table_file_abs_path = item_path_buf.clone();
+            let old_table_folder_abs_path = parent_dir.to_path_buf(); // parent_dir is item_path_buf.parent().unwrap()
 
-            if contains_invalid_chars(new_filename_with_ext) { return Err(CommandError::from("New table filename contains invalid characters.")); }
+            let old_table_filename_str = old_table_file_abs_path.file_name()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get old table filename string from {}", old_table_file_abs_path.display())))?
+                .to_string();
+            let old_table_stem_str = old_table_file_abs_path.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get old table stem string from {}", old_table_file_abs_path.display())))?
+                .to_string();
+
+            let new_table_filename_str = new_name_trimmed.to_string();
+            let new_table_filename_pathbuf = PathBuf::from(&new_table_filename_str);
+            let new_table_stem_str = new_table_filename_pathbuf.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get new table stem string from {}", new_table_filename_str)))?
+                .to_string();
+
+            let tables_root_abs_path = old_table_folder_abs_path.parent()
+                .ok_or_else(|| CommandError::from(format!("Could not get tables root directory from {}", old_table_folder_abs_path.display())))?;
+
+            let new_table_folder_abs_path = tables_root_abs_path.join(&new_table_stem_str);
+            let final_new_table_file_abs_path = new_table_folder_abs_path.join(&new_table_filename_str);
+
+            let old_asset_metadata_path = get_table_asset_metadata_path(&old_table_file_abs_path)?;
+            let new_asset_metadata_path = get_table_asset_metadata_path(&final_new_table_file_abs_path)?;
+
+            // --- Validations ---
+            if contains_invalid_chars(&new_table_filename_str) { return Err(CommandError::from("New table filename contains invalid characters.")); }
             let allowed_extensions = ["csv", "xlsx"];
-            let new_ext = new_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let new_ext = final_new_table_file_abs_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if !allowed_extensions.contains(&new_ext.as_str()) {
                 return Err(CommandError::from(format!("Invalid extension '.{}'. Allowed extensions for tables are: {:?}", new_ext, allowed_extensions)));
             }
-            let old_ext = item_path_buf.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let old_ext = old_table_file_abs_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
             if old_ext != new_ext {
                 return Err(CommandError::from(format!("Changing table file extension from '.{}' to '.{}' is not allowed.", old_ext, new_ext)));
             }
-            if new_filename_with_ext.starts_with('.') { return Err(CommandError::from("Table filename cannot start with a dot.")); }
+            if new_table_filename_str.starts_with('.') { return Err(CommandError::from("Table filename cannot start with a dot.")); }
 
-            if item_path_buf == new_path { info!("[Backend Rename] New table path is same as old path. No action needed."); return Ok(()); }
+            if old_table_file_abs_path == final_new_table_file_abs_path {
+                info!("[Backend Rename Table] New table path is the same as the old path. No action needed.");
+                return Ok(());
+            }
 
-            if new_path.exists() {
-                let canon_old = fs::canonicalize(&item_path_buf).ok();
-                let canon_new = fs::canonicalize(&new_path).ok();
-                if canon_old.is_some() && canon_new.is_some() && canon_old != canon_new {
-                    return Err(CommandError::from(format!("Table file named '{}' already exists.", new_filename_with_ext)));
+            if old_table_folder_abs_path != new_table_folder_abs_path && new_table_folder_abs_path.exists() {
+                return Err(CommandError::from(format!("Target folder '{}' already exists. Cannot rename table folder.", new_table_folder_abs_path.display())));
+            }
+
+            if final_new_table_file_abs_path.exists() {
+                // Check if it's the same file (e.g. case change on case-insensitive FS)
+                // Canonicalize both paths and compare. If they are different, then it's a true conflict.
+                let canon_old = fs::canonicalize(&old_table_file_abs_path).ok();
+                let canon_target = fs::canonicalize(&final_new_table_file_abs_path).ok();
+                if canon_old.is_some() && canon_target.is_some() && canon_old != canon_target {
+                     return Err(CommandError::from(format!("Target table file '{}' already exists and is different from the source.", final_new_table_file_abs_path.display())));
+                } else if canon_old.is_none() && canon_target.is_some() { // old path might not exist if folder was renamed first, then error occurred
+                     return Err(CommandError::from(format!("Target table file '{}' already exists.", final_new_table_file_abs_path.display())));
+                }
+                 info!("[Backend Rename Table] Target file path {} exists, but might be the same file due to case change or prior operations. Proceeding carefully.", final_new_table_file_abs_path.display());
+            }
+
+            // --- File System Operations ---
+            if old_table_folder_abs_path != new_table_folder_abs_path {
+                // Scenario 1: Folder name changes
+                info!("[Backend Rename Table] Renaming folder {} -> {}", old_table_folder_abs_path.display(), new_table_folder_abs_path.display());
+                fs::rename(&old_table_folder_abs_path, &new_table_folder_abs_path)
+                    .map_err(|e| CommandError::from(format!("Failed to rename table folder: {}", e)))?;
+
+                // The table file is now at new_table_folder_abs_path.join(&old_table_filename_str)
+                let current_table_file_path_after_folder_rename = new_table_folder_abs_path.join(&old_table_filename_str);
+
+                if old_table_filename_str != new_table_filename_str {
+                    info!("[Backend Rename Table] Renaming table file (post folder rename) {} -> {}", current_table_file_path_after_folder_rename.display(), final_new_table_file_abs_path.display());
+                    if let Err(e) = fs::rename(&current_table_file_path_after_folder_rename, &final_new_table_file_abs_path) {
+                        warn!("[Backend Rename Table] Failed to rename table file after folder rename: {}. Reverting folder rename.", e);
+                        let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Attempt to revert folder rename
+                        return Err(CommandError::from(format!("Failed to rename table file after folder rename: {}", e)));
+                    }
+                }
+
+                let current_old_metadata_filename = format!(".{}.metadata.json", old_table_stem_str);
+                let current_old_metadata_path_after_folder_rename = new_table_folder_abs_path.join(current_old_metadata_filename);
+
+                if current_old_metadata_path_after_folder_rename.exists() {
+                    info!("[Backend Rename Table] Reading old metadata from moved location: {}", current_old_metadata_path_after_folder_rename.display());
+                    let old_json_content = match fs::read_to_string(&current_old_metadata_path_after_folder_rename) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            warn!("[Backend Rename Table] Failed to read old metadata (post folder rename): {}. Reverting operations.", e);
+                            if old_table_filename_str != new_table_filename_str { // Revert file rename if done
+                                let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename);
+                            }
+                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Revert folder rename
+                            return Err(CommandError::from(format!("Failed to read old metadata after folder rename: {}", e)));
+                        }
+                    };
+
+                    let mut parsed_metadata: StandardAssetMetadata = match serde_json::from_str(&old_json_content) {
+                        Ok(meta) => meta,
+                        Err(e) => {
+                             warn!("[Backend Rename Table] Failed to parse old metadata (post folder rename): {}. Reverting operations.", e);
+                            if old_table_filename_str != new_table_filename_str { // Revert file rename if done
+                                let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename);
+                            }
+                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Revert folder rename
+                            return Err(CommandError::from(format!("Failed to parse old metadata: {}", e)));
+                        }
+                    };
+
+                    parsed_metadata.metadata.file_name = new_table_filename_str.clone();
+                    parsed_metadata.metadata.file_path = final_new_table_file_abs_path.to_string_lossy().into_owned();
+                    parsed_metadata.metadata.last_modified = Utc::now().to_rfc3339();
+
+                    let updated_json_string = match serde_json::to_string_pretty(&parsed_metadata) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!("[Backend Rename Table] Failed to serialize updated metadata: {}. Reverting operations.", e);
+                            if old_table_filename_str != new_table_filename_str { let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename); }
+                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path);
+                            return Err(CommandError::from(format!("Failed to serialize updated metadata: {}", e)));
+                        }
+                    };
+
+                    info!("[Backend Rename Table] Writing updated metadata to {}", new_asset_metadata_path.display());
+                    if let Err(e) = fs::write(&new_asset_metadata_path, updated_json_string) {
+                        warn!("[Backend Rename Table] Failed to write new metadata: {}. Reverting operations.", e);
+                         if old_table_filename_str != new_table_filename_str { let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename); }
+                         let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path);
+                        return Err(CommandError::from(format!("Failed to write new metadata: {}", e)));
+                    }
+
+                    if current_old_metadata_path_after_folder_rename != new_asset_metadata_path {
+                        info!("[Backend Rename Table] Removing old metadata from moved location: {}", current_old_metadata_path_after_folder_rename.display());
+                        if let Err(e) = fs::remove_file(&current_old_metadata_path_after_folder_rename) {
+                            warn!("[Backend Rename Table] Failed to remove old metadata file (post folder rename) {}: {}", current_old_metadata_path_after_folder_rename.display(), e);
+                        }
+                    }
+                } else if !new_asset_metadata_path.exists() { // Old metadata (even after folder move) does not exist, AND new one also doesn't. Create new.
+                    info!("[Backend Rename Table] Old metadata not found at {}. Creating new metadata at {}.", current_old_metadata_path_after_folder_rename.display(), new_asset_metadata_path.display());
+                    let default_metadata = StandardAssetMetadata {
+                        metadata: FileMetadata {
+                            file_name: new_table_filename_str.clone(),
+                            file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                        },
+                        highlights: Vec::new(),
+                    };
+                    let json_string = serde_json::to_string_pretty(&default_metadata)
+                        .map_err(|e| CommandError::from(format!("Failed to serialize new default metadata: {}", e)))?; // Basic error, no revert needed yet for this specific failure
+                    fs::write(&new_asset_metadata_path, json_string)
+                        .map_err(|e| CommandError::from(format!("Failed to write new default metadata to {}: {}", new_asset_metadata_path.display(), e)))?;
+                }
+
+            } else {
+                // Scenario 2: Folder name does NOT change (so filename must be different, checked by initial validation)
+                info!("[Backend Rename Table] Renaming table file (folder same) {} -> {}", old_table_file_abs_path.display(), final_new_table_file_abs_path.display());
+                fs::rename(&old_table_file_abs_path, &final_new_table_file_abs_path)
+                    .map_err(|e| CommandError::from(format!("Failed to rename table file (folder same): {}", e)))?;
+
+                if old_asset_metadata_path.exists() {
+                    info!("[Backend Rename Table] Reading old metadata from original location: {}", old_asset_metadata_path.display());
+                    let old_json_content = match fs::read_to_string(&old_asset_metadata_path) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            warn!("[Backend Rename Table] Failed to read old metadata: {}. Reverting table file rename.", e);
+                            let _ = fs::rename(&final_new_table_file_abs_path, &old_table_file_abs_path);
+                            return Err(CommandError::from(format!("Failed to read old metadata: {}", e)));
+                        }
+                    };
+                    let mut parsed_metadata: StandardAssetMetadata = match serde_json::from_str(&old_json_content) {
+                         Ok(meta) => meta,
+                         Err(e) => {
+                            warn!("[Backend Rename Table] Failed to parse old metadata: {}. Reverting table file rename.", e);
+                            let _ = fs::rename(&final_new_table_file_abs_path, &old_table_file_abs_path);
+                            return Err(CommandError::from(format!("Failed to parse old metadata: {}", e)));
+                         }
+                    };
+
+                    parsed_metadata.metadata.file_name = new_table_filename_str.clone();
+                    parsed_metadata.metadata.file_path = final_new_table_file_abs_path.to_string_lossy().into_owned();
+                    parsed_metadata.metadata.last_modified = Utc::now().to_rfc3339();
+
+                    let updated_json_string = match serde_json::to_string_pretty(&parsed_metadata) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!("[Backend Rename Table] Failed to serialize updated metadata: {}. Reverting table file rename.", e);
+                            let _ = fs::rename(&final_new_table_file_abs_path, &old_table_file_abs_path);
+                            return Err(CommandError::from(format!("Failed to serialize updated metadata: {}", e)));
+                        }
+                    };
+
+                    info!("[Backend Rename Table] Writing updated metadata to {}", new_asset_metadata_path.display());
+                    if let Err(e) = fs::write(&new_asset_metadata_path, updated_json_string) {
+                        warn!("[Backend Rename Table] Failed to write new metadata: {}. Reverting table file rename.", e);
+                        let _ = fs::rename(&final_new_table_file_abs_path, &old_table_file_abs_path);
+                        return Err(CommandError::from(format!("Failed to write new metadata: {}", e)));
+                    }
+
+                    if old_asset_metadata_path != new_asset_metadata_path { // Only remove if paths are different (e.g. stem changed)
+                        info!("[Backend Rename Table] Removing old metadata from original location: {}", old_asset_metadata_path.display());
+                        if let Err(e) = fs::remove_file(&old_asset_metadata_path) {
+                            warn!("[Backend Rename Table] Failed to remove old metadata file {}: {}", old_asset_metadata_path.display(), e);
+                        }
+                    }
+                } else if !new_asset_metadata_path.exists() { // Old metadata does not exist, and new one also doesn't. Create new.
+                    info!("[Backend Rename Table] Old metadata not found at {}. Creating new metadata at {}.", old_asset_metadata_path.display(), new_asset_metadata_path.display());
+                     let default_metadata = StandardAssetMetadata {
+                        metadata: FileMetadata {
+                            file_name: new_table_filename_str.clone(),
+                            file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                        },
+                        highlights: Vec::new(),
+                    };
+                    let json_string = serde_json::to_string_pretty(&default_metadata)
+                        .map_err(|e| CommandError::from(format!("Failed to serialize new default metadata: {}", e)))?;
+                    fs::write(&new_asset_metadata_path, json_string)
+                        .map_err(|e| CommandError::from(format!("Failed to write new default metadata to {}: {}", new_asset_metadata_path.display(), e)))?;
                 }
             }
 
-            info!("[Backend Rename] Renaming table file {} -> {}", item_path_buf.display(), new_path.display());
-            fs::rename(&item_path_buf, &new_path).map_err(|e| CommandError::from(format!("Failed to rename table file: {}", e)))?;
+            // --- XML Update ---
+            let new_relative_path_for_xml = final_new_table_file_abs_path.strip_prefix(project_base_dir)?
+                .to_string_lossy().replace("\\", "/");
 
-            let new_relative_path_buf = new_path.strip_prefix(project_base_dir)?;
-            let new_relative_path = new_relative_path_buf.to_string_lossy().replace("\\", "/");
-
-            info!("[Backend Rename] Updating XML for table: Path '{}' -> '{}', name -> '{}'", item_relative_path, new_relative_path, new_filename_with_ext);
+            info!("[Backend Rename Table] Updating XML: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml, new_table_filename_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut updated_xml = false;
 
             if let Some(table_entry) = project_data.table_files.files.iter_mut().find(|t| t.relative_path == item_relative_path) {
-                table_entry.name = new_filename_with_ext.to_string();
-                table_entry.relative_path = new_relative_path;
+                table_entry.name = new_table_filename_str.clone();
+                table_entry.relative_path = new_relative_path_for_xml;
                 project_data.table_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 updated_xml = true;
-                info!("[Backend Rename] XML table entry updated.");
+                info!("[Backend Rename Table] XML table entry updated.");
             } else {
-                warn!("[Backend Rename] Renamed table file, but could not find matching path '{}' in XML.", item_relative_path);
+                // This is a more critical error after file operations have succeeded.
+                // Attempting complex rollbacks here could be risky. Log an error.
+                error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                // Depending on desired behavior, could return an error here to signal inconsistency.
+                // For now, we'll save if other changes were made, but this is a problem.
+                 return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
 
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
-                info!("[Backend Rename] XML saved for table rename.");
-            }
-
-            // Handle standard asset metadata for the table
-            let old_asset_metadata_path_result = get_table_asset_metadata_path(&item_path_buf); // item_path_buf is the old absolute path
-            let new_asset_metadata_path_result = get_table_asset_metadata_path(&new_path); // new_path is the new absolute path
-
-            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
-                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
-                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
-
-                    if old_asset_meta_path.exists() {
-                        info!("[Backend Rename] Attempting to read old table asset metadata: {}", old_asset_meta_path.display());
-                        match fs::read_to_string(&old_asset_meta_path) {
-                            Ok(json_content) => {
-                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
-                                    Ok(mut parsed_meta) => {
-                                        parsed_meta.metadata.file_name = new_filename_with_ext.to_string();
-                                        parsed_meta.metadata.file_path = new_path.to_string_lossy().into_owned();
-                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
-                                        asset_metadata_to_write = Some(parsed_meta);
-                                        info!("[Backend Rename] Parsed and updated old table asset metadata.");
-                                    }
-                                    Err(e) => warn!("[Backend Rename] Failed to parse old table asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                                }
-                            }
-                            Err(e) => warn!("[Backend Rename] Failed to read old table asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                        }
-                        if let Err(e) = fs::remove_file(&old_asset_meta_path) {
-                            warn!("[Backend Rename] Failed to remove old table asset metadata {}: {}", old_asset_meta_path.display(), e);
-                        }
-                    } else {
-                        info!("[Backend Rename] Old table asset metadata {} not found. New one will be created.", old_asset_meta_path.display());
-                    }
-
-                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
-                        StandardAssetMetadata {
-                            metadata: FileMetadata {
-                                file_name: new_filename_with_ext.to_string(),
-                                file_path: new_path.to_string_lossy().into_owned(),
-                                last_modified: Utc::now().to_rfc3339(),
-                                title: "".to_string(),
-                                description: "".to_string(),
-                                summary: "".to_string(),
-                            },
-                            highlights: Vec::new(),
-                        }
-                    });
-
-                    match serde_json::to_string_pretty(&final_asset_metadata) {
-                        Ok(json_string) => {
-                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
-                                warn!("[Backend Rename] Failed to write table asset metadata to {}: {}", new_asset_meta_path.display(), e);
-                            } else {
-                                info!("[Backend Rename] Wrote table asset metadata to {}", new_asset_meta_path.display());
-                            }
-                        }
-                        Err(e) => warn!("[Backend Rename] Failed to serialize table asset metadata for {}: {}", new_asset_meta_path.display(), e),
-                    }
-                }
-                (Err(e), _) => warn!("[Backend Rename] Could not determine old table asset metadata path: {:?}", e),
-                (_, Err(e)) => warn!("[Backend Rename] Could not determine new table asset metadata path: {:?}", e),
+                info!("[Backend Rename Table] XML saved.");
             }
         },
         "image" => {
@@ -1604,61 +1753,103 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             if new_image_filename_with_ext_str.starts_with('.') { return Err(CommandError::from("Image filename cannot start with a dot.")); }
 
             // --- Path Definitions ---
-            let old_image_file_path = &item_path_buf; // e.g., .../OldImageStem/OldImage.png
-            let old_image_folder_path = parent_dir;   // e.g., .../OldImageStem/
+            let old_image_file_abs_path = item_path_buf.clone(); // e.g., .../OldImageStem/OldImage.png
+            let old_image_folder_abs_path = parent_dir.to_path_buf();   // e.g., .../OldImageStem/
 
-            // Path for the image file *after* filename rename but *before* folder rename
-            let new_image_file_path_in_old_folder = old_image_folder_path.join(&new_image_filename_pathbuf); // e.g., .../OldImageStem/NewImage.png
+            #[allow(unused_variables)] // old_image_stem_str might be unused if no metadata/annotation exists
+            let old_image_stem_str = old_image_file_abs_path.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get old image stem from {}", old_image_file_abs_path.display())))?
+                .to_string();
 
-            let new_image_filename_stem = new_image_filename_pathbuf.file_stem().and_then(|s| s.to_str())
-                .ok_or_else(|| CommandError::from(format!("Could not get new image file stem from {}", new_image_filename_pathbuf.display())))?;
+            // new_image_filename_with_ext_str is new_name_trimmed
+            // new_image_filename_pathbuf is PathBuf::from(new_image_filename_with_ext_str)
+            let new_image_stem_str = new_image_filename_pathbuf.file_stem().and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from(format!("Could not get new image file stem from {}", new_image_filename_pathbuf.display())))?
+                .to_string();
 
-            let images_root_path = old_image_folder_path.parent()
-                .ok_or_else(|| CommandError::from(format!("Could not get images root from {}", old_image_folder_path.display())))?;
+            let images_root_abs_path = old_image_folder_abs_path.parent()
+                .ok_or_else(|| CommandError::from(format!("Could not get images root from {}", old_image_folder_abs_path.display())))?;
+
+            let new_image_folder_abs_path = images_root_abs_path.join(&new_image_stem_str); // e.g., .../Images/NewImageStem/
+            let final_new_image_file_abs_path = new_image_folder_abs_path.join(&new_image_filename_pathbuf); // e.g., .../NewImageStem/NewImage.png
             
-            let new_image_folder_path = images_root_path.join(new_image_filename_stem); // e.g., .../Images/NewImageStem/
+            // Path for the image file *after* filename rename but *before* potential folder rename
+            let new_image_file_path_in_old_folder = old_image_folder_abs_path.join(&new_image_filename_pathbuf);
+
+            // Asset Metadata Paths
+            let old_asset_metadata_abs_path = get_image_asset_metadata_path(&old_image_file_abs_path)?;
+            let new_asset_metadata_abs_path = get_image_asset_metadata_path(&final_new_image_file_abs_path)?;
 
             // --- Pre-checks for conflicts ---
-            if *old_image_file_path == new_image_file_path_in_old_folder && old_image_folder_path == &new_image_folder_path {
-                info!("[Backend Rename] Image name and folder name are effectively unchanged. No action needed.");
-                return Ok(());
-            }
-
-            if old_image_folder_path != &new_image_folder_path && new_image_folder_path.exists() {
-                return Err(CommandError::from(format!("A folder named '{}' already exists for images. Cannot rename image folder.", new_image_filename_stem)));
-            }
-
-            let final_target_image_file_path = new_image_folder_path.join(&new_image_filename_pathbuf);
-            if final_target_image_file_path.exists() {
-                let canon_old_abs = fs::canonicalize(old_image_file_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old image path {}: {}", old_image_file_path.display(), e)))?;
-                let canon_final_target_abs = fs::canonicalize(&final_target_image_file_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target image path {}: {}", final_target_image_file_path.display(), e)))?;
-                if canon_final_target_abs != canon_old_abs {
-                    return Err(CommandError::from(format!("An image file named '{}' already exists in the target location '{}'.", new_image_filename_with_ext_str, new_image_folder_path.display())));
+            if old_image_file_abs_path == final_new_image_file_abs_path { // Covers case where only folder might change due to stem, but filename itself is same.
+                 // Also covers case where item_path_buf (old_image_file_abs_path) is identical to final_new_image_file_abs_path
+                if old_image_folder_abs_path == new_image_folder_abs_path {
+                    info!("[Backend Rename] Image name and folder name are effectively unchanged. No action needed.");
+                    return Ok(());
                 }
             }
 
+            if old_image_folder_abs_path != new_image_folder_abs_path && new_image_folder_abs_path.exists() {
+                return Err(CommandError::from(format!("A folder named '{}' already exists for images. Cannot rename image folder.", new_image_stem_str)));
+            }
+
+            if final_new_image_file_abs_path.exists() {
+                let canon_old_abs = fs::canonicalize(&old_image_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old image path {}: {}", old_image_file_abs_path.display(), e)))?;
+                let canon_final_target_abs = fs::canonicalize(&final_new_image_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target image path {}: {}", final_new_image_file_abs_path.display(), e)))?;
+                if canon_final_target_abs != canon_old_abs {
+                    return Err(CommandError::from(format!("An image file named '{}' already exists in the target location '{}'.", new_image_filename_with_ext_str, new_image_folder_abs_path.display())));
+                }
+            }
+
+            // --- Read Old Metadata (Before Any Renames) ---
+            let mut parsed_old_metadata_content: Option<StandardAssetMetadata> = None;
+            if old_asset_metadata_abs_path.exists() {
+                info!("[Backend Rename Image] Attempting to read old asset metadata from: {}", old_asset_metadata_abs_path.display());
+                match fs::read_to_string(&old_asset_metadata_abs_path) {
+                    Ok(json_content) => {
+                        match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
+                            Ok(parsed_meta) => {
+                                parsed_old_metadata_content = Some(parsed_meta);
+                                info!("[Backend Rename Image] Successfully parsed old asset metadata.");
+                            }
+                            Err(e) => {
+                                warn!("[Backend Rename Image] Failed to parse old asset metadata from {}: {}. Will create new metadata if needed.", old_asset_metadata_abs_path.display(), e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("[Backend Rename Image] Failed to read old asset metadata from {}: {}. Will create new metadata if needed.", old_asset_metadata_abs_path.display(), e);
+                    }
+                }
+            }
+
+
             // --- File System Operations ---
-            // 1. Rename main image file (within its current/old folder)
-            if old_image_file_path != &new_image_file_path_in_old_folder {
-                info!("[Backend Rename] Renaming image file {} -> {}", old_image_file_path.display(), new_image_file_path_in_old_folder.display());
-                fs::rename(old_image_file_path, &new_image_file_path_in_old_folder)
-                    .map_err(|e| CommandError::from(format!("Failed to rename image file: {}", e)))?;
+            // 1. Rename main image file (within its current/old folder first if filename changes)
+            // This new_image_file_path_in_old_folder is (.../OldImageStem/NewImage.png)
+            if old_image_file_abs_path != new_image_file_path_in_old_folder {
+                info!("[Backend Rename Image] Renaming image file {} -> {}", old_image_file_abs_path.display(), new_image_file_path_in_old_folder.display());
+                fs::rename(&old_image_file_abs_path, &new_image_file_path_in_old_folder)
+                    .map_err(|e| CommandError::from(format!("Failed to rename image file (pre-folder op): {}", e)))?;
             }
 
             // 2. Rename associated annotation file (within its current/old folder)
-            if let Ok(old_annotation_path) = get_annotation_metadata_path_for_image(old_image_file_path) { // Use original path to find old annotation
+            // old_image_file_abs_path is the original path to the image (e.g. .../OldStem/OldImage.png)
+            // new_image_file_path_in_old_folder is the path if image is renamed but still in old folder (e.g. .../OldStem/NewImage.png)
+            if let Ok(old_annotation_path) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
                 if old_annotation_path.exists() {
-                    // New annotation name, still in old folder
+                    // new_annotation_path_in_old_folder is path for annotation if image renamed in old folder. (e.g. .../OldStem/.NewImage.annotations.json)
                     if let Ok(new_annotation_path_in_old_folder) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                        if old_annotation_path != new_annotation_path_in_old_folder {
-                            info!("[Backend Rename] Renaming image annotation: {} -> {}", old_annotation_path.display(), new_annotation_path_in_old_folder.display());
-                            if new_annotation_path_in_old_folder.exists() {
-                                warn!("[Backend Rename] Target image annotation {} already exists. Skipping rename of {}.", new_annotation_path_in_old_folder.display(), old_annotation_path.display());
+                        if old_annotation_path != new_annotation_path_in_old_folder { // Check if annotation name needs to change
+                            info!("[Backend Rename Image] Renaming image annotation (pre-folder op): {} -> {}", old_annotation_path.display(), new_annotation_path_in_old_folder.display());
+                            if new_annotation_path_in_old_folder.exists() { // Conflict for annotation file
+                                warn!("[Backend Rename Image] Target image annotation {} already exists. Skipping rename of {}.", new_annotation_path_in_old_folder.display(), old_annotation_path.display());
                             } else {
                                 if let Err(e) = fs::rename(&old_annotation_path, &new_annotation_path_in_old_folder) {
-                                    warn!("[Backend Rename] Failed to rename image annotation: {}. Attempting to revert main image rename.", e);
-                                    if old_image_file_path != &new_image_file_path_in_old_folder { // only revert if it was actually renamed
-                                        let _ = fs::rename(&new_image_file_path_in_old_folder, old_image_file_path);
+                                    warn!("[Backend Rename Image] Failed to rename image annotation: {}. Attempting to revert main image rename (pre-folder op).", e);
+                                    if old_image_file_abs_path != new_image_file_path_in_old_folder { // only revert if it was actually renamed
+                                        let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
                                     }
                                     return Err(CommandError::from(format!("Failed to rename image annotation file: {}", e)));
                                 }
@@ -1668,32 +1859,160 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 }
             }
 
-            // 3. Rename the folder if its name (derived from stem) has changed
-            let mut current_image_folder_path_for_xml_update = old_image_folder_path.clone();
-            if old_image_folder_path != &new_image_folder_path {
-                info!("[Backend Rename] Renaming image folder {} -> {}", old_image_folder_path.display(), new_image_folder_path.display());
-                if let Err(e) = fs::rename(old_image_folder_path, &new_image_folder_path) {
-                    warn!("[Backend Rename] Failed to rename image folder: {}. Attempting to revert file renames.", e);
+            let mut folder_renamed = false;
+            // 3. Rename the main image folder if its name (derived from stem) has changed
+            if old_image_folder_abs_path != new_image_folder_abs_path {
+                info!("[Backend Rename Image] Renaming image folder {} -> {}", old_image_folder_abs_path.display(), new_image_folder_abs_path.display());
+                if let Err(e) = fs::rename(&old_image_folder_abs_path, &new_image_folder_abs_path) {
+                    warn!("[Backend Rename Image] Failed to rename image folder: {}. Attempting to revert file renames.", e);
                     // Revert annotation rename (if any)
-                    if let Ok(old_annot_p) = get_annotation_metadata_path_for_image(old_image_file_path) {
+                    if let Ok(old_annot_p) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
                         if let Ok(new_annot_p_temp) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                            if old_annot_p != new_annot_p_temp && new_annot_p_temp.exists() { let _ = fs::rename(&new_annot_p_temp, &old_annot_p); }
+                            if old_annot_p != new_annot_p_temp && new_annot_p_temp.exists() { // if annotation was renamed
+                                 // new_annot_p_temp would be something like .../OldStem/.NewImageStem.annotations.json
+                                 // old_annot_p would be .../OldStem/.OldImageStem.annotations.json
+                                let _ = fs::rename(&new_annot_p_temp, &old_annot_p);
+                            }
                         }
                     }
-                    // Revert main image rename
-                    if old_image_file_path != &new_image_file_path_in_old_folder && new_image_file_path_in_old_folder.exists() {
-                        let _ = fs::rename(&new_image_file_path_in_old_folder, old_image_file_path);
+                    // Revert main image rename (if it was done within the old folder)
+                    if old_image_file_abs_path != new_image_file_path_in_old_folder && new_image_file_path_in_old_folder.exists() {
+                        let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
                     }
                     return Err(CommandError::from(format!("Failed to rename image folder: {}", e)));
                 }
-                current_image_folder_path_for_xml_update = &new_image_folder_path;
+                folder_renamed = true;
+            }
+
+            // 4. If folder name changed, the image file (which might have been renamed, e.g. OldImage.png -> NewImage.png)
+            // is now in new_image_folder_abs_path but with its *original filename* if only stem changed folder,
+            // or its *new filename* if filename also changed.
+            // It should be `final_new_image_file_abs_path`.
+            // Current path of image file:
+            // - If folder renamed: new_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap())
+            // - If folder NOT renamed: new_image_file_path_in_old_folder
+            let current_image_path_before_final_rename = if folder_renamed {
+                new_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap_or_default())
+            } else {
+                new_image_file_path_in_old_folder.clone() // Already .../OldStem/NewImage.png if name changed
+            };
+
+            if current_image_path_before_final_rename != final_new_image_file_abs_path && current_image_path_before_final_rename.exists() {
+                 info!("[Backend Rename Image] Renaming image file (post-folder op) {} -> {}", current_image_path_before_final_rename.display(), final_new_image_file_abs_path.display());
+                 if let Err(e) = fs::rename(&current_image_path_before_final_rename, &final_new_image_file_abs_path) {
+                    warn!("[Backend Rename Image] Failed to rename image file to final path: {}. Attempting to revert operations.", e);
+                    // Complex revert: folder, then annotations, then initial image rename
+                    if folder_renamed {
+                        let _ = fs::rename(&new_image_folder_abs_path, &old_image_folder_abs_path);
+                        // After folder revert, annotation and image file are back in old_image_folder_abs_path
+                        // Revert annotation rename (e.g. from .../OldStem/.NewImage.annotations.json back to .../OldStem/.OldImage.annotations.json)
+                        if let Ok(old_annot_p_orig) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) { // .../OldStem/.OldImage.annotations.json
+                           if let Ok(new_annot_p_in_old_folder_orig) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) { // .../OldStem/.NewImage.annotations.json
+                                if new_annot_p_in_old_folder_orig.exists() && old_annot_p_orig != new_annot_p_in_old_folder_orig {
+                                    let _ = fs::rename(&new_annot_p_in_old_folder_orig, &old_annot_p_orig);
+                                }
+                           }
+                        }
+                    }
+                     // Revert initial image rename (e.g. from .../OldStem/NewImage.png back to .../OldStem/OldImage.png)
+                    if old_image_file_abs_path != new_image_file_path_in_old_folder {
+                        let path_to_revert_from = if folder_renamed { &new_image_file_path_in_old_folder } else { &current_image_path_before_final_rename };
+                        if path_to_revert_from.exists() {
+                             let _ = fs::rename(path_to_revert_from, &old_image_file_abs_path);
+                        }
+                    }
+                    return Err(CommandError::from(format!("Failed to rename image file to final path: {}", e)));
+                 }
+            }
+
+
+            // --- Prepare and Write New/Updated Metadata (After All Other Renames) ---
+            let final_metadata_to_write: StandardAssetMetadata;
+            if let Some(mut metadata) = parsed_old_metadata_content.take() { // Use .take() to get ownership
+                info!("[Backend Rename Image] Updating existing asset metadata for {}", new_asset_metadata_abs_path.display());
+                metadata.metadata.file_name = new_image_filename_with_ext_str.to_string();
+                metadata.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
+                metadata.metadata.last_modified = Utc::now().to_rfc3339();
+                final_metadata_to_write = metadata;
+
+                // Cleanup old metadata file
+                if old_asset_metadata_abs_path != new_asset_metadata_abs_path {
+                    let path_of_old_meta_to_remove = if folder_renamed {
+                        // If folder was renamed, the original old_asset_metadata_abs_path is stale.
+                        // The file would have moved with the folder.
+                        new_image_folder_abs_path.join(old_asset_metadata_abs_path.file_name().unwrap_or_default())
+                    } else {
+                        old_asset_metadata_abs_path.clone()
+                    };
+                    if path_of_old_meta_to_remove.exists() && path_of_old_meta_to_remove != new_asset_metadata_abs_path {
+                        info!("[Backend Rename Image] Removing old/moved asset metadata file from: {}", path_of_old_meta_to_remove.display());
+                        if let Err(e) = fs::remove_file(&path_of_old_meta_to_remove) {
+                            warn!("[Backend Rename Image] Failed to remove old/moved asset metadata {}: {}", path_of_old_meta_to_remove.display(), e);
+                        }
+                    } else if !path_of_old_meta_to_remove.exists() && old_asset_metadata_abs_path.exists() && old_asset_metadata_abs_path != new_asset_metadata_abs_path {
+                        // This case handles if folder was NOT renamed, but stem changed, so old metadata file is at original path.
+                        info!("[Backend Rename Image] Removing original asset metadata file from: {}", old_asset_metadata_abs_path.display());
+                         if let Err(e) = fs::remove_file(&old_asset_metadata_abs_path) {
+                            warn!("[Backend Rename Image] Failed to remove original asset metadata {}: {}", old_asset_metadata_abs_path.display(), e);
+                        }
+                    }
+                }
+            } else {
+                info!("[Backend Rename Image] Creating new default asset metadata for {}", new_asset_metadata_abs_path.display());
+                final_metadata_to_write = StandardAssetMetadata {
+                    metadata: FileMetadata {
+                        file_name: new_image_filename_with_ext_str.to_string(),
+                        file_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
+                        last_modified: Utc::now().to_rfc3339(),
+                        title: "".to_string(),
+                        description: "".to_string(),
+                        summary: "".to_string(),
+                    },
+                    highlights: Vec::new(),
+                };
+            }
+
+            match serde_json::to_string_pretty(&final_metadata_to_write) {
+                Ok(json_string) => {
+                    info!("[Backend Rename Image] Writing asset metadata to {}", new_asset_metadata_abs_path.display());
+                    if let Err(e) = fs::write(&new_asset_metadata_abs_path, json_string) {
+                        warn!("[Backend Rename Image] Failed to write asset metadata to {}: {}. Attempting full rollback.", new_asset_metadata_abs_path.display(), e);
+                        // Attempt to roll back: final image file, folder, annotation, initial image file
+                        if final_new_image_file_abs_path.exists() && final_new_image_file_abs_path != current_image_path_before_final_rename { // Revert final image rename
+                           let _ = fs::rename(&final_new_image_file_abs_path, &current_image_path_before_final_rename);
+                        }
+                        if folder_renamed { // Revert folder rename
+                            let _ = fs::rename(&new_image_folder_abs_path, &old_image_folder_abs_path);
+                             // After folder revert, annotation and image file are back in old_image_folder_abs_path
+                            // Revert annotation rename (e.g. from .../OldStem/.NewImage.annotations.json back to .../OldStem/.OldImage.annotations.json)
+                            if let Ok(old_annot_p_orig) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
+                               if let Ok(new_annot_p_in_old_folder_orig) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
+                                    if new_annot_p_in_old_folder_orig.exists() && old_annot_p_orig != new_annot_p_in_old_folder_orig {
+                                        let _ = fs::rename(&new_annot_p_in_old_folder_orig, &old_annot_p_orig);
+                                    }
+                               }
+                            }
+                        }
+                        // Revert initial image rename (e.g. from .../OldStem/NewImage.png back to .../OldStem/OldImage.png)
+                        if old_image_file_abs_path != new_image_file_path_in_old_folder {
+                             let path_to_revert_from = if folder_renamed { old_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap_or_default()) } else { new_image_file_path_in_old_folder.clone() };
+                             if path_to_revert_from.exists() {
+                                 let _ = fs::rename(path_to_revert_from, &old_image_file_abs_path);
+                             }
+                        }
+                        return Err(CommandError::from(format!("Failed to write asset metadata: {}", e)));
+                    }
+                }
+                Err(e) => {
+                     warn!("[Backend Rename Image] Failed to serialize asset metadata for {}: {}", new_asset_metadata_abs_path.display(), e);
+                    // No file system changes made yet for metadata, so no specific rollback for this, but it's an error.
+                    return Err(CommandError::from(format!("Failed to serialize asset metadata: {}",e)));
+                }
             }
 
             // --- XML Update ---
-            let final_new_image_file_abs_path = current_image_folder_path_for_xml_update.join(&new_image_filename_pathbuf);
             let new_relative_path_for_image_xml = final_new_image_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-
-            info!("[Backend Rename] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
+            info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut updated_xml = false;
 
@@ -1702,77 +2021,16 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 image_entry.relative_path = new_relative_path_for_image_xml;
                 project_data.image_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 updated_xml = true;
-                info!("[Backend Rename] XML image entry updated.");
+                info!("[Backend Rename Image] XML image entry updated.");
             } else {
-                warn!("[Backend Rename] Renamed image and/or folder, but could not find matching old relative path '{}' in XML.", item_relative_path);
+                 error!("[Backend Rename Image] CRITICAL: File system operations for image rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                 return Err(CommandError::from(format!("Failed to update XML as old image entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
 
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
-                info!("[Backend Rename] XML saved for image rename.");
+                info!("[Backend Rename Image] XML saved for image rename.");
             }
-
-            // Handle standard asset metadata for the image
-            let old_asset_metadata_path_result = get_image_asset_metadata_path(old_image_file_path);
-            let new_asset_metadata_path_result = get_image_asset_metadata_path(&final_new_image_file_abs_path);
-
-            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
-                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
-                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
-
-                    if old_asset_meta_path.exists() {
-                        info!("[Backend Rename] Attempting to read old image asset metadata: {}", old_asset_meta_path.display());
-                        match fs::read_to_string(&old_asset_meta_path) {
-                            Ok(json_content) => {
-                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
-                                    Ok(mut parsed_meta) => {
-                                        parsed_meta.metadata.file_name = new_image_filename_pathbuf.file_name().and_then(|s|s.to_str()).unwrap_or("").to_string();
-                                        parsed_meta.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
-                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
-                                        asset_metadata_to_write = Some(parsed_meta);
-                                        info!("[Backend Rename] Parsed and updated old image asset metadata.");
-                                    }
-                                    Err(e) => warn!("[Backend Rename] Failed to parse old image asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                                }
-                            }
-                            Err(e) => warn!("[Backend Rename] Failed to read old image asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                        }
-                        if let Err(e) = fs::remove_file(&old_asset_meta_path) {
-                            warn!("[Backend Rename] Failed to remove old image asset metadata {}: {}", old_asset_meta_path.display(), e);
-                        }
-                    } else {
-                        info!("[Backend Rename] Old image asset metadata {} not found. New one will be created.", old_asset_meta_path.display());
-                    }
-
-                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
-                        StandardAssetMetadata {
-                            metadata: FileMetadata {
-                                file_name: new_image_filename_pathbuf.file_name().and_then(|s|s.to_str()).unwrap_or("").to_string(),
-                                file_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
-                                last_modified: Utc::now().to_rfc3339(),
-                                title: "".to_string(),
-                                description: "".to_string(),
-                                summary: "".to_string(),
-                            },
-                            highlights: Vec::new(),
-                        }
-                    });
-
-                    match serde_json::to_string_pretty(&final_asset_metadata) {
-                        Ok(json_string) => {
-                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
-                                warn!("[Backend Rename] Failed to write image asset metadata to {}: {}", new_asset_meta_path.display(), e);
-                            } else {
-                                info!("[Backend Rename] Wrote image asset metadata to {}", new_asset_meta_path.display());
-                            }
-                        }
-                        Err(e) => warn!("[Backend Rename] Failed to serialize image asset metadata for {}: {}", new_asset_meta_path.display(), e),
-                    }
-                }
-                (Err(e), _) => warn!("[Backend Rename] Could not determine old image asset metadata path: {:?}", e),
-                (_, Err(e)) => warn!("[Backend Rename] Could not determine new image asset metadata path: {:?}", e),
-            }
-
         },
         _ => {
             error!("[Backend Rename] Renaming items of type '{}' is not supported directly: {}", item_type, item_path);

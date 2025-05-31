@@ -2,6 +2,7 @@
 import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { message } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event'; // Added for media_renamed event
 
 const HARVEY_FILES_DIR = "harvey_files";
 const MEDIA_DIR_NAME = 'Media';
@@ -434,3 +435,119 @@ export function hideUnsavedChangesPrompt() { console.log('[ProjectStore] Hiding 
 export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting })); } // isLoading also true during import
 export function showConversionPrompt(fileName, onConfirm, onCancel) { console.log(`[ProjectStore] Showing conversion prompt for: ${fileName}`); project.update(p => ({ ...p, showConfirmConversionModal: true, conversionFileName: fileName, onConversionConfirm: onConfirm, onConversionCancel: onCancel, })); }
 export function hideConversionPrompt() { console.log('[ProjectStore] Hiding conversion prompt.'); project.update(p => ({ ...p, showConfirmConversionModal: false, conversionFileName: '', onConversionConfirm: () => {}, onConversionCancel: () => {}, })); }
+
+// Listen for media rename events from the backend
+listen('media_renamed', (event) => {
+    console.log('[ProjectStore] Received media_renamed event:', event.payload);
+    if (!event.payload) return;
+
+    const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
+
+    project.update(p => {
+        let updatedState = { ...p };
+        let stateChanged = false;
+
+        // Update selectedMediaFile (for Transcriptions tab player)
+        if (p.selectedMediaFile && p.selectedMediaFile.media_xml_identifier === old_media_stem) {
+            const newFileName = new_absolute_path.split(/[\/]/).pop();
+            updatedState.selectedMediaFile = {
+                ...p.selectedMediaFile,
+                name: newFileName,
+                path: new_absolute_path,
+                relative_path: new_media_file_relative_path,
+                media_xml_identifier: new_media_stem,
+            };
+            updatedState.statusMessage = `Current media renamed to: ${newFileName}`;
+            stateChanged = true;
+            console.log('[ProjectStore] Updated selectedMediaFile due to rename.');
+        }
+
+        // Update selectedMediaNotePath (for Notes tab player)
+        if (p.selectedMediaNotePath) {
+            const currentNoteFileNameWithExt = p.selectedMediaNotePath.split(/[\/]/).pop();
+            const currentNoteStem = currentNoteFileNameWithExt.substring(0, currentNoteFileNameWithExt.lastIndexOf('.'));
+            const pathParts = p.selectedMediaNotePath.split(/[\/]/);
+            const parentFolderForNote = pathParts.length > 2 ? pathParts[pathParts.length - 3] : null; // e.g. {OldStem}/Media/OldStem.mp4 -> OldStem
+
+            if (currentNoteStem === old_media_stem && parentFolderForNote === old_media_stem) {
+                updatedState.selectedMediaNotePath = new_absolute_path; // The event payload gives the new media path directly
+                stateChanged = true;
+                console.log('[ProjectStore] Updated selectedMediaNotePath due to rename (stem and folder match).');
+            }
+        }
+
+        // Update the main 'files' array (file tree)
+        function updateFileEntriesRecursive(nodes, oldStem, newStem, newAbsMediaPath, newRelMediaPath, baseDir) {
+            if (!Array.isArray(nodes)) return { updatedNodes: nodes, changed: false };
+
+            let overallChanged = false;
+            const updatedNodes = nodes.map(node => {
+                let nodeChanged = false;
+                let updatedNode = { ...node };
+
+                if (updatedNode.media_xml_identifier === oldStem) {
+                    updatedNode.media_xml_identifier = newStem;
+                    nodeChanged = true;
+
+                    if (updatedNode.file_type === 'directory_media_stem') {
+                        updatedNode.name = newStem;
+                        // Path of the new stem folder, e.g., /app/project/.harvey_files/Media/NewStem
+                        const mediaFileParentDir = newAbsMediaPath.substring(0, newAbsMediaPath.lastIndexOf('/'));
+                        const newStemFolderPath = mediaFileParentDir.substring(0, mediaFileParentDir.lastIndexOf('/'));
+
+                        updatedNode.path = newStemFolderPath;
+                        if (baseDir && newStemFolderPath.startsWith(baseDir)) {
+                            updatedNode.relative_path = newStemFolderPath.substring(baseDir.length + 1).replace(/\\/g, '/');
+                        } else {
+                            updatedNode.relative_path = newStemFolderPath.replace(/\\/g, '/'); // Fallback if baseDir is not applicable
+                        }
+                        nodeChanged = true;
+                    } else if (updatedNode.file_type === MEDIA_SUBDIR || updatedNode.file_type === TRANSCRIPTS_SUBDIR || (updatedNode.is_directory && updatedNode.name === MEDIA_SUBDIR) || (updatedNode.is_directory && updatedNode.name === TRANSCRIPTS_SUBDIR)) {
+                        // These are the "media" and "transcripts" subfolders inside the stem folder
+                        const oldStemFolderPath = updatedNode.path.substring(0, updatedNode.path.lastIndexOf('/')); // .../OldStem
+                        const newStemFolderPath = oldStemFolderPath.replace(oldStem, newStem); // .../NewStem
+                        updatedNode.path = updatedNode.path.replace(oldStemFolderPath, newStemFolderPath);
+                        updatedNode.relative_path = updatedNode.relative_path.replace(oldStem, newStem); // Simpler replacement for relative path
+                        nodeChanged = true;
+                    } else if (updatedNode.file_type === 'media' && updatedNode.path.includes(`/${oldStem}/`)) {
+                        updatedNode.name = newAbsMediaPath.split(/[\/]/).pop();
+                        updatedNode.path = newAbsMediaPath;
+                        updatedNode.relative_path = newRelMediaPath;
+                        nodeChanged = true;
+                    } else if (updatedNode.file_type === 'transcript' && updatedNode.path.includes(`/${oldStem}/`)) {
+                        if (updatedNode.name.startsWith(oldStem)) {
+                            updatedNode.name = updatedNode.name.replace(oldStem, newStem);
+                        }
+                        updatedNode.path = updatedNode.path.replace(`/${oldStem}/`, `/${newStem}/`);
+                        updatedNode.relative_path = updatedNode.relative_path.replace(`/${oldStem}/`, `/${newStem}/`);
+                        nodeChanged = true;
+                    }
+                }
+
+                if (updatedNode.children && updatedNode.children.length > 0) {
+                    const result = updateFileEntriesRecursive(updatedNode.children, oldStem, newStem, newAbsMediaPath, newRelMediaPath, baseDir);
+                    if (result.changed) {
+                        updatedNode.children = result.updatedNodes;
+                        nodeChanged = true;
+                    }
+                }
+                if (nodeChanged) overallChanged = true;
+                return updatedNode;
+            });
+
+            if (overallChanged) {
+                updatedNodes.sort((a, b) => a.name.localeCompare(b.name));
+            }
+            return { updatedNodes, changed: overallChanged };
+        }
+
+        const filesUpdateResult = updateFileEntriesRecursive(updatedState.files, old_media_stem, new_media_stem, new_absolute_path, new_media_file_relative_path, p.baseDirectory);
+        if (filesUpdateResult.changed) {
+            updatedState.files = filesUpdateResult.updatedNodes;
+            stateChanged = true;
+            console.log('[ProjectStore] Updated main files tree due to media rename.');
+        }
+
+        return stateChanged ? updatedState : p;
+    });
+});

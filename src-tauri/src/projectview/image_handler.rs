@@ -20,22 +20,7 @@ const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp
 // const HARVEY_FILES_DIR: &str = ".harvey_files";
 // const IMAGES_DIR: &str = "Images";
 
-// Duplicated struct definitions (to be refactored to shared_types later)
-#[derive(Serialize, Deserialize, Debug)]
-struct FileMetadata {
-    file_name: String,
-    file_path: String,
-    last_modified: String,
-    title: String,
-    description: String,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct StandardAssetMetadata {
-    metadata: FileMetadata,
-    highlights: Vec<String>,
-}
+use super::shared_types::{FileMetadata, StandardAssetMetadata};
 
 // Helper to get a unique path in the Images directory
 // Removed get_unique_image_path function as it is no longer used
