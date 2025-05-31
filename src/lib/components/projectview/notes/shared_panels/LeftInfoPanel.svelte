@@ -40,8 +40,12 @@
     });
 
     async function loadMetadata(filePath) {
-        fullLoadedMetadataObject = null;
         currentFileMetadata = null;
+        fullLoadedMetadataObject = null;
+        // Also reset edit mode if a new file is being loaded, to prevent stale edit state
+        if (isEditing && filePath !== previousSelectedItemPath) {
+            isEditing = false;
+        }
         let metadataPath;
         try {
             console.log(`[LeftInfoPanel DEBUG] loadMetadata called with filePath: ${filePath}`);
@@ -103,6 +107,7 @@
 
     async function handleSaveMetadata() {
         console.log('[LeftInfoPanel] handleSaveMetadata called.');
+        let renameProcessed = false; // Initialize renameProcessed flag
         if (!currentFileMetadata || !currentFileMetadata.file_path || !fullLoadedMetadataObject) {
             console.error('[LeftInfoPanel] Save error: Missing critical metadata or file path info.');
             await message('Cannot save: Critical metadata information is missing. Please try reloading the file.', { title: 'Save Error', type: 'error' });
@@ -147,26 +152,25 @@
                     console.log(`[LeftInfoPanel] Calling renameProjectItem: path=${originalFilePath}, nameToSend=${nameToSendToService}, type=${currentItemType}`);
                     await renameProjectItem(originalFilePath, nameToSendToService, currentItemType);
 
-                    // If renameProjectItem is successful, it should trigger a project refresh.
-                    // This refresh will update selectedItemPathInStore, which in turn will trigger loadMetadata.
-                    // Therefore, we exit edit mode and let the reactive flow handle the new state.
-                    await message("File renamed. If you wish to edit metadata for the new name, please ensure it's selected and click edit again.", { title: 'Rename Successful' });
+                    // NEW LOGIC:
+                    console.log('[LeftInfoPanel] Rename successful via renameProjectItem. Waiting for store update and reactive reload.');
+                    await message("File rename initiated. The view will refresh with the new information.", { title: 'Rename Initiated' });
                     isEditing = false;
-                    return; // Exit handleSaveMetadata, further metadata save is not needed here for the old item.
+                    renameProcessed = true; // Set the flag
                 } catch (err) {
                     console.error(`[LeftInfoPanel] renameProjectItem failed:`, err);
                     await message(`Error renaming item: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
                     // Do not revert editableMetadata.file_name here, allow user to see and correct their input if desired or cancel.
-                    isEditing = true; // Stay in edit mode
-                    return;
+                    isEditing = true; // Stay in edit mode on error
+                    return; // Return on error
                 }
-            }
+            } // End of rename block
 
-            // If no rename occurred, or if rename logic is to be followed by immediate metadata save to new file (which we now avoid)
-            // The metadata save logic for non-rename case:
-            const metadataPathForSave = `${originalDir}${currentSep}.${originalFileNameWithoutExtension}.metadata.json`;
+            // Modify the subsequent metadata save block
+            if (!renameProcessed) { // Check the flag
+                const metadataPathForSave = `${originalDir}${currentSep}.${originalFileNameWithoutExtension}.metadata.json`;
 
-            let updatedFileMetadata = { ...currentFileMetadata }; // Start with currently loaded metadata for this path
+                let updatedFileMetadata = { ...currentFileMetadata }; // Start with currently loaded metadata for this path
             updatedFileMetadata.title = editableMetadata.title.trim();
             updatedFileMetadata.description = editableMetadata.description.trim();
             updatedFileMetadata.summary = editableMetadata.summary.trim();
@@ -186,7 +190,7 @@
 
             isEditing = false;
             await message('Metadata saved successfully!', { title: 'Success' });
-
+            } // End of if(!renameProcessed)
         } catch (err) {
             console.error('[LeftInfoPanel] Error saving metadata:', err);
             await message(`Error saving metadata: ${err.message || err}. Please check console for details.`, { title: 'Save Failed', type: 'error' });

@@ -551,3 +551,156 @@ listen('media_renamed', (event) => {
         return stateChanged ? updatedState : p;
     });
 });
+
+// Listen for item rename events from the backend
+listen('item_renamed', (event) => {
+    console.log('[ProjectStore] Received item_renamed event:', event.payload);
+    if (!event.payload) return;
+
+    const { old_path, new_path, new_name, item_type, project_xml_path, base_directory } = event.payload;
+
+    project.update(p => {
+        let updatedState = { ...p };
+        let stateChanged = false;
+
+        const normalized_old_path = old_path.replace(/\\/g, '/');
+        const normalized_new_path = new_path.replace(/\\/g, '/');
+
+        // Update Selected Path
+        if (item_type === 'doc' && p.selectedDocumentPath === normalized_old_path) {
+            updatedState.selectedDocumentPath = normalized_new_path;
+            stateChanged = true;
+            console.log('[ProjectStore item_renamed] Updated selectedDocumentPath.');
+        } else if (item_type === 'imported_transcript' && p.currentImportedTranscriptPath === normalized_old_path) {
+            updatedState.currentImportedTranscriptPath = normalized_new_path;
+            stateChanged = true;
+            console.log('[ProjectStore item_renamed] Updated currentImportedTranscriptPath.');
+        } else if (item_type === 'transcript' && p.currentTranscriptPath === normalized_old_path) {
+            updatedState.currentTranscriptPath = normalized_new_path;
+            stateChanged = true;
+            console.log('[ProjectStore item_renamed] Updated currentTranscriptPath.');
+        }
+        // TODO: Add checks for table and image if dedicated selected path variables are introduced.
+        // For now, if a table or image was selected via selectedDocumentPath, it will be handled by the 'doc' case
+        // if the item_type was misidentified or if they share the selection variable.
+        // However, the backend sends specific item_types, so this should be accurate.
+        // If a 'table' or 'image' type item was viewed using selectedDocumentPath, and that path matches, it should also update.
+        // This logic might need refinement if tables/images get their own distinct selected paths in the store.
+        else if ((item_type === 'table' || item_type === 'image') && p.selectedDocumentPath === normalized_old_path) {
+            updatedState.selectedDocumentPath = normalized_new_path; // Assuming they use selectedDocumentPath
+            stateChanged = true;
+            console.log(`[ProjectStore item_renamed] Updated selectedDocumentPath for ${item_type}.`);
+        }
+
+
+        // Update File Lists
+        let new_relative_path = '';
+        if (base_directory && normalized_new_path.startsWith(base_directory)) {
+            new_relative_path = normalized_new_path.substring(base_directory.length + 1).replace(/\\/g, '/');
+        } else {
+            new_relative_path = normalized_new_path.replace(/\\/g, '/'); // Fallback
+            console.warn('[ProjectStore item_renamed] new_path did not start with base_directory. Base:', base_directory, 'NewPath:', normalized_new_path);
+        }
+
+        if (item_type === 'doc') {
+            const docIndex = updatedState.documentFiles.findIndex(doc => doc.path === normalized_old_path || (p.baseDirectory + '/' + doc.relativePath).replace(/\\/g, '/') === normalized_old_path);
+            if (docIndex > -1) {
+                updatedState.documentFiles[docIndex].name = new_name;
+                updatedState.documentFiles[docIndex].path = normalized_new_path;
+                updatedState.documentFiles[docIndex].relativePath = new_relative_path;
+                updatedState.documentFiles.sort((a, b) => a.name.localeCompare(b.name));
+                stateChanged = true;
+                console.log('[ProjectStore item_renamed] Updated documentFiles entry.');
+            }
+        } else if (item_type === 'table') {
+            const tableIndex = updatedState.tableFiles.findIndex(table => table.path === normalized_old_path || (p.baseDirectory + '/' + table.relativePath).replace(/\\/g, '/') === normalized_old_path);
+            if (tableIndex > -1) {
+                updatedState.tableFiles[tableIndex].name = new_name;
+                updatedState.tableFiles[tableIndex].path = normalized_new_path;
+                updatedState.tableFiles[tableIndex].relativePath = new_relative_path;
+                updatedState.tableFiles.sort((a, b) => a.name.localeCompare(b.name));
+                stateChanged = true;
+                console.log('[ProjectStore item_renamed] Updated tableFiles entry.');
+            }
+        } else if (item_type === 'image') {
+            const imageIndex = updatedState.imageFiles.findIndex(img => img.path === normalized_old_path || (p.baseDirectory + '/' + img.relativePath).replace(/\\/g, '/') === normalized_old_path);
+            if (imageIndex > -1) {
+                updatedState.imageFiles[imageIndex].name = new_name;
+                updatedState.imageFiles[imageIndex].path = normalized_new_path;
+                updatedState.imageFiles[imageIndex].relativePath = new_relative_path;
+                updatedState.imageFiles.sort((a, b) => a.name.localeCompare(b.name));
+                stateChanged = true;
+                console.log('[ProjectStore item_renamed] Updated imageFiles entry.');
+            }
+        } else if (item_type === 'imported_transcript') {
+            const importedIndex = updatedState.importedTranscriptFiles.findIndex(it => it.path === normalized_old_path || (p.baseDirectory + '/' + it.relativePath).replace(/\\/g, '/') === normalized_old_path);
+            if (importedIndex > -1) {
+                updatedState.importedTranscriptFiles[importedIndex].name = new_name;
+                updatedState.importedTranscriptFiles[importedIndex].path = normalized_new_path;
+                updatedState.importedTranscriptFiles[importedIndex].relativePath = new_relative_path;
+                updatedState.importedTranscriptFiles.sort((a, b) => a.name.localeCompare(b.name));
+                stateChanged = true;
+                console.log('[ProjectStore item_renamed] Updated importedTranscriptFiles entry.');
+            }
+        } else if (item_type === 'transcript') {
+            // This is a media-associated transcript. Needs to update within the main `files` tree.
+            function updateTranscriptInTreeRecursive(nodes) {
+                if (!Array.isArray(nodes)) return { updatedNodes: nodes, changed: false };
+                let overallChanged = false;
+                const updatedNodes = nodes.map(node => {
+                    let nodeChanged = false;
+                    let updatedNode = { ...node };
+
+                    if (updatedNode.file_type === 'transcript' && updatedNode.path === normalized_old_path) {
+                        updatedNode.name = new_name;
+                        updatedNode.path = normalized_new_path;
+                        updatedNode.relative_path = new_relative_path;
+                        nodeChanged = true;
+                        console.log('[ProjectStore item_renamed] Updated transcript entry in main files tree.');
+                    }
+
+                    if (updatedNode.children && updatedNode.children.length > 0) {
+                        const result = updateTranscriptInTreeRecursive(updatedNode.children);
+                        if (result.changed) {
+                            updatedNode.children = result.updatedNodes;
+                            nodeChanged = true; // Propagate change upwards
+                        }
+                    }
+                    if (nodeChanged) overallChanged = true;
+                    return updatedNode;
+                });
+                 if (overallChanged && nodes.some(n => n.file_type === 'transcript')) { // Only sort if a transcript list was modified
+                    updatedNodes.sort((a, b) => {
+                        // Keep directory structure, sort transcripts by name
+                        if (a.is_directory && !b.is_directory) return -1;
+                        if (!a.is_directory && b.is_directory) return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+                }
+                return { updatedNodes, changed: overallChanged };
+            }
+
+            const transcriptTreeUpdateResult = updateTranscriptInTreeRecursive(updatedState.files);
+            if (transcriptTreeUpdateResult.changed) {
+                updatedState.files = transcriptTreeUpdateResult.updatedNodes;
+                stateChanged = true;
+            }
+
+            // Also update the `associated_transcripts` array on the parent media file entry
+             if (updatedState.selectedMediaFile && updatedState.selectedMediaFile.associated_transcripts) {
+                const assocTranscriptIndex = updatedState.selectedMediaFile.associated_transcripts.findIndex(
+                    t => (p.baseDirectory + '/' + t.relativePath).replace(/\\/g, '/') === normalized_old_path
+                );
+                if (assocTranscriptIndex > -1) {
+                    updatedState.selectedMediaFile.associated_transcripts[assocTranscriptIndex].name = new_name;
+                    updatedState.selectedMediaFile.associated_transcripts[assocTranscriptIndex].relativePath = new_relative_path;
+                    updatedState.selectedMediaFile.associated_transcripts.sort((a, b) => a.name.localeCompare(b.name));
+                    // No need to set stateChanged here again if already true, but good to log
+                    console.log('[ProjectStore item_renamed] Updated associated_transcripts on selectedMediaFile.');
+                }
+            }
+        }
+
+        return stateChanged ? updatedState : p;
+    });
+});
