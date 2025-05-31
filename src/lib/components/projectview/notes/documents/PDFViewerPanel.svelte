@@ -133,7 +133,7 @@ import { get } from 'svelte/store';
         return pv;
     }
 
-    async function ensureTextLayerReady(pageViewFromCaller, pageIndex, isEagerLoad = false) {
+    async function ensureTextLayerReady(pageViewFromCaller, pageIndex) { // Removed isEagerLoad
         let pv = pageViewFromCaller || pdfViewer?.getPageView(pageIndex);
 
         // Check 1: Is it already good?
@@ -142,39 +142,31 @@ import { get } from 'svelte/store';
         }
 
         // If PageView object itself doesn't exist, try to make it exist.
+        // Always operate in "non-eager" mode now.
         if (!pv) {
-            if (!isEagerLoad) { // Only scroll if not an eager load
-                try {
-                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
-                } catch (_) { /* ignore scroll errors if viewer is busy */ }
-                await new Promise(r => setTimeout(r, 350)); // Initial wait for PageView creation
-            }
-            pv = pdfViewer?.getPageView(pageIndex); // Attempt to get it, might still be null if eager loading an off-screen page
+            try {
+                pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+            } catch (_) { /* ignore scroll errors if viewer is busy */ }
+            await new Promise(r => setTimeout(r, 350)); // Initial wait for PageView creation
+
+            pv = pdfViewer?.getPageView(pageIndex);
             if (!pv) {
-                if (isEagerLoad) {
-                    // console.log(`[ensureTextLayerReady Eager] No PageView for page ${pageIndex + 1} without scrolling. Returning null.`);
-                    return null; // Expected for eager loaded off-screen pages
-                }
                 console.error(`[ensureTextLayerReady] Critical: No PageView object for page ${pageIndex + 1} after attempting scroll.`);
                 throw new Error(`No PageView object for page ${pageIndex + 1}`);
             }
-            // Re-check after PageView creation (or retrieval if no scroll)
+            // Re-check after PageView creation
             if (pv.textLayer?.textLayerDiv || pv.div?.querySelector('.textLayer')) {
                 return finalizePageView(pv, pageIndex);
             }
         }
         
         // Check 2: PageView exists, but textLayer not ready.
+        // Always operate in "non-eager" mode now.
         if (pv) {
-            if (!isEagerLoad) { // Only scroll and wait longer if not an eager load
-                try {
-                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
-                } catch (_) { /* ignore scroll errors */ }
-                await new Promise(r => setTimeout(r, 600)); // Wait a bit longer after scroll
-            } else {
-                // For eager load, just a very brief wait to see if it becomes available quickly
-                await new Promise(r => setTimeout(r, 50));
-            }
+            try {
+                pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
+            } catch (_) { /* ignore scroll errors */ }
+            await new Promise(r => setTimeout(r, 600)); // Wait a bit longer after scroll
 
             let freshPv = pdfViewer?.getPageView(pageIndex); 
             if (freshPv && (freshPv.textLayer?.textLayerDiv || freshPv.div?.querySelector('.textLayer'))) {
@@ -183,10 +175,10 @@ import { get } from 'svelte/store';
             pv = freshPv || pv; // Use freshPv if available
         }
 
-        // Check 3: Fallback to polling (less aggressive for eager load)
+        // Check 3: Fallback to polling (always "non-eager" mode)
         return new Promise((resolve, reject) => {
-            const MAX_WAIT_TEXTLAYER = isEagerLoad ? 500 : 30000; // Shorter timeout for eager load
-            const interval = isEagerLoad ? 100 : 250;
+            const MAX_WAIT_TEXTLAYER = 30000;
+            const interval = 250;
             let totalWait = 0;
             let checkIntervalId = null;
 
@@ -198,7 +190,8 @@ import { get } from 'svelte/store';
                 if (!pdfViewer) {
                     cleanupInterval();
                     console.warn(`[ensureTextLayerReady] pdfViewer became null. Aborting.`);
-                    return resolve(null); // Resolve with null if viewer disappears
+                    // Resolve with null instead of rejecting, to allow graceful handling if possible
+                    return resolve(null);
                 }
 
                 let currentPolledPv = pdfViewer.getPageView(pageIndex);
@@ -216,18 +209,9 @@ import { get } from 'svelte/store';
                     totalWait += interval;
                     if (totalWait >= MAX_WAIT_TEXTLAYER) {
                         cleanupInterval();
-                        if (isEagerLoad) {
-                            // console.log(`[ensureTextLayerReady Eager] Timeout for page ${pageIndex + 1}. Returning current PageView (may lack textLayer).`);
-                            resolve(currentPolledPv); // Return whatever PageView we have, even if textLayer isn't ready
-                        } else {
-                            console.error(`[ensureTextLayerReady Polling] Timeout waiting for textLayer div on page ${pageIndex + 1}.`);
-                            reject(new Error(`Timeout waiting for textLayer div on page ${pageIndex + 1} (polling)`));
-                        }
-                    } else if (!currentPolledPv && isEagerLoad) {
-                        cleanupInterval();
-                        // console.log(`[ensureTextLayerReady Eager] PageView for ${pageIndex + 1} disappeared. Resolving null.`);
-                        resolve(null); // PageView might not exist for eager loads if it's far off-screen
-                    } else if (!currentPolledPv && !isEagerLoad) {
+                        console.error(`[ensureTextLayerReady Polling] Timeout waiting for textLayer div on page ${pageIndex + 1}.`);
+                        reject(new Error(`Timeout waiting for textLayer div on page ${pageIndex + 1} (polling)`));
+                    } else if (!currentPolledPv) { // Check if pageView itself disappeared
                         cleanupInterval();
                         console.error(`[ensureTextLayerReady Polling] PageView for page ${pageIndex + 1} became null.`);
                         reject(new Error(`PageView for page ${pageIndex + 1} became null during polling`));
@@ -1217,31 +1201,24 @@ async function loadAnnotationsForPageRange(centerPageIndex) {
         return;
     }
 
-    const pageBuffer = 2; // Load 2 pages before and 2 pages after
-    const startPage = Math.max(0, centerPageIndex - pageBuffer);
-    const endPage = Math.min(numPages - 1, centerPageIndex + pageBuffer);
+    // console.log(`[loadAnnotationsForPageRange] Focusing on centerPageIndex: ${centerPageIndex + 1}.`);
 
-    // console.log(`[loadAnnotationsForPageRange] Center: ${centerPageIndex + 1}. Range to process: ${startPage + 1} to ${endPage + 1}.`);
-
-    for (let pageIdxToLoad = startPage; pageIdxToLoad <= endPage; pageIdxToLoad++) {
-        const isEager = pageIdxToLoad !== centerPageIndex;
-        if (!loadedPagesWithAnnotations.has(pageIdxToLoad)) {
-            // console.log(`[loadAnnotationsForPageRange] Processing page ${pageIdxToLoad + 1} (Eager: ${isEager}).`);
-            await renderAnnotationsForPage(pageIdxToLoad, isEager); // Pass isEager flag
-            // Add to set only if it wasn't an eager load that got deferred for text match,
-            // or if it successfully rendered quadPoints.
-            // renderAnnotationsForPage itself doesn't return success, so we rely on it attempting.
-            // A page is considered "processed for loading" even if some text matches are deferred for eager pages.
-            loadedPagesWithAnnotations.add(pageIdxToLoad);
-            await tick();
-        } else {
-            // console.log(`[loadAnnotationsForPageRange] Annotations for page ${pageIdxToLoad + 1} (Eager: ${isEager}) already in loadedPagesWithAnnotations set.`);
-        }
+    // This function now only processes the centerPageIndex.
+    // The isEagerLoad flag passed to renderAnnotationsForPage will always be false from here.
+    if (!loadedPagesWithAnnotations.has(centerPageIndex)) {
+        // console.log(`[loadAnnotationsForPageRange] Annotations for page ${centerPageIndex + 1} not yet loaded. Rendering.`);
+        await renderAnnotationsForPage(centerPageIndex); // Call without isEagerLoad
+        loadedPagesWithAnnotations.add(centerPageIndex);
+        await tick(); // Allow UI to update if this was the first load for this page.
+    } else {
+        // console.log(`[loadAnnotationsForPageRange] Annotations for page ${centerPageIndex + 1} already considered loaded.`);
+        // Re-rendering of already loaded pages, if necessary, is handled by calls to applyHighlightsForPage
+        // in pagechanging or textlayerrendered event handlers.
     }
 }
 
 // Renders annotations for a single given page index (0-based)
-async function renderAnnotationsForPage(pageIndex, isEagerLoad = false) {
+async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
     if (!initialHighlights?.length || !pdfViewer || !pdfDoc) {
         // console.log(`[renderAnnotationsForPage] Pre-conditions not met for page ${pageIndex + 1}`);
         return;
@@ -1253,35 +1230,30 @@ async function renderAnnotationsForPage(pageIndex, isEagerLoad = false) {
         return;
     }
 
-    // console.debug(`[renderAnnotationsForPage] Page ${pageIndex + 1} (Eager: ${isEagerLoad}). Rendering ${pageHighlights.length} highlights.`);
+    // console.debug(`[renderAnnotationsForPage] Page ${pageIndex + 1}. Rendering ${pageHighlights.length} highlights.`);
 
-    let pageView = pdfViewer.getPageView(pageIndex); // Try to get existing PageView first
+    let pageView = pdfViewer.getPageView(pageIndex);
     try {
-        // Pass isEagerLoad to ensureTextLayerReady
-        pageView = await ensureTextLayerReady(pageView, pageIndex, isEagerLoad);
+        pageView = await ensureTextLayerReady(pageView, pageIndex); // Call without isEagerLoad
     } catch(e) {
-        console.warn(`[renderAnnotationsForPage] Failed to ensure page ${pageIndex + 1} ready (Eager: ${isEagerLoad}). Error: ${e.message}`);
-        // If pageView couldn't be obtained/prepared, especially for non-eager loads, we might not be able to proceed.
+        console.warn(`[renderAnnotationsForPage] Failed to ensure page ${pageIndex + 1} ready. Error: ${e.message}`);
         if (!pageView) return;
     }
 
-    // If ensureTextLayerReady returns null (e.g. for an eager-loaded page that's not available without scroll)
     if (!pageView) {
-        // console.log(`[renderAnnotationsForPage] PageView for ${pageIndex + 1} not available (likely eager load). Cannot render highlights.`);
+        // console.log(`[renderAnnotationsForPage] PageView for ${pageIndex + 1} not available. Cannot render highlights.`);
         return;
     }
 
-    const layerDiv = pageView.textLayer?.textLayerDiv; // textLayer might be missing if not ready
-    const pdfPage = pageView.pdfPage; // pdfPage might be missing
+    const layerDiv = pageView.textLayer?.textLayerDiv;
+    const pdfPage = pageView.pdfPage;
 
     if (!pageView.div) {
-        console.warn(`[renderAnnotationsForPage] No pageView.div for page ${pageIndex + 1} (Eager: ${isEagerLoad}). Cannot apply highlights.`);
+        console.warn(`[renderAnnotationsForPage] No pageView.div for page ${pageIndex + 1}. Cannot apply highlights.`);
         return;
     }
-    // For text-matching fallbacks, pdfPage is essential.
-    // For quadPoints, only pageView.div (for overlay container) is strictly needed.
     if (!pdfPage && pageHighlights.some(hl => !hl.quadPoints && hl.text)) {
-         console.warn(`[renderAnnotationsForPage] No pdfPage for page ${pageIndex + 1} (Eager: ${isEagerLoad}), text-based fallbacks will fail.`);
+         console.warn(`[renderAnnotationsForPage] No pdfPage for page ${pageIndex + 1}, text-based fallbacks will fail.`);
     }
 
 
@@ -1291,24 +1263,22 @@ async function renderAnnotationsForPage(pageIndex, isEagerLoad = false) {
         }
 
         if (hl.quadPoints && hl.quadPoints.length > 0) {
-            // console.debug(`[renderAnnotationsForPage] ID ${hl.id} on page ${pageIndex + 1} (Eager: ${isEagerLoad}) using existing quadPoints.`);
+            // console.debug(`[renderAnnotationsForPage] ID ${hl.id} on page ${pageIndex + 1} using existing quadPoints.`);
             renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
         } else if (hl.text && annotationMatcherWorker) {
             // Text match fallback
-            if (!layerDiv || !pdfPage) { // Check if text layer and pdfPage are actually ready
-                if (isEagerLoad) {
-                    // console.log(`[renderAnnotationsForPage Eager] Text layer for page ${pageIndex + 1} not ready. Deferring text-match for ID ${hl.id}.`);
-                } else {
-                    console.warn(`[renderAnnotationsForPage] Text layer/pdfPage for page ${pageIndex + 1} not ready despite not being eager load. Cannot text-match ID ${hl.id}. PV State: ${pageView?.textLayer?.renderingDone}`);
-                }
-                continue; // Skip this highlight if text layer isn't ready for text matching
+            // Now, ensureTextLayerReady (always in non-eager mode) should have prepared the text layer for an active page.
+            // If layerDiv or pdfPage is still not available here, it's a genuine problem for an active page.
+            if (!layerDiv || !pdfPage) {
+                console.warn(`[renderAnnotationsForPage] Text layer/pdfPage for page ${pageIndex + 1} not ready. Cannot text-match ID ${hl.id}. PV State: ${pageView?.textLayer?.renderingDone}`);
+                continue; // Skip this highlight if text layer isn't ready
             }
 
             const workerTaskKey = `${pageIndex}-${hl.id}`;
             if (pendingWorkerTasks.has(workerTaskKey)) {
                 continue;
             }
-            // console.warn(`[renderAnnotationsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1} (Eager: ${isEagerLoad}). Attempting text match via Web Worker.`);
+            // console.warn(`[renderAnnotationsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match via Web Worker.`);
             pendingWorkerTasks.add(workerTaskKey);
 
             try {
@@ -1323,14 +1293,14 @@ async function renderAnnotationsForPage(pageIndex, isEagerLoad = false) {
                     pageTextContentItems: textContent.items
                 });
             } catch (e) {
-                console.error(`[renderAnnotationsForPage] Error getting textContent or posting to worker for ${hl.id} (Eager: ${isEagerLoad}):`, e);
+                console.error(`[renderAnnotationsForPage] Error getting textContent or posting to worker for ${hl.id}:`, e);
                 pendingWorkerTasks.delete(workerTaskKey);
             }
         } else if (!hl.quadPoints && !hl.text) {
-            // console.warn(`[renderAnnotationsForPage] Skipping highlight ID ${hl.id} on page ${pageIndex + 1} (Eager: ${isEagerLoad}): No quadPoints and no text.`);
+            // console.warn(`[renderAnnotationsForPage] Skipping highlight ID ${hl.id} on page ${pageIndex + 1}: No quadPoints and no text.`);
         } else if (hl.text && (!layerDiv || !pdfPage)) {
-            // This case is now handled by the check before attempting worker call.
-            // console.warn(`[renderAnnotationsForPage] Cannot attempt text match for ${hl.id} on page ${pageIndex + 1} (Eager: ${isEagerLoad}): textLayerDiv or pdfPage not available. PV State: ${pageView?.textLayer?.renderingDone}`);
+            // This case is now largely covered by the check before attempting worker call.
+            // console.warn(`[renderAnnotationsForPage] Cannot attempt text match for ${hl.id} on page ${pageIndex + 1}: textLayerDiv or pdfPage not available. PV State: ${pageView?.textLayer?.renderingDone}`);
         }
     }
 }
