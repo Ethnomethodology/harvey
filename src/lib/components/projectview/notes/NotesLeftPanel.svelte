@@ -6,11 +6,10 @@
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
-	import { readTextFile, writeFile, renameFile } from '@tauri-apps/api/fs';
 	import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { convertFileSrc } from '@tauri-apps/api/core'; 
+    import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
     const dispatch = createEventDispatcher();
 
@@ -463,8 +462,11 @@
 
             console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
 
-            const fileContents = await readTextFile(metadataPath);
-            const parsed = JSON.parse(fileContents);
+            const fileContents = await invoke('read_text_file', { path: metadataPath });
+            // Ensure fileContents is actually a string if invoke returns an object like { contents: "..." }
+            // For this subtask, assuming invoke('read_text_file') returns string directly or JSON.parse handles it.
+            const parsed = JSON.parse(typeof fileContents === 'string' ? fileContents : fileContents.contents);
+
 
             if (parsed && parsed.metadata) {
                 fullLoadedMetadataObject = parsed;
@@ -474,10 +476,15 @@
                 console.warn('[NotesLeftPanel] Metadata file does not contain a "metadata" property or is empty:', metadataPath);
             }
         } catch (error) {
-            if (error.message && error.message.includes('os error 2')) { // "os error 2" usually means file not found
-                 console.log(`[NotesLeftPanel] Metadata file not found for ${filePath}. This is normal if no metadata has been saved yet.`);
+            // Tauri 2.0 invoke errors are typically objects with a message string.
+            // The specific string "os error 2" might change or be wrapped.
+            // A more general check for "No such file or directory" or if the error is a specific type might be better.
+            // For now, we'll keep the spirit of the original check but make it more robust to error structure.
+            let errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+            if (errorMessage.includes('os error 2') || errorMessage.toLowerCase().includes('no such file or directory')) {
+                 console.log(`[NotesLeftPanel] Metadata file not found for ${filePath} (via invoke). This is normal if no metadata has been saved yet. Error: ${errorMessage}`);
             } else {
-                console.error('[NotesLeftPanel] Error loading or parsing metadata:', error);
+                console.error('[NotesLeftPanel] Error loading or parsing metadata (via invoke):', error);
             }
         }
         if (!currentFileMetadata) isEditing = false; // Turn off editing if metadata load failed
@@ -536,9 +543,9 @@
                     const newMetadataPath = `${originalDir}${sep}.${newFileNameWithExtension}.metadata.json`;
                     try {
                         console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
-                        await renameFile(originalFilePath, newFilePath);
+                        await invoke('rename_file', { oldPath: originalFilePath, newPath: newFilePath });
                         console.log(`[NotesLeftPanel] Renaming metadata file from ${originalMetadataPath} to ${newMetadataPath}`);
-                        await renameFile(originalMetadataPath, newMetadataPath);
+                        await invoke('rename_file', { oldPath: originalMetadataPath, newPath: newMetadataPath });
 
                         wasRenamed = true;
                         finalFilePath = newFilePath;
@@ -583,7 +590,7 @@
             objectToWrite.version = objectToWrite.version || "1.0"; // Ensure version if missing
             objectToWrite.last_modified_harvey = new Date().toISOString(); // Update overall object mod time
 
-            await writeFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
+            await invoke('write_text_file', { path: finalMetadataPath, contents: JSON.stringify(objectToWrite, null, 2) });
 
             // Update current state after successful save
             currentFileMetadata = { ...updatedFileMetadata }; // Make sure it's a new object for reactivity if needed elsewhere
