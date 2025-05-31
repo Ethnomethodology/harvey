@@ -6,8 +6,6 @@
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
-	import { readTextFile, writeTextFile, rename } from '@tauri-apps/plugin-fs';
-	import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { convertFileSrc } from '@tauri-apps/api/core';
@@ -17,15 +15,11 @@
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
 
-    let currentFileMetadata = null; // Holds only the 'metadata' part of the JSON
-    let fullLoadedMetadataObject = null; // Holds the entire parsed JSON object
-    let isEditing = false;
-    let editableMetadata = {
-        file_name: '',
-        title: '',
-        description: '',
-        summary: ''
-    };
+    // Metadata related variables removed
+    // let currentFileMetadata = null;
+    // let fullLoadedMetadataObject = null;
+    // let isEditing = false;
+    // let editableMetadata = { ... };
 
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
@@ -77,6 +71,10 @@
 
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_NOTES_PANEL_STATE = 'harveyNotesPanelCategoryState';
+
+    // SVG Icon constants for metadata edit/cancel removed
+    // const EDIT_ICON_SVG = ...
+    // const CANCEL_ICON_SVG = ...
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_NOTES_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[NotesLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
     function toggleCategory(categoryType) { if (categoryOpenState.hasOwnProperty(categoryType)) { categoryOpenState[categoryType] = !categoryOpenState[categoryType]; categoryOpenState = categoryOpenState; } else { console.warn(`[NotesLeftPanel] Toggle unknown category: ${categoryType}`); } }
@@ -439,201 +437,9 @@
 
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
-    // Reactive statement to load metadata when selectedItemPathInStore changes
-    $: {
-        if (selectedItemPathInStore) {
-            // When selected item changes, exit editing mode.
-            if (isEditing) isEditing = false;
-            loadMetadata(selectedItemPathInStore);
-        } else {
-            currentFileMetadata = null;
-            fullLoadedMetadataObject = null;
-            isEditing = false; // Ensure editing is off if no file selected
-        }
-    }
-
-    async function loadMetadata(filePath) {
-        fullLoadedMetadataObject = null; // Reset before loading
-        currentFileMetadata = null; // Reset before loading
-        let metadataPath; // Declare here to be accessible in catch
-        try {
-            console.log(`[NotesLeftPanel DEBUG] loadMetadata called with filePath: ${filePath}`);
-            const dirName = await dirname(filePath);
-            console.log(`[NotesLeftPanel DEBUG] dirname resolved to: ${dirName}`);
-            const baseName = await basename(filePath); // e.g., "Test.png"
-            console.log(`[NotesLeftPanel DEBUG] basename resolved to: ${baseName}`);
-            const originalExtension = await extname(baseName); // e.g., "png" (no dot)
-            console.log(`[NotesLeftPanel DEBUG] originalExtension resolved to: ${originalExtension}`);
-            let fileNameWithoutExtension;
-            if (originalExtension.length > 0) {
-                // Remove the extension and the dot before it
-                fileNameWithoutExtension = baseName.substring(0, baseName.length - originalExtension.length - 1);
-            } else {
-                // No extension, use baseName as is
-                fileNameWithoutExtension = baseName;
-            }
-            console.log(`[NotesLeftPanel DEBUG] fileNameWithoutExtension: ${fileNameWithoutExtension}`);
-
-            const currentSep = sep();
-            console.log(`[NotesLeftPanel DEBUG] path.sep resolved to: ${currentSep}`);
-
-            const metadataFileName = `.${fileNameWithoutExtension}.metadata.json`; // e.g., ".Test.metadata.json"
-            console.log(`[NotesLeftPanel DEBUG] constructed metadataFileName: ${metadataFileName}`);
-
-            metadataPath = `${dirName}${currentSep}${metadataFileName}`; // Ensure metadataPath is declared to be accessible in catch
-
-            console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
-
-            const fileContents = await readTextFile(metadataPath);
-            const parsed = JSON.parse(fileContents);
-
-
-            if (parsed && parsed.metadata) {
-                fullLoadedMetadataObject = parsed;
-                currentFileMetadata = fullLoadedMetadataObject.metadata;
-                console.log('[NotesLeftPanel] Full metadata object loaded. Metadata part:', currentFileMetadata);
-            } else {
-                console.warn('[NotesLeftPanel] Metadata file does not contain a "metadata" property or is empty:', metadataPath);
-            }
-        } catch (error) {
-            let errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
-            if (errorMessage.includes('os error 2') || errorMessage.toLowerCase().includes('no such file or directory')) {
-                 console.log(`[NotesLeftPanel] Metadata file not found for ${filePath} at actual path: ${metadataPath}. This is normal if no metadata has been saved yet. Error: ${errorMessage}`);
-            } else {
-                console.error(`[NotesLeftPanel] Error loading or parsing metadata for ${filePath} at actual path: ${metadataPath}. Error:`, error);
-            }
-        }
-        if (!currentFileMetadata) isEditing = false; // Turn off editing if metadata load failed
-    }
-
-    // Populate editableMetadata when entering edit mode
-    $: if (isEditing && currentFileMetadata) {
-        editableMetadata.file_name = currentFileMetadata.file_name || '';
-        editableMetadata.title = currentFileMetadata.title || '';
-        editableMetadata.description = currentFileMetadata.description || '';
-        editableMetadata.summary = currentFileMetadata.summary || '';
-    } else if (!isEditing) {
-        // Optional: Clear or reset editableMetadata when not editing, though it's repopulated on edit start
-        editableMetadata = { file_name: '', title: '', description: '', summary: '' };
-    }
-
-    function toggleEditMode() {
-        isEditing = !isEditing;
-    }
-
-    async function handleSaveMetadata() {
-        if (!currentFileMetadata || !currentFileMetadata.file_path || !fullLoadedMetadataObject) {
-            console.error('[NotesLeftPanel] Save error: Missing critical metadata or file path info.');
-            await message('Cannot save: Critical metadata information is missing. Please try reloading the file.', { title: 'Save Error', type: 'error' });
-            return;
-        }
-
-        try {
-            const originalFilePath = currentFileMetadata.file_path;
-            const originalFileNameWithExtension = currentFileMetadata.file_name;
-            const originalFileExtension = await extname(originalFileNameWithExtension); // e.g., "png"
-
-            let originalFileNameWithoutExtension;
-            if (originalFileExtension.length > 0) {
-                originalFileNameWithoutExtension = originalFileNameWithExtension.substring(0, originalFileNameWithExtension.length - originalFileExtension.length - 1);
-            } else {
-                originalFileNameWithoutExtension = originalFileNameWithExtension;
-            }
-
-            const editedFileNameWithoutExtension = editableMetadata.file_name.trim();
-            // Construct new full filename carefully based on whether an extension exists
-            const newFileNameWithExtension = originalFileExtension.length > 0
-                ? editedFileNameWithoutExtension + "." + originalFileExtension
-                : editedFileNameWithoutExtension;
-
-            const originalDir = await dirname(originalFilePath);
-            const originalMetadataPath = `${originalDir}${sep()}.${originalFileNameWithoutExtension}.metadata.json`; // Corrected
-
-            let wasRenamed = false;
-            let finalFilePath = originalFilePath;
-            let finalMetadataPath = originalMetadataPath;
-
-            if (editedFileNameWithoutExtension !== originalFileNameWithoutExtension) {
-                if (!editedFileNameWithoutExtension) {
-                    await message('File name cannot be empty.', { title: 'Invalid File Name', type: 'error' });
-                    return; // Keep editing mode
-                }
-                const userConfirmedRename = await confirm(
-                    `The file name has changed.\nOld: '${originalFileNameWithoutExtension}'\nNew: '${editedFileNameWithoutExtension}'\n\nDo you want to rename the actual file and its metadata file?`,
-                    { title: 'Confirm File Rename', okLabel: 'Rename', cancelLabel: 'Cancel' }
-                );
-
-                if (userConfirmedRename) {
-                    const newFilePath = `${originalDir}${sep()}${newFileNameWithExtension}`;
-                    // editedFileNameWithoutExtension is already available
-                    const newMetadataPath = `${originalDir}${sep()}.${editedFileNameWithoutExtension}.metadata.json`; // Corrected
-                    try {
-                        console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
-                        await rename(originalFilePath, newFilePath);
-                        console.log(`[NotesLeftPanel] Renaming metadata file from ${originalMetadataPath} to ${newMetadataPath}`);
-                        await rename(originalMetadataPath, newMetadataPath);
-
-                        wasRenamed = true;
-                        finalFilePath = newFilePath;
-                        finalMetadataPath = newMetadataPath;
-
-                        console.log('[NotesLeftPanel] File and metadata renamed successfully.');
-                        // projectService.renameItem would be better here to update all project XMLs etc.
-                        // For now, direct store update for selected path:
-                         if ($project.selectedDocumentPath === originalFilePath) project.update(p => ({...p, selectedDocumentPath: finalFilePath}));
-                         if ($project.currentImportedTranscriptPath === originalFilePath) project.update(p => ({...p, currentImportedTranscriptPath: finalFilePath}));
-                         if ($project.selectedMediaNotePath === originalFilePath) project.update(p => ({...p, selectedMediaNotePath: finalFilePath}));
-
-                        // dispatch('projectfileschanged'); // Ideal scenario to trigger full refresh if paths changed globally
-
-                    } catch (err) {
-                        console.error(`[NotesLeftPanel] Error renaming file/metadata:`, err);
-                        await message(`Error renaming file: ${err.message || err}. Other changes have not been saved.`, { title: 'Rename Failed', type: 'error' });
-                        return; // Keep editing mode
-                    }
-                } else {
-                    // User cancelled rename, revert filename in form and abort save.
-                    editableMetadata.file_name = originalFileNameWithoutExtension;
-                    await message('Rename cancelled. Other changes were not saved.', { title: 'Rename Cancelled', type: 'info' });
-                    isEditing = false;
-                    return;
-                }
-            }
-
-            let updatedFileMetadata = { ...currentFileMetadata };
-            updatedFileMetadata.title = editableMetadata.title.trim();
-            updatedFileMetadata.description = editableMetadata.description.trim();
-            updatedFileMetadata.summary = editableMetadata.summary.trim();
-            updatedFileMetadata.last_modified = new Date().toISOString();
-
-            if (wasRenamed) {
-                updatedFileMetadata.file_name = newFileNameWithExtension;
-                updatedFileMetadata.file_path = finalFilePath;
-            }
-
-            let objectToWrite = { ...fullLoadedMetadataObject };
-            objectToWrite.metadata = updatedFileMetadata;
-            objectToWrite.version = objectToWrite.version || "1.0"; // Ensure version if missing
-            objectToWrite.last_modified_harvey = new Date().toISOString(); // Update overall object mod time
-
-            await writeTextFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
-
-            // Update current state after successful save
-            currentFileMetadata = { ...updatedFileMetadata }; // Make sure it's a new object for reactivity if needed elsewhere
-            fullLoadedMetadataObject = objectToWrite; // Keep the full object in sync
-
-            isEditing = false;
-            await message('Metadata saved successfully!', { title: 'Success' });
-
-        } catch (err) {
-            console.error('[NotesLeftPanel] Error saving metadata:', err);
-            await message(`Error saving metadata: ${err.message || err}. Please check console for details.`, { title: 'Save Failed', type: 'error' });
-            // Do not exit editing mode if save fails
-        }
-    }
-
-    const EDIT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
-    const CANCEL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>`;
+    // Metadata related functions (loadMetadata, toggleEditMode, handleSaveMetadata) and reactive blocks removed.
+    // selectedItemPathInStore is kept for now, assuming it might be used for other UI elements like selection highlighting.
+    $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
 </script>
 
@@ -729,81 +535,7 @@
         {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
 	</div>
 
-    <!-- Metadata Display Section -->
-    <div class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600 overflow-y-auto text-xs relative">
-        {#if currentFileMetadata}
-            <button
-                on:click={toggleEditMode}
-                class="absolute top-2 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
-            >
-                {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
-            </button>
-
-            <div class="p-1 space-y-2">
-                <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2">File Metadata</h3>
-
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">File Name:</span>
-                    {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" />
-                    {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.file_name || 'N/A'}</span>
-                    {/if}
-                </div>
-
-                <div>
-                    <span class="font-medium text-gray-600 dark:text-gray-400">File Path:</span>
-                    <span class="ml-1 text-gray-800 dark:text-gray-200 break-all">{currentFileMetadata.file_path || 'N/A'}</span>
-                </div>
-
-                <div>
-                    <span class="font-medium text-gray-600 dark:text-gray-400">Last Modified:</span>
-                    <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
-                </div>
-
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Title:</span>
-                    {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" />
-                    {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.title || 'N/A'}</span>
-                    {/if}
-                </div>
-
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Description:</span>
-                    {#if isEditing}
-                        <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
-                    {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentFileMetadata.description || 'N/A'}</span>
-                    {/if}
-                </div>
-
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Summary:</span>
-                    {#if isEditing}
-                        <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
-                    {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentFileMetadata.summary || 'N/A'}</span>
-                    {/if}
-                </div>
-
-                {#if isEditing}
-                    <div class="mt-3 flex justify-end">
-                        <button
-                            on:click={handleSaveMetadata}
-                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                        >
-                            Save
-                        </button>
-                    </div>
-                {/if}
-            </div>
-        {:else}
-            <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">No metadata loaded or file not selected.</p>
-        {/if}
-    </div>
+    <!-- Metadata Display Section Removed -->
 
 	{#if contextMenuVisible && contextMenuItem}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
