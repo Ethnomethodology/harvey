@@ -12,6 +12,7 @@ use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for de
 use chrono::Utc;
 use serde_json;
 use serde::{Serialize, Deserialize};
+use tauri::Manager; // Added for app_handle.emit
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FileMetadata {
@@ -27,6 +28,14 @@ struct FileMetadata {
 struct StandardAssetMetadata {
     metadata: FileMetadata,
     highlights: Vec<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct MediaRenamedPayload {
+    old_media_stem: String,
+    new_media_stem: String,
+    new_media_file_relative_path: String,
+    new_absolute_path: String,
 }
 
 // Helper function to get annotation metadata path for an image (from existing code)
@@ -769,7 +778,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
 
 #[tauri::command]
-pub async fn rename_project_item( item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
+pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
     info!("[Backend Rename] Request: Item='{}', NewNameParam='{}'", item_path, new_name);
     let item_path_buf = PathBuf::from(&item_path);
     let xml_path_buf = PathBuf::from(&project_xml_path);
@@ -983,6 +992,18 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 project_data.media_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved.");
+
+                // Emit the media_renamed event
+                let payload = MediaRenamedPayload {
+                    old_media_stem: old_stem.clone(),
+                    new_media_stem: new_stem.clone(),
+                    new_media_file_relative_path: primary_media_new_relative_path.clone(),
+                    new_absolute_path: new_media_path.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("media_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit media_renamed event for new stem {}: {}", new_stem, e);
+                }
+
             } else {
                 error!("[Backend Rename] CRITICAL: Failed find XML entry for '{}' after file operations. File system may be inconsistent.", old_stem);
                 return Err(CommandError::from(format!("XML entry for '{}' not found after successful file renames. Project state potentially inconsistent.", old_stem)));
