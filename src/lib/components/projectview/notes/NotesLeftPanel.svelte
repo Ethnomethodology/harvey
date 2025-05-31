@@ -434,7 +434,7 @@
       document.addEventListener('click', listener);
       return () => document.removeEventListener('click', listener);
     });
-
+  
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
 </script>
