@@ -295,7 +295,7 @@
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs" placeholder="Enter name without extension"/>
+                        <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" placeholder="Enter name without extension"/>
                         {#if currentFileMetadata.file_name.includes('.')}
                             <span class="mt-1 text-gray-500 dark:text-gray-400 text-xs block">
                                 Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
@@ -322,7 +322,7 @@
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Title:</label>
                     {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs" />
+                        <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" />
                     {:else}
                         <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.title || ''}</span>
                     {/if}
@@ -332,7 +332,7 @@
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Description:</label>
                     {#if isEditing}
-                        <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs"></textarea>
+                        <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"></textarea>
                     {:else}
                         <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || ''}</span>
                     {/if}
@@ -342,7 +342,7 @@
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Summary:</label>
                     {#if isEditing}
-                        <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs"></textarea>
+                        <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"></textarea>
                     {:else}
                         <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
                     {/if}
