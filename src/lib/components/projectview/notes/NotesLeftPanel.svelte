@@ -460,13 +460,20 @@
             console.log(`[NotesLeftPanel DEBUG] loadMetadata called with filePath: ${filePath}`);
             const dirName = await dirname(filePath);
             console.log(`[NotesLeftPanel DEBUG] dirname resolved to: ${dirName}`);
-            const baseName = await basename(filePath);
+            const baseName = await basename(filePath); // e.g., "Test.png"
             console.log(`[NotesLeftPanel DEBUG] basename resolved to: ${baseName}`);
-            const currentSep = sep(); // Call sep() to get the separator string
+            const originalExtension = await extname(baseName); // e.g., ".png"
+            console.log(`[NotesLeftPanel DEBUG] originalExtension resolved to: ${originalExtension}`);
+            const fileNameWithoutExtension = baseName.substring(0, baseName.length - originalExtension.length); // e.g., "Test"
+            console.log(`[NotesLeftPanel DEBUG] fileNameWithoutExtension: ${fileNameWithoutExtension}`);
+
+            const currentSep = sep();
             console.log(`[NotesLeftPanel DEBUG] path.sep resolved to: ${currentSep}`);
-            const metadataFileName = `.${baseName}.metadata.json`;
+
+            const metadataFileName = `.${fileNameWithoutExtension}.metadata.json`; // Corrected: e.g., ".Test.metadata.json"
             console.log(`[NotesLeftPanel DEBUG] constructed metadataFileName: ${metadataFileName}`);
-            metadataPath = `${dirName}${currentSep}${metadataFileName}`;
+
+            metadataPath = `${dirName}${currentSep}${metadataFileName}`; // Ensure metadataPath is declared to be accessible in catch
 
             console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
 
@@ -524,7 +531,8 @@
             const newFileNameWithExtension = editedFileNameWithoutExtension + originalFileExtension;
 
             const originalDir = await dirname(originalFilePath);
-            const originalMetadataPath = `${originalDir}${sep()}.${originalFileNameWithExtension}.metadata.json`;
+            // originalFileNameWithoutExtension is already calculated
+            const originalMetadataPath = `${originalDir}${sep()}.${originalFileNameWithoutExtension}.metadata.json`; // Corrected
 
             let wasRenamed = false;
             let finalFilePath = originalFilePath;
@@ -542,7 +550,8 @@
 
                 if (userConfirmedRename) {
                     const newFilePath = `${originalDir}${sep()}${newFileNameWithExtension}`;
-                    const newMetadataPath = `${originalDir}${sep()}.${newFileNameWithExtension}.metadata.json`;
+                    // editedFileNameWithoutExtension is already available
+                    const newMetadataPath = `${originalDir}${sep()}.${editedFileNameWithoutExtension}.metadata.json`; // Corrected
                     try {
                         console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
                         await rename(originalFilePath, newFilePath);
