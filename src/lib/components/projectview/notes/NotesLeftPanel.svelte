@@ -455,11 +455,18 @@
     async function loadMetadata(filePath) {
         fullLoadedMetadataObject = null; // Reset before loading
         currentFileMetadata = null; // Reset before loading
+        let metadataPath; // Declare here to be accessible in catch
         try {
+            console.log(`[NotesLeftPanel DEBUG] loadMetadata called with filePath: ${filePath}`);
             const dirName = await dirname(filePath);
+            console.log(`[NotesLeftPanel DEBUG] dirname resolved to: ${dirName}`);
             const baseName = await basename(filePath);
+            console.log(`[NotesLeftPanel DEBUG] basename resolved to: ${baseName}`);
+            const currentSep = sep(); // Call sep() to get the separator string
+            console.log(`[NotesLeftPanel DEBUG] path.sep resolved to: ${currentSep}`);
             const metadataFileName = `.${baseName}.metadata.json`;
-            const metadataPath = `${dirName}${sep()}${metadataFileName}`;
+            console.log(`[NotesLeftPanel DEBUG] constructed metadataFileName: ${metadataFileName}`);
+            metadataPath = `${dirName}${currentSep}${metadataFileName}`;
 
             console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
 
@@ -475,10 +482,11 @@
                 console.warn('[NotesLeftPanel] Metadata file does not contain a "metadata" property or is empty:', metadataPath);
             }
         } catch (error) {
-            if (error.message && error.message.includes('os error 2')) { // "os error 2" usually means file not found
-                 console.log(`[NotesLeftPanel] Metadata file not found for ${filePath}. This is normal if no metadata has been saved yet.`);
+            let errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+            if (errorMessage.includes('os error 2') || errorMessage.toLowerCase().includes('no such file or directory')) {
+                 console.log(`[NotesLeftPanel] Metadata file not found for ${filePath} at actual path: ${metadataPath}. This is normal if no metadata has been saved yet. Error: ${errorMessage}`);
             } else {
-                console.error('[NotesLeftPanel] Error loading or parsing metadata:', error);
+                console.error(`[NotesLeftPanel] Error loading or parsing metadata for ${filePath} at actual path: ${metadataPath}. Error:`, error);
             }
         }
         if (!currentFileMetadata) isEditing = false; // Turn off editing if metadata load failed
