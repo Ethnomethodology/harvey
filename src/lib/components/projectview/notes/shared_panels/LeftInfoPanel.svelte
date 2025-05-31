@@ -290,7 +290,7 @@
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
         {#if currentFileMetadata}
-            <div class="p-1 space-y-2"> {/* This space-y-2 might become redundant or need adjustment */}
+            <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
