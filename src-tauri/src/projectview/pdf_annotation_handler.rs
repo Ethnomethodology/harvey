@@ -26,7 +26,6 @@ pub async fn load_pdf_annotations(
 
 #[tauri::command]
 pub async fn save_pdf_annotations(
-    project_xml_path_str: String,
     original_pdf_relative_path_str: String, // Relative to project base dir
     annotations_json_content: String,
 ) -> Result<(), CommandError> {

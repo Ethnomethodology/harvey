@@ -1377,35 +1377,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
             
-            // 3. Rename PDF annotation file (if PDF) (within its current/old folder)
-            if old_ext == "pdf" {
-                if let Ok(old_pdf_annot_path) = get_pdf_annotation_file_path(old_doc_file_path) { // Use original path
-                    if old_pdf_annot_path.exists() {
-                        // New annotation name, still in old folder (based on new_doc_file_path_in_old_folder)
-                        if let Ok(new_pdf_annot_path_in_old_folder) = get_pdf_annotation_file_path(&new_doc_file_path_in_old_folder) { 
-                            if old_pdf_annot_path != new_pdf_annot_path_in_old_folder {
-                                info!("[Backend Rename] Renaming PDF annotation: {} -> {}", old_pdf_annot_path.display(), new_pdf_annot_path_in_old_folder.display());
-                                if new_pdf_annot_path_in_old_folder.exists() {
-                                     warn!("[Backend Rename] Target PDF annotation {} already exists. Skipping rename of {}.", new_pdf_annot_path_in_old_folder.display(), old_pdf_annot_path.display());
-                                } else {
-                                    if let Err(e) = fs::rename(&old_pdf_annot_path, &new_pdf_annot_path_in_old_folder) {
-                                        warn!("[Backend Rename] Failed to rename PDF annotation: {}. Attempting to revert renames.", e);
-                                        // Revert app metadata
-                                        if let Ok(old_app_meta_p) = get_document_metadata_path_for_doc(old_doc_file_path) {
-                                            if let Ok(new_app_meta_p_temp) = get_document_metadata_path_for_doc(&new_doc_file_path_in_old_folder) {
-                                                if old_app_meta_p != new_app_meta_p_temp && new_app_meta_p_temp.exists() { let _ = fs::rename(&new_app_meta_p_temp, &old_app_meta_p); }
-                                            }
-                                        }
-                                        // Revert main doc
-                                        if old_doc_file_path != &new_doc_file_path_in_old_folder { let _ = fs::rename(&new_doc_file_path_in_old_folder, old_doc_file_path); }
-                                        return Err(CommandError::from(format!("Failed to rename PDF annotation: {}", e)));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // PDF Annotation file system rename is no longer handled here. DB call handles the rename.
 
     // If it was a PDF, rename its annotations in DB
     // This needs to happen *before* `item_relative_path` (old path) is lost
