@@ -7,7 +7,7 @@
     import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
-    import AddFieldModal from '../modals/AddFieldModal.svelte';
+    import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
 
     let currentFileMetadata = null;
     let fullLoadedMetadataObject = null;
@@ -23,7 +23,6 @@
 
     const EDIT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
     const CANCEL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>`;
-    const PLUS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" /></svg>`;
 
     const AUDIO_EXTENSIONS = new Set(['mp3','wav','m4a','ogg','aac','flac']);
     const VIDEO_EXTENSIONS = new Set(['mp4','mov','avi','mkv','webm']);
@@ -316,7 +315,7 @@
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
         {#if currentFileMetadata}
-            <div class="p-1 space-y-2"> <!-- This space-y-2 might become redundant or need adjustment -->
+            <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
@@ -375,27 +374,12 @@
                 </div>
 
                 <!-- Custom Fields Section -->
-                <!-- HR Separator - shows if there are custom fields OR if in edit mode (to make space for the add button) -->
-                {#if (currentFileMetadata?.customFields && currentFileMetadata.customFields.length > 0) || isEditing}
+                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) )}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">Custom Fields</h3>
                 {/if}
 
-                <!-- Custom Fields Header and Add Button (Edit Mode Only) -->
-                {#if isEditing}
-                    <div class="flex justify-between items-center mb-3">
-                        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Custom Fields</h3>
-                        <button
-                            type="button"
-                            on:click={() => showAddFieldModal = true}
-                            class="p-1 text-green-600 hover:text-green-800 dark:text-green-500 dark:hover:text-green-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:focus:ring-offset-gray-800"
-                            title="Add New Custom Field"
-                        >
-                            {@html PLUS_ICON_SVG}
-                        </button>
-                    </div>
-                {/if}
-
-                <!-- Read Mode Custom Fields (No header if not editing AND no custom fields) -->
+                <!-- Read Mode Custom Fields -->
                 {#if !isEditing && currentFileMetadata && currentFileMetadata.customFields}
                     {#each currentFileMetadata.customFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
@@ -407,8 +391,8 @@
                     {/each}
                 {/if}
 
-                <!-- Edit Mode Custom Fields (fields themselves, header is above) -->
-                {#if isEditing && editableMetadata && editableMetadata.customFields && editableMetadata.customFields.length > 0}
+                <!-- Edit Mode Custom Fields -->
+                {#if isEditing && editableMetadata && editableMetadata.customFields}
                     {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
                             <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.key}:</label>
@@ -437,7 +421,14 @@
                 <!-- End of custom fields rendering -->
 
                 {#if isEditing}
-                    <div class="mt-6 flex justify-end items-center">
+                    <div class="mt-4 flex justify-between items-center">
+                        <button
+                            type="button"
+                            on:click={() => showAddFieldModal = true}
+                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
+                        >
+                            Add Custom Field
+                        </button>
                         <button
                             on:click={handleSaveMetadata}
                             class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
