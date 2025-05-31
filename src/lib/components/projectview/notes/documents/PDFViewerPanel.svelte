@@ -492,8 +492,19 @@ import { get } from 'svelte/store';
         }
         if (showSelectionToolbar && selectionToolbarElement && !selectionToolbarElement.contains(event.target) && !(highlightDropdownRef && highlightDropdownRef.contains(event.target))) {
             const isInsideViewer = viewerElement?.contains(event.target);
-            const isHighlight = event.target.closest?.('.pdf-highlight');
-            if (!isInsideViewer || (!isHighlight && window.getSelection()?.isCollapsed)) { hideSelectionToolbar(); }
+            // Ensure we check for both old span-based highlights and new overlay parts
+            const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
+
+            if (!isInsideViewer) { // Click is outside the PDF viewer area
+                hideSelectionToolbar();
+            } else {
+                // Click is inside the viewer. Hide only if not on an existing highlight AND selection is collapsed.
+                if (!clickedOnExistingHighlight && window.getSelection()?.isCollapsed) {
+                    hideSelectionToolbar();
+                }
+                // If clickedOnExistingHighlight is true, toolbar remains (handled by handleViewerClick).
+                // If selection is not collapsed (e.g. user just made a selection), toolbar remains.
+            }
         }
     }
 
@@ -515,10 +526,18 @@ import { get } from 'svelte/store';
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
+
+                // Set showSelectionToolbar to true as early as possible
                 showSelectionToolbar = true; 
-                await tick(); // Ensure Svelte renders the toolbar if it was hidden
-                // Call directly after tick for more immediate appearance
-                positionToolbarAtPoint(event.clientX, event.clientY);
+
+                // Defer positioning until after the next frame, ensuring the toolbar element is available
+                // and Svelte has processed the showSelectionToolbar change.
+                requestAnimationFrame(() => {
+                    // Ensure the toolbar is still meant to be shown and elements are available
+                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
+                        positionToolbarAtPoint(event.clientX, event.clientY);
+                    }
+                });
                 return;
             }
         }
@@ -556,43 +575,25 @@ import { get } from 'svelte/store';
                         clickRange.selectNodeContents(textLayer.firstChild);
                     }
                 }
+                // Set showSelectionToolbar to true as early as possible
                 showSelectionToolbar = true;
-                await tick();
                 
-                if (toolbarMode === 'click') { // This should be the mode when clicking an existing highlight
-                    // Call directly after tick for more immediate appearance
-                    positionToolbarAtPoint(event.clientX, event.clientY);
-                } else if (toolbarMode === 'selection' && clickRange) { // Fallback or other scenario
-                    positionAndShowSelectionToolbar(clickRange);
-                }
+                // Defer positioning to next animation frame
+                requestAnimationFrame(() => {
+                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
+                        if (toolbarMode === 'click') {
+                            positionToolbarAtPoint(event.clientX, event.clientY);
+                        }
+                        // The 'else if (toolbarMode === 'selection' && clickRange)' block was removed
+                        // as it was determined to be unreachable.
+                    }
+                });
             }
             event.stopPropagation();
         } else if (!sel || sel.isCollapsed) { hideSelectionToolbar(); }
     }
 
-    async function positionAndShowSelectionToolbar(range) {
-        if (!selectionToolbarElement || !viewerContainer || !range || !pdfViewerWrapperElement) { hideSelectionToolbar(); return; }
-        selectionToolbarElement.style.display = 'flex'; selectionToolbarElement.style.opacity = '0'; selectionToolbarElement.style.visibility = 'hidden';
-        await tick(); 
-        requestAnimationFrame(() => {
-            if (!selectionToolbarElement || !viewerContainer || !pdfViewerWrapperElement || !range) { hideSelectionToolbar(); return; }
-            const containerRect = pdfViewerWrapperElement.getBoundingClientRect(); const clientRects = range.getClientRects();
-            if (!clientRects || clientRects.length === 0) { hideSelectionToolbar(); return; }
-            const firstRect = clientRects[0]; const toolbarHeight = selectionToolbarElement.offsetHeight; const toolbarWidth = selectionToolbarElement.offsetWidth;
-            if (!toolbarHeight || !toolbarWidth) { hideSelectionToolbar(); return; }
-            let targetTop = firstRect.top - containerRect.top - toolbarHeight - 8;
-            let targetLeft = firstRect.left - containerRect.left + (firstRect.width / 2) - (toolbarWidth / 2);
-            targetLeft = Math.max(0, targetLeft); targetLeft = Math.min(containerRect.width - toolbarWidth - 5, targetLeft);
-            if (targetTop < 0 || (clientRects.length > 1 && firstRect.bottom > clientRects[clientRects.length -1].top )) {
-                 let topBelow = (clientRects.length > 1 ? clientRects[clientRects.length -1].bottom : firstRect.bottom) - containerRect.top + 8;
-                 targetTop = (topBelow + toolbarHeight > containerRect.height - 5 && targetTop >=0) ? targetTop : topBelow;
-                 if(topBelow + toolbarHeight > containerRect.height -5 && targetTop < 0) targetTop = 0;
-            }
-            selectionToolbarTop = targetTop; selectionToolbarLeft = targetLeft;
-            selectionToolbarElement.style.top = `${targetTop}px`; selectionToolbarElement.style.left = `${targetLeft}px`;
-            selectionToolbarElement.style.opacity = '1'; selectionToolbarElement.style.visibility = 'visible';
-        });
-    }
+    // positionAndShowSelectionToolbar function has been removed as it was dead code.
 
     /** Position toolbar at given client coordinates (for click-mode) */
     function positionToolbarAtPoint(clientX, clientY) {
