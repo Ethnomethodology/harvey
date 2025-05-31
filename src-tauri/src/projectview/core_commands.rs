@@ -23,16 +23,6 @@ struct MediaRenamedPayload {
     new_absolute_path: String,
 }
 
-#[derive(Clone, Serialize)]
-struct ItemRenamedPayload {
-    old_path: String,
-    new_path: String,
-    new_name: String,
-    item_type: String,
-    project_xml_path: String,
-    base_directory: String,
-}
-
 // Helper function to get annotation metadata path for an image (from existing code)
 fn get_annotation_metadata_path_for_image(image_path: &Path) -> Result<PathBuf, CommandError> {
     let parent_dir = image_path.parent().ok_or_else(|| {
