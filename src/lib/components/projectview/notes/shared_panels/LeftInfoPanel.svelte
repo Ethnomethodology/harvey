@@ -7,7 +7,7 @@
     import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
-    import AddFieldModal from '../modals/AddFieldModal.svelte';
+    import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
 
     let currentFileMetadata = null;
     let fullLoadedMetadataObject = null;
@@ -315,7 +315,7 @@
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
         {#if currentFileMetadata}
-            <div class="p-1 space-y-2"> {/* This space-y-2 might become redundant or need adjustment */}
+            <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
