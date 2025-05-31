@@ -14,7 +14,7 @@ pub async fn load_pdf_annotations(
     // For now, we assume the path passed from frontend is already relative or can be made relative.
     // This might need adjustment based on how `projectService.js` constructs this path.
     // Let's assume for now it's the relative path.
-    match load_annotations_from_db(&original_pdf_abs_path_str) {
+    match load_annotations_from_db(&original_pdf_abs_path_str, "pdf") {
         Ok(Some(content)) => Ok(Some(content)),
         Ok(None) => Ok(None),
         Err(e) => {
@@ -42,7 +42,7 @@ pub async fn save_pdf_annotations(
         warn!("[PDF Annots DB] Annotation JSON content for {} appears invalid. Saving anyway.", original_pdf_relative_path_str);
     }
 
-    match save_annotations_to_db(&original_pdf_relative_path_str, &annotations_json_content) {
+    match save_annotations_to_db(&original_pdf_relative_path_str, &annotations_json_content, "pdf") {
         Ok(_) => {
             info!("[PDF Annots DB] Annotations saved successfully for {}.", original_pdf_relative_path_str);
             Ok(())
