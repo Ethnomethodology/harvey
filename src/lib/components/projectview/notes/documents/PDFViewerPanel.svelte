@@ -54,6 +54,18 @@ import { get } from 'svelte/store';
     const CONTEXT_LENGTH = 30;
     let initialHighlightsApplied = false;
     let pdfJsStyleElement = null;
+    let loadedPagesWithAnnotations = new Set(); // To track pages with rendered annotations
+    let isLoadingInitialAnnotations = false; // New state for initial annotation loading
+    let annotationMatcherWorker = null; // For text matching fallback
+    let pendingWorkerTasks = new Set(); // Tracks annotations being processed by the worker: `${pageIndex}-${annotationId}`
+
+    function deferTask(taskFn) {
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(taskFn, { timeout: 1000 }); // Added a timeout for safety
+        } else {
+            setTimeout(taskFn, 0);
+        }
+    }
 
     // --- Helper: Capture DOM Range Data for Undo/Redo (Visual Only) ---
     function captureRangeDataForUndo(range) {
@@ -129,7 +141,7 @@ import { get } from 'svelte/store';
         return pv;
     }
 
-    async function ensureTextLayerReady(pageViewFromCaller, pageIndex) {
+    async function ensureTextLayerReady(pageViewFromCaller, pageIndex) { // Removed isEagerLoad
         let pv = pageViewFromCaller || pdfViewer?.getPageView(pageIndex);
 
         // Check 1: Is it already good?
@@ -138,14 +150,16 @@ import { get } from 'svelte/store';
         }
 
         // If PageView object itself doesn't exist, try to make it exist.
+        // Always operate in "non-eager" mode now.
         if (!pv) {
             try {
                 pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
             } catch (_) { /* ignore scroll errors if viewer is busy */ }
             await new Promise(r => setTimeout(r, 350)); // Initial wait for PageView creation
+
             pv = pdfViewer?.getPageView(pageIndex);
             if (!pv) {
-                console.error(`[ensureTextLayerReady] Critical: No PageView object for page ${pageIndex + 1} after initial scroll.`);
+                console.error(`[ensureTextLayerReady] Critical: No PageView object for page ${pageIndex + 1} after attempting scroll.`);
                 throw new Error(`No PageView object for page ${pageIndex + 1}`);
             }
             // Re-check after PageView creation
@@ -154,26 +168,26 @@ import { get } from 'svelte/store';
             }
         }
         
-        // Check 2: PageView exists, but textLayer not ready. Try scrolling and waiting a bit more.
-        // This also covers the case where pv was just created above but its textLayer isn't ready.
-        if (pv) { // pv should exist here
+        // Check 2: PageView exists, but textLayer not ready.
+        // Always operate in "non-eager" mode now.
+        if (pv) {
             try {
                 pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
             } catch (_) { /* ignore scroll errors */ }
-
             await new Promise(r => setTimeout(r, 600)); // Wait a bit longer after scroll
+
             let freshPv = pdfViewer?.getPageView(pageIndex); 
             if (freshPv && (freshPv.textLayer?.textLayerDiv || freshPv.div?.querySelector('.textLayer'))) {
                 return finalizePageView(freshPv, pageIndex);
             }
-            pv = freshPv || pv; // Use freshPv if available, otherwise fallback to the pv we had.
+            pv = freshPv || pv; // Use freshPv if available
         }
 
-        // Check 3: Fallback to polling
+        // Check 3: Fallback to polling (always "non-eager" mode)
         return new Promise((resolve, reject) => {
-            const MAX_WAIT_TEXTLAYER = 30000; // Further Increased timeout to 30 seconds
+            const MAX_WAIT_TEXTLAYER = 30000;
+            const interval = 250;
             let totalWait = 0;
-            const interval = 250; // Slightly increased interval
             let checkIntervalId = null;
 
             const cleanupInterval = () => {
@@ -181,43 +195,39 @@ import { get } from 'svelte/store';
             };
 
             const checkTextLayerAvailability = async () => {
-                if (!pdfViewer) { // Guard against pdfViewer being null
+                if (!pdfViewer) {
                     cleanupInterval();
-                    console.warn(`[ensureTextLayerReady] pdfViewer became null during check for page ${pageIndex + 1}. Aborting text layer wait.`);
-                    reject(new Error(`pdfViewer became null while waiting for textLayer on page ${pageIndex + 1}`));
-                    return;
+                    console.warn(`[ensureTextLayerReady] pdfViewer became null. Aborting.`);
+                    // Resolve with null instead of rejecting, to allow graceful handling if possible
+                    return resolve(null);
                 }
 
-                let currentPolledPv = pdfViewer.getPageView(pageIndex); // Always get fresh PageView
+                let currentPolledPv = pdfViewer.getPageView(pageIndex);
                 let div = currentPolledPv?.textLayer?.textLayerDiv || currentPolledPv?.div?.querySelector('.textLayer');
 
-                // console.debug(`[ensureTextLayerReady Polling] Page ${pageIndex + 1}: totalWait=${totalWait}, pv=${!!currentPolledPv}, div=${!!div}`);
                 if (div) {
                     cleanupInterval();
                     try {
                         const finalPv = await finalizePageView(currentPolledPv, pageIndex);
                         resolve(finalPv);
                     } catch (e) {
-                        reject(e); // finalizePageView might throw if getPage fails
+                        reject(e);
                     }
                 } else {
                     totalWait += interval;
                     if (totalWait >= MAX_WAIT_TEXTLAYER) {
-                        cleanupInterval(); // Ensure interval is cleared on timeout
-                        console.error(`[ensureTextLayerReady Polling] Timeout waiting for textLayer div on page ${pageIndex + 1} after ${MAX_WAIT_TEXTLAYER}ms.`);
+                        cleanupInterval();
+                        console.error(`[ensureTextLayerReady Polling] Timeout waiting for textLayer div on page ${pageIndex + 1}.`);
                         reject(new Error(`Timeout waiting for textLayer div on page ${pageIndex + 1} (polling)`));
-                    } else if (!currentPolledPv && pdfViewer) { // Check if pageView itself disappeared
-                        // This case might occur if the PDF document is changed/closed during polling.
-                        // The !pdfViewer check at the top handles viewer disappearing, but this is a specific PageView check.
+                    } else if (!currentPolledPv) { // Check if pageView itself disappeared
                         cleanupInterval();
                         console.error(`[ensureTextLayerReady Polling] PageView for page ${pageIndex + 1} became null.`);
                         reject(new Error(`PageView for page ${pageIndex + 1} became null during polling`));
                     }
                 }
             };
-            // Start the interval
             checkIntervalId = setInterval(checkTextLayerAvailability, interval);
-            checkTextLayerAvailability(); // Perform an initial check immediately
+            checkTextLayerAvailability();
         });
     }
     
@@ -358,6 +368,10 @@ import { get } from 'svelte/store';
     }
 
     onMount(async () => {
+        // Initialize the Web Worker
+        annotationMatcherWorker = new Worker(new URL('$lib/workers/pdfAnnotationMatcher.worker.js', import.meta.url), { type: 'module' });
+        annotationMatcherWorker.onmessage = handleWorkerMessage;
+
         const res = await fetch('/pdfjs/pdf_viewer.css');
         let css = await res.text();
         css = css.replace(/(^|\})\s*([^{]+)/g, `$1 .pdf-viewer-panel-root $2`);
@@ -409,7 +423,76 @@ import { get } from 'svelte/store';
         if (eventBus && typeof eventBus.destroy === 'function') { eventBus.destroy(); } eventBus = null; 
         if (pdfViewer) { pdfViewer.cleanup(); pdfViewer.setDocument(null); pdfViewer = null; } 
         if (pdfDoc) { pdfDoc.destroy(); pdfDoc = null; }
+        if (annotationMatcherWorker) {
+            annotationMatcherWorker.terminate();
+            annotationMatcherWorker = null;
+        }
     });
+
+    async function handleWorkerMessage(event) {
+        const { pageIndex, annotationId, startIndex, matchLength, error } = event.data;
+        const workerTaskKey = `${pageIndex}-${annotationId}`;
+        pendingWorkerTasks.delete(workerTaskKey); // Remove from pending tasks
+
+        if (error) {
+            console.warn(`[Worker Message] Error for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
+            return;
+        }
+
+        if (startIndex !== -1 && matchLength > 0) {
+            // console.log(`[Worker Message] Match found for ${annotationId} on page ${pageIndex + 1}. Start: ${startIndex}, Length: ${matchLength}`);
+            const pageView = pdfViewer?.getPageView(pageIndex);
+            const layerDiv = pageView?.textLayer?.textLayerDiv;
+
+            if (!pageView || !layerDiv) {
+                console.warn(`[Worker Message] Could not find pageView or layerDiv for page ${pageIndex + 1} to apply highlight ${annotationId}.`);
+                return;
+            }
+
+            // Use a dummy normalizedExpectedText for now, as worker already did the match.
+            // Or, pass the original normalized text from worker if needed for verification in findRangeInTextLayer.
+            const range = findRangeInTextLayer(layerDiv, startIndex, matchLength, "");
+
+            if (range) {
+                const pageRect = pageView.div.getBoundingClientRect();
+                const clientRects = range.getClientRects();
+                const newQuadPoints = [];
+                for (let i = 0; i < clientRects.length; i++) {
+                    const rect = clientRects[i];
+                    newQuadPoints.push([
+                        rect.left - pageRect.left, rect.top - pageRect.top,
+                        rect.right - pageRect.left, rect.top - pageRect.top,
+                        rect.left - pageRect.left, rect.bottom - pageRect.top,
+                        rect.right - pageRect.left, rect.bottom - pageRect.top
+                    ]);
+                }
+
+                if (newQuadPoints.length > 0) {
+                    const highlight = initialHighlights.find(h => h.id === annotationId && h.pageIndex === pageIndex);
+                    if (highlight) {
+                        renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
+                        // console.log(`[Worker Message] Rendered ${annotationId} via worker result and generated quadPoints.`);
+
+                        // Update initialHighlights with the new quadPoints to avoid future worker calls for this item
+                        highlight.quadPoints = newQuadPoints;
+                        // No explicit store dispatch here as per subtask, but this is where it would go if persistence is needed.
+                        // Mark dirty if quadpoints are generated and should be saved
+                        markPdfAnnotationsDirty();
+
+                    } else {
+                        console.warn(`[Worker Message] Highlight ${annotationId} not found in initialHighlights after worker processing.`);
+                    }
+                } else {
+                    console.warn(`[Worker Message] Text found by worker for ${annotationId}, but failed to generate quadPoints from range.`);
+                }
+            } else {
+                console.warn(`[Worker Message] Text found by worker for ${annotationId}, but findRangeInTextLayer failed to create range on main thread.`);
+            }
+        } else {
+            // This case should be covered by 'error' from worker, but as a fallback:
+            console.warn(`[Worker Message] No match found by worker for ${annotationId} on page ${pageIndex + 1}.`);
+        }
+    }
 
     function handleClickOutside(event) {
         if (isToolbarHighlightDropdownOpen && highlightDropdownRef && !highlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
@@ -417,8 +500,19 @@ import { get } from 'svelte/store';
         }
         if (showSelectionToolbar && selectionToolbarElement && !selectionToolbarElement.contains(event.target) && !(highlightDropdownRef && highlightDropdownRef.contains(event.target))) {
             const isInsideViewer = viewerElement?.contains(event.target);
-            const isHighlight = event.target.closest?.('.pdf-highlight');
-            if (!isInsideViewer || (!isHighlight && window.getSelection()?.isCollapsed)) { hideSelectionToolbar(); }
+            // Ensure we check for both old span-based highlights and new overlay parts
+            const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
+
+            if (!isInsideViewer) { // Click is outside the PDF viewer area
+                hideSelectionToolbar();
+            } else {
+                // Click is inside the viewer. Hide only if not on an existing highlight AND selection is collapsed.
+                if (!clickedOnExistingHighlight && window.getSelection()?.isCollapsed) {
+                    hideSelectionToolbar();
+                }
+                // If clickedOnExistingHighlight is true, toolbar remains (handled by handleViewerClick).
+                // If selection is not collapsed (e.g. user just made a selection), toolbar remains.
+            }
         }
     }
 
@@ -440,10 +534,18 @@ import { get } from 'svelte/store';
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
+
+                // Set showSelectionToolbar to true as early as possible
                 showSelectionToolbar = true; 
-                await tick(); // Ensure Svelte renders the toolbar if it was hidden
-                // Call directly after tick for more immediate appearance
-                positionToolbarAtPoint(event.clientX, event.clientY);
+
+                // Defer positioning until after the next frame, ensuring the toolbar element is available
+                // and Svelte has processed the showSelectionToolbar change.
+                requestAnimationFrame(() => {
+                    // Ensure the toolbar is still meant to be shown and elements are available
+                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
+                        positionToolbarAtPoint(event.clientX, event.clientY);
+                    }
+                });
                 return;
             }
         }
@@ -481,43 +583,25 @@ import { get } from 'svelte/store';
                         clickRange.selectNodeContents(textLayer.firstChild);
                     }
                 }
+                // Set showSelectionToolbar to true as early as possible
                 showSelectionToolbar = true;
-                await tick();
                 
-                if (toolbarMode === 'click') { // This should be the mode when clicking an existing highlight
-                    // Call directly after tick for more immediate appearance
-                    positionToolbarAtPoint(event.clientX, event.clientY);
-                } else if (toolbarMode === 'selection' && clickRange) { // Fallback or other scenario
-                    positionAndShowSelectionToolbar(clickRange);
-                }
+                // Defer positioning to next animation frame
+                requestAnimationFrame(() => {
+                    if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
+                        if (toolbarMode === 'click') {
+                            positionToolbarAtPoint(event.clientX, event.clientY);
+                        }
+                        // The 'else if (toolbarMode === 'selection' && clickRange)' block was removed
+                        // as it was determined to be unreachable.
+                    }
+                });
             }
             event.stopPropagation();
         } else if (!sel || sel.isCollapsed) { hideSelectionToolbar(); }
     }
 
-    async function positionAndShowSelectionToolbar(range) {
-        if (!selectionToolbarElement || !viewerContainer || !range || !pdfViewerWrapperElement) { hideSelectionToolbar(); return; }
-        selectionToolbarElement.style.display = 'flex'; selectionToolbarElement.style.opacity = '0'; selectionToolbarElement.style.visibility = 'hidden';
-        await tick(); 
-        requestAnimationFrame(() => {
-            if (!selectionToolbarElement || !viewerContainer || !pdfViewerWrapperElement || !range) { hideSelectionToolbar(); return; }
-            const containerRect = pdfViewerWrapperElement.getBoundingClientRect(); const clientRects = range.getClientRects();
-            if (!clientRects || clientRects.length === 0) { hideSelectionToolbar(); return; }
-            const firstRect = clientRects[0]; const toolbarHeight = selectionToolbarElement.offsetHeight; const toolbarWidth = selectionToolbarElement.offsetWidth;
-            if (!toolbarHeight || !toolbarWidth) { hideSelectionToolbar(); return; }
-            let targetTop = firstRect.top - containerRect.top - toolbarHeight - 8;
-            let targetLeft = firstRect.left - containerRect.left + (firstRect.width / 2) - (toolbarWidth / 2);
-            targetLeft = Math.max(0, targetLeft); targetLeft = Math.min(containerRect.width - toolbarWidth - 5, targetLeft);
-            if (targetTop < 0 || (clientRects.length > 1 && firstRect.bottom > clientRects[clientRects.length -1].top )) {
-                 let topBelow = (clientRects.length > 1 ? clientRects[clientRects.length -1].bottom : firstRect.bottom) - containerRect.top + 8;
-                 targetTop = (topBelow + toolbarHeight > containerRect.height - 5 && targetTop >=0) ? targetTop : topBelow;
-                 if(topBelow + toolbarHeight > containerRect.height -5 && targetTop < 0) targetTop = 0;
-            }
-            selectionToolbarTop = targetTop; selectionToolbarLeft = targetLeft;
-            selectionToolbarElement.style.top = `${targetTop}px`; selectionToolbarElement.style.left = `${targetLeft}px`;
-            selectionToolbarElement.style.opacity = '1'; selectionToolbarElement.style.visibility = 'visible';
-        });
-    }
+    // positionAndShowSelectionToolbar function has been removed as it was dead code.
 
     /** Position toolbar at given client coordinates (for click-mode) */
     function positionToolbarAtPoint(clientX, clientY) {
@@ -567,85 +651,122 @@ import { get } from 'svelte/store';
     function handleToolbarMouseLeave() { clearTimeout(hideToolbarTimeoutId); hideToolbarTimeoutId = setTimeout(hideSelectionToolbar, 500); }
 
     async function handleHighlightAction(color) {
-        await tick();
-        let success = false;
-        let actionPayload = { rangeData: null, dataForStorage: null };
+        // Removed initial await tick() to prioritize immediate UI response.
+        // Ticks for store updates will be handled within deferred tasks if necessary.
 
-        if (toolbarMode === 'selection') {
+        if (toolbarMode === 'selection') { // ADDING NEW HIGHLIGHT
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
-            const rangeToUse = selectedRange.cloneRange();
-            actionPayload.rangeData = captureRangeDataForUndo(rangeToUse);
-            actionPayload.text = actionPayload.rangeData.text;
 
-            if (color === 'remove') {
-                const affectedHighlights = await getAffectedHighlightsData(rangeToUse); // Now async
-                removeHighlightFromSelectionDOM(rangeToUse);
-                affectedHighlights.forEach(hlStorageData => {
-                    dispatch('pdfhighlightevent', { type: 'remove', id: hlStorageData.id });
-                    recordAction('removeHighlight', { ...hlStorageData, rangeData: null /* DOM range hard to restore for this */ });
-                });
-                // mark dirty (selection mode, remove action)
-                await tick(); // wait for store update from dispatched events
-                markPdfAnnotationsDirty(); // Pass current annotations from store if needed by the function, or it gets them itself.
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                if (affectedHighlights.length > 0) success = true;
-            } else {
-                actionPayload.id = `hl-${uuidv4()}`;
-                actionPayload.color = color;
-                applyHighlightToSelectionDOM(rangeToUse, color, actionPayload.id);
-                actionPayload.dataForStorage = await createHighlightDataForStorage(actionPayload.id, rangeToUse, color);
-                if (actionPayload.dataForStorage) {
-                    dispatch('pdfhighlightevent', { type: 'add', ...actionPayload.dataForStorage });
-                    recordAction('addHighlight', actionPayload);
-                    // mark dirty
-                    markPdfAnnotationsDirty();
-                    // saveCurrentPdfAnnotations(); // Removed for manual save
-                    success = true;
-                }
-            }
-        } else if (toolbarMode === 'click') {
-            if (!clickedHighlightId) { console.warn("Highlight Action (Click Mode): clickedHighlightId is null!"); return; }
-            actionPayload.id = clickedHighlightId;
-            actionPayload.oldColor = clickedHighlightColor;
-            actionPayload.text = getTextOfHighlightId(clickedHighlightId);
+            const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
+            const newHighlightId = `hl-${uuidv4()}`;
 
-            // No longer recompute dataForStorage for color changes; use original highlight data from initialHighlights
+            // --- Immediate Visual Update ---
+            const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
+            // applyHighlightToSelectionDOM now primarily focuses on calling renderHighlightOverlay
+            // which should be relatively fast.
 
-            if (color === 'remove') {
-                // Remove the visual overlay for this highlight
-                removeHighlightOverlay(clickedHighlightId);
-                dispatch('pdfhighlightevent', { type: 'remove', id: clickedHighlightId });
-                // For undo, need to provide dataForStorage
-                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
-                const dataForStorage = originalHighlight
-                    ? { ...originalHighlight }
-                    : { id: clickedHighlightId, type: 'pdfHighlight', color: actionPayload.oldColor, text: actionPayload.text, pageIndex: 0, prefix: '', suffix: '', occurrenceInPageContext: 0 };
-                recordAction('removeHighlight', { ...actionPayload, color: actionPayload.oldColor, dataForStorage: { ...dataForStorage, color: actionPayload.oldColor } });
-                // mark dirty (click mode, remove action)
-                await tick(); // ensure store is updated after dispatched remove event
-                markPdfAnnotationsDirty();
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                success = true;
-            } else {
-                actionPayload.newColor = color;
-                // Update overlay visual color
-                updateHighlightOverlayColor(clickedHighlightId, color);
-                // Inform store of color update
-                const originalHighlight = initialHighlights.find(h => h.id === clickedHighlightId);
-                if (originalHighlight) {
-                    dispatch('pdfhighlightevent', { type: 'update', ...originalHighlight, color });
-                }
-                recordAction('changeColor', actionPayload);
-                markPdfAnnotationsDirty();
-                // saveCurrentPdfAnnotations(); // Removed for manual save
-                success = true;
-            }
-        } else { console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode); }
-
-        if (success) {
             hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
+
+            if (!visualRendered) { // If applyHighlightToSelectionDOM failed (e.g. no page context)
+                console.warn("Visual rendering of new highlight failed. Aborting deferred tasks.");
+                return;
+            }
+
+            // --- Deferred Data Processing & State Updates ---
+            deferTask(async () => {
+                try {
+                    const dataForStorage = await createHighlightDataForStorage(newHighlightId, rangeToUse, color);
+                    if (dataForStorage) {
+                        dispatch('pdfhighlightevent', { type: 'add', ...dataForStorage });
+                        // For undo, capture necessary info. rangeData might be complex to restore perfectly,
+                        // but text and context are good.
+                        const rangeDataForUndo = captureRangeDataForUndo(rangeToUse);
+                        recordAction('addHighlight', { id: newHighlightId, color, rangeData: rangeDataForUndo, dataForStorage });
+
+                        await tick(); // Allow store dispatch to settle if needed by markPdfAnnotationsDirty
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Added highlight ${newHighlightId}`);
+                    } else {
+                        console.warn(`[Highlight Action Defer] Failed to create dataForStorage for ${newHighlightId}. Highlight might not be saved correctly.`);
+                        // Potentially remove the visual highlight here if data creation is critical
+                        // removeHighlightOverlay(newHighlightId); // Or removeClickedHighlightBlockDOM if spans were created
+                    }
+                } catch (e) {
+                    console.error(`[Highlight Action Defer] Error processing new highlight ${newHighlightId}:`, e);
+                }
+            });
+
+        } else if (toolbarMode === 'click') { // MODIFYING OR REMOVING EXISTING HIGHLIGHT
+            if (!clickedHighlightId) { console.warn("Highlight Action (Click Mode): clickedHighlightId is null!"); return; }
+
+            const currentHighlightId = clickedHighlightId;
+            const originalColor = clickedHighlightColor; // Stored when highlight was clicked
+            const originalHighlightData = initialHighlights.find(h => h.id === currentHighlightId);
+
+            if (!originalHighlightData && color !== 'remove') {
+                console.warn(`[Highlight Action] Original data for highlight ${currentHighlightId} not found. Cannot update color.`);
+                hideSelectionToolbar();
+                return;
+            }
+
+            if (color === 'remove') {
+                // --- Immediate Visual Update ---
+                removeHighlightOverlay(currentHighlightId);
+                // removeClickedHighlightBlockDOM(currentHighlightId); // If we need to remove old span structure too
+
+                hideSelectionToolbar();
+
+                // --- Deferred Data Processing & State Updates ---
+                deferTask(async () => {
+                    try {
+                        dispatch('pdfhighlightevent', { type: 'remove', id: currentHighlightId });
+                        const dataForStorageUndo = originalHighlightData
+                            ? { ...originalHighlightData }
+                            : { id: currentHighlightId, type: 'pdfHighlight', color: originalColor, text: '', pageIndex: 0 }; // Basic fallback for undo
+                        recordAction('removeHighlight', { id: currentHighlightId, color: originalColor, dataForStorage: dataForStorageUndo });
+
+                        await tick();
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Removed highlight ${currentHighlightId}`);
+                    } catch (e) {
+                        console.error(`[Highlight Action Defer] Error processing highlight removal ${currentHighlightId}:`, e);
+                    }
+                });
+
+            } else { // Changing color
+                // --- Immediate Visual Update ---
+                updateHighlightOverlayColor(currentHighlightId, color);
+                // changeClickedHighlightColorDOM(currentHighlightId, color); // If old span structure needs update
+
+                hideSelectionToolbar();
+
+                // --- Deferred Data Processing & State Updates ---
+                deferTask(async () => {
+                    try {
+                        const updatedDataForStorage = { ...originalHighlightData, color };
+                        dispatch('pdfhighlightevent', { type: 'update', ...updatedDataForStorage });
+                        recordAction('changeColor', {
+                            id: currentHighlightId,
+                            oldColor: originalColor,
+                            newColor: color,
+                            dataForStorage: updatedDataForStorage
+                        });
+
+                        await tick();
+                        markPdfAnnotationsDirty();
+                        // console.log(`[Highlight Action Defer] Changed color for highlight ${currentHighlightId}`);
+                    } catch (e) {
+                        console.error(`[Highlight Action Defer] Error processing highlight color change ${currentHighlightId}:`, e);
+                    }
+                });
+            }
+        } else {
+            console.warn("Highlight Action: Invalid toolbarMode:", toolbarMode);
+            hideSelectionToolbar(); // Hide toolbar if mode is invalid
         }
+        // `success` flag removed as visual part is immediate, deferred part handles its own errors.
+        // Hiding toolbar and clearing selection (for new highlights) is done immediately.
     }
     
     async function handleDropdownHighlightAction(color) {
@@ -1001,10 +1122,25 @@ import { get } from 'svelte/store';
         // A simple _listeners = {} might work for the default EventBus but isn't a public API.
         // eventBus._listeners = {}; // Risky, internal property.
 
-        eventBus.on('pagechanging', (e) => { if (e.pageNumber && e.pageNumber !== currentPageNum) { currentPageNum = e.pageNumber; pageRendering = true; hideSelectionToolbar();} });
+        eventBus.on('pagechanging', (e) => { // Made synchronous again as loadAnnotationsForPageRange is async
+            if (e.pageNumber && e.pageNumber !== currentPageNum) {
+                currentPageNum = e.pageNumber;
+                pageRendering = true;
+                hideSelectionToolbar();
+
+                if (pdfViewer && pdfDoc && numPages > 0) {
+                    // console.log(`[pagechanging] event for page ${currentPageNum}. Triggering annotation load for target page.`);
+                    loadAnnotationsForPageRange(currentPageNum - 1); // Process the target page
+                }
+                // The loop for re-applying highlights to the visible buffer has been removed.
+                // Re-rendering now relies more on textlayerrendered.
+            }
+        });
         eventBus.on('pagerendered', (e) => { 
+            // This event signifies that a page's main rendering (canvas) is done.
+            // Text layer and annotations are handled by 'textlayerrendered' and 'pagechanging'.
             if (e.pageNumber === currentPageNum) pageRendering = false; 
-            // console.log(`Page ${e.pageNumber} rendered.`);
+            // console.log(`Page ${e.pageNumber} rendered (main content).`);
         });
         eventBus.on('scalechanging', (e) => { 
             let s = currentScaleValue; 
@@ -1035,8 +1171,12 @@ import { get } from 'svelte/store';
         });
 
         eventBus.on('textlayerrendered', async (evt) => {
-            // Re-apply highlights for this page whenever its text layer renders
-            await applyHighlightsForPage(evt.pageNumber - 1);
+            if (pdfViewer && pdfDoc && numPages > 0) {
+                const pageIndex = evt.pageNumber - 1; // 0-based
+                // console.log(`[textlayerrendered] event for page ${evt.pageNumber}. Loading range and then applying highlights for this page.`);
+                await loadAnnotationsForPageRange(pageIndex); // Ensure annotations in range are loaded (if not already)
+                await applyHighlightsForPage(pageIndex);     // Then, specifically re-render this page's highlights
+            }
         });
 
         eventBus.on('pagesinit', () => { 
@@ -1060,300 +1200,166 @@ import { get } from 'svelte/store';
 
     // --- Apply Initial Highlights (More Robust) ---
     async function applyInitialHighlights() {
-        if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement) return;
+        if (initialHighlightsApplied || !pdfDoc || !pdfViewer || !viewerElement || numPages === 0) return;
         if (!initialHighlights || initialHighlights.length === 0) {
-            initialHighlightsApplied = true; // Mark as applied even if no highlights
-            loading = false; // Ensure loading is false if we return early
+            initialHighlightsApplied = true;
+            // Ensure isLoadingInitialAnnotations is false if we return early
+            isLoadingInitialAnnotations = false;
             return;
         }
-        loading = true; 
-        loadingMessage = 'Loading Annotations...';
-        console.log(`[PDFViewerPanel] ${loadingMessage} Count:`, initialHighlights.length);
-        await tick(); 
-    
-        const highlightsByPage = initialHighlights.reduce((acc, hl) => {
-            const pageIdx = hl.pageIndex;
-            if (typeof pageIdx !== 'number' || pageIdx < 0) { return acc; }
-            if (!acc[pageIdx]) acc[pageIdx] = [];
-            acc[pageIdx].push(hl);
-            return acc;
-        }, {});
 
-        const pageIndicesWithHighlights = Object.keys(highlightsByPage).map(idx => parseInt(idx, 10)).sort((a,b) => a - b);
+        isLoadingInitialAnnotations = true; // Set true for initial annotation load
+        loadingMessage = 'Loading initial annotations...';
+        console.log(`[PDFViewerPanel applyInitialHighlights] ${loadingMessage}`);
+        await tick();
 
-        for (const pageIndex of pageIndicesWithHighlights) {
-            console.log(`[ApplyInitial] Processing page ${pageIndex + 1} for highlights.`);
-            const pageHighlights = highlightsByPage[pageIndex];
-            if (!pageHighlights || pageHighlights.length === 0) continue;
+        // Determine the initial page to load (current page in view)
+        const initialPageToLoad = pdfViewer.currentPageNumber - 1; // 0-based
 
-            let pageView;
-            try {
-                // Ensure page view and its div exist for overlay container
-                pageView = pdfViewer.getPageView(pageIndex);
-                if (!pageView || !pageView.div) {
-                    pdfViewer?.scrollPageIntoView({ pageNumber: pageIndex + 1 });
-                    await new Promise(r => setTimeout(r, 150)); 
-                    pageView = pdfViewer.getPageView(pageIndex);
-                }
-                if (!pageView || !pageView.div) {
-                    console.warn(`[ApplyInitial] Could not obtain PageView.div for page ${pageIndex + 1}. Skipping highlights for this page.`);
-                    continue;
-                }
-                // ensureTextLayerReady is crucial if we need to access textLayerDiv or pdfPage for fallbacks/verification
-                pageView = await ensureTextLayerReady(pageView, pageIndex); 
-            } catch(e) {
-                console.error(`[ApplyInitial] Failed to ensure text layer for page ${pageIndex + 1}. Skipping highlights for this page. Error: ${e.message}`);
-                continue; 
-            }
-            
-            const pdfPage = pageView.pdfPage || await pdfDoc.getPage(pageIndex + 1);
-            if (!pdfPage) {
-                 console.warn(`[ApplyInitial] Could not get PDFPage object for page ${pageIndex + 1}. Skipping.`);
-                 continue;
-            }
-
-            for (const highlight of pageHighlights) {
-                if (!highlight.id || !highlight.color) {
-                    console.warn(`[ApplyInitial] Skipping highlight with missing id or color on page ${pageIndex + 1}.`, highlight);
-                    continue;
-                }
-
-                if (highlight.quadPoints && highlight.quadPoints.length > 0) {
-                    // console.debug(`[ApplyInitial] Rendering ID ${highlight.id} on page ${pageIndex + 1} using quadPoints.`);
-                    renderHighlightOverlay(highlight.quadPoints, highlight.color, highlight.id, pageIndex);
-
-                    // Optional: Verification against text if text is also stored and textLayer is available
-                    if (highlight.text && pageView.textLayer?.textLayerDiv && pdfPage) {
-                        const pageTextLayerDiv = pageView.textLayer.textLayerDiv;
-                        const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
-                        let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
-                        rawFullPageText = rawFullPageText.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
-                        const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
-
-                        const searchStrNormalized = normalizeTextForMatching(highlight.text).replace(/\s+/g, ' ');
-                        const prefixNorm = highlight.prefix ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ') : '';
-                        const suffixNorm = highlight.suffix ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ') : '';
-                        let pattern = '';
-                        if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
-                        pattern += escapeRegExp(searchStrNormalized);
-                        if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
-                        let regex = new RegExp(pattern, 'g');
-                        let match, currentOccurrences = 0, startIndex = -1;
-                        const targetOccurrence = highlight.occurrenceInPageContext || 0;
-
-                        while ((match = regex.exec(fullPageTextNormalized)) !== null) {
-                            if (currentOccurrences === targetOccurrence) { startIndex = match.index; break; }
-                            currentOccurrences++;
-                        }
-                        if (startIndex === -1 && searchStrNormalized.length > 0) { // Fallback simple search if context search failed
-                            const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
-                            let simpleMatch, simpleCount = 0;
-                            while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
-                                if (simpleCount === targetOccurrence) { startIndex = simpleMatch.index; break; }
-                                simpleCount++;
-                            }
-                        }
-
-                        if (startIndex === -1 && searchStrNormalized.length > 0) {
-                            console.warn(`[ApplyInitial] Verification failed for ID ${highlight.id} (quadPoints used): Text (norm: "${searchStrNormalized.substring(0,30)}") not found at expected occurrence ${targetOccurrence} on page ${pageIndex + 1}. Highlight rendered via quadPoints may be on outdated text.`);
-                        }
-                    }
-                } else if (highlight.text && pageView.textLayer?.textLayerDiv && pdfPage) { // Fallback: No quadPoints, try to use text matching
-                    console.warn(`[ApplyInitial] Missing quadPoints for ID ${highlight.id} on page ${pageIndex + 1}. Attempting text match fallback.`);
-                    const pageTextLayerDiv = pageView.textLayer.textLayerDiv;
-                    const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
-                    let rawFullPageText = pageTextLayerDiv.textContent || textContent.items.map(item => item.str).join('');
-                    rawFullPageText = rawFullPageText.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
-                    const fullPageTextNormalized = normalizeTextForMatching(rawFullPageText).replace(/\s+/g, ' ');
-
-                    const searchStrNormalized = normalizeTextForMatching(highlight.text).replace(/\s+/g, ' ');
-                    if (!searchStrNormalized) {
-                        console.warn(`[ApplyInitial] Skipping fallback for ${highlight.id}: normalized search text is empty.`);
-                        continue;
-                    }
-                    const prefixNorm = highlight.prefix ? normalizeTextForMatching(highlight.prefix).replace(/\s+/g, ' ') : '';
-                    const suffixNorm = highlight.suffix ? normalizeTextForMatching(highlight.suffix).replace(/\s+/g, ' ') : '';
-                    let pattern = '';
-                    if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
-                    pattern += escapeRegExp(searchStrNormalized);
-                    if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
-                    let regex = new RegExp(pattern, 'g');
-                    let match, currentOccurrences = 0, startIndex = -1;
-                    const targetOccurrence = highlight.occurrenceInPageContext || 0;
-
-                    while ((match = regex.exec(fullPageTextNormalized)) !== null) {
-                        if (currentOccurrences === targetOccurrence) { startIndex = match.index; break; }
-                        currentOccurrences++;
-                    }
-                    if (startIndex === -1) { // Fallback simple search
-                        const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
-                        let simpleMatch, simpleCount = 0;
-                        while ((simpleMatch = simpleRegex.exec(fullPageTextNormalized)) !== null) {
-                            if (simpleCount === targetOccurrence) { startIndex = simpleMatch.index; break; }
-                            simpleCount++;
-                        }
-                    }
-
-                    if (startIndex !== -1) {
-                        const range = findRangeInTextLayer(pageTextLayerDiv, startIndex, searchStrNormalized.length, searchStrNormalized);
-                        if (range) {
-                            const pageRect = pageView.div.getBoundingClientRect();
-                            const clientRects = range.getClientRects();
-                            const newQuadPoints = [];
-                            for (let i = 0; i < clientRects.length; i++) {
-                                const rect = clientRects[i];
-                                newQuadPoints.push([
-                                    rect.left - pageRect.left, rect.top - pageRect.top,
-                                    rect.right - pageRect.left, rect.top - pageRect.top,
-                                    rect.left - pageRect.left, rect.bottom - pageRect.top,
-                                    rect.right - pageRect.left, rect.bottom - pageRect.top
-                                ]);
-                            }
-                            if (newQuadPoints.length > 0) {
-                                renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
-                                console.log(`[ApplyInitial] Fallback: Rendered ID ${highlight.id} via text match and generated quadPoints.`);
-                                // Consider dispatching an update to store these newQuadPoints
-                            } else {
-                                console.warn(`[ApplyInitial] Fallback: Text found for ID ${highlight.id}, but failed to generate quadPoints from range.`);
-                            }
-                        } else {
-                            console.warn(`[ApplyInitial] Fallback: Text found for ID ${highlight.id}, but findRangeInTextLayer failed to create range.`);
-                        }
-                    } else {
-                        console.warn(`[ApplyInitial] Fallback: Text not found for ID ${highlight.id} on page ${pageIndex + 1} (norm: "${searchStrNormalized.substring(0,30)}", occ: ${targetOccurrence}).`);
-                    }
-                } else {
-                    console.warn(`[ApplyInitial] Skipping highlight ID ${highlight.id} on page ${pageIndex + 1}: No quadPoints and no text (or textLayer/pdfPage unavailable for fallback).`);
-                }
-            }
-            // Allow highlights from this page to render before processing the next page
-            await tick();
-            await new Promise(resolve => setTimeout(resolve, 50)); // Shorter delay
+        try {
+            await loadAnnotationsForPageRange(initialPageToLoad);
+        } catch (e) {
+            console.error("[PDFViewerPanel applyInitialHighlights] Error during loadAnnotationsForPageRange:", e);
+            // Optionally set an error message for the user
+        } finally {
+            initialHighlightsApplied = true; // Mark that initial pass is done
+            isLoadingInitialAnnotations = false; // Set false when done
+            loadingMessage = ''; // Reset loading message
+            console.log('[PDFViewerPanel applyInitialHighlights] Finished applying initial batch of highlights.');
         }
-
-        // --- Scroll to first page after all highlights are applied ---
-        if (pdfViewer && numPages > 0) {
-            console.log('[PDFViewerPanel] All initial highlights applied. Scrolling to first page.');
-            if (pdfViewer.currentPageNumber !== 1) { // Only scroll if not already on page 1
-                pdfViewer.scrollPageIntoView({ pageNumber: 1 });
-                await new Promise(resolve => setTimeout(resolve, 200)); 
-            }
-        }
-
-        initialHighlightsApplied = true;
-        loading = false;
-        loadingMessage = ''; // Reset loading message
-        console.log('[PDFViewerPanel] Finished applying all initial highlights.');
     }
 
-// Re-apply stored highlights on a single page whenever its text layer renders
-async function applyHighlightsForPage(pageIndex) {
-    if (!initialHighlights?.length || !pdfViewer || !pdfDoc) return;
-    // grab only the highlights for this page
-    const pageHighlights = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
-    if (!pageHighlights.length) return;
+// Function to load annotations for a specific range of pages
+async function loadAnnotationsForPageRange(centerPageIndex) {
+    if (!pdfDoc || !pdfViewer || !initialHighlights || initialHighlights.length === 0 || numPages === 0) {
+        // console.log('[loadAnnotationsForPageRange] Pre-conditions not met, skipping.', {pdfDoc: !!pdfDoc, pdfViewer: !!pdfViewer, initialHighlights: initialHighlights?.length, numPages});
+        return;
+    }
 
-    // console.debug(`[applyHighlightsForPage] Page ${pageIndex + 1} textlayerrendered. Re-applying ${pageHighlights.length} highlights.`);
+    // console.log(`[loadAnnotationsForPageRange] Focusing on centerPageIndex: ${centerPageIndex + 1}.`);
+
+    // This function now only processes the centerPageIndex.
+    // The isEagerLoad flag passed to renderAnnotationsForPage will always be false from here.
+    if (!loadedPagesWithAnnotations.has(centerPageIndex)) {
+        // console.log(`[loadAnnotationsForPageRange] Annotations for page ${centerPageIndex + 1} not yet loaded. Rendering.`);
+        await renderAnnotationsForPage(centerPageIndex); // Call without isEagerLoad
+        loadedPagesWithAnnotations.add(centerPageIndex);
+        await tick(); // Allow UI to update if this was the first load for this page.
+    } else {
+        // console.log(`[loadAnnotationsForPageRange] Annotations for page ${centerPageIndex + 1} already considered loaded.`);
+        // Re-rendering of already loaded pages, if necessary, is handled by calls to applyHighlightsForPage
+        // in pagechanging or textlayerrendered event handlers.
+    }
+}
+
+// Renders annotations for a single given page index (0-based)
+async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
+    if (!initialHighlights?.length || !pdfViewer || !pdfDoc) {
+        // console.log(`[renderAnnotationsForPage] Pre-conditions not met for page ${pageIndex + 1}`);
+        return;
+    }
+
+    const pageHighlights = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
+    if (!pageHighlights.length) {
+        // console.log(`[renderAnnotationsForPage] No highlights to render for page ${pageIndex + 1}.`);
+        return;
+    }
+
+    // console.debug(`[renderAnnotationsForPage] Page ${pageIndex + 1}. Rendering ${pageHighlights.length} highlights.`);
 
     let pageView = pdfViewer.getPageView(pageIndex);
     try {
-        pageView = await ensureTextLayerReady(pageView, pageIndex); // Ensures pageView.div and pageView.pdfPage
+        pageView = await ensureTextLayerReady(pageView, pageIndex); // Call without isEagerLoad
     } catch(e) {
-        console.warn(`[applyHighlightsForPage] Failed to ensure page ${pageIndex + 1} ready. Error: ${e.message}`);
+        console.warn(`[renderAnnotationsForPage] Failed to ensure page ${pageIndex + 1} ready. Error: ${e.message}`);
+        if (!pageView) return;
+    }
+
+    if (!pageView) {
+        // console.log(`[renderAnnotationsForPage] PageView for ${pageIndex + 1} not available. Cannot render highlights.`);
         return;
     }
 
-    const layerDiv = pageView?.textLayer?.textLayerDiv; 
-    const pdfPage = pageView?.pdfPage; 
+    const layerDiv = pageView.textLayer?.textLayerDiv;
+    const pdfPage = pageView.pdfPage;
 
-    if (!pageView?.div) { 
-        console.warn(`[applyHighlightsForPage] No pageView.div for page ${pageIndex + 1}. Cannot apply highlights.`);
+    if (!pageView.div) {
+        console.warn(`[renderAnnotationsForPage] No pageView.div for page ${pageIndex + 1}. Cannot apply highlights.`);
         return;
     }
-    // pdfPage is needed for text content if we do fallback or verification
-    if (!pdfPage && pageHighlights.some(hl => !hl.quadPoints || !hl.quadPoints.length)) {
-         console.warn(`[applyHighlightsForPage] No pdfPage for page ${pageIndex + 1}, text-based fallbacks will fail.`);
+    if (!pdfPage && pageHighlights.some(hl => !hl.quadPoints && hl.text)) {
+         console.warn(`[renderAnnotationsForPage] No pdfPage for page ${pageIndex + 1}, text-based fallbacks will fail.`);
     }
+
 
     for (const hl of pageHighlights) {
-        if (!hl.id || !hl.color) continue;
+        if (!hl.id || !hl.color) {
+            continue;
+        }
 
         if (hl.quadPoints && hl.quadPoints.length > 0) {
-            // console.debug(`[applyHighlightsForPage] Rendering ID ${hl.id} on page ${pageIndex + 1} using quadPoints.`);
+            // console.debug(`[renderAnnotationsForPage] ID ${hl.id} on page ${pageIndex + 1} using existing quadPoints.`);
             renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
-        } else if (hl.text && layerDiv && pdfPage) { // Fallback: No quadPoints, try text match
-            console.warn(`[applyHighlightsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match fallback.`);
-            
-            const items = (await pdfPage.getTextContent({ normalizeWhitespace: true })).items;
-            let rawTxt = layerDiv.textContent || items.map(i => i.str).join('');
-            rawTxt = rawTxt.replace(/\u00A0/g, ' ').replace(/-\s+/g, '');
-            const normTxt = normalizeTextForMatching(rawTxt).replace(/\s+/g, ' ');
+        } else if (hl.text && annotationMatcherWorker) {
+            // Text match fallback
+            // Now, ensureTextLayerReady (always in non-eager mode) should have prepared the text layer for an active page.
+            // If layerDiv or pdfPage is still not available here, it's a genuine problem for an active page.
+            if (!layerDiv || !pdfPage) {
+                console.warn(`[renderAnnotationsForPage] Text layer/pdfPage for page ${pageIndex + 1} not ready. Cannot text-match ID ${hl.id}. PV State: ${pageView?.textLayer?.renderingDone}`);
+                continue; // Skip this highlight if text layer isn't ready
+            }
 
-            const searchStrNormalized = normalizeTextForMatching(hl.text).replace(/\s+/g, ' ');
-            if (!searchStrNormalized) {
-                console.warn(`[applyHighlightsForPage] Skipping fallback for ${hl.id}: normalized search text is empty.`);
+            const workerTaskKey = `${pageIndex}-${hl.id}`;
+            if (pendingWorkerTasks.has(workerTaskKey)) {
                 continue;
             }
-            const prefixNorm = hl.prefix ? normalizeTextForMatching(hl.prefix).replace(/\s+/g, ' ') : '';
-            const suffixNorm = hl.suffix ? normalizeTextForMatching(hl.suffix).replace(/\s+/g, ' ') : '';
+            // console.warn(`[renderAnnotationsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match via Web Worker.`);
+            pendingWorkerTasks.add(workerTaskKey);
 
-            let pattern = '';
-            if (prefixNorm) pattern += `(?<=${escapeRegExp(prefixNorm)})`;
-            pattern += escapeRegExp(searchStrNormalized);
-            if (suffixNorm) pattern += `(?=${escapeRegExp(suffixNorm)})`;
-            const regex = new RegExp(pattern, 'g');
-
-            let m, occ = 0, start = -1;
-            const targetOccurrence = hl.occurrenceInPageContext || 0;
-
-            while ((m = regex.exec(normTxt))) {
-                if (occ === targetOccurrence) {
-                    start = m.index; 
-                    break;
-                }
-                occ++;
-            }
-             if (start === -1) { // Fallback simple search if context search failed
-                const simpleRegex = new RegExp(escapeRegExp(searchStrNormalized), 'g');
-                let simpleMatch, simpleCount = 0;
-                while ((simpleMatch = simpleRegex.exec(normTxt)) !== null) {
-                    if (simpleCount === targetOccurrence) { start = simpleMatch.index; break; }
-                    simpleCount++;
-                }
-            }
-
-            if (start !== -1) {
-                const range = findRangeInTextLayer(layerDiv, start, searchStrNormalized.length, searchStrNormalized);
-                if (range) {
-                    const pageRect = pageView.div.getBoundingClientRect();
-                    const clientRects = range.getClientRects();
-                    const newQuadPoints = [];
-                    for (let i = 0; i < clientRects.length; i++) {
-                        const rect = clientRects[i];
-                        newQuadPoints.push([
-                            rect.left - pageRect.left, rect.top - pageRect.top,
-                            rect.right - pageRect.left, rect.top - pageRect.top,
-                            rect.left - pageRect.left, rect.bottom - pageRect.top,
-                            rect.right - pageRect.left, rect.bottom - pageRect.top
-                        ]);
-                    }
-                    if (newQuadPoints.length > 0) {
-                        renderHighlightOverlay(newQuadPoints, hl.color, hl.id, pageIndex);
-                        // console.log(`[applyHighlightsForPage] Fallback: Rendered ID ${hl.id} via text match and generated quadPoints.`);
-                    } else {
-                         console.warn(`[applyHighlightsForPage] Fallback: Text found for ID ${hl.id}, but failed to generate quadPoints from range.`);
-                    }
-                } else {
-                     console.warn(`[applyHighlightsForPage] Fallback: Text found for ID ${hl.id}, but findRangeInTextLayer failed to create range.`);
-                }
-            } else {
-                console.warn(`[applyHighlightsForPage] Fallback: Text not found for ID ${hl.id} on page ${pageIndex + 1} (norm: "${searchStrNormalized.substring(0,30)}", occ: ${targetOccurrence}).`);
+            try {
+                const textContent = await pdfPage.getTextContent({ normalizeWhitespace: true, includeMarkedContent: false });
+                annotationMatcherWorker.postMessage({
+                    pageIndex: pageIndex,
+                    annotationId: hl.id,
+                    annotationText: hl.text,
+                    annotationPrefix: hl.prefix,
+                    annotationSuffix: hl.suffix,
+                    annotationOccurrence: hl.occurrenceInPageContext,
+                    pageTextContentItems: textContent.items
+                });
+            } catch (e) {
+                console.error(`[renderAnnotationsForPage] Error getting textContent or posting to worker for ${hl.id}:`, e);
+                pendingWorkerTasks.delete(workerTaskKey);
             }
         } else if (!hl.quadPoints && !hl.text) {
-            console.warn(`[applyHighlightsForPage] Skipping highlight ID ${hl.id} on page ${pageIndex + 1}: No quadPoints and no text.`);
-        } else if (!layerDiv && hl.text && (!hl.quadPoints || hl.quadPoints.length === 0)) {
-            console.warn(`[applyHighlightsForPage] Cannot attempt text match for ${hl.id} on page ${pageIndex + 1}: textLayerDiv not available.`);
+            // console.warn(`[renderAnnotationsForPage] Skipping highlight ID ${hl.id} on page ${pageIndex + 1}: No quadPoints and no text.`);
+        } else if (hl.text && (!layerDiv || !pdfPage)) {
+            // This case is now largely covered by the check before attempting worker call.
+            // console.warn(`[renderAnnotationsForPage] Cannot attempt text match for ${hl.id} on page ${pageIndex + 1}: textLayerDiv or pdfPage not available. PV State: ${pageView?.textLayer?.renderingDone}`);
         }
+    }
+}
+
+// This function is no longer the primary way to apply highlights on page load/render.
+// It's kept for potential direct calls if needed, but should respect loadedPagesWithAnnotations.
+// Or it can be removed if renderAnnotationsForPage and loadAnnotationsForPageRange cover all needs.
+async function applyHighlightsForPage(pageIndex) {
+    // console.log(`[applyHighlightsForPage] Re-applying highlights for page ${pageIndex + 1}.`);
+    // This function is now primarily for re-rendering.
+    // It assumes that if a page is in loadedPagesWithAnnotations, its data is ready in initialHighlights.
+    // If quadPoints were missing and generated by worker, they'd be in initialHighlights now.
+
+    // We don't check loadedPagesWithAnnotations here because this function is explicitly called
+    // to re-render pages that *are* considered loaded and visible.
+    // The `loadAnnotationsForPageRange` function is responsible for initially populating `loadedPagesWithAnnotations`.
+
+    await renderAnnotationsForPage(pageIndex); // This will render using initialHighlights data
+
+    // Ensure the page is marked as loaded if it wasn't (e.g. if called directly for some reason)
+    // and it actually has highlights.
+    if (!loadedPagesWithAnnotations.has(pageIndex) && initialHighlights.some(hl => hl.pageIndex === pageIndex)) {
+        // console.log(`[applyHighlightsForPage] Marking page ${pageIndex+1} as loaded after direct render.`);
+        loadedPagesWithAnnotations.add(pageIndex);
     }
 }
 // --- Continuous Highlight Overlay Helpers ---
@@ -1509,7 +1515,19 @@ function updateHighlightOverlayColor(id, color) {
     function zoomOut() { if (pdfViewer) pdfViewer.decreaseScale(); }
     function zoomIn() { if (pdfViewer) pdfViewer.increaseScale(); }
     function setZoom(value) { if (pdfViewer && value) { pdfViewer.currentScaleValue = value; } }
-    function handlePageInputChange(e) { if (!pdfViewer) return; const req = parseInt(e.target.value, 10); if (!isNaN(req) && req >= 1 && req <= numPages && req !== currentPageNum) { pdfViewer.currentPageNumber = req; } else { e.target.value = currentPageNum; }}
+    function handlePageInputChange(e) {
+        if (!pdfViewer) return;
+        const req = parseInt(e.target.value, 10);
+        if (!isNaN(req) && req >= 1 && req <= numPages && req !== currentPageNum) {
+            pdfViewer.currentPageNumber = req;
+            // When page changes via input, also trigger annotation loading for the new range
+            if (pdfDoc && numPages > 0) { // Ensure doc is loaded
+                loadAnnotationsForPageRange(req - 1); // 0-based index
+            }
+        } else {
+            e.target.value = currentPageNum;
+        }
+    }
     function handlePageInputBlur(e) { if (e.target.value !== String(currentPageNum)) e.target.value = currentPageNum; }
     function runSearch({ findPrevious = false } = {}) {
       if (!searchQuery.trim() || !eventBus) return;
@@ -1530,14 +1548,36 @@ function updateHighlightOverlayColor(id, color) {
     $: if (
         pdfDoc &&
         pdfViewer &&
-        !initialHighlightsApplied &&
-        storePdfAnnotations &&
-        storePdfAnnotations.length > 0
+        // Check if storePdfAnnotations actually changed from initialHighlights to prevent loops
+        // and ensure it runs when annotations are loaded or updated.
+        JSON.stringify(storePdfAnnotations) !== JSON.stringify(initialHighlights)
     ) {
         initialHighlights = storePdfAnnotations;
-        if (pdfViewer._pages?.length > 0) {
-            applyInitialHighlights();
+        loadedPagesWithAnnotations = new Set(); // Reset loaded pages
+        initialHighlightsApplied = false; // Allow applyInitialHighlights to run again with new data
+
+        console.log("[PDFViewerPanel Store Sync] Annotations updated from store. Resetting loaded state.");
+
+        // If pages are already initialized and viewer is ready, trigger initial load process.
+        // This condition is important to ensure applyInitialHighlights runs after PDF is ready
+        // and also when annotations are updated externally (e.g. from another component).
+        if (pdfViewer._pages?.length > 0 && !loading) { // Ensure PDF itself is not in a loading state
+            console.log("[PDFViewerPanel Store Sync] Applying highlights due to store update.");
+            applyInitialHighlights(); // This will call loadAnnotationsForPageRange for the current view
         }
+    } else if (
+        pdfDoc &&
+        pdfViewer &&
+        storePdfAnnotations &&
+        storePdfAnnotations.length === 0 &&
+        initialHighlights.length > 0
+    ) {
+        // Handle case where all annotations are removed from the store
+        console.log("[PDFViewerPanel Store Sync] All annotations removed from store. Clearing UI.");
+        initialHighlights = [];
+        document.querySelectorAll('.highlight-overlay .overlay-part').forEach(el => el.remove());
+        loadedPagesWithAnnotations = new Set();
+        initialHighlightsApplied = false; // Reset
     }
 
     $: pageNumInput = currentPageNum;
@@ -1653,7 +1693,7 @@ function updateHighlightOverlayColor(id, color) {
 <div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-gray-700 relative pdf-viewer-wrapper">
     {#if error}
         <div class="absolute inset-0 flex items-center justify-center p-4 z-40 pointer-events-none"><div class="text-red-700 dark:text-red-300 p-4 bg-red-100 dark:bg-red-900/80 rounded border border-red-400 dark:border-red-600 max-w-lg text-center shadow-lg"><p class="font-semibold mb-2">Error:</p><p class="text-sm break-words">{@html error}</p></div></div>
-    {:else if loading}
+    {:else if loading || isLoadingInitialAnnotations}
         <div class="absolute inset-0 flex flex-col items-center justify-center z-50 bg-gray-900/75 dark:bg-black/75 pointer-events-auto">
             <!-- Replace this SVG with your GIF: <img src="/path/to/your-loading.gif" alt="Loading..." class="w-16 h-16 mb-4" /> -->
             <svg class="animate-spin h-12 w-12 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
