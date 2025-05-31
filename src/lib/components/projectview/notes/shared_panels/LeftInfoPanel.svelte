@@ -289,11 +289,12 @@
         if (!editableMetadata.customFields) {
             editableMetadata.customFields = [];
         }
-        // Optional: Check for duplicate key
-        // if (editableMetadata.customFields.some(f => f.key === newField.key)) {
-        //     alert(`A custom field with the name "${newField.key}" already exists.`);
-        //     return;
-        // }
+        // Enforce unique field names (case-insensitive)
+        if (editableMetadata.customFields.some(f => f.key.toLowerCase() === newField.key.toLowerCase())) {
+            message(`A custom field with the name "${newField.key}" already exists.`, { title: 'Duplicate Field Name', type: 'warning' });
+            showAddFieldModal = false; // Close the modal
+            return;
+        }
         editableMetadata.customFields = [...editableMetadata.customFields, newField];
         showAddFieldModal = false;
     }
@@ -374,9 +375,23 @@
                 </div>
 
                 <!-- Custom Fields Section -->
-                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) )}
+                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) || isEditing )} {/* Show header if editing for the add button */}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
-                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">Custom Fields</h3>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
+                        {#if isEditing}
+                            <button
+                                on:click={() => showAddFieldModal = true}
+                                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                title="Add Custom Field"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle" viewBox="0 0 16 16">
+                                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                    <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                                </svg>
+                            </button>
+                        {/if}
+                    </div>
                 {/if}
 
                 <!-- Read Mode Custom Fields -->
@@ -421,14 +436,7 @@
                 <!-- End of custom fields rendering -->
 
                 {#if isEditing}
-                    <div class="mt-4 flex justify-between items-center">
-                        <button
-                            type="button"
-                            on:click={() => showAddFieldModal = true}
-                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
-                        >
-                            Add Custom Field
-                        </button>
+                    <div class="mt-4 flex justify-end items-center"> {/* Changed justify-between to justify-end */}
                         <button
                             on:click={handleSaveMetadata}
                             class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
