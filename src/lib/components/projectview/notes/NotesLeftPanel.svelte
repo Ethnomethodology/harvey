@@ -462,15 +462,22 @@
             console.log(`[NotesLeftPanel DEBUG] dirname resolved to: ${dirName}`);
             const baseName = await basename(filePath); // e.g., "Test.png"
             console.log(`[NotesLeftPanel DEBUG] basename resolved to: ${baseName}`);
-            const originalExtension = await extname(baseName); // e.g., ".png"
+            const originalExtension = await extname(baseName); // e.g., "png" (no dot)
             console.log(`[NotesLeftPanel DEBUG] originalExtension resolved to: ${originalExtension}`);
-            const fileNameWithoutExtension = baseName.substring(0, baseName.length - originalExtension.length); // e.g., "Test"
+            let fileNameWithoutExtension;
+            if (originalExtension.length > 0) {
+                // Remove the extension and the dot before it
+                fileNameWithoutExtension = baseName.substring(0, baseName.length - originalExtension.length - 1);
+            } else {
+                // No extension, use baseName as is
+                fileNameWithoutExtension = baseName;
+            }
             console.log(`[NotesLeftPanel DEBUG] fileNameWithoutExtension: ${fileNameWithoutExtension}`);
 
             const currentSep = sep();
             console.log(`[NotesLeftPanel DEBUG] path.sep resolved to: ${currentSep}`);
 
-            const metadataFileName = `.${fileNameWithoutExtension}.metadata.json`; // Corrected: e.g., ".Test.metadata.json"
+            const metadataFileName = `.${fileNameWithoutExtension}.metadata.json`; // e.g., ".Test.metadata.json"
             console.log(`[NotesLeftPanel DEBUG] constructed metadataFileName: ${metadataFileName}`);
 
             metadataPath = `${dirName}${currentSep}${metadataFileName}`; // Ensure metadataPath is declared to be accessible in catch
@@ -524,14 +531,22 @@
         try {
             const originalFilePath = currentFileMetadata.file_path;
             const originalFileNameWithExtension = currentFileMetadata.file_name;
-            const originalFileExtension = await extname(originalFileNameWithExtension);
-            const originalFileNameWithoutExtension = originalFileNameWithExtension.substring(0, originalFileNameWithExtension.length - originalFileExtension.length);
+            const originalFileExtension = await extname(originalFileNameWithExtension); // e.g., "png"
+
+            let originalFileNameWithoutExtension;
+            if (originalFileExtension.length > 0) {
+                originalFileNameWithoutExtension = originalFileNameWithExtension.substring(0, originalFileNameWithExtension.length - originalFileExtension.length - 1);
+            } else {
+                originalFileNameWithoutExtension = originalFileNameWithExtension;
+            }
 
             const editedFileNameWithoutExtension = editableMetadata.file_name.trim();
-            const newFileNameWithExtension = editedFileNameWithoutExtension + originalFileExtension;
+            // Construct new full filename carefully based on whether an extension exists
+            const newFileNameWithExtension = originalFileExtension.length > 0
+                ? editedFileNameWithoutExtension + "." + originalFileExtension
+                : editedFileNameWithoutExtension;
 
             const originalDir = await dirname(originalFilePath);
-            // originalFileNameWithoutExtension is already calculated
             const originalMetadataPath = `${originalDir}${sep()}.${originalFileNameWithoutExtension}.metadata.json`; // Corrected
 
             let wasRenamed = false;
