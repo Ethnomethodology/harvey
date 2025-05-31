@@ -459,7 +459,7 @@
             const dirName = await dirname(filePath);
             const baseName = await basename(filePath);
             const metadataFileName = `.${baseName}.metadata.json`;
-            const metadataPath = `${dirName}${sep}${metadataFileName}`;
+            const metadataPath = `${dirName}${sep()}${metadataFileName}`;
 
             console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
 
@@ -516,7 +516,7 @@
             const newFileNameWithExtension = editedFileNameWithoutExtension + originalFileExtension;
 
             const originalDir = await dirname(originalFilePath);
-            const originalMetadataPath = `${originalDir}${sep}.${originalFileNameWithExtension}.metadata.json`;
+            const originalMetadataPath = `${originalDir}${sep()}.${originalFileNameWithExtension}.metadata.json`;
 
             let wasRenamed = false;
             let finalFilePath = originalFilePath;
@@ -533,8 +533,8 @@
                 );
 
                 if (userConfirmedRename) {
-                    const newFilePath = `${originalDir}${sep}${newFileNameWithExtension}`;
-                    const newMetadataPath = `${originalDir}${sep}.${newFileNameWithExtension}.metadata.json`;
+                    const newFilePath = `${originalDir}${sep()}${newFileNameWithExtension}`;
+                    const newMetadataPath = `${originalDir}${sep()}.${newFileNameWithExtension}.metadata.json`;
                     try {
                         console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
                         await rename(originalFilePath, newFilePath);
