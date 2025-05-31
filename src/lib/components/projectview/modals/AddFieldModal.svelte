@@ -62,6 +62,8 @@
             bind:value={fieldName}
             class="{formElementClasses}"
             placeholder="e.g., Case ID, Location"
+            autocorrect="off"
+            autocomplete="off"
           />
         </div>
 
@@ -85,6 +87,8 @@
               id="fieldValueInput"
               bind:value={fieldValue}
               class="{formElementClasses}"
+              autocorrect="off"
+              autocomplete="off"
             />
           {:else if fieldType === 'long_text'}
             <textarea
@@ -92,6 +96,8 @@
               rows="3"
               bind:value={fieldValue}
               class="{formElementClasses}"
+              autocorrect="off"
+              autocomplete="off"
             ></textarea>
           {/if}
         </div>
