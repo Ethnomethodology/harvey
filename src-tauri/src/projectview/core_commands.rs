@@ -4,7 +4,7 @@ use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use std::{
-    fs,
+    fs::{self, remove_file},
     path::{Path, PathBuf},
 };
 use quick_xml;
@@ -13,6 +13,7 @@ use chrono::Utc;
 use serde_json;
 use serde::{Serialize, Deserialize};
 use tauri::Manager; // Added for app_handle.emit
+use super::db_handler::{delete_annotations_from_db, rename_annotations_in_db}; // DB Handler
 use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
 
 #[derive(Clone, serde::Serialize)]
@@ -273,13 +274,12 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
     log::debug!(
         "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}, PDF Annotation Files: {}",
-        file_entries.len(),
+            file_entries.len(),
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
         project_data.imported_transcript_files.files.len(),
-        project_data.document_metadata_files.files.len(),
-        project_data.pdf_annotation_files.files.len() // ADDED
+        project_data.document_metadata_files.files.len()
     );
 
     Ok(ProjectViewData {
@@ -292,7 +292,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         image_files: project_data.image_files.files,
         imported_transcript_files: project_data.imported_transcript_files.files,
         document_metadata_files: project_data.document_metadata_files.files,
-        pdf_annotation_files: project_data.pdf_annotation_files.files, // ADDED
     })
 }
 
@@ -495,15 +494,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     info!("[Backend Delete] Cleaned up XML document (app) metadata entry for original doc '{}'.", item_relative_path_guess);
                     xml_changed = true;
                 }
-                // Clean up PDF annotations if it was a PDF
-                if item_relative_path_guess.to_lowercase().ends_with(".pdf") {
-                    let initial_pdf_annot_len = project_data.pdf_annotation_files.files.len();
-                    project_data.pdf_annotation_files.files.retain(|pa| pa.original_document_relative_path != item_relative_path_guess);
-                    if project_data.pdf_annotation_files.files.len() < initial_pdf_annot_len {
-                        info!("[Backend Delete] Cleaned up XML PDF annotation entry for original PDF '{}'.", item_relative_path_guess);
-                        xml_changed = true;
-                    }
-                }
             },
             "table" => {
                 let initial_table_len = project_data.table_files.files.len();
@@ -673,20 +663,25 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete] Deleting document folder: {}", doc_folder.display());
                 fs::remove_dir_all(&doc_folder)
                     .map_err(|e| CommandError::from(format!("Failed to delete document folder {}: {}", doc_folder.display(), e)))?;
+
+                // If it was a PDF, delete its annotations from DB
+                if item_relative_path.to_lowercase().ends_with(".pdf") {
+                    if let Err(db_err) = delete_annotations_from_db(&item_relative_path) {
+                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for {}: {}", item_relative_path, db_err);
+                        // Continue with file deletion even if DB fails, but log it.
+                    }
+                }
             } else {
                 info!("[Backend Delete] Document folder not found, deleting single file: {}", item_path_buf.display());
                 fs::remove_file(&item_path_buf)
                     .map_err(|e| CommandError::from(format!("Failed to delete document file {}: {}", item_path_buf.display(), e)))?;
-            }
-            // Prune XML entries for this document
+            }            // Prune XML entries for this document
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             // Match XML entries which include the full "harvey_files/Documents/<stem>" path
             let prefix = format!("{}/{}/{}", HARVEY_FILES_DIR, DOCS_DIR, stem);
             project_data.document_files.files.retain(|d| !d.relative_path.starts_with(&prefix));
             project_data.document_metadata_files.files
                 .retain(|m| !m.original_document_relative_path.starts_with(&prefix));
-            project_data.pdf_annotation_files.files
-                .retain(|p| !p.original_document_relative_path.starts_with(&prefix));
             save_project_xml(&xml_path_buf, &project_data)?;
             info!("[Backend Delete] XML entries removed for document '{}'", stem);
         },
@@ -1415,18 +1410,37 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
+    // If it was a PDF, rename its annotations in DB
+    // This needs to happen *before* `item_relative_path` (old path) is lost
+    // And `new_relative_path_for_doc` (new path) is calculated correctly.
+    if old_ext == "pdf" {
+        // Calculate the new relative path for the document before folder rename potentially changes `final_new_doc_file_abs_path` context
+        let temp_final_new_doc_file_abs_path = new_doc_folder_path.join(&new_filename_pathbuf); // This is the final absolute path
+        let temp_new_relative_path_for_doc = temp_final_new_doc_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+        if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &temp_new_relative_path_for_doc) {
+            warn!("[Backend Rename] Failed to rename PDF annotations in DB from {} to {}: {}. File operations will proceed, but DB might be inconsistent.", item_relative_path, temp_new_relative_path_for_doc, db_err);
+            // Decide on rollback strategy or proceed with warning. For now, proceed with warning.
+        }
+    }
+
             // 4. Rename the folder if its name (derived from stem) has changed
             let mut current_doc_folder_path_for_xml_update = old_doc_folder_path.clone(); // Start with old, update if renamed
             if old_doc_folder_path != &new_doc_folder_path {
                 info!("[Backend Rename] Renaming document folder {} -> {}", old_doc_folder_path.display(), new_doc_folder_path.display());
                 if let Err(e) = fs::rename(old_doc_folder_path, &new_doc_folder_path) {
                     warn!("[Backend Rename] Failed to rename document folder: {}. Attempting to revert file renames.", e);
-                    // Revert PDF annotation rename (if any)
+            // Revert PDF annotation rename (if any) - This is tricky because DB change is already attempted.
+            // If DB rename failed, nothing to revert. If it succeeded, we might need to rename it back.
                     if old_ext == "pdf" {
-                        if let Ok(old_pdf_annot_p) = get_pdf_annotation_file_path(old_doc_file_path) {
-                           if let Ok(new_pdf_annot_p_temp) = get_pdf_annotation_file_path(&new_doc_file_path_in_old_folder) {
-                                if old_pdf_annot_p != new_pdf_annot_p_temp && new_pdf_annot_p_temp.exists() { let _ = fs::rename(&new_pdf_annot_p_temp, &old_pdf_annot_p); }
-                           }
+                // Re-calculate paths for potential DB revert
+                let temp_final_new_doc_file_abs_path_for_revert = new_doc_folder_path.join(&new_filename_pathbuf);
+                let temp_new_relative_path_for_doc_for_revert = temp_final_new_doc_file_abs_path_for_revert.strip_prefix(project_base_dir).map_err(|_| CommandError::from("Path stripping error during revert calc"))?.to_string_lossy().replace("\\", "/");
+                // Attempt to rename back in DB if it was successful before
+                if rename_annotations_in_db(&temp_new_relative_path_for_doc_for_revert, &item_relative_path).is_ok() {
+                     warn!("[Backend Rename] Successfully reverted PDF annotation rename in DB during folder rename failure.");
+                } else {
+                     warn!("[Backend Rename] Failed to revert PDF annotation rename in DB during folder rename failure. DB might be inconsistent.");
                         }
                     }
                     // Revert app metadata rename (if any)
@@ -1455,14 +1469,15 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                      new_app_metadata_relative_path_for_xml = Some(final_new_app_metadata_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
                 }
             }
-            let mut new_pdf_annotation_relative_path_for_xml: Option<String> = None;
-            if old_ext == "pdf" {
-                if let Ok(final_new_pdf_annot_abs_path) = get_pdf_annotation_file_path(&final_new_doc_file_abs_path) {
-                    if final_new_pdf_annot_abs_path.exists() {
-                        new_pdf_annotation_relative_path_for_xml = Some(final_new_pdf_annot_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
-                    }
-                }
-            }
+    // PDF Annotation XML is no longer managed
+    // let mut new_pdf_annotation_relative_path_for_xml: Option<String> = None;
+    // if old_ext == "pdf" {
+    //     if let Ok(final_new_pdf_annot_abs_path) = get_pdf_annotation_file_path(&final_new_doc_file_abs_path) {
+    //         if final_new_pdf_annot_abs_path.exists() {
+    //             new_pdf_annotation_relative_path_for_xml = Some(final_new_pdf_annot_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
+    //         }
+    //     }
+    // }
 
             info!("[Backend Rename] Updating XML for document: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_doc, new_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;

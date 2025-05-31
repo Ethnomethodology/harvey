@@ -184,7 +184,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
             imageFiles: loadedData.image_files || [],
             importedTranscriptFiles: loadedData.imported_transcript_files || [],
             documentMetadataFiles: loadedData.document_metadata_files || [],
-            pdfAnnotationFiles: loadedData.pdf_annotation_files || [],
+            // pdfAnnotationFiles is no longer loaded from project XML/backend data structure
             isLoading: false, // isLoading false after successful load
             error: null,
             statusMessage: `Loaded project: ${loadedData.project_name}`
@@ -801,4 +801,65 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     }
 }
 
-export async function loadPdfAnnotationsFromFile(pdfAbsPath) { if (!pdfAbsPath) { setLoadedPdfAnnotations([]); project.update(p => { if(p.selectedDocumentPath === pdfAbsPath && p.isDocumentLoading) return {...p, isDocumentLoading: false, isLoading: false }; return p; }); return; } const filename = await basename(pdfAbsPath); try { const annotationsJsonString = await invoke('load_pdf_annotations', { originalPdfAbsPathStr: pdfAbsPath }); if (annotationsJsonString && typeof annotationsJsonString === 'string') { try { const parsedAnnotations = JSON.parse(annotationsJsonString); setLoadedPdfAnnotations(parsedAnnotations || []); } catch (parseError) { setPdfAnnotationsLoadFailed(pdfAbsPath, `Failed to parse loaded annotations: ${parseError.message}`); } } else if (annotationsJsonString === null) { setLoadedPdfAnnotations([]); } else { setLoadedPdfAnnotations([]); } } catch (e) { const errorMessage = e.message || String(e); setPdfAnnotationsLoadFailed(pdfAbsPath, `Service call failed: ${errorMessage}`); } }
+export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
+    const currentProj = get(project); // Get current project state
+    const projectBaseDir = currentProj.baseDirectory;
+
+    if (!pdfAbsPath) {
+        setLoadedPdfAnnotations([]);
+        project.update(p => {
+            if (p.selectedDocumentPath === pdfAbsPath && p.isDocumentLoading) {
+                return { ...p, isDocumentLoading: false, isLoading: false };
+            }
+            return p;
+        });
+        return;
+    }
+
+    if (!projectBaseDir) {
+        console.error('[ProjectService] Cannot load PDF annotations: Project base directory is missing.');
+        setPdfAnnotationsLoadFailed(pdfAbsPath, "Project base directory not found.");
+        return;
+    }
+
+    let relativePdfPath = pdfAbsPath;
+    if (pdfAbsPath.startsWith(projectBaseDir)) {
+        relativePdfPath = pdfAbsPath.substring(projectBaseDir.length);
+        if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) {
+            relativePdfPath = relativePdfPath.substring(1);
+        }
+    } else {
+        console.warn(`[ProjectService] pdfAbsPath "${pdfAbsPath}" does not seem to be within projectBaseDir "${projectBaseDir}". Using it as is, but this might be an issue for DB lookup.`);
+        // If the path is already relative (e.g. from a failed load retry), this might be okay.
+        // Or, this indicates an issue elsewhere in path management.
+    }
+    relativePdfPath = relativePdfPath.replace(/\\/g, '/'); // Normalize to forward slashes for consistency
+
+    const filename = await basename(pdfAbsPath); // Keep for logging or UI
+    project.update(p => ({ ...p, statusMessage: `Loading annotations for ${filename}...`})); // Optional: status update
+
+    try {
+        // Backend now expects original_pdf_abs_path_str to be the relative path for DB keying
+        const annotationsJsonString = await invoke('load_pdf_annotations', { originalPdfAbsPathStr: relativePdfPath });
+
+        if (annotationsJsonString && typeof annotationsJsonString === 'string') {
+            try {
+                const parsedAnnotations = JSON.parse(annotationsJsonString);
+                setLoadedPdfAnnotations(parsedAnnotations || []);
+            } catch (parseError) {
+                console.error(`[ProjectService] Failed to parse annotations for ${relativePdfPath}:`, parseError);
+                setPdfAnnotationsLoadFailed(pdfAbsPath, `Failed to parse loaded annotations: ${parseError.message}`);
+            }
+        } else if (annotationsJsonString === null) {
+            setLoadedPdfAnnotations([]); // No annotations found is a valid state
+        } else {
+            // Should not happen if backend returns string or null.
+            console.warn(`[ProjectService] Unexpected response from load_pdf_annotations for ${relativePdfPath}:`, annotationsJsonString);
+            setLoadedPdfAnnotations([]);
+        }
+    } catch (e) {
+        const errorMessage = e.message || String(e);
+        console.error(`[ProjectService] Error loading annotations for ${relativePdfPath}:`, errorMessage);
+        setPdfAnnotationsLoadFailed(pdfAbsPath, `Service call failed: ${errorMessage}`);
+    }
+}

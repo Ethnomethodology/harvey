@@ -15,3 +15,4 @@ pub mod cloud_handler;
 pub mod export_handler;
 pub mod shared_types;
 pub mod shared_utils;
+pub mod db_handler;
