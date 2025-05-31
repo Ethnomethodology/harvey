@@ -293,58 +293,58 @@
             <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" placeholder="Enter name without extension"/>
+                        <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs" placeholder="Enter name without extension"/>
                         {#if currentFileMetadata.file_name.includes('.')}
                             <span class="mt-1 text-gray-500 dark:text-gray-400 text-xs block">
                                 Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
                             </span>
                         {/if}
                     {:else}
-                        <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.file_name || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_name || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- File Path (read-only) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
-                    <span class="text-gray-800 dark:text-gray-200 break-all block">{currentFileMetadata.file_path || 'N/A'}</span>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
+                    <span class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || 'N/A'}</span>
                 </div>
 
                 <!-- Last Modified (read-only) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
-                    <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
+                    <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
                 </div>
 
                 <!-- Title (editable) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Title:</label>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Title:</label>
                     {#if isEditing}
-                        <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" />
+                        <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs" />
                     {:else}
-                        <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.title || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.title || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- Description (editable) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Description:</label>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Description:</label>
                     {#if isEditing}
-                        <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
+                        <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs"></textarea>
                     {:else}
-                        <span class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap block">{currentFileMetadata.description || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- Summary (editable) -->
                 <div class="mb-3">
-                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Summary:</label>
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Summary:</label>
                     {#if isEditing}
-                        <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
+                        <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-1.5 py-1 text-xs"></textarea>
                     {:else}
-                        <span class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap block">{currentFileMetadata.summary || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || 'N/A'}</span>
                     {/if}
                 </div>
 
