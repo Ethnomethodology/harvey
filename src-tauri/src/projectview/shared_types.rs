@@ -18,6 +18,27 @@ pub const PDF_ANNOTATIONS_FILE_SUFFIX: &str = "annotations.json"; // For .pdf_st
 
 // --- Struct Definitions ---
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FileMetadata {
+    pub file_name: String,
+    pub file_path: String,
+    pub last_modified: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub summary: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StandardAssetMetadata {
+    pub metadata: FileMetadata,
+    #[serde(default)]
+    pub highlights: Vec<String>,
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SpeakersXml {
     #[serde(rename = "@count", default)]
@@ -269,11 +290,35 @@ impl Default for DocumentHighlightData {
         DocumentHighlightData {
             metadata: FileLevelMetadata {
                 file_name: String::new(),
-                last_modified: Utc::now().to_rfc3339(),
+                last_modified: Utc::now().to_rfc3339(), // Use chrono::Utc
                 title: String::new(),
                 description: String::new(),
                 summary: String::new(),
             },
+            highlights: Vec::new(),
+        }
+    }
+}
+
+// Default implementation for FileMetadata
+impl Default for FileMetadata {
+    fn default() -> Self {
+        FileMetadata {
+            file_name: String::new(),
+            file_path: String::new(),
+            last_modified: Utc::now().to_rfc3339(), // Use chrono::Utc
+            title: String::new(),
+            description: String::new(),
+            summary: String::new(),
+        }
+    }
+}
+
+// Default implementation for StandardAssetMetadata
+impl Default for StandardAssetMetadata {
+    fn default() -> Self {
+        StandardAssetMetadata {
+            metadata: FileMetadata::default(),
             highlights: Vec::new(),
         }
     }

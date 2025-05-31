@@ -18,22 +18,7 @@ use csv;
 // Error as CalamineError might be needed if there's ambiguity, but usually not if not aliased.
 use calamine::{Reader, Xlsx, open_workbook, Data};
 
-// Duplicated struct definitions (to be refactored to shared_types later)
-#[derive(Serialize, Deserialize, Debug)]
-struct FileMetadata {
-    file_name: String,
-    file_path: String,
-    last_modified: String,
-    title: String,
-    description: String,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct StandardAssetMetadata {
-    metadata: FileMetadata,
-    highlights: Vec<String>, // Assuming highlights are strings
-}
+use super::shared_types::{FileMetadata, StandardAssetMetadata};
 
 // Helper to get a unique path in the Tables directory (Unchanged)
 fn get_unique_table_path(

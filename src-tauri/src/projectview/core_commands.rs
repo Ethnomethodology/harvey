@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata}; // Added FileMetadata, StandardAssetMetadata
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -14,22 +14,6 @@ use serde_json;
 use serde::{Serialize, Deserialize};
 use tauri::Manager; // Added for app_handle.emit
 use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
-
-#[derive(Serialize, Deserialize, Debug)]
-struct FileMetadata {
-    file_name: String,
-    file_path: String,
-    last_modified: String,
-    title: String,
-    description: String,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct StandardAssetMetadata {
-    metadata: FileMetadata,
-    highlights: Vec<String>,
-}
 
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {
