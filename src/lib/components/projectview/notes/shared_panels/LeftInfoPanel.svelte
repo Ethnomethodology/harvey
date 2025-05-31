@@ -276,74 +276,75 @@
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
-    <h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0">
-        Metadata
-    </h2>
-    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
+    <h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex justify-between items-center">
+        <span>Metadata</span>
         {#if currentFileMetadata}
             <button
                 on:click={toggleEditMode}
-                class="absolute top-[-2px] right-0 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
             >
                 {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
             </button>
-
-            <div class="p-1 space-y-2">
+        {/if}
+    </h2>
+    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
+        {#if currentFileMetadata}
+            <div class="p-1 space-y-2"> {/* This space-y-2 might become redundant or need adjustment */}
                 <!-- File Name (editable for stem, display full) -->
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">File Name:</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
                         <input type="text" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" placeholder="Enter name without extension"/>
                         {#if currentFileMetadata.file_name.includes('.')}
-                            <span class="ml-1 text-gray-500 dark:text-gray-400 text-xs">
+                            <span class="mt-1 text-gray-500 dark:text-gray-400 text-xs block">
                                 Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
                             </span>
                         {/if}
                     {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.file_name || 'N/A'}</span>
+                        <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.file_name || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- File Path (read-only) -->
-                <div>
-                    <span class="font-medium text-gray-600 dark:text-gray-400">File Path:</span>
-                    <span class="ml-1 text-gray-800 dark:text-gray-200 break-all">{currentFileMetadata.file_path || 'N/A'}</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
+                    <span class="text-gray-800 dark:text-gray-200 break-all block">{currentFileMetadata.file_path || 'N/A'}</span>
                 </div>
 
                 <!-- Last Modified (read-only) -->
-                <div>
-                    <span class="font-medium text-gray-600 dark:text-gray-400">Last Modified:</span>
-                    <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
+                    <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
                 </div>
 
                 <!-- Title (editable) -->
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Title:</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Title:</label>
                     {#if isEditing}
                         <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs" />
                     {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200">{currentFileMetadata.title || 'N/A'}</span>
+                        <span class="text-gray-800 dark:text-gray-200 block">{currentFileMetadata.title || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- Description (editable) -->
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Description:</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Description:</label>
                     {#if isEditing}
                         <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
                     {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentFileMetadata.description || 'N/A'}</span>
+                        <span class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap block">{currentFileMetadata.description || 'N/A'}</span>
                     {/if}
                 </div>
 
                 <!-- Summary (editable) -->
-                <div class="mb-2">
-                    <span class="font-medium text-gray-600 dark:text-gray-400 block mb-0.5">Summary:</span>
+                <div class="mb-3">
+                    <label class="font-medium text-gray-600 dark:text-gray-400 block mb-1">Summary:</label>
                     {#if isEditing}
                         <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1 text-xs"></textarea>
                     {:else}
-                        <span class="ml-1 text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentFileMetadata.summary || 'N/A'}</span>
+                        <span class="text-gray-800 dark:text-gray-200 whitespace-pre-wrap block">{currentFileMetadata.summary || 'N/A'}</span>
                     {/if}
                 </div>
 
