@@ -966,7 +966,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
             if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
                 entry.name = new_stem.clone();
-                entry.relative_path = primary_media_new_relative_path;
+                entry.relative_path = primary_media_new_relative_path.clone();
 
                 for transcript_entry in entry.transcripts.iter_mut() {
                     let old_t_path = PathBuf::from(&transcript_entry.relative_path);
