@@ -165,13 +165,7 @@ pub async fn import_image_file(
         }
     }
 
-    // Create an empty annotations file for this image
-    let annotations_file_name = format!(".{}.annotations.json", source_filename_stem);
-    let annotations_path = folder_path.join(&annotations_file_name);
-    if !annotations_path.exists() {
-        info!("[import_image_file] Creating empty annotations file: {}", annotations_path.display());
-        fs::write(&annotations_path, "").map_err(|e| CommandError::from(format!("Failed to create annotations file {}: {}", annotations_path.display(), e)))?;
-    }
+    // Annotation JSO file creation is removed, DB will handle annotations.
 
     // Return the absolute path of the newly imported image
     Ok(final_image_path.to_string_lossy().to_string())
@@ -181,71 +175,41 @@ pub async fn import_image_file(
 // --- NEW ANNOTATION COMMANDS ---
 
 #[tauri::command]
-pub async fn load_image_annotations(metadata_path_str: String) -> Result<Option<String>, CommandError> {
-    debug!("[load_image_annotations] Attempting to load annotations from: {}", metadata_path_str);
-    let metadata_path = PathBuf::from(metadata_path_str);
+pub async fn load_image_annotations(image_relative_path_str: String) -> Result<Option<String>, CommandError> {
+    use crate::projectview::db_handler::load_annotations_from_db;
+    // log macros info, error, debug are already imported at the top of the file.
 
-    if !metadata_path.exists() {
-        info!("[load_image_annotations] Metadata file not found at {}. No annotations to load.", metadata_path.display());
-        return Ok(None); // Not an error, just no file
-    }
-
-    if !metadata_path.is_file() {
-        warn!("[load_image_annotations] Metadata path {} is not a file.", metadata_path.display());
-        return Err(CommandError::from(format!("Metadata path {} is not a file.", metadata_path.display())));
-    }
-
-    match fs::File::open(&metadata_path) {
-        Ok(mut file) => {
-            let mut contents = String::new();
-            match file.read_to_string(&mut contents) {
-                Ok(_) => {
-                    info!("[load_image_annotations] Successfully loaded annotations from {}.", metadata_path.display());
-                    Ok(Some(contents))
-                }
-                Err(e) => {
-                    error!("[load_image_annotations] Failed to read annotations from {}: {}", metadata_path.display(), e);
-                    Err(CommandError::from(format!("Failed to read annotations file {}: {}", metadata_path.display(), e)))
-                }
-            }
-        }
+    info!("[DB Image Annots] Loading for image: {}", image_relative_path_str);
+    match load_annotations_from_db(&image_relative_path_str, "image") {
+        Ok(Some(content)) => Ok(Some(content)),
+        Ok(None) => Ok(None),
         Err(e) => {
-            error!("[load_image_annotations] Failed to open annotations file {}: {}", metadata_path.display(), e);
-            // Distinguish between "not found" (already handled) and other errors
-            Err(CommandError::from(format!("Failed to open annotations file {}: {}", metadata_path.display(), e)))
+            error!("[DB Image Annots] Error loading annotations for {}: {}", image_relative_path_str, e);
+            Err(CommandError::from(format!("Failed to load image annotations from DB: {}", e)))
         }
     }
 }
 
 #[tauri::command]
-pub async fn save_image_annotations(metadata_path_str: String, annotations_json_string: String) -> Result<(), CommandError> {
-    debug!("[save_image_annotations] Attempting to save annotations to: {}", metadata_path_str);
-    let metadata_path = PathBuf::from(metadata_path_str);
+pub async fn save_image_annotations(image_relative_path_str: String, annotations_json_string: String) -> Result<(), CommandError> {
+    use crate::projectview::db_handler::save_annotations_to_db;
+    // log macros info, error, debug, warn are already imported at the top of the file.
 
-    // Ensure parent directory exists if the path is not just a filename
-    if let Some(parent_dir) = metadata_path.parent() {
-        if !parent_dir.exists() {
-            info!("[save_image_annotations] Parent directory {} does not exist, creating.", parent_dir.display());
-            fs::create_dir_all(parent_dir).map_err(|e| CommandError::from(format!("Failed to create parent directory {}: {}", parent_dir.display(), e)))?;
-        }
+    info!("[DB Image Annots] Saving for image: {}", image_relative_path_str);
+
+    // Basic JSON validation before saving to DB (optional but good practice)
+    if serde_json::from_str::<serde_json::Value>(&annotations_json_string).is_err() {
+        warn!("[DB Image Annots] Annotation JSON content for {} appears invalid. Saving anyway.", image_relative_path_str);
     }
 
-    match fs::File::create(&metadata_path) {
-        Ok(mut file) => {
-            match file.write_all(annotations_json_string.as_bytes()) {
-                Ok(_) => {
-                    info!("[save_image_annotations] Successfully saved annotations to {}.", metadata_path.display());
-                    Ok(())
-                }
-                Err(e) => {
-                    error!("[save_image_annotations] Failed to write annotations to {}: {}", metadata_path.display(), e);
-                    Err(CommandError::from(format!("Failed to write annotations to file {}: {}", metadata_path.display(), e)))
-                }
-            }
-        }
+    match save_annotations_to_db(&image_relative_path_str, &annotations_json_string, "image") {
+        Ok(_) => {
+            info!("[DB Image Annots] Annotations saved successfully for {}.", image_relative_path_str);
+            Ok(())
+        },
         Err(e) => {
-            error!("[save_image_annotations] Failed to create/truncate annotations file {}: {}", metadata_path.display(), e);
-            Err(CommandError::from(format!("Failed to create/truncate annotations file {}: {}", metadata_path.display(), e)))
+            error!("[DB Image Annots] Error saving annotations for {}: {}", image_relative_path_str, e);
+            Err(CommandError::from(format!("Failed to save image annotations to DB: {}", e)))
         }
     }
 }

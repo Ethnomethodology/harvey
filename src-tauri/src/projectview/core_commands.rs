@@ -753,6 +753,12 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             } else {
                 warn!("[Backend Delete] Deleted image folder (or it was already gone), but no matching entry found in XML for path '{}'.", item_relative_path);
             }
+
+            // Add this call (item_relative_path is the relative path of the image file):
+            if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "image") {
+                warn!("[Backend Delete] Failed to delete image annotations from DB for {}: {}. File deletion will proceed.", item_relative_path, db_err);
+                // Log the error but continue with file system cleanup.
+            }
         },
         _ => {
             error!("[Backend Delete] Deleting items of type '{}' is not supported directly: {}", item_type, item_path);
@@ -1862,30 +1868,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     .map_err(|e| CommandError::from(format!("Failed to rename image file (pre-folder op): {}", e)))?;
             }
 
-            // 2. Rename associated annotation file (within its current/old folder)
-            // old_image_file_abs_path is the original path to the image (e.g. .../OldStem/OldImage.png)
-            // new_image_file_path_in_old_folder is the path if image is renamed but still in old folder (e.g. .../OldStem/NewImage.png)
-            if let Ok(old_annotation_path) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
-                if old_annotation_path.exists() {
-                    // new_annotation_path_in_old_folder is path for annotation if image renamed in old folder. (e.g. .../OldStem/.NewImage.annotations.json)
-                    if let Ok(new_annotation_path_in_old_folder) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                        if old_annotation_path != new_annotation_path_in_old_folder { // Check if annotation name needs to change
-                            info!("[Backend Rename Image] Renaming image annotation (pre-folder op): {} -> {}", old_annotation_path.display(), new_annotation_path_in_old_folder.display());
-                            if new_annotation_path_in_old_folder.exists() { // Conflict for annotation file
-                                warn!("[Backend Rename Image] Target image annotation {} already exists. Skipping rename of {}.", new_annotation_path_in_old_folder.display(), old_annotation_path.display());
-                            } else {
-                                if let Err(e) = fs::rename(&old_annotation_path, &new_annotation_path_in_old_folder) {
-                                    warn!("[Backend Rename Image] Failed to rename image annotation: {}. Attempting to revert main image rename (pre-folder op).", e);
-                                    if old_image_file_abs_path != new_image_file_path_in_old_folder { // only revert if it was actually renamed
-                                        let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
-                                    }
-                                    return Err(CommandError::from(format!("Failed to rename image annotation file: {}", e)));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Physical JSO annotation file rename is removed. DB call will handle annotation rename.
 
             let mut folder_renamed = false;
             // 3. Rename the main image folder if its name (derived from stem) has changed
@@ -2040,6 +2023,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             // --- XML Update ---
             let new_relative_path_for_image_xml = final_new_image_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+            // Add this call, typically after successful file system renames and before or during XML updates:
+            if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &new_relative_path_for_image_xml, "image") {
+                warn!("[Backend Rename Image] Failed to rename image annotations in DB from {} to {}: {}. File and XML operations may have succeeded, but DB might be inconsistent.", item_relative_path, new_relative_path_for_image_xml, db_err);
+                // Consider if a rollback of file operations is needed or if logging is sufficient.
+            }
+
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut updated_xml = false;
