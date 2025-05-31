@@ -1842,7 +1842,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                             } else {
                                 if let Err(e) = fs::rename(&old_annotation_path, &new_annotation_path_in_old_folder) {
                                     warn!("[Backend Rename Image] Failed to rename image annotation: {}. Attempting to revert main image rename (pre-folder op).", e);
-                                    if old_image_file_abs_path != &new_image_file_path_in_old_folder { // only revert if it was actually renamed
+                                    if old_image_file_abs_path != new_image_file_path_in_old_folder { // only revert if it was actually renamed
                                         let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
                                     }
                                     return Err(CommandError::from(format!("Failed to rename image annotation file: {}", e)));
@@ -1924,7 +1924,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
             let final_metadata_to_write: StandardAssetMetadata;
             if let Some(mut metadata) = parsed_old_metadata_content.take() { // Use .take() to get ownership
                 info!("[Backend Rename Image] Updating existing asset metadata for {}", new_asset_metadata_abs_path.display());
-                metadata.metadata.file_name = new_image_filename_with_ext_str.clone();
+                metadata.metadata.file_name = new_image_filename_with_ext_str.to_string();
                 metadata.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
                 metadata.metadata.last_modified = Utc::now().to_rfc3339();
                 final_metadata_to_write = metadata;
@@ -1955,7 +1955,7 @@ pub async fn rename_project_item( item_path: String, new_name: String, project_x
                 info!("[Backend Rename Image] Creating new default asset metadata for {}", new_asset_metadata_abs_path.display());
                 final_metadata_to_write = StandardAssetMetadata {
                     metadata: FileMetadata {
-                        file_name: new_image_filename_with_ext_str.clone(),
+                        file_name: new_image_filename_with_ext_str.to_string(),
                         file_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
                         last_modified: Utc::now().to_rfc3339(),
                         title: "".to_string(),
