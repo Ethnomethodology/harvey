@@ -23,6 +23,16 @@ struct MediaRenamedPayload {
     new_absolute_path: String,
 }
 
+#[derive(Clone, Serialize)]
+struct ItemRenamedPayload {
+    old_path: String,
+    new_path: String,
+    new_name: String,
+    item_type: String,
+    project_xml_path: String,
+    base_directory: String,
+}
+
 // Helper function to get annotation metadata path for an image (from existing code)
 fn get_annotation_metadata_path_for_image(image_path: &Path) -> Result<PathBuf, CommandError> {
     let parent_dir = image_path.parent().ok_or_else(|| {
@@ -1042,6 +1052,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if xml_changed {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: new_path.to_string_lossy().into_owned(),
+                    new_name: new_filename_with_ext.to_string(),
+                    item_type: "transcript".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for transcript: {}", e);
+                }
             }
         },
         "imported_transcript" => {
@@ -1261,6 +1283,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
+                    new_name: new_transcript_filename_with_ext_str.clone(),
+                    item_type: "imported_transcript".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
+                }
             }
 
         },
@@ -1479,6 +1513,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 project_data.pdf_annotation_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for document and its associated files.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: final_new_doc_file_abs_path.to_string_lossy().into_owned(),
+                    new_name: new_filename_with_ext_str.to_string(),
+                    item_type: "doc".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for doc: {}", e);
+                }
             }
         },
         "table" => {
@@ -1734,6 +1780,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Table] XML saved.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
+                    new_name: new_table_filename_str.clone(),
+                    item_type: "table".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for table: {}", e);
+                }
             }
         },
         "image" => {
@@ -2030,6 +2088,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Image] XML saved for image rename.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
+                    new_name: new_image_filename_with_ext_str.to_string(),
+                    item_type: "image".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for image: {}", e);
+                }
             }
         },
         _ => {
