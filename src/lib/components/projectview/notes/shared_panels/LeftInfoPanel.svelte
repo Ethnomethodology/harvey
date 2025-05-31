@@ -375,7 +375,7 @@
                 </div>
 
                 <!-- Custom Fields Section -->
-                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) || isEditing )} {/* Show header if editing for the add button */}
+                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) || isEditing )}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
@@ -436,7 +436,7 @@
                 <!-- End of custom fields rendering -->
 
                 {#if isEditing}
-                    <div class="mt-4 flex justify-end items-center"> {/* Changed justify-between to justify-end */}
+                    <div class="mt-4 flex justify-end items-center"> 
                         <button
                             on:click={handleSaveMetadata}
                             class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
