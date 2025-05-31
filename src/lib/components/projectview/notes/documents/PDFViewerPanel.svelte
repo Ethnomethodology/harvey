@@ -1076,29 +1076,18 @@ import { get } from 'svelte/store';
         // A simple _listeners = {} might work for the default EventBus but isn't a public API.
         // eventBus._listeners = {}; // Risky, internal property.
 
-        eventBus.on('pagechanging', async (e) => {
+        eventBus.on('pagechanging', (e) => { // Made synchronous again as loadAnnotationsForPageRange is async
             if (e.pageNumber && e.pageNumber !== currentPageNum) {
-                const newPageNum = e.pageNumber;
-                currentPageNum = newPageNum;
+                currentPageNum = e.pageNumber;
                 pageRendering = true;
                 hideSelectionToolbar();
 
                 if (pdfViewer && pdfDoc && numPages > 0) {
-                    // console.log(`[pagechanging] event for page ${newPageNum}. Triggering annotation load.`);
-                    await loadAnnotationsForPageRange(newPageNum - 1); // Load new/missing annotations in range
-
-                    // After loading, ensure all *loaded* annotations in the new visible buffer are re-rendered
-                    const pageBuffer = 2;
-                    const startRenderPage = Math.max(0, newPageNum - 1 - pageBuffer);
-                    const endRenderPage = Math.min(numPages - 1, newPageNum - 1 + pageBuffer);
-                    // console.log(`[pagechanging] Re-rendering visible loaded pages: ${startRenderPage + 1} to ${endRenderPage + 1}`);
-                    for (let i = startRenderPage; i <= endRenderPage; i++) {
-                        if (loadedPagesWithAnnotations.has(i)) {
-                            // console.log(`[pagechanging] Re-applying highlights for already loaded page ${i + 1}`);
-                            await applyHighlightsForPage(i); // Re-render this page's highlights
-                        }
-                    }
+                    // console.log(`[pagechanging] event for page ${currentPageNum}. Triggering annotation load for target page.`);
+                    loadAnnotationsForPageRange(currentPageNum - 1); // Process the target page
                 }
+                // The loop for re-applying highlights to the visible buffer has been removed.
+                // Re-rendering now relies more on textlayerrendered.
             }
         });
         eventBus.on('pagerendered', (e) => { 
