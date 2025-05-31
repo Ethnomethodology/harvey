@@ -435,8 +435,6 @@
       return () => document.removeEventListener('click', listener);
     });
 
-    $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
-
     // Metadata related functions (loadMetadata, toggleEditMode, handleSaveMetadata) and reactive blocks removed.
     // selectedItemPathInStore is kept for now, assuming it might be used for other UI elements like selection highlighting.
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
