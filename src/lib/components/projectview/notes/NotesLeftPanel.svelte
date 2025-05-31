@@ -6,11 +6,11 @@
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
-	import { readTextFile, writeFile, renameFile } from '@tauri-apps/api/fs';
+	import { readTextFile, writeTextFile, rename } from '@tauri-apps/plugin-fs';
 	import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { convertFileSrc } from '@tauri-apps/api/core'; // invoke removed if not used elsewhere
+    import { convertFileSrc } from '@tauri-apps/api/core';
 
     const dispatch = createEventDispatcher();
 
@@ -537,9 +537,9 @@
                     const newMetadataPath = `${originalDir}${sep}.${newFileNameWithExtension}.metadata.json`;
                     try {
                         console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
-                        await renameFile(originalFilePath, newFilePath);
+                        await rename(originalFilePath, newFilePath);
                         console.log(`[NotesLeftPanel] Renaming metadata file from ${originalMetadataPath} to ${newMetadataPath}`);
-                        await renameFile(originalMetadataPath, newMetadataPath);
+                        await rename(originalMetadataPath, newMetadataPath);
 
                         wasRenamed = true;
                         finalFilePath = newFilePath;
@@ -584,7 +584,7 @@
             objectToWrite.version = objectToWrite.version || "1.0"; // Ensure version if missing
             objectToWrite.last_modified_harvey = new Date().toISOString(); // Update overall object mod time
 
-            await writeFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
+            await writeTextFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
 
             // Update current state after successful save
             currentFileMetadata = { ...updatedFileMetadata }; // Make sure it's a new object for reactivity if needed elsewhere
