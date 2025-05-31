@@ -48,38 +48,6 @@
     "fs:scope-home",
     "fs:scope-document-recursive",
     {
-      "identifier": "fs:allow-read-metadata-files",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**/.*.metadata.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-write-metadata-files",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**/.*.metadata.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-exists-metadata-files",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**/.*.metadata.json"
-        }
-      ]
-    },
-    {
-      "identifier": "fs:allow-rename-metadata-files",
-      "allow": [
-        {
-          "path": "$DOCUMENT/**/.*.metadata.json"
-        }
-      ]
-    },
-    {
       "identifier": "shell:allow-execute",
       "allow": [
         {
