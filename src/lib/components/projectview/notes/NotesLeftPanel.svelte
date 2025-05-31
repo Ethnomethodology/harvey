@@ -462,10 +462,10 @@
 
             console.log(`[NotesLeftPanel] Loading metadata from: ${metadataPath}`);
 
-            const fileContents = await invoke('read_text_file', { path: metadataPath });
+            const fileContents = await invoke('read_file_content', { path: metadataPath });
             // Ensure fileContents is actually a string if invoke returns an object like { contents: "..." }
-            // For this subtask, assuming invoke('read_text_file') returns string directly or JSON.parse handles it.
-            const parsed = JSON.parse(typeof fileContents === 'string' ? fileContents : fileContents.contents);
+            // Based on projectService.js, read_file_content likely returns a string directly.
+            const parsed = JSON.parse(typeof fileContents === 'string' ? fileContents : fileContents.contents); // Keep check just in case
 
 
             if (parsed && parsed.metadata) {
@@ -543,9 +543,9 @@
                     const newMetadataPath = `${originalDir}${sep}.${newFileNameWithExtension}.metadata.json`;
                     try {
                         console.log(`[NotesLeftPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
-                        await invoke('rename_file', { oldPath: originalFilePath, newPath: newFilePath });
+                        await invoke('fs_rename_file', { old_path: originalFilePath, new_path: newFilePath });
                         console.log(`[NotesLeftPanel] Renaming metadata file from ${originalMetadataPath} to ${newMetadataPath}`);
-                        await invoke('rename_file', { oldPath: originalMetadataPath, newPath: newMetadataPath });
+                        await invoke('fs_rename_file', { old_path: originalMetadataPath, new_path: newMetadataPath });
 
                         wasRenamed = true;
                         finalFilePath = newFilePath;
@@ -590,7 +590,7 @@
             objectToWrite.version = objectToWrite.version || "1.0"; // Ensure version if missing
             objectToWrite.last_modified_harvey = new Date().toISOString(); // Update overall object mod time
 
-            await invoke('write_text_file', { path: finalMetadataPath, contents: JSON.stringify(objectToWrite, null, 2) });
+            await invoke('fs_write_text_file', { path: finalMetadataPath, content: JSON.stringify(objectToWrite, null, 2) });
 
             // Update current state after successful save
             currentFileMetadata = { ...updatedFileMetadata }; // Make sure it's a new object for reactivity if needed elsewhere
