@@ -3,9 +3,10 @@
     import { onMount } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     // import { get } from 'svelte/store'; // Not strictly needed if using $project
-    import { readTextFile, writeTextFile, rename } from '@tauri-apps/plugin-fs';
+    import { readTextFile, writeTextFile, rename as fsRename } from '@tauri-apps/plugin-fs'; // Aliased to avoid conflict
     import { dirname, basename, sep, extname } from '@tauri-apps/api/path';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+    import { renameProjectItem } from '$lib/services/projectService.js';
 
     let currentFileMetadata = null;
     let fullLoadedMetadataObject = null;
@@ -19,6 +20,10 @@
 
     const EDIT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
     const CANCEL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>`;
+
+    const AUDIO_EXTENSIONS = new Set(['mp3','wav','m4a','ogg','aac','flac']);
+    const VIDEO_EXTENSIONS = new Set(['mp4','mov','avi','mkv','webm']);
+    const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
     let previousSelectedItemPath = null;
 
@@ -124,6 +129,7 @@
 
             const originalDir = await dirname(originalFilePath);
             const currentSep = sep();
+            // originalFileNameWithoutExtension is already calculated earlier correctly
             const originalMetadataPath = `${originalDir}${currentSep}.${originalFileNameWithoutExtension}.metadata.json`;
 
             let wasRenamed = false;
@@ -133,46 +139,55 @@
             if (editedFileNameWithoutExtension !== originalFileNameWithoutExtension) {
                 if (!editedFileNameWithoutExtension) {
                     await message('File name cannot be empty.', { title: 'Invalid File Name', type: 'error' });
+                    isEditing = true; // Stay in edit mode
                     return;
                 }
-                const userConfirmedRename = await confirm(
-                    `The file name has changed.\nOld: '${originalFileNameWithoutExtension}'\nNew: '${editedFileNameWithoutExtension}'\n\nDo you want to rename the actual file and its metadata file?`,
-                    { title: 'Confirm File Rename', okLabel: 'Rename', cancelLabel: 'Cancel' }
-                );
+                // Assuming renameProjectItem handles confirmation or it's handled upstream.
+                try {
+                    console.log(`[LeftInfoPanel] Calling renameProjectItem: path=${originalFilePath}, newName=${editedFileNameWithoutExtension}, type=${currentItemType}`);
+                    await renameProjectItem(originalFilePath, editedFileNameWithoutExtension, currentItemType);
 
-                if (userConfirmedRename) {
-                    const newFilePath = `${originalDir}${currentSep}${newFileNameWithExtension}`;
-                    const newMetadataPath = `${originalDir}${currentSep}.${editedFileNameWithoutExtension}.metadata.json`;
-                    try {
-                        console.log(`[LeftInfoPanel] Renaming actual file from ${originalFilePath} to ${newFilePath}`);
-                        await rename(originalFilePath, newFilePath);
-                        console.log(`[LeftInfoPanel] Renaming metadata file from ${originalMetadataPath} to ${newMetadataPath}`);
-                        await rename(originalMetadataPath, newMetadataPath);
+                    wasRenamed = true;
 
-                        wasRenamed = true;
-                        finalFilePath = newFilePath;
-                        finalMetadataPath = newMetadataPath;
+                    // Update paths for saving metadata to the new location
+                    // newFileNameWithExtension was already calculated based on editedFileNameWithoutExtension
+                    finalFilePath = `${originalDir}${currentSep}${newFileNameWithExtension}`;
+                    finalMetadataPath = `${originalDir}${currentSep}.${editedFileNameWithoutExtension}.metadata.json`;
 
-                        console.log('[LeftInfoPanel] File and metadata renamed successfully.');
+                    // The project store should refresh via events triggered by renameProjectItem.
+                    // This should lead to selectedItemPathInStore updating, and loadMetadata re-running for the new path.
+                    // If not, manual update of currentFileMetadata might be needed, but ideally the reactive flow handles it.
+                    await message("File renamed via project service. Metadata will be saved to the new location.", { title: 'Rename Successful' });
 
-                         if ($project.selectedDocumentPath === originalFilePath) project.update(p => ({...p, selectedDocumentPath: finalFilePath}));
-                         if ($project.currentImportedTranscriptPath === originalFilePath) project.update(p => ({...p, currentImportedTranscriptPath: finalFilePath}));
-                         if ($project.selectedMediaNotePath === originalFilePath) project.update(p => ({...p, selectedMediaNotePath: finalFilePath}));
-                        // TODO: Consider a more robust way to update project state, e.g. via projectService or dedicated store action
-                    } catch (err) {
-                        console.error(`[LeftInfoPanel] Error renaming file/metadata:`, err);
-                        await message(`Error renaming file: ${err.message || err}. Other changes have not been saved.`, { title: 'Rename Failed', type: 'error' });
-                        return;
-                    }
-                } else {
-                    editableMetadata.file_name = originalFileNameWithoutExtension; // Revert in form
-                    await message('Rename cancelled. Other changes were not saved.', { title: 'Rename Cancelled', type: 'info' });
-                    isEditing = false;
-                    return;
+                } catch (err) {
+                    console.error(`[LeftInfoPanel] renameProjectItem failed:`, err);
+                    await message(`Error renaming item via project service: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
+                    isEditing = true; // Stay in edit mode if rename fails
+                    return; // Stop the save process
                 }
             }
 
-            let updatedFileMetadata = { ...currentFileMetadata };
+            let updatedFileMetadata = { ...currentFileMetadata }; // currentFileMetadata might be stale if rename happened and store hasn't updated yet
+            // If wasRenamed, currentFileMetadata's name/path are old. The new name/path are in newFileNameWithExtension and finalFilePath
+            // However, the metadata content (title, desc, summary) is from the *original* metadata object (fullLoadedMetadataObject)
+            // or from currentFileMetadata if not renamed.
+
+            // Let's ensure we are working with the correct base metadata if a rename happened.
+            // If renamed, fullLoadedMetadataObject still holds the *content* of the *original* metadata file.
+            // We want to save the *editable changes* to the *new* metadata file location.
+            // updatedFileMetadata should reflect the state of *editableMetadata* applied to the *original* structure.
+
+            if (wasRenamed && fullLoadedMetadataObject && fullLoadedMetadataObject.metadata) {
+                 // If a rename happened, the metadata structure (like highlights) should be from the original file's content,
+                 // but file_name and file_path should be updated.
+                 updatedFileMetadata = { ...fullLoadedMetadataObject.metadata };
+                 updatedFileMetadata.file_name = newFileNameWithExtension;
+                 updatedFileMetadata.file_path = finalFilePath;
+            } else if (currentFileMetadata) {
+                 updatedFileMetadata = { ...currentFileMetadata };
+            }
+            // else: should not happen due to initial checks, but as a fallback, it would be an empty object.
+
             updatedFileMetadata.title = editableMetadata.title.trim();
             updatedFileMetadata.description = editableMetadata.description.trim();
             updatedFileMetadata.summary = editableMetadata.summary.trim();
@@ -182,18 +197,25 @@
                 updatedFileMetadata.file_name = newFileNameWithExtension; // Save new full name with ext
                 updatedFileMetadata.file_path = finalFilePath;
             }
-            // If not renamed, editableMetadata.file_name (stem) is not saved back to currentFileMetadata.file_name yet.
-            // currentFileMetadata.file_name should always be full name with extension.
+            // Apply changes from editableMetadata
+            updatedFileMetadata.title = editableMetadata.title.trim();
+            updatedFileMetadata.description = editableMetadata.description.trim();
+            updatedFileMetadata.summary = editableMetadata.summary.trim();
+            updatedFileMetadata.last_modified = new Date().toISOString();
+            // file_name and file_path are handled by rename logic if 'wasRenamed' is true
 
-            let objectToWrite = { ...fullLoadedMetadataObject };
-            objectToWrite.metadata = updatedFileMetadata;
+            let objectToWrite = { ...fullLoadedMetadataObject }; // Start with the original full object
+            objectToWrite.metadata = updatedFileMetadata; // Replace the metadata part
             objectToWrite.version = objectToWrite.version || "1.0";
             objectToWrite.last_modified_harvey = new Date().toISOString();
 
+            console.log(`[LeftInfoPanel] Writing metadata to: ${finalMetadataPath}`);
             await writeTextFile(finalMetadataPath, JSON.stringify(objectToWrite, null, 2));
 
+            // After successful save, update the local state to reflect the saved data.
+            // This is important if loadMetadata doesn't immediately re-run (e.g., if path didn't change but content did)
             currentFileMetadata = { ...updatedFileMetadata };
-            fullLoadedMetadataObject = objectToWrite;
+            fullLoadedMetadataObject = { ...objectToWrite };
 
             isEditing = false;
             await message('Metadata saved successfully!', { title: 'Success' });
@@ -205,6 +227,34 @@
     }
 
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
+
+    let currentItemType = null;
+    $: if (selectedItemPathInStore && $project.baseDirectory) {
+        const path = selectedItemPathInStore;
+        // Try to get the actual filename from currentFileMetadata first, as it's most reliable after load
+        const name = currentFileMetadata?.file_name || (path ? path.substring(path.lastIndexOf(sep()) + 1) : '');
+        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+
+        if (AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) {
+            currentItemType = 'media';
+        } else if (IMAGE_EXTENSIONS.has(ext)) {
+            currentItemType = 'image';
+        } else if (ext === 'pdf' || ext === 'json' || ext === 'txt' || ext === 'md') {
+            const isImportedTranscript = $project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}${sep()}${f.relativePath}` === path);
+            if (isImportedTranscript) {
+                currentItemType = 'imported_transcript';
+            } else {
+                currentItemType = 'doc';
+            }
+        } else if (ext === 'csv' || ext === 'xlsx') {
+            currentItemType = 'table';
+        } else {
+            currentItemType = 'unknown';
+        }
+        console.log(`[LeftInfoPanel] Determined currentItemType: ${currentItemType} for path: ${path} (name: ${name}, ext: ${ext})`);
+    } else {
+        currentItemType = null;
+    }
 
     $: {
         if (selectedItemPathInStore !== previousSelectedItemPath) {
@@ -218,6 +268,7 @@
             } else {
                 currentFileMetadata = null;
                 fullLoadedMetadataObject = null;
+                currentItemType = null; // Reset item type if no path
             }
             previousSelectedItemPath = selectedItemPathInStore;
         } else if (!selectedItemPathInStore && previousSelectedItemPath !== null) {
@@ -225,6 +276,7 @@
             console.log(`[LeftInfoPanel] selectedItemPathInStore became null (was '${previousSelectedItemPath}'). Resetting metadata and edit state.`);
             currentFileMetadata = null;
             fullLoadedMetadataObject = null;
+            currentItemType = null; // Reset item type
             if (isEditing) {
                 isEditing = false;
             }
