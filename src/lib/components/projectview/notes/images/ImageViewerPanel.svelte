@@ -276,36 +276,6 @@
             console.log('[ImageViewerPanel createAnnotation] currentAnnotations updated. Count:', currentAnnotations.length);
 
             await saveAnnotationsForImage();
-
-            // Re-select the drawing tool for convenience
-            // Ensure anno and toolbar are valid and methods exist before attempting to use them.
-            if (toolbar && anno && typeof anno.setDrawingTool === 'function') {
-                let currentSelectedToolName = null;
-                if (typeof anno.getSelectedTool === 'function') {
-                    try {
-                        currentSelectedToolName = anno.getSelectedTool();
-                        // console.log(`[ImageViewerPanel createAnnotation] Tool from getSelectedTool: ${currentSelectedToolName}`);
-                    } catch (e) {
-                        console.warn('[ImageViewerPanel createAnnotation] Error calling anno.getSelectedTool():', e);
-                        // currentSelectedToolName remains null, will lead to default tool re-selection
-                    }
-                } else {
-                    console.warn('[ImageViewerPanel createAnnotation] anno.getSelectedTool is not a function.');
-                }
-
-                if (currentSelectedToolName) {
-                    console.log(`[ImageViewerPanel createAnnotation] Re-activating tool: ${currentSelectedToolName}`);
-                    anno.setDrawingTool(currentSelectedToolName);
-                } else {
-                    console.log("[ImageViewerPanel createAnnotation] Defaulting to 'rect' tool (getSelectedTool failed, returned null/undefined, or was not available).");
-                    anno.setDrawingTool('rect');
-                }
-            } else {
-                // Log issues if critical components for tool re-selection are missing
-                if (!toolbar) console.warn("[ImageViewerPanel createAnnotation] Toolbar not available for re-selecting tool.");
-                if (!anno) console.warn("[ImageViewerPanel createAnnotation] Annotorious instance (anno) not available for re-selecting tool.");
-                else if (typeof anno.setDrawingTool !== 'function') console.warn("[ImageViewerPanel createAnnotation] anno.setDrawingTool is not a function, cannot re-select tool.");
-            }
             
             console.log("[ImageViewerPanel createAnnotation] All annotations in Annotorious after creation:", anno.getAnnotations());
         });
