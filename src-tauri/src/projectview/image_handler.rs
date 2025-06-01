@@ -6,11 +6,11 @@ use crate::projectview::core_commands::get_image_asset_metadata_path;
 use chrono::Utc;
 use serde_json;
 // serde::{Serialize, Deserialize} removed
-use log::{info, warn, debug, error}; // Added error
+use log::{info, warn, error}; // debug removed
 use std::{
     fs,
-    io::{Read, Write}, // Added for file operations
-    path::PathBuf, // Path removed
+    // io::{Read, Write} removed as per instruction, assuming File ops below don't need direct trait import
+    path::PathBuf,
 };
 use quick_xml;
 
