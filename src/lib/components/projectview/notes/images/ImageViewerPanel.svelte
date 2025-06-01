@@ -1,7 +1,9 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-    import { dirname, join } from '@tauri-apps/api/path';
+    import { dirname, join, sep } from '@tauri-apps/api/path'; // ensure sep is imported
+    import { get } from 'svelte/store';
+    import { project } from '$lib/stores/projectStore.js';
     import OpenSeadragon from 'openseadragon';
     import OpenSeadragonAnnotator from '@recogito/annotorious-openseadragon';
     import Toolbar from '@recogito/annotorious-toolbar';
@@ -36,23 +38,23 @@
 
     const DELETE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5m2.5 3a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>`;
 
-    async function getMetadataPathForImage(imgPath) {
-        if (!imgPath) return null;
-        try {
-            const dir = await dirname(imgPath);
-            let filename = imgPath.substring(dir.length + (dir.endsWith('/') || dir.endsWith('\\') ? 0 : 1));
-            const lastDot = filename.lastIndexOf('.');
-            const baseName = lastDot === -1 ? filename : filename.substring(0, lastDot);
-            const metadataFilename = `.${baseName}.annotations.json`;
-            return await join(dir, metadataFilename);
-        } catch (e) {
-            console.error("[ImageViewerPanel] Error constructing metadata path:", e);
-            return null;
-        }
-    }
+    // async function getMetadataPathForImage(imgPath) {
+    //     if (!imgPath) return null;
+    //     try {
+    //         const dir = await dirname(imgPath);
+    //         let filename = imgPath.substring(dir.length + (dir.endsWith('/') || dir.endsWith('\\') ? 0 : 1));
+    //         const lastDot = filename.lastIndexOf('.');
+    //         const baseName = lastDot === -1 ? filename : filename.substring(0, lastDot);
+    //         const metadataFilename = `.${baseName}.annotations.json`;
+    //         return await join(dir, metadataFilename);
+    //     } catch (e) {
+    //         console.error("[ImageViewerPanel] Error constructing metadata path:", e);
+    //         return null;
+    //     }
+    // }
 
     async function loadAnnotationsForImage(imgPath) {
-        console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for ${imgPath}`);
+        // console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for ${imgPath}`);
         if (!anno) {
             console.warn("[ImageViewerPanel loadAnnotationsForImage] Annotorious not initialized.");
             currentAnnotations = [];
@@ -61,28 +63,43 @@
         anno.clearAnnotations();
         currentAnnotations = [];
 
-        const metadataPath = await getMetadataPathForImage(imgPath);
-        if (!metadataPath) {
-            console.warn(`[ImageViewerPanel loadAnnotationsForImage] Could not determine metadata path for ${imgPath}.`);
-            return;
+        // const metadataPath = await getMetadataPathForImage(imgPath);
+        // if (!metadataPath) {
+        //     console.warn(`[ImageViewerPanel loadAnnotationsForImage] Could not determine metadata path for ${imgPath}.`);
+        //     return;
+        // }
+        const currentProj = get(project);
+        const projectBaseDir = currentProj.baseDirectory;
+        let relativeImagePath = imgPath; // imgPath is the absolute path to the image
+
+        if (projectBaseDir && imgPath.startsWith(projectBaseDir)) {
+            relativeImagePath = imgPath.substring(projectBaseDir.length);
+            if (relativeImagePath.startsWith(sep) || relativeImagePath.startsWith('/') || relativeImagePath.startsWith('\\')) {
+                relativeImagePath = relativeImagePath.substring(1);
+            }
+        } else {
+            console.warn(`[ImageViewerPanel loadAnnotationsForImage] imgPath "${imgPath}" may not be within projectBaseDir "${projectBaseDir}". Using path as is for DB key, this might fail if not truly relative.`);
         }
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+
+        console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
 
         try {
-            const annotationsJsonString = await invoke('load_image_annotations', { metadataPathStr: metadataPath });
+            const annotationsJsonString = await invoke('load_image_annotations', { imageRelativePathStr: relativeImagePath });
             if (annotationsJsonString && typeof annotationsJsonString === 'string') {
                 const loaded = JSON.parse(annotationsJsonString);
                 if (Array.isArray(loaded)) {
                     anno.setAnnotations(loaded);
                     currentAnnotations = JSON.parse(JSON.stringify(loaded)); // Ensure deep copy for local cache
-                    console.log(`[ImageViewerPanel loadAnnotationsForImage] Loaded ${loaded.length} annotations from ${metadataPath}.`);
+                    console.log(`[ImageViewerPanel loadAnnotationsForImage] Loaded ${loaded.length} annotations for ${relativeImagePath}.`);
                 } else {
-                    console.warn(`[ImageViewerPanel loadAnnotationsForImage] Loaded data from ${metadataPath} is not an array.`);
+                    console.warn(`[ImageViewerPanel loadAnnotationsForImage] Loaded data for ${relativeImagePath} is not an array.`);
                 }
             } else {
-                 console.log(`[ImageViewerPanel loadAnnotationsForImage] No annotations file found or empty content at ${metadataPath}.`);
+                 console.log(`[ImageViewerPanel loadAnnotationsForImage] No annotations found or empty content for ${relativeImagePath}.`);
             }
         } catch (err) {
-            console.error(`[ImageViewerPanel loadAnnotationsForImage] Error for ${imgPath} from ${metadataPath}:`, err);
+            console.error(`[ImageViewerPanel loadAnnotationsForImage] Error for ${relativeImagePath} (absolute: ${imgPath}):`, err);
             currentAnnotations = [];
         }
     }
@@ -92,20 +109,36 @@
             console.warn("[ImageViewerPanel saveAnnotationsForImage] No image path, cannot save.");
             return;
         }
-        const metadataPath = await getMetadataPathForImage(currentLoadedPath);
-        if (!metadataPath) {
-            console.error(`[ImageViewerPanel saveAnnotationsForImage] Could not determine metadata path for ${currentLoadedPath}.`);
+        // const metadataPath = await getMetadataPathForImage(currentLoadedPath);
+        // if (!metadataPath) {
+        //     console.error(`[ImageViewerPanel saveAnnotationsForImage] Could not determine metadata path for ${currentLoadedPath}.`);
+        //     return;
+        // }
+        const currentProj = get(project);
+        const projectBaseDir = currentProj.baseDirectory;
+        let relativeImagePath = currentLoadedPath; // currentLoadedPath is the absolute path
+
+        if (projectBaseDir && currentLoadedPath.startsWith(projectBaseDir)) {
+            relativeImagePath = currentLoadedPath.substring(projectBaseDir.length);
+            if (relativeImagePath.startsWith(sep) || relativeImagePath.startsWith('/') || relativeImagePath.startsWith('\\')) {
+                relativeImagePath = relativeImagePath.substring(1);
+            }
+        } else {
+            console.error(`[ImageViewerPanel saveAnnotationsForImage] Cannot determine relative path for ${currentLoadedPath} using base ${projectBaseDir}. Cannot save.`);
             return;
         }
-        console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations to ${metadataPath}`);
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+
+        console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for image relative path: ${relativeImagePath}`);
+
         try {
             await invoke('save_image_annotations', {
-                metadataPathStr: metadataPath,
+                imageRelativePathStr: relativeImagePath,
                 annotationsJsonString: JSON.stringify(currentAnnotations, null, 2)
             });
-            console.log(`[ImageViewerPanel saveAnnotationsForImage] Annotations saved to ${metadataPath}`);
+            console.log(`[ImageViewerPanel saveAnnotationsForImage] Annotations saved for ${relativeImagePath}`);
         } catch (err) {
-            console.error(`[ImageViewerPanel saveAnnotationsForImage] Error saving to ${metadataPath}:`, err);
+            console.error(`[ImageViewerPanel saveAnnotationsForImage] Error saving for ${relativeImagePath}:`, err);
         }
     }
 
