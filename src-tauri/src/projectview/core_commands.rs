@@ -1,19 +1,18 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata}; // Added FileMetadata, StandardAssetMetadata
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use std::{
-    fs,
+    fs::{self},
     path::{Path, PathBuf},
 };
 use quick_xml;
-use super::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED for delete/rename
 use chrono::Utc;
 use serde_json;
-use serde::{Serialize, Deserialize};
-use tauri::Manager; // Added for app_handle.emit
-use tauri::Emitter; // Added for app_handle.emit_to (if needed for specific window)
+use serde::Serialize;
+use super::db_handler::{delete_annotations_from_db, rename_annotations_in_db};
+use tauri::Emitter;
 
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {
@@ -33,26 +32,7 @@ struct ItemRenamedPayload {
     base_directory: String,
 }
 
-// Helper function to get annotation metadata path for an image (from existing code)
-fn get_annotation_metadata_path_for_image(image_path: &Path) -> Result<PathBuf, CommandError> {
-    let parent_dir = image_path.parent().ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get parent directory for image: {}",
-            image_path.display()
-        ))
-    })?;
-    let image_stem = image_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get file stem for image: {}",
-            image_path.display()
-        ))
-    })?;
-
-    let metadata_filename = format!(".{}.annotations.json", image_stem);
-    Ok(parent_dir.join(metadata_filename))
-}
-
-// Helper function to get document metadata path
+// Helper function to get document metadata path (used by imported transcripts as well)
 fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, CommandError> {
     let doc_parent_dir = doc_path.parent().ok_or_else(|| {
         CommandError::from(format!(
@@ -272,14 +252,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     file_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
     log::debug!(
-        "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}, PDF Annotation Files: {}",
-        file_entries.len(),
+        "[Backend Load XML] Media stems: {}, Documents: {}, Tables: {}, Images: {}, Imported Transcripts: {}, App Metadata Files: {}",
+            file_entries.len(),
         project_data.document_files.files.len(),
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
         project_data.imported_transcript_files.files.len(),
-        project_data.document_metadata_files.files.len(),
-        project_data.pdf_annotation_files.files.len() // ADDED
+        project_data.document_metadata_files.files.len()
     );
 
     Ok(ProjectViewData {
@@ -292,7 +271,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         image_files: project_data.image_files.files,
         imported_transcript_files: project_data.imported_transcript_files.files,
         document_metadata_files: project_data.document_metadata_files.files,
-        pdf_annotation_files: project_data.pdf_annotation_files.files, // ADDED
     })
 }
 
@@ -338,7 +316,6 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
 
-    // Create a structured metadata file
     match get_media_metadata_path(&destination_media_path) {
         Ok(metadata_path) => {
             let file_name = destination_media_path.file_name()
@@ -373,7 +350,6 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
         }
         Err(e) => {
             error!("[Backend Import] Failed to get media metadata path for {}: {:?}", destination_media_path.display(), e);
-            // Do not block import if metadata path generation fails
         }
     }
 
@@ -427,7 +403,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         };
         let item_relative_path_guess = item_relative_path_buf_guess.to_string_lossy().replace("\\", "/");
-        // Enhanced detection for imported transcripts and tables in non-existent path cleanup
         let item_type_guess = {
             let path_lower = item_relative_path_guess.to_lowercase();
             let transcripts_folder = format!("{}/", TRANSCRIPTS_SUBDIR.to_lowercase());
@@ -481,28 +456,18 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     xml_changed = true;
                 }
             },
-            "doc" => { // This handles .json, .pdf, .md, .txt documents
+            "doc" => {
                 let initial_doc_len = project_data.document_files.files.len();
                 project_data.document_files.files.retain(|d| d.relative_path != item_relative_path_guess);
                 if project_data.document_files.files.len() < initial_doc_len {
                     info!("[Backend Delete] Cleaned up XML document entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
                 }
-                // Clean up app metadata
                 let initial_meta_len = project_data.document_metadata_files.files.len();
                 project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path_guess);
                 if project_data.document_metadata_files.files.len() < initial_meta_len {
                     info!("[Backend Delete] Cleaned up XML document (app) metadata entry for original doc '{}'.", item_relative_path_guess);
                     xml_changed = true;
-                }
-                // Clean up PDF annotations if it was a PDF
-                if item_relative_path_guess.to_lowercase().ends_with(".pdf") {
-                    let initial_pdf_annot_len = project_data.pdf_annotation_files.files.len();
-                    project_data.pdf_annotation_files.files.retain(|pa| pa.original_document_relative_path != item_relative_path_guess);
-                    if project_data.pdf_annotation_files.files.len() < initial_pdf_annot_len {
-                        info!("[Backend Delete] Cleaned up XML PDF annotation entry for original PDF '{}'.", item_relative_path_guess);
-                        xml_changed = true;
-                    }
                 }
             },
             "table" => {
@@ -540,7 +505,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
     let (item_type, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
     let item_relative_path = item_relative_path_buf.to_string_lossy().replace("\\", "/");
-    // Enhanced detection for imported transcripts, tables, and images
     let item_type = {
         let path_lower = item_relative_path.to_lowercase();
         let transcripts_folder = format!("{}/", TRANSCRIPTS_SUBDIR.to_lowercase());
@@ -626,7 +590,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             fs::remove_file(&item_path_buf)
                 .map_err(|e| CommandError::from(format!("Failed to delete imported transcript file {}: {}", item_path_buf.display(), e)))?;
 
-            // 1. Delete containing folder if empty
             if let Some(folder) = item_path_buf.parent() {
                 if folder.exists() {
                     match fs::remove_dir(folder) {
@@ -637,7 +600,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 }
             }
 
-            // 2. Delete its metadata file, if present
             if let Ok(metadata_path) = get_document_metadata_path_for_doc(&item_path_buf) {
                 if metadata_path.exists() {
                     info!("[Backend Delete] Deleting metadata file for imported transcript: {}", metadata_path.display());
@@ -647,7 +609,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 }
             }
 
-            // 3. Update project XML to remove the transcript and metadata entries
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_entries = project_data.imported_transcript_files.files.len();
@@ -663,7 +624,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             }
         },
         "doc" => {
-            // Delete entire document folder (file, metadata, annotations, .tmp)
             let stem = item_path_buf.file_stem()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get document stem: {}", item_path_buf.display())))?;
@@ -673,27 +633,32 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete] Deleting document folder: {}", doc_folder.display());
                 fs::remove_dir_all(&doc_folder)
                     .map_err(|e| CommandError::from(format!("Failed to delete document folder {}: {}", doc_folder.display(), e)))?;
+
+                if item_relative_path.to_lowercase().ends_with(".pdf") {
+                    if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "pdf") {
+                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for {}: {}", item_relative_path, db_err);
+                    }
+                }
             } else {
                 info!("[Backend Delete] Document folder not found, deleting single file: {}", item_path_buf.display());
                 fs::remove_file(&item_path_buf)
                     .map_err(|e| CommandError::from(format!("Failed to delete document file {}: {}", item_path_buf.display(), e)))?;
+                 if item_relative_path.to_lowercase().ends_with(".pdf") {
+                    if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "pdf") {
+                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for single file {}: {}", item_relative_path, db_err);
+                    }
+                }
             }
-            // Prune XML entries for this document
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            // Match XML entries which include the full "harvey_files/Documents/<stem>" path
             let prefix = format!("{}/{}/{}", HARVEY_FILES_DIR, DOCS_DIR, stem);
-            project_data.document_files.files.retain(|d| !d.relative_path.starts_with(&prefix));
+            project_data.document_files.files.retain(|d| !d.relative_path.starts_with(&prefix) && d.relative_path != item_relative_path);
             project_data.document_metadata_files.files
-                .retain(|m| !m.original_document_relative_path.starts_with(&prefix));
-            project_data.pdf_annotation_files.files
-                .retain(|p| !p.original_document_relative_path.starts_with(&prefix));
+                .retain(|m| !m.original_document_relative_path.starts_with(&prefix) && m.original_document_relative_path != item_relative_path);
             save_project_xml(&xml_path_buf, &project_data)?;
             info!("[Backend Delete] XML entries removed for document '{}'", stem);
         },
         "table" => {
             info!("[Backend Delete] Deleting table file: {}", item_path_buf.display());
-
-            // Construct folder path
             let file_stem = item_path_buf.file_stem()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get table filename stem for deletion: {}", item_path_buf.display())))?;
@@ -701,7 +666,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
             let tables_dir = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
             let folder_path = tables_dir.join(file_stem);
 
-            // Delete folder and its contents
             if folder_path.exists() && folder_path.is_dir() {
                 info!("[Backend Delete] Deleting table folder: {}", folder_path.display());
                 fs::remove_dir_all(&folder_path).map_err(|e| CommandError::from(format!("Failed to delete table folder {}: {}", folder_path.display(), e)))?;
@@ -709,7 +673,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 warn!("[Backend Delete] Table folder {} not found. Assuming already deleted.", folder_path.display());
             }
 
-            // XML update (no need to remove file separately, folder deletion suffices)
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_table_len = project_data.table_files.files.len();
@@ -723,8 +686,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
         },
         "image" => {
             info!("[Backend Delete] Request to delete image and its folder for: {}", item_path_buf.display());
-
-            // Get the parent folder of the image file. This is the folder to be deleted.
             let image_folder_to_delete = item_path_buf.parent().ok_or_else(|| {
                 CommandError::from(format!(
                     "Could not get parent directory for image file: {}",
@@ -748,7 +709,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 );
             }
 
-            // Update project XML to remove image entry
+            if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "image") {
+                warn!("[Backend Delete] Failed to delete image annotations from DB for {}: {}. File deletion proceeded.", item_relative_path, db_err);
+            }
+
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_len = project_data.image_files.files.len();
@@ -857,7 +821,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 return Err(CommandError::from(format!("Original media file structure inconsistent after directory rename. Expected file at {}", old_media_path_in_new_dir.display())));
             }
 
-            // Enhanced media metadata handling: read, update, and rewrite, or create new.
             let old_metadata_path_result = get_media_metadata_path(&old_media_path_in_new_dir);
             let new_metadata_path_result = get_media_metadata_path(&new_media_path);
 
@@ -871,7 +834,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             Ok(old_json_content) => {
                                 match serde_json::from_str::<StandardAssetMetadata>(&old_json_content) {
                                     Ok(mut parsed_metadata) => {
-                                        // Successfully parsed, now update fields
                                         parsed_metadata.metadata.file_name = new_media_path.file_name()
                                             .and_then(|s| s.to_str()).unwrap_or("").to_string();
                                         parsed_metadata.metadata.file_path = new_media_path.to_string_lossy().into_owned();
@@ -881,16 +843,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                     }
                                     Err(e) => {
                                         warn!("[Backend Rename] Failed to parse old media metadata file {}: {}. A new one will be created.", old_metadata_path.display(), e);
-                                        // Proceed to create new metadata below
                                     }
                                 }
                             }
                             Err(e) => {
                                 warn!("[Backend Rename] Failed to read old media metadata file {}: {}. A new one will be created.", old_metadata_path.display(), e);
-                                // Proceed to create new metadata below
                             }
                         }
-                        // Attempt to remove the old metadata file if it was read or if parsing failed (to replace it)
                         if let Err(e) = fs::remove_file(&old_metadata_path) {
                             warn!("[Backend Rename] Failed to remove old media metadata file {}: {}", old_metadata_path.display(), e);
                         }
@@ -898,7 +857,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         info!("[Backend Rename] Old media metadata file {} not found. A new one will be created.", old_metadata_path.display());
                     }
 
-                    // If metadata wasn't loaded and updated, create new default metadata
                     let final_metadata_to_write = metadata_content.unwrap_or_else(|| {
                         info!("[Backend Rename] Creating new media metadata content for {}.", new_media_path.display());
                         StandardAssetMetadata {
@@ -915,7 +873,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         }
                     });
 
-                    // Write the (potentially updated or new) metadata to the new path
                     match serde_json::to_string_pretty(&final_metadata_to_write) {
                         Ok(json_string) => {
                             if let Err(e) = fs::write(&new_metadata_path, json_string) {
@@ -988,7 +945,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved.");
 
-                // Emit the media_renamed event
                 let payload = MediaRenamedPayload {
                     old_media_stem: old_stem.clone(),
                     new_media_stem: new_stem.clone(),
@@ -1067,7 +1023,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
         },
         "imported_transcript" => {
-            // new_name_trimmed is expected to be the new stem (e.g., "NewTranscriptName")
             let new_transcript_stem_str = new_name_trimmed;
             if contains_invalid_chars(new_transcript_stem_str) { return Err(CommandError::from("New transcript name contains invalid characters.")); }
             if new_transcript_stem_str.starts_with('.') { return Err(CommandError::from("Transcript name cannot start with a dot.")); }
@@ -1075,20 +1030,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let new_transcript_filename_with_ext_str = format!("{}.json", new_transcript_stem_str);
             let new_transcript_filename_pathbuf = PathBuf::from(&new_transcript_filename_with_ext_str);
 
-            // --- Path Definitions ---
-            let old_transcript_file_path = &item_path_buf; // e.g., .../OldTranscriptStem/OldTranscriptStem.json
-            let old_transcript_folder_path = parent_dir;   // e.g., .../OldTranscriptStem/
+            let old_transcript_file_path = &item_path_buf;
+            let old_transcript_folder_path = parent_dir;
 
             let new_transcript_file_path_in_old_folder = old_transcript_folder_path.join(&new_transcript_filename_pathbuf);
-
-            // new_transcript_stem_str is already the stem
 
             let transcripts_root_path = old_transcript_folder_path.parent()
                 .ok_or_else(|| CommandError::from(format!("Could not get Transcripts root from {}", old_transcript_folder_path.display())))?;
             
             let new_transcript_folder_path = transcripts_root_path.join(new_transcript_stem_str);
 
-            // --- Pre-checks for conflicts ---
             if *old_transcript_file_path == new_transcript_file_path_in_old_folder && old_transcript_folder_path == &new_transcript_folder_path {
                 info!("[Backend Rename] Imported transcript name and folder name are effectively unchanged. No action needed.");
                 return Ok(());
@@ -1105,16 +1056,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                  }
             }
 
-            // --- File System Operations ---
-            // 1. Rename main transcript file (within its current/old folder)
             if old_transcript_file_path != &new_transcript_file_path_in_old_folder {
                 info!("[Backend Rename] Renaming imported transcript file {} -> {}", old_transcript_file_path.display(), new_transcript_file_path_in_old_folder.display());
                 fs::rename(old_transcript_file_path, &new_transcript_file_path_in_old_folder)
                     .map_err(|e| CommandError::from(format!("Failed to rename imported transcript file: {}", e)))?;
             }
 
-            // 2. Rename associated app metadata file (within its current/old folder)
-            // Imported transcripts use the same metadata file naming as documents.
             if let Ok(old_metadata_path) = get_document_metadata_path_for_doc(old_transcript_file_path) {
                 if old_metadata_path.exists() {
                     if let Ok(new_metadata_path_in_old_folder) = get_document_metadata_path_for_doc(&new_transcript_file_path_in_old_folder) {
@@ -1136,19 +1083,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
-            // 3. Rename the folder if its name (derived from stem) has changed
             let mut current_transcript_folder_path_for_xml_update = old_transcript_folder_path.clone();
             if old_transcript_folder_path != &new_transcript_folder_path {
                 info!("[Backend Rename] Renaming imported transcript folder {} -> {}", old_transcript_folder_path.display(), new_transcript_folder_path.display());
                 if let Err(e) = fs::rename(old_transcript_folder_path, &new_transcript_folder_path) {
                     warn!("[Backend Rename] Failed to rename imported transcript folder: {}. Attempting to revert file renames.", e);
-                    // Revert metadata rename
                     if let Ok(old_meta_p) = get_document_metadata_path_for_doc(old_transcript_file_path) {
                         if let Ok(new_meta_p_temp) = get_document_metadata_path_for_doc(&new_transcript_file_path_in_old_folder) {
                             if old_meta_p != new_meta_p_temp && new_meta_p_temp.exists() { let _ = fs::rename(&new_meta_p_temp, &old_meta_p); }
                         }
                     }
-                    // Revert main transcript rename
                     if old_transcript_file_path != &new_transcript_file_path_in_old_folder && new_transcript_file_path_in_old_folder.exists() {
                         let _ = fs::rename(&new_transcript_file_path_in_old_folder, old_transcript_file_path);
                     }
@@ -1157,13 +1101,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 current_transcript_folder_path_for_xml_update = &new_transcript_folder_path;
             }
 
-            // --- XML Update ---
             let final_new_transcript_file_abs_path = current_transcript_folder_path_for_xml_update.join(&new_transcript_filename_pathbuf);
             let new_relative_path_for_transcript_xml = final_new_transcript_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
-            // Standardize or update the .metadata.json file (previously app-specific, now StandardAssetMetadata)
-            // Note: old_transcript_file_path is the original absolute path of the transcript before any renames.
-            // final_new_transcript_file_abs_path is the new absolute path after all renames.
             let old_asset_metadata_path_result = get_document_metadata_path_for_doc(old_transcript_file_path);
             let new_asset_metadata_path_result = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path);
 
@@ -1188,12 +1128,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             }
                             Err(e) => warn!("[Backend Rename] Failed to read old imported transcript asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
                         }
-                        if old_asset_meta_path != new_asset_meta_path { // Only remove if paths are different
+                        if old_asset_meta_path != new_asset_meta_path {
                             if let Err(e) = fs::remove_file(&old_asset_meta_path) {
                                 warn!("[Backend Rename] Failed to remove old imported transcript asset metadata {}: {}", old_asset_meta_path.display(), e);
                             }
                         }
-                    } else if new_asset_meta_path.exists() { // Handles case where old and new path are same (e.g. case change of main file)
+                    } else if new_asset_meta_path.exists() {
                          info!("[Backend Rename] Attempting to read existing imported transcript asset metadata for in-place update: {}", new_asset_meta_path.display());
                          match fs::read_to_string(&new_asset_meta_path) {
                             Ok(json_content) => {
@@ -1243,10 +1183,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 (_, Err(e)) => warn!("[Backend Rename] Could not determine new imported transcript asset metadata path: {:?}", e),
             }
 
-            // This is where the XML path for the .<name>.metadata.json (DocumentMetadataEntry) is determined
             let mut new_app_metadata_relative_path_for_xml: Option<String> = None;
             if let Ok(final_new_app_metadata_abs_path) = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path) {
-                if final_new_app_metadata_abs_path.exists() { // Check if it exists after our write attempt
+                if final_new_app_metadata_abs_path.exists() {
                     new_app_metadata_relative_path_for_xml = Some(final_new_app_metadata_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
                 }
             }
@@ -1265,13 +1204,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 warn!("[Backend Rename] Renamed imported transcript and/or folder, but could not find matching old relative path '{}' in XML for main transcript.", item_relative_path);
             }
 
-            // Update associated DocumentMetadataEntryXml
             if let Some(new_rel_meta_path) = new_app_metadata_relative_path_for_xml {
                 if let Some(metadata_entry) = project_data.document_metadata_files.files.iter_mut().find(|m| m.original_document_relative_path == item_relative_path) {
                     let new_meta_filename = PathBuf::from(&new_rel_meta_path).file_name().unwrap_or_default().to_string_lossy().to_string();
                     metadata_entry.name = new_meta_filename;
-                    metadata_entry.original_document_relative_path = new_relative_path_for_transcript_xml.clone(); // Link to new transcript path
-                    metadata_entry.relative_path = new_rel_meta_path; // New path of the metadata file itself
+                    metadata_entry.original_document_relative_path = new_relative_path_for_transcript_xml.clone();
+                    metadata_entry.relative_path = new_rel_meta_path;
                     project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                     updated_xml = true;
                     info!("[Backend Rename] XML document metadata entry updated for imported transcript.");
@@ -1298,8 +1236,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
 
         },
-        "doc" => { // Handles .json, .pdf, .md, .txt
-            let new_filename_with_ext_str = new_name_trimmed; // e.g., "NewDocName.pdf"
+        "doc" => {
+            let new_filename_with_ext_str = new_name_trimmed;
             let new_filename_pathbuf = PathBuf::from(new_filename_with_ext_str);
 
             if contains_invalid_chars(new_filename_with_ext_str) { return Err(CommandError::from("New filename contains invalid chars.")); }
@@ -1313,17 +1251,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                   return Err(CommandError::from(format!("Changing document file extension from '.{}' to '.{}' is not allowed.", old_ext, new_ext)));
              }
             if new_filename_with_ext_str.starts_with('.') &&
-               !new_filename_with_ext_str.ends_with(METADATA_FILE_SUFFIX) &&
-               !new_filename_with_ext_str.ends_with(PDF_ANNOTATIONS_FILE_SUFFIX) {
+               !new_filename_with_ext_str.ends_with(METADATA_FILE_SUFFIX) {
                 return Err(CommandError::from("Document filename cannot start with a dot unless it's a designated metadata or annotation file."));
             }
 
-            // --- Path Definitions ---
-            let old_doc_file_path = &item_path_buf; // e.g., .../OldDocStem/OldDocName.pdf
-            let old_doc_folder_path = parent_dir;   // e.g., .../OldDocStem/ (parent_dir is item_path_buf.parent())
+            let old_doc_file_path = &item_path_buf;
+            let old_doc_folder_path = parent_dir;
             
-            // Path for the document file *after* filename rename but *before* folder rename
-            let new_doc_file_path_in_old_folder = old_doc_folder_path.join(&new_filename_pathbuf); // e.g., .../OldDocStem/NewDocName.pdf
+            let new_doc_file_path_in_old_folder = old_doc_folder_path.join(&new_filename_pathbuf);
             
             let new_doc_filename_stem = new_filename_pathbuf.file_stem().and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get new document file stem from {}", new_filename_pathbuf.display())))?;
@@ -1331,20 +1266,17 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let documents_root_path = old_doc_folder_path.parent()
                 .ok_or_else(|| CommandError::from(format!("Could not get documents root from {}", old_doc_folder_path.display())))?;
             
-            let new_doc_folder_path = documents_root_path.join(new_doc_filename_stem); // e.g., .../Documents/NewDocStem/
+            let new_doc_folder_path = documents_root_path.join(new_doc_filename_stem);
 
-            // --- Pre-checks for conflicts ---
             if *old_doc_file_path == new_doc_file_path_in_old_folder && old_doc_folder_path == &new_doc_folder_path {
                 info!("[Backend Rename] Document name and folder name are effectively unchanged. No action needed.");
                 return Ok(());
             }
 
-            // Check if the target *folder* (if different) already exists
             if old_doc_folder_path != &new_doc_folder_path && new_doc_folder_path.exists() {
                 return Err(CommandError::from(format!("A folder named '{}' already exists. Cannot rename document folder.", new_doc_filename_stem)));
             }
             
-            // Check if the final target *file* would conflict (e.g. .../NewDocStem/NewDocName.pdf)
             let final_target_doc_file_path = new_doc_folder_path.join(&new_filename_pathbuf);
             if final_target_doc_file_path.exists() {
                  let canon_old_abs = fs::canonicalize(old_doc_file_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old path {}: {}", old_doc_file_path.display(),e)))?;
@@ -1354,18 +1286,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                  }
             }
 
-            // --- File System Operations ---
-            // 1. Rename main document file (within its current/old folder)
             if old_doc_file_path != &new_doc_file_path_in_old_folder {
                 info!("[Backend Rename] Renaming document file {} -> {}", old_doc_file_path.display(), new_doc_file_path_in_old_folder.display());
                 fs::rename(old_doc_file_path, &new_doc_file_path_in_old_folder)
                     .map_err(|e| CommandError::from(format!("Failed to rename document file: {}", e)))?;
             }
 
-            // 2. Rename associated app metadata file (within its current/old folder)
-            if let Ok(old_app_metadata_path) = get_document_metadata_path_for_doc(old_doc_file_path) { // Use original path to find old metadata
+            if let Ok(old_app_metadata_path) = get_document_metadata_path_for_doc(old_doc_file_path) {
                 if old_app_metadata_path.exists() {
-                    // New metadata name, still in old folder (based on new_doc_file_path_in_old_folder)
                     if let Ok(new_app_metadata_path_in_old_folder) = get_document_metadata_path_for_doc(&new_doc_file_path_in_old_folder) { 
                         if old_app_metadata_path != new_app_metadata_path_in_old_folder {
                             info!("[Backend Rename] Renaming app metadata: {} -> {}", old_app_metadata_path.display(), new_app_metadata_path_in_old_folder.display());
@@ -1374,7 +1302,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             } else {
                                 if let Err(e) = fs::rename(&old_app_metadata_path, &new_app_metadata_path_in_old_folder) {
                                     warn!("[Backend Rename] Failed to rename app metadata: {}. Attempting to revert main doc rename.", e);
-                                    if old_doc_file_path != &new_doc_file_path_in_old_folder { // only revert if it was actually renamed
+                                    if old_doc_file_path != &new_doc_file_path_in_old_folder {
                                         let _ = fs::rename(&new_doc_file_path_in_old_folder, old_doc_file_path);
                                     }
                                     return Err(CommandError::from(format!("Failed to rename app metadata: {}", e)));
@@ -1385,67 +1313,43 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
             
-            // 3. Rename PDF annotation file (if PDF) (within its current/old folder)
+            // PDF Annotation file system rename is no longer handled here. DB call handles the rename.
+
             if old_ext == "pdf" {
-                if let Ok(old_pdf_annot_path) = get_pdf_annotation_file_path(old_doc_file_path) { // Use original path
-                    if old_pdf_annot_path.exists() {
-                        // New annotation name, still in old folder (based on new_doc_file_path_in_old_folder)
-                        if let Ok(new_pdf_annot_path_in_old_folder) = get_pdf_annotation_file_path(&new_doc_file_path_in_old_folder) { 
-                            if old_pdf_annot_path != new_pdf_annot_path_in_old_folder {
-                                info!("[Backend Rename] Renaming PDF annotation: {} -> {}", old_pdf_annot_path.display(), new_pdf_annot_path_in_old_folder.display());
-                                if new_pdf_annot_path_in_old_folder.exists() {
-                                     warn!("[Backend Rename] Target PDF annotation {} already exists. Skipping rename of {}.", new_pdf_annot_path_in_old_folder.display(), old_pdf_annot_path.display());
-                                } else {
-                                    if let Err(e) = fs::rename(&old_pdf_annot_path, &new_pdf_annot_path_in_old_folder) {
-                                        warn!("[Backend Rename] Failed to rename PDF annotation: {}. Attempting to revert renames.", e);
-                                        // Revert app metadata
-                                        if let Ok(old_app_meta_p) = get_document_metadata_path_for_doc(old_doc_file_path) {
-                                            if let Ok(new_app_meta_p_temp) = get_document_metadata_path_for_doc(&new_doc_file_path_in_old_folder) {
-                                                if old_app_meta_p != new_app_meta_p_temp && new_app_meta_p_temp.exists() { let _ = fs::rename(&new_app_meta_p_temp, &old_app_meta_p); }
-                                            }
-                                        }
-                                        // Revert main doc
-                                        if old_doc_file_path != &new_doc_file_path_in_old_folder { let _ = fs::rename(&new_doc_file_path_in_old_folder, old_doc_file_path); }
-                                        return Err(CommandError::from(format!("Failed to rename PDF annotation: {}", e)));
-                                    }
-                                }
-                            }
-                        }
-                    }
+                let temp_final_new_doc_file_abs_path = new_doc_folder_path.join(&new_filename_pathbuf);
+                let temp_new_relative_path_for_doc = temp_final_new_doc_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+                if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &temp_new_relative_path_for_doc, "pdf") {
+                    warn!("[Backend Rename] Failed to rename PDF annotations in DB from {} to {}: {}. File operations will proceed, but DB might be inconsistent.", item_relative_path, temp_new_relative_path_for_doc, db_err);
                 }
             }
 
-            // 4. Rename the folder if its name (derived from stem) has changed
-            let mut current_doc_folder_path_for_xml_update = old_doc_folder_path.clone(); // Start with old, update if renamed
+            let mut current_doc_folder_path_for_xml_update = old_doc_folder_path.clone();
             if old_doc_folder_path != &new_doc_folder_path {
                 info!("[Backend Rename] Renaming document folder {} -> {}", old_doc_folder_path.display(), new_doc_folder_path.display());
                 if let Err(e) = fs::rename(old_doc_folder_path, &new_doc_folder_path) {
                     warn!("[Backend Rename] Failed to rename document folder: {}. Attempting to revert file renames.", e);
-                    // Revert PDF annotation rename (if any)
                     if old_ext == "pdf" {
-                        if let Ok(old_pdf_annot_p) = get_pdf_annotation_file_path(old_doc_file_path) {
-                           if let Ok(new_pdf_annot_p_temp) = get_pdf_annotation_file_path(&new_doc_file_path_in_old_folder) {
-                                if old_pdf_annot_p != new_pdf_annot_p_temp && new_pdf_annot_p_temp.exists() { let _ = fs::rename(&new_pdf_annot_p_temp, &old_pdf_annot_p); }
-                           }
+                        let temp_final_new_doc_file_abs_path_for_revert = new_doc_folder_path.join(&new_filename_pathbuf);
+                        let temp_new_relative_path_for_doc_for_revert = temp_final_new_doc_file_abs_path_for_revert.strip_prefix(project_base_dir).map_err(|_| CommandError::from("Path stripping error during revert calc"))?.to_string_lossy().replace("\\", "/");
+                        if rename_annotations_in_db(&temp_new_relative_path_for_doc_for_revert, &item_relative_path, "pdf").is_ok() {
+                             warn!("[Backend Rename] Successfully reverted PDF annotation rename in DB during folder rename failure.");
+                        } else {
+                             warn!("[Backend Rename] Failed to revert PDF annotation rename in DB during folder rename failure. DB might be inconsistent.");
                         }
                     }
-                    // Revert app metadata rename (if any)
                     if let Ok(old_app_meta_p) = get_document_metadata_path_for_doc(old_doc_file_path) {
                         if let Ok(new_app_meta_p_temp) = get_document_metadata_path_for_doc(&new_doc_file_path_in_old_folder) {
                             if old_app_meta_p != new_app_meta_p_temp && new_app_meta_p_temp.exists() { let _ = fs::rename(&new_app_meta_p_temp, &old_app_meta_p); }
                         }
                     }
-                    // Revert main doc rename
                     if old_doc_file_path != &new_doc_file_path_in_old_folder && new_doc_file_path_in_old_folder.exists() {
                         let _ = fs::rename(&new_doc_file_path_in_old_folder, old_doc_file_path);
                     }
                     return Err(CommandError::from(format!("Failed to rename document folder: {}", e)));
                 }
-                current_doc_folder_path_for_xml_update = &new_doc_folder_path; // Folder was renamed, use new path for XML
+                current_doc_folder_path_for_xml_update = &new_doc_folder_path;
             }
 
-            // --- XML Update ---
-            // The main document file is now at: current_doc_folder_path_for_xml_update.join(&new_filename_pathbuf)
             let final_new_doc_file_abs_path = current_doc_folder_path_for_xml_update.join(&new_filename_pathbuf);
             let new_relative_path_for_doc = final_new_doc_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
@@ -1453,14 +1357,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if let Ok(final_new_app_metadata_abs_path) = get_document_metadata_path_for_doc(&final_new_doc_file_abs_path) {
                 if final_new_app_metadata_abs_path.exists() {
                      new_app_metadata_relative_path_for_xml = Some(final_new_app_metadata_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
-                }
-            }
-            let mut new_pdf_annotation_relative_path_for_xml: Option<String> = None;
-            if old_ext == "pdf" {
-                if let Ok(final_new_pdf_annot_abs_path) = get_pdf_annotation_file_path(&final_new_doc_file_abs_path) {
-                    if final_new_pdf_annot_abs_path.exists() {
-                        new_pdf_annotation_relative_path_for_xml = Some(final_new_pdf_annot_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
-                    }
                 }
             }
 
@@ -1477,7 +1373,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 warn!("[Backend Rename] Renamed document, but could not find matching old relative path '{}' in XML for main doc.", item_relative_path);
             }
 
-            // Update app metadata XML entry
             if let Some(new_rel_meta_path) = new_app_metadata_relative_path_for_xml {
                  if let Some(metadata_entry) = project_data.document_metadata_files.files.iter_mut().find(|m| m.original_document_relative_path == item_relative_path) {
                     let new_meta_filename = PathBuf::from(&new_rel_meta_path).file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -1491,26 +1386,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
             
-            // Update PDF annotation XML entry if it's a PDF and was renamed
-            if old_ext == "pdf" {
-                if let Some(new_rel_annot_path) = new_pdf_annotation_relative_path_for_xml {
-                    if let Some(pdf_annot_entry) = project_data.pdf_annotation_files.files.iter_mut().find(|pa| pa.original_document_relative_path == item_relative_path) {
-                        let new_pdf_annot_filename = PathBuf::from(&new_rel_annot_path).file_name().unwrap_or_default().to_string_lossy().to_string();
-                        pdf_annot_entry.name = new_pdf_annot_filename;
-                        pdf_annot_entry.original_document_relative_path = new_relative_path_for_doc.clone();
-                        pdf_annot_entry.relative_path = new_rel_annot_path;
-                        updated_xml = true;
-                        info!("[Backend Rename] XML PDF annotation entry updated.");
-                    } else {
-                        warn!("[Backend Rename] PDF annotation file renamed/moved, but could not find matching old original_document_relative_path '{}' in XML for PDF annotation.", item_relative_path);
-                    }
-                }
-            }
-
             if updated_xml {
                 project_data.document_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                project_data.pdf_annotation_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for document and its associated files.");
 
@@ -1528,9 +1406,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
         },
         "table" => {
-            // --- Path Definitions ---
             let old_table_file_abs_path = item_path_buf.clone();
-            let old_table_folder_abs_path = parent_dir.to_path_buf(); // parent_dir is item_path_buf.parent().unwrap()
+            let old_table_folder_abs_path = parent_dir.to_path_buf();
 
             let old_table_filename_str = old_table_file_abs_path.file_name()
                 .and_then(|s| s.to_str())
@@ -1557,7 +1434,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let old_asset_metadata_path = get_table_asset_metadata_path(&old_table_file_abs_path)?;
             let new_asset_metadata_path = get_table_asset_metadata_path(&final_new_table_file_abs_path)?;
 
-            // --- Validations ---
             if contains_invalid_chars(&new_table_filename_str) { return Err(CommandError::from("New table filename contains invalid characters.")); }
             let allowed_extensions = ["csv", "xlsx"];
             let new_ext = final_new_table_file_abs_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
@@ -1580,33 +1456,28 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
 
             if final_new_table_file_abs_path.exists() {
-                // Check if it's the same file (e.g. case change on case-insensitive FS)
-                // Canonicalize both paths and compare. If they are different, then it's a true conflict.
                 let canon_old = fs::canonicalize(&old_table_file_abs_path).ok();
                 let canon_target = fs::canonicalize(&final_new_table_file_abs_path).ok();
                 if canon_old.is_some() && canon_target.is_some() && canon_old != canon_target {
                      return Err(CommandError::from(format!("Target table file '{}' already exists and is different from the source.", final_new_table_file_abs_path.display())));
-                } else if canon_old.is_none() && canon_target.is_some() { // old path might not exist if folder was renamed first, then error occurred
+                } else if canon_old.is_none() && canon_target.is_some() {
                      return Err(CommandError::from(format!("Target table file '{}' already exists.", final_new_table_file_abs_path.display())));
                 }
                  info!("[Backend Rename Table] Target file path {} exists, but might be the same file due to case change or prior operations. Proceeding carefully.", final_new_table_file_abs_path.display());
             }
 
-            // --- File System Operations ---
             if old_table_folder_abs_path != new_table_folder_abs_path {
-                // Scenario 1: Folder name changes
                 info!("[Backend Rename Table] Renaming folder {} -> {}", old_table_folder_abs_path.display(), new_table_folder_abs_path.display());
                 fs::rename(&old_table_folder_abs_path, &new_table_folder_abs_path)
                     .map_err(|e| CommandError::from(format!("Failed to rename table folder: {}", e)))?;
 
-                // The table file is now at new_table_folder_abs_path.join(&old_table_filename_str)
                 let current_table_file_path_after_folder_rename = new_table_folder_abs_path.join(&old_table_filename_str);
 
                 if old_table_filename_str != new_table_filename_str {
                     info!("[Backend Rename Table] Renaming table file (post folder rename) {} -> {}", current_table_file_path_after_folder_rename.display(), final_new_table_file_abs_path.display());
                     if let Err(e) = fs::rename(&current_table_file_path_after_folder_rename, &final_new_table_file_abs_path) {
                         warn!("[Backend Rename Table] Failed to rename table file after folder rename: {}. Reverting folder rename.", e);
-                        let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Attempt to revert folder rename
+                        let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path);
                         return Err(CommandError::from(format!("Failed to rename table file after folder rename: {}", e)));
                     }
                 }
@@ -1620,10 +1491,10 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         Ok(content) => content,
                         Err(e) => {
                             warn!("[Backend Rename Table] Failed to read old metadata (post folder rename): {}. Reverting operations.", e);
-                            if old_table_filename_str != new_table_filename_str { // Revert file rename if done
+                            if old_table_filename_str != new_table_filename_str {
                                 let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename);
                             }
-                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Revert folder rename
+                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path);
                             return Err(CommandError::from(format!("Failed to read old metadata after folder rename: {}", e)));
                         }
                     };
@@ -1632,10 +1503,10 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         Ok(meta) => meta,
                         Err(e) => {
                              warn!("[Backend Rename Table] Failed to parse old metadata (post folder rename): {}. Reverting operations.", e);
-                            if old_table_filename_str != new_table_filename_str { // Revert file rename if done
+                            if old_table_filename_str != new_table_filename_str {
                                 let _ = fs::rename(&final_new_table_file_abs_path, &current_table_file_path_after_folder_rename);
                             }
-                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path); // Revert folder rename
+                            let _ = fs::rename(&new_table_folder_abs_path, &old_table_folder_abs_path);
                             return Err(CommandError::from(format!("Failed to parse old metadata: {}", e)));
                         }
                     };
@@ -1668,7 +1539,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             warn!("[Backend Rename Table] Failed to remove old metadata file (post folder rename) {}: {}", current_old_metadata_path_after_folder_rename.display(), e);
                         }
                     }
-                } else if !new_asset_metadata_path.exists() { // Old metadata (even after folder move) does not exist, AND new one also doesn't. Create new.
+                } else if !new_asset_metadata_path.exists() {
                     info!("[Backend Rename Table] Old metadata not found at {}. Creating new metadata at {}.", current_old_metadata_path_after_folder_rename.display(), new_asset_metadata_path.display());
                     let default_metadata = StandardAssetMetadata {
                         metadata: FileMetadata {
@@ -1680,13 +1551,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         highlights: Vec::new(),
                     };
                     let json_string = serde_json::to_string_pretty(&default_metadata)
-                        .map_err(|e| CommandError::from(format!("Failed to serialize new default metadata: {}", e)))?; // Basic error, no revert needed yet for this specific failure
+                        .map_err(|e| CommandError::from(format!("Failed to serialize new default metadata: {}", e)))?;
                     fs::write(&new_asset_metadata_path, json_string)
                         .map_err(|e| CommandError::from(format!("Failed to write new default metadata to {}: {}", new_asset_metadata_path.display(), e)))?;
                 }
 
             } else {
-                // Scenario 2: Folder name does NOT change (so filename must be different, checked by initial validation)
                 info!("[Backend Rename Table] Renaming table file (folder same) {} -> {}", old_table_file_abs_path.display(), final_new_table_file_abs_path.display());
                 fs::rename(&old_table_file_abs_path, &final_new_table_file_abs_path)
                     .map_err(|e| CommandError::from(format!("Failed to rename table file (folder same): {}", e)))?;
@@ -1730,13 +1600,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         return Err(CommandError::from(format!("Failed to write new metadata: {}", e)));
                     }
 
-                    if old_asset_metadata_path != new_asset_metadata_path { // Only remove if paths are different (e.g. stem changed)
+                    if old_asset_metadata_path != new_asset_metadata_path {
                         info!("[Backend Rename Table] Removing old metadata from original location: {}", old_asset_metadata_path.display());
                         if let Err(e) = fs::remove_file(&old_asset_metadata_path) {
                             warn!("[Backend Rename Table] Failed to remove old metadata file {}: {}", old_asset_metadata_path.display(), e);
                         }
                     }
-                } else if !new_asset_metadata_path.exists() { // Old metadata does not exist, and new one also doesn't. Create new.
+                } else if !new_asset_metadata_path.exists() {
                     info!("[Backend Rename Table] Old metadata not found at {}. Creating new metadata at {}.", old_asset_metadata_path.display(), new_asset_metadata_path.display());
                      let default_metadata = StandardAssetMetadata {
                         metadata: FileMetadata {
@@ -1754,7 +1624,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
-            // --- XML Update ---
             let new_relative_path_for_xml = final_new_table_file_abs_path.strip_prefix(project_base_dir)?
                 .to_string_lossy().replace("\\", "/");
 
@@ -1769,11 +1638,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 updated_xml = true;
                 info!("[Backend Rename Table] XML table entry updated.");
             } else {
-                // This is a more critical error after file operations have succeeded.
-                // Attempting complex rollbacks here could be risky. Log an error.
                 error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
-                // Depending on desired behavior, could return an error here to signal inconsistency.
-                // For now, we'll save if other changes were made, but this is a problem.
                  return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
 
@@ -1795,7 +1660,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
         },
         "image" => {
-            let new_image_filename_with_ext_str = new_name_trimmed; // e.g., "NewImage.png"
+            let new_image_filename_with_ext_str = new_name_trimmed;
             let new_image_filename_pathbuf = PathBuf::from(new_image_filename_with_ext_str);
 
             if contains_invalid_chars(new_image_filename_with_ext_str) { return Err(CommandError::from("New image filename contains invalid characters.")); }
@@ -1810,18 +1675,15 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
             if new_image_filename_with_ext_str.starts_with('.') { return Err(CommandError::from("Image filename cannot start with a dot.")); }
 
-            // --- Path Definitions ---
-            let old_image_file_abs_path = item_path_buf.clone(); // e.g., .../OldImageStem/OldImage.png
-            let old_image_folder_abs_path = parent_dir.to_path_buf();   // e.g., .../OldImageStem/
+            let old_image_file_abs_path = item_path_buf.clone();
+            let old_image_folder_abs_path = parent_dir.to_path_buf();
 
-            #[allow(unused_variables)] // old_image_stem_str might be unused if no metadata/annotation exists
+            #[allow(unused_variables)]
             let old_image_stem_str = old_image_file_abs_path.file_stem()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get old image stem from {}", old_image_file_abs_path.display())))?
                 .to_string();
 
-            // new_image_filename_with_ext_str is new_name_trimmed
-            // new_image_filename_pathbuf is PathBuf::from(new_image_filename_with_ext_str)
             let new_image_stem_str = new_image_filename_pathbuf.file_stem().and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get new image file stem from {}", new_image_filename_pathbuf.display())))?
                 .to_string();
@@ -1829,19 +1691,15 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let images_root_abs_path = old_image_folder_abs_path.parent()
                 .ok_or_else(|| CommandError::from(format!("Could not get images root from {}", old_image_folder_abs_path.display())))?;
 
-            let new_image_folder_abs_path = images_root_abs_path.join(&new_image_stem_str); // e.g., .../Images/NewImageStem/
-            let final_new_image_file_abs_path = new_image_folder_abs_path.join(&new_image_filename_pathbuf); // e.g., .../NewImageStem/NewImage.png
+            let new_image_folder_abs_path = images_root_abs_path.join(&new_image_stem_str);
+            let final_new_image_file_abs_path = new_image_folder_abs_path.join(&new_image_filename_pathbuf);
             
-            // Path for the image file *after* filename rename but *before* potential folder rename
             let new_image_file_path_in_old_folder = old_image_folder_abs_path.join(&new_image_filename_pathbuf);
 
-            // Asset Metadata Paths
             let old_asset_metadata_abs_path = get_image_asset_metadata_path(&old_image_file_abs_path)?;
             let new_asset_metadata_abs_path = get_image_asset_metadata_path(&final_new_image_file_abs_path)?;
 
-            // --- Pre-checks for conflicts ---
-            if old_image_file_abs_path == final_new_image_file_abs_path { // Covers case where only folder might change due to stem, but filename itself is same.
-                 // Also covers case where item_path_buf (old_image_file_abs_path) is identical to final_new_image_file_abs_path
+            if old_image_file_abs_path == final_new_image_file_abs_path {
                 if old_image_folder_abs_path == new_image_folder_abs_path {
                     info!("[Backend Rename] Image name and folder name are effectively unchanged. No action needed.");
                     return Ok(());
@@ -1860,7 +1718,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
-            // --- Read Old Metadata (Before Any Renames) ---
             let mut parsed_old_metadata_content: Option<StandardAssetMetadata> = None;
             if old_asset_metadata_abs_path.exists() {
                 info!("[Backend Rename Image] Attempting to read old asset metadata from: {}", old_asset_metadata_abs_path.display());
@@ -1882,58 +1739,19 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
-
-            // --- File System Operations ---
-            // 1. Rename main image file (within its current/old folder first if filename changes)
-            // This new_image_file_path_in_old_folder is (.../OldImageStem/NewImage.png)
             if old_image_file_abs_path != new_image_file_path_in_old_folder {
                 info!("[Backend Rename Image] Renaming image file {} -> {}", old_image_file_abs_path.display(), new_image_file_path_in_old_folder.display());
                 fs::rename(&old_image_file_abs_path, &new_image_file_path_in_old_folder)
                     .map_err(|e| CommandError::from(format!("Failed to rename image file (pre-folder op): {}", e)))?;
             }
 
-            // 2. Rename associated annotation file (within its current/old folder)
-            // old_image_file_abs_path is the original path to the image (e.g. .../OldStem/OldImage.png)
-            // new_image_file_path_in_old_folder is the path if image is renamed but still in old folder (e.g. .../OldStem/NewImage.png)
-            if let Ok(old_annotation_path) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
-                if old_annotation_path.exists() {
-                    // new_annotation_path_in_old_folder is path for annotation if image renamed in old folder. (e.g. .../OldStem/.NewImage.annotations.json)
-                    if let Ok(new_annotation_path_in_old_folder) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                        if old_annotation_path != new_annotation_path_in_old_folder { // Check if annotation name needs to change
-                            info!("[Backend Rename Image] Renaming image annotation (pre-folder op): {} -> {}", old_annotation_path.display(), new_annotation_path_in_old_folder.display());
-                            if new_annotation_path_in_old_folder.exists() { // Conflict for annotation file
-                                warn!("[Backend Rename Image] Target image annotation {} already exists. Skipping rename of {}.", new_annotation_path_in_old_folder.display(), old_annotation_path.display());
-                            } else {
-                                if let Err(e) = fs::rename(&old_annotation_path, &new_annotation_path_in_old_folder) {
-                                    warn!("[Backend Rename Image] Failed to rename image annotation: {}. Attempting to revert main image rename (pre-folder op).", e);
-                                    if old_image_file_abs_path != new_image_file_path_in_old_folder { // only revert if it was actually renamed
-                                        let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
-                                    }
-                                    return Err(CommandError::from(format!("Failed to rename image annotation file: {}", e)));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Physical JSO annotation file rename is removed. DB call will handle annotation rename.
 
             let mut folder_renamed = false;
-            // 3. Rename the main image folder if its name (derived from stem) has changed
             if old_image_folder_abs_path != new_image_folder_abs_path {
                 info!("[Backend Rename Image] Renaming image folder {} -> {}", old_image_folder_abs_path.display(), new_image_folder_abs_path.display());
                 if let Err(e) = fs::rename(&old_image_folder_abs_path, &new_image_folder_abs_path) {
                     warn!("[Backend Rename Image] Failed to rename image folder: {}. Attempting to revert file renames.", e);
-                    // Revert annotation rename (if any)
-                    if let Ok(old_annot_p) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
-                        if let Ok(new_annot_p_temp) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                            if old_annot_p != new_annot_p_temp && new_annot_p_temp.exists() { // if annotation was renamed
-                                 // new_annot_p_temp would be something like .../OldStem/.NewImageStem.annotations.json
-                                 // old_annot_p would be .../OldStem/.OldImageStem.annotations.json
-                                let _ = fs::rename(&new_annot_p_temp, &old_annot_p);
-                            }
-                        }
-                    }
-                    // Revert main image rename (if it was done within the old folder)
                     if old_image_file_abs_path != new_image_file_path_in_old_folder && new_image_file_path_in_old_folder.exists() {
                         let _ = fs::rename(&new_image_file_path_in_old_folder, &old_image_file_abs_path);
                     }
@@ -1942,37 +1760,19 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 folder_renamed = true;
             }
 
-            // 4. If folder name changed, the image file (which might have been renamed, e.g. OldImage.png -> NewImage.png)
-            // is now in new_image_folder_abs_path but with its *original filename* if only stem changed folder,
-            // or its *new filename* if filename also changed.
-            // It should be `final_new_image_file_abs_path`.
-            // Current path of image file:
-            // - If folder renamed: new_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap())
-            // - If folder NOT renamed: new_image_file_path_in_old_folder
             let current_image_path_before_final_rename = if folder_renamed {
                 new_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap_or_default())
             } else {
-                new_image_file_path_in_old_folder.clone() // Already .../OldStem/NewImage.png if name changed
+                new_image_file_path_in_old_folder.clone()
             };
 
             if current_image_path_before_final_rename != final_new_image_file_abs_path && current_image_path_before_final_rename.exists() {
                  info!("[Backend Rename Image] Renaming image file (post-folder op) {} -> {}", current_image_path_before_final_rename.display(), final_new_image_file_abs_path.display());
                  if let Err(e) = fs::rename(&current_image_path_before_final_rename, &final_new_image_file_abs_path) {
                     warn!("[Backend Rename Image] Failed to rename image file to final path: {}. Attempting to revert operations.", e);
-                    // Complex revert: folder, then annotations, then initial image rename
                     if folder_renamed {
                         let _ = fs::rename(&new_image_folder_abs_path, &old_image_folder_abs_path);
-                        // After folder revert, annotation and image file are back in old_image_folder_abs_path
-                        // Revert annotation rename (e.g. from .../OldStem/.NewImage.annotations.json back to .../OldStem/.OldImage.annotations.json)
-                        if let Ok(old_annot_p_orig) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) { // .../OldStem/.OldImage.annotations.json
-                           if let Ok(new_annot_p_in_old_folder_orig) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) { // .../OldStem/.NewImage.annotations.json
-                                if new_annot_p_in_old_folder_orig.exists() && old_annot_p_orig != new_annot_p_in_old_folder_orig {
-                                    let _ = fs::rename(&new_annot_p_in_old_folder_orig, &old_annot_p_orig);
-                                }
-                           }
-                        }
                     }
-                     // Revert initial image rename (e.g. from .../OldStem/NewImage.png back to .../OldStem/OldImage.png)
                     if old_image_file_abs_path != new_image_file_path_in_old_folder {
                         let path_to_revert_from = if folder_renamed { &new_image_file_path_in_old_folder } else { &current_image_path_before_final_rename };
                         if path_to_revert_from.exists() {
@@ -1983,21 +1783,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                  }
             }
 
-
-            // --- Prepare and Write New/Updated Metadata (After All Other Renames) ---
             let final_metadata_to_write: StandardAssetMetadata;
-            if let Some(mut metadata) = parsed_old_metadata_content.take() { // Use .take() to get ownership
+            if let Some(mut metadata) = parsed_old_metadata_content.take() {
                 info!("[Backend Rename Image] Updating existing asset metadata for {}", new_asset_metadata_abs_path.display());
                 metadata.metadata.file_name = new_image_filename_with_ext_str.to_string();
                 metadata.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
                 metadata.metadata.last_modified = Utc::now().to_rfc3339();
                 final_metadata_to_write = metadata;
 
-                // Cleanup old metadata file
                 if old_asset_metadata_abs_path != new_asset_metadata_abs_path {
                     let path_of_old_meta_to_remove = if folder_renamed {
-                        // If folder was renamed, the original old_asset_metadata_abs_path is stale.
-                        // The file would have moved with the folder.
                         new_image_folder_abs_path.join(old_asset_metadata_abs_path.file_name().unwrap_or_default())
                     } else {
                         old_asset_metadata_abs_path.clone()
@@ -2008,7 +1803,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             warn!("[Backend Rename Image] Failed to remove old/moved asset metadata {}: {}", path_of_old_meta_to_remove.display(), e);
                         }
                     } else if !path_of_old_meta_to_remove.exists() && old_asset_metadata_abs_path.exists() && old_asset_metadata_abs_path != new_asset_metadata_abs_path {
-                        // This case handles if folder was NOT renamed, but stem changed, so old metadata file is at original path.
                         info!("[Backend Rename Image] Removing original asset metadata file from: {}", old_asset_metadata_abs_path.display());
                          if let Err(e) = fs::remove_file(&old_asset_metadata_abs_path) {
                             warn!("[Backend Rename Image] Failed to remove original asset metadata {}: {}", old_asset_metadata_abs_path.display(), e);
@@ -2035,23 +1829,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     info!("[Backend Rename Image] Writing asset metadata to {}", new_asset_metadata_abs_path.display());
                     if let Err(e) = fs::write(&new_asset_metadata_abs_path, json_string) {
                         warn!("[Backend Rename Image] Failed to write asset metadata to {}: {}. Attempting full rollback.", new_asset_metadata_abs_path.display(), e);
-                        // Attempt to roll back: final image file, folder, annotation, initial image file
-                        if final_new_image_file_abs_path.exists() && final_new_image_file_abs_path != current_image_path_before_final_rename { // Revert final image rename
+                        if final_new_image_file_abs_path.exists() && final_new_image_file_abs_path != current_image_path_before_final_rename {
                            let _ = fs::rename(&final_new_image_file_abs_path, &current_image_path_before_final_rename);
                         }
-                        if folder_renamed { // Revert folder rename
+                        if folder_renamed {
                             let _ = fs::rename(&new_image_folder_abs_path, &old_image_folder_abs_path);
-                             // After folder revert, annotation and image file are back in old_image_folder_abs_path
-                            // Revert annotation rename (e.g. from .../OldStem/.NewImage.annotations.json back to .../OldStem/.OldImage.annotations.json)
-                            if let Ok(old_annot_p_orig) = get_annotation_metadata_path_for_image(&old_image_file_abs_path) {
-                               if let Ok(new_annot_p_in_old_folder_orig) = get_annotation_metadata_path_for_image(&new_image_file_path_in_old_folder) {
-                                    if new_annot_p_in_old_folder_orig.exists() && old_annot_p_orig != new_annot_p_in_old_folder_orig {
-                                        let _ = fs::rename(&new_annot_p_in_old_folder_orig, &old_annot_p_orig);
-                                    }
-                               }
-                            }
                         }
-                        // Revert initial image rename (e.g. from .../OldStem/NewImage.png back to .../OldStem/OldImage.png)
                         if old_image_file_abs_path != new_image_file_path_in_old_folder {
                              let path_to_revert_from = if folder_renamed { old_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap_or_default()) } else { new_image_file_path_in_old_folder.clone() };
                              if path_to_revert_from.exists() {
@@ -2063,13 +1846,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
                 Err(e) => {
                      warn!("[Backend Rename Image] Failed to serialize asset metadata for {}: {}", new_asset_metadata_abs_path.display(), e);
-                    // No file system changes made yet for metadata, so no specific rollback for this, but it's an error.
                     return Err(CommandError::from(format!("Failed to serialize asset metadata: {}",e)));
                 }
             }
 
-            // --- XML Update ---
             let new_relative_path_for_image_xml = final_new_image_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+            if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &new_relative_path_for_image_xml, "image") {
+                warn!("[Backend Rename Image] Failed to rename image annotations in DB from {} to {}: {}. File and XML operations may have succeeded, but DB might be inconsistent.", item_relative_path, new_relative_path_for_image_xml, db_err);
+            }
+
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut updated_xml = false;

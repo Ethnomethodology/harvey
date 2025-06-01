@@ -1,13 +1,11 @@
 // src-tauri/src/projectview/document_handler.rs
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{
-    ProjectXml, DocumentEntryXml, DocumentHighlightData, DocumentMetadataEntryXml, FileLevelMetadata,
-    PdfAnnotationEntryXml, // ADDED
+    ProjectXml, DocumentEntryXml, DocumentMetadataEntryXml,
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS
 };
 use crate::projectview::shared_utils::{save_project_xml, ensure_base_asset_dirs};
-use crate::projectview::document_commands::{get_unique_document_path, get_document_metadata_path};
-use crate::projectview::pdf_annotation_handler::get_pdf_annotation_file_path; // ADDED
+use crate::projectview::document_commands::{get_document_metadata_path};
 
 use std::{
     fs,
@@ -162,30 +160,11 @@ pub async fn import_document(
                 app_metadata_xml_changed = true;
             }
 
-            // --- Handle .annotations.json (for pdf-annotate.js) ---
-            let pdf_annotation_file_path = get_pdf_annotation_file_path(&final_pdf_path)?;
-            if !pdf_annotation_file_path.exists() {
-                // Create an empty JSON array string for pdf-annotate.js initially
-                fs::write(&pdf_annotation_file_path, "[]") 
-                    .map_err(|e| CommandError::from(format!("Failed to write initial empty PDF annotation file: {}", e)))?;
-                info!("[import_document] Created initial PDF annotation file: {}", pdf_annotation_file_path.display());
-            }
-            let pdf_annotation_filename_xml = pdf_annotation_file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let pdf_annotation_relative_path_xml = pdf_annotation_file_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-            let mut pdf_annotation_xml_changed = false;
-            if !project_data.pdf_annotation_files.files.iter().any(|entry| entry.original_document_relative_path == relative_path_for_pdf_xml) {
-                project_data.pdf_annotation_files.files.push(PdfAnnotationEntryXml {
-                    name: pdf_annotation_filename_xml,
-                    original_document_relative_path: relative_path_for_pdf_xml.clone(),
-                    relative_path: pdf_annotation_relative_path_xml,
-                });
-                project_data.pdf_annotation_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                info!("[import_document] Added PDF annotation file entry to XML for PDF: {}", relative_path_for_pdf_xml);
-                pdf_annotation_xml_changed = true;
-            }
+            // --- PDF Annotations are now handled by the database, no file creation or XML entry needed here ---
+            info!("[import_document] PDF annotation file/XML entry is no longer created for PDF: {}", relative_path_for_pdf_xml);
+            let _pdf_annotation_xml_changed = false; // Ensure this doesn't interfere with save_project_xml logic
 
-
-            if main_doc_xml_changed || app_metadata_xml_changed || pdf_annotation_xml_changed {
+            if main_doc_xml_changed || app_metadata_xml_changed { // Removed pdf_annotation_xml_changed
                 save_project_xml(&project_xml_path, &project_data)?;
                 info!("[import_document] Project XML updated successfully for PDF and/or its metadata/annotations.");
             } else {

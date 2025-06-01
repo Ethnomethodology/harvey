@@ -5,7 +5,7 @@ use crate::welcome::config::CommandError;
 use crate::projectview::core_commands::get_table_asset_metadata_path;
 use chrono::Utc;
 use serde_json; // Already used for Value, json, but good to ensure it's available for to_string_pretty
-use serde::{Serialize, Deserialize};
+// serde::{Serialize, Deserialize} removed
 use log::{info, warn, debug};
 use std::{
     fs,

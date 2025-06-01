@@ -3,6 +3,7 @@ use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use tauri::Manager;
+use crate::projectview::db_handler::init_db as init_projectview_db;
 
 // --- Declare top-level modules ---
 mod welcome;
@@ -24,6 +25,13 @@ pub fn run() {
         log::error!("Fatal Error: Failed to ensure config directory exists: {}", e.message);
     } else {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    }
+
+    // Initialize ProjectView Database
+    if let Err(e) = init_projectview_db() {
+        log::error!("Failed to initialize project view database: {}", e);
+        // Depending on severity, you might want to panic or show a dialog to the user.
+        // For now, just logging.
     }
 
     log::info!("Starting Harvey application...");

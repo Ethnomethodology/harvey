@@ -1,6 +1,6 @@
 // src-tauri/src/projectview/shared_types.rs
 use serde::{Deserialize, Serialize};
-use chrono::{Utc, DateTime};
+use chrono::Utc; // DateTime removed
 
 // --- Constants ---
 pub const HARVEY_FILES_DIR: &str = "harvey_files";
@@ -13,7 +13,6 @@ pub const MEDIA_SUBDIR: &str = "media";
 pub const TRANSCRIPTS_SUBDIR: &str = "transcripts";
 pub const TEMP_SUBDIR_DOCS: &str = ".tmp";
 pub const METADATA_FILE_SUFFIX: &str = "metadata.json";
-pub const PDF_ANNOTATIONS_FILE_SUFFIX: &str = "annotations.json"; // For .pdf_stem.annotations.json
 
 
 // --- Struct Definitions ---
@@ -105,19 +104,6 @@ pub struct DocumentMetadataEntryXml {
     pub relative_path: String,
 }
 
-// --- ADDED: For PDF Annotation Files ---
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PdfAnnotationEntryXml {
-    #[serde(rename = "name")] // e.g., .MyDoc.annotations.json
-    pub name: String,
-    #[serde(rename = "originalDocumentRelativePath")] // e.g., harvey_files/Documents/MyDoc.pdf
-    pub original_document_relative_path: String,
-    #[serde(rename = "relativePath")] // e.g., harvey_files/Documents/.MyDoc.annotations.json
-    pub relative_path: String,
-}
-// --- END ADDED ---
-
-
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct DocumentFiles {
     #[serde(rename = "documentFile", default)]
@@ -147,15 +133,6 @@ pub struct DocumentMetadataFiles {
     #[serde(rename = "documentMetadataFile", default)]
     pub files: Vec<DocumentMetadataEntryXml>,
 }
-
-// --- ADDED: Wrapper for PDF Annotation Files ---
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct PdfAnnotationFiles {
-    #[serde(rename = "pdfAnnotationFile", default)]
-    pub files: Vec<PdfAnnotationEntryXml>,
-}
-// --- END ADDED ---
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MediaFileEntryXml {
@@ -194,10 +171,6 @@ pub struct ProjectXml {
     pub imported_transcript_files: ImportedTranscriptFiles,
     #[serde(rename = "documentMetadataFiles", default)]
     pub document_metadata_files: DocumentMetadataFiles,
-    // --- ADDED: pdf_annotation_files field ---
-    #[serde(rename = "pdfAnnotationFiles", default)]
-    pub pdf_annotation_files: PdfAnnotationFiles,
-    // --- END ADDED ---
 }
 
 
@@ -234,9 +207,6 @@ pub struct ProjectViewData {
     pub image_files: Vec<ImageEntryXml>,
     pub imported_transcript_files: Vec<ImportedTranscriptEntryXml>,
     pub document_metadata_files: Vec<DocumentMetadataEntryXml>,
-    // --- ADDED: pdf_annotation_files field ---
-    pub pdf_annotation_files: Vec<PdfAnnotationEntryXml>,
-    // --- END ADDED ---
 }
 
 
