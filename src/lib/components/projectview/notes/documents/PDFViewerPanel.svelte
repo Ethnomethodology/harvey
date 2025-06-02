@@ -285,6 +285,7 @@ import { get } from 'svelte/store';
         if (undoStack.length === 0) return;
         const action = undoStack.pop();
         redoStack.push(action);
+        redoStack = [...redoStack];
         // console.log('[PDF Undo] Action:', action.type, action.payload?.id);
         switch (action.type) {
             case 'addHighlight':
