@@ -992,25 +992,16 @@ import { get } from 'svelte/store';
     }
 
     function removeClickedHighlightBlockDOM(id) {
-        if (!id || !viewerContainer) return;
-        const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${id}"]`);
-        if (spans.length === 0) return;
-        let commonAncestor = spans.length > 0 && spans[0].parentNode ? spans[0].parentNode.closest('.textLayer') : null;
-        spans.forEach(span => { unwrapNodeDOM(span); });
-        try { if (commonAncestor) { commonAncestor.normalize(); } else { viewerElement?.normalize(); } }
-        catch(e) { console.warn("Normalization failed in removeClickedHighlightBlockDOM", e); }
+    if (!id) return; // Removed viewerContainer check
+    // Span manipulation and normalization removed
         if (clickedHighlightId === id) clickedHighlightId = null;
-        // Remove overlay parts
         removeHighlightOverlay(id);
     }
 
     function changeClickedHighlightColorDOM(id, color) {
-        if (!id || !color || !viewerContainer) return;
-        const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${id}"]`);
-        if (spans.length === 0) return;
-        spans.forEach(span => { span.style.backgroundColor = color; span.dataset.hlColor = color; });
+        if (!id || !color) return; // Removed viewerContainer check as updateHighlightOverlayColor doesn't need it directly
+        // Spans manipulation removed
         if (clickedHighlightId === id) clickedHighlightColor = color;
-        // Update overlay parts as well
         updateHighlightOverlayColor(id, color);
     }
 
