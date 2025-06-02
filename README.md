@@ -4,16 +4,17 @@
 Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
 
 ## Technology Stack
-*   **Core Framework**: [Tauri](https://tauri.app/) (Rust backend, webview frontend)
+*   **Core Framework**: [Tauri](https://tauri.app/) (v2.0, Rust backend, webview frontend)
 *   **Backend Language**: [Rust](https://www.rust-lang.org/)
 *   **Frontend Framework**: [SvelteKit](https://kit.svelte.dev/)
-*   **Frontend Languages**: TypeScript, HTML, CSS
+*   **Frontend Languages**: JavaScript (SvelteKit), HTML, CSS
 *   **Text Editor**: [Lexical](https://lexical.dev/)
 *   **PDF Viewing**: [PDF.js](https://mozilla.github.io/pdf.js/)
 *   **Table Display**: [Tabulator](https://tabulator.info/)
-*   **Image Viewing/Manipulation**: OpenSeadragon (implied by static assets)
+*   **Image Viewing/Manipulation**: OpenSeadragon
 *   **Annotations Database**: SQLite (managed via `rusqlite` in Rust)
 *   **UI Styling**: Tailwind CSS (based on `tailwind.config.js`)
+*   **Tauri CLI**: Managed as a project dependency via npm (using `@tauri-apps/cli`)
 *   **Sidecar Execution**: For local AI models (e.g., Whisper, Diarization tools)
 
 ## Key Features

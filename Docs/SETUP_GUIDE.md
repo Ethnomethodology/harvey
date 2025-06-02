@@ -49,11 +49,10 @@ Now that you have the essential tools, let's get the Project Harvey code onto yo
     *   If you've used it before, go to `File > Clone Repository...` from the top menu.
 3.  **Select the URL Tab**: In the "Clone a Repository" dialog, make sure the "URL" tab is selected.
 4.  **Enter the Repository URL**:
-    *   The URL for Project Harvey's code is: `https://github.com/your-username/project-harvey.git`
-        *   **(Developer Note: Please replace `your-username/project-harvey.git` with the actual URL of the Project Harvey repository when this documentation is finalized. For now, this placeholder is used.)**
+    *   The URL for Project Harvey's code is: `https://github.com/Ethnomethodology/harvey`
     *   Paste this URL into the "Repository URL or GitHub CLI command" field.
 5.  **Choose a Local Path**:
-    *   The "Local path" field shows which folder on your computer the project code will be saved into. GitHub Desktop usually suggests a folder like `Documents/GitHub/project-harvey`. You can change this if you prefer, but the default is often fine. Make a note of this location!
+    *   The "Local path" field shows which folder on your computer the project code will be saved into. GitHub Desktop will suggest a default folder, often within your user's `Documents` directory (e.g., `Documents/GitHub/project-harvey` or similar). You can change this if you prefer, but the default is often fine. Make a note of this location!
 6.  **Click "Clone"**: GitHub Desktop will now download all the project files to the folder you specified. This might take a few minutes depending on your internet speed.
 
 ### 2.2. Using Visual Studio Code (Alternative)
@@ -65,8 +64,7 @@ If you prefer, and are comfortable with VSCode, it can also clone repositories.
     *   Go to `View > Command Palette...` from the top menu (or press `Ctrl+Shift+P` on Windows/Linux, `Cmd+Shift+P` on macOS).
 3.  **Type `Git: Clone`**: In the Command Palette, start typing `Git: Clone` and select it from the list when it appears.
 4.  **Enter the Repository URL**:
-    *   Paste the Project Harvey repository URL: `https://github.com/your-username/project-harvey.git`
-        *   **(Important Developer Note: The URL above is a placeholder! This must be replaced with the actual URL of the Project Harvey GitHub repository when this documentation is finalized.)**
+    *   Paste the Project Harvey repository URL: `https://github.com/Ethnomethodology/harvey`
     *   Press `Enter`.
 5.  **Select a Folder (Local Path)**: VSCode will ask you to choose an existing folder on your computer where you want to save the project files. Select or create a suitable folder and then click "Select Repository Location".
 6.  **Open the Cloned Repository**: Once cloning is complete, VSCode will usually show a notification asking if you want to open the cloned repository. Click "Open".
@@ -96,39 +94,34 @@ Rust is a programming language. You'll need to install it using a tool called `r
 
 ### 3.2. Install Tauri System Prerequisites (Very Important!)
 
-Tauri applications rely on your system having certain "webview" software (which is like a built-in web browser component that Tauri uses to display the user interface) and other development tools. These prerequisites are different for each operating system.
+Tauri 2.0 applications rely on your system having certain "webview" software (which is like a built-in web browser component that Tauri uses to display the user interface) and other development tools. These prerequisites are different for each operating system.
 
-*   **This is the most crucial step for the backend setup.**
-*   **Go to the Official Tauri Prerequisites Guide**: [https://tauri.app/v1/guides/getting-started/prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites)
+*   **This is the most crucial step for the backend setup for Tauri 2.0.**
+*   **Go to the Official Tauri V2 Prerequisites Guide**: [https://v2.tauri.app/develop/guides/prerequisites/](https://v2.tauri.app/develop/guides/prerequisites/)
 *   **Carefully follow the instructions for YOUR specific operating system**:
-    *   **Windows**: Usually involves installing Microsoft Visual Studio C++ Build Tools. The guide has specific checkboxes to select during that installation.
+    *   **Windows**: Usually involves installing Microsoft Visual Studio C++ Build Tools (ensure you select the correct workloads as specified in the Tauri guide).
     *   **macOS**: Typically requires Xcode Command Line Tools.
-    *   **Linux**: Requires several packages like `libwebkit2gtk-4.0-dev`, `build-essential`, etc. The guide lists them per distribution (like Ubuntu, Fedora).
-*   **Take your time with this step.** If these prerequisites are not met, the project will not build.
+    *   **Linux**: Requires several packages like `webkit2gtk-4.1-dev` (or similar, depending on distribution and specific GTK version), `build-essential`, etc. The Tauri guide lists them per distribution (like Ubuntu, Fedora).
+*   **Take your time with this step and ensure all components listed for your OS in the Tauri v2 guide are installed.** If these prerequisites are not met, the project will not build.
 
-### 3.3. Install the Tauri CLI (Command Line Interface)
+### 3.3. Understanding the Tauri CLI (Project-Managed)
 
-The Tauri CLI is a tool that helps manage and build Tauri applications.
+The Tauri CLI (Command Line Interface) is a tool that helps manage and build Tauri applications.
 
-1.  **Open a Terminal** (a new one if you just finished Rust installation or prerequisites).
-2.  **Navigate to the Project Folder (Good Practice)**:
-    *   It's good practice to run installation commands from within the project folder if possible, though for global tools like `tauri-cli` it's not strictly necessary.
-    *   In the terminal, you can navigate to where you cloned Project Harvey 1.0. For example, if it's in `Documents/GitHub/project-harvey`:
-        *   Type `cd Documents/GitHub/project-harvey` and press `Enter`. The `cd` command means "change directory." This tells your terminal to switch its focus to that specific folder.
-3.  **Install Tauri CLI**: Type the following command into the terminal and press `Enter`:
-    ```bash
-    cargo install tauri-cli
-    ```
-    *   This command uses `cargo` (Rust's package manager, which was installed with Rust) to download and install the `tauri-cli` tool. This might take a few minutes.
-4.  **Verify Installation (Optional)**: In the terminal, type `cargo tauri --version` and press `Enter`. If it's installed correctly, you'll see its version number.
-    *   *(Note: If the `cargo tauri` command isn't found, you might need to restart your terminal, or in rare cases, your computer. This helps ensure the system recognizes the new path where `cargo` installs command-line tools.)*
+For Project Harvey 1.0, the Tauri CLI is managed as a **development dependency** directly within the project. This is defined in the `package.json` file (you'll see `@tauri-apps/cli` listed there).
 
-Once these steps are done, your system should be ready for the Project Harvey 1.0 backend!
+*   **No Global Installation Needed**: You **do not** need to install `tauri-cli` globally on your system using `cargo install tauri-cli`.
+*   **How it Works**: When you run Tauri commands using `npm run tauri ...` (for example, `npm run tauri dev` or `npm run tauri build`, which will be covered in Part 5), `npm` automatically uses the specific version of the Tauri CLI that is included in the project's dependencies.
+*   This approach ensures that all developers (and you, when setting up) use the same version of the CLI, which helps avoid compatibility issues.
+
+So, there's no separate installation step for the Tauri CLI itself beyond what `npm install` (covered in Part 4) will handle for project-specific tools.
+
+Once the Rust setup (3.1) and Tauri System Prerequisites (3.2) are successfully completed, your system should be ready for Project Harvey 1.0's backend!
 
 ---
 ## Part 4: Setting Up the Frontend (Node.js and Dependencies)
 
-Project Harvey's frontend (the user interface you see and interact with) is built using web technologies and requires Node.js.
+Project Harvey's frontend (the user interface you see and interact with) is built using SvelteKit (with JavaScript) and other web technologies, all of which require Node.js.
 
 ### 4.1. Install Node.js and npm
 
@@ -156,14 +149,14 @@ Now that you have Node.js and npm, you can install all the specific libraries an
         (Replace `path/to/your/project-harvey-folder` with the actual path on your computer where you cloned the project. This needs to be the main project folder that contains the `src-tauri` folder and other files like `package.json`.)
     *   **Tip**: If you have the project open in VSCode, you can open an integrated terminal by going to `Terminal > New Terminal` in the VSCode menu. It will usually start in the correct project folder automatically.
 3.  **Run `npm install`**:
-    *   Once your terminal is focused on the root directory of the Project Harvey 1.0 project (this is the folder that contains a file named `package.json`), type the following command and press `Enter`:
+    *   Once your terminal is focused on the **root directory** of the Project Harvey 1.0 project (this is the folder that contains a file named `package.json`), type the following command and press `Enter`:
         ```bash
         npm install
         ```
-    *   **What this does**: This command reads the `package.json` file, which lists all the frontend libraries (or "packages") that Project Harvey 1.0 needs to work. `npm` then downloads these packages from the internet and installs them into a folder called `node_modules` within your project directory.
+    *   **What this does**: This command reads the `package.json` file, which lists all the frontend libraries (or "packages") that Project Harvey 1.0 needs to function. `npm` then downloads these packages from the internet and installs them into a folder called `node_modules` within your project directory. Importantly, this step also installs the project-specific version of the Tauri CLI (`@tauri-apps/cli`), as mentioned in Part 3.3. This ensures you're using the correct CLI version for this project without needing a separate global installation.
     *   This step can take a few minutes, and you'll see a lot of text scrolling in the terminal as files are downloaded and installed. Don't worry unless you see prominent `ERROR` messages at the very end. General warnings (`WARN`) are usually okay.
 
-After this, the frontend part of Project Harvey 1.0 should be all set up!
+After this, the frontend part of Project Harvey 1.0, including the necessary local tools for building and running it, should be all set up! This project uses SvelteKit with JavaScript for its user interface.
 
 ---
 ## Part 5: Building and Running the Project
@@ -187,12 +180,9 @@ For just running the application on your computer after setup, development mode 
         ```bash
         npm run tauri dev
         ```
-    *   Alternatively, you can often use this command which does the same thing:
-        ```bash
-        cargo tauri dev
-        ```
+    *   **Why `npm run tauri dev`?** We use this command because our project manages the Tauri CLI tool as a development dependency through `npm` (Node Package Manager). The `npm run` part tells `npm` to execute the `tauri dev` command using the specific version of the CLI tools that the project expects, ensuring consistency.
     *   **What happens now?**
-        *   This command tells Tauri to build both the frontend and the backend code and then launch the application in "development mode."
+        *   This command tells Tauri to build both the frontend (SvelteKit) and the backend code (Rust) and then launch the application in "development mode."
         *   You'll see a lot of output in your terminal. The very first time you run this, it might take several minutes because Rust needs to compile all the backend code (you'll see messages about "compiling crates" – "crates" are what Rust calls its packages or libraries). Subsequent builds are usually much faster.
         *   If everything is set up correctly, after the build process finishes, the Project Harvey 1.0 application window should automatically open on your screen!
 
@@ -212,11 +202,8 @@ If you want to create a standalone application package (like an `.exe` file on W
         ```bash
         npm run tauri build
         ```
-    *   Or, alternatively:
-        ```bash
-        cargo tauri build
-        ```
-    *   This process will also take some time. Once it's finished, it will usually tell you where the built application files are located. This is typically in a folder like `src-tauri/target/release/bundle/` within your project directory.
+    *   Similar to the `dev` command, this uses the project-specific Tauri CLI via `npm`.
+    *   This process will also take some time. Once it's finished, it will usually tell you where the built application files are located. This is typically in a subfolder within `src-tauri/target/release/` (for example, `src-tauri/target/release/bundle/msi/` for a Windows installer, or `src-tauri/target/release/bundle/dmg/` for a macOS disk image). The exact path will be shown in the terminal output.
 
 You've now successfully run Project Harvey 1.0! If you used the `dev` command, you can close the application window. To stop the development server that's running in your terminal, you can usually press `Ctrl+C` in the terminal window.
 
@@ -230,7 +217,7 @@ Your feedback is valuable for making Project Harvey better! If you have an idea 
 GitHub Issues is a tracking system built into every GitHub repository. It's used to track tasks, enhancements, and bugs for projects.
 
 *   **Where to find it**:
-    1.  Go to the Project Harvey 1.0 repository page on GitHub in your web browser (this is the same URL you used for cloning, e.g., `https://github.com/your-username/project-harvey.git` - **Important Developer Note: This URL is a placeholder and needs to be replaced with the actual project URL!**).
+    1.  Go to the Project Harvey 1.0 repository page on GitHub in your web browser (this is the same URL you used for cloning: `https://github.com/Ethnomethodology/harvey`).
     2.  Look for a tab at the top of the repository page that says "Issues." Click on it.
 
 ### 6.2. Before Creating a New Issue
