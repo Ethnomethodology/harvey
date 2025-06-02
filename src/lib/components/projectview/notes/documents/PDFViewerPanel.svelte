@@ -258,9 +258,15 @@ import { get } from 'svelte/store';
             // Fallback or error, as pageRect is crucial. For now, let it proceed, quadpoints will be incorrect.
         }
         
-        const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
-
+        console.log(`[DEBUG_PARTIAL_HL] createHighlightDataForStorage: Selected text: "${range.toString()}"`);
         const clientRects = range.getClientRects();
+        console.log(`[DEBUG_PARTIAL_HL] createHighlightDataForStorage: Raw ClientRects count: ${clientRects.length}`);
+        for (let i = 0; i < clientRects.length; i++) {
+            const r = clientRects[i];
+            console.log(`[DEBUG_PARTIAL_HL] createHighlightDataForStorage: ClientRect[${i}]: x=${r.x}, y=${r.y}, w=${r.width}, h=${r.height}, t=${r.top}, r=${r.right}, b=${r.bottom}, l=${r.left}`);
+        }
+        const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
+        console.log(`[DEBUG_PARTIAL_HL] createHighlightDataForStorage: PageRect: t=${pageRect.top}, l=${pageRect.left}`);
         const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
         // Note: normalizeTextForMatching(rawText) was used for 'text' before.
@@ -671,8 +677,15 @@ import { get } from 'svelte/store';
                 const pageView = pdfViewer.getPageView(newSelectionPageIndex);
                 actualNewSelectionPageElement = pageView?.div;
             }
-            const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
+            console.log(`[DEBUG_PARTIAL_HL] handleHighlightAction (for subsumption check): Selected text: "${rangeToUse.toString()}"`);
             const newSelectionClientRects = rangeToUse.getClientRects();
+            console.log(`[DEBUG_PARTIAL_HL] handleHighlightAction (for subsumption check): Raw ClientRects count: ${newSelectionClientRects.length}`);
+            for (let i = 0; i < newSelectionClientRects.length; i++) {
+                const r = newSelectionClientRects[i];
+                console.log(`[DEBUG_PARTIAL_HL] handleHighlightAction (for subsumption check): ClientRect[${i}]: x=${r.x}, y=${r.y}, w=${r.width}, h=${r.height}, t=${r.top}, r=${r.right}, b=${r.bottom}, l=${r.left}`);
+            }
+            const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
+            console.log(`[DEBUG_PARTIAL_HL] handleHighlightAction (for subsumption check): PageRect: t=${newSelectionPageRect.top}, l=${newSelectionPageRect.left}`);
             const newSelectionProcessedQuads = processAndMergeQuadPoints(newSelectionClientRects, newSelectionPageRect);
 
             if (newSelectionPageIndex === -1) {
@@ -916,8 +929,15 @@ import { get } from 'svelte/store';
             console.warn('[applyHighlightToSelectionDOM] Could not obtain pageElement for quadPoints calculation.');
             return null; 
         }
-        const pageRect = actualPageElement.getBoundingClientRect();
+        console.log(`[DEBUG_PARTIAL_HL] applyHighlightToSelectionDOM: Selected text: "${range.toString()}"`);
         const clientRects = range.getClientRects();
+        console.log(`[DEBUG_PARTIAL_HL] applyHighlightToSelectionDOM: Raw ClientRects count: ${clientRects.length}`);
+        for (let i = 0; i < clientRects.length; i++) {
+            const r = clientRects[i];
+            console.log(`[DEBUG_PARTIAL_HL] applyHighlightToSelectionDOM: ClientRect[${i}]: x=${r.x}, y=${r.y}, w=${r.width}, h=${r.height}, t=${r.top}, r=${r.right}, b=${r.bottom}, l=${r.left}`);
+        }
+        const pageRect = actualPageElement.getBoundingClientRect();
+        console.log(`[DEBUG_PARTIAL_HL] applyHighlightToSelectionDOM: PageRect: t=${pageRect.top}, l=${pageRect.left}`);
         const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
         renderHighlightOverlay(quadPoints, color, hlId, pageIndex);
@@ -1051,6 +1071,10 @@ function processAndMergeQuadPoints(clientRects, pageRect) {
     if (!clientRects || clientRects.length === 0) {
         return [];
     }
+    // Note: clientRects here is already passed in, so we don't log range.toString()
+    console.log(`[DEBUG_PARTIAL_HL] processAndMergeQuadPoints: Input ClientRects count: ${clientRects.length}`);
+    // The properties of clientRects were logged by the caller.
+    console.log(`[DEBUG_PARTIAL_HL] processAndMergeQuadPoints: Input PageRect: t=${pageRect.top}, l=${pageRect.left}`);
 
     const RECT_HEIGHT_TOLERANCE = 10; // pixels, for grouping rects into lines
 
@@ -1065,6 +1089,7 @@ function processAndMergeQuadPoints(clientRects, pageRect) {
         const y2 = r.bottom - pageRect.top;
         rects.push({ x1, y1, x2, y2, midY: (y1 + y2) / 2 });
     }
+    console.log(`[DEBUG_PARTIAL_HL] processAndMergeQuadPoints: Initial page-relative rects (before sort/merge): count=${rects.length}`, JSON.parse(JSON.stringify(rects)));
 
     // Sort by y1 then x1
     rects.sort((a, b) => {
@@ -1140,6 +1165,7 @@ function processAndMergeQuadPoints(clientRects, pageRect) {
             ]);
         }
     }
+    console.log(`[DEBUG_PARTIAL_HL] processAndMergeQuadPoints: Output finalQuadPoints: count=${finalQuadPoints.length}`, JSON.parse(JSON.stringify(finalQuadPoints)));
     return finalQuadPoints;
 }
 
