@@ -261,22 +261,7 @@ import { get } from 'svelte/store';
         const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
 
         const clientRects = range.getClientRects();
-        const quadPoints = [];
-
-        for (let i = 0; i < clientRects.length; i++) {
-            const rect = clientRects[i];
-            // Coordinates relative to the page
-            const x1 = rect.left - pageRect.left;
-            const y1 = rect.top - pageRect.top;
-            const x2 = rect.right - pageRect.left;
-            const y2 = rect.top - pageRect.top; // y2 is same as y1 for top-right
-            const x3 = rect.left - pageRect.left; // x3 is same as x1 for bottom-left
-            const y3 = rect.bottom - pageRect.top;
-            const x4 = rect.right - pageRect.left; // x4 is same as x2 for bottom-right
-            const y4 = rect.bottom - pageRect.top; // y4 is same as y3 for bottom-right
-            
-            quadPoints.push([x1, y1, x2, y2, x3, y3, x4, y4]);
-        }
+        const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
         // Note: normalizeTextForMatching(rawText) was used for 'text' before.
         // The requirement is to store raw text for 'text', and quadPoints for positioning.
@@ -435,7 +420,7 @@ import { get } from 'svelte/store';
         pendingWorkerTasks.delete(workerTaskKey); // Remove from pending tasks
 
         if (error) {
-            console.warn(`[DEBUG_HL] Worker Message: ERROR for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
+            console.warn(`[Worker Message] Error for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
             return;
         }
 
@@ -470,7 +455,6 @@ import { get } from 'svelte/store';
                 if (newQuadPoints.length > 0) {
                     const highlight = initialHighlights.find(h => h.id === annotationId && h.pageIndex === pageIndex);
                     if (highlight) {
-                        console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}. CALLING renderHighlightOverlay. newQuadPoints_count=${newQuadPoints?.length}`, JSON.parse(JSON.stringify(newQuadPoints)));
                         renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
                         // console.log(`[Worker Message] Rendered ${annotationId} via worker result and generated quadPoints.`);
 
@@ -484,16 +468,14 @@ import { get } from 'svelte/store';
                         console.warn(`[Worker Message] Highlight ${annotationId} not found in initialHighlights after worker processing.`);
                     }
                 } else {
-                    console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}, but newQuadPoints generation failed or resulted in empty array.`);
                     console.warn(`[Worker Message] Text found by worker for ${annotationId}, but failed to generate quadPoints from range.`);
                 }
             } else {
-                console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}, but findRangeInTextLayer failed.`);
                 console.warn(`[Worker Message] Text found by worker for ${annotationId}, but findRangeInTextLayer failed to create range on main thread.`);
             }
         } else {
             // This case should be covered by 'error' from worker, but as a fallback:
-            console.warn(`[DEBUG_HL] Worker Message: No match found by worker for ${annotationId} on page ${pageIndex + 1}.`);
+            console.warn(`[Worker Message] No match found by worker for ${annotationId} on page ${pageIndex + 1}.`);
         }
     }
 
@@ -875,19 +857,8 @@ import { get } from 'svelte/store';
         }
         const pageRect = actualPageElement.getBoundingClientRect();
         const clientRects = range.getClientRects();
-        const quadPoints = [];
-
-        for (let i = 0; i < clientRects.length; i++) {
-            const rect = clientRects[i];
-            quadPoints.push([
-                rect.left - pageRect.left, rect.top - pageRect.top,
-                rect.right - pageRect.left, rect.top - pageRect.top,
-                rect.left - pageRect.left, rect.bottom - pageRect.top,
-                rect.right - pageRect.left, rect.bottom - pageRect.top
-            ]);
-        }
+        const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
-        console.log(`[DEBUG_HL] applyHighlightToSelectionDOM: CALLING renderHighlightOverlay for id=${hlId}, page=${pageIndex}, color=${color}, quadPoints_count=${quadPoints?.length}`, JSON.parse(JSON.stringify(quadPoints || [])));
         renderHighlightOverlay(quadPoints, color, hlId, pageIndex);
         return hlId;
     }
@@ -1014,6 +985,102 @@ import { get } from 'svelte/store';
         while (node.firstChild) { parent.insertBefore(node.firstChild, node); }
         try { if (parent.contains(node)) parent.removeChild(node); } catch (e) { /* console.error("Unwrap Error:", e, node); */ }
     }
+
+function processAndMergeQuadPoints(clientRects, pageRect) {
+    if (!clientRects || clientRects.length === 0) {
+        return [];
+    }
+
+    const RECT_HEIGHT_TOLERANCE = 10; // pixels, for grouping rects into lines
+
+    let rects = [];
+    for (let i = 0; i < clientRects.length; i++) {
+        const r = clientRects[i];
+        if (r.width === 0 || r.height === 0) continue;
+
+        const x1 = r.left - pageRect.left;
+        const y1 = r.top - pageRect.top;
+        const x2 = r.right - pageRect.left;
+        const y2 = r.bottom - pageRect.top;
+        rects.push({ x1, y1, x2, y2, midY: (y1 + y2) / 2 });
+    }
+
+    // Sort by y1 then x1
+    rects.sort((a, b) => {
+        if (a.y1 !== b.y1) {
+            return a.y1 - b.y1;
+        }
+        return a.x1 - b.x1;
+    });
+
+    if (rects.length === 0) return [];
+
+    const lines = [];
+    let currentLine = [rects[0]];
+
+    for (let i = 1; i < rects.length; i++) {
+        const currentRect = rects[i];
+        const firstRectInLine = currentLine[0];
+        // Check if currentRect's y1 is close to the firstRectInLine's y1
+        // or if it vertically overlaps with the bounding box of the current line being built
+        let lineMinY = firstRectInLine.y1;
+        let lineMaxY = firstRectInLine.y2;
+        for(let k=1; k < currentLine.length; k++) {
+            lineMinY = Math.min(lineMinY, currentLine[k].y1);
+            lineMaxY = Math.max(lineMaxY, currentLine[k].y2);
+        }
+
+        if (currentRect.y1 < lineMaxY && currentRect.y2 > lineMinY && Math.abs(currentRect.y1 - firstRectInLine.y1) < (firstRectInLine.y2 - firstRectInLine.y1) * 1.5 + RECT_HEIGHT_TOLERANCE ) {
+             // A more robust check: if the current rect's y-span significantly overlaps with the current line's y-span.
+             // Or, if y1 is within tolerance of the line's average y1 or first rect's y1.
+             // For now, using a simpler tolerance based on the first rect of the line:
+            // if (Math.abs(currentRect.y1 - firstRectInLine.y1) < RECT_HEIGHT_TOLERANCE && Math.abs(currentRect.midY - firstRectInLine.midY) < RECT_HEIGHT_TOLERANCE * 2) {
+           currentLine.push(currentRect);
+        } else {
+            lines.push(currentLine);
+            currentLine = [currentRect];
+        }
+    }
+    lines.push(currentLine); // Add the last line
+
+    const finalQuadPoints = [];
+    for (const line of lines) {
+        if (line.length === 0) continue;
+
+        // Sort rects in this line by x1 (should mostly be sorted already)
+        line.sort((a, b) => a.x1 - b.x1);
+
+        let mergedRectsOnLine = [];
+        if (line.length > 0) {
+            mergedRectsOnLine.push({ ...line[0] }); // Start with the first rect
+
+            for (let i = 1; i < line.length; i++) {
+                const currentRect = line[i];
+                let lastMerged = mergedRectsOnLine[mergedRectsOnLine.length - 1];
+
+                // Check for horizontal overlap or adjacency (within a small tolerance if needed)
+                // For now, direct overlap: if currentRect.x1 is less than lastMerged.x2
+                if (currentRect.x1 < lastMerged.x2 + 5) { // 5px tolerance for adjacency
+                    lastMerged.x2 = Math.max(lastMerged.x2, currentRect.x2);
+                    lastMerged.y1 = Math.min(lastMerged.y1, currentRect.y1);
+                    lastMerged.y2 = Math.max(lastMerged.y2, currentRect.y2);
+                } else {
+                    mergedRectsOnLine.push({ ...currentRect });
+                }
+            }
+        }
+
+        for (const mergedRect of mergedRectsOnLine) {
+            finalQuadPoints.push([
+                mergedRect.x1, mergedRect.y1,
+                mergedRect.x2, mergedRect.y1,
+                mergedRect.x1, mergedRect.y2,
+                mergedRect.x2, mergedRect.y2
+            ]);
+        }
+    }
+    return finalQuadPoints;
+}
     
     /* ─────────────────────────── PDF Loading / Setup (User's latest version) ──────────────── */
     async function loadPdfAndLibraries(containerElement) {
@@ -1294,7 +1361,6 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
 
         if (hl.quadPoints && hl.quadPoints.length > 0) {
             // console.debug(`[renderAnnotationsForPage] ID ${hl.id} on page ${pageIndex + 1} using existing quadPoints.`);
-            console.log(`[DEBUG_HL] renderAnnotationsForPage: Using existing quadPoints for id=${hl.id}, page=${pageIndex}, color=${hl.color}, quadPoints_count=${hl.quadPoints?.length}`, JSON.parse(JSON.stringify(hl.quadPoints)));
             renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
         } else if (hl.text && annotationMatcherWorker) {
             // Text match fallback
@@ -1310,7 +1376,6 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
                 continue;
             }
             // console.warn(`[renderAnnotationsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match via Web Worker.`);
-            console.log(`[DEBUG_HL] renderAnnotationsForPage: Missing quadPoints for id=${hl.id}, page=${pageIndex}. Will attempt worker match. Text snippet: "${hl.text?.substring(0, 50)}..."`);
             pendingWorkerTasks.add(workerTaskKey);
 
             try {
@@ -1380,15 +1445,10 @@ function ensureHighlightOverlayContainer(pageIndex) {
 
 /** Draws highlight overlay rectangles using pre-calculated quadPoints. */
 function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
-    console.log(`[DEBUG_HL] renderHighlightOverlay: START id=${id}, page=${pageIndex}, color=${color}, quadPoints_count=${quadPoints?.length}`, JSON.parse(JSON.stringify(quadPoints || [])));
     const overlay = ensureHighlightOverlayContainer(pageIndex);
     if (!overlay) return;
 
     // Remove any existing parts for this highlight id to prevent duplicates
-    const existingParts = overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
-    if (existingParts.length > 0) {
-        console.log(`[DEBUG_HL] renderHighlightOverlay: Removing ${existingParts.length} existing parts for id=${id}, page=${pageIndex}`);
-    }
     overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`).forEach(el => el.remove());
 
     if (!quadPoints || quadPoints.length === 0) {
@@ -1423,7 +1483,6 @@ function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
             borderRadius: '2px',
             pointerEvents: 'auto' // Allow clicks on the overlay part
         });
-        console.log(`[DEBUG_HL] renderHighlightOverlay: Appending part ${index} for id=${id}, page=${pageIndex}, quad=`, JSON.parse(JSON.stringify(quad)));
         overlay.appendChild(rectEl);
     });
 }
