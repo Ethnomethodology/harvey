@@ -538,7 +538,26 @@ import { get } from 'svelte/store';
     }
 
     async function handleViewerClick(event) {
-        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
+        // If the click is on the selection toolbar or its dropdown, let normal interaction proceed.
+        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) {
+            return;
+        }
+
+        // If a text selection was just made (mouseup set the mode and range),
+        // and the selection toolbar is meant to be shown for that new selection,
+        // then this click should not try to find a clicked highlight or change the mode.
+        if (toolbarMode === 'selection' && selectedRange && showSelectionToolbar) {
+            // This click might be part of the mouseup action that created the selection.
+            // We want to ensure the 'selection' toolbar appears as intended by handleViewerMouseUp.
+            // We don't want to immediately switch to 'click' mode if the mouseup point was on an old highlight.
+            // Stop propagation if the click is within the viewer but not on the toolbar,
+            // to prevent other viewer-level click handlers if necessary, though it might not be strictly needed here.
+            // if (viewerContainer.contains(event.target)) { // Be careful with stopping propagation too broadly.
+            //     event.stopPropagation();
+            // }
+            return; // Exit early, letting the selection toolbar (from mouseup) be the focus.
+        }
+
         // Detect click on either old span or new overlay rectangles
         let highlightSpan = event.target.closest?.('.pdf-highlight');
         if (!highlightSpan) {
@@ -645,22 +664,64 @@ import { get } from 'svelte/store';
             const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
             const newHighlightId = `hl-${uuidv4()}`;
 
-            // --- Immediate Visual Update ---
+            // Calculate new selection quads first for subsumption check
+            const { pageIndex: newSelectionPageIndex, pageElement: newSelectionPageElement } = getRangePageInfo(rangeToUse);
+            let actualNewSelectionPageElement = newSelectionPageElement;
+            if (!actualNewSelectionPageElement && newSelectionPageIndex !== -1 && pdfViewer) {
+                const pageView = pdfViewer.getPageView(newSelectionPageIndex);
+                actualNewSelectionPageElement = pageView?.div;
+            }
+            const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
+            const newSelectionClientRects = rangeToUse.getClientRects();
+            const newSelectionProcessedQuads = processAndMergeQuadPoints(newSelectionClientRects, newSelectionPageRect);
+
+            if (newSelectionPageIndex === -1) {
+                console.warn('[handleHighlightAction] Could not determine page index for new selection for overlap check. Proceeding without check.');
+            } else {
+                const highlightsToCheck = [...initialHighlights];
+                for (const existingHl of highlightsToCheck) {
+                    if (existingHl.pageIndex === newSelectionPageIndex) {
+                        if (existingHl.quadPoints && existingHl.quadPoints.length > 0) {
+                            if (areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints)) {
+                                console.log(`[handleHighlightAction] New selection subsumes existing highlight ID: ${existingHl.id}. Removing old one.`);
+                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                                // For proper undo, we need the full original data including its specific range data if possible.
+                                // Using existingHl as dataForStorage is a simplification.
+                                recordAction('removeHighlight', {
+                                    id: existingHl.id,
+                                    color: existingHl.color,
+                                    dataForStorage: { ...existingHl }
+                                });
+                                // The UI for the old highlight (overlay parts) will be removed by the 'remove' event handler
+                                // or by the new highlight's render call if IDs match (though they won't here).
+                                // No need to call removeHighlightOverlay(existingHl.id) directly here if events handle it.
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Immediate Visual Update for the new highlight ---
             const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
             // applyHighlightToSelectionDOM now primarily focuses on calling renderHighlightOverlay
-            // which should be relatively fast.
 
             hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
 
-            if (!visualRendered) { // If applyHighlightToSelectionDOM failed (e.g. no page context)
-                console.warn("Visual rendering of new highlight failed. Aborting deferred tasks.");
+            if (!visualRendered && newSelectionProcessedQuads.length > 0) { // Only warn if quads were expected
+                console.warn("Visual rendering of new highlight failed, though processed quads were generated. Aborting deferred tasks.");
                 return;
             }
+            if (!visualRendered && newSelectionProcessedQuads.length === 0) {
+                console.warn("Visual rendering of new highlight failed, no processed quads. Aborting deferred tasks.");
+                return;
+            }
+
 
             // --- Deferred Data Processing & State Updates ---
             deferTask(async () => {
                 try {
+                    // dataForStorage will use newSelectionProcessedQuads via createHighlightDataForStorage
                     const dataForStorage = await createHighlightDataForStorage(newHighlightId, rangeToUse, color);
                     if (dataForStorage) {
                         dispatch('pdfhighlightevent', { type: 'add', ...dataForStorage });
@@ -1080,6 +1141,30 @@ function processAndMergeQuadPoints(clientRects, pageRect) {
         }
     }
     return finalQuadPoints;
+}
+
+function areQuadsSubsumed(newSelectionQuads, existingHighlightQuads) {
+    if (!existingHighlightQuads || existingHighlightQuads.length === 0) return false;
+    if (!newSelectionQuads || newSelectionQuads.length === 0) return false;
+
+    for (const existingQuad of existingHighlightQuads) {
+        // Convert existingQuad from [x1,y1, x2,y1, x1,y2, x2,y2] to {x1,y1,x2,y2}
+        const exRect = { x1: existingQuad[0], y1: existingQuad[1], x2: existingQuad[6], y2: existingQuad[7] };
+        let isThisExistingQuadCovered = false;
+        for (const newSelectionQuad of newSelectionQuads) {
+            // Convert newSelectionQuad to {nx1,ny1,nx2,ny2}
+            const nsRect = { nx1: newSelectionQuad[0], ny1: newSelectionQuad[1], nx2: newSelectionQuad[6], ny2: newSelectionQuad[7] };
+            // Check if nsRect completely contains exRect
+            if (nsRect.nx1 <= exRect.x1 && nsRect.ny1 <= exRect.y1 && nsRect.nx2 >= exRect.x2 && nsRect.ny2 >= exRect.y2) {
+                isThisExistingQuadCovered = true;
+                break; // This existingQuad is covered by at least one newSelectionQuad
+            }
+        }
+        if (!isThisExistingQuadCovered) {
+            return false; // Found an existingQuad that is not covered by any newSelectionQuad
+        }
+    }
+    return true; // All existingQuads are covered
 }
     
     /* ─────────────────────────── PDF Loading / Setup (User's latest version) ──────────────── */
