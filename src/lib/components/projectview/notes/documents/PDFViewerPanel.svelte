@@ -1594,7 +1594,7 @@ function groupDisjointBlocks(quads) {
             const horizontallyOverlap = Math.max(currentLeft, lastLeft) < Math.min(currentRight, lastRight);
             const horizontallyAdjacentOrClose = currentLeft < lastRight + 10 && currentRight > lastLeft - 10;
 
-            if ((areOnSameLine && horizontallyAdjacentOrClose) || (areOnAdjacentLine && horizontallyOverlap)) {
+            if ((areOnSameLine && horizontallyAdjacentOrClose) || (areOnAdjacentLine && horizontallyAdjacentOrClose)) {
                 currentBlock.push(currentStripQuad);
             } else {
                 allBlocks.push(currentBlock);
