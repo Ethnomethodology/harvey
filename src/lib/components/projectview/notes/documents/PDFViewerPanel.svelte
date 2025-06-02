@@ -435,7 +435,7 @@ import { get } from 'svelte/store';
         pendingWorkerTasks.delete(workerTaskKey); // Remove from pending tasks
 
         if (error) {
-            console.warn(`[Worker Message] Error for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
+            console.warn(`[DEBUG_HL] Worker Message: ERROR for annotation ${annotationId} on page ${pageIndex + 1}: ${error}`);
             return;
         }
 
@@ -470,6 +470,7 @@ import { get } from 'svelte/store';
                 if (newQuadPoints.length > 0) {
                     const highlight = initialHighlights.find(h => h.id === annotationId && h.pageIndex === pageIndex);
                     if (highlight) {
+                        console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}. CALLING renderHighlightOverlay. newQuadPoints_count=${newQuadPoints?.length}`, JSON.parse(JSON.stringify(newQuadPoints)));
                         renderHighlightOverlay(newQuadPoints, highlight.color, highlight.id, pageIndex);
                         // console.log(`[Worker Message] Rendered ${annotationId} via worker result and generated quadPoints.`);
 
@@ -483,14 +484,16 @@ import { get } from 'svelte/store';
                         console.warn(`[Worker Message] Highlight ${annotationId} not found in initialHighlights after worker processing.`);
                     }
                 } else {
+                    console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}, but newQuadPoints generation failed or resulted in empty array.`);
                     console.warn(`[Worker Message] Text found by worker for ${annotationId}, but failed to generate quadPoints from range.`);
                 }
             } else {
+                console.log(`[DEBUG_HL] handleWorkerMessage: Worker found match for id=${annotationId}, page=${pageIndex}, but findRangeInTextLayer failed.`);
                 console.warn(`[Worker Message] Text found by worker for ${annotationId}, but findRangeInTextLayer failed to create range on main thread.`);
             }
         } else {
             // This case should be covered by 'error' from worker, but as a fallback:
-            console.warn(`[Worker Message] No match found by worker for ${annotationId} on page ${pageIndex + 1}.`);
+            console.warn(`[DEBUG_HL] Worker Message: No match found by worker for ${annotationId} on page ${pageIndex + 1}.`);
         }
     }
 
@@ -884,6 +887,7 @@ import { get } from 'svelte/store';
             ]);
         }
         
+        console.log(`[DEBUG_HL] applyHighlightToSelectionDOM: CALLING renderHighlightOverlay for id=${hlId}, page=${pageIndex}, color=${color}, quadPoints_count=${quadPoints?.length}`, JSON.parse(JSON.stringify(quadPoints || [])));
         renderHighlightOverlay(quadPoints, color, hlId, pageIndex);
         return hlId;
     }
@@ -1290,6 +1294,7 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
 
         if (hl.quadPoints && hl.quadPoints.length > 0) {
             // console.debug(`[renderAnnotationsForPage] ID ${hl.id} on page ${pageIndex + 1} using existing quadPoints.`);
+            console.log(`[DEBUG_HL] renderAnnotationsForPage: Using existing quadPoints for id=${hl.id}, page=${pageIndex}, color=${hl.color}, quadPoints_count=${hl.quadPoints?.length}`, JSON.parse(JSON.stringify(hl.quadPoints)));
             renderHighlightOverlay(hl.quadPoints, hl.color, hl.id, pageIndex);
         } else if (hl.text && annotationMatcherWorker) {
             // Text match fallback
@@ -1305,6 +1310,7 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
                 continue;
             }
             // console.warn(`[renderAnnotationsForPage] Missing quadPoints for ID ${hl.id} on page ${pageIndex + 1}. Attempting text match via Web Worker.`);
+            console.log(`[DEBUG_HL] renderAnnotationsForPage: Missing quadPoints for id=${hl.id}, page=${pageIndex}. Will attempt worker match. Text snippet: "${hl.text?.substring(0, 50)}..."`);
             pendingWorkerTasks.add(workerTaskKey);
 
             try {
@@ -1374,10 +1380,15 @@ function ensureHighlightOverlayContainer(pageIndex) {
 
 /** Draws highlight overlay rectangles using pre-calculated quadPoints. */
 function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
+    console.log(`[DEBUG_HL] renderHighlightOverlay: START id=${id}, page=${pageIndex}, color=${color}, quadPoints_count=${quadPoints?.length}`, JSON.parse(JSON.stringify(quadPoints || [])));
     const overlay = ensureHighlightOverlayContainer(pageIndex);
     if (!overlay) return;
 
     // Remove any existing parts for this highlight id to prevent duplicates
+    const existingParts = overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`);
+    if (existingParts.length > 0) {
+        console.log(`[DEBUG_HL] renderHighlightOverlay: Removing ${existingParts.length} existing parts for id=${id}, page=${pageIndex}`);
+    }
     overlay.querySelectorAll(`.overlay-part[data-hl-id="${id}"]`).forEach(el => el.remove());
 
     if (!quadPoints || quadPoints.length === 0) {
@@ -1385,7 +1396,7 @@ function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
         return;
     }
 
-    quadPoints.forEach(quad => {
+    quadPoints.forEach((quad, index) => {
         // quad is [x1, y1, x2, y2, x3, y3, x4, y4]
         // These are already page-relative coordinates.
         const x1 = quad[0];
@@ -1412,6 +1423,7 @@ function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
             borderRadius: '2px',
             pointerEvents: 'auto' // Allow clicks on the overlay part
         });
+        console.log(`[DEBUG_HL] renderHighlightOverlay: Appending part ${index} for id=${id}, page=${pageIndex}, quad=`, JSON.parse(JSON.stringify(quad)));
         overlay.appendChild(rectEl);
     });
 }
