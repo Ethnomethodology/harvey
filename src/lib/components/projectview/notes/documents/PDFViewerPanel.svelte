@@ -258,25 +258,9 @@ import { get } from 'svelte/store';
             // Fallback or error, as pageRect is crucial. For now, let it proceed, quadpoints will be incorrect.
         }
         
-        const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
-
         const clientRects = range.getClientRects();
-        const quadPoints = [];
-
-        for (let i = 0; i < clientRects.length; i++) {
-            const rect = clientRects[i];
-            // Coordinates relative to the page
-            const x1 = rect.left - pageRect.left;
-            const y1 = rect.top - pageRect.top;
-            const x2 = rect.right - pageRect.left;
-            const y2 = rect.top - pageRect.top; // y2 is same as y1 for top-right
-            const x3 = rect.left - pageRect.left; // x3 is same as x1 for bottom-left
-            const y3 = rect.bottom - pageRect.top;
-            const x4 = rect.right - pageRect.left; // x4 is same as x2 for bottom-right
-            const y4 = rect.bottom - pageRect.top; // y4 is same as y3 for bottom-right
-            
-            quadPoints.push([x1, y1, x2, y2, x3, y3, x4, y4]);
-        }
+        const pageRect = actualPageElement?.getBoundingClientRect() || { top: 0, left: 0 }; // Fallback to 0,0 if no pageElement
+        const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
         // Note: normalizeTextForMatching(rawText) was used for 'text' before.
         // The requirement is to store raw text for 'text', and quadPoints for positioning.
@@ -319,6 +303,48 @@ import { get } from 'svelte/store';
                     dispatch('pdfhighlightevent', { type: 'update', ...action.payload.dataForStorage, color: action.payload.oldColor });
                 } else { console.warn('[PDF Undo] Cannot revert color change, missing data.', action.payload); }
                 break;
+            case 'updateHighlightQuads': // For partial overlaps
+                // Undo the trim: restore original quads
+                if (action.payload.id && action.payload.originalHighlightData && action.payload.oldQuads) {
+                    dispatch('pdfhighlightevent', {
+                        type: 'update',
+                        ...action.payload.originalHighlightData, // Spread original data
+                        quadPoints: action.payload.oldQuads      // Restore old quads
+                    });
+                } else { console.warn('[PDF Undo] Cannot revert quad update, missing data.', action.payload); }
+                break;
+            case 'removeHighlightFromSelection':
+                console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Action payload:', JSON.parse(JSON.stringify(action.payload)));
+
+                // Log re-adding fully removed original highlights
+                if (action.payload.removedOriginalHighlights && action.payload.removedOriginalHighlights.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Re-adding fully removed highlights:', JSON.parse(JSON.stringify(action.payload.removedOriginalHighlights.map(h => h.id))));
+                    action.payload.removedOriginalHighlights.forEach(hlData => {
+                        dispatch('pdfhighlightevent', { type: 'add', ...hlData });
+                    });
+                }
+
+                // Log reverting updated original highlights
+                if (action.payload.updatedOriginalHighlights && action.payload.updatedOriginalHighlights.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Reverting updated/trimmed highlights:', JSON.parse(JSON.stringify(action.payload.updatedOriginalHighlights.map(u => u.id))));
+                    action.payload.updatedOriginalHighlights.forEach(updateData => {
+                        dispatch('pdfhighlightevent', {
+                            type: 'update',
+                            ...updateData.originalHighlightData,
+                            quadPoints: updateData.oldQuads
+                        });
+                    });
+                }
+
+                // Log removing newly added split highlights
+                if (action.payload.addedSplitHighlightIds && action.payload.addedSplitHighlightIds.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Removing newly added split part IDs:', JSON.parse(JSON.stringify(action.payload.addedSplitHighlightIds)));
+                    action.payload.addedSplitHighlightIds.forEach(id => {
+                        console.log(`[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Dispatching remove for split ID: ${id}`);
+                        dispatch('pdfhighlightevent', { type: 'remove', id: id });
+                    });
+                }
+                break;
         }
         hideSelectionToolbar();
     }
@@ -344,6 +370,35 @@ import { get } from 'svelte/store';
                     changeClickedHighlightColorDOM(action.payload.id, action.payload.newColor);
                     dispatch('pdfhighlightevent', { type: 'update', ...action.payload.dataForStorage, color: action.payload.newColor });
                 } else { console.warn('[PDF Redo] Cannot re-apply color change, missing data.', action.payload); }
+                break;
+            case 'updateHighlightQuads': // For partial overlaps
+                // Redo the trim: apply new quads
+                if (action.payload.id && action.payload.originalHighlightData && action.payload.newQuads) {
+                     dispatch('pdfhighlightevent', {
+                        type: 'update',
+                        ...action.payload.originalHighlightData, // Spread original data
+                        quadPoints: action.payload.newQuads      // Apply new quads
+                    });
+                } else { console.warn('[PDF Redo] Cannot re-apply quad update, missing data.', action.payload); }
+                break;
+            case 'removeHighlightFromSelection':
+                // Redo the removal of parts of highlights / creation of new split highlights
+                // 1. Re-remove fully removed original highlights
+                action.payload.removedOriginalHighlights?.forEach(hlData => {
+                    dispatch('pdfhighlightevent', { type: 'remove', id: hlData.id });
+                });
+                // 2. Re-update original highlights to their trimmed quads (first block)
+                action.payload.updatedOriginalHighlights?.forEach(updateData => {
+                    dispatch('pdfhighlightevent', {
+                        type: 'update',
+                        ...updateData.originalHighlightData,
+                        quadPoints: updateData.newQuadsFirstBlock
+                    });
+                });
+                // 3. Re-add newly created split highlights
+                action.payload.addedSplitHighlightData?.forEach(hlData => {
+                    dispatch('pdfhighlightevent', { type: 'add', ...hlData });
+                });
                 break;
         }
         hideSelectionToolbar();
@@ -553,7 +608,26 @@ import { get } from 'svelte/store';
     }
 
     async function handleViewerClick(event) {
-        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
+        // If the click is on the selection toolbar or its dropdown, let normal interaction proceed.
+        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) {
+            return;
+        }
+
+        // If a text selection was just made (mouseup set the mode and range),
+        // and the selection toolbar is meant to be shown for that new selection,
+        // then this click should not try to find a clicked highlight or change the mode.
+        if (toolbarMode === 'selection' && selectedRange && showSelectionToolbar) {
+            // This click might be part of the mouseup action that created the selection.
+            // We want to ensure the 'selection' toolbar appears as intended by handleViewerMouseUp.
+            // We don't want to immediately switch to 'click' mode if the mouseup point was on an old highlight.
+            // Stop propagation if the click is within the viewer but not on the toolbar,
+            // to prevent other viewer-level click handlers if necessary, though it might not be strictly needed here.
+            // if (viewerContainer.contains(event.target)) { // Be careful with stopping propagation too broadly.
+            //     event.stopPropagation();
+            // }
+            return; // Exit early, letting the selection toolbar (from mouseup) be the focus.
+        }
+
         // Detect click on either old span or new overlay rectangles
         let highlightSpan = event.target.closest?.('.pdf-highlight');
         if (!highlightSpan) {
@@ -658,24 +732,230 @@ import { get } from 'svelte/store';
             if (!selectedRange) { console.warn("Highlight Action (Selection Mode): No stored selection range found."); return; }
 
             const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
-            const newHighlightId = `hl-${uuidv4()}`;
 
-            // --- Immediate Visual Update ---
+            // --- NEW LOGIC BLOCK FOR REMOVING FROM SELECTION --- >>>
+            if (color === 'remove') {
+                console.log('[handleHighlightAction] Attempting to remove highlight from selection.');
+                hideSelectionToolbar(); // Hide toolbar immediately
+                window.getSelection()?.removeAllRanges(); // Clear text selection
+
+                const { pageIndex: selectionPageIndex, pageElement: selectionPageElement } = getRangePageInfo(rangeToUse);
+
+                if (selectionPageIndex === -1) {
+                    console.warn('[handleHighlightAction] Remove from selection: Could not determine page index for selection.');
+                    return; // Exit if page index is unknown
+                }
+
+                let actualSelectionPageElement = selectionPageElement;
+                if (!actualSelectionPageElement && pdfViewer) { // Ensure pdfViewer is available
+                    const pageView = pdfViewer.getPageView(selectionPageIndex);
+                    actualSelectionPageElement = pageView?.div;
+                }
+                // Fallback for pageRect if pageElement is still not found
+                const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || viewerContainer?.getBoundingClientRect() || { top: 0, left: 0 };
+                const selectionClientRects = rangeToUse.getClientRects();
+                const selectionQuads = processAndMergeQuadPoints(selectionClientRects, selectionPageRect);
+
+                if (!selectionQuads || selectionQuads.length === 0) {
+                    console.warn('[handleHighlightAction] Remove from selection: No valid quads for current selection.');
+                    return; // Exit if selection yields no quads
+                }
+
+                let compoundUndoPayload = {
+                    removedOriginalHighlights: [],
+                    updatedOriginalHighlights: [],
+                    addedSplitHighlightIds: [],
+                    addedSplitHighlightData: []
+                };
+
+                const highlightsToProcess = [...initialHighlights];
+
+                for (const existingHl of highlightsToProcess) {
+                    if (existingHl.pageIndex === selectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
+
+                        const existingHlBoundingBox = getBoundingBoxForQuads(existingHl.quadPoints);
+                        const selectionBoundingBox = getBoundingBoxForQuads(selectionQuads);
+
+                        if (doBoundingBoxesIntersect(selectionBoundingBox, existingHlBoundingBox)) {
+                            const originalQuadsForUndo = JSON.parse(JSON.stringify(existingHl.quadPoints));
+                            const originalHighlightDataForUndo = JSON.parse(JSON.stringify(existingHl));
+
+                            const remainingQuads = subtractQuads(existingHl.quadPoints, selectionQuads);
+
+                            if (remainingQuads.length === 0) {
+                                console.log(`[handleHighlightAction] Remove from selection: Existing highlight ID ${existingHl.id} fully covered. Removing it.`);
+                                compoundUndoPayload.removedOriginalHighlights.push(originalHighlightDataForUndo);
+                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                            } else {
+                                const disjointBlocks = groupDisjointBlocks(remainingQuads);
+
+                                if (disjointBlocks && disjointBlocks.length > 0) {
+                                    const firstBlockQuads = disjointBlocks[0];
+                                    console.log(`[handleHighlightAction] Remove from selection: Updating existing highlight ID ${existingHl.id} with first block of ${firstBlockQuads.length} quads.`);
+
+                                    compoundUndoPayload.updatedOriginalHighlights.push({
+                                        id: existingHl.id,
+                                        oldQuads: originalQuadsForUndo,
+                                        newQuadsFirstBlock: firstBlockQuads,
+                                        originalHighlightData: originalHighlightDataForUndo
+                                    });
+
+                                    dispatch('pdfhighlightevent', {
+                                        type: 'update',
+                                        ...originalHighlightDataForUndo,
+                                        quadPoints: firstBlockQuads
+                                    });
+
+                                    for (let i = 1; i < disjointBlocks.length; i++) {
+                                        const newSplitHighlightId = `hl-${uuidv4()}`;
+                                        const splitBlockQuads = disjointBlocks[i];
+                                        console.log(`[handleHighlightAction] Remove from selection: Creating new highlight ID ${newSplitHighlightId} for split part of original ID ${existingHl.id}.`);
+
+                                        const newHighlightDataObject = {
+                                            type: 'pdfHighlight',
+                                            id: newSplitHighlightId,
+                                            color: existingHl.color,
+                                            pageIndex: existingHl.pageIndex,
+                                            text: existingHl.text,
+                                            quadPoints: splitBlockQuads,
+                                            prefix: existingHl.prefix,
+                                            suffix: existingHl.suffix,
+                                        };
+                                        compoundUndoPayload.addedSplitHighlightIds.push(newSplitHighlightId);
+                                        compoundUndoPayload.addedSplitHighlightData.push(newHighlightDataObject);
+
+                                        dispatch('pdfhighlightevent', { type: 'add', ...newHighlightDataObject });
+                                    }
+                                } else {
+                                    console.log(`[handleHighlightAction] Remove from selection: Existing highlight ID ${existingHl.id} effectively removed after split attempt (no valid remaining blocks).`);
+                                    compoundUndoPayload.removedOriginalHighlights.push(originalHighlightDataForUndo);
+                                    dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                                }
+                            }
+                            markPdfAnnotationsDirty();
+                        }
+                    }
+                }
+
+                if (compoundUndoPayload.removedOriginalHighlights.length > 0 || compoundUndoPayload.updatedOriginalHighlights.length > 0 || compoundUndoPayload.addedSplitHighlightIds.length > 0) {
+                    recordAction('removeHighlightFromSelection', compoundUndoPayload);
+                }
+                return;
+            }
+            // --- END OF NEW LOGIC BLOCK ---
+
+            const newHighlightId = `hl-${uuidv4()}`;
+            // Calculate new selection quads first for subsumption check
+            const { pageIndex: newSelectionPageIndex, pageElement: newSelectionPageElement } = getRangePageInfo(rangeToUse);
+            let actualNewSelectionPageElement = newSelectionPageElement;
+            if (!actualNewSelectionPageElement && newSelectionPageIndex !== -1 && pdfViewer) {
+                const pageView = pdfViewer.getPageView(newSelectionPageIndex);
+                actualNewSelectionPageElement = pageView?.div;
+            }
+            const newSelectionClientRects = rangeToUse.getClientRects();
+            const newSelectionPageRect = actualNewSelectionPageElement?.getBoundingClientRect() || { top: 0, left: 0 };
+            const newSelectionProcessedQuads = processAndMergeQuadPoints(newSelectionClientRects, newSelectionPageRect);
+
+            if (newSelectionPageIndex === -1) {
+                console.warn('[handleHighlightAction] Could not determine page index for new selection for overlap check. Proceeding without check.');
+            } else {
+                const highlightsToCheck = [...initialHighlights];
+                for (const existingHl of highlightsToCheck) {
+                    if (existingHl.pageIndex === newSelectionPageIndex) {
+                        if (existingHl.quadPoints && existingHl.quadPoints.length > 0) {
+                            if (areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints)) {
+                                console.log(`[handleHighlightAction] New selection subsumes existing highlight ID: ${existingHl.id}. Removing old one.`);
+                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                                // For proper undo, we need the full original data including its specific range data if possible.
+                                // Using existingHl as dataForStorage is a simplification.
+                                recordAction('removeHighlight', {
+                                    id: existingHl.id,
+                                    color: existingHl.color,
+                                    dataForStorage: { ...existingHl }
+                                });
+                                // The UI for the old highlight (overlay parts) will be removed by the 'remove' event handler
+                                // or by the new highlight's render call if IDs match (though they won't here).
+                                // No need to call removeHighlightOverlay(existingHl.id) directly here if events handle it.
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Phase 2: Handle Partial Overlaps by Trimming Existing Highlights ---
+            const newSelectionBoundingBox = newSelectionProcessedQuads.length > 0 ? getBoundingBoxForQuads(newSelectionProcessedQuads) : null;
+            // const highlightsToUpdateForUndo = []; // Not using this batching approach for now
+
+            for (const existingHl of [...initialHighlights]) { // Iterate on a copy
+                if (existingHl.pageIndex === newSelectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
+
+                    // Basic check: if an ID was already processed by subsumption, it might be gone from initialHighlights
+                    // or its quadPoints might be empty. A more robust check might involve a list of IDs already handled.
+                    // For this iteration, we assume `areQuadsSubsumed` handles distinct cases.
+                    // If existingHl was fully subsumed, it should have been removed/marked.
+                    // This logic targets *only* partial overlaps.
+
+                    const existingHlBoundingBox = getBoundingBoxForQuads(existingHl.quadPoints);
+
+                    if (newSelectionBoundingBox && doBoundingBoxesIntersect(newSelectionBoundingBox, existingHlBoundingBox) &&
+                        !areQuadsSubsumed(newSelectionProcessedQuads, existingHl.quadPoints) && // Not fully subsumed by new
+                        !areQuadsSubsumed(existingHl.quadPoints, newSelectionProcessedQuads)      // New not fully subsumed by old
+                    ) {
+                        console.log(`[handleHighlightAction] Partial overlap detected with existing highlight ID: ${existingHl.id}. Attempting to trim.`);
+
+                        const originalQuadsForUndo = JSON.parse(JSON.stringify(existingHl.quadPoints)); // Deep copy for undo
+                        const remainingQuads = subtractQuads(existingHl.quadPoints, newSelectionProcessedQuads);
+
+                        if (remainingQuads.length === 0) {
+                            console.log(`[handleHighlightAction] Trimming existing highlight ID: ${existingHl.id} resulted in empty quads. Removing it.`);
+                            dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                            recordAction('removeHighlight', {
+                                id: existingHl.id,
+                                color: existingHl.color,
+                                dataForStorage: { ...existingHl, quadPoints: originalQuadsForUndo }
+                            });
+                        } else {
+                            console.log(`[handleHighlightAction] Updating existing highlight ID: ${existingHl.id} with ${remainingQuads.length} remaining quads.`);
+
+                            dispatch('pdfhighlightevent', {
+                                type: 'update',
+                                ...existingHl, // Spread existing properties
+                                quadPoints: remainingQuads // Override quadPoints
+                            });
+                            recordAction('updateHighlightQuads', {
+                                id: existingHl.id,
+                                oldQuads: originalQuadsForUndo,
+                                newQuads: remainingQuads,
+                                originalHighlightData: JSON.parse(JSON.stringify(existingHl)) // Store all original data
+                            });
+                        }
+                        markPdfAnnotationsDirty();
+                    }
+                }
+            }
+            // End of new partial overlap logic
+
+            // --- Immediate Visual Update for the new highlight ---
             const visualRendered = applyHighlightToSelectionDOM(rangeToUse, color, newHighlightId);
             // applyHighlightToSelectionDOM now primarily focuses on calling renderHighlightOverlay
-            // which should be relatively fast.
 
             hideSelectionToolbar();
             window.getSelection()?.removeAllRanges();
 
-            if (!visualRendered) { // If applyHighlightToSelectionDOM failed (e.g. no page context)
-                console.warn("Visual rendering of new highlight failed. Aborting deferred tasks.");
+            if (!visualRendered && newSelectionProcessedQuads.length > 0) { // Only warn if quads were expected
+                console.warn("Visual rendering of new highlight failed, though processed quads were generated. Aborting deferred tasks.");
                 return;
             }
+            if (!visualRendered && newSelectionProcessedQuads.length === 0) {
+                console.warn("Visual rendering of new highlight failed, no processed quads. Aborting deferred tasks.");
+                return;
+            }
+
 
             // --- Deferred Data Processing & State Updates ---
             deferTask(async () => {
                 try {
+                    // dataForStorage will use newSelectionProcessedQuads via createHighlightDataForStorage
                     const dataForStorage = await createHighlightDataForStorage(newHighlightId, rangeToUse, color);
                     if (dataForStorage) {
                         dispatch('pdfhighlightevent', { type: 'add', ...dataForStorage });
@@ -870,19 +1150,9 @@ import { get } from 'svelte/store';
             console.warn('[applyHighlightToSelectionDOM] Could not obtain pageElement for quadPoints calculation.');
             return null; 
         }
-        const pageRect = actualPageElement.getBoundingClientRect();
         const clientRects = range.getClientRects();
-        const quadPoints = [];
-
-        for (let i = 0; i < clientRects.length; i++) {
-            const rect = clientRects[i];
-            quadPoints.push([
-                rect.left - pageRect.left, rect.top - pageRect.top,
-                rect.right - pageRect.left, rect.top - pageRect.top,
-                rect.left - pageRect.left, rect.bottom - pageRect.top,
-                rect.right - pageRect.left, rect.bottom - pageRect.top
-            ]);
-        }
+        const pageRect = actualPageElement.getBoundingClientRect();
+        const quadPoints = processAndMergeQuadPoints(clientRects, pageRect);
         
         renderHighlightOverlay(quadPoints, color, hlId, pageIndex);
         return hlId;
@@ -992,25 +1262,16 @@ import { get } from 'svelte/store';
     }
 
     function removeClickedHighlightBlockDOM(id) {
-        if (!id || !viewerContainer) return;
-        const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${id}"]`);
-        if (spans.length === 0) return;
-        let commonAncestor = spans.length > 0 && spans[0].parentNode ? spans[0].parentNode.closest('.textLayer') : null;
-        spans.forEach(span => { unwrapNodeDOM(span); });
-        try { if (commonAncestor) { commonAncestor.normalize(); } else { viewerElement?.normalize(); } }
-        catch(e) { console.warn("Normalization failed in removeClickedHighlightBlockDOM", e); }
+    if (!id) return; // Removed viewerContainer check
+    // Span manipulation and normalization removed
         if (clickedHighlightId === id) clickedHighlightId = null;
-        // Remove overlay parts
         removeHighlightOverlay(id);
     }
 
     function changeClickedHighlightColorDOM(id, color) {
-        if (!id || !color || !viewerContainer) return;
-        const spans = viewerContainer.querySelectorAll(`.pdf-highlight[data-hl-id="${id}"]`);
-        if (spans.length === 0) return;
-        spans.forEach(span => { span.style.backgroundColor = color; span.dataset.hlColor = color; });
+        if (!id || !color) return; // Removed viewerContainer check as updateHighlightOverlayColor doesn't need it directly
+        // Spans manipulation removed
         if (clickedHighlightId === id) clickedHighlightColor = color;
-        // Update overlay parts as well
         updateHighlightOverlayColor(id, color);
     }
 
@@ -1019,6 +1280,333 @@ import { get } from 'svelte/store';
         while (node.firstChild) { parent.insertBefore(node.firstChild, node); }
         try { if (parent.contains(node)) parent.removeChild(node); } catch (e) { /* console.error("Unwrap Error:", e, node); */ }
     }
+
+function processAndMergeQuadPoints(clientRects, pageRect) {
+    if (!clientRects || clientRects.length === 0) {
+        return [];
+    }
+
+    const RECT_HEIGHT_TOLERANCE = 10; // pixels, for grouping rects into lines
+
+    let rects = [];
+    for (let i = 0; i < clientRects.length; i++) {
+        const r = clientRects[i];
+        if (r.width === 0 || r.height === 0) continue;
+
+        const x1 = r.left - pageRect.left;
+        const y1 = r.top - pageRect.top;
+        const x2 = r.right - pageRect.left;
+        const y2 = r.bottom - pageRect.top;
+        rects.push({ x1, y1, x2, y2, midY: (y1 + y2) / 2 });
+    }
+
+    // Sort by y1 then x1
+    rects.sort((a, b) => {
+        if (a.y1 !== b.y1) {
+            return a.y1 - b.y1;
+        }
+        return a.x1 - b.x1;
+    });
+
+    if (rects.length === 0) return [];
+
+    const lines = [];
+    let currentLine = []; // Start with an empty currentLine
+
+    if (rects.length > 0) {
+        currentLine.push(rects[0]); // Add the first rect to start the first line
+        for (let i = 1; i < rects.length; i++) {
+            const currentRect = rects[i];
+            const firstRectOfCurrentLine = currentLine[0]; // Get the first rect of the line being built
+
+            // Calculate an approximate line height based on the first rect of the current line.
+            // This assumes rects on the same line have similar heights.
+            const approxLineHeight = (firstRectOfCurrentLine.y2 - firstRectOfCurrentLine.y1);
+
+            // Condition to start a new line:
+            // If the top of the currentRect is significantly below the top of the firstRectOfCurrentLine.
+            // "Significantly below" means currentRect.y1 is greater than firstRectOfCurrentLine.y1 by
+            // more than a fraction (e.g., 0.7) of the approxLineHeight.
+            if (currentRect.y1 > firstRectOfCurrentLine.y1 + approxLineHeight * 0.7) {
+                lines.push(currentLine);      // Finalize the previous line
+                currentLine = [currentRect];  // Start a new line with currentRect
+            } else {
+                // Otherwise, currentRect is considered part of the current line
+                currentLine.push(currentRect);
+            }
+        }
+        lines.push(currentLine); // Add the last processed line
+    }
+
+    const finalQuadPoints = [];
+    for (const line of lines) {
+        if (line.length === 0) continue;
+
+        // Sort rects in this line by x1 (should mostly be sorted already)
+        line.sort((a, b) => a.x1 - b.x1);
+
+        let mergedRectsOnLine = [];
+        if (line.length > 0) {
+            mergedRectsOnLine.push({ ...line[0] }); // Start with the first rect
+
+            for (let i = 1; i < line.length; i++) {
+                const currentRect = line[i];
+                let lastMerged = mergedRectsOnLine[mergedRectsOnLine.length - 1];
+
+                // Check for horizontal overlap or adjacency (within a small tolerance if needed)
+                // For now, direct overlap: if currentRect.x1 is less than lastMerged.x2
+                if (currentRect.x1 < lastMerged.x2 + 5) { // 5px tolerance for adjacency
+                    lastMerged.x2 = Math.max(lastMerged.x2, currentRect.x2);
+                    lastMerged.y1 = Math.min(lastMerged.y1, currentRect.y1);
+                    lastMerged.y2 = Math.max(lastMerged.y2, currentRect.y2);
+                } else {
+                    mergedRectsOnLine.push({ ...currentRect });
+                }
+            }
+        }
+
+        for (const mergedRect of mergedRectsOnLine) {
+            finalQuadPoints.push([
+                mergedRect.x1, mergedRect.y1,
+                mergedRect.x2, mergedRect.y1,
+                mergedRect.x1, mergedRect.y2,
+                mergedRect.x2, mergedRect.y2
+            ]);
+        }
+    }
+    return finalQuadPoints;
+}
+
+function areQuadsSubsumed(newSelectionQuads, existingHighlightQuads) {
+    if (!existingHighlightQuads || existingHighlightQuads.length === 0) return false;
+    if (!newSelectionQuads || newSelectionQuads.length === 0) return false;
+
+    for (const existingQuad of existingHighlightQuads) {
+        // Convert existingQuad from [x1,y1, x2,y1, x1,y2, x2,y2] to {x1,y1,x2,y2}
+        const exRect = { x1: existingQuad[0], y1: existingQuad[1], x2: existingQuad[6], y2: existingQuad[7] };
+        let isThisExistingQuadCovered = false;
+        for (const newSelectionQuad of newSelectionQuads) {
+            // Convert newSelectionQuad to {nx1,ny1,nx2,ny2}
+            const nsRect = { nx1: newSelectionQuad[0], ny1: newSelectionQuad[1], nx2: newSelectionQuad[6], ny2: newSelectionQuad[7] };
+            // Check if nsRect completely contains exRect
+            if (nsRect.nx1 <= exRect.x1 && nsRect.ny1 <= exRect.y1 && nsRect.nx2 >= exRect.x2 && nsRect.ny2 >= exRect.y2) {
+                isThisExistingQuadCovered = true;
+                break; // This existingQuad is covered by at least one newSelectionQuad
+            }
+        }
+        if (!isThisExistingQuadCovered) {
+            return false; // Found an existingQuad that is not covered by any newSelectionQuad
+        }
+    }
+    return true; // All existingQuads are covered
+}
+
+function getBoundingBoxForQuads(quadsArray) {
+    if (!quadsArray || quadsArray.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const quad of quadsArray) {
+        // For an axis-aligned rect represented as 8-point quad:
+        // quad[0]=x1_tl, quad[1]=y1_tl, quad[2]=x2_tr, quad[3]=y1_tr (y1_tl)
+        // quad[4]=x1_bl, quad[5]=y2_bl, quad[6]=x2_br, quad[7]=y2_br (y2_bl)
+        // Simplified: minX = quad[0], minY = quad[1], maxX = quad[2], maxY = quad[5]
+        // To be robust for any quad (even if not perfectly axis-aligned from some sources):
+        minX = Math.min(minX, quad[0], quad[2], quad[4], quad[6]);
+        minY = Math.min(minY, quad[1], quad[3], quad[5], quad[7]);
+        maxX = Math.max(maxX, quad[0], quad[2], quad[4], quad[6]);
+        maxY = Math.max(maxY, quad[1], quad[3], quad[5], quad[7]);
+    }
+    if (minX === Infinity) return null; // Should not happen if quadsArray is not empty
+    return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+}
+
+function doBoundingBoxesIntersect(boxA, boxB) {
+    if (!boxA || !boxB) return false;
+    // Check for non-intersection. If any of these is true, they don't intersect.
+    return !(boxA.x1 >= boxB.x2 || // boxA is to the right of boxB
+             boxA.x2 <= boxB.x1 || // boxA is to the left of boxB
+             boxA.y1 >= boxB.y2 || // boxA is below boxB
+             boxA.y2 <= boxB.y1);  // boxA is above boxB
+}
+
+// --- Quad/Rect Subtraction Helpers ---
+function _subtractSingleRect(rectA, rectB) {
+    // rectA: the rectangle to subtract from
+    // rectB: the rectangle being subtracted
+    const resultRects = [];
+    const TOLERANCE = 0.01; // For floating point comparisons
+
+    // Check for non-intersection
+    if (rectA.x1 >= rectB.x2 - TOLERANCE || rectA.x2 <= rectB.x1 + TOLERANCE || rectA.y1 >= rectB.y2 - TOLERANCE || rectA.y2 <= rectB.y1 + TOLERANCE) {
+        return [rectA]; // No intersection, A remains whole
+    }
+
+    const ix1 = Math.max(rectA.x1, rectB.x1);
+    const ix2 = Math.min(rectA.x2, rectB.x2);
+    const iy1 = Math.max(rectA.y1, rectB.y1);
+    const iy2 = Math.min(rectA.y2, rectB.y2);
+
+    // Top part of rectA
+    if (rectA.y1 < iy1 - TOLERANCE) {
+        resultRects.push({ x1: rectA.x1, y1: rectA.y1, x2: rectA.x2, y2: iy1 });
+    }
+    // Bottom part of rectA
+    if (rectA.y2 > iy2 + TOLERANCE) {
+        resultRects.push({ x1: rectA.x1, y1: iy2, x2: rectA.x2, y2: rectA.y2 });
+    }
+    // Left part of rectA (within the vertical span of the intersection)
+    if (rectA.x1 < ix1 - TOLERANCE) {
+        resultRects.push({ x1: rectA.x1, y1: iy1, x2: ix1, y2: iy2 });
+    }
+    // Right part of rectA (within the vertical span of the intersection)
+    if (rectA.x2 > ix2 + TOLERANCE) {
+        resultRects.push({ x1: ix2, y1: iy1, x2: rectA.x2, y2: iy2 });
+    }
+
+    return resultRects.filter(r => r.x2 - r.x1 > TOLERANCE && r.y2 - r.y1 > TOLERANCE);
+}
+
+function quadToRect(quad) {
+    // quad is [x_tl, y_tl, x_tr, y_tr, x_bl, y_bl, x_br, y_br]
+    // For an axis-aligned rect: x_tr = x_br, y_tr = y_tl, x_bl = x_tl, y_bl = y_br
+    // Rect: {x1, y1, x2, y2} where (x1,y1) is TL and (x2,y2) is BR
+    return { x1: quad[0], y1: quad[1], x2: quad[2], y2: quad[5] };
+}
+
+function rectToQuad(rect) {
+    return [rect.x1, rect.y1, rect.x2, rect.y1, rect.x1, rect.y2, rect.x2, rect.y2];
+}
+
+function _simplifyAndMergeRects(rectsToSimplify) {
+    if (!rectsToSimplify || rectsToSimplify.length === 0) return [];
+
+    let rects = [...rectsToSimplify.filter(r => r.x2 - r.x1 > 0.01 && r.y2 - r.y1 > 0.01)];
+
+    rects.sort((a, b) => {
+        if (a.y1 !== b.y1) return a.y1 - b.y1;
+        return a.x1 - b.x1;
+    });
+
+    if (rects.length === 0) return [];
+
+    const lines = [];
+    let currentLine = [];
+
+    if (rects.length > 0) {
+        currentLine.push(rects[0]);
+        for (let i = 1; i < rects.length; i++) {
+            const currentRect = rects[i];
+            const firstRectOfCurrentLine = currentLine[0];
+            const approxLineHeight = (firstRectOfCurrentLine.y2 - firstRectOfCurrentLine.y1);
+
+            if (currentRect.y1 > firstRectOfCurrentLine.y1 + approxLineHeight * 0.7) {
+                lines.push(currentLine);
+                currentLine = [currentRect];
+            } else {
+                currentLine.push(currentRect);
+            }
+        }
+        lines.push(currentLine);
+    }
+
+    const mergedLines = [];
+    for (const line of lines) {
+        if (line.length === 0) continue;
+        line.sort((a, b) => a.x1 - b.x1);
+        let mergedRectsOnLine = [];
+        if (line.length > 0) {
+            mergedRectsOnLine.push({ ...line[0] });
+            for (let i = 1; i < line.length; i++) {
+                const currentRect = line[i];
+                let lastMerged = mergedRectsOnLine[mergedRectsOnLine.length - 1];
+                if (currentRect.x1 < lastMerged.x2 + 5) { // 5px tolerance for adjacency
+                    lastMerged.x2 = Math.max(lastMerged.x2, currentRect.x2);
+                    lastMerged.y1 = Math.min(lastMerged.y1, currentRect.y1); // Take min y1 for line
+                    lastMerged.y2 = Math.max(lastMerged.y2, currentRect.y2); // Take max y2 for line
+                } else {
+                    mergedRectsOnLine.push({ ...currentRect });
+                }
+            }
+        }
+        mergedLines.push(...mergedRectsOnLine);
+    }
+    return mergedLines;
+}
+
+function subtractQuads(originalQuads, subtractingQuads) {
+    if (!originalQuads || originalQuads.length === 0) return [];
+    if (!subtractingQuads || subtractingQuads.length === 0) return [...originalQuads];
+
+    let currentRects = originalQuads.map(quadToRect);
+    const subtractingRects = subtractingQuads.map(quadToRect);
+
+    for (const subRect of subtractingRects) {
+        let nextResultRects = [];
+        for (const currentRect of currentRects) {
+            const diffRects = _subtractSingleRect(currentRect, subRect);
+            nextResultRects.push(...diffRects);
+        }
+        currentRects = nextResultRects;
+    }
+
+    const finalCleanedRects = _simplifyAndMergeRects(currentRects);
+    return finalCleanedRects.map(rectToQuad);
+}
+
+function groupDisjointBlocks(quads) {
+    if (!quads || quads.length === 0) {
+        return [];
+    }
+
+    // Ensure quads are sorted: primarily by y1 (quad[1]), secondarily by x1 (quad[0])
+    const sortedQuads = [...quads].sort((a, b) => {
+        if (a[1] !== b[1]) return a[1] - b[1]; // y1
+        return a[0] - b[0]; // x1
+    });
+
+    const allBlocks = [];
+    let currentBlock = [];
+
+    for (const currentStripQuad of sortedQuads) {
+        if (currentBlock.length === 0) {
+            currentBlock.push(currentStripQuad);
+        } else {
+            const lastStripInBlock = currentBlock[currentBlock.length - 1];
+
+            // y_tl is quad[1], y_bl is quad[5]
+            const avgHeightOfLastStrip = Math.max(5, lastStripInBlock[5] - lastStripInBlock[1]);
+
+            // currentStripQuad: x1=quad[0], y1=quad[1], x2=quad[2] (TRx), y2=quad[5] (BLy)
+            // lastStripInBlock: x1=quad[0], y1=quad[1], x2=quad[2] (TRx), y2=quad[5] (BLy)
+
+            const currentTop = currentStripQuad[1];
+            const lastTop = lastStripInBlock[1];
+
+            const areOnSameLine = Math.abs(currentTop - lastTop) < avgHeightOfLastStrip * 0.7;
+            const areOnAdjacentLine = Math.abs(currentTop - lastTop) < avgHeightOfLastStrip * 1.7;
+
+            const currentLeft = currentStripQuad[0];
+            const currentRight = currentStripQuad[2]; // TRx
+            const lastLeft = lastStripInBlock[0];
+            const lastRight = lastStripInBlock[2]; // TRx
+
+            const horizontallyOverlap = Math.max(currentLeft, lastLeft) < Math.min(currentRight, lastRight);
+            const horizontallyAdjacentOrClose = currentLeft < lastRight + 10 && currentRight > lastLeft - 10;
+
+            if ((areOnSameLine && horizontallyAdjacentOrClose) || (areOnAdjacentLine && horizontallyOverlap)) {
+                currentBlock.push(currentStripQuad);
+            } else {
+                allBlocks.push(currentBlock);
+                currentBlock = [currentStripQuad];
+            }
+        }
+    }
+
+    if (currentBlock.length > 0) {
+        allBlocks.push(currentBlock);
+    }
+
+    return allBlocks;
+}
     
     /* ─────────────────────────── PDF Loading / Setup (User's latest version) ──────────────── */
     async function loadPdfAndLibraries(containerElement) {
@@ -1394,7 +1982,7 @@ function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
         return;
     }
 
-    quadPoints.forEach(quad => {
+    quadPoints.forEach((quad, index) => {
         // quad is [x1, y1, x2, y2, x3, y3, x4, y4]
         // These are already page-relative coordinates.
         const x1 = quad[0];
