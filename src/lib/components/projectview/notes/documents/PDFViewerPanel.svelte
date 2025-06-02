@@ -348,10 +348,15 @@ import { get } from 'svelte/store';
         // console.log('[PDF Redo] Action:', action.type, action.payload?.id);
         switch (action.type) {
             case 'addHighlight':
-                if (action.payload.rangeData?.clonedRange && action.payload.color && action.payload.id && action.payload.dataForStorage) {
-                    applyHighlightToSelectionDOM(action.payload.rangeData.clonedRange, action.payload.color, action.payload.id);
+                // The payload for 'addHighlight' actions is typically:
+                // { id: newHighlightId, color, rangeData: rangeDataForUndo, dataForStorage }
+                // dataForStorage should contain the definitive quadPoints and other necessary info.
+                if (action.payload.dataForStorage) {
                     dispatch('pdfhighlightevent', { type: 'add', ...action.payload.dataForStorage });
-                } else { console.warn('[PDF Redo] Cannot re-apply highlight (was add), missing data.', action.payload); }
+                } else {
+                    // This path should ideally not be hit if dataForStorage is always correctly populated.
+                    console.warn('[PDF Redo] Cannot re-do "addHighlight", missing dataForStorage.', action.payload);
+                }
                 break;
             case 'removeHighlight':
                 removeClickedHighlightBlockDOM(action.payload.id);
