@@ -314,23 +314,36 @@ import { get } from 'svelte/store';
                 } else { console.warn('[PDF Undo] Cannot revert quad update, missing data.', action.payload); }
                 break;
             case 'removeHighlightFromSelection':
-                // Undo the removal of parts of highlights / creation of new split highlights
-                // 1. Re-add fully removed original highlights
-                action.payload.removedOriginalHighlights?.forEach(hlData => {
-                    dispatch('pdfhighlightevent', { type: 'add', ...hlData });
-                });
-                // 2. Revert updated original highlights to their original quads
-                action.payload.updatedOriginalHighlights?.forEach(updateData => {
-                    dispatch('pdfhighlightevent', {
-                        type: 'update',
-                        ...updateData.originalHighlightData,
-                        quadPoints: updateData.oldQuads
+                console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Action payload:', JSON.parse(JSON.stringify(action.payload)));
+
+                // Log re-adding fully removed original highlights
+                if (action.payload.removedOriginalHighlights && action.payload.removedOriginalHighlights.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Re-adding fully removed highlights:', JSON.parse(JSON.stringify(action.payload.removedOriginalHighlights.map(h => h.id))));
+                    action.payload.removedOriginalHighlights.forEach(hlData => {
+                        dispatch('pdfhighlightevent', { type: 'add', ...hlData });
                     });
-                });
-                // 3. Remove newly created split highlights
-                action.payload.addedSplitHighlightIds?.forEach(idToRemove => {
-                    dispatch('pdfhighlightevent', { type: 'remove', id: idToRemove });
-                });
+                }
+
+                // Log reverting updated original highlights
+                if (action.payload.updatedOriginalHighlights && action.payload.updatedOriginalHighlights.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Reverting updated/trimmed highlights:', JSON.parse(JSON.stringify(action.payload.updatedOriginalHighlights.map(u => u.id))));
+                    action.payload.updatedOriginalHighlights.forEach(updateData => {
+                        dispatch('pdfhighlightevent', {
+                            type: 'update',
+                            ...updateData.originalHighlightData,
+                            quadPoints: updateData.oldQuads
+                        });
+                    });
+                }
+
+                // Log removing newly added split highlights
+                if (action.payload.addedSplitHighlightIds && action.payload.addedSplitHighlightIds.length > 0) {
+                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Removing newly added split part IDs:', JSON.parse(JSON.stringify(action.payload.addedSplitHighlightIds)));
+                    action.payload.addedSplitHighlightIds.forEach(id => {
+                        console.log(`[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Dispatching remove for split ID: ${id}`);
+                        dispatch('pdfhighlightevent', { type: 'remove', id: id });
+                    });
+                }
                 break;
         }
         hideSelectionToolbar();
