@@ -316,35 +316,25 @@ import { get } from 'svelte/store';
                 } else { console.warn('[PDF Undo] Cannot revert quad update, missing data.', action.payload); }
                 break;
             case 'removeHighlightFromSelection':
-                console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Action payload:', JSON.parse(JSON.stringify(action.payload)));
-
-                // Log re-adding fully removed original highlights
-                if (action.payload.removedOriginalHighlights && action.payload.removedOriginalHighlights.length > 0) {
-                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Re-adding fully removed highlights:', JSON.parse(JSON.stringify(action.payload.removedOriginalHighlights.map(h => h.id))));
-                    action.payload.removedOriginalHighlights.forEach(hlData => {
-                        dispatch('pdfhighlightevent', { type: 'add', ...hlData });
-                    });
+                // New undo logic for the revised payload structure
+                if (action.payload.updatedOriginalHighlight) {
+                    const { id, oldQuads } = action.payload.updatedOriginalHighlight;
+                    const originalHlData = initialHighlights.find(h => h.id === id); // Or find from a snapshot if available
+                    if (originalHlData) {
+                         dispatch('pdfhighlightevent', { type: 'update', ...originalHlData, quadPoints: oldQuads });
+                    } else {
+                        // This case implies the original highlight data (for other fields like text, color) is missing
+                        // We might need to store more in updatedOriginalHighlight if this happens.
+                        // For now, just using oldQuads.
+                        console.warn(`[PDF Undo removeHighlightFromSelection] Original data for highlight ${id} not found for full update. Restoring with old quads only.`);
+                        dispatch('pdfhighlightevent', { type: 'update', id: id, quadPoints: oldQuads });
+                    }
                 }
-
-                // Log reverting updated original highlights
-                if (action.payload.updatedOriginalHighlights && action.payload.updatedOriginalHighlights.length > 0) {
-                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Reverting updated/trimmed highlights:', JSON.parse(JSON.stringify(action.payload.updatedOriginalHighlights.map(u => u.id))));
-                    action.payload.updatedOriginalHighlights.forEach(updateData => {
-                        dispatch('pdfhighlightevent', {
-                            type: 'update',
-                            ...updateData.originalHighlightData,
-                            quadPoints: updateData.oldQuads
-                        });
-                    });
+                if (action.payload.removedOriginalHighlight) {
+                    dispatch('pdfhighlightevent', { type: 'add', ...action.payload.removedOriginalHighlight.originalHighlightData });
                 }
-
-                // Log removing newly added split highlights
-                if (action.payload.addedSplitHighlightIds && action.payload.addedSplitHighlightIds.length > 0) {
-                    console.log('[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Removing newly added split part IDs:', JSON.parse(JSON.stringify(action.payload.addedSplitHighlightIds)));
-                    action.payload.addedSplitHighlightIds.forEach(id => {
-                        console.log(`[UNDO_DEBUG_EXECUTE] Undo removeHighlightFromSelection: Dispatching remove for split ID: ${id}`);
-                        dispatch('pdfhighlightevent', { type: 'remove', id: id });
-                    });
+                if (action.payload.addedSecondPart) {
+                    dispatch('pdfhighlightevent', { type: 'remove', id: action.payload.addedSecondPart.id });
                 }
                 break;
         }
@@ -384,23 +374,27 @@ import { get } from 'svelte/store';
                 } else { console.warn('[PDF Redo] Cannot re-apply quad update, missing data.', action.payload); }
                 break;
             case 'removeHighlightFromSelection':
-                // Redo the removal of parts of highlights / creation of new split highlights
-                // 1. Re-remove fully removed original highlights
-                action.payload.removedOriginalHighlights?.forEach(hlData => {
-                    dispatch('pdfhighlightevent', { type: 'remove', id: hlData.id });
-                });
-                // 2. Re-update original highlights to their trimmed quads (first block)
-                action.payload.updatedOriginalHighlights?.forEach(updateData => {
-                    dispatch('pdfhighlightevent', {
-                        type: 'update',
-                        ...updateData.originalHighlightData,
-                        quadPoints: updateData.newQuadsFirstBlock
-                    });
-                });
-                // 3. Re-add newly created split highlights
-                action.payload.addedSplitHighlightData?.forEach(hlData => {
-                    dispatch('pdfhighlightevent', { type: 'add', ...hlData });
-                });
+                // New redo logic for the revised payload structure
+                if (action.payload.updatedOriginalHighlight) {
+                    const { id, newQuads } = action.payload.updatedOriginalHighlight;
+                     const originalHlData = initialHighlights.find(h => h.id === id); // Or find from a snapshot
+                    if (originalHlData) {
+                        dispatch('pdfhighlightevent', { type: 'update', ...originalHlData, quadPoints: newQuads });
+                    } else {
+                         // This implies the highlight was fully removed and then partially restored by undo.
+                         // For redo, we'd need to re-add it with newQuads.
+                         // This path needs careful consideration of what originalHighlightData should be.
+                         // For now, we assume updatedOriginalHighlight implies the item exists for update.
+                        console.warn(`[PDF Redo removeHighlightFromSelection] Original data for highlight ${id} not found for full update. Updating with new quads only.`);
+                        dispatch('pdfhighlightevent', { type: 'update', id: id, quadPoints: newQuads });
+                    }
+                }
+                if (action.payload.removedOriginalHighlight) {
+                    dispatch('pdfhighlightevent', { type: 'remove', id: action.payload.removedOriginalHighlight.originalHighlightData.id });
+                }
+                if (action.payload.addedSecondPart) {
+                    dispatch('pdfhighlightevent', { type: 'add', ...action.payload.addedSecondPart.data });
+                }
                 break;
         }
         hideSelectionToolbar();
@@ -735,116 +729,135 @@ import { get } from 'svelte/store';
 
             const rangeToUse = selectedRange.cloneRange(); // Clone synchronously
 
-            // --- NEW LOGIC BLOCK FOR REMOVING FROM SELECTION --- >>>
+            // --- MODIFIED LOGIC BLOCK FOR REMOVING FROM SELECTION --- >>>
             if (color === 'remove') {
-                console.log('[handleHighlightAction] Attempting to remove highlight from selection.');
-                hideSelectionToolbar(); // Hide toolbar immediately
-                window.getSelection()?.removeAllRanges(); // Clear text selection
+                console.log('[handleHighlightAction] Attempting to remove highlight from selection (new logic).');
+                hideSelectionToolbar();
+                window.getSelection()?.removeAllRanges();
 
                 const { pageIndex: selectionPageIndex, pageElement: selectionPageElement } = getRangePageInfo(rangeToUse);
-
                 if (selectionPageIndex === -1) {
-                    console.warn('[handleHighlightAction] Remove from selection: Could not determine page index for selection.');
-                    return; // Exit if page index is unknown
+                    console.warn('[handleHighlightAction] Remove from selection: Could not determine page index.');
+                    return;
                 }
 
                 let actualSelectionPageElement = selectionPageElement;
-                if (!actualSelectionPageElement && pdfViewer) { // Ensure pdfViewer is available
+                if (!actualSelectionPageElement && pdfViewer) {
                     const pageView = pdfViewer.getPageView(selectionPageIndex);
                     actualSelectionPageElement = pageView?.div;
                 }
-                // Fallback for pageRect if pageElement is still not found
                 const selectionPageRect = actualSelectionPageElement?.getBoundingClientRect() || viewerContainer?.getBoundingClientRect() || { top: 0, left: 0 };
                 const selectionClientRects = rangeToUse.getClientRects();
                 const selectionQuads = processAndMergeQuadPoints(selectionClientRects, selectionPageRect);
 
                 if (!selectionQuads || selectionQuads.length === 0) {
                     console.warn('[handleHighlightAction] Remove from selection: No valid quads for current selection.');
-                    return; // Exit if selection yields no quads
+                    return;
                 }
-
-                let compoundUndoPayload = {
-                    removedOriginalHighlights: [],
-                    updatedOriginalHighlights: [],
-                    addedSplitHighlightIds: [],
-                    addedSplitHighlightData: []
-                };
+                const selectionBBox = getBoundingBoxForQuads(selectionQuads);
+                if (!selectionBBox) {
+                    console.warn('[handleHighlightAction] Remove from selection: Could not get bounding box for selection quads.');
+                    return;
+                }
 
                 const highlightsToProcess = [...initialHighlights];
-
                 for (const existingHl of highlightsToProcess) {
                     if (existingHl.pageIndex === selectionPageIndex && existingHl.quadPoints && existingHl.quadPoints.length > 0) {
+                        const existingHlBBox = getBoundingBoxForQuads(existingHl.quadPoints);
+                        if (!existingHlBBox || !doBoundingBoxesIntersect(selectionBBox, existingHlBBox)) {
+                            continue; // No intersection, skip this highlight
+                        }
 
-                        const existingHlBoundingBox = getBoundingBoxForQuads(existingHl.quadPoints);
-                        const selectionBoundingBox = getBoundingBoxForQuads(selectionQuads);
+                        const originalExistingQuads = JSON.parse(JSON.stringify(existingHl.quadPoints)); // For undo
+                        let quadsBeforeSelection = [];
+                        let quadsAfterSelection = [];
 
-                        if (doBoundingBoxesIntersect(selectionBoundingBox, existingHlBoundingBox)) {
-                            const originalQuadsForUndo = JSON.parse(JSON.stringify(existingHl.quadPoints));
-                            const originalHighlightDataForUndo = JSON.parse(JSON.stringify(existingHl));
+                        for (const exQuad of existingHl.quadPoints) {
+                            const exQuadBBox = getBoundingBoxForQuads([exQuad]);
+                            if (!exQuadBBox) continue;
 
-                            const remainingQuads = subtractQuads(existingHl.quadPoints, selectionQuads);
-
-                            if (remainingQuads.length === 0) {
-                                console.log(`[handleHighlightAction] Remove from selection: Existing highlight ID ${existingHl.id} fully covered. Removing it.`);
-                                compoundUndoPayload.removedOriginalHighlights.push(originalHighlightDataForUndo);
-                                dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
-                            } else {
-                                const disjointBlocks = groupDisjointBlocks(remainingQuads);
-
-                                if (disjointBlocks && disjointBlocks.length > 0) {
-                                    const firstBlockQuads = disjointBlocks[0];
-                                    console.log(`[handleHighlightAction] Remove from selection: Updating existing highlight ID ${existingHl.id} with first block of ${firstBlockQuads.length} quads.`);
-
-                                    compoundUndoPayload.updatedOriginalHighlights.push({
-                                        id: existingHl.id,
-                                        oldQuads: originalQuadsForUndo,
-                                        newQuadsFirstBlock: firstBlockQuads,
-                                        originalHighlightData: originalHighlightDataForUndo
-                                    });
-
-                                    dispatch('pdfhighlightevent', {
-                                        type: 'update',
-                                        ...originalHighlightDataForUndo,
-                                        quadPoints: firstBlockQuads
-                                    });
-
-                                    for (let i = 1; i < disjointBlocks.length; i++) {
-                                        const newSplitHighlightId = `hl-${uuidv4()}`;
-                                        const splitBlockQuads = disjointBlocks[i];
-                                        console.log(`[handleHighlightAction] Remove from selection: Creating new highlight ID ${newSplitHighlightId} for split part of original ID ${existingHl.id}.`);
-
-                                        const newHighlightDataObject = {
-                                            type: 'pdfHighlight',
-                                            id: newSplitHighlightId,
-                                            color: existingHl.color,
-                                            pageIndex: existingHl.pageIndex,
-                                            text: existingHl.text,
-                                            quadPoints: splitBlockQuads,
-                                            prefix: existingHl.prefix,
-                                            suffix: existingHl.suffix,
-                                        };
-                                        compoundUndoPayload.addedSplitHighlightIds.push(newSplitHighlightId);
-                                        compoundUndoPayload.addedSplitHighlightData.push(newHighlightDataObject);
-
-                                        dispatch('pdfhighlightevent', { type: 'add', ...newHighlightDataObject });
+                            if (!doBoundingBoxesIntersect(exQuadBBox, selectionBBox)) {
+                                // Quad does not intersect with the selection bounding box
+                                if (exQuadBBox.y2 < selectionBBox.y1 || (exQuadBBox.y1 < selectionBBox.y1 && exQuadBBox.y2 < selectionBBox.y2) ) { // Quad is clearly above selection
+                                    quadsBeforeSelection.push(exQuad);
+                                } else if (exQuadBBox.y1 > selectionBBox.y2 || (exQuadBBox.y2 > selectionBBox.y2 && exQuadBBox.y1 > selectionBBox.y1)) { // Quad is clearly below selection
+                                    quadsAfterSelection.push(exQuad);
+                                } else { // Side-by-side cases or complex scenarios, treat as part of original block for now if not overlapping
+                                     // Heuristic: if quad center is to the left of selection center, consider it before, else after.
+                                    const exQuadCenterX = (exQuadBBox.x1 + exQuadBBox.x2) / 2;
+                                    const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
+                                    if (exQuadCenterX < selectionCenterX) {
+                                       quadsBeforeSelection.push(exQuad);
+                                    } else {
+                                       quadsAfterSelection.push(exQuad);
                                     }
-                                } else {
-                                    console.log(`[handleHighlightAction] Remove from selection: Existing highlight ID ${existingHl.id} effectively removed after split attempt (no valid remaining blocks).`);
-                                    compoundUndoPayload.removedOriginalHighlights.push(originalHighlightDataForUndo);
-                                    dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                                }
+                            } else {
+                                // Quad intersects with the selection bounding box, subtract and categorize remnants
+                                const remnants = subtractQuads([exQuad], selectionQuads);
+                                for (const remnantQuad of remnants) {
+                                    const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
+                                    if (!remnantBBox) continue;
+                                    // Compare vertical position of remnant relative to selection
+                                    // Using y-center might be more robust for remnants that are thin strips
+                                    const remnantCenterY = (remnantBBox.y1 + remnantBBox.y2) / 2;
+                                    const selectionCenterY = (selectionBBox.y1 + selectionBBox.y2) / 2;
+
+                                    if (remnantCenterY < selectionCenterY && remnantBBox.y2 <= selectionBBox.y2 + 2) { // Remnant is above or in upper part of selection
+                                        quadsBeforeSelection.push(remnantQuad);
+                                    } else if (remnantCenterY > selectionCenterY && remnantBBox.y1 >= selectionBBox.y1 - 2) { // Remnant is below or in lower part of selection
+                                        quadsAfterSelection.push(remnantQuad);
+                                    } else if (remnantBBox.y2 < selectionBBox.y1 + (selectionBBox.y2 - selectionBBox.y1)/2 ) { // Fallback: strict above
+                                        quadsBeforeSelection.push(remnantQuad);
+                                    } else if (remnantBBox.y1 > selectionBBox.y1 + (selectionBBox.y2 - selectionBBox.y1)/2 ) { // Fallback: strict below
+                                        quadsAfterSelection.push(remnantQuad);
+                                    }
+                                    // else: remnant is in the middle, effectively removed by selection
                                 }
                             }
-                            markPdfAnnotationsDirty();
                         }
+                        
+                        const finalQuadsBefore = quadsBeforeSelection.length > 0 ? _simplifyAndMergeRects(quadsBeforeSelection.map(q => quadToRect(q))).map(r => rectToQuad(r)) : [];
+                        const finalQuadsAfter = quadsAfterSelection.length > 0 ? _simplifyAndMergeRects(quadsAfterSelection.map(q => quadToRect(q))).map(r => rectToQuad(r)) : [];
+                        
+                        let undoPayload = {
+                            updatedOriginalHighlight: null,
+                            removedOriginalHighlight: null,
+                            addedSecondPart: null,
+                            selectionQuads: JSON.parse(JSON.stringify(selectionQuads)) 
+                        };
+
+                        if (finalQuadsBefore.length > 0) {
+                            dispatch('pdfhighlightevent', { type: 'update', ...existingHl, quadPoints: finalQuadsBefore });
+                            undoPayload.updatedOriginalHighlight = { id: existingHl.id, oldQuads: originalExistingQuads, newQuads: JSON.parse(JSON.stringify(finalQuadsBefore)) };
+                        } else {
+                            dispatch('pdfhighlightevent', { type: 'remove', id: existingHl.id });
+                            undoPayload.removedOriginalHighlight = { originalHighlightData: JSON.parse(JSON.stringify(existingHl)) };
+                        }
+
+                        if (finalQuadsAfter.length > 0) {
+                            const newSplitHighlightId = `hl-${uuidv4()}`;
+                            const newHighlightDataObject = {
+                                type: 'pdfHighlight',
+                                id: newSplitHighlightId,
+                                color: existingHl.color,
+                                pageIndex: existingHl.pageIndex,
+                                text: existingHl.text, // Text might be inaccurate for the split part
+                                quadPoints: finalQuadsAfter,
+                                prefix: existingHl.prefix, // Prefixes/suffixes might be inaccurate
+                                suffix: existingHl.suffix,
+                            };
+                            dispatch('pdfhighlightevent', { type: 'add', ...newHighlightDataObject });
+                            undoPayload.addedSecondPart = { id: newSplitHighlightId, data: newHighlightDataObject };
+                        }
+                        
+                        markPdfAnnotationsDirty();
+                        recordAction('removeHighlightFromSelection', undoPayload);
                     }
                 }
-
-                if (compoundUndoPayload.removedOriginalHighlights.length > 0 || compoundUndoPayload.updatedOriginalHighlights.length > 0 || compoundUndoPayload.addedSplitHighlightIds.length > 0) {
-                    recordAction('removeHighlightFromSelection', compoundUndoPayload);
-                }
-                return;
+                return; 
             }
-            // --- END OF NEW LOGIC BLOCK ---
+            // --- END OF MODIFIED LOGIC BLOCK ---
 
             const newHighlightId = `hl-${uuidv4()}`;
             // Calculate new selection quads first for subsumption check
@@ -1584,7 +1597,7 @@ function groupDisjointBlocks(quads) {
             const lastTop = lastStripInBlock[1];
 
             const areOnSameLine = Math.abs(currentTop - lastTop) < avgHeightOfLastStrip * 0.7;
-            const areOnAdjacentLine = Math.abs(currentTop - lastTop) < avgHeightOfLastStrip * 1.7;
+            const areOnAdjacentLine = Math.abs(currentTop - lastTop) < avgHeightOfLastStrip * 2.5;
 
             const currentLeft = currentStripQuad[0];
             const currentRight = currentStripQuad[2]; // TRx
