@@ -1847,13 +1847,36 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
         return;
     }
 
-    const pageHighlights = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
-    if (!pageHighlights.length) {
+    const pageHighlightsFromStore = initialHighlights.filter(hl => hl.pageIndex === pageIndex);
+
+    // <<< NEW CLEANUP LOGIC >>>
+    const storeHighlightIdsOnPage = new Set(pageHighlightsFromStore.map(hl => hl.id));
+    const overlayContainer = ensureHighlightOverlayContainer(pageIndex);
+    if (overlayContainer) {
+        const existingDomHighlightParts = overlayContainer.querySelectorAll('.overlay-part[data-hl-id]');
+        const domHighlightIdsOnPage = new Set();
+        existingDomHighlightParts.forEach(part => {
+            if (part.dataset.hlId) { // Ensure hlId exists
+                domHighlightIdsOnPage.add(part.dataset.hlId);
+            }
+        });
+
+        for (const domId of domHighlightIdsOnPage) {
+            if (!storeHighlightIdsOnPage.has(domId)) {
+                // This ID is in the DOM but no longer in the store for this page
+                console.log(`[renderAnnotationsForPage] Clean-up: Removing stale DOM highlight ${domId} from page ${pageIndex + 1}`);
+                removeHighlightOverlay(domId); // removeHighlightOverlay is an existing function
+            }
+        }
+    }
+    // <<< END OF NEW CLEANUP LOGIC >>>
+
+    if (!pageHighlightsFromStore.length) { // Check after cleanup, using the filtered list
         // console.log(`[renderAnnotationsForPage] No highlights to render for page ${pageIndex + 1}.`);
         return;
     }
 
-    // console.debug(`[renderAnnotationsForPage] Page ${pageIndex + 1}. Rendering ${pageHighlights.length} highlights.`);
+    // console.debug(`[renderAnnotationsForPage] Page ${pageIndex + 1}. Rendering ${pageHighlightsFromStore.length} highlights.`);
 
     let pageView = pdfViewer.getPageView(pageIndex);
     try {
@@ -1880,7 +1903,7 @@ async function renderAnnotationsForPage(pageIndex) { // Removed isEagerLoad
     }
 
 
-    for (const hl of pageHighlights) {
+    for (const hl of pageHighlightsFromStore) {
         if (!hl.id || !hl.color) {
             continue;
         }
