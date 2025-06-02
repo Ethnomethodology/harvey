@@ -292,10 +292,12 @@ import { get } from 'svelte/store';
                 dispatch('pdfhighlightevent', { type: 'remove', id: action.payload.id });
                 break;
             case 'removeHighlight':
-                if (action.payload.rangeData?.clonedRange && action.payload.color && action.payload.id && action.payload.dataForStorage) {
-                    applyHighlightToSelectionDOM(action.payload.rangeData.clonedRange, action.payload.color, action.payload.id);
+                if (action.payload.dataForStorage) { // This object should contain all necessary highlight data including quadPoints
                     dispatch('pdfhighlightevent', { type: 'add', ...action.payload.dataForStorage });
-                } else { console.warn('[PDF Undo] Cannot re-apply highlight (was remove), missing DOM range or full data.', action.payload); }
+                } else {
+                    // This case should ideally not be reached if recordAction for 'removeHighlight' always includes dataForStorage
+                    console.warn('[PDF Undo] Cannot re-apply highlight (was remove), missing dataForStorage for undo.', action.payload);
+                }
                 break;
             case 'changeColor':
                 if (action.payload.id && action.payload.oldColor && action.payload.dataForStorage) {
