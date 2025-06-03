@@ -39,6 +39,7 @@ import { get } from 'svelte/store';
         { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
         { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
         { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
+        { value: 'rgba(255, 255, 255, 1)', label: 'None' },
     ];
     // let isToolbarHighlightDropdownOpen = false; // Removed
     // let highlightDropdownRef; // Removed
@@ -2438,16 +2439,21 @@ function updateHighlightOverlayColor(id, color) {
             on:click={() => {
                 isQuickHighlightActive = !isQuickHighlightActive;
                 if (isQuickHighlightActive) {
-                    if (quickHighlightMode === 'remove') {
+                    // If no specific color has been chosen via dropdown (quickHighlightColor is still default/yellow or was white from 'None')
+                    // OR if the mode was 'remove' (meaning 'None' was selected)
+                    // then default to yellow highlight.
+                    if (quickHighlightColor === 'rgba(255, 242, 117, 0.5)' || quickHighlightColor === 'rgba(255, 255, 255, 1)' || quickHighlightMode === 'remove') {
                         quickHighlightMode = 'highlight';
-                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default yellow
+                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
                     }
+                    // Otherwise, if a color was previously selected (e.g., Green) and mode is 'highlight',
+                    // it will retain that color and mode.
                 }
             }}
-            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : 'background-color: #FFFFFF;') : ''}"
+            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : `background-color: rgba(255, 255, 255, 1);`) : ''}"
         >
-            {#if quickHighlightMode === 'remove'}
-                {@html removeHighlightIconSVG}
+            {#if isQuickHighlightActive && quickHighlightMode === 'remove'}
+                <!-- No icon when "None" is active, just white background -->
             {:else}
                 {@html markerIconSVG}
             {/if}
@@ -2458,23 +2464,7 @@ function updateHighlightOverlayColor(id, color) {
             </button>
             {#if isNewHighlightDropdownOpen}
             <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
-                <div
-                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                    role="menuitem"
-                    tabindex="-1"
-                    on:click={() => {
-                        quickHighlightMode = 'remove';
-                        isNewHighlightDropdownOpen = false;
-                    }}
-                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
-                >
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center">
-                        {@html removeHighlightIconSVG}
-                    </span>
-                    <span>Remove Highlight</span>
-                </div>
-                <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
-                {#each highlightOptions as opt}
+                {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                     <div
                         class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                         role="menuitem"
@@ -2483,13 +2473,30 @@ function updateHighlightOverlayColor(id, color) {
                             quickHighlightColor = opt.value;
                             quickHighlightMode = 'highlight';
                             isNewHighlightDropdownOpen = false;
+                            isQuickHighlightActive = true; // Enable toggle
                         }}
-                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
+                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
                     >
                         <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={opt.value}></span>
                         <span>{opt.label}</span>
                     </div>
                 {/each}
+                {!-- Add new "None" option here --}
+                <div
+                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    on:click={() => {
+                        quickHighlightColor = 'rgba(255, 255, 255, 1)'; // White
+                        quickHighlightMode = 'remove'; // Set mode to remove
+                        isNewHighlightDropdownOpen = false;
+                        isQuickHighlightActive = true; // Enable toggle
+                    }}
+                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = 'rgba(255, 255, 255, 1)'; quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
+                >
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
+                    <span>None</span>
+                </div>
             </div>
             {/if}
         </div>
