@@ -2,20 +2,24 @@
 
 ## Overview/Core Purpose
 
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+
+Harvey 1.0 is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
+
+It's an application built by researchers, for researchers.
 
 ## Key Features
 
 *   **Comprehensive Project Management**: Create, open, import, and manage multimedia research projects using `.harvey` project files.
 *   **Media Transcription (Dual Mode)**:
-    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing.
+    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing, ensuring data privacy.
     *   **Cloud-Powered**: Leverage cloud-based transcription services (e.g., Google Gemini) for high-accuracy transcription with an internet connection.
 *   **Interactive Transcript Editor**: Edit and refine transcripts with a rich-text editor (Lexical-based) linked to media playback, including timestamp adjustment and speaker labeling.
 *   **Versatile Document Handling**:
     *   **Rich Text Documents**: Create and edit notes and documents with formatting, tables, and lists.
     *   **PDF Viewing & Annotation**: Open and view PDF documents, with robust text-based annotation capabilities.
     *   **Table Viewing**: Import and view CSV and XLSX files with interactive features.
-    *   **Image Handling & Annotation**: Import, view, and annotate various image formats.
+    *   **Image Handling & Annotation**: Import, view (OpenSeadragon), and annotate (Annotorious) various image formats.
 *   **Asset Management**: Organize various project assets including media files, transcripts, documents, images, and tables.
 *   **Configurable Settings**: Customize application behavior, including transcription model selection, API key management, and UI themes.
 *   **Cross-Platform**: Runs on Windows, macOS, and Linux.
@@ -31,7 +35,7 @@ Project Harvey 1.0 is a comprehensive desktop application designed for researche
 *   **Text Editor**: [Lexical](https://lexical.dev/)
 *   **PDF Viewing**: [PDF.js](https://mozilla.github.io/pdf.js/)
 *   **Table Display**: [Tabulator](https://tabulator.info/)
-*   **Image Viewing/Manipulation**: OpenSeadragon
+*   **Image Viewing/Annotation**: OpenSeadragon (viewing), Annotorious (annotations)
 *   **Annotations Database**: SQLite (managed via `rusqlite` in Rust)
 *   **UI Styling**: Tailwind CSS
 *   **Sidecar Execution**: For local AI models (e.g., Whisper, Diarization tools)

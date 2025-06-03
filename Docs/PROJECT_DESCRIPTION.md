@@ -1,7 +1,9 @@
 # Project Harvey 1.0: Module Breakdown
 
 ## Harvey 1.0: An Overview
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+
+Harvey 1.0 is designed with privacy as a priority; core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring their data remains on their device. It is an application built by researchers, for researchers.
 
 ## Technology Stack
 *   **Core Framework**: [Tauri](https://tauri.app/) (v2.0, Rust backend, webview frontend)
@@ -11,7 +13,7 @@ Project Harvey 1.0 is a comprehensive desktop application designed for researche
 *   **Text Editor**: [Lexical](https://lexical.dev/)
 *   **PDF Viewing**: [PDF.js](https://mozilla.github.io/pdf.js/)
 *   **Table Display**: [Tabulator](https://tabulator.info/)
-*   **Image Viewing/Manipulation**: OpenSeadragon
+*   **Image Viewing/Manipulation**: OpenSeadragon (viewing), Annotorious (annotations)
 *   **Annotations Database**: SQLite (managed via `rusqlite` in Rust)
 *   **UI Styling**: Tailwind CSS (based on `tailwind.config.js`)
 *   **Tauri CLI**: Managed as a project dependency via npm (using `@tauri-apps/cli`)
@@ -21,14 +23,14 @@ Project Harvey 1.0 is a comprehensive desktop application designed for researche
 
 *   **Comprehensive Project Management**: Create, open, import, and manage multimedia research projects using `.harvey` project files.
 *   **Media Transcription (Dual Mode)**:
-    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing.
+    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing, ensuring data privacy as models run locally after a one-time download.
     *   **Cloud-Powered**: Leverage cloud-based transcription services (e.g., Google Gemini) for high-accuracy transcription with an internet connection.
 *   **Interactive Transcript Editor**: Edit and refine transcripts with a rich-text editor (Lexical-based) linked to media playback, including timestamp adjustment and speaker labeling.
 *   **Versatile Document Handling**:
     *   **Rich Text Documents**: Create and edit notes and documents with formatting, tables, and lists.
     *   **PDF Viewing & Annotation**: Open and view PDF documents, with robust text-based annotation capabilities (highlights, comments) that are stored and re-applied accurately. Annotations are saved in a separate SQLite database (`harvey_annotations.sqlite`).
     *   **Table Viewing**: Import and view CSV and XLSX files with interactive features like sorting and filtering.
-    *   **Image Handling & Annotation**: Import, view, and annotate various image formats. Annotations can be saved and reloaded, managed by the backend `image_handler.rs`.
+    *   **Image Handling & Annotation**: Import, view (using OpenSeadragon), and annotate (using Annotorious) various image formats. Annotations can be saved and reloaded, managed by the backend `image_handler.rs`.
 *   **Asset Management**: Organize various project assets including media files, transcripts, documents, images, and tables within a structured project environment.
 *   **Configurable Settings**: Customize application behavior, including transcription model selection, API key management for cloud services, download locations, and UI themes (light/dark/system) via `config.xml`.
 *   **Cross-Platform**: Designed to run on Windows, macOS, and Linux.
