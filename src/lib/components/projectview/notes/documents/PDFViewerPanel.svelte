@@ -2452,9 +2452,7 @@ function updateHighlightOverlayColor(id, color) {
             }}
             style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : `background-color: rgba(255, 255, 255, 1);`) : ''}"
         >
-            {#if isQuickHighlightActive && quickHighlightMode === 'remove'}
-                <!-- No icon when "None" is active, just white background -->
-            {:else}
+            {#if isQuickHighlightActive}
                 {@html markerIconSVG}
             {/if}
         </button>
