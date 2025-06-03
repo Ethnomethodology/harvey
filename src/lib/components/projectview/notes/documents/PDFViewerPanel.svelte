@@ -8,6 +8,7 @@
 import { markPdfAnnotationsDirty } from '$lib/stores/projectStore.js';
 import { get } from 'svelte/store';
 
+    let wasPerformingSelection = false;
     const dispatch = createEventDispatcher();
 
     /* ─────────────────────────── Component state / props ─────────────────────────── */
@@ -39,6 +40,7 @@ import { get } from 'svelte/store';
         { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
         { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
         { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
+        { value: 'rgba(255, 255, 255, 1)', label: 'None' },
     ];
     // let isToolbarHighlightDropdownOpen = false; // Removed
     // let highlightDropdownRef; // Removed
@@ -628,14 +630,24 @@ import { get } from 'svelte/store';
     }
 
     async function handleViewerMouseUp(event) {
+        const sel = window.getSelection();
+
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+            wasPerformingSelection = true;
+        }
+        // If wasPerformingSelection is not true here, it means mousedown happened, but no drag selection occurred.
+        // It will remain `false` as set by handleViewerMouseDown.
+
+        // Defer resetting the flag until after the current event cycle (mouseup + potential click)
+        setTimeout(() => { wasPerformingSelection = false; }, 0);
+
         if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) return;
         await tick();
 
-        const sel = window.getSelection();
-
         if (isQuickHighlightActive) {
-            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-                const range = sel.getRangeAt(0);
+            // Only apply quick highlight if a selection was actually performed
+            if (wasPerformingSelection && sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                const range = sel.getRangeAt(0); // sel is already defined
                 let isInTextLayer = false;
                 const ancestor = range.commonAncestorContainer;
                 if (ancestor && viewerElement?.contains(ancestor)) {
@@ -645,8 +657,8 @@ import { get } from 'svelte/store';
 
                 if (isInTextLayer && range.toString().trim().length > 0) {
                     const rangeToUse = range.cloneRange();
-                    selectedRange = rangeToUse; // Set for handleHighlightAction
-                    toolbarMode = 'selection';  // Set for handleHighlightAction
+                    selectedRange = rangeToUse;
+                    toolbarMode = 'selection';
 
                     if (quickHighlightMode === 'highlight') {
                         await handleHighlightAction(quickHighlightColor);
@@ -656,25 +668,32 @@ import { get } from 'svelte/store';
 
                     window.getSelection()?.removeAllRanges();
                     selectedRange = null;
-                    // toolbarMode remains 'selection' but selectedRange is null, so floating toolbar won't appear for this.
-                    // hideSelectionToolbar(); // This would hide it if it was somehow shown by another means.
                 }
             }
-            return; // Prevent floating toolbar from appearing when Quick Highlight is active
+            return; // If quick highlight is active, we either process it or do nothing else with selection toolbar.
         }
 
-        // Original logic for floating toolbar if Quick Highlight is not active
-        selectedRange = null;
-        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-            const range = sel.getRangeAt(0);
+        // Logic for standard floating toolbar (if Quick Highlight is not active)
+        if (wasPerformingSelection && sel && sel.rangeCount > 0 && !sel.isCollapsed) { // Check wasPerformingSelection
+            const range = sel.getRangeAt(0); // sel is already defined
             let isInTextLayer = false;
             const ancestor = range.commonAncestorContainer;
-            if (ancestor && viewerElement?.contains(ancestor)) {
-                const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
-                if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
-            }
+                if (ancestor && viewerElement?.contains(ancestor)) {
+                    const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
+                    if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
+                }
 
             if (isInTextLayer && range.toString().trim().length > 0) {
+                const targetElement = event.target;
+                const clickedOnExistingHighlight = targetElement.closest?.('.pdf-highlight') || targetElement.closest?.('.overlay-part');
+
+                if (clickedOnExistingHighlight) {
+                    window.getSelection()?.removeAllRanges(); // Clear selection
+                    hideSelectionToolbar(); // Hide toolbar
+                    return; // Suppress 'selection' toolbar
+                }
+
+                // If not clicking on existing highlight, proceed to show 'selection' toolbar
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
@@ -688,7 +707,9 @@ import { get } from 'svelte/store';
                 return;
             }
         }
-        if (toolbarMode === 'selection' && showSelectionToolbar) { // If no valid selection made, hide toolbar
+
+        // If no valid selection for toolbar, or if it was suppressed.
+        if (toolbarMode === 'selection' && showSelectionToolbar) {
              hideSelectionToolbar();
         }
     }
@@ -699,26 +720,40 @@ import { get } from 'svelte/store';
             return;
         }
 
+        // NEW CHECK: If this click immediately followed a mouseup that was part of a selection gesture,
+        // and that mouseup ended on an existing highlight, we want to suppress the 'click' mode toolbar.
+        // `handleViewerMouseUp` would have already cleared the selection and hidden the 'selection' toolbar.
+        const targetElement = event.target;
+        const clickedOnExistingHighlightTarget = targetElement.closest?.('.pdf-highlight') || targetElement.closest?.('.overlay-part');
+
+        if (wasPerformingSelection && clickedOnExistingHighlightTarget) {
+            // This click is the tail end of a selection drag that landed on a highlight.
+            // `handleViewerMouseUp` already handled not showing the 'selection' toolbar.
+            // We now prevent the 'click' (modify) toolbar from appearing as well.
+            // The `wasPerformingSelection` flag will be reset by the timeout scheduled in `handleViewerMouseUp`.
+            return;
+        }
+
+        // Original logic from here onwards:
         // If a text selection was just made (mouseup set the mode and range),
         // and the selection toolbar is meant to be shown for that new selection,
         // then this click should not try to find a clicked highlight or change the mode.
         if (toolbarMode === 'selection' && selectedRange && showSelectionToolbar) {
-            // This click might be part of the mouseup action that created the selection.
-            // We want to ensure the 'selection' toolbar appears as intended by handleViewerMouseUp.
-            // We don't want to immediately switch to 'click' mode if the mouseup point was on an old highlight.
-            // Stop propagation if the click is within the viewer but not on the toolbar,
-            // to prevent other viewer-level click handlers if necessary, though it might not be strictly needed here.
-            // if (viewerContainer.contains(event.target)) { // Be careful with stopping propagation too broadly.
-            //     event.stopPropagation();
-            // }
+            // This block might still be useful if a selection was made on plain text,
+            // the 'selection' toolbar appeared, and then a click happens (e.g. to dismiss it).
+            // However, if `wasPerformingSelection` was true and `clickedOnExistingHighlightTarget` was false,
+            // the above block wouldn't return.
+            // This original block primarily prevents switching from 'selection' to 'click' mode
+            // if the selection toolbar is already active for a *new* selection.
             return; // Exit early, letting the selection toolbar (from mouseup) be the focus.
         }
 
         // Detect click on either old span or new overlay rectangles
-        let highlightSpan = event.target.closest?.('.pdf-highlight');
-        if (!highlightSpan) {
-            const els = document.elementsFromPoint(event.clientX, event.clientY);
-            highlightSpan = els.find(el => el.classList?.contains('overlay-part')) || null;
+        // Note: `clickedOnExistingHighlightTarget` is already determined above, can reuse.
+        let highlightSpan = clickedOnExistingHighlightTarget;
+        if (!highlightSpan) { // If not found by target.closest, try elementsFromPoint (for overlays)
+             const els = document.elementsFromPoint(event.clientX, event.clientY);
+             highlightSpan = els.find(el => el.classList?.contains('overlay-part')) || null;
         }
         const sel = window.getSelection();
         if (highlightSpan && viewerContainer.contains(highlightSpan)) {
@@ -1213,6 +1248,8 @@ import { get } from 'svelte/store';
      * to the nearest text span so selection behaves like Preview/Acrobat.
      */
     function handleViewerMouseDown(event) {
+        wasPerformingSelection = false; // Reset the flag on every mousedown
+
         // Only react to primary button inside the viewerContainer
         if (event.button !== 0) return;
         if (!viewerContainer || !viewerContainer.contains(event.target)) return;
@@ -2438,16 +2475,25 @@ function updateHighlightOverlayColor(id, color) {
             on:click={() => {
                 isQuickHighlightActive = !isQuickHighlightActive;
                 if (isQuickHighlightActive) {
-                    if (quickHighlightMode === 'remove') {
+                    // If no specific color has been chosen via dropdown (quickHighlightColor is still default/yellow or was white from 'None')
+                    // OR if the mode was 'remove' (meaning 'None' was selected)
+                    // then default to yellow highlight.
+                    if (quickHighlightColor === 'rgba(255, 242, 117, 0.5)' || quickHighlightColor === 'rgba(255, 255, 255, 1)' || quickHighlightMode === 'remove') {
                         quickHighlightMode = 'highlight';
-                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default yellow
+                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
                     }
+                    // Otherwise, if a color was previously selected (e.g., Green) and mode is 'highlight',
+                    // it will retain that color and mode.
                 }
             }}
-            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : 'background-color: #FFFFFF;') : ''}"
+            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : `background-color: rgba(255, 255, 255, 1);`) : ''}"
         >
-            {#if quickHighlightMode === 'remove'}
-                {@html removeHighlightIconSVG}
+            {#if isQuickHighlightActive}
+                {#if quickHighlightMode === 'remove'}
+                    {@html removeHighlightIconSVG}
+                {:else}
+                    {@html markerIconSVG}
+                {/if}
             {:else}
                 {@html markerIconSVG}
             {/if}
@@ -2458,23 +2504,7 @@ function updateHighlightOverlayColor(id, color) {
             </button>
             {#if isNewHighlightDropdownOpen}
             <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
-                <div
-                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                    role="menuitem"
-                    tabindex="-1"
-                    on:click={() => {
-                        quickHighlightMode = 'remove';
-                        isNewHighlightDropdownOpen = false;
-                    }}
-                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
-                >
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center">
-                        {@html removeHighlightIconSVG}
-                    </span>
-                    <span>Remove Highlight</span>
-                </div>
-                <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
-                {#each highlightOptions as opt}
+                {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                     <div
                         class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                         role="menuitem"
@@ -2483,13 +2513,29 @@ function updateHighlightOverlayColor(id, color) {
                             quickHighlightColor = opt.value;
                             quickHighlightMode = 'highlight';
                             isNewHighlightDropdownOpen = false;
+                            isQuickHighlightActive = true; // Enable toggle
                         }}
-                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
+                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
                     >
                         <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={opt.value}></span>
                         <span>{opt.label}</span>
                     </div>
                 {/each}
+                <div
+                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    on:click={() => {
+                        quickHighlightColor = 'rgba(255, 255, 255, 1)'; // White
+                        quickHighlightMode = 'remove'; // Set mode to remove
+                        isNewHighlightDropdownOpen = false;
+                        isQuickHighlightActive = true; // Enable toggle
+                    }}
+                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = 'rgba(255, 255, 255, 1)'; quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
+                >
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
+                    <span>None</span>
+                </div>
             </div>
             {/if}
         </div>
@@ -2555,7 +2601,7 @@ function updateHighlightOverlayColor(id, color) {
             on:mouseenter={handleToolbarMouseEnter}
             on:mouseleave={handleToolbarMouseLeave} >
 
-            {#each highlightOptions as opt}
+            {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                 <button class="floating-toolbar-button"
                     title="{toolbarMode === 'click' ? `Change highlight to ${opt.label}` : `Highlight selection ${opt.label}`}"
                     on:click|stopPropagation={() => { handleHighlightAction(opt.value); }}>
