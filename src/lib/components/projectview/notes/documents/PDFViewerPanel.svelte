@@ -2452,7 +2452,15 @@ function updateHighlightOverlayColor(id, color) {
             }}
             style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : `background-color: rgba(255, 255, 255, 1);`) : ''}"
         >
-            {@html markerIconSVG}
+            {#if isQuickHighlightActive}
+                {#if quickHighlightMode === 'remove'}
+                    {@html removeHighlightIconSVG}
+                {:else}
+                    {@html markerIconSVG}
+                {/if}
+            {:else}
+                {@html markerIconSVG}
+            {/if}
         </button>
         <div class="relative flex items-center" bind:this={newHighlightDropdownRef}>
             <button class="mini-toolbar-button rounded-s-none border-l-0" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
