@@ -2357,7 +2357,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+    <div class="quick-highlight-group flex items-center border border-gray-300 dark:border-gray-600 rounded-lg">
         <button
             class="mini-toolbar-button mini-toolbar-button-grouped-left"
             class:active={isQuickHighlightActive}
@@ -2565,11 +2565,24 @@ function updateHighlightOverlayColor(id, color) {
 
     .toolbar :global(.mini-toolbar-button-grouped-left),
     .toolbar :global(.mini-toolbar-button-grouped-right) {
-        @apply !border-0 !rounded-none;
+        /* Override specific border sides and all of radius from mini-toolbar-button's default 'border' and 'rounded-lg' apply. */
+        /* The parent 'quick-highlight-group' now provides the main outer border. */
+        border-top-width: 0px !important;  /* Important to override Tailwind's 'border' class */
+        border-bottom-width: 0px !important;
+        border-radius: 0px !important; /* Remove all rounding from individual buttons */
+
+        /* We keep the padding and other styles from mini-toolbar-button */
     }
 
     .toolbar :global(.mini-toolbar-button-grouped-left) {
-        @apply border-r border-gray-300 dark:border-gray-600;
+        border-left-width: 0px !important; /* Leftmost button, no individual left border */
+        border-right-width: 1px !important; /* Explicitly set the right border as a divider */
+        @apply border-r-gray-300 dark:border-r-gray-600; /* Apply color to the right border */
+    }
+
+    .toolbar :global(.mini-toolbar-button-grouped-right) {
+        border-left-width: 0px !important; /* No individual left border, it's flush with the left button's right border */
+        border-right-width: 0px !important; /* Rightmost button, no individual right border */
     }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
