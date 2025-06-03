@@ -2357,7 +2357,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group flex items-center border border-gray-300 dark:border-gray-600 rounded-lg">
+    <div class="quick-highlight-group flex items-center rounded-lg overflow-hidden">
         <button
             class="mini-toolbar-button mini-toolbar-button-grouped-left"
             class:active={isQuickHighlightActive}
@@ -2563,26 +2563,15 @@ function updateHighlightOverlayColor(id, color) {
     .floating-toolbar-button { @apply p-1 rounded border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
     .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
 
-    .toolbar :global(.mini-toolbar-button-grouped-left),
-    .toolbar :global(.mini-toolbar-button-grouped-right) {
-        /* Override specific border sides and all of radius from mini-toolbar-button's default 'border' and 'rounded-lg' apply. */
-        /* The parent 'quick-highlight-group' now provides the main outer border. */
-        border-top-width: 0px !important;  /* Important to override Tailwind's 'border' class */
-        border-bottom-width: 0px !important;
-        border-radius: 0px !important; /* Remove all rounding from individual buttons */
-
-        /* We keep the padding and other styles from mini-toolbar-button */
-    }
-
     .toolbar :global(.mini-toolbar-button-grouped-left) {
-        border-left-width: 0px !important; /* Leftmost button, no individual left border */
-        border-right-width: 1px !important; /* Explicitly set the right border as a divider */
-        @apply border-r-gray-300 dark:border-r-gray-600; /* Apply color to the right border */
+        @apply rounded-r-none; /* Keep its original left, top, bottom border & left rounding from mini-toolbar-button */
+                               /* Add the right border for division */
+        @apply border-r border-gray-300 dark:border-gray-600;
     }
 
     .toolbar :global(.mini-toolbar-button-grouped-right) {
-        border-left-width: 0px !important; /* No individual left border, it's flush with the left button's right border */
-        border-right-width: 0px !important; /* Rightmost button, no individual right border */
+        @apply rounded-l-none border-l-0; /* Keep its original right, top, bottom border & right rounding */
+                                       /* Remove its left border */
     }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
