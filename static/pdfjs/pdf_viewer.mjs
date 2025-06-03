@@ -76,6 +76,115 @@ const {
   XfaLayer
 } = globalThis.pdfjsLib;
 
+// START MODIFICATIONS FOR AnnotationEditorLayer click vs. drag
+
+// Simulating private field via prototype property
+Object.defineProperty(AnnotationEditorLayer.prototype, "_pointerDownInfo", {
+  writable: true,
+  value: null,
+  enumerable: false, // Make it non-enumerable to mimic privacy slightly
+  configurable: true,
+});
+
+AnnotationEditorLayer.prototype._onPointerDown = function(event) {
+  // Ensure that the pointerdown target is actually part of an editor.
+  const editorElement = event.target?.closest?.(".annotationEditor");
+  if (!editorElement || !this.div.contains(editorElement)) {
+    this._pointerDownInfo = null;
+    return;
+  }
+
+  this._pointerDownInfo = {
+    x: event.pageX,
+    y: event.pageY,
+    timestamp: event.timeStamp,
+    target: editorElement, // Store the annotation editor element itself
+  };
+};
+
+AnnotationEditorLayer.prototype._commonPointerUp = function(event, annotation) {
+  const editor = this.getEditor(annotation);
+  if (!editor?.isAttached) {
+    // If the editor isn't attached, it might have been removed by another piece of logic.
+    // Resetting _pointerDownInfo is good practice, though it might be null already.
+    this._pointerDownInfo = null;
+    return;
+  }
+
+  const pointerDownInfo = this._pointerDownInfo;
+  // Always reset pointerDownInfo after use or if it's invalid.
+  this._pointerDownInfo = null;
+
+  if (!pointerDownInfo || pointerDownInfo.target !== annotation) {
+    // Pointerdown was not on this annotation, or info is missing.
+    // This also handles cases where pointerdown was on the layer's div but not an editor.
+    if (this.uiManager.isToolbarEnabledFor(editor)) {
+      this.uiManager.hideToolbar(editor);
+    }
+    // If the editor was active, and the interaction didn't start on it or was invalid,
+    // consider deselecting it, especially if the event target is outside.
+    if (this.uiManager.getActive() === editor && !annotation.contains(event.target)) {
+        this.uiManager.deselect(editor);
+    }
+    return;
+  }
+
+  const deltaX = Math.abs(event.pageX - pointerDownInfo.x);
+  const deltaY = Math.abs(event.pageY - pointerDownInfo.y);
+  const duration = event.timeStamp - pointerDownInfo.timestamp;
+
+  const MAX_CLICK_MOVEMENT = 5; // pixels
+  const MAX_CLICK_DURATION = 300; // milliseconds
+
+  const isClick = deltaX < MAX_CLICK_MOVEMENT &&
+                  deltaY < MAX_CLICK_MOVEMENT &&
+                  duration < MAX_CLICK_DURATION &&
+                  (event.detail === 1 || (event.pointerType === 'touch' && event.detail === 0));
+
+  if (editor.editorType === AnnotationEditorType.HIGHLIGHT) {
+    if (isClick) {
+      // If it's a click on the active editor, ensure toolbar is shown.
+      // If it's a click on an inactive editor, select it (which should show toolbar).
+      if (this.uiManager.getActive() !== editor) {
+        this.uiManager.select(editor); // This should also trigger showToolbar via UIManager logic
+      } else {
+        this.uiManager.showToolbar(this.div, editor, annotation); // Explicitly show if already active
+      }
+    } else { // It's a drag or a click that didn't meet criteria
+      this.uiManager.hideToolbar(editor);
+      // If it was a drag (not a click) and the editor was active, deselect it.
+      if (this.uiManager.getActive() === editor) {
+        this.uiManager.deselect(editor);
+      }
+    }
+    return; // Specific logic for HighlightEditor is complete.
+  }
+
+  // Fallback to original-like logic for other annotation types.
+  // This part might need to be adjusted if other editors also have click-specific toolbar logic.
+  if (isClick) {
+    if (this.uiManager.getActive() === editor) {
+      // Click on an active editor typically deselects it or cycles through states.
+      // For simplicity here, we assume deselect, but original might be more complex.
+      this.uiManager.deselect(editor);
+    } else {
+      this.uiManager.select(editor);
+    }
+  } else { // It's a drag for other types
+    // If a drag ends on an editor, it usually remains selected or becomes selected.
+    // Toolbar is generally hidden during/after drag unless explicitly shown.
+    if (this.uiManager.isToolbarEnabledFor(editor)) {
+        this.uiManager.hideToolbar(editor);
+    }
+    // If the drag ended outside the annotation, deselect.
+    if (this.uiManager.getActive() === editor && !annotation.contains(event.target)) {
+        this.uiManager.deselect(editor);
+    }
+  }
+};
+
+// END MODIFICATIONS FOR AnnotationEditorLayer
+
 ;// ./web/ui_utils.js
 
 const DEFAULT_SCALE_VALUE = "auto";
@@ -1737,34 +1846,101 @@ class AnnotationLayerBuilder {
     intent = "display",
     structTreeLayer = null
   }) {
-    if (this.div) {
+    const clonedViewport = viewport.clone({ dontFlip: true });
+
+    if (this.div) { // This is the UPDATE path (e.g., on zoom)
       if (this._cancelled || !this.annotationLayer) {
         return;
       }
-      this.annotationLayer.update({
-        viewport: viewport.clone({
-          dontFlip: true
-        })
+
+      this.annotationLayer.cancel();
+      this.div.textContent = "";
+
+      const annotationsToRender = this.#annotations;
+      if (!annotationsToRender) {
+        console.error("AnnotationLayerBuilder: #annotations is missing for update path.");
+        return;
+      }
+
+      const hasJSActions = await (this._hasJSActionsPromise || Promise.resolve(false));
+      const fieldObjects = await (this._fieldObjectsPromise || Promise.resolve(null));
+
+      if (this._cancelled) {
+          return;
+      }
+
+      // Ensure the layer is re-initialized with the new viewport,
+      // as `cancel` might have unrecoverably altered its state.
+      // Or, more simply, ensure its viewport is updated before render.
+      this.annotationLayer.viewport = clonedViewport;
+
+      await this.annotationLayer.render({
+        annotations: annotationsToRender,
+        viewport: clonedViewport, // Already cloned, use directly
+        imageResourcesPath: this.imageResourcesPath,
+        renderForms: this.renderForms,
+        linkService: this.linkService,
+        downloadManager: this.downloadManager,
+        annotationStorage: this.annotationStorage,
+        enableScripting: this.enableScripting,
+        hasJSActions,
+        fieldObjects,
+        structTreeLayer,
+        annotationCanvasMap: this._annotationCanvasMap,
+        accessibilityManager: this._accessibilityManager
       });
+
+      if (this.#linksInjected) {
+          this.#linksInjected = false;
+          // Attempt to get the PDFPageView instance. This assumes `this.pdfPage.pageNumber` is valid.
+          const pageView = this.linkService.pdfViewer?.getPageView(this.pdfPage.pageNumber - 1);
+          if (pageView) {
+            await this.injectLinkAnnotations({
+                inferredLinks: Autolinker.processLinks(pageView),
+                viewport: clonedViewport,
+                structTreeLayer
+            });
+          } else {
+            console.warn("AnnotationLayerBuilder: Could not retrieve PDFPageView for re-injecting links.");
+          }
+      }
       return;
     }
-    const [annotations, hasJSActions, fieldObjects] = await Promise.all([this.pdfPage.getAnnotations({
-      intent
-    }), this._hasJSActionsPromise, this._fieldObjectsPromise]);
+
+    // INITIAL RENDER PATH
+    // Ensure promises for hasJSActions and fieldObjects are initialized if not already present.
+    this._hasJSActionsPromise ||= Promise.resolve(false);
+    this._fieldObjectsPromise ||= Promise.resolve(null);
+
+    const [annotations, hasJSActions, fieldObjects] = await Promise.all([
+      this.pdfPage.getAnnotations({ intent }),
+      this._hasJSActionsPromise,
+      this._fieldObjectsPromise
+    ]);
+
     if (this._cancelled) {
       return;
     }
+
+    this.#annotations = annotations; // Store pristine annotations
+    // Store resolved values or promises for use in the update path
+    this._hasJSActionsPromise = Promise.resolve(hasJSActions);
+    this._fieldObjectsPromise = Promise.resolve(fieldObjects);
+
     const div = this.div = document.createElement("div");
     div.className = "annotationLayer";
     this.#onAppend?.(div);
+
     if (annotations.length === 0) {
-      this.#annotations = annotations;
+      // Still store #annotations for consistency, even if empty.
       this.hide(true);
       return;
     }
-    this.#initAnnotationLayer(viewport, structTreeLayer);
+
+    this.#initAnnotationLayer(clonedViewport, structTreeLayer);
     await this.annotationLayer.render({
       annotations,
+      viewport: clonedViewport, // Use the already cloned viewport
       imageResourcesPath: this.imageResourcesPath,
       renderForms: this.renderForms,
       linkService: this.linkService,
@@ -1772,9 +1948,13 @@ class AnnotationLayerBuilder {
       annotationStorage: this.annotationStorage,
       enableScripting: this.enableScripting,
       hasJSActions,
-      fieldObjects
+      fieldObjects,
+      structTreeLayer, // Pass along
+      annotationCanvasMap: this._annotationCanvasMap, // Pass along
+      accessibilityManager: this._accessibilityManager // Pass along
     });
-    this.#annotations = annotations;
+
+    // this.#annotations = annotations; // Already stored above
     if (this.linkService.isInPresentationMode) {
       this.#updatePresentationModeState(PresentationModeState.FULLSCREEN);
     }
@@ -4129,6 +4309,8 @@ class AnnotationEditorLayerBuilder {
   #structTreeLayer = null;
   #textLayer = null;
   #uiManager;
+  #pointerDownInfo = null;
+
   constructor(options) {
     this.pdfPage = options.pdfPage;
     this.accessibilityManager = options.accessibilityManager;
@@ -4188,6 +4370,15 @@ class AnnotationEditorLayerBuilder {
       intent
     };
     this.annotationEditorLayer.render(parameters);
+
+    // Bind _onPointerDown for the newly created/rendered annotationEditorLayer instance
+    if (this.annotationEditorLayer.div) {
+      this.annotationEditorLayer.div.addEventListener(
+        "pointerdown",
+        this.annotationEditorLayer._onPointerDown.bind(this.annotationEditorLayer)
+      );
+    }
+
     this.show();
   }
   cancel() {
