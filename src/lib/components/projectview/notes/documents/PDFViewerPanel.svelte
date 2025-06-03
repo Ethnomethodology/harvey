@@ -55,6 +55,18 @@ import { get } from 'svelte/store';
     let pageRendering = false; let pageNumInput = currentPageNum; let pdfjsLib = null; let PDFViewer = null; let EventBus = null; let PDFLinkService = null; let PDFFindController = null; 
     // pdfWorkerUrl will be imported dynamically
 
+    const markerIconSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
+        </svg>
+    `;
+
+    const removeHighlightIconSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+        </svg>
+    `;
+
     let searchQuery = ''; let lastSearched = '';
     let currentFindState = 0;
 
@@ -580,7 +592,7 @@ import { get } from 'svelte/store';
             const isInsideViewer = viewerElement?.contains(event.target);
             const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
 
-            if (!isInsideViewer) { 
+            if (!isInsideViewer) {
                 hideSelectionToolbar();
             } else {
                 // Click is inside the viewer. Hide only if not on an existing highlight AND selection is collapsed.
@@ -595,7 +607,7 @@ import { get } from 'svelte/store';
 
     async function handleViewerMouseUp(event) {
         if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) return;
-        await tick(); 
+        await tick();
 
         const sel = window.getSelection();
 
@@ -619,9 +631,9 @@ import { get } from 'svelte/store';
                     } else if (quickHighlightMode === 'remove') {
                         await handleHighlightAction('remove');
                     }
-                    
+
                     window.getSelection()?.removeAllRanges();
-                    selectedRange = null; 
+                    selectedRange = null;
                     // toolbarMode remains 'selection' but selectedRange is null, so floating toolbar won't appear for this.
                     // hideSelectionToolbar(); // This would hide it if it was somehow shown by another means.
                 }
@@ -630,7 +642,7 @@ import { get } from 'svelte/store';
         }
 
         // Original logic for floating toolbar if Quick Highlight is not active
-        selectedRange = null; 
+        selectedRange = null;
         if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
             const range = sel.getRangeAt(0);
             let isInTextLayer = false;
@@ -1147,7 +1159,7 @@ import { get } from 'svelte/store';
     // async function handleDropdownHighlightAction(color) { // Old function, to be removed or repurposed
     //     if (!selectedRange) { isToolbarHighlightDropdownOpen = false; return; }
     //     // selectedRange is already cloned from mouseup
-    //     isToolbarHighlightDropdownOpen = false; 
+    //     isToolbarHighlightDropdownOpen = false;
     //     toolbarMode = 'selection'; // Ensure mode is set for handleHighlightAction
     //     await handleHighlightAction(color); // Pass the selectedRange implicitly
     //     selectedRange = null; // Clear after use
@@ -2345,9 +2357,9 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group flex items-center">
-        <button 
-            class="mini-toolbar-button"
+    <div class="quick-highlight-group flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+        <button
+            class="mini-toolbar-button mini-toolbar-button-grouped-left"
             class:active={isQuickHighlightActive}
             title="Quick Highlight - {isQuickHighlightActive ? 'On' : 'Off'}"
             on:click={() => {
@@ -2361,20 +2373,22 @@ function updateHighlightOverlayColor(id, color) {
             }}
             style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : 'background-color: #FFFFFF;') : ''}"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
-            </svg>
+            {#if quickHighlightMode === 'remove'}
+                {@html removeHighlightIconSVG}
+            {:else}
+                {@html markerIconSVG}
+            {/if}
         </button>
         <div class="relative" bind:this={newHighlightDropdownRef}>
-            <button class="mini-toolbar-button" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
+            <button class="mini-toolbar-button mini-toolbar-button-grouped-right" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
             {#if isNewHighlightDropdownOpen}
             <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
-                <div 
-                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" 
-                    role="menuitem" 
-                    tabindex="-1" 
+                <div
+                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
                     on:click={() => {
                         quickHighlightMode = 'remove';
                         isNewHighlightDropdownOpen = false;
@@ -2382,18 +2396,16 @@ function updateHighlightOverlayColor(id, color) {
                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
                 >
                     <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
+                        {@html removeHighlightIconSVG}
                     </span>
                     <span>Remove Highlight</span>
                 </div>
                 <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
                 {#each highlightOptions as opt}
-                    <div 
-                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" 
-                        role="menuitem" 
-                        tabindex="-1" 
+                    <div
+                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                        role="menuitem"
+                        tabindex="-1"
                         on:click={() => {
                             quickHighlightColor = opt.value;
                             quickHighlightMode = 'highlight';
@@ -2550,6 +2562,15 @@ function updateHighlightOverlayColor(id, color) {
     .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
     .floating-toolbar-button { @apply p-1 rounded border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
     .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
+
+    .toolbar :global(.mini-toolbar-button-grouped-left),
+    .toolbar :global(.mini-toolbar-button-grouped-right) {
+        @apply !border-0 !rounded-none;
+    }
+
+    .toolbar :global(.mini-toolbar-button-grouped-left) {
+        @apply border-r border-gray-300 dark:border-gray-600;
+    }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
 </style>

@@ -12,7 +12,7 @@ function getBoundingBoxForQuads(quadsArray) {
         maxY = Math.max(maxY, quad[1], quad[3], quad[5], quad[7]);
     }
     if (minX === Infinity) return null;
-    return { 
+    return {
         x1: minX, y1: minY, x2: maxX, y2: maxY,
         x_center: (minX + maxX) / 2, // Added for convenience if needed by logic
         y_center: (minY + maxY) / 2  // Added for convenience
@@ -165,11 +165,11 @@ function testableHandleHighlightRemoval(existingHl, selectionQuads, selectionBBo
                 } else {
                     console.warn('[Testable Logic] Remnant quad overlaps selection horizontally. exQuadBBox:', exQuadBBox, 'remnantBBox:', remnantBBox, 'selectionBBox:', selectionBBox);
                      if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) { // exQuad is wider than tall
-                        if (remnantBBox.y2 <= selectionBBox.y1) { 
+                        if (remnantBBox.y2 <= selectionBBox.y1) {
                             quadsBeforeSelection.push(remnantQuad);
-                        } else if (remnantBBox.y1 >= selectionBBox.y2) { 
+                        } else if (remnantBBox.y1 >= selectionBBox.y2) {
                             quadsAfterSelection.push(remnantQuad);
-                        } else { 
+                        } else {
                             const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                             const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
                             if (remnantCenterX < selectionCenterX) {
@@ -178,10 +178,10 @@ function testableHandleHighlightRemoval(existingHl, selectionQuads, selectionBBo
                                 quadsAfterSelection.push(remnantQuad);
                             }
                         }
-                    } else { 
+                    } else {
                         const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
                         const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                        if (remnantCenterX < selectionCenterX) { 
+                        if (remnantCenterX < selectionCenterX) {
                             quadsBeforeSelection.push(remnantQuad);
                         } else {
                             quadsAfterSelection.push(remnantQuad);
@@ -198,7 +198,7 @@ function testableHandleHighlightRemoval(existingHl, selectionQuads, selectionBBo
     if (finalQuadsBefore.length > 0) {
         const updatedHighlightData = { ...existingHl, quadPoints: finalQuadsBefore };
         // Ensure 'type' from existingHl (which is 'pdfHighlight') doesn't overwrite the action type 'update'
-        delete updatedHighlightData.type; 
+        delete updatedHighlightData.type;
         dispatchFunction('pdfhighlightevent', { type: 'update', data: { ...updatedHighlightData, type: existingHl.type || 'pdfHighlight'} });
     } else {
         dispatchFunction('pdfhighlightevent', { type: 'remove', id: existingHl.id });
@@ -211,10 +211,10 @@ function testableHandleHighlightRemoval(existingHl, selectionQuads, selectionBBo
             id: newSplitHighlightId,
             color: existingHl.color,
             pageIndex: existingHl.pageIndex,
-            text: existingHl.text, 
+            text: existingHl.text,
             quadPoints: finalQuadsAfter,
-            prefix: existingHl.prefix, 
-            suffix: existingHl.suffix, 
+            prefix: existingHl.prefix,
+            suffix: existingHl.suffix,
         };
         dispatchFunction('pdfhighlightevent', { type: 'add', data: newHighlightDataObject });
     }
@@ -233,13 +233,13 @@ const scenarios = [
     },
     {
         description: "Scenario 2: Multi-Line Split (Remove from First Line)",
-        existingHl: { 
-            id: 'old_id_para', color: 'blue', pageIndex: 0, text: "Line1\nLine2\nLine3", 
+        existingHl: {
+            id: 'old_id_para', color: 'blue', pageIndex: 0, text: "Line1\nLine2\nLine3",
             quadPoints: [
                 [0, 10, 100, 10, 0, 30, 100, 30], // Line 1
                 [0, 35, 100, 35, 0, 55, 100, 55], // Line 2
                 [0, 60, 100, 60, 0, 80, 100, 80]  // Line 3
-            ] 
+            ]
         },
         selectionQuads: [[30, 10, 70, 10, 30, 30, 70, 30]], // Middle of first line
         expectedDispatch: [
@@ -273,7 +273,7 @@ let allTestsPassed = true;
 scenarios.forEach(scenario => {
     console.log(`\nRunning: ${scenario.description}`);
     dispatchedEvents = []; // Reset for each scenario
-    
+
     const selectionBBox = getBoundingBoxForQuads(scenario.selectionQuads);
     // Simulate the loop over existingHl. In real code, this is `for (const existingHl of highlightsToProcess)`
     // For this test, we call the function directly with one `existingHl`.
