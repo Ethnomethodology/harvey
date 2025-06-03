@@ -2357,7 +2357,7 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group flex items-center rounded-lg overflow-hidden">
+    <div class="quick-highlight-group flex items-center">
         <button
             class="mini-toolbar-button mini-toolbar-button-grouped-left"
             class:active={isQuickHighlightActive}
