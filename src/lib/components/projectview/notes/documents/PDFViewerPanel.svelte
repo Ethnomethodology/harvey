@@ -2485,6 +2485,7 @@ function updateHighlightOverlayColor(id, color) {
                         <span>{opt.label}</span>
                     </div>
                 {/each}
+                {!-- Add new "None" option here --}
                 <div
                     class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                     role="menuitem"
@@ -2565,7 +2566,7 @@ function updateHighlightOverlayColor(id, color) {
             on:mouseenter={handleToolbarMouseEnter}
             on:mouseleave={handleToolbarMouseLeave} >
 
-            {#each highlightOptions as opt}
+            {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                 <button class="floating-toolbar-button"
                     title="{toolbarMode === 'click' ? `Change highlight to ${opt.label}` : `Highlight selection ${opt.label}`}"
                     on:click|stopPropagation={() => { handleHighlightAction(opt.value); }}>
