@@ -46,6 +46,9 @@ import { get } from 'svelte/store';
     let newHighlightDropdownRef; // Added for new dropdown
     let isNewHighlightDropdownOpen = false; // Added for new dropdown
 
+    let zoomDropdownRef;
+    let isZoomDropdownOpen = false;
+
     // Reactive state for Quick Highlight feature
     let isQuickHighlightActive = false;
     let quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
@@ -54,6 +57,22 @@ import { get } from 'svelte/store';
 
     let pageRendering = false; let pageNumInput = currentPageNum; let pdfjsLib = null; let PDFViewer = null; let EventBus = null; let PDFLinkService = null; let PDFFindController = null; 
     // pdfWorkerUrl will be imported dynamically
+
+    const zoomOptions = [
+        { value: 'auto', label: 'Auto' },
+        { value: 'page-actual', label: 'Actual Size' },
+        { value: 'page-fit', label: 'Page Fit' },
+        { value: 'page-width', label: 'Page Width' },
+        { type: 'separator' },
+        { value: '0.5', label: '50%' },
+        { value: '0.75', label: '75%' },
+        { value: '1', label: '100%' },
+        { value: '1.25', label: '125%' },
+        { value: '1.5', label: '150%' },
+        { value: '2', label: '200%' },
+        { value: '3', label: '300%' },
+        { value: '4', label: '400%' },
+    ];
 
     const markerIconSVG = `
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16">
@@ -580,6 +599,9 @@ import { get } from 'svelte/store';
     function handleClickOutside(event) {
         if (isNewHighlightDropdownOpen && newHighlightDropdownRef && !newHighlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
             isNewHighlightDropdownOpen = false;
+        }
+        if (isZoomDropdownOpen && zoomDropdownRef && !zoomDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) { // Ensure not clicking on a menu item of the zoom dropdown itself
+            isZoomDropdownOpen = false;
         }
         // Ensure the new dropdown check doesn't prevent the selection toolbar from hiding.
         // The condition for hiding selectionToolbar should be independent of newHighlightDropdownRef unless it's part of the selection toolbar itself.
@@ -1167,6 +1189,15 @@ import { get } from 'svelte/store';
 
     function toggleNewHighlightDropdown() { // Added new function
         isNewHighlightDropdownOpen = !isNewHighlightDropdownOpen;
+    }
+
+    function toggleZoomDropdown() {
+        isZoomDropdownOpen = !isZoomDropdownOpen;
+    }
+
+    function selectZoomLevel(value) {
+        setZoom(value); // This function already exists and calls pdfViewer.currentScaleValue
+        isZoomDropdownOpen = false;
     }
     
     // --- Helper: Get the combined text of a highlight block by its id ---
@@ -2318,6 +2349,22 @@ function updateHighlightOverlayColor(id, color) {
         return 'auto'; // Default fallback
     })();
 
+    $: currentZoomLabel = (() => {
+        const scaleStr = String(currentScaleValue);
+        const foundOption = zoomOptions.find(opt => opt.value === scaleStr);
+        if (foundOption && foundOption.type !== 'separator') {
+            return foundOption.label;
+        }
+        // Handle numeric scale values not exactly in presets (e.g. after pinch zoom)
+        const numScale = parseFloat(scaleStr);
+        if (!isNaN(numScale)) {
+            // Check if it's very close to a preset percentage
+            const presetMatch = zoomOptions.find(opt => opt.value && !isNaN(parseFloat(opt.value)) && Math.abs(parseFloat(opt.value) - numScale) < 0.001);
+            if (presetMatch && presetMatch.type !== 'separator') return presetMatch.label;
+            return `${Math.round(numScale * 100)}%`;
+        }
+        return 'Auto'; // Default fallback
+    })();
 
 </script>
 
@@ -2330,24 +2377,50 @@ function updateHighlightOverlayColor(id, color) {
     <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={zoomOut} title="Zoom out" disabled={loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" /></svg></button>
-    <select class="mini-toolbar-select w-24" bind:value={currentScaleValue} on:change={(e) => setZoom(e.target.value)} disabled={loading || !pdfDoc} aria-label="Zoom level">
-        {#if !PRESET_SCALES.includes(String(currentScaleValue)) && !isNaN(parseFloat(currentScaleValue))}
-            <option value={currentScaleValue} selected>{Math.round(parseFloat(currentScaleValue) * 100)}%</option>
+
+    <!-- Custom Zoom Dropdown -->
+    <div class="relative" bind:this={zoomDropdownRef}>
+        <button
+            class="mini-toolbar-button flex items-center gap-1 w-24 justify-between"
+            on:click={toggleZoomDropdown}
+            title="Zoom Level"
+            disabled={loading || !pdfDoc}
+            aria-haspopup="true"
+            aria-expanded={isZoomDropdownOpen}
+        >
+            <span class="truncate text-xs">{@html currentZoomLabel}</span>
+            <svg class="ml-0.5 h-3 w-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+        </button>
+        {#if isZoomDropdownOpen}
+            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-y-auto max-h-60 py-1">
+                {#each zoomOptions as option (option.value || option.label)}
+                    {#if option.type === 'separator'}
+                        <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
+                    {:else}
+                        <div
+                            class="px-3 py-1.5 text-xs flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
+                            class:font-semibold={String(currentScaleValue) === option.value}
+                            class:bg-gray-200={String(currentScaleValue) === option.value}
+                            class:dark:bg-gray-600={String(currentScaleValue) === option.value}
+                            on:click={() => selectZoomLevel(option.value)}
+                            role="menuitemradio"
+                            aria-checked={String(currentScaleValue) === option.value}
+                            tabindex="0"
+                            on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { selectZoomLevel(option.value); e.preventDefault(); toggleZoomDropdown(); } else if (e.key === 'Escape') { toggleZoomDropdown(); e.target.closest('button').focus(); } }}
+                        >
+                            <span>{option.label}</span>
+                            {#if String(currentScaleValue) === option.value}
+                                <svg class="h-4 w-4 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                            {/if}
+                        </div>
+                    {/if}
+                {/each}
+            </div>
         {/if}
-        <option value="auto">Auto</option> 
-        <option value="page-actual">Actual size</option> 
-        <option value="page-fit">Page fit</option> 
-        <option value="page-width">Page width</option> 
-        <option disabled>──────────</option> 
-        <option value="0.5">50%</option> 
-        <option value="0.75">75%</option> 
-        <option value="1">100%</option> 
-        <option value="1.25">125%</option> 
-        <option value="1.5">150%</option> 
-        <option value="2">200%</option> 
-        <option value="3">300%</option> 
-        <option value="4">400%</option>
-    </select>
+    </div>
+
     <button class="mini-toolbar-button" on:click={zoomIn} title="Zoom in" disabled={loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" /></svg></button>
     <div class="separator"></div>
     <div class="flex items-center space-x-0.5">
@@ -2379,7 +2452,7 @@ function updateHighlightOverlayColor(id, color) {
                 {@html markerIconSVG}
             {/if}
         </button>
-        <div class="relative" bind:this={newHighlightDropdownRef}>
+        <div class="relative flex items-center" bind:this={newHighlightDropdownRef}>
             <button class="mini-toolbar-button rounded-s-none border-l-0" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
@@ -2514,14 +2587,24 @@ function updateHighlightOverlayColor(id, color) {
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input,
     .toolbar select.mini-toolbar-select {
-        @apply px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-800 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500;
-        height: 28px;
-        line-height: normal;
-        vertical-align: middle;
+        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
+        min-height: 24px; /* Explicit min-height from Lexical */
+        /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
+        /* vertical-align: middle; replaced by inline-flex items-center */
     }
 
+    /* Ensure specific button instances that are part of a group don't have excessive right margin */
+    .quick-highlight-group .mini-toolbar-button {
+        @apply mr-0; /* Reset margin for grouped buttons */
+    }
+    /* Add a specific active style for generic buttons if needed, separate from quick-highlight */
+    .toolbar button.mini-toolbar-button.active-generic { /* Example for a generic active state */
+        @apply bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-200;
+    }
+
+
     .toolbar select.mini-toolbar-select {
-        @apply appearance-none pr-8;
+        @apply appearance-none pr-8; /* pr-8 is for arrow, keep it */
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23666' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
         background-repeat: no-repeat;
         background-position: right 0.75rem center;
@@ -2532,8 +2615,8 @@ function updateHighlightOverlayColor(id, color) {
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23ccc' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
     }
 
-    .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; }
-    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1.5 inline-block align-middle; }
+    /* .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; } */ /* py-0.5 from base handles this */
+    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle; } /* Changed mx-1.5 to mx-1 */
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
