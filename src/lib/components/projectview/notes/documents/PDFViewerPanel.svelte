@@ -789,50 +789,63 @@ import { get } from 'svelte/store';
 
                             if (!doBoundingBoxesIntersect(exQuadBBox, selectionBBox)) {
                                 // Quad does not intersect with the selection bounding box
-                                if (exQuadBBox.y2 < selectionBBox.y1 || (exQuadBBox.y1 < selectionBBox.y1 && exQuadBBox.y2 < selectionBBox.y2) ) { // Quad is clearly above selection
+                                if (exQuadBBox.y2 <= selectionBBox.y1) { // Quad is entirely above selection
                                     quadsBeforeSelection.push(exQuad);
-                                } else if (exQuadBBox.y1 > selectionBBox.y2 || (exQuadBBox.y2 > selectionBBox.y2 && exQuadBBox.y1 > selectionBBox.y1)) { // Quad is clearly below selection
+                                } else if (exQuadBBox.y1 >= selectionBBox.y2) { // Quad is entirely below selection
                                     quadsAfterSelection.push(exQuad);
-                                } else { // Side-by-side cases or complex scenarios, treat as part of original block for now if not overlapping
-                                     // Heuristic: if quad center is to the left of selection center, consider it before, else after.
-                                    const exQuadCenterX = (exQuadBBox.x1 + exQuadBBox.x2) / 2;
-                                    const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                    if (exQuadCenterX < selectionCenterX) {
-                                       quadsBeforeSelection.push(exQuad);
+                                } else { // Quad is on the same horizontal band as the selection
+                                    if (exQuadBBox.x2 <= selectionBBox.x1) { // Quad is entirely to the left of selection
+                                        quadsBeforeSelection.push(exQuad);
+                                    } else if (exQuadBBox.x1 >= selectionBBox.x2) { // Quad is entirely to the right of selection
+                                        quadsAfterSelection.push(exQuad);
                                     } else {
-                                       quadsAfterSelection.push(exQuad);
+                                        // This case should be rare if intersection logic is correct.
+                                        // Quad is on the same band and horizontally overlapping but wasn't caught by intersection.
+                                        console.warn('[handleHighlightAction] Non-intersecting exQuad overlaps selection horizontally. Defaulting to quadsBeforeSelection. exQuadBBox:', exQuadBBox, 'selectionBBox:', selectionBBox);
+                                        quadsBeforeSelection.push(exQuad); // Default behavior
                                     }
                                 }
                             } else {
                                 // Quad intersects with the selection bounding box, subtract and categorize remnants
                                 const remnants = subtractQuads([exQuad], selectionQuads);
+                                for (const remnantQuad of remnants) {
+                                    const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
+                                    if (!remnantBBox) continue;
 
-                                // Determine if exQuad is a line that is only partially affected horizontally by selectionQuads
-                                // (i.e., selection is not removing the entire vertical extent of exQuad)
-                                const isSubLineModification = 
-                                    (selectionBBox.y1 <= exQuadBBox.y1 && selectionBBox.y2 >= exQuadBBox.y2) || // Selection covers exQuad vertically
-                                    (selectionBBox.y1 >= exQuadBBox.y1 && selectionBBox.y2 <= exQuadBBox.y2);   // Selection is within exQuad vertically
-
-                                if (isSubLineModification) {
-                                    // exQuad is a line that contains (or is contained by) the selection vertically.
-                                    // Its remnants (after punching a horizontal hole if selection is narrower) should stay associated with exQuad's original destiny.
-                                    // If the original highlight was a single line (existingHl.quadPoints.length === 1),
-                                    // OR if this exQuad is primarily "before" or at the start of the selection area.
-                                    if (existingHl.quadPoints.length === 1 || exQuadBBox.y_center < selectionBBox.y_center || (exQuadBBox.y1 <= selectionBBox.y1 && exQuadBBox.y2 <= selectionBBox.y2) ) {
-                                        quadsBeforeSelection.push(...remnants);
+                                    if (remnantBBox.x2 <= selectionBBox.x1) { // Remnant is to the left of the selection
+                                        quadsBeforeSelection.push(remnantQuad);
+                                    } else if (remnantBBox.x1 >= selectionBBox.x2) { // Remnant is to the right of the selection
+                                        quadsAfterSelection.push(remnantQuad);
                                     } else {
-                                        quadsAfterSelection.push(...remnants);
-                                    }
-                                } else {
-                                    // This exQuad is being cut either at its top or bottom by the selection (selection is partially above or below exQuad).
-                                    // Fallback to simpler y_center based distribution for remnants.
-                                    for (const remnantQuad of remnants) {
-                                        const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
-                                        if (!remnantBBox) continue; // Should not happen with valid remnant
-                                        if (remnantBBox.y_center < selectionBBox.y_center) {
-                                            quadsBeforeSelection.push(remnantQuad);
-                                        } else {
-                                            quadsAfterSelection.push(remnantQuad);
+                                        // Remnant overlaps horizontally with selection - this implies a vertical cut or complex scenario.
+                                        // This case handles remnants that are directly above or below the "hole" punched by selectionQuads
+                                        // within the bounds of exQuad if exQuad was taller than the selection.
+                                        // Or, if subtractQuads produced a remnant that still overlaps horizontally (which is unexpected for simple hole punching).
+                                        console.warn('[handleHighlightAction] Remnant quad overlaps selection horizontally. exQuadBBox:', exQuadBBox, 'remnantBBox:', remnantBBox, 'selectionBBox:', selectionBBox);
+                                        // Fallback logic based on vertical position relative to selection (if exQuad is primarily horizontal)
+                                        // or horizontal center if truly ambiguous.
+                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) { // exQuad is wider than tall
+                                            if (remnantBBox.y2 <= selectionBBox.y1) { // Remnant is above selection
+                                                quadsBeforeSelection.push(remnantQuad);
+                                            } else if (remnantBBox.y1 >= selectionBBox.y2) { // Remnant is below selection
+                                                quadsAfterSelection.push(remnantQuad);
+                                            } else { // Fallback to x_center for truly overlapping cases within the selection's vertical span
+                                                const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
+                                                const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
+                                                if (remnantCenterX < selectionCenterX) {
+                                                    quadsBeforeSelection.push(remnantQuad);
+                                                } else {
+                                                    quadsAfterSelection.push(remnantQuad);
+                                                }
+                                            }
+                                        } else { // exQuad is taller than wide (or square) - use original y_center logic or x_center
+                                            const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
+                                            const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
+                                            if (remnantCenterX < selectionCenterX) { // Default to x-based split for ambiguous cases
+                                                quadsBeforeSelection.push(remnantQuad);
+                                            } else {
+                                                quadsAfterSelection.push(remnantQuad);
+                                            }
                                         }
                                     }
                                 }
