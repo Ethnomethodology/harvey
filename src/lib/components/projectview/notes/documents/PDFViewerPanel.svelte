@@ -341,8 +341,6 @@ import { get } from 'svelte/store';
                 }
                 break;
         }
-        console.log('[UNDO END] Undo Stack (types):', undoStack.map(a => a.type), 'Redo Stack (types):', redoStack.map(a => a.type));
-        console.log('[UNDO END] Lengths: Undo:', undoStack.length, 'Redo:', redoStack.length);
         hideSelectionToolbar();
     }
 
@@ -410,8 +408,6 @@ import { get } from 'svelte/store';
                 }
                 break;
         }
-        console.log('[REDO END] Undo Stack (types):', undoStack.map(a => a.type), 'Redo Stack (types):', redoStack.map(a => a.type));
-        console.log('[REDO END] Lengths: Undo:', undoStack.length, 'Redo:', redoStack.length);
         hideSelectionToolbar();
     }
     
