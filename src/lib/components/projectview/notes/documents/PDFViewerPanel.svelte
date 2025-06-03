@@ -583,17 +583,6 @@ import { get } from 'svelte/store';
             if (!isInsideViewer) { 
                 hideSelectionToolbar();
             } else {
-                if (!clickedOnExistingHighlight && window.getSelection()?.isCollapsed) {
-                    hideSelectionToolbar();
-                }
-            }
-        }
-    }
-            const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
-
-            if (!isInsideViewer) { // Click is outside the PDF viewer area
-                hideSelectionToolbar();
-            } else {
                 // Click is inside the viewer. Hide only if not on an existing highlight AND selection is collapsed.
                 if (!clickedOnExistingHighlight && window.getSelection()?.isCollapsed) {
                     hideSelectionToolbar();
