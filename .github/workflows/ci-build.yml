@@ -172,6 +172,19 @@ jobs:
           ls -R ./sidecar
         shell: bash
 
+      - name: Clean target sidecar directory
+        run: |
+          echo "Cleaning src-tauri/sidecar/ directory..."
+          if [ -d "src-tauri/sidecar" ]; then
+            # Remove contents of sidecar directory.
+            # Using find to delete contents to avoid issues if sidecar itself is a symlink or special.
+            find src-tauri/sidecar/ -mindepth 1 -delete
+            echo "src-tauri/sidecar/ cleaned."
+          else
+            echo "src-tauri/sidecar/ directory does not exist, skipping cleanup."
+          fi
+        shell: bash
+
       - name: Copy and rename sidecars
         run: |
           mkdir -p src-tauri/sidecar src-tauri/models
@@ -232,6 +245,9 @@ jobs:
           fi
         shell: bash
 
+      - name: Clean frontend build directory
+        run: rm -rf build/
+        shell: bash
 
       - name: Build frontend
         run: |
