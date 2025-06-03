@@ -40,11 +40,32 @@ import { get } from 'svelte/store';
         { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
         { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
     ];
-    let isToolbarHighlightDropdownOpen = false;
-    let highlightDropdownRef;
+    // let isToolbarHighlightDropdownOpen = false; // Removed
+    // let highlightDropdownRef; // Removed
+
+    let newHighlightDropdownRef; // Added for new dropdown
+    let isNewHighlightDropdownOpen = false; // Added for new dropdown
+
+    // Reactive state for Quick Highlight feature
+    let isQuickHighlightActive = false;
+    let quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default to yellow
+    let quickHighlightMode = 'highlight'; // Possible values: 'highlight', 'remove'
+
 
     let pageRendering = false; let pageNumInput = currentPageNum; let pdfjsLib = null; let PDFViewer = null; let EventBus = null; let PDFLinkService = null; let PDFFindController = null; 
     // pdfWorkerUrl will be imported dynamically
+
+    const markerIconSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/>
+        </svg>
+    `;
+
+    const removeHighlightIconSVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+        </svg>
+    `;
 
     let searchQuery = ''; let lastSearched = '';
     let currentFindState = 0;
@@ -557,15 +578,21 @@ import { get } from 'svelte/store';
     }
 
     function handleClickOutside(event) {
-        if (isToolbarHighlightDropdownOpen && highlightDropdownRef && !highlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
-            isToolbarHighlightDropdownOpen = false; selectedRange = null;
+        if (isNewHighlightDropdownOpen && newHighlightDropdownRef && !newHighlightDropdownRef.contains(event.target) && !event.target.closest('[role="menuitem"]')) {
+            isNewHighlightDropdownOpen = false;
         }
-        if (showSelectionToolbar && selectionToolbarElement && !selectionToolbarElement.contains(event.target) && !(highlightDropdownRef && highlightDropdownRef.contains(event.target))) {
+        // Ensure the new dropdown check doesn't prevent the selection toolbar from hiding.
+        // The condition for hiding selectionToolbar should be independent of newHighlightDropdownRef unless it's part of the selection toolbar itself.
+        // Based on current structure, newHighlightDropdownRef is part of the main toolbar, not the floating selection toolbar.
+        if (showSelectionToolbar && selectionToolbarElement && !selectionToolbarElement.contains(event.target)) {
+            // Check if the click is on any part of the main toolbar that should keep the selection toolbar open (e.g. if it was a highlight color button)
+            // For now, we assume any click outside selectionToolbar itself should be evaluated for hiding.
+            // The original logic for `!(highlightDropdownRef && highlightDropdownRef.contains(event.target))` was to prevent hiding if clicking the old highlight dropdown.
+            // We don't have such a direct equivalent needing to keep selectionToolbar open for the new main toolbar dropdown.
             const isInsideViewer = viewerElement?.contains(event.target);
-            // Ensure we check for both old span-based highlights and new overlay parts
             const clickedOnExistingHighlight = event.target.closest?.('.pdf-highlight') || event.target.closest?.('.overlay-part');
 
-            if (!isInsideViewer) { // Click is outside the PDF viewer area
+            if (!isInsideViewer) {
                 hideSelectionToolbar();
             } else {
                 // Click is inside the viewer. Hide only if not on an existing highlight AND selection is collapsed.
@@ -579,11 +606,43 @@ import { get } from 'svelte/store';
     }
 
     async function handleViewerMouseUp(event) {
-        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) return;
-        await tick(); // Allow selection to finalize in the DOM
+        if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) return;
+        await tick();
 
-        selectedRange = null; 
         const sel = window.getSelection();
+
+        if (isQuickHighlightActive) {
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                const range = sel.getRangeAt(0);
+                let isInTextLayer = false;
+                const ancestor = range.commonAncestorContainer;
+                if (ancestor && viewerElement?.contains(ancestor)) {
+                    const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
+                    if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
+                }
+
+                if (isInTextLayer && range.toString().trim().length > 0) {
+                    const rangeToUse = range.cloneRange();
+                    selectedRange = rangeToUse; // Set for handleHighlightAction
+                    toolbarMode = 'selection';  // Set for handleHighlightAction
+
+                    if (quickHighlightMode === 'highlight') {
+                        await handleHighlightAction(quickHighlightColor);
+                    } else if (quickHighlightMode === 'remove') {
+                        await handleHighlightAction('remove');
+                    }
+
+                    window.getSelection()?.removeAllRanges();
+                    selectedRange = null;
+                    // toolbarMode remains 'selection' but selectedRange is null, so floating toolbar won't appear for this.
+                    // hideSelectionToolbar(); // This would hide it if it was somehow shown by another means.
+                }
+            }
+            return; // Prevent floating toolbar from appearing when Quick Highlight is active
+        }
+
+        // Original logic for floating toolbar if Quick Highlight is not active
+        selectedRange = null;
         if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
             const range = sel.getRangeAt(0);
             let isInTextLayer = false;
@@ -592,18 +651,14 @@ import { get } from 'svelte/store';
                 const textLayerParent = (ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode)?.closest('.textLayer');
                 if (textLayerParent && viewerElement.contains(textLayerParent)) isInTextLayer = true;
             }
+
             if (isInTextLayer && range.toString().trim().length > 0) {
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
-
-                // Set showSelectionToolbar to true as early as possible
                 showSelectionToolbar = true; 
 
-                // Defer positioning until after the next frame, ensuring the toolbar element is available
-                // and Svelte has processed the showSelectionToolbar change.
                 requestAnimationFrame(() => {
-                    // Ensure the toolbar is still meant to be shown and elements are available
                     if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
                         positionToolbarAtPoint(event.clientX, event.clientY);
                     }
@@ -611,12 +666,14 @@ import { get } from 'svelte/store';
                 return;
             }
         }
-        selectedRange = null; if (toolbarMode === 'selection' && showSelectionToolbar) hideSelectionToolbar();
+        if (toolbarMode === 'selection' && showSelectionToolbar) { // If no valid selection made, hide toolbar
+             hideSelectionToolbar();
+        }
     }
 
     async function handleViewerClick(event) {
         // If the click is on the selection toolbar or its dropdown, let normal interaction proceed.
-        if (selectionToolbarElement?.contains(event.target) || highlightDropdownRef?.contains(event.target)) {
+        if (selectionToolbarElement?.contains(event.target) || newHighlightDropdownRef?.contains(event.target)) { // Adjusted for new dropdown ref
             return;
         }
 
@@ -789,50 +846,63 @@ import { get } from 'svelte/store';
 
                             if (!doBoundingBoxesIntersect(exQuadBBox, selectionBBox)) {
                                 // Quad does not intersect with the selection bounding box
-                                if (exQuadBBox.y2 < selectionBBox.y1 || (exQuadBBox.y1 < selectionBBox.y1 && exQuadBBox.y2 < selectionBBox.y2) ) { // Quad is clearly above selection
+                                if (exQuadBBox.y2 <= selectionBBox.y1) { // Quad is entirely above selection
                                     quadsBeforeSelection.push(exQuad);
-                                } else if (exQuadBBox.y1 > selectionBBox.y2 || (exQuadBBox.y2 > selectionBBox.y2 && exQuadBBox.y1 > selectionBBox.y1)) { // Quad is clearly below selection
+                                } else if (exQuadBBox.y1 >= selectionBBox.y2) { // Quad is entirely below selection
                                     quadsAfterSelection.push(exQuad);
-                                } else { // Side-by-side cases or complex scenarios, treat as part of original block for now if not overlapping
-                                     // Heuristic: if quad center is to the left of selection center, consider it before, else after.
-                                    const exQuadCenterX = (exQuadBBox.x1 + exQuadBBox.x2) / 2;
-                                    const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
-                                    if (exQuadCenterX < selectionCenterX) {
-                                       quadsBeforeSelection.push(exQuad);
+                                } else { // Quad is on the same horizontal band as the selection
+                                    if (exQuadBBox.x2 <= selectionBBox.x1) { // Quad is entirely to the left of selection
+                                        quadsBeforeSelection.push(exQuad);
+                                    } else if (exQuadBBox.x1 >= selectionBBox.x2) { // Quad is entirely to the right of selection
+                                        quadsAfterSelection.push(exQuad);
                                     } else {
-                                       quadsAfterSelection.push(exQuad);
+                                        // This case should be rare if intersection logic is correct.
+                                        // Quad is on the same band and horizontally overlapping but wasn't caught by intersection.
+                                        console.warn('[handleHighlightAction] Non-intersecting exQuad overlaps selection horizontally. Defaulting to quadsBeforeSelection. exQuadBBox:', exQuadBBox, 'selectionBBox:', selectionBBox);
+                                        quadsBeforeSelection.push(exQuad); // Default behavior
                                     }
                                 }
                             } else {
                                 // Quad intersects with the selection bounding box, subtract and categorize remnants
                                 const remnants = subtractQuads([exQuad], selectionQuads);
+                                for (const remnantQuad of remnants) {
+                                    const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
+                                    if (!remnantBBox) continue;
 
-                                // Determine if exQuad is a line that is only partially affected horizontally by selectionQuads
-                                // (i.e., selection is not removing the entire vertical extent of exQuad)
-                                const isSubLineModification = 
-                                    (selectionBBox.y1 <= exQuadBBox.y1 && selectionBBox.y2 >= exQuadBBox.y2) || // Selection covers exQuad vertically
-                                    (selectionBBox.y1 >= exQuadBBox.y1 && selectionBBox.y2 <= exQuadBBox.y2);   // Selection is within exQuad vertically
-
-                                if (isSubLineModification) {
-                                    // exQuad is a line that contains (or is contained by) the selection vertically.
-                                    // Its remnants (after punching a horizontal hole if selection is narrower) should stay associated with exQuad's original destiny.
-                                    // If the original highlight was a single line (existingHl.quadPoints.length === 1),
-                                    // OR if this exQuad is primarily "before" or at the start of the selection area.
-                                    if (existingHl.quadPoints.length === 1 || exQuadBBox.y_center < selectionBBox.y_center || (exQuadBBox.y1 <= selectionBBox.y1 && exQuadBBox.y2 <= selectionBBox.y2) ) {
-                                        quadsBeforeSelection.push(...remnants);
+                                    if (remnantBBox.x2 <= selectionBBox.x1) { // Remnant is to the left of the selection
+                                        quadsBeforeSelection.push(remnantQuad);
+                                    } else if (remnantBBox.x1 >= selectionBBox.x2) { // Remnant is to the right of the selection
+                                        quadsAfterSelection.push(remnantQuad);
                                     } else {
-                                        quadsAfterSelection.push(...remnants);
-                                    }
-                                } else {
-                                    // This exQuad is being cut either at its top or bottom by the selection (selection is partially above or below exQuad).
-                                    // Fallback to simpler y_center based distribution for remnants.
-                                    for (const remnantQuad of remnants) {
-                                        const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
-                                        if (!remnantBBox) continue; // Should not happen with valid remnant
-                                        if (remnantBBox.y_center < selectionBBox.y_center) {
-                                            quadsBeforeSelection.push(remnantQuad);
-                                        } else {
-                                            quadsAfterSelection.push(remnantQuad);
+                                        // Remnant overlaps horizontally with selection - this implies a vertical cut or complex scenario.
+                                        // This case handles remnants that are directly above or below the "hole" punched by selectionQuads
+                                        // within the bounds of exQuad if exQuad was taller than the selection.
+                                        // Or, if subtractQuads produced a remnant that still overlaps horizontally (which is unexpected for simple hole punching).
+                                        console.warn('[handleHighlightAction] Remnant quad overlaps selection horizontally. exQuadBBox:', exQuadBBox, 'remnantBBox:', remnantBBox, 'selectionBBox:', selectionBBox);
+                                        // Fallback logic based on vertical position relative to selection (if exQuad is primarily horizontal)
+                                        // or horizontal center if truly ambiguous.
+                                        if (exQuadBBox.x2 - exQuadBBox.x1 > exQuadBBox.y2 - exQuadBBox.y1) { // exQuad is wider than tall
+                                            if (remnantBBox.y2 <= selectionBBox.y1) { // Remnant is above selection
+                                                quadsBeforeSelection.push(remnantQuad);
+                                            } else if (remnantBBox.y1 >= selectionBBox.y2) { // Remnant is below selection
+                                                quadsAfterSelection.push(remnantQuad);
+                                            } else { // Fallback to x_center for truly overlapping cases within the selection's vertical span
+                                                const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
+                                                const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
+                                                if (remnantCenterX < selectionCenterX) {
+                                                    quadsBeforeSelection.push(remnantQuad);
+                                                } else {
+                                                    quadsAfterSelection.push(remnantQuad);
+                                                }
+                                            }
+                                        } else { // exQuad is taller than wide (or square) - use original y_center logic or x_center
+                                            const remnantCenterX = (remnantBBox.x1 + remnantBBox.x2) / 2;
+                                            const selectionCenterX = (selectionBBox.x1 + selectionBBox.x2) / 2;
+                                            if (remnantCenterX < selectionCenterX) { // Default to x-based split for ambiguous cases
+                                                quadsBeforeSelection.push(remnantQuad);
+                                            } else {
+                                                quadsAfterSelection.push(remnantQuad);
+                                            }
                                         }
                                     }
                                 }
@@ -1086,13 +1156,17 @@ import { get } from 'svelte/store';
         // Hiding toolbar and clearing selection (for new highlights) is done immediately.
     }
     
-    async function handleDropdownHighlightAction(color) {
-        if (!selectedRange) { isToolbarHighlightDropdownOpen = false; return; }
-        // selectedRange is already cloned from mouseup
-        isToolbarHighlightDropdownOpen = false; 
-        toolbarMode = 'selection'; // Ensure mode is set for handleHighlightAction
-        await handleHighlightAction(color); // Pass the selectedRange implicitly
-        selectedRange = null; // Clear after use
+    // async function handleDropdownHighlightAction(color) { // Old function, to be removed or repurposed
+    //     if (!selectedRange) { isToolbarHighlightDropdownOpen = false; return; }
+    //     // selectedRange is already cloned from mouseup
+    //     isToolbarHighlightDropdownOpen = false;
+    //     toolbarMode = 'selection'; // Ensure mode is set for handleHighlightAction
+    //     await handleHighlightAction(color); // Pass the selectedRange implicitly
+    //     selectedRange = null; // Clear after use
+    // }
+
+    function toggleNewHighlightDropdown() { // Added new function
+        isNewHighlightDropdownOpen = !isNewHighlightDropdownOpen;
     }
     
     // --- Helper: Get the combined text of a highlight block by its id ---
@@ -2282,25 +2356,70 @@ function updateHighlightOverlayColor(id, color) {
         <button class="mini-toolbar-button" title="Next match" on:click={() => runSearch({ findPrevious: false })} disabled={loading || !pdfDoc || !searchQuery}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     </div>
     <div class="separator"></div>
-    <div class="relative inline-flex items-center" bind:this={highlightDropdownRef}>
-        <button class="mini-toolbar-button flex items-center" title="Highlight selected text" on:click={toggleToolbarHighlightDropdown} disabled={loading || !pdfDoc}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-highlighter" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"/></svg>
-            <svg class="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+    <!-- New Quick Highlight UI -->
+    <div class="quick-highlight-group inline-flex items-center" role="group">
+        <button
+            class="mini-toolbar-button rounded-e-none border-r border-gray-300 dark:border-r-gray-600"
+            class:active={isQuickHighlightActive}
+            title="Quick Highlight - {isQuickHighlightActive ? 'On' : 'Off'}"
+            on:click={() => {
+                isQuickHighlightActive = !isQuickHighlightActive;
+                if (isQuickHighlightActive) {
+                    if (quickHighlightMode === 'remove') {
+                        quickHighlightMode = 'highlight';
+                        quickHighlightColor = 'rgba(255, 242, 117, 0.5)'; // Default yellow
+                    }
+                }
+            }}
+            style="{isQuickHighlightActive ? (quickHighlightMode === 'highlight' ? `background-color: ${quickHighlightColor};` : 'background-color: #FFFFFF;') : ''}"
+        >
+            {#if quickHighlightMode === 'remove'}
+                {@html removeHighlightIconSVG}
+            {:else}
+                {@html markerIconSVG}
+            {/if}
         </button>
-        {#if isToolbarHighlightDropdownOpen}
-            <div class="absolute top-full mt-1 left-0 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
-                <div class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1" on:click|stopPropagation={() => { handleDropdownHighlightAction('remove'); }}>
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></span>
-                    <span>None</span>
+        <div class="relative" bind:this={newHighlightDropdownRef}>
+            <button class="mini-toolbar-button rounded-s-none border-l-0" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
+                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+            </button>
+            {#if isNewHighlightDropdownOpen}
+            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
+                <div
+                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    role="menuitem"
+                    tabindex="-1"
+                    on:click={() => {
+                        quickHighlightMode = 'remove';
+                        isNewHighlightDropdownOpen = false;
+                    }}
+                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
+                >
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center">
+                        {@html removeHighlightIconSVG}
+                    </span>
+                    <span>Remove Highlight</span>
                 </div>
+                <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
                 {#each highlightOptions as opt}
-                    <div class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1" on:click|stopPropagation={() => { handleDropdownHighlightAction(opt.value); }}>
+                    <div
+                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                        role="menuitem"
+                        tabindex="-1"
+                        on:click={() => {
+                            quickHighlightColor = opt.value;
+                            quickHighlightMode = 'highlight';
+                            isNewHighlightDropdownOpen = false;
+                        }}
+                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; e.preventDefault();}}}
+                    >
                         <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={opt.value}></span>
                         <span>{opt.label}</span>
                     </div>
                 {/each}
             </div>
-        {/if}
+            {/if}
+        </div>
     </div>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={undo} title="Undo (⌘+Z)" disabled={undoStack.length === 0}>
