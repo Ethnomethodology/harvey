@@ -50,7 +50,7 @@ jobs:
           override: true
 
       - name: Clean project
-        run: cargo clean
+        run: cargo clean --manifest-path src-tauri/Cargo.toml
 
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
