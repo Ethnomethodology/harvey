@@ -76,6 +76,115 @@ const {
   XfaLayer
 } = globalThis.pdfjsLib;
 
+// START MODIFICATIONS FOR AnnotationEditorLayer click vs. drag
+
+// Simulating private field via prototype property
+Object.defineProperty(AnnotationEditorLayer.prototype, "_pointerDownInfo", {
+  writable: true,
+  value: null,
+  enumerable: false, // Make it non-enumerable to mimic privacy slightly
+  configurable: true,
+});
+
+AnnotationEditorLayer.prototype._onPointerDown = function(event) {
+  // Ensure that the pointerdown target is actually part of an editor.
+  const editorElement = event.target?.closest?.(".annotationEditor");
+  if (!editorElement || !this.div.contains(editorElement)) {
+    this._pointerDownInfo = null;
+    return;
+  }
+
+  this._pointerDownInfo = {
+    x: event.pageX,
+    y: event.pageY,
+    timestamp: event.timeStamp,
+    target: editorElement, // Store the annotation editor element itself
+  };
+};
+
+AnnotationEditorLayer.prototype._commonPointerUp = function(event, annotation) {
+  const editor = this.getEditor(annotation);
+  if (!editor?.isAttached) {
+    // If the editor isn't attached, it might have been removed by another piece of logic.
+    // Resetting _pointerDownInfo is good practice, though it might be null already.
+    this._pointerDownInfo = null;
+    return;
+  }
+
+  const pointerDownInfo = this._pointerDownInfo;
+  // Always reset pointerDownInfo after use or if it's invalid.
+  this._pointerDownInfo = null;
+
+  if (!pointerDownInfo || pointerDownInfo.target !== annotation) {
+    // Pointerdown was not on this annotation, or info is missing.
+    // This also handles cases where pointerdown was on the layer's div but not an editor.
+    if (this.uiManager.isToolbarEnabledFor(editor)) {
+      this.uiManager.hideToolbar(editor);
+    }
+    // If the editor was active, and the interaction didn't start on it or was invalid,
+    // consider deselecting it, especially if the event target is outside.
+    if (this.uiManager.getActive() === editor && !annotation.contains(event.target)) {
+        this.uiManager.deselect(editor);
+    }
+    return;
+  }
+
+  const deltaX = Math.abs(event.pageX - pointerDownInfo.x);
+  const deltaY = Math.abs(event.pageY - pointerDownInfo.y);
+  const duration = event.timeStamp - pointerDownInfo.timestamp;
+
+  const MAX_CLICK_MOVEMENT = 5; // pixels
+  const MAX_CLICK_DURATION = 300; // milliseconds
+
+  const isClick = deltaX < MAX_CLICK_MOVEMENT &&
+                  deltaY < MAX_CLICK_MOVEMENT &&
+                  duration < MAX_CLICK_DURATION &&
+                  (event.detail === 1 || (event.pointerType === 'touch' && event.detail === 0));
+
+  if (editor.editorType === AnnotationEditorType.HIGHLIGHT) {
+    if (isClick) {
+      // If it's a click on the active editor, ensure toolbar is shown.
+      // If it's a click on an inactive editor, select it (which should show toolbar).
+      if (this.uiManager.getActive() !== editor) {
+        this.uiManager.select(editor); // This should also trigger showToolbar via UIManager logic
+      } else {
+        this.uiManager.showToolbar(this.div, editor, annotation); // Explicitly show if already active
+      }
+    } else { // It's a drag or a click that didn't meet criteria
+      this.uiManager.hideToolbar(editor);
+      // If it was a drag (not a click) and the editor was active, deselect it.
+      if (this.uiManager.getActive() === editor) {
+        this.uiManager.deselect(editor);
+      }
+    }
+    return; // Specific logic for HighlightEditor is complete.
+  }
+
+  // Fallback to original-like logic for other annotation types.
+  // This part might need to be adjusted if other editors also have click-specific toolbar logic.
+  if (isClick) {
+    if (this.uiManager.getActive() === editor) {
+      // Click on an active editor typically deselects it or cycles through states.
+      // For simplicity here, we assume deselect, but original might be more complex.
+      this.uiManager.deselect(editor);
+    } else {
+      this.uiManager.select(editor);
+    }
+  } else { // It's a drag for other types
+    // If a drag ends on an editor, it usually remains selected or becomes selected.
+    // Toolbar is generally hidden during/after drag unless explicitly shown.
+    if (this.uiManager.isToolbarEnabledFor(editor)) {
+        this.uiManager.hideToolbar(editor);
+    }
+    // If the drag ended outside the annotation, deselect.
+    if (this.uiManager.getActive() === editor && !annotation.contains(event.target)) {
+        this.uiManager.deselect(editor);
+    }
+  }
+};
+
+// END MODIFICATIONS FOR AnnotationEditorLayer
+
 ;// ./web/ui_utils.js
 
 const DEFAULT_SCALE_VALUE = "auto";
@@ -4129,6 +4238,8 @@ class AnnotationEditorLayerBuilder {
   #structTreeLayer = null;
   #textLayer = null;
   #uiManager;
+  #pointerDownInfo = null;
+
   constructor(options) {
     this.pdfPage = options.pdfPage;
     this.accessibilityManager = options.accessibilityManager;
@@ -4188,6 +4299,15 @@ class AnnotationEditorLayerBuilder {
       intent
     };
     this.annotationEditorLayer.render(parameters);
+
+    // Bind _onPointerDown for the newly created/rendered annotationEditorLayer instance
+    if (this.annotationEditorLayer.div) {
+      this.annotationEditorLayer.div.addEventListener(
+        "pointerdown",
+        this.annotationEditorLayer._onPointerDown.bind(this.annotationEditorLayer)
+      );
+    }
+
     this.show();
   }
   cancel() {
