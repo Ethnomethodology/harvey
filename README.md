@@ -26,6 +26,32 @@ It's an application built by researchers, for researchers.
 *   **Data Export**: Export transcripts to common formats (e.g., DOCX).
 *   **Background Processing**: Handles intensive tasks like model downloads and transcriptions in the background.
 
+## Contributing to Harvey
+
+We warmly welcome contributions to Project Harvey from everyone in the open-source community! Whether you're taking your first steps into coding, looking to experiment with AI-assisted development, or a qualitative researcher wanting to shape the tools you use, your input is valuable.
+
+Project Harvey is particularly interested in fostering a collaborative environment that embraces innovative coding paradigms. We encourage contributions from users of "vibe coding" and "agentic coding" platforms (such as those being explored with Google Jules, for example). We see these approaches as exciting ways to build software:
+
+*   **Vibe Coding**: This is about setting the general direction or 'vibe' for a feature. You might have a clear outcome in mind but perhaps not all the technical steps. AI tools can help you flesh out the specifics, and you refine the code iteratively. It's a partnership where you guide the AI to achieve your vision.
+*   **Agentic Coding**: Here, the AI acts more like an autonomous agent. It can take on more complex tasks, almost like a junior developer, capable of planning and executing coding steps with a degree of independence based on your higher-level goals.
+
+From its inception, Project Harvey has been significantly developed using AI tools, including Gemini, Google AI Studio, and explorations with Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+
+We are always keen to hear from our users and contributors about:
+
+*   Issues you might be facing with Harvey.
+*   What aspects of the application you find most useful.
+*   Features you would love to see added.
+*   Any help or guidance you might need regarding contributing to the Harvey Project.
+
+Your feedback and contributions are crucial in making Harvey a better tool for everyone.
+
+To get started, please refer to our documentation:
+
+*   To get your local copy of Harvey up and running, see our: [Setup Guide (Docs/SETUP_GUIDE.md)](Docs/SETUP_GUIDE.md)
+*   To understand how Harvey is structured and how its different parts work, refer to the: [Project Description (Docs/PROJECT_DESCRIPTION.md)](Docs/PROJECT_DESCRIPTION.md)
+*   For guidance on making contributions, especially using AI-assisted coding tools like Google Jules, check out our: [Developer's Contribution Guide (Docs/DEVELOPERS_GUIDE.md)](Docs/DEVELOPERS_GUIDE.md)
+
 ## Technology Stack
 
 *   **Core Framework**: [Tauri](https://tauri.app/) (v2.0, Rust backend, webview frontend)
