@@ -676,6 +676,21 @@ import { get } from 'svelte/store';
             }
 
             if (isInTextLayer && range.toString().trim().length > 0) {
+                // NEW CHECK: If the mouseup event occurred directly on an existing highlight,
+                // do not show the 'selection' toolbar. The user should click it to get the 'click' mode toolbar.
+                const targetElement = event.target;
+                const clickedOnExistingHighlight = targetElement.closest?.('.pdf-highlight') || targetElement.closest?.('.overlay-part');
+
+                if (clickedOnExistingHighlight) {
+                    // If a selection was made but the mouseup was on an existing highlight,
+                    // clear the selection and hide any potentially visible selection toolbar.
+                    // This prioritizes the click action for existing highlights.
+                    window.getSelection()?.removeAllRanges();
+                    hideSelectionToolbar(); // Ensure it's hidden
+                    return; // Do not proceed to show the 'selection' toolbar
+                }
+
+                // Original logic to show selection toolbar:
                 clearTimeout(hideToolbarTimeoutId); 
                 selectedRange = range.cloneRange(); 
                 clickedHighlightId = null; clickedHighlightColor = null; toolbarMode = 'selection';
@@ -683,6 +698,9 @@ import { get } from 'svelte/store';
 
                 requestAnimationFrame(() => {
                     if (showSelectionToolbar && selectionToolbarElement && pdfViewerWrapperElement) {
+                        // For 'selection' mode, it's often better to position relative to the selection's bounding box
+                        // rather than just event.clientX, event.clientY, but for now, keep existing positioning.
+                        // Consider revising positionToolbarAtPoint or adding positionToolbarForRange if needed later.
                         positionToolbarAtPoint(event.clientX, event.clientY);
                     }
                 });
