@@ -2514,14 +2514,24 @@ function updateHighlightOverlayColor(id, color) {
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input,
     .toolbar select.mini-toolbar-select {
-        @apply px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-800 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500;
-        height: 28px;
-        line-height: normal;
-        vertical-align: middle;
+        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
+        min-height: 24px; /* Explicit min-height from Lexical */
+        /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
+        /* vertical-align: middle; replaced by inline-flex items-center */
     }
 
+    /* Ensure specific button instances that are part of a group don't have excessive right margin */
+    .quick-highlight-group .mini-toolbar-button {
+        @apply mr-0; /* Reset margin for grouped buttons */
+    }
+    /* Add a specific active style for generic buttons if needed, separate from quick-highlight */
+    .toolbar button.mini-toolbar-button.active-generic { /* Example for a generic active state */
+        @apply bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-200;
+    }
+
+
     .toolbar select.mini-toolbar-select {
-        @apply appearance-none pr-8;
+        @apply appearance-none pr-8; /* pr-8 is for arrow, keep it */
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23666' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
         background-repeat: no-repeat;
         background-position: right 0.75rem center;
@@ -2532,8 +2542,8 @@ function updateHighlightOverlayColor(id, color) {
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23ccc' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
     }
 
-    .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; }
-    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1.5 inline-block align-middle; }
+    /* .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; } */ /* py-0.5 from base handles this */
+    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle; } /* Changed mx-1.5 to mx-1 */
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
