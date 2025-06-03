@@ -2357,9 +2357,9 @@ function updateHighlightOverlayColor(id, color) {
     </div>
     <div class="separator"></div>
     <!-- New Quick Highlight UI -->
-    <div class="quick-highlight-group flex items-center">
+    <div class="quick-highlight-group inline-flex items-center" role="group">
         <button
-            class="mini-toolbar-button mini-toolbar-button-grouped-left"
+            class="mini-toolbar-button rounded-e-none border-r border-gray-300 dark:border-r-gray-600"
             class:active={isQuickHighlightActive}
             title="Quick Highlight - {isQuickHighlightActive ? 'On' : 'Off'}"
             on:click={() => {
@@ -2380,7 +2380,7 @@ function updateHighlightOverlayColor(id, color) {
             {/if}
         </button>
         <div class="relative" bind:this={newHighlightDropdownRef}>
-            <button class="mini-toolbar-button mini-toolbar-button-grouped-right" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
+            <button class="mini-toolbar-button rounded-s-none border-l-0" title="Select Quick Highlight Color or Mode" on:click={toggleNewHighlightDropdown} disabled={loading || !pdfDoc}>
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
             {#if isNewHighlightDropdownOpen}
@@ -2562,17 +2562,6 @@ function updateHighlightOverlayColor(id, color) {
     .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
     .floating-toolbar-button { @apply p-1 rounded border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
     .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
-
-    .toolbar :global(.mini-toolbar-button-grouped-left) {
-        @apply rounded-r-none; /* Keep its original left, top, bottom border & left rounding from mini-toolbar-button */
-                               /* Add the right border for division */
-        @apply border-r border-gray-300 dark:border-gray-600;
-    }
-
-    .toolbar :global(.mini-toolbar-button-grouped-right) {
-        @apply rounded-l-none border-l-0; /* Keep its original right, top, bottom border & right rounding */
-                                       /* Remove its left border */
-    }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
 </style>
