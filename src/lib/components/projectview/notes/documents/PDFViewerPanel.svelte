@@ -284,8 +284,10 @@ import { get } from 'svelte/store';
     function undo() {
         if (undoStack.length === 0) return;
         const action = undoStack.pop();
+        undoStack = [...undoStack]; // Ensures reactivity after pop
+        
         redoStack.push(action);
-        redoStack = [...redoStack];
+        redoStack = [...redoStack]; // Ensures reactivity after push
         // console.log('[PDF Undo] Action:', action.type, action.payload?.id);
         switch (action.type) {
             case 'addHighlight':
@@ -339,13 +341,18 @@ import { get } from 'svelte/store';
                 }
                 break;
         }
+        console.log('[UNDO END] Undo Stack (types):', undoStack.map(a => a.type), 'Redo Stack (types):', redoStack.map(a => a.type));
+        console.log('[UNDO END] Lengths: Undo:', undoStack.length, 'Redo:', redoStack.length);
         hideSelectionToolbar();
     }
 
     function redo() {
         if (redoStack.length === 0) return;
         const action = redoStack.pop();
+        redoStack = [...redoStack]; // Ensures reactivity after pop
+        
         undoStack.push(action);
+        undoStack = [...undoStack]; // Ensures reactivity after push
         // console.log('[PDF Redo] Action:', action.type, action.payload?.id);
         switch (action.type) {
             case 'addHighlight':
@@ -403,6 +410,8 @@ import { get } from 'svelte/store';
                 }
                 break;
         }
+        console.log('[REDO END] Undo Stack (types):', undoStack.map(a => a.type), 'Redo Stack (types):', redoStack.map(a => a.type));
+        console.log('[REDO END] Lengths: Undo:', undoStack.length, 'Redo:', redoStack.length);
         hideSelectionToolbar();
     }
     
