@@ -1846,34 +1846,101 @@ class AnnotationLayerBuilder {
     intent = "display",
     structTreeLayer = null
   }) {
-    if (this.div) {
+    const clonedViewport = viewport.clone({ dontFlip: true });
+
+    if (this.div) { // This is the UPDATE path (e.g., on zoom)
       if (this._cancelled || !this.annotationLayer) {
         return;
       }
-      this.annotationLayer.update({
-        viewport: viewport.clone({
-          dontFlip: true
-        })
+
+      this.annotationLayer.cancel();
+      this.div.textContent = "";
+
+      const annotationsToRender = this.#annotations;
+      if (!annotationsToRender) {
+        console.error("AnnotationLayerBuilder: #annotations is missing for update path.");
+        return;
+      }
+
+      const hasJSActions = await (this._hasJSActionsPromise || Promise.resolve(false));
+      const fieldObjects = await (this._fieldObjectsPromise || Promise.resolve(null));
+
+      if (this._cancelled) {
+          return;
+      }
+
+      // Ensure the layer is re-initialized with the new viewport,
+      // as `cancel` might have unrecoverably altered its state.
+      // Or, more simply, ensure its viewport is updated before render.
+      this.annotationLayer.viewport = clonedViewport;
+
+      await this.annotationLayer.render({
+        annotations: annotationsToRender,
+        viewport: clonedViewport, // Already cloned, use directly
+        imageResourcesPath: this.imageResourcesPath,
+        renderForms: this.renderForms,
+        linkService: this.linkService,
+        downloadManager: this.downloadManager,
+        annotationStorage: this.annotationStorage,
+        enableScripting: this.enableScripting,
+        hasJSActions,
+        fieldObjects,
+        structTreeLayer,
+        annotationCanvasMap: this._annotationCanvasMap,
+        accessibilityManager: this._accessibilityManager
       });
+
+      if (this.#linksInjected) {
+          this.#linksInjected = false;
+          // Attempt to get the PDFPageView instance. This assumes `this.pdfPage.pageNumber` is valid.
+          const pageView = this.linkService.pdfViewer?.getPageView(this.pdfPage.pageNumber - 1);
+          if (pageView) {
+            await this.injectLinkAnnotations({
+                inferredLinks: Autolinker.processLinks(pageView),
+                viewport: clonedViewport,
+                structTreeLayer
+            });
+          } else {
+            console.warn("AnnotationLayerBuilder: Could not retrieve PDFPageView for re-injecting links.");
+          }
+      }
       return;
     }
-    const [annotations, hasJSActions, fieldObjects] = await Promise.all([this.pdfPage.getAnnotations({
-      intent
-    }), this._hasJSActionsPromise, this._fieldObjectsPromise]);
+
+    // INITIAL RENDER PATH
+    // Ensure promises for hasJSActions and fieldObjects are initialized if not already present.
+    this._hasJSActionsPromise ||= Promise.resolve(false);
+    this._fieldObjectsPromise ||= Promise.resolve(null);
+
+    const [annotations, hasJSActions, fieldObjects] = await Promise.all([
+      this.pdfPage.getAnnotations({ intent }),
+      this._hasJSActionsPromise,
+      this._fieldObjectsPromise
+    ]);
+
     if (this._cancelled) {
       return;
     }
+
+    this.#annotations = annotations; // Store pristine annotations
+    // Store resolved values or promises for use in the update path
+    this._hasJSActionsPromise = Promise.resolve(hasJSActions);
+    this._fieldObjectsPromise = Promise.resolve(fieldObjects);
+
     const div = this.div = document.createElement("div");
     div.className = "annotationLayer";
     this.#onAppend?.(div);
+
     if (annotations.length === 0) {
-      this.#annotations = annotations;
+      // Still store #annotations for consistency, even if empty.
       this.hide(true);
       return;
     }
-    this.#initAnnotationLayer(viewport, structTreeLayer);
+
+    this.#initAnnotationLayer(clonedViewport, structTreeLayer);
     await this.annotationLayer.render({
       annotations,
+      viewport: clonedViewport, // Use the already cloned viewport
       imageResourcesPath: this.imageResourcesPath,
       renderForms: this.renderForms,
       linkService: this.linkService,
@@ -1881,9 +1948,13 @@ class AnnotationLayerBuilder {
       annotationStorage: this.annotationStorage,
       enableScripting: this.enableScripting,
       hasJSActions,
-      fieldObjects
+      fieldObjects,
+      structTreeLayer, // Pass along
+      annotationCanvasMap: this._annotationCanvasMap, // Pass along
+      accessibilityManager: this._accessibilityManager // Pass along
     });
-    this.#annotations = annotations;
+
+    // this.#annotations = annotations; // Already stored above
     if (this.linkService.isInPresentationMode) {
       this.#updatePresentationModeState(PresentationModeState.FULLSCREEN);
     }
