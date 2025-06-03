@@ -49,6 +49,9 @@ jobs:
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}
           override: true
 
+      - name: Clean project
+        run: cargo clean --manifest-path src-tauri/Cargo.toml
+
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
         with:
