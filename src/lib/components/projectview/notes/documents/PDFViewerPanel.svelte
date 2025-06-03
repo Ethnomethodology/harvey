@@ -806,24 +806,35 @@ import { get } from 'svelte/store';
                             } else {
                                 // Quad intersects with the selection bounding box, subtract and categorize remnants
                                 const remnants = subtractQuads([exQuad], selectionQuads);
-                                for (const remnantQuad of remnants) {
-                                    const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
-                                    if (!remnantBBox) continue;
-                                    // Compare vertical position of remnant relative to selection
-                                    // Using y-center might be more robust for remnants that are thin strips
-                                    const remnantCenterY = (remnantBBox.y1 + remnantBBox.y2) / 2;
-                                    const selectionCenterY = (selectionBBox.y1 + selectionBBox.y2) / 2;
 
-                                    if (remnantCenterY < selectionCenterY && remnantBBox.y2 <= selectionBBox.y2 + 2) { // Remnant is above or in upper part of selection
-                                        quadsBeforeSelection.push(remnantQuad);
-                                    } else if (remnantCenterY > selectionCenterY && remnantBBox.y1 >= selectionBBox.y1 - 2) { // Remnant is below or in lower part of selection
-                                        quadsAfterSelection.push(remnantQuad);
-                                    } else if (remnantBBox.y2 < selectionBBox.y1 + (selectionBBox.y2 - selectionBBox.y1)/2 ) { // Fallback: strict above
-                                        quadsBeforeSelection.push(remnantQuad);
-                                    } else if (remnantBBox.y1 > selectionBBox.y1 + (selectionBBox.y2 - selectionBBox.y1)/2 ) { // Fallback: strict below
-                                        quadsAfterSelection.push(remnantQuad);
+                                // Determine if exQuad is a line that is only partially affected horizontally by selectionQuads
+                                // (i.e., selection is not removing the entire vertical extent of exQuad)
+                                const isSubLineModification = 
+                                    (selectionBBox.y1 <= exQuadBBox.y1 && selectionBBox.y2 >= exQuadBBox.y2) || // Selection covers exQuad vertically
+                                    (selectionBBox.y1 >= exQuadBBox.y1 && selectionBBox.y2 <= exQuadBBox.y2);   // Selection is within exQuad vertically
+
+                                if (isSubLineModification) {
+                                    // exQuad is a line that contains (or is contained by) the selection vertically.
+                                    // Its remnants (after punching a horizontal hole if selection is narrower) should stay associated with exQuad's original destiny.
+                                    // If the original highlight was a single line (existingHl.quadPoints.length === 1),
+                                    // OR if this exQuad is primarily "before" or at the start of the selection area.
+                                    if (existingHl.quadPoints.length === 1 || exQuadBBox.y_center < selectionBBox.y_center || (exQuadBBox.y1 <= selectionBBox.y1 && exQuadBBox.y2 <= selectionBBox.y2) ) {
+                                        quadsBeforeSelection.push(...remnants);
+                                    } else {
+                                        quadsAfterSelection.push(...remnants);
                                     }
-                                    // else: remnant is in the middle, effectively removed by selection
+                                } else {
+                                    // This exQuad is being cut either at its top or bottom by the selection (selection is partially above or below exQuad).
+                                    // Fallback to simpler y_center based distribution for remnants.
+                                    for (const remnantQuad of remnants) {
+                                        const remnantBBox = getBoundingBoxForQuads([remnantQuad]);
+                                        if (!remnantBBox) continue; // Should not happen with valid remnant
+                                        if (remnantBBox.y_center < selectionBBox.y_center) {
+                                            quadsBeforeSelection.push(remnantQuad);
+                                        } else {
+                                            quadsAfterSelection.push(remnantQuad);
+                                        }
+                                    }
                                 }
                             }
                         }
