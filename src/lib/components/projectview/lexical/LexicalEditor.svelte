@@ -1613,7 +1613,7 @@
 
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
-      @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700
+      @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 dark:text-gray-200
               hover:bg-gray-200 dark:hover:bg-gray-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed
               focus:outline-none focus:ring-1 focus:ring-blue-500;
       margin-right: 2px;
