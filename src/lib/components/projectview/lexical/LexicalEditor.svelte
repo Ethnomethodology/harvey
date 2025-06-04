@@ -360,12 +360,12 @@
           checklist: 'list-none mb-1 pl-0',
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
-        quote: 'border-l-4 border-gray-300 pl-2 italic my-1',
-        code: 'bg-gray-100 dark:bg-gray-700 font-mono p-0.5 my-0.5 rounded text-sm block whitespace-pre-wrap',
+        quote: 'border-l-4 border-gray-300 dark:border-gray-600 pl-2 italic my-1',
+        code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 rounded text-sm block whitespace-pre-wrap',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
-        table: 'editor-table w-full border-collapse border my-2 table-fixed',
-        tableCell: 'editor-table-cell border px-2 py-1 align-top min-w-[50px] relative',
-        tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-700 text-center',
+        table: 'editor-table w-full border-collapse border dark:border-gray-700 my-2 table-fixed',
+        tableCell: 'editor-table-cell border dark:border-gray-600 px-2 py-1 align-top min-w-[50px] relative',
+        tableCellHeader: 'editor-table-cell-header font-semibold bg-gray-100 dark:bg-gray-700 dark:text-gray-200 text-center',
         tableRow: 'editor-table-row',
         tableCellResizer: 'editor-table-cell-resizer',
         placeholder: 'lexical-placeholder-theme-class absolute top-0 left-0 text-gray-400 dark:text-gray-500 text-sm select-none pointer-events-none opacity-50 p-2',
@@ -1517,7 +1517,7 @@
                   aria-checked={selectedTextColor === option.value}
                   tabindex="-1"
                 >
-                  <span class="w-4 h-4 border border-gray-400 rounded-full" style="background-color: {option.value === 'transparent' ? '#fff' : option.value};"></span>
+                  <span class="w-4 h-4 border border-gray-400 dark:border-gray-500 rounded-full" style="background-color: {option.value === 'transparent' ? '#fff' : option.value};"></span>
                   <span>{option.label}</span>
                 </div>
               {/each}
@@ -1548,7 +1548,7 @@
                   aria-checked={selectedHighlightColor === option.value}
                   tabindex="-1"
                 >
-                  <span class="w-4 h-4 rounded-full border border-gray-400" style="background-color: {option.value};"></span>
+                  <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style="background-color: {option.value};"></span>
                   <span>{option.label}</span>
                 </div>
               {/each}
@@ -1735,6 +1735,9 @@
       position: absolute; top: 8px; left: 8px;
       color: theme('colors.gray.400');
       pointer-events: none; display: none; opacity: 0.6;
+  }
+  html.dark .lexical-content[contenteditable="true"]::before {
+      color: theme('colors.gray.500');
   }
   .lexical-content[contenteditable="true"] p:first-child:last-child:empty::before {
       display: block;
