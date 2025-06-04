@@ -1613,8 +1613,8 @@
 
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
-      @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 dark:text-gray-200
-              hover:bg-gray-200 dark:hover:bg-gray-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed
+      @apply px-1.5 py-0.5 border border-gray-300 rounded bg-gray-100 text-gray-800
+              hover:bg-gray-200 text-xs disabled:opacity-50 disabled:cursor-not-allowed
               focus:outline-none focus:ring-1 focus:ring-blue-500;
       margin-right: 2px;
       line-height: 1.2;
@@ -1622,8 +1622,23 @@
       display: inline-flex;
       align-items: center;
   }
+
+  html.dark .toolbar button.mini-toolbar-button,
+  html.dark .toolbar select.mini-toolbar-select {
+      @apply bg-gray-700 border-gray-600 text-gray-200;
+  }
+
+  html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
+  html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
+      @apply bg-gray-600;
+  }
+
   .toolbar button.mini-toolbar-button.active {
-      @apply bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-200;
+      @apply bg-blue-100 border-blue-300 text-blue-800;
+  }
+
+  html.dark .toolbar button.mini-toolbar-button.active {
+      @apply bg-blue-800 border-blue-600 text-blue-200;
   }
   .separator {
       @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle;
