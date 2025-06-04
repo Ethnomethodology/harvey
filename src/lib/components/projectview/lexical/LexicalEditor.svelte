@@ -888,7 +888,22 @@
         }
         const normalizedSelection = _getSelection();
         if (_isRangeSelection(normalizedSelection)) {
-            _patchStyleText(normalizedSelection, { 'background-color': colorToApply === 'transparent' ? null : colorToApply });
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const styles = {};
+
+            if (colorToApply !== 'transparent') {
+                styles['background-color'] = colorToApply;
+                if (isDarkMode) {
+                    styles['color'] = '#111827'; // Dark text for dark mode highlights
+                }
+                // In light mode, text color is not explicitly changed, allowing it to inherit.
+            } else {
+                // Removing highlight
+                styles['background-color'] = null;
+                styles['color'] = null; // Remove any explicit text color, allowing it to inherit.
+            }
+
+            _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
             for (const node of selectedNodes) {
