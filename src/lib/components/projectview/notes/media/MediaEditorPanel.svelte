@@ -23,6 +23,25 @@
 
     const dispatch = createEventDispatcher();
 
+    const mediaToolbarConfig = {
+      undo: true,
+      redo: true,
+      blockType: true,
+      bold: true,
+      italic: true,
+      underline: true,
+      strikethrough: true,
+      link: true,
+      insertMenu: false, // Explicitly false
+      indent: true,
+      outdent: true,
+      align: true,
+      textColor: true,
+      highlight: true,
+      clearFormatting: true,
+      search: true
+    };
+
     let lexicalEditorRef;
     let mediaPlayerInNotesRef;
 
@@ -370,7 +389,7 @@
                         placeholder="Enter notes for this media file..."
                         on:change={handleEditorChange}
                         enableSearch={true}
-                        toolbarConfig={{ insertMenu: false }}
+                        toolbarConfig={mediaToolbarConfig}
                     />
                 {/key}
             </div>
