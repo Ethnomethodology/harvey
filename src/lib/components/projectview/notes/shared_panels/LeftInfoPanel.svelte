@@ -8,6 +8,8 @@
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
+    import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
 
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '';
@@ -326,20 +328,37 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
-    <h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex justify-between items-center">
-        <span>Metadata</span>
-        {#if currentFileMetadata}
-            <button
-                on:click={toggleEditMode}
-                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
-            >
-                {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
-            </button>
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+      class:p-3={!$panelStateStore.leftCollapsed}
+      class:p-2={$panelStateStore.leftCollapsed}
+      class:w-full={!$panelStateStore.leftCollapsed}
+      class:w-12={$panelStateStore.leftCollapsed} >
+    <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center"
+        class:mb-3={!$panelStateStore.leftCollapsed}
+        class:mb-0={$panelStateStore.leftCollapsed}
+        class:justify-between={!$panelStateStore.leftCollapsed}
+        class:justify-center={$panelStateStore.leftCollapsed} >
+        <button
+            on:click={panelStateStore.toggleLeftPanel}
+            class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
+        >
+            <FileEarmarkCodeIcon class="w-4 h-4"/>
+        </button>
+        {#if !$panelStateStore.leftCollapsed}
+            <span class="ml-2">Metadata</span>
+            {#if currentFileMetadata}
+                <button
+                    on:click={toggleEditMode}
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
+                >
+                    {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
+                </button>
+            {/if}
         {/if}
     </h2>
-    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
+    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative" class:hidden={$panelStateStore.leftCollapsed}>
         {#if currentFileMetadata}
             <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->

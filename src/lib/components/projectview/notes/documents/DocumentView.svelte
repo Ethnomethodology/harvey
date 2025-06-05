@@ -9,6 +9,7 @@
     import DocumentEditorPanel from './DocumentEditorPanel.svelte'; 
     import PDFViewerPanel from './PDFViewerPanel.svelte';          
     import { project, updateDocumentHighlights } from '$lib/stores/projectStore.js'; 
+    import panelStateStore from '$lib/stores/panelStateStore.js';
 
     export let itemPath = null; 
 
@@ -52,12 +53,14 @@
 <div class="flex flex-grow p-0 gap-1 w-full min-h-0 h-full">
 
     <!-- Left Panel (Shared) -->
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.leftCollapsed}
+         class:w-[20.588%]={!$panelStateStore.leftCollapsed} >
         <LeftInfoPanel itemPath={itemPath} itemType="document" />
     </div>
 
     <!-- Middle Panel - The Editor OR Viewer -->
-    <div class="w-[58.824%] h-full">
+    <div class="h-full flex-grow">
         {#key itemPath} 
             {#if itemPath} 
                 {#if isPdf}
@@ -82,7 +85,9 @@
     </div>
 
     <!-- Right Panel (Shared) -->
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.rightCollapsed}
+         class:w-[20.588%]={!$panelStateStore.rightCollapsed} >
         <RightInfoPanel itemPath={itemPath} itemType="document" />
     </div>
 
@@ -90,6 +95,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    .w-\[20\.588\%\] { width: 20.58825%; }
-    .w-\[58\.824\%\] { width: 58.8235%; }
+    .w-\[20\.588\%\] { width: 20.58825%; } /* Retained for explicit expanded width */
 </style>

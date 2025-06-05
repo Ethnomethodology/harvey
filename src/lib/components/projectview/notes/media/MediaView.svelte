@@ -3,6 +3,7 @@
     import { onMount, createEventDispatcher } from 'svelte';
     import LeftInfoPanel from '../shared_panels/LeftInfoPanel.svelte';
     import RightInfoPanel from '../shared_panels/RightInfoPanel.svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     import MediaEditorPanel from './MediaEditorPanel.svelte';
 
     export let itemPath = null;
@@ -25,11 +26,13 @@
 </script>
 
 <div class="flex flex-grow p-0 gap-1 w-full min-h-0 h-full">
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.leftCollapsed}
+         class:w-[20.588%]={!$panelStateStore.leftCollapsed}>
         <LeftInfoPanel itemPath={itemPath} itemType="media_note" />
     </div>
 
-    <div class="w-[58.824%] h-full">
+    <div class="h-full flex-grow">
         {#key itemPath}
             {#if itemPath}
                 <MediaEditorPanel
@@ -45,7 +48,9 @@
         {/key}
     </div>
 
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.rightCollapsed}
+         class:w-[20.588%]={!$panelStateStore.rightCollapsed}>
         <RightInfoPanel itemPath={itemPath} itemType="media_note" />
     </div>
 </div>
@@ -53,5 +58,4 @@
 <style>
 	.min-h-0 { min-height: 0; }
     .w-\[20\.588\%\] { width: 20.58825%; }
-    .w-\[58\.824\%\] { width: 58.8235%; }
 </style>
