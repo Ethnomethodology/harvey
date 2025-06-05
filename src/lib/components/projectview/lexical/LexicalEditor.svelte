@@ -148,6 +148,8 @@
   let searchUiContainerElement;
   let searchToggleButtonElement;
 
+  let latestScrollTargetKey = null; // New component-level variable
+
   let isResizing = false;
   let resizeDirection = null;
   let resizeTargetCellKey = null;
@@ -190,13 +192,21 @@
     }
 
     function handleClickOutsideSearch(event) {
+      console.log('[handleClickOutsideSearch] Triggered. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm, 'target:', event.target);
       if (showSearchBox && searchTerm === '') {
         const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
         const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
 
+        console.log('[handleClickOutsideSearch] Conditions met (showSearchBox && searchTerm === ""). isClickInsideSearchUi:', isClickInsideSearchUi, 'isClickOnSearchToggleButton:', isClickOnSearchToggleButton);
+
         if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
+          console.log('[handleClickOutsideSearch] Hiding search box because click was outside UI and toggle button, and search term is empty.');
           showSearchBox = false;
+        } else {
+          console.log('[handleClickOutsideSearch] Not hiding search box. Click was inside UI or on toggle button, or search term is not empty.');
         }
+      } else {
+        console.log('[handleClickOutsideSearch] Conditions not met for hiding. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm);
       }
     }
 
@@ -1382,124 +1392,220 @@
       if (editorContainer) editorContainer.style.cursor = 'auto';
   }
 
-  function handleSearchInputKeydown(event) {
-    if (event.key === 'Enter') {
-      if (searchTerm.trim() !== '') {
-        executeSearch(searchTerm);
-      } else {
-        searchResults = [];
-        currentSearchResultIndex = -1;
-      }
-    }
-  }
+function handleSearchInputKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault(); // Prevent default Enter key action
+    console.log('[handleSearchInputKeydown] Enter key pressed.');
 
-  function executeSearch(termToSearch) {
-    if (!editor) return;
-    const term = termToSearch.trim();
-
-    // Removed: Clearing of currentSearchHighlight visual effect
-
-    searchResults = [];
-    currentSearchResultIndex = -1;
-
-    if (term === '') {
-      dispatch('searchresultsupdated', { results: searchResults, term: term });
-      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
-      return;
+    if (searchTerm.trim() !== '') {
+      executeSearch(searchTerm);
+    } else {
+      // If term is empty, Enter probably shouldn't clear results again,
+      // but rather do nothing or allow default (which is now prevented).
+      // For now, let's assume Enter on empty term does nothing further here
+      // beyond preventing default.
+      // Or, if executeSearch handles empty term by clearing, that's fine.
+      // executeSearch already handles empty searchTerm by clearing results.
+      searchResults = [];
+      currentSearchResultIndex = -1;
+      // Dispatch updates if needed, though executeSearch('') would do this.
+      // dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
+      // dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+      console.log('[handleSearchInputKeydown] Search term is empty, results cleared (if any).');
     }
 
-    editor.getEditorState().read(() => {
-      const root = _getRoot();
-      const nodesToSearch = [root];
-      const newResults = [];
-
-      while (nodesToSearch.length > 0) {
-        const node = nodesToSearch.pop();
-
-        if (_isTextNode(node)) {
-          const text = node.getTextContent();
-          const termLower = term.toLowerCase();
-          const textLower = text.toLowerCase();
-          let offset = -1;
-          while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
-            newResults.push({
-              nodeKey: node.getKey(),
-              offset: offset,
-              length: term.length,
-              text: node.getTextContent().substring(offset, offset + term.length)
-            });
-          }
-        } else if (node.getChildren) {
-          const children = node.getChildren();
-          for (let i = children.length - 1; i >= 0; i--) {
-              nodesToSearch.push(children[i]);
-          }
-        }
-      }
-      searchResults = newResults;
-      if (searchResults.length > 0) {
-        currentSearchResultIndex = 0;
-        navigateToResult(currentSearchResultIndex);
+    // Explicitly refocus the search input field
+    // Use tick to ensure any DOM updates from executeSearch are processed first,
+    // though likely not strictly necessary here if input field itself isn't re-rendered.
+    tick().then(() => {
+      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+      if (inputField) {
+        inputField.focus();
+        console.log('[handleSearchInputKeydown] Refocused search input field.');
       } else {
-        console.log('No results found for:', term);
-        dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+        console.warn('[handleSearchInputKeydown] Could not find search input field to refocus.');
       }
     });
+  }
+}
+
+function executeSearch(termToSearch) {
+  if (!editor) return;
+  const term = termToSearch.trim();
+  console.log('[executeSearch] Called with termToSearch:', termToSearch, '(trimmed term:', term + ')');
+
+  searchResults = [];
+  currentSearchResultIndex = -1;
+
+  if (term === '') {
+    console.log('[executeSearch] Term is empty, clearing results and dispatching.');
     dispatch('searchresultsupdated', { results: searchResults, term: term });
+    dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+    return;
   }
 
-  function clearSearchTermInput() {
-    searchTerm = '';
-    searchResults = [];
-    currentSearchResultIndex = -1;
+  console.log('[executeSearch] Commencing search for term:', term);
+  editor.getEditorState().read(() => {
+    const root = _getRoot();
+    const nodesToSearch = [root];
+    const newResults = [];
 
-    // Removed: Clearing of currentSearchHighlight visual effect
+    while (nodesToSearch.length > 0) {
+      const node = nodesToSearch.pop();
 
-    dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
-    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
-
-    if (showSearchBox && editorContainer) {
-      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-      inputField?.focus();
-    }
-  }
-
-  function navigateToResult(index) {
-    if (!editor) return;
-
-    if (index < 0 || index >= searchResults.length) {
-      currentSearchResultIndex = -1;
-      dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
-      return;
-    }
-
-    const result = searchResults[index];
-    currentSearchResultIndex = index;
-
-    editor.update(() => {
-      const node = _getNodeByKey(result.nodeKey);
       if (_isTextNode(node)) {
-        node.select(result.offset, result.offset + result.length);
-        // Lexical should scroll this selection into view by default
-      } else {
-        console.warn(`Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+        console.log('[executeSearch] Processing TextNode. Key:', node.getKey(), 'Text (first 50 chars):', node.getTextContent().substring(0, 50));
+        const text = node.getTextContent();
+        const termLower = term.toLowerCase();
+        const textLower = text.toLowerCase();
+        let offset = -1;
+        while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
+          const matchDetail = {
+            nodeKey: node.getKey(),
+            offset: offset,
+            length: term.length,
+            text: node.getTextContent().substring(offset, offset + term.length)
+          };
+          console.log('[executeSearch] Match found:', matchDetail);
+          newResults.push(matchDetail);
+        }
+      } else if (node.getChildren) {
+        const children = node.getChildren();
+        for (let i = children.length - 1; i >= 0; i--) {
+            nodesToSearch.push(children[i]);
+        }
       }
-    }, { tag: 'search-navigate' });
+    }
+    searchResults = newResults;
+    console.log('[executeSearch] Search complete. Found', searchResults.length, 'results.');
+    if (searchResults.length > 0) {
+      currentSearchResultIndex = 0;
+      console.log('[executeSearch] currentSearchResultIndex set to 0. First result:', searchResults[0]);
+      navigateToResult(currentSearchResultIndex); // This will also log
+    } else {
+      console.log('[executeSearch] No results found for:', term);
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null }); // Ensure this is dispatched if no results
+    }
+  });
+  const dispatchData = { results: searchResults, term: term };
+  console.log('[executeSearch] Dispatching searchresultsupdated with:', dispatchData);
+  dispatch('searchresultsupdated', dispatchData);
+}
 
-    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: searchResults[index] });
+function clearSearchTermInput() {
+  console.log('[clearSearchTermInput] Called.');
+  searchTerm = '';
+  searchResults = [];
+  currentSearchResultIndex = -1;
+
+  const updateData = { results: searchResults, term: searchTerm };
+  const indexChangeData = { currentIndex: currentSearchResultIndex, currentResult: null };
+
+  console.log('[clearSearchTermInput] Dispatching searchresultsupdated with:', updateData);
+  dispatch('searchresultsupdated', updateData);
+  console.log('[clearSearchTermInput] Dispatching searchindexchanged with:', indexChangeData);
+  dispatch('searchindexchanged', indexChangeData);
+
+  if (showSearchBox && editorContainer) {
+    const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+    inputField?.focus();
+  }
+}
+
+function navigateToResult(index) {
+  if (!editor) return;
+  console.log('[navigateToResult] Called with index:', index, 'Total results:', searchResults.length);
+
+  // Removed redundant highlight clearing, selection handles this
+
+  if (index < 0 || index >= searchResults.length) {
+    currentSearchResultIndex = -1;
+    console.log('[navigateToResult] Index out of bounds. currentSearchResultIndex set to -1.');
+    // Ensure previous highlight is cleared if any
+    // if (currentSearchHighlight) {
+    //   currentSearchHighlight.remove();
+    //   currentSearchHighlight = null;
+    // }
+    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
+    return;
   }
 
-  function navigateToPreviousResult() {
-    if (searchResults.length === 0 || currentSearchResultIndex <= 0) return;
-    currentSearchResultIndex--;
-    navigateToResult(currentSearchResultIndex);
-  }
+  const result = searchResults[index];
+  currentSearchResultIndex = index;
+  console.log('[navigateToResult] Navigating to result:', result);
 
-  function navigateToNextResult() {
-    if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) return;
-    currentSearchResultIndex++;
-    navigateToResult(currentSearchResultIndex);
+  editor.focus(); // <--- Add this line
+  latestScrollTargetKey = null; // Reset at the beginning of navigation
+
+  editor.update(() => {
+    const node = _getNodeByKey(result.nodeKey);
+    if (_isTextNode(node)) {
+      const currentNodeTextLength = node.getTextContentSize();
+      const startOffset = result.offset;
+      const endOffset = result.offset + result.length;
+
+      console.log(`[navigateToResult] Attempting selection for node ${result.nodeKey}. Stored Offset: ${startOffset}, Stored Length: ${result.length}, End Offset: ${endOffset}, Current Node Text Length: ${currentNodeTextLength}`);
+
+      if (startOffset < 0 || startOffset > currentNodeTextLength || endOffset > currentNodeTextLength) {
+        console.warn(`[navigateToResult] Stale or invalid offset for node ${result.nodeKey}. Offset: ${startOffset}, Length: ${result.length}, Node Text Length: ${currentNodeTextLength}. Skipping selection.`);
+        latestScrollTargetKey = null; // Ensure no scroll attempt
+      } else {
+        console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
+        node.select(startOffset, endOffset);
+        latestScrollTargetKey = result.nodeKey; // Set target for scrolling
+      }
+    } else {
+      console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+      latestScrollTargetKey = null; // Ensure no scroll attempt
+    }
+  }, { tag: 'search-navigate' });
+
+  // Scroll logic using the component-level variable, wrapped in tick()
+  if (latestScrollTargetKey) {
+    const keyToScroll = latestScrollTargetKey; // Capture value for closure
+    tick().then(() => {
+      console.log('[navigateToResult] Tick complete. Attempting to scroll for node key:', keyToScroll);
+      try {
+        const domElement = editor.getElementByKey(keyToScroll);
+        if (domElement) {
+          console.log('[navigateToResult] DOM element found. Attempting to scroll DOM element into view for node key:', keyToScroll);
+          domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          console.warn('[navigateToResult] Tick: Could not find DOM element for node key:', keyToScroll, 'to scroll into view.');
+        }
+      } catch (e) {
+        console.error('[navigateToResult] Tick: Error scrolling element into view:', e);
+      }
+    });
+  } else {
+      console.log('[navigateToResult] Skipping scroll attempt as no valid scrollTargetKey was set for node key:', result.nodeKey);
   }
+  latestScrollTargetKey = null; // Clean up after attempt or skip
+
+  const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
+  console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
+  dispatch('searchindexchanged', dispatchData);
+}
+
+function navigateToPreviousResult() {
+  console.log('[navigateToPreviousResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
+  if (searchResults.length === 0 || currentSearchResultIndex <= 0) {
+    console.log('[navigateToPreviousResult] No previous results or already at the first result.');
+    return;
+  }
+  currentSearchResultIndex--;
+  navigateToResult(currentSearchResultIndex);
+}
+
+function navigateToNextResult() {
+  console.log('[navigateToNextResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
+  if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) {
+    console.log('[navigateToNextResult] No next results or already at the last result.');
+    return;
+  }
+  currentSearchResultIndex++;
+  navigateToResult(currentSearchResultIndex);
+}
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -1734,7 +1840,21 @@
         <button
           bind:this={searchToggleButtonElement}
           class="mini-toolbar-button"
-          on:click={() => showSearchBox = !showSearchBox}
+          on:click={() => {
+            showSearchBox = !showSearchBox;
+            console.log('[Search Toggle Button] Clicked. New showSearchBox state:', showSearchBox);
+            if (showSearchBox) {
+              tick().then(() => { // Ensure UI is rendered before focusing
+                const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+                inputField?.focus();
+                console.log('[Search Toggle Button] Search box shown, attempting to focus input.');
+                if (searchUiContainerElement) {
+                  const styles = window.getComputedStyle(searchUiContainerElement);
+                  console.log('[Search Toggle Button] Search UI computed styles - position:', styles.position, 'z-index:', styles.zIndex, 'top:', styles.top, 'right:', styles.right, 'display:', styles.display);
+                }
+              });
+            }
+          }}
           class:active={showSearchBox}
           title="Search Document"
           disabled={!editable}
@@ -1743,59 +1863,60 @@
             <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
           </svg>
         </button>
-      {/if}
-    </div>
-  {/if}
-  <!-- MOVED AND RESTYLED SEARCH UI BLOCK - This comment is incorrect, it was already inside. Only classes/style are changing -->
-  {#if showSearchBox}
-    <div
-      bind:this={searchUiContainerElement}
-      class="search-ui-container absolute top-full right-0 mt-1 p-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-800 rounded-md shadow-lg flex items-center gap-1 z-20"
-      style="max-width: 24rem; min-width: 20rem;"
-    >
-      <div class="relative flex-grow"> <!-- Wrapper for input and clear button -->
-        <input
-          type="text"
-          bind:value={searchTerm}
-          placeholder="Search..."
-          class="w-full px-2 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          on:keydown={handleSearchInputKeydown}
-        />
-        {#if searchTerm}
-          <button
-            on:click={clearSearchTermInput}
-            title="Clear Search"
-            aria-label="Clear search input"
-            class="absolute inset-y-0 right-0 flex items-center justify-center p-1 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        <!-- MOVED SEARCH UI BLOCK HERE -->
+        {#if showSearchBox}
+          <div
+            bind:this={searchUiContainerElement}
+            class="search-ui-container absolute top-full right-0 mt-1 p-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-800 rounded-md shadow-lg flex items-center gap-1 z-20"
+            style="max-width: 24rem; min-width: 20rem;"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-            </svg>
-          </button>
+            <div class="relative flex-grow">
+              <input
+                type="text"
+                bind:value={searchTerm}
+                placeholder="Search..."
+                class="w-full px-2 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                on:keydown={handleSearchInputKeydown}
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+              />
+              {#if searchTerm}
+                <button
+                  on:click={clearSearchTermInput}
+                  title="Clear Search"
+                  aria-label="Clear search input"
+                  class="absolute inset-y-0 right-0 flex items-center justify-center p-1 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                  </svg>
+                </button>
+              {/if}
+            </div>
+            <button
+              on:click={navigateToPreviousResult}
+              disabled={searchResults.length === 0 || currentSearchResultIndex <= 0}
+              title="Previous Match"
+              aria-label="Previous search match"
+              class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+              </svg>
+            </button>
+            <button
+              on:click={navigateToNextResult}
+              disabled={searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1}
+              title="Next Match"
+              aria-label="Next search match"
+              class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+              </svg>
+            </button>
+          </div>
         {/if}
-      </div>
-      <button
-        on:click={navigateToPreviousResult}
-        disabled={searchResults.length === 0 || currentSearchResultIndex <= 0}
-        title="Previous Match"
-        aria-label="Previous search match"
-        class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-          <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-        </svg>
-      </button>
-      <button
-        on:click={navigateToNextResult}
-        disabled={searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1}
-        title="Next Match"
-        aria-label="Next search match"
-        class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-          <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-        </svg>
-      </button>
+      {/if}
     </div>
   {/if}
 
