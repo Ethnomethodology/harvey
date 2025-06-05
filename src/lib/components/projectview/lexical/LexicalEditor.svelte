@@ -100,10 +100,12 @@
     align: true,
     textColor: true,
     highlight: true,
-    clearFormatting: true
+    clearFormatting: true,
+    search: true
   };
   export let enableTableCellMenu = false;
   export let enableTableCellResize = false;
+  export let enableSearch = false;
 
   let editorWrapper;
   let editorContainer;
@@ -121,6 +123,11 @@
   let currentModalUrl = '';
   let isEditingLink = false;
 
+  let showSearchBox = false;
+  let searchTerm = '';
+  let searchResults = []; // Will store objects like { nodeKey: string, offset: number, length: number }
+  let currentSearchResultIndex = -1;
+
   let blockType = 'paragraph';
   let isBlockDropdownOpen = false;
   let blockDropdownRef;
@@ -133,6 +140,13 @@
   let showTableCellMenu = false;
   let tableCellMenuPosition = { top: 0, left: 0 };
   let activeTableCellKey = null;
+
+  let searchUiContainerElement;
+  let searchToggleButtonElement;
+
+  let currentSearchHighlight = null; // Stores { nodeKey: string, offset: number, length: number } of the current visual highlight
+  const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)'; // Gold-ish yellow, semi-transparent for light mode
+  const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';  // A bluish, semi-transparent for dark mode
 
   let isResizing = false;
   let resizeDirection = null;
@@ -174,12 +188,26 @@
         closeTableCellMenu(false);
       }
     }
+
+    function handleClickOutsideSearch(event) {
+      if (showSearchBox && searchTerm === '') {
+        const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
+        const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
+
+        if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
+          showSearchBox = false;
+        }
+      }
+    }
+
     document.addEventListener('click', handleClickOutside, true);
+    document.addEventListener('click', handleClickOutsideSearch, true); // Use capture phase
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
 
     return () => {
       document.removeEventListener('click', handleClickOutside, true);
+      document.removeEventListener('click', handleClickOutsideSearch, true);
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
     };
@@ -1354,6 +1382,161 @@
       if (editorContainer) editorContainer.style.cursor = 'auto';
   }
 
+  function handleSearchInputKeydown(event) {
+    if (event.key === 'Enter') {
+      if (searchTerm.trim() !== '') {
+        executeSearch(searchTerm);
+      } else {
+        searchResults = [];
+        currentSearchResultIndex = -1;
+      }
+    }
+  }
+
+  function executeSearch(termToSearch) {
+    if (!editor) return;
+    const term = termToSearch.trim();
+
+    // Clear previous visual highlight before new search or clearing
+    if (currentSearchHighlight && currentSearchHighlight.nodeKey) {
+      editor.update(() => {
+        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
+        if (_isTextNode(prevNode)) {
+          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
+          _patchStyleText(tempSelection, { 'background-color': null });
+        }
+        currentSearchHighlight = null;
+      }, { tag: 'search-clear-highlight' }); // Use a specific tag
+    }
+
+    searchResults = [];
+    currentSearchResultIndex = -1;
+
+    if (term === '') {
+      dispatch('searchresultsupdated', { results: searchResults, term: term });
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+      return;
+    }
+
+    editor.getEditorState().read(() => {
+      const root = _getRoot();
+      const nodesToSearch = [root];
+      const newResults = [];
+
+      while (nodesToSearch.length > 0) {
+        const node = nodesToSearch.pop();
+
+        if (_isTextNode(node)) {
+          const text = node.getTextContent();
+          const termLower = term.toLowerCase();
+          const textLower = text.toLowerCase();
+          let offset = -1;
+          while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
+            newResults.push({
+              nodeKey: node.getKey(),
+              offset: offset,
+              length: term.length,
+              text: node.getTextContent().substring(offset, offset + term.length)
+            });
+          }
+        } else if (node.getChildren) {
+          const children = node.getChildren();
+          for (let i = children.length - 1; i >= 0; i--) {
+              nodesToSearch.push(children[i]);
+          }
+        }
+      }
+      searchResults = newResults;
+      if (searchResults.length > 0) {
+        currentSearchResultIndex = 0;
+        navigateToResult(currentSearchResultIndex);
+      } else {
+        console.log('No results found for:', term);
+        dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+      }
+    });
+    dispatch('searchresultsupdated', { results: searchResults, term: term });
+  }
+
+  function clearSearchTermInput() {
+    searchTerm = '';
+    const oldSearchResults = searchResults;
+    searchResults = [];
+    currentSearchResultIndex = -1;
+
+    if (editor && currentSearchHighlight && currentSearchHighlight.nodeKey) {
+      editor.update(() => {
+        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
+        if (_isTextNode(prevNode)) {
+          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
+          _patchStyleText(tempSelection, { 'background-color': null });
+        }
+        currentSearchHighlight = null;
+      });
+    }
+
+    dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
+    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
+
+    if (showSearchBox && editorContainer) {
+      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+      inputField?.focus();
+    }
+  }
+
+  function navigateToResult(index) {
+    if (!editor) return;
+
+    editor.update(() => {
+      // Clear previous highlight first
+      if (currentSearchHighlight && currentSearchHighlight.nodeKey) {
+        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
+        if (_isTextNode(prevNode)) {
+          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
+          _patchStyleText(tempSelection, { 'background-color': null });
+        }
+        currentSearchHighlight = null;
+      }
+
+      if (index < 0 || index >= searchResults.length) {
+        currentSearchResultIndex = -1;
+        dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
+        return;
+      }
+
+      const result = searchResults[index];
+      currentSearchResultIndex = index;
+
+      const node = _getNodeByKey(result.nodeKey);
+      if (_isTextNode(node)) {
+        const selection = node.select(result.offset, result.offset + result.length);
+
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        const highlightBg = isDarkMode ? SEARCH_MATCH_BACKGROUND_DARK : SEARCH_MATCH_BACKGROUND_LIGHT;
+        _patchStyleText(selection, { 'background-color': highlightBg });
+
+        currentSearchHighlight = { nodeKey: result.nodeKey, offset: result.offset, length: result.length };
+
+      } else {
+        console.warn(`Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+        currentSearchHighlight = null;
+      }
+    }, { tag: 'search-navigate' });
+
+    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: searchResults[index] });
+  }
+
+  function navigateToPreviousResult() {
+    if (searchResults.length === 0 || currentSearchResultIndex <= 0) return;
+    currentSearchResultIndex--;
+    navigateToResult(currentSearchResultIndex);
+  }
+
+  function navigateToNextResult() {
+    if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) return;
+    currentSearchResultIndex++;
+    navigateToResult(currentSearchResultIndex);
+  }
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -1581,7 +1764,66 @@
           </svg>
         </button>
       {/if}
+      {#if toolbarConfig.clearFormatting && toolbarConfig.search}
+        <div class="separator"></div>
+      {/if}
+      {#if enableSearch && toolbarConfig.search}
+        <button
+          bind:this={searchToggleButtonElement}
+          class="mini-toolbar-button"
+          on:click={() => showSearchBox = !showSearchBox}
+          class:active={showSearchBox}
+          title="Search Document"
+          disabled={!editable}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+          </svg>
+        </button>
+      {/if}
   </div>
+  {/if}
+  {#if showSearchBox}
+    <div bind:this={searchUiContainerElement} class="search-ui-container bg-gray-100 dark:bg-gray-700 p-1 border-b border-gray-300 dark:border-gray-600 flex items-center gap-1">
+      <input
+        type="text"
+        bind:value={searchTerm}
+        placeholder="Search..."
+        class="px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-grow"
+        on:keydown={handleSearchInputKeydown}
+      />
+      {#if searchTerm}
+        <button
+          on:click={clearSearchTermInput}
+          title="Clear Search"
+          class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+          </svg>
+        </button>
+      {/if}
+      <button
+        on:click={navigateToPreviousResult}
+        disabled={searchResults.length === 0 || currentSearchResultIndex <= 0}
+        title="Previous Match"
+        class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-up" viewBox="0 0 16 16">
+          <path fill-rule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5"/>
+        </svg>
+      </button>
+      <button
+        on:click={navigateToNextResult}
+        disabled={searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1}
+        title="Next Match"
+        class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-down" viewBox="0 0 16 16">
+          <path fill-rule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4 4a.5.5 0 0 1-.708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1"/>
+        </svg>
+      </button>
+    </div>
   {/if}
 
   <div class="lexical-wrapper flex-grow min-h-0 overflow-y-auto p-2 relative" bind:this={editorWrapper}>
