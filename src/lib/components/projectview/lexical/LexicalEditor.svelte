@@ -125,8 +125,12 @@
 
   let showSearchBox = false;
   let searchTerm = '';
-  let searchResults = []; // Will store objects like { nodeKey: string, offset: number, length: number }
+  let searchResults = [];
   let currentSearchResultIndex = -1;
+
+  let currentSearchHighlight = null;
+  const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)';
+  const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';
 
   let blockType = 'paragraph';
   let isBlockDropdownOpen = false;
@@ -143,10 +147,6 @@
 
   let searchUiContainerElement;
   let searchToggleButtonElement;
-
-  let currentSearchHighlight = null; // Stores { nodeKey: string, offset: number, length: number } of the current visual highlight
-  const SEARCH_MATCH_BACKGROUND_LIGHT = 'rgba(255, 215, 0, 0.4)'; // Gold-ish yellow, semi-transparent for light mode
-  const SEARCH_MATCH_BACKGROUND_DARK = 'rgba(75, 125, 175, 0.4)';  // A bluish, semi-transparent for dark mode
 
   let isResizing = false;
   let resizeDirection = null;
@@ -201,7 +201,7 @@
     }
 
     document.addEventListener('click', handleClickOutside, true);
-    document.addEventListener('click', handleClickOutsideSearch, true); // Use capture phase
+    document.addEventListener('click', handleClickOutsideSearch, true);
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
 
@@ -1397,17 +1397,7 @@
     if (!editor) return;
     const term = termToSearch.trim();
 
-    // Clear previous visual highlight before new search or clearing
-    if (currentSearchHighlight && currentSearchHighlight.nodeKey) {
-      editor.update(() => {
-        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
-        if (_isTextNode(prevNode)) {
-          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
-          _patchStyleText(tempSelection, { 'background-color': null });
-        }
-        currentSearchHighlight = null;
-      }, { tag: 'search-clear-highlight' }); // Use a specific tag
-    }
+    // Removed: Clearing of currentSearchHighlight visual effect
 
     searchResults = [];
     currentSearchResultIndex = -1;
@@ -1460,20 +1450,10 @@
 
   function clearSearchTermInput() {
     searchTerm = '';
-    const oldSearchResults = searchResults;
     searchResults = [];
     currentSearchResultIndex = -1;
 
-    if (editor && currentSearchHighlight && currentSearchHighlight.nodeKey) {
-      editor.update(() => {
-        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
-        if (_isTextNode(prevNode)) {
-          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
-          _patchStyleText(tempSelection, { 'background-color': null });
-        }
-        currentSearchHighlight = null;
-      });
-    }
+    // Removed: Clearing of currentSearchHighlight visual effect
 
     dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
     dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
@@ -1487,39 +1467,22 @@
   function navigateToResult(index) {
     if (!editor) return;
 
+    if (index < 0 || index >= searchResults.length) {
+      currentSearchResultIndex = -1;
+      dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
+      return;
+    }
+
+    const result = searchResults[index];
+    currentSearchResultIndex = index;
+
     editor.update(() => {
-      // Clear previous highlight first
-      if (currentSearchHighlight && currentSearchHighlight.nodeKey) {
-        const prevNode = _getNodeByKey(currentSearchHighlight.nodeKey);
-        if (_isTextNode(prevNode)) {
-          const tempSelection = prevNode.select(currentSearchHighlight.offset, currentSearchHighlight.offset + currentSearchHighlight.length);
-          _patchStyleText(tempSelection, { 'background-color': null });
-        }
-        currentSearchHighlight = null;
-      }
-
-      if (index < 0 || index >= searchResults.length) {
-        currentSearchResultIndex = -1;
-        dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
-        return;
-      }
-
-      const result = searchResults[index];
-      currentSearchResultIndex = index;
-
       const node = _getNodeByKey(result.nodeKey);
       if (_isTextNode(node)) {
-        const selection = node.select(result.offset, result.offset + result.length);
-
-        const isDarkMode = document.documentElement.classList.contains('dark');
-        const highlightBg = isDarkMode ? SEARCH_MATCH_BACKGROUND_DARK : SEARCH_MATCH_BACKGROUND_LIGHT;
-        _patchStyleText(selection, { 'background-color': highlightBg });
-
-        currentSearchHighlight = { nodeKey: result.nodeKey, offset: result.offset, length: result.length };
-
+        node.select(result.offset, result.offset + result.length);
+        // Lexical should scroll this selection into view by default
       } else {
         console.warn(`Search result node with key ${result.nodeKey} not found or not a TextNode.`);
-        currentSearchHighlight = null;
       }
     }, { tag: 'search-navigate' });
 
@@ -1541,7 +1504,7 @@
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
   {#if editable}
-  <div class="toolbar flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -1781,46 +1744,56 @@
           </svg>
         </button>
       {/if}
-  </div>
+    </div>
   {/if}
+  <!-- MOVED AND RESTYLED SEARCH UI BLOCK - This comment is incorrect, it was already inside. Only classes/style are changing -->
   {#if showSearchBox}
-    <div bind:this={searchUiContainerElement} class="search-ui-container bg-gray-100 dark:bg-gray-700 p-1 border-b border-gray-300 dark:border-gray-600 flex items-center gap-1">
-      <input
-        type="text"
-        bind:value={searchTerm}
-        placeholder="Search..."
-        class="px-2 py-0.5 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 flex-grow"
-        on:keydown={handleSearchInputKeydown}
-      />
-      {#if searchTerm}
-        <button
-          on:click={clearSearchTermInput}
-          title="Clear Search"
-          class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-          </svg>
-        </button>
-      {/if}
+    <div
+      bind:this={searchUiContainerElement}
+      class="search-ui-container absolute top-full right-0 mt-1 p-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-800 rounded-md shadow-lg flex items-center gap-1 z-20"
+      style="max-width: 24rem; min-width: 20rem;"
+    >
+      <div class="relative flex-grow"> <!-- Wrapper for input and clear button -->
+        <input
+          type="text"
+          bind:value={searchTerm}
+          placeholder="Search..."
+          class="w-full px-2 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          on:keydown={handleSearchInputKeydown}
+        />
+        {#if searchTerm}
+          <button
+            on:click={clearSearchTermInput}
+            title="Clear Search"
+            aria-label="Clear search input"
+            class="absolute inset-y-0 right-0 flex items-center justify-center p-1 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+            </svg>
+          </button>
+        {/if}
+      </div>
       <button
         on:click={navigateToPreviousResult}
         disabled={searchResults.length === 0 || currentSearchResultIndex <= 0}
         title="Previous Match"
-        class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="Previous search match"
+        class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-up" viewBox="0 0 16 16">
-          <path fill-rule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5"/>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+          <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
         </svg>
       </button>
       <button
         on:click={navigateToNextResult}
         disabled={searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1}
         title="Next Match"
-        class="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-600 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="Next search match"
+        class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-down" viewBox="0 0 16 16">
-          <path fill-rule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4 4a.5.5 0 0 1-.708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1"/>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+          <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
         </svg>
       </button>
     </div>
