@@ -369,7 +369,8 @@
                         editable={true}
                         placeholder="Enter notes for this media file..."
                         on:change={handleEditorChange}
-                     enableSearch={true}
+                        enableSearch={true}
+                        toolbarConfig={{ insertMenu: false }}
                     />
                 {/key}
             </div>
