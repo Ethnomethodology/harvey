@@ -9,6 +9,32 @@
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
 
+    function formatDuration(seconds) {
+        if (!seconds && seconds !== 0) return '';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        const ms = Math.round((seconds - Math.floor(seconds)) * 1000);
+
+        let str = '';
+        if (h > 0) str += `${h}:`;
+        str += `${m < 10 && h > 0 ? '0' : ''}${m}:`;
+        str += `${s < 10 ? '0' : ''}${s}`;
+        if (ms > 0) str += `.${String(ms).padStart(3, '0').substring(0,3)}`;
+        return str;
+    }
+
+    function formatBitrate(bps) {
+        if (!bps) return '';
+        if (bps >= 1000000) {
+            return (bps / 1000000).toFixed(2) + ' Mbps';
+        }
+        if (bps >= 1000) {
+            return (bps / 1000).toFixed(0) + ' kbps';
+        }
+        return bps + ' bps';
+    }
+
     let currentFileMetadata = null;
     let fullLoadedMetadataObject = null;
     let isEditing = false;
@@ -334,13 +360,13 @@
                 <!-- File Path (read-only) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
-                    <span class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || 'N/A'}</span>
+                    <span class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
                 </div>
 
                 <!-- Last Modified (read-only) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
-                    <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}</span>
+                    <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : ''}</span>
                 </div>
 
                 <!-- Title (editable) -->
@@ -349,7 +375,7 @@
                     {#if isEditing}
                         <input type="text" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"/>
                     {:else}
-                        <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.title || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.title || ''}</span>
                     {/if}
                 </div>
 
@@ -359,7 +385,7 @@
                     {#if isEditing}
                         <textarea bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || ''}</span>
                     {/if}
                 </div>
 
@@ -369,9 +395,65 @@
                     {#if isEditing}
                         <textarea bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || 'N/A'}</span>
+                        <span class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
                     {/if}
                 </div>
+
+                <!-- Technical Metadata Section -->
+                {#if currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate || currentFileMetadata.creation_time}
+                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Technical Details</h3>
+
+                    {#if currentFileMetadata.duration_seconds}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Duration:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{formatDuration(currentFileMetadata.duration_seconds)}</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.width && currentFileMetadata.height}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Dimensions:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.width} x {currentFileMetadata.height}</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.frame_rate}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Frame Rate:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.frame_rate.toFixed(2)} fps</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.bit_rate}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Bit Rate:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{formatBitrate(currentFileMetadata.bit_rate)}</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.video_codec}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Video Codec:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.video_codec || ''}</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.audio_codec}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Audio Codec:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.audio_codec || ''}</span>
+                        </div>
+                    {/if}
+
+                    {#if currentFileMetadata.creation_time}
+                        <div class="mb-3">
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Creation Time:</label>
+                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.creation_time ? new Date(currentFileMetadata.creation_time).toLocaleString() : ''}</span>
+                        </div>
+                    {/if}
+                {/if}
+                <!-- End of Technical Metadata Section -->
 
                 <!-- Custom Fields Section -->
                 {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) || isEditing )}
