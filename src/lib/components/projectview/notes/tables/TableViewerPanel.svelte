@@ -260,7 +260,7 @@
          white-space: normal !important;
      }
      :global(.tabulator-header-filter input) {
-         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border;
+         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
      }
      :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
          background-color: rgba(255, 255, 0, 0.3) !important;
