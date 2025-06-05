@@ -91,7 +91,7 @@
             console.log(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`);
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitColumns", // Changed from fitDataTable
+                layout: "fitDataTable", // Changed back from fitColumns
                 columns: generateColumns(tableData),
                 height: "100%",
                 placeholder: "No Data Available",
@@ -114,6 +114,14 @@
                     input.setAttribute("spellcheck", "false");
                 });
             });
+
+            // After setting up event handlers:
+            setTimeout(() => {
+                if (tabulatorInstance && typeof tabulatorInstance.redraw === 'function') {
+                    console.log('[TableViewerPanel initializeTable] Triggering a gentle redraw after short delay.');
+                    tabulatorInstance.redraw(); // Using redraw() without 'true' for a less disruptive redraw
+                }
+            }, 100); // 100ms delay, can be adjusted
 
             console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
 
