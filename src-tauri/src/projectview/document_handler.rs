@@ -20,23 +20,7 @@ use uuid::Uuid;
 use quick_xml;
 use serde::{Serialize, Deserialize};
 use chrono::Utc;
-
-// Temporary struct definitions - to be moved to shared_types.rs and reconciled in Step 8
-#[derive(Serialize, Deserialize, Debug)]
-struct FileMetadata {
-    file_name: String,
-    file_path: String, // Ensure this field exists
-    last_modified: String,
-    title: String,
-    description: String,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct StandardAssetMetadata {
-    metadata: FileMetadata,
-    highlights: Vec<String>,
-}
+// Local FileMetadata and StandardAssetMetadata structs removed, shared_types versions will be used.
 
 fn get_unique_temp_path_for_conversion(base_dir: &Path, prefix: &str, extension: &str) -> Result<PathBuf, CommandError> {
     let temp_dir = base_dir.join(TEMP_SUBDIR_DOCS);
@@ -137,6 +121,14 @@ pub async fn import_document(
                         title: "".to_string(),
                         description: "".to_string(),
                         summary: "".to_string(),
+                        duration_seconds: None,
+                        width: None,
+                        height: None,
+                        frame_rate: None,
+                        bit_rate: None,
+                        audio_codec: None,
+                        video_codec: None,
+                        creation_time: None,
                     },
                     highlights: Vec::new(), // Standardized, starts empty
                 };
