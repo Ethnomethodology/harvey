@@ -148,6 +148,8 @@
   let searchUiContainerElement;
   let searchToggleButtonElement;
 
+  let latestScrollTargetKey = null; // New component-level variable
+
   let isResizing = false;
   let resizeDirection = null;
   let resizeTargetCellKey = null;
@@ -1533,11 +1535,12 @@ function navigateToResult(index) {
   console.log('[navigateToResult] Navigating to result:', result);
 
   editor.focus(); // <--- Add this line
+  latestScrollTargetKey = null; // Reset at the beginning of navigation
 
   editor.update(() => {
     const node = _getNodeByKey(result.nodeKey);
     if (_isTextNode(node)) {
-      const currentNodeTextLength = node.getTextContentSize(); // Use Lexical's method to get text length
+      const currentNodeTextLength = node.getTextContentSize();
       const startOffset = result.offset;
       const endOffset = result.offset + result.length;
 
@@ -1545,30 +1548,40 @@ function navigateToResult(index) {
 
       if (startOffset < 0 || startOffset > currentNodeTextLength || endOffset > currentNodeTextLength) {
         console.warn(`[navigateToResult] Stale or invalid offset for node ${result.nodeKey}. Offset: ${startOffset}, Length: ${result.length}, Node Text Length: ${currentNodeTextLength}. Skipping selection.`);
-        // TODO: Consider how to handle this stale result for the user (e.g., auto-advance, message)
+        latestScrollTargetKey = null; // Ensure no scroll attempt
       } else {
         console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
         node.select(startOffset, endOffset);
-
-        // Correct way to scroll the selected node into view
-        try {
-          const domElement = editor.getElementByKey(result.nodeKey);
-          if (domElement) {
-            console.log('[navigateToResult] Attempting to scroll DOM element into view for node key:', result.nodeKey);
-            domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          } else {
-            console.warn('[navigateToResult] Could not find DOM element for node key:', result.nodeKey, 'to scroll into view.');
-          }
-        } catch (e) {
-          console.error('[navigateToResult] Error scrolling element into view:', e);
-        }
+        latestScrollTargetKey = result.nodeKey; // Set target for scrolling
       }
     } else {
       console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+      latestScrollTargetKey = null; // Ensure no scroll attempt
     }
-  }, { tag: 'search-navigate' }); // Ensure the tag allows editor updates if needed, or is purely for read. 'search-navigate' seems fine.
+  }, { tag: 'search-navigate' });
 
-  // Dispatch event (this happens regardless of successful selection within the update block)
+  // Scroll logic using the component-level variable, wrapped in tick()
+  if (latestScrollTargetKey) {
+    const keyToScroll = latestScrollTargetKey; // Capture value for closure
+    tick().then(() => {
+      console.log('[navigateToResult] Tick complete. Attempting to scroll for node key:', keyToScroll);
+      try {
+        const domElement = editor.getElementByKey(keyToScroll);
+        if (domElement) {
+          console.log('[navigateToResult] DOM element found. Attempting to scroll DOM element into view for node key:', keyToScroll);
+          domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          console.warn('[navigateToResult] Tick: Could not find DOM element for node key:', keyToScroll, 'to scroll into view.');
+        }
+      } catch (e) {
+        console.error('[navigateToResult] Tick: Error scrolling element into view:', e);
+      }
+    });
+  } else {
+      console.log('[navigateToResult] Skipping scroll attempt as no valid scrollTargetKey was set for node key:', result.nodeKey);
+  }
+  latestScrollTargetKey = null; // Clean up after attempt or skip
+
   const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
   console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
   dispatch('searchindexchanged', dispatchData);
