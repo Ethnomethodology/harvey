@@ -5,6 +5,7 @@ use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tauri::AppHandle;
+use tauri_plugin_shell::ShellExt;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
@@ -1028,6 +1029,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 title: "".to_string(),
                                 description: "".to_string(),
                                 summary: "".to_string(),
+                                duration_seconds: None,
+                                width: None,
+                                height: None,
+                                frame_rate: None,
+                                bit_rate: None,
+                                audio_codec: None,
+                                video_codec: None,
+                                creation_time: None,
                             },
                             highlights: Vec::new(),
                         }
@@ -1323,6 +1332,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 title: "".to_string(),
                                 description: "".to_string(),
                                 summary: "".to_string(),
+                                duration_seconds: None,
+                                width: None,
+                                height: None,
+                                frame_rate: None,
+                                bit_rate: None,
+                                audio_codec: None,
+                                video_codec: None,
+                                creation_time: None,
                             },
                             highlights: Vec::new(),
                         }
@@ -1707,6 +1724,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
                             last_modified: Utc::now().to_rfc3339(),
                             title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            creation_time: None,
                         },
                         highlights: Vec::new(),
                     };
@@ -1774,6 +1799,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
                             last_modified: Utc::now().to_rfc3339(),
                             title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            creation_time: None,
                         },
                         highlights: Vec::new(),
                     };
@@ -1979,6 +2012,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         title: "".to_string(),
                         description: "".to_string(),
                         summary: "".to_string(),
+                        duration_seconds: None,
+                        width: None,
+                        height: None,
+                        frame_rate: None,
+                        bit_rate: None,
+                        audio_codec: None,
+                        video_codec: None,
+                        creation_time: None,
                     },
                     highlights: Vec::new(),
                 };
