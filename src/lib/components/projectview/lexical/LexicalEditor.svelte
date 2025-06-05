@@ -190,13 +190,21 @@
     }
 
     function handleClickOutsideSearch(event) {
+      console.log('[handleClickOutsideSearch] Triggered. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm, 'target:', event.target);
       if (showSearchBox && searchTerm === '') {
         const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
         const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
 
+        console.log('[handleClickOutsideSearch] Conditions met (showSearchBox && searchTerm === ""). isClickInsideSearchUi:', isClickInsideSearchUi, 'isClickOnSearchToggleButton:', isClickOnSearchToggleButton);
+
         if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
+          console.log('[handleClickOutsideSearch] Hiding search box because click was outside UI and toggle button, and search term is empty.');
           showSearchBox = false;
+        } else {
+          console.log('[handleClickOutsideSearch] Not hiding search box. Click was inside UI or on toggle button, or search term is not empty.');
         }
+      } else {
+        console.log('[handleClickOutsideSearch] Conditions not met for hiding. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm);
       }
     }
 
@@ -1393,113 +1401,150 @@
     }
   }
 
-  function executeSearch(termToSearch) {
-    if (!editor) return;
-    const term = termToSearch.trim();
+function executeSearch(termToSearch) {
+  if (!editor) return;
+  const term = termToSearch.trim();
+  console.log('[executeSearch] Called with termToSearch:', termToSearch, '(trimmed term:', term + ')');
 
-    // Removed: Clearing of currentSearchHighlight visual effect
+  searchResults = [];
+  currentSearchResultIndex = -1;
 
-    searchResults = [];
-    currentSearchResultIndex = -1;
+  if (term === '') {
+    console.log('[executeSearch] Term is empty, clearing results and dispatching.');
+    dispatch('searchresultsupdated', { results: searchResults, term: term });
+    dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+    return;
+  }
 
-    if (term === '') {
-      dispatch('searchresultsupdated', { results: searchResults, term: term });
-      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
-      return;
-    }
+  console.log('[executeSearch] Commencing search for term:', term);
+  editor.getEditorState().read(() => {
+    const root = _getRoot();
+    const nodesToSearch = [root];
+    const newResults = [];
 
-    editor.getEditorState().read(() => {
-      const root = _getRoot();
-      const nodesToSearch = [root];
-      const newResults = [];
+    while (nodesToSearch.length > 0) {
+      const node = nodesToSearch.pop();
 
-      while (nodesToSearch.length > 0) {
-        const node = nodesToSearch.pop();
-
-        if (_isTextNode(node)) {
-          const text = node.getTextContent();
-          const termLower = term.toLowerCase();
-          const textLower = text.toLowerCase();
-          let offset = -1;
-          while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
-            newResults.push({
-              nodeKey: node.getKey(),
-              offset: offset,
-              length: term.length,
-              text: node.getTextContent().substring(offset, offset + term.length)
-            });
-          }
-        } else if (node.getChildren) {
-          const children = node.getChildren();
-          for (let i = children.length - 1; i >= 0; i--) {
-              nodesToSearch.push(children[i]);
-          }
+      if (_isTextNode(node)) {
+        console.log('[executeSearch] Processing TextNode. Key:', node.getKey(), 'Text (first 50 chars):', node.getTextContent().substring(0, 50));
+        const text = node.getTextContent();
+        const termLower = term.toLowerCase();
+        const textLower = text.toLowerCase();
+        let offset = -1;
+        while ((offset = textLower.indexOf(termLower, offset + 1)) !== -1) {
+          const matchDetail = {
+            nodeKey: node.getKey(),
+            offset: offset,
+            length: term.length,
+            text: node.getTextContent().substring(offset, offset + term.length)
+          };
+          console.log('[executeSearch] Match found:', matchDetail);
+          newResults.push(matchDetail);
+        }
+      } else if (node.getChildren) {
+        const children = node.getChildren();
+        for (let i = children.length - 1; i >= 0; i--) {
+            nodesToSearch.push(children[i]);
         }
       }
-      searchResults = newResults;
-      if (searchResults.length > 0) {
-        currentSearchResultIndex = 0;
-        navigateToResult(currentSearchResultIndex);
-      } else {
-        console.log('No results found for:', term);
-        dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
-      }
-    });
-    dispatch('searchresultsupdated', { results: searchResults, term: term });
-  }
+    }
+    searchResults = newResults;
+    console.log('[executeSearch] Search complete. Found', searchResults.length, 'results.');
+    if (searchResults.length > 0) {
+      currentSearchResultIndex = 0;
+      console.log('[executeSearch] currentSearchResultIndex set to 0. First result:', searchResults[0]);
+      navigateToResult(currentSearchResultIndex); // This will also log
+    } else {
+      console.log('[executeSearch] No results found for:', term);
+      dispatch('searchindexchanged', { currentIndex: -1, currentResult: null }); // Ensure this is dispatched if no results
+    }
+  });
+  const dispatchData = { results: searchResults, term: term };
+  console.log('[executeSearch] Dispatching searchresultsupdated with:', dispatchData);
+  dispatch('searchresultsupdated', dispatchData);
+}
 
-  function clearSearchTermInput() {
-    searchTerm = '';
-    searchResults = [];
+function clearSearchTermInput() {
+  console.log('[clearSearchTermInput] Called.');
+  searchTerm = '';
+  searchResults = [];
+  currentSearchResultIndex = -1;
+
+  const updateData = { results: searchResults, term: searchTerm };
+  const indexChangeData = { currentIndex: currentSearchResultIndex, currentResult: null };
+
+  console.log('[clearSearchTermInput] Dispatching searchresultsupdated with:', updateData);
+  dispatch('searchresultsupdated', updateData);
+  console.log('[clearSearchTermInput] Dispatching searchindexchanged with:', indexChangeData);
+  dispatch('searchindexchanged', indexChangeData);
+
+  if (showSearchBox && editorContainer) {
+    const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+    inputField?.focus();
+  }
+}
+
+function navigateToResult(index) {
+  if (!editor) return;
+  console.log('[navigateToResult] Called with index:', index, 'Total results:', searchResults.length);
+
+  // Removed redundant highlight clearing, selection handles this
+
+  if (index < 0 || index >= searchResults.length) {
     currentSearchResultIndex = -1;
-
-    // Removed: Clearing of currentSearchHighlight visual effect
-
-    dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
+    console.log('[navigateToResult] Index out of bounds. currentSearchResultIndex set to -1.');
+    // Ensure previous highlight is cleared if any
+    // if (currentSearchHighlight) {
+    //   currentSearchHighlight.remove();
+    //   currentSearchHighlight = null;
+    // }
     dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
-
-    if (showSearchBox && editorContainer) {
-      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-      inputField?.focus();
-    }
+    return;
   }
 
-  function navigateToResult(index) {
-    if (!editor) return;
+  const result = searchResults[index];
+  currentSearchResultIndex = index;
+  console.log('[navigateToResult] Navigating to result:', result);
 
-    if (index < 0 || index >= searchResults.length) {
-      currentSearchResultIndex = -1;
-      dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
-      return;
-    }
-
-    const result = searchResults[index];
-    currentSearchResultIndex = index;
-
-    editor.update(() => {
-      const node = _getNodeByKey(result.nodeKey);
-      if (_isTextNode(node)) {
-        node.select(result.offset, result.offset + result.length);
-        // Lexical should scroll this selection into view by default
-      } else {
-        console.warn(`Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+  editor.update(() => {
+    const node = _getNodeByKey(result.nodeKey);
+    if (_isTextNode(node)) {
+      console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', result.offset, 'Length:', result.length);
+      node.select(result.offset, result.offset + result.length);
+      // Ensure the editor scrolls to the selection
+      const domElement = editor.getElementByKey(result.nodeKey);
+      if (domElement) {
+        // domElement.scrollIntoView({ behavior: 'smooth', block: 'center' }); // Lexical handles this by default
       }
-    }, { tag: 'search-navigate' });
+    } else {
+      console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
+    }
+  }, { tag: 'search-navigate' });
 
-    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: searchResults[index] });
-  }
+  const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
+  console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
+  dispatch('searchindexchanged', dispatchData);
+}
 
-  function navigateToPreviousResult() {
-    if (searchResults.length === 0 || currentSearchResultIndex <= 0) return;
-    currentSearchResultIndex--;
-    navigateToResult(currentSearchResultIndex);
+function navigateToPreviousResult() {
+  console.log('[navigateToPreviousResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
+  if (searchResults.length === 0 || currentSearchResultIndex <= 0) {
+    console.log('[navigateToPreviousResult] No previous results or already at the first result.');
+    return;
   }
+  currentSearchResultIndex--;
+  navigateToResult(currentSearchResultIndex);
+}
 
-  function navigateToNextResult() {
-    if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) return;
-    currentSearchResultIndex++;
-    navigateToResult(currentSearchResultIndex);
+function navigateToNextResult() {
+  console.log('[navigateToNextResult] Called. currentSearchResultIndex:', currentSearchResultIndex, 'Total results:', searchResults.length);
+  if (searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1) {
+    console.log('[navigateToNextResult] No next results or already at the last result.');
+    return;
   }
+  currentSearchResultIndex++;
+  navigateToResult(currentSearchResultIndex);
+}
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -1734,7 +1779,21 @@
         <button
           bind:this={searchToggleButtonElement}
           class="mini-toolbar-button"
-          on:click={() => showSearchBox = !showSearchBox}
+          on:click={() => {
+            showSearchBox = !showSearchBox;
+            console.log('[Search Toggle Button] Clicked. New showSearchBox state:', showSearchBox);
+            if (showSearchBox) {
+              tick().then(() => { // Ensure UI is rendered before focusing
+                const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+                inputField?.focus();
+                console.log('[Search Toggle Button] Search box shown, attempting to focus input.');
+                if (searchUiContainerElement) {
+                  const styles = window.getComputedStyle(searchUiContainerElement);
+                  console.log('[Search Toggle Button] Search UI computed styles - position:', styles.position, 'z-index:', styles.zIndex, 'top:', styles.top, 'right:', styles.right, 'display:', styles.display);
+                }
+              });
+            }
+          }}
           class:active={showSearchBox}
           title="Search Document"
           disabled={!editable}
