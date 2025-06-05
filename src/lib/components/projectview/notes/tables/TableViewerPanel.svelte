@@ -91,7 +91,7 @@
             console.log(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`);
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitDataTable",
+                layout: "fitColumns", // Changed from fitDataTable
                 columns: generateColumns(tableData),
                 height: "100%",
                 placeholder: "No Data Available",
@@ -113,11 +113,6 @@
                     input.setAttribute("autocapitalize", "none");
                     input.setAttribute("spellcheck", "false");
                 });
-                // Add the redraw call here
-                if (tabulatorInstance) {
-                    console.log('[TableViewerPanel renderComplete] Forcing table redraw.');
-                    tabulatorInstance.redraw(true);
-                }
             });
 
             console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
