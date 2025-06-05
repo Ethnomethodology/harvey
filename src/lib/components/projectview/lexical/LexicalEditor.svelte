@@ -1511,18 +1511,36 @@ function navigateToResult(index) {
   editor.update(() => {
     const node = _getNodeByKey(result.nodeKey);
     if (_isTextNode(node)) {
-      console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', result.offset, 'Length:', result.length);
-      node.select(result.offset, result.offset + result.length);
-      // Ensure the editor scrolls to the selection
-      const domElement = editor.getElementByKey(result.nodeKey);
-      if (domElement) {
-        // domElement.scrollIntoView({ behavior: 'smooth', block: 'center' }); // Lexical handles this by default
+      const currentNodeTextLength = node.getTextContentSize(); // Use Lexical's method to get text length
+      const startOffset = result.offset;
+      const endOffset = result.offset + result.length;
+
+      console.log(`[navigateToResult] Attempting selection for node ${result.nodeKey}. Stored Offset: ${startOffset}, Stored Length: ${result.length}, End Offset: ${endOffset}, Current Node Text Length: ${currentNodeTextLength}`);
+
+      if (startOffset < 0 || startOffset > currentNodeTextLength || endOffset > currentNodeTextLength) {
+        console.warn(`[navigateToResult] Stale or invalid offset for node ${result.nodeKey}. Offset: ${startOffset}, Length: ${result.length}, Node Text Length: ${currentNodeTextLength}. Skipping selection.`);
+        // TODO: Consider how to handle this stale result for the user (e.g., auto-advance, message)
+      } else {
+        console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
+        node.select(startOffset, endOffset);
+
+        // Ensure scroll into view
+        const currentSelection = _getSelection(); // Get the selection object
+        if (currentSelection) {
+          try {
+            currentSelection.scrollIntoView();
+            console.log('[navigateToResult] Called scrollIntoView() on current selection.');
+          } catch (e) {
+            console.error('[navigateToResult] Error calling scrollIntoView():', e);
+          }
+        }
       }
     } else {
       console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
     }
   }, { tag: 'search-navigate' });
 
+  // Dispatch event (this happens regardless of successful selection within the update block)
   const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
   console.log('[navigateToResult] Dispatching searchindexchanged with:', dispatchData);
   dispatch('searchindexchanged', dispatchData);
