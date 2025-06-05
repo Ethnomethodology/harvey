@@ -267,20 +267,14 @@ pub struct FileLevelMetadata {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DocumentHighlightData {
-    pub metadata: FileLevelMetadata,
+    pub metadata: FileMetadata, // Changed type here
     pub highlights: Vec<HighlightMetadata>,
 }
 
 impl Default for DocumentHighlightData {
     fn default() -> Self {
         DocumentHighlightData {
-            metadata: FileLevelMetadata {
-                file_name: String::new(),
-                last_modified: Utc::now().to_rfc3339(), // Use chrono::Utc
-                title: String::new(),
-                description: String::new(),
-                summary: String::new(),
-            },
+            metadata: FileMetadata::default(), // Use FileMetadata's default
             highlights: Vec::new(),
         }
     }
