@@ -28,6 +28,22 @@ pub struct FileMetadata {
     pub description: String,
     #[serde(default)]
     pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_rate: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bit_rate: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_codec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_codec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creation_time: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -280,6 +296,14 @@ impl Default for FileMetadata {
             title: String::new(),
             description: String::new(),
             summary: String::new(),
+            duration_seconds: None,
+            width: None,
+            height: None,
+            frame_rate: None,
+            bit_rate: None,
+            audio_codec: None,
+            video_codec: None,
+            creation_time: None,
         }
     }
 }
