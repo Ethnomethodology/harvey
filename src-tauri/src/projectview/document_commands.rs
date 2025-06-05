@@ -130,8 +130,9 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
         if !metadata_path.exists() {
             info!("[Backend Save Doc] Creating empty metadata file for new/untracked document at: {}", metadata_path.display());
             // Create default DocumentHighlightData with populated file_name and last_modified
-            let mut default_metadata_content = DocumentHighlightData::default();
+            let mut default_metadata_content = DocumentHighlightData::default(); // metadata is now FileMetadata::default()
             default_metadata_content.metadata.file_name = document_name.clone(); // Use the name of the document being saved
+            default_metadata_content.metadata.file_path = target_path_buf.to_string_lossy().into_owned(); // Set the file_path
             default_metadata_content.metadata.last_modified = Utc::now().to_rfc3339();
 
             let metadata_json_content = serde_json::to_string_pretty(&default_metadata_content)

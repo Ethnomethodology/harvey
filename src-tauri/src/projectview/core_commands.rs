@@ -3,6 +3,9 @@ use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAsset
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
+use serde::Deserialize;
+use tauri::AppHandle;
+use tauri_plugin_shell::ShellExt;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
@@ -30,6 +33,83 @@ struct ItemRenamedPayload {
     item_type: String,
     project_xml_path: String,
     base_directory: String,
+}
+
+// --- FFProbe Helper Structs ---
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStreamTags {
+    #[serde(rename = "DURATION")]
+    duration: Option<String>, // e.g., "00:00:45.420000000" (from video stream for some formats)
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStream {
+    codec_type: Option<String>,
+    codec_name: Option<String>,
+    width: Option<i32>,
+    height: Option<i32>,
+    avg_frame_rate: Option<String>, // e.g., "25/1"
+    r_frame_rate: Option<String>,   // e.g., "25/1"
+    bit_rate: Option<String>,       // e.g., "1500000" (bps)
+    #[serde(default)]
+    tags: FFProbeStreamTags,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormatTags {
+    #[serde(rename = "creation_time")]
+    creation_time: Option<String>, // ISO 8601 string
+    #[serde(rename = "DURATION")]
+    duration: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormat {
+    duration: Option<String>,       // e.g., "45.423000" (seconds)
+    bit_rate: Option<String>,       // e.g., "1607049" (bps)
+    #[serde(default)] // Make tags optional as they might not always be present
+    tags: Option<FFProbeFormatTags>,
+    format_name: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeOutput {
+    #[serde(default)]
+    streams: Vec<FFProbeStream>,
+    #[serde(default)] // Make format default as well, to be safe
+    format: FFProbeFormat,
+}
+
+// --- Helper Functions for FFProbe Data Parsing ---
+fn parse_duration_str_to_seconds(s_opt: Option<String>) -> Option<f64> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains(':') {
+            let parts: Vec<&str> = s.split(':').collect();
+            if parts.len() == 3 {
+                let hours = parts[0].parse::<f64>().ok()?;
+                let minutes = parts[1].parse::<f64>().ok()?;
+                let seconds_ms = parts[2].parse::<f64>().ok()?;
+                Some(hours * 3600.0 + minutes * 60.0 + seconds_ms)
+            } else { None }
+        } else {
+            s.parse::<f64>().ok()
+        }
+    })
+}
+
+fn parse_frame_rate_str(s_opt: Option<String>) -> Option<f32> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains('/') {
+            let parts: Vec<&str> = s.split('/').collect();
+            if parts.len() == 2 {
+                let num = parts[0].parse::<f32>().ok()?;
+                let den = parts[1].parse::<f32>().ok()?;
+                if den.abs() > f32::EPSILON { Some(num / den) } else { None }
+            } else { None }
+        } else {
+            s.parse::<f32>().ok()
+        }
+    })
 }
 
 // Helper function to get document metadata path (used by imported transcripts as well)
@@ -276,7 +356,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
 
 #[tauri::command]
-pub async fn import_media( source_file_path_str: String, project_xml_path_str: String) -> Result<Vec<FileEntry>, CommandError> {
+pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<Vec<FileEntry>, CommandError> {
     info!("[Backend Import] Source: '{}', Project XML: '{}'", source_file_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_file_path_str);
     let project_xml_path = PathBuf::from(&project_xml_path_str);
@@ -316,21 +396,102 @@ pub async fn import_media( source_file_path_str: String, project_xml_path_str: S
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
 
+    let mut duration_seconds: Option<f64> = None;
+    let mut width: Option<i32> = None;
+    let mut height: Option<i32> = None;
+    let mut frame_rate: Option<f32> = None;
+    let mut bit_rate_overall: Option<i64> = None;
+    let mut audio_codec: Option<String> = None;
+    let mut video_codec: Option<String> = None;
+    let mut creation_time_tag: Option<String> = None;
+
+    let ffprobe_args = vec![
+        "-v".to_string(), "quiet".to_string(),
+        "-print_format".to_string(), "json".to_string(),
+        "-show_format".to_string(),
+        "-show_streams".to_string(),
+        destination_media_path.to_string_lossy().to_string(),
+    ];
+
+    info!("[Backend Import] Running ffprobe for: {}", destination_media_path.display());
+    match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured in tauri.conf.json").args(ffprobe_args).output().await {
+        Ok(output) => {
+            if output.status.success() {
+                let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
+                debug!("[Backend Import] ffprobe output JSON for {}: {}", destination_media_path.display(), ffprobe_json_str);
+                match serde_json::from_str::<FFProbeOutput>(&ffprobe_json_str) {
+                    Ok(parsed_ffprobe_output) => {
+                        duration_seconds = parse_duration_str_to_seconds(parsed_ffprobe_output.format.duration.clone())
+                            .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
+
+                        bit_rate_overall = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                        if let Some(tags) = parsed_ffprobe_output.format.tags {
+                            creation_time_tag = tags.creation_time;
+                        }
+
+                        for stream in parsed_ffprobe_output.streams {
+                            if duration_seconds.is_none() {
+                                 duration_seconds = parse_duration_str_to_seconds(stream.tags.duration.clone());
+                            }
+                            match stream.codec_type.as_deref() {
+                                Some("video") if width.is_none() => {
+                                    width = stream.width;
+                                    height = stream.height;
+                                    video_codec = stream.codec_name;
+                                    frame_rate = parse_frame_rate_str(stream.avg_frame_rate.clone())
+                                        .or_else(|| parse_frame_rate_str(stream.r_frame_rate.clone()));
+                                    if bit_rate_overall.is_none() {
+                                        bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                    }
+                                }
+                                Some("audio") if audio_codec.is_none() => {
+                                    audio_codec = stream.codec_name;
+                                    if bit_rate_overall.is_none() && stream.bit_rate.is_some() {
+                                         bit_rate_overall = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        info!("[Backend Import] Successfully parsed ffprobe output for {}", destination_media_path.display());
+                    }
+                    Err(e) => {
+                        error!("[Backend Import] Failed to parse ffprobe JSON for {}: {}. JSON: '{}'", destination_media_path.display(), e, ffprobe_json_str);
+                    }
+                }
+            } else {
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                error!("[Backend Import] ffprobe failed for {}. Code: {:?}, Stderr: {}", destination_media_path.display(), output.status.code(), stderr_str);
+            }
+        }
+        Err(e) => {
+            error!("[Backend Import] ffprobe execution error for {}: {}", destination_media_path.display(), e);
+        }
+    }
+
     match get_media_metadata_path(&destination_media_path) {
         Ok(metadata_path) => {
-            let file_name = destination_media_path.file_name()
+            let file_name_var_for_meta = destination_media_path.file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or("")
                 .to_string();
 
             let metadata_content = StandardAssetMetadata {
                 metadata: FileMetadata {
-                    file_name,
+                    file_name: file_name_var_for_meta,
                     file_path: destination_media_path.to_string_lossy().into_owned(),
                     last_modified: Utc::now().to_rfc3339(),
                     title: "".to_string(),
                     description: "".to_string(),
                     summary: "".to_string(),
+                    duration_seconds,
+                    width,
+                    height,
+                    frame_rate,
+                    bit_rate: bit_rate_overall,
+                    audio_codec,
+                    video_codec,
+                    creation_time: creation_time_tag,
                 },
                 highlights: Vec::new(),
             };
@@ -868,6 +1029,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 title: "".to_string(),
                                 description: "".to_string(),
                                 summary: "".to_string(),
+                                duration_seconds: None,
+                                width: None,
+                                height: None,
+                                frame_rate: None,
+                                bit_rate: None,
+                                audio_codec: None,
+                                video_codec: None,
+                                creation_time: None,
                             },
                             highlights: Vec::new(),
                         }
@@ -1163,6 +1332,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 title: "".to_string(),
                                 description: "".to_string(),
                                 summary: "".to_string(),
+                                duration_seconds: None,
+                                width: None,
+                                height: None,
+                                frame_rate: None,
+                                bit_rate: None,
+                                audio_codec: None,
+                                video_codec: None,
+                                creation_time: None,
                             },
                             highlights: Vec::new(),
                         }
@@ -1547,6 +1724,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
                             last_modified: Utc::now().to_rfc3339(),
                             title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            creation_time: None,
                         },
                         highlights: Vec::new(),
                     };
@@ -1614,6 +1799,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                             file_path: final_new_table_file_abs_path.to_string_lossy().into_owned(),
                             last_modified: Utc::now().to_rfc3339(),
                             title: "".to_string(), description: "".to_string(), summary: "".to_string(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            creation_time: None,
                         },
                         highlights: Vec::new(),
                     };
@@ -1819,6 +2012,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                         title: "".to_string(),
                         description: "".to_string(),
                         summary: "".to_string(),
+                        duration_seconds: None,
+                        width: None,
+                        height: None,
+                        frame_rate: None,
+                        bit_rate: None,
+                        audio_codec: None,
+                        video_codec: None,
+                        creation_time: None,
                     },
                     highlights: Vec::new(),
                 };

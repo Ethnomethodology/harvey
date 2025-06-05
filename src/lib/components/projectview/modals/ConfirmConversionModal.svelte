@@ -5,7 +5,7 @@
 
 	export let showModal = false;
 	export let fileName = 'the selected file';
-    export let targetFormat = 'Markdown (.md)';
+    export let targetFormat = 'Lexical (.json)';
 
 	const dispatch = createEventDispatcher();
 
@@ -44,7 +44,7 @@
 			<p class="mb-6 text-sm">
                 The file "<span class="font-medium">{fileName}</span>" needs to be converted to
                 <span class="font-medium">{targetFormat}</span> before it can be imported.
-                This may take a moment and requires <span class="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">pandoc</span> to be installed.
+                This may take a moment.
             </p>
             <p class="mb-6 text-sm text-gray-600 dark:text-gray-400">
                 Proceed with conversion and import?
