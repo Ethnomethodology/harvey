@@ -1390,16 +1390,42 @@
       if (editorContainer) editorContainer.style.cursor = 'auto';
   }
 
-  function handleSearchInputKeydown(event) {
-    if (event.key === 'Enter') {
-      if (searchTerm.trim() !== '') {
-        executeSearch(searchTerm);
-      } else {
-        searchResults = [];
-        currentSearchResultIndex = -1;
-      }
+function handleSearchInputKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault(); // Prevent default Enter key action
+    console.log('[handleSearchInputKeydown] Enter key pressed.');
+
+    if (searchTerm.trim() !== '') {
+      executeSearch(searchTerm);
+    } else {
+      // If term is empty, Enter probably shouldn't clear results again,
+      // but rather do nothing or allow default (which is now prevented).
+      // For now, let's assume Enter on empty term does nothing further here
+      // beyond preventing default.
+      // Or, if executeSearch handles empty term by clearing, that's fine.
+      // executeSearch already handles empty searchTerm by clearing results.
+      searchResults = [];
+      currentSearchResultIndex = -1;
+      // Dispatch updates if needed, though executeSearch('') would do this.
+      // dispatch('searchresultsupdated', { results: searchResults, term: searchTerm });
+      // dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
+      console.log('[handleSearchInputKeydown] Search term is empty, results cleared (if any).');
     }
+
+    // Explicitly refocus the search input field
+    // Use tick to ensure any DOM updates from executeSearch are processed first,
+    // though likely not strictly necessary here if input field itself isn't re-rendered.
+    tick().then(() => {
+      const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
+      if (inputField) {
+        inputField.focus();
+        console.log('[handleSearchInputKeydown] Refocused search input field.');
+      } else {
+        console.warn('[handleSearchInputKeydown] Could not find search input field to refocus.');
+      }
+    });
   }
+}
 
 function executeSearch(termToSearch) {
   if (!editor) return;
@@ -1524,21 +1550,23 @@ function navigateToResult(index) {
         console.log('[navigateToResult] Selecting text in node. Key:', result.nodeKey, 'Offset:', startOffset, 'Length:', result.length);
         node.select(startOffset, endOffset);
 
-        // Ensure scroll into view
-        const currentSelection = _getSelection(); // Get the selection object
-        if (currentSelection) {
-          try {
-            currentSelection.scrollIntoView();
-            console.log('[navigateToResult] Called scrollIntoView() on current selection.');
-          } catch (e) {
-            console.error('[navigateToResult] Error calling scrollIntoView():', e);
+        // Correct way to scroll the selected node into view
+        try {
+          const domElement = editor.getElementByKey(result.nodeKey);
+          if (domElement) {
+            console.log('[navigateToResult] Attempting to scroll DOM element into view for node key:', result.nodeKey);
+            domElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } else {
+            console.warn('[navigateToResult] Could not find DOM element for node key:', result.nodeKey, 'to scroll into view.');
           }
+        } catch (e) {
+          console.error('[navigateToResult] Error scrolling element into view:', e);
         }
       }
     } else {
       console.warn(`[navigateToResult] Search result node with key ${result.nodeKey} not found or not a TextNode.`);
     }
-  }, { tag: 'search-navigate' });
+  }, { tag: 'search-navigate' }); // Ensure the tag allows editor updates if needed, or is purely for read. 'search-navigate' seems fine.
 
   // Dispatch event (this happens regardless of successful selection within the update block)
   const dispatchData = { currentIndex: currentSearchResultIndex, currentResult: result };
