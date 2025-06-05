@@ -358,8 +358,9 @@
             {/if}
         {/if}
     </h2>
-    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative" class:hidden={$panelStateStore.leftCollapsed}>
-        {#if currentFileMetadata}
+    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
+        {#if !$panelStateStore.leftCollapsed}
+            {#if currentFileMetadata}
             <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
@@ -546,10 +547,21 @@
                     </div>
                 {/if}
             </div>
-        {:else}
+            {:else}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
+            {/if}
+        {#else}
+            <!-- Collapsed View: Vertical Labels -->
+            <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_name ?? 'N/A'}>Name</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_path ?? 'N/A'}>Path</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}>Mod.</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.title ?? 'N/A'}>Title</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.description ?? 'N/A'}>Desc.</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.summary ?? 'N/A'}>Summ.</div>
+            </div>
         {/if}
     </div>
 </div>
