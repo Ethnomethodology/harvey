@@ -2,7 +2,8 @@
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{
     ProjectXml, DocumentEntryXml, DocumentMetadataEntryXml,
-    HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS
+    HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS,
+    StandardAssetMetadata, FileMetadata // Added imports
 };
 use crate::projectview::shared_utils::{save_project_xml, ensure_base_asset_dirs};
 use crate::projectview::document_commands::{get_document_metadata_path};
@@ -18,7 +19,7 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use uuid::Uuid;
 use quick_xml;
-use serde::{Serialize, Deserialize};
+// use serde::{Serialize, Deserialize}; // Removed as per instruction (if unused)
 use chrono::Utc;
 // Local FileMetadata and StandardAssetMetadata structs removed, shared_types versions will be used.
 
