@@ -162,6 +162,7 @@
                      enableTableCellResize={true}
                      on:change={handleEditorChange}
                      on:highlightevent={handleHighlightEvent}
+                     enableSearch={true}
                  />
              {/key}
         </div>

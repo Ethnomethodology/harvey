@@ -23,6 +23,25 @@
 
     const dispatch = createEventDispatcher();
 
+    const mediaToolbarConfig = {
+      undo: true,
+      redo: true,
+      blockType: true,
+      bold: true,
+      italic: true,
+      underline: true,
+      strikethrough: true,
+      link: true,
+      insertMenu: false, // Explicitly false
+      indent: true,
+      outdent: true,
+      align: true,
+      textColor: true,
+      highlight: true,
+      clearFormatting: true,
+      search: true
+    };
+
     let lexicalEditorRef;
     let mediaPlayerInNotesRef;
 
@@ -361,7 +380,7 @@
                 Select an audio or video file from the Fieldnotes panel to view its player and notes.
             </div>
         {:else}
-            <div class="lexical-editor-wrapper-style w-full h-full">
+            <div class="lexical-editor-wrapper-style w-full h-full dark:text-gray-100">
                 {#key mediaPath}
                     <LexicalEditor
                         bind:this={lexicalEditorRef}
@@ -369,6 +388,8 @@
                         editable={true}
                         placeholder="Enter notes for this media file..."
                         on:change={handleEditorChange}
+                        enableSearch={true}
+                        toolbarConfig={mediaToolbarConfig}
                     />
                 {/key}
             </div>
@@ -389,7 +410,7 @@
         border-radius: 0 !important;
         box-shadow: none !important;
         overflow: hidden;
-         @apply bg-white dark:bg-gray-800;
+        /* Removed: @apply bg-white dark:bg-gray-800; */
     }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
         overflow-y: auto;
@@ -397,7 +418,7 @@
         @apply p-3;
     }
     .lexical-editor-wrapper-style :global(.lexical-content) {
-        @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100;
+        @apply leading-normal whitespace-pre-wrap break-words;
         min-height: unset !important;
         font-family: Arial, Helvetica, sans-serif;
         font-size: 12pt;

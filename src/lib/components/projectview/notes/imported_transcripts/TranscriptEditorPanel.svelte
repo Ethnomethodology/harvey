@@ -580,9 +580,11 @@ onMount(() => {
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
-                        link: true, indent: true, outdent: true, align: false,
-                        textColor: true, highlight: true, clearFormatting: true
+                                link: true, indent: true, outdent: true, align: true, // This line is changed
+                        textColor: true, highlight: true, clearFormatting: true,
+                        search: true
                      }}
+                     enableSearch={true}
                  />
             {/key}
         </div>
