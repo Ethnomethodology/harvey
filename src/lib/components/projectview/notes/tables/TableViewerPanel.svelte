@@ -113,6 +113,11 @@
                     input.setAttribute("autocapitalize", "none");
                     input.setAttribute("spellcheck", "false");
                 });
+                // Add the redraw call here
+                if (tabulatorInstance) {
+                    console.log('[TableViewerPanel renderComplete] Forcing table redraw.');
+                    tabulatorInstance.redraw(true);
+                }
             });
 
             console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
@@ -252,7 +257,7 @@
          white-space: normal !important;
      }
      :global(.tabulator-header-filter input) {
-         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-full box-border;
+         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border;
      }
      :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
          background-color: rgba(255, 255, 0, 0.3) !important;
