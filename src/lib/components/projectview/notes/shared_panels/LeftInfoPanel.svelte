@@ -360,6 +360,7 @@
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
         {#if !$panelStateStore.leftCollapsed}
+            <!-- Expanded View -->
             {#if currentFileMetadata}
             <div class="p-1 space-y-2">
                 <!-- File Name (editable for stem, display full) -->
@@ -551,7 +552,7 @@
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
-            {/if}
+            {/if} <!-- Closes #if currentFileMetadata -->
         {#else}
             <!-- Collapsed View: Vertical Labels -->
             <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
@@ -562,19 +563,8 @@
                 <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.description ?? 'N/A'}>Desc.</div>
                 <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.summary ?? 'N/A'}>Summ.</div>
             </div>
-        {/if}
+        {/if} <!-- Closes #if !$panelStateStore.leftCollapsed -->
     </div>
 </div>
-
-<style lang="postcss">
-    .min-h-0 { min-height: 0; }
-    .overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }
-    .overflow-y-auto::-webkit-scrollbar-track { @apply bg-transparent; }
-    .overflow-y-auto::-webkit-scrollbar-thumb { @apply rounded bg-gray-400/50 dark:bg-gray-500/50; }
-    .overflow-y-auto::-webkit-scrollbar-thumb:hover { @apply bg-gray-500/70 dark:bg-gray-400/70; }
-    .overflow-y-auto { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
-    :root { --scrollbar-thumb: rgba(156, 163, 175, 0.5); --scrollbar-track: transparent; }
-    html.dark { --scrollbar-thumb: rgba(107, 114, 128, 0.5); }
-</style>
 
 <AddFieldModal bind:showModal={showAddFieldModal} on:confirm={handleAddCustomFieldConfirm} on:close={() => showAddFieldModal = false} />
