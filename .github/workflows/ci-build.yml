@@ -553,9 +553,11 @@ jobs:
         env:
           DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
         run: |
-          BUNDLE_DIR=src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle
+          BUNDLE_DIR="src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle"
           cd "$BUNDLE_DIR"
-          zip_name="${{ env.DMG_NAME %.dmg}}.zip" # Corrected this line from previous attempt
+          # Use the DMG_NAME environment variable (made available by the 'env:' block above)
+          # with shell parameter expansion.
+          zip_name="${DMG_NAME%.dmg}.zip"
           zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
           echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
         shell: bash
