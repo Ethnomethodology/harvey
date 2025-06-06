@@ -552,7 +552,7 @@
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
-            {/if} <!-- Closes #if currentFileMetadata -->
+            {/if}
         {#else}
             <!-- Collapsed View: Vertical Labels -->
             <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
