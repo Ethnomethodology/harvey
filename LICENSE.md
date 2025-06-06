@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 Dipanjan Saha
+Copyright (c) 2025 Dipanjan Saha, Gemma Lough, and Tatsuya Akutsu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
