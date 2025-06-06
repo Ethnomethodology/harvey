@@ -359,11 +359,13 @@
         {/if}
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
+        {#comment} START: Temporarily commenting out expanded view for debugging {/comment}
         {#if !$panelStateStore.leftCollapsed}
-            <!-- Expanded View -->
-            {#if currentFileMetadata}
-            <div class="p-1 space-y-2">
-                <!-- File Name (editable for stem, display full) -->
+            {#comment}
+                <!-- Expanded View -->
+                {#if currentFileMetadata}
+                <div class="p-1 space-y-2">
+                    <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
@@ -552,7 +554,9 @@
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
-            {/if}
+            {/if} <!-- Closes #if currentFileMetadata -->
+            {#endcomment}
+            <p>Expanded view is currently commented out for debugging.</p>
         {#else}
             <!-- Collapsed View: Vertical Labels -->
             <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
@@ -563,7 +567,7 @@
                 <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.description ?? 'N/A'}>Desc.</div>
                 <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.summary ?? 'N/A'}>Summ.</div>
             </div>
-        {/if} <!-- Closes #if !$panelStateStore.leftCollapsed -->
+        {/if}
     </div>
 </div>
 
