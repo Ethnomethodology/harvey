@@ -555,13 +555,13 @@
             {/if}
         {:else}
             <!-- Collapsed View: Vertical Labels -->
-            <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_name ?? 'N/A'}>Name</div>
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_path ?? 'N/A'}>Path</div>
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}>Mod.</div>
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.title ?? 'N/A'}>Title</div>
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.description ?? 'N/A'}>Desc.</div>
-                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.summary ?? 'N/A'}>Summ.</div>
+            <div class="pt-2 flex flex-col items-center space-y-1.5 text-gray-600 dark:text-gray-400 w-full px-0.5">
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`File Name: ${currentFileMetadata?.file_name ?? 'N/A'}`}>Name</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`File Path: ${currentFileMetadata?.file_path ?? 'N/A'}`}>Path</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Date: ${currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}`}>Date</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Title: ${currentFileMetadata?.title ?? 'N/A'}`}>Title</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Description: ${currentFileMetadata?.description ?? 'N/A'}`}>Desc</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Summary: ${currentFileMetadata?.summary ?? 'N/A'}`}>Summ</div>
             </div>
         {/if}
     </div>
