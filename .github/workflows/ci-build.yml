@@ -259,7 +259,7 @@ jobs:
       - name: Download and Extract Pandoc (macOS)
         if: matrix.os == 'macos-latest'
         env:
-          PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
+          PANDOC_TAG_ENV: ${{ env.PANDOC_LATEST_TAG }} # Renamed to avoid confusion with shell var, though not strictly necessary
         shell: bash
         run: |
           # Determine architecture suffix
@@ -269,9 +269,11 @@ jobs:
             ARCH_DIR_SUFFIX="x86_64"
           fi
 
-          ZIP="pandoc-${{env.PANDOC_TAG}}-${{env.ARCH_DIR_SUFFIX}}-macOS.zip"
-          URL="https://github.com/jgm/pandoc/releases/download/${{env.PANDOC_TAG}}/${ZIP}"
-          echo "Downloading $ZIP..."
+          # Use shell variables for PANDOC_TAG (from env) and ARCH_DIR_SUFFIX (set above)
+          ZIP="pandoc-${PANDOC_TAG_ENV}-${ARCH_DIR_SUFFIX}-macOS.zip"
+          URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG_ENV}/${ZIP}"
+
+          echo "Downloading $ZIP from $URL" # Added URL to echo for better debugging
           curl -fSL "$URL" -o pandoc_macos.zip
 
           echo "Extracting pandoc archive..."
