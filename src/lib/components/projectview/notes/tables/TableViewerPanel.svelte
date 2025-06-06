@@ -104,6 +104,10 @@
                 selectable: 1,
                 movableColumns: true,
                 resizableColumnFit: true,
+                // Pagination options
+                pagination: true,
+                paginationSize: 20,
+                paginationMode: 'local',
             });
 
             tabulatorInstance.on("rowClick", function(e, row){
