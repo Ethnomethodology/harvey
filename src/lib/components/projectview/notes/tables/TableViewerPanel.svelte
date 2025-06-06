@@ -13,6 +13,12 @@
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
 
+    let searchTerm = '';
+    let searchMatches = []; // To store Tabulator RowComponents that match
+    let currentMatchIndex = -1;
+    // It might be useful to also store the actual column fields for easy access
+    let columnFields = [];
+
     // Placeholder functions (Unchanged)
     function openRowForm(row) {
         const rowData = row.getData();
@@ -123,6 +129,9 @@
                 }
             }, 100); // 100ms delay, can be adjusted
 
+            const columns = tabulatorInstance.getColumnDefinitions();
+            columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder'); // Store actual field names
+
             console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
 
         } catch (err) {
@@ -136,6 +145,90 @@
                 isLoading = false;
             }
             console.log(`[TableViewerPanel initializeTable] Finished for ${pathForTable}. isLoading: ${isLoading}`);
+        }
+    }
+
+    function handleSearch() {
+        if (!tabulatorInstance) return;
+        const term = searchTerm.trim();
+
+        clearHighlights(); // Clear highlights before new search or clearing filter
+
+        if (!term) {
+            tabulatorInstance.clearFilter();
+            searchMatches = [];
+            currentMatchIndex = -1;
+            return;
+        }
+
+        const filters = columnFields.map(field => ({ field: field, type: 'like', value: term }));
+        tabulatorInstance.setFilter(filters);
+        searchMatches = tabulatorInstance.getRows("active");
+
+        if (searchMatches.length > 0) {
+            // currentMatchIndex = 0; // Set before navigateToMatch
+            navigateToMatch(0); // Navigate to the first match
+        } else {
+            currentMatchIndex = -1;
+        }
+        console.log(`Found ${searchMatches.length} rows matching "${term}"`);
+    }
+
+    function clearHighlights() {
+        if (tabulatorInstance) {
+            // Get all row elements within the table
+            const rows = tabulatorInstance.getRows(); // Gets all RowComponents
+            rows.forEach(row => {
+                const rowElement = row.getElement();
+                if (rowElement.classList.contains('current-search-match')) {
+                    rowElement.classList.remove('current-search-match');
+                }
+            });
+        }
+        // Also, if a specific row was stored as 'currently highlighted', clear that too
+        // This is implicitly handled by currentMatchIndex and applying highlight only to current
+    }
+
+    async function navigateToMatch(index) {
+        if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
+            currentMatchIndex = -1; // Ensure index is invalid if navigation fails
+            return;
+        }
+
+        clearHighlights(); // Clear previous highlight
+
+        currentMatchIndex = index;
+        const rowComponent = searchMatches[currentMatchIndex];
+
+        if (rowComponent) {
+            try {
+                await rowComponent.scrollTo(); // Scroll to the row
+                const rowElement = rowComponent.getElement();
+                rowElement.classList.add('current-search-match'); // Add highlight class
+                // Optional: select the row as well
+                // tabulatorInstance.deselectRow(); // Deselect others if not multi-select
+                // rowComponent.select();
+            } catch (err) {
+                console.error("Error navigating to match:", err);
+            }
+        }
+    }
+
+    function goToNextMatch() {
+        if (searchMatches.length > 0 && currentMatchIndex < searchMatches.length - 1) {
+            navigateToMatch(currentMatchIndex + 1);
+        } else if (searchMatches.length > 0 && currentMatchIndex === searchMatches.length - 1) {
+            // Optional: loop back to the first match
+            // navigateToMatch(0);
+        }
+    }
+
+    function goToPreviousMatch() {
+        if (searchMatches.length > 0 && currentMatchIndex > 0) {
+            navigateToMatch(currentMatchIndex - 1);
+        } else if (searchMatches.length > 0 && currentMatchIndex === 0) {
+            // Optional: loop back to the last match
+            // navigateToMatch(searchMatches.length - 1);
         }
     }
 
@@ -217,15 +310,36 @@
         </h3>
          { #if !isLoading && !error }
          <div class="flex items-center space-x-2">
+            <button
+              title="Previous Match"
+              class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              on:click={goToPreviousMatch}
+              disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+              </svg>
+            </button>
+            <button
+              title="Next Match"
+              class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              on:click={goToNextMatch}
+              disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+              </svg>
+            </button>
              <input
                type="search"
+               bind:value={searchTerm}
+               oninput={handleSearch}
                placeholder="Search table..."
                class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
                autocomplete="off"
                autocorrect="off"
                autocapitalize="none"
                spellcheck="false"
-               oninput={(e) => { console.log('Search:', e.target.value); /* TODO: Implement search */ }}
              >
              <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
                      onclick={() => { console.log('TODO: Add new row'); alert('Add Row (Placeholder)'); }}
@@ -273,7 +387,16 @@
         inset: 0;
     }
 
-:global(.tabulator-header, .tabulator .tabulator-header .tabulator-col:first-child) {
-    padding-left: 0px!important;
+:global(.tabulator .tabulator-header .tabulator-col) {
+    padding-left: 0px !important;
+}
+
+:global(.tabulator .tabulator-row .tabulator-cell:first-child) {
+    padding-left: 0px !important;
+}
+
+:global(.tabulator-row.current-search-match) {
+    background-color: rgba(255, 220, 100, 0.4) !important; /* Example highlight color */
+    outline: 1px solid rgba(255, 165, 0, 0.7) !important;
 }
 </style>
