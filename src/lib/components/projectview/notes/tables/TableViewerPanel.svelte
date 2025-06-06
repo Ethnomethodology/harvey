@@ -13,6 +13,12 @@
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
 
+    let searchTerm = '';
+    let searchMatches = []; // To store Tabulator RowComponents that match
+    let currentMatchIndex = -1;
+    // It might be useful to also store the actual column fields for easy access
+    let columnFields = [];
+
     // Placeholder functions (Unchanged)
     function openRowForm(row) {
         const rowData = row.getData();
@@ -91,13 +97,17 @@
             console.log(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`);
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitDataTable",
+                layout: "fitDataTable", // Changed back from fitColumns
                 columns: generateColumns(tableData),
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
                 movableColumns: true,
                 resizableColumnFit: true,
+                // Pagination options
+                pagination: true,
+                paginationSize: 20,
+                paginationMode: 'local',
             });
 
             tabulatorInstance.on("rowClick", function(e, row){
@@ -115,6 +125,17 @@
                 });
             });
 
+            // After setting up event handlers:
+            setTimeout(() => {
+                if (tabulatorInstance && typeof tabulatorInstance.redraw === 'function') {
+                    console.log('[TableViewerPanel initializeTable] Triggering a gentle redraw after short delay.');
+                    tabulatorInstance.redraw(); // Using redraw() without 'true' for a less disruptive redraw
+                }
+            }, 100); // 100ms delay, can be adjusted
+
+            const columns = tabulatorInstance.getColumnDefinitions();
+            columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder'); // Store actual field names
+
             console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
 
         } catch (err) {
@@ -128,6 +149,83 @@
                 isLoading = false;
             }
             console.log(`[TableViewerPanel initializeTable] Finished for ${pathForTable}. isLoading: ${isLoading}`);
+        }
+    }
+
+    function handleSearch() {
+        if (!tabulatorInstance) return;
+        const term = searchTerm.trim();
+
+        clearHighlights(); // Clear highlights before new search or clearing filter
+
+        if (!term) {
+            tabulatorInstance.clearFilter();
+            searchMatches = [];
+            currentMatchIndex = -1;
+            return;
+        }
+
+        const filters = columnFields.map(field => ({ field: field, type: 'like', value: term }));
+        tabulatorInstance.setFilter(filters);
+        searchMatches = tabulatorInstance.getRows("active");
+
+        if (searchMatches.length > 0) {
+            // currentMatchIndex = 0; // Set before navigateToMatch
+            navigateToMatch(0); // Navigate to the first match
+        } else {
+            currentMatchIndex = -1;
+        }
+        console.log(`Found ${searchMatches.length} rows matching "${term}"`);
+    }
+
+    function clearHighlights() {
+        if (tabulatorInstance) {
+            tabulatorInstance.deselectRow(); // Deselect all rows
+        }
+        console.log("clearHighlights called: deselected all rows.");
+    }
+
+    async function navigateToMatch(index) {
+        if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
+            currentMatchIndex = -1;
+            // If no valid match, ensure nothing is selected from search
+            if (tabulatorInstance) tabulatorInstance.deselectRow();
+            return;
+        }
+
+        // It's good practice to clear any programmatically set selections before new action
+        if (tabulatorInstance) {
+            tabulatorInstance.deselectRow();
+        }
+
+        currentMatchIndex = index;
+        const rowComponent = searchMatches[currentMatchIndex];
+
+        if (rowComponent) {
+            try {
+                await rowComponent.scrollTo();
+                await rowComponent.select(); // Select the current row
+            } catch (err) {
+                console.error("Error navigating to match:", err);
+            }
+        }
+    }
+
+    function goToNextMatch() {
+        if (searchMatches.length > 0 && currentMatchIndex < searchMatches.length - 1) {
+            navigateToMatch(currentMatchIndex + 1);
+        } else if (searchMatches.length > 0 && currentMatchIndex === searchMatches.length - 1) {
+            // Optional: loop back to the first match
+            // navigateToMatch(0);
+        }
+    }
+
+    function goToPreviousMatch() {
+        if (searchMatches.length > 0 && currentMatchIndex > 0) {
+            navigateToMatch(currentMatchIndex - 1);
+        } else if (searchMatches.length > 0 && currentMatchIndex === 0) {
+            // Optional: loop back to the last match
+            // navigateToMatch(searchMatches.length - 1);
         }
     }
 
@@ -209,21 +307,42 @@
         </h3>
          { #if !isLoading && !error }
          <div class="flex items-center space-x-2">
-             <input
-               type="search"
-               placeholder="Search table..."
-               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
-               autocomplete="off"
-               autocorrect="off"
-               autocapitalize="none"
-               spellcheck="false"
-               oninput={(e) => { console.log('Search:', e.target.value); /* TODO: Implement search */ }}
-             >
-             <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                     onclick={() => { console.log('TODO: Add new row'); alert('Add Row (Placeholder)'); }}
-                     title="Add New Row">
-                 Add Row
-             </button>
+            <input
+              type="search"
+              bind:value={searchTerm}
+              oninput={handleSearch}
+              placeholder="Search table..."
+              class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="none"
+              spellcheck="false"
+            >
+            <button
+              title="Previous Match"
+              class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              onclick={goToPreviousMatch}
+              disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
+              </svg>
+            </button>
+            <button
+              title="Next Match"
+              class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              onclick={goToNextMatch}
+              disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
+              </svg>
+            </button>
+            <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
+                    onclick={() => { console.log('TODO: Add new row'); alert('Add Row (Placeholder)'); }}
+                    title="Add New Row">
+                Add Row
+            </button>
          </div>
          { /if }
     </div>
@@ -252,7 +371,7 @@
          white-space: normal !important;
      }
      :global(.tabulator-header-filter input) {
-         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-full box-border;
+         @apply p-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 box-border w-auto;
      }
      :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
          background-color: rgba(255, 255, 0, 0.3) !important;
@@ -264,4 +383,22 @@
         position: absolute;
         inset: 0;
     }
+
+:global(.tabulator .tabulator-header .tabulator-col) {
+    padding-left: 0px !important;
+}
+
+:global(.tabulator-footer .tabulator-paginator .tabulator-page.active) {
+    background-color: #0d6efd !important; /* Using a common Bootstrap primary blue */
+    color: white !important;
+    font-weight: bold !important;
+    border-color: #0d6efd !important; /* Ensure border matches */
+}
+
+:global(.tabulator-footer .tabulator-paginator .tabulator-page[aria-current="page"]) {
+    background-color: #0d6efd !important; /* Using a common Bootstrap primary blue */
+    color: white !important;
+    font-weight: bold !important;
+    border-color: #0d6efd !important; /* Ensure border matches */
+}
 </style>
