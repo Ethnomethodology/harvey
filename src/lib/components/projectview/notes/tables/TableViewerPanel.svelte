@@ -313,7 +313,7 @@
             <button
               title="Previous Match"
               class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              on:click={goToPreviousMatch}
+              onclick={goToPreviousMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
@@ -323,7 +323,7 @@
             <button
               title="Next Match"
               class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              on:click={goToNextMatch}
+              onclick={goToNextMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
