@@ -272,4 +272,28 @@
         position: absolute;
         inset: 0;
     }
+
+:global(.tabulator-row::before),
+:global(.tabulator-row::after) {
+    display: none !important; /* Attempt to hide pseudo-elements on rows */
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+:global(.tabulator-row .tabulator-cell:first-child::before),
+:global(.tabulator-row .tabulator-cell:first-child::after) {
+    display: none !important; /* Attempt to hide pseudo-elements on the first cell */
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Common class for row selection handles, though less likely for just 'selectable' */
+:global(.tabulator-row-handle) {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 </style>
