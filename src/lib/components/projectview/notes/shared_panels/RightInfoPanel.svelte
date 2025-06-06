@@ -22,7 +22,7 @@
     <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center"
         class:mb-3={!$panelStateStore.rightCollapsed}
         class:mb-0={$panelStateStore.rightCollapsed}
-        class:justify-start={!$panelStateStore.rightCollapsed} /* Changed from justify-between to start for single title */
+        class:justify-start={!$panelStateStore.rightCollapsed}
         class:justify-center={$panelStateStore.rightCollapsed} >
         <button
             on:click={panelStateStore.toggleRightPanel}

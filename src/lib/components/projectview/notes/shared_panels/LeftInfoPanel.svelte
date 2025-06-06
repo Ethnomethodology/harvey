@@ -359,9 +359,7 @@
         {/if}
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
-        {#comment} START: Temporarily commenting out expanded view for debugging {/comment}
         {#if !$panelStateStore.leftCollapsed}
-            {#comment}
                 <!-- Expanded View -->
                 {#if currentFileMetadata}
                 <div class="p-1 space-y-2">
@@ -554,10 +552,8 @@
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
-            {/if} <!-- Closes #if currentFileMetadata -->
-            {#endcomment}
-            <p>Expanded view is currently commented out for debugging.</p>
-        {#else}
+            {/if}
+        {:else}
             <!-- Collapsed View: Vertical Labels -->
             <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
                 <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_name ?? 'N/A'}>Name</div>
@@ -569,6 +565,7 @@
             </div>
         {/if}
     </div>
+    
 </div>
 
 <AddFieldModal bind:showModal={showAddFieldModal} on:confirm={handleAddCustomFieldConfirm} on:close={() => showAddFieldModal = false} />
