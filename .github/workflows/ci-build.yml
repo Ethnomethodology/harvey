@@ -139,7 +139,7 @@ jobs:
           tag: 'v0.2.0'
           fileName: "diarize-cli-windows-x86_64.exe"
           out-file-path: ./sidecar
-          extract: true
+          extract: false # Changed
 
       - name: Download ffmpeg (windows-x86_64)
         if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
@@ -150,7 +150,7 @@ jobs:
           tag: 'v0.2.0'
           fileName: "ffmpeg-windows-x86_64.exe"
           out-file-path: ./sidecar
-          extract: true
+          extract: false # Changed
 
       - name: Download whisper-cpp (windows-x86_64)
         if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
@@ -161,7 +161,7 @@ jobs:
           tag: 'v0.2.0'
           fileName: "whisper-cpp-windows-x86_64.exe"
           out-file-path: ./sidecar
-          extract: true
+          extract: false # Changed
 
       - name: Verify SHA256 Checksums
         shell: bash
@@ -180,17 +180,18 @@ jobs:
             fi
 
             if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              # Iterate to find the line with the hash, as certutil output can vary
               output=$(certutil -hashfile "$file_path" SHA256)
-              while IFS= read -r line; do
-                if [[ "$line" =~ ^[0-9a-fA-F]{64}$ ]]; then # Look for a line that is exactly 64 hex characters
-                  actual_checksum=$(echo "$line" | tr '[:upper:]' '[:lower:]' | sed 's/ //g')
-                  break
-                fi
-              done <<< "$output"
-              if [[ -z "$actual_checksum" ]]; then
-                echo "Error: Could not extract checksum for $file_path from certutil output:"
+              # More robust extraction: get 2nd line, remove all whitespace, convert to lowercase
+              actual_checksum=$(echo "$output" | head -n 2 | tail -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+
+              # Validate the extracted checksum
+              if [[ -z "$actual_checksum" ]] || ! [[ "$actual_checksum" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "Error: Could not extract a valid SHA256 checksum for $file_path from certutil output:"
+                echo "--- certutil output ---"
                 echo "$output"
+                echo "--- extracted checksum ---"
+                echo "$actual_checksum"
+                echo "------------------------"
                 exit 1
               fi
             else # macos-latest
