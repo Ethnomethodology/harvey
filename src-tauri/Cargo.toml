@@ -6,6 +6,7 @@ version = "0.1.0"
 description = "A Desktop App for Audio/Video Transcription"
 authors = ["Dipanjan Saha, Gemma Lough, Tatsuya Akutsu"]
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "harvey_1_lib" # This should match what's in tauri.conf.json under tauri.bundle.identifier if it's a library-based app

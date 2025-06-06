@@ -47,6 +47,11 @@
       "sidecar/diarize-cli",
       "sidecar/pandoc",
       "sidecar/ffmpeg"
+    ],
+    "licenseFile": "../LICENSE.md",
+    "license": "MIT",
+    "resources": [
+      "third_party_licenses"
     ]
   }
 }
