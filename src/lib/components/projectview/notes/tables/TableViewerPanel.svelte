@@ -273,11 +273,7 @@
         inset: 0;
     }
 
-:global(.tabulator .tabulator-header .tabulator-col) {
-    padding-left: 0px !important;
-}
-
-:global(.tabulator .tabulator-row .tabulator-cell:first-child) {
-    padding-left: 0px !important;
+:global(.tabulator-header, .tabulator .tabulator-header .tabulator-col:first-child) {
+    padding-left: 0px!important;
 }
 </style>
