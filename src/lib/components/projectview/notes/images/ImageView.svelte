@@ -4,6 +4,7 @@
     // Import shared panels
     import LeftInfoPanel from '../shared_panels/LeftInfoPanel.svelte';
     import RightInfoPanel from '../shared_panels/RightInfoPanel.svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     // Import the specific image viewer panel (placeholder for now)
     import ImageViewerPanel from './ImageViewerPanel.svelte';
 
@@ -30,12 +31,14 @@
 <div class="flex flex-grow p-0 gap-1 w-full min-h-0 h-full">
 
     <!-- Left Panel (Shared) -->
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.leftCollapsed}
+         class:w-[20.588%]={!$panelStateStore.leftCollapsed}>
         <LeftInfoPanel itemPath={itemPath} itemType="image" />
     </div>
 
     <!-- Middle Panel - The Image Viewer -->
-    <div class="w-[58.824%] h-full">
+    <div class="h-full flex-grow">
         {#key itemPath} {#if itemPath}
              <ImageViewerPanel imagePath={itemPath} />
         {:else}
@@ -47,7 +50,9 @@
     </div>
 
     <!-- Right Panel (Shared) -->
-    <div class="w-[20.588%] h-full flex-shrink-0">
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
+         class:w-12={$panelStateStore.rightCollapsed}
+         class:w-[20.588%]={!$panelStateStore.rightCollapsed}>
         <RightInfoPanel itemPath={itemPath} itemType="image" />
     </div>
 
@@ -57,5 +62,4 @@
 	.min-h-0 { min-height: 0; }
     /* Define width classes using arbitrary values */
     .w-\[20\.588\%\] { width: 20.58825%; }
-    .w-\[58\.824\%\] { width: 58.8235%; }
 </style>

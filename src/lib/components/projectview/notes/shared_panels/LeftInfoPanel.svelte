@@ -8,6 +8,8 @@
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
+    import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
 
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '';
@@ -326,23 +328,42 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
-    <h2 class="text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex justify-between items-center">
-        <span>Metadata</span>
-        {#if currentFileMetadata}
-            <button
-                on:click={toggleEditMode}
-                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
-            >
-                {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
-            </button>
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+      class:p-3={!$panelStateStore.leftCollapsed}
+      class:p-2={$panelStateStore.leftCollapsed}
+      class:w-full={!$panelStateStore.leftCollapsed}
+      class:w-12={$panelStateStore.leftCollapsed} >
+    <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center"
+        class:mb-3={!$panelStateStore.leftCollapsed}
+        class:mb-0={$panelStateStore.leftCollapsed}
+        class:justify-between={!$panelStateStore.leftCollapsed}
+        class:justify-center={$panelStateStore.leftCollapsed} >
+        <button
+            on:click={panelStateStore.toggleLeftPanel}
+            class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
+        >
+            <FileEarmarkCodeIcon class="w-4 h-4"/>
+        </button>
+        {#if !$panelStateStore.leftCollapsed}
+            <span class="ml-2">Metadata</span>
+            {#if currentFileMetadata}
+                <button
+                    on:click={toggleEditMode}
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
+                >
+                    {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
+                </button>
+            {/if}
         {/if}
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
-        {#if currentFileMetadata}
-            <div class="p-1 space-y-2">
-                <!-- File Name (editable for stem, display full) -->
+        {#if !$panelStateStore.leftCollapsed}
+                <!-- Expanded View -->
+                {#if currentFileMetadata}
+                <div class="p-1 space-y-2">
+                    <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
@@ -527,23 +548,24 @@
                     </div>
                 {/if}
             </div>
-        {:else}
+            {:else}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No file selected or metadata not available.
             </p>
+            {/if}
+        {:else}
+            <!-- Collapsed View: Vertical Labels -->
+            <div class="pt-2 flex flex-col items-center space-y-1 text-gray-600 dark:text-gray-400">
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_name ?? 'N/A'}>Name</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.file_path ?? 'N/A'}>Path</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}>Mod.</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.title ?? 'N/A'}>Title</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.description ?? 'N/A'}>Desc.</div>
+                <div class="text-xs w-full text-center truncate" title={currentFileMetadata?.summary ?? 'N/A'}>Summ.</div>
+            </div>
         {/if}
     </div>
+    
 </div>
-
-<style lang="postcss">
-    .min-h-0 { min-height: 0; }
-    .overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }
-    .overflow-y-auto::-webkit-scrollbar-track { @apply bg-transparent; }
-    .overflow-y-auto::-webkit-scrollbar-thumb { @apply rounded bg-gray-400/50 dark:bg-gray-500/50; }
-    .overflow-y-auto::-webkit-scrollbar-thumb:hover { @apply bg-gray-500/70 dark:bg-gray-400/70; }
-    .overflow-y-auto { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
-    :root { --scrollbar-thumb: rgba(156, 163, 175, 0.5); --scrollbar-track: transparent; }
-    html.dark { --scrollbar-thumb: rgba(107, 114, 128, 0.5); }
-</style>
 
 <AddFieldModal bind:showModal={showAddFieldModal} on:confirm={handleAddCustomFieldConfirm} on:close={() => showAddFieldModal = false} />
