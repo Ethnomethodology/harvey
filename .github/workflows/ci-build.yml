@@ -61,18 +61,186 @@ jobs:
       - name: Prepare sidecar directory
         run: mkdir -p ./sidecar
 
-      - name: Fetch ffmpeg, whisper, diarize-cli from SIDECAR_REPO (v0.2.0)
+      # macOS arm64 sidecars
+      - name: Download diarize-cli (macos-arm64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
         uses: robinraju/release-downloader@v1.10
         with:
           token: ${{ secrets.SIDECAR_TOKEN }}
           repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0' 
-          fileName: >-
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && '*macos*x86_64*' ||
-               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && '*macos*arm64*' ||
-               matrix.os == 'windows-latest' && matrix.arch == 'x64' && '*windows*x86_64*' }}
+          tag: 'v0.2.0'
+          fileName: "diarize-cli-macos-arm64"
           out-file-path: ./sidecar
           extract: true
+
+      - name: Download ffmpeg (macos-arm64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "ffmpeg-macos-arm64"
+          out-file-path: ./sidecar
+          extract: true
+
+      - name: Download whisper-cpp (macos-arm64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "whisper-cpp-macos-arm64"
+          out-file-path: ./sidecar
+          extract: true
+
+      # macOS x86_64 sidecars
+      - name: Download diarize-cli (macos-x86_64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "diarize-cli-macos-x86_64"
+          out-file-path: ./sidecar
+          extract: true
+
+      - name: Download ffmpeg (macos-x86_64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "ffmpeg-macos-x86_64"
+          out-file-path: ./sidecar
+          extract: true
+
+      - name: Download whisper-cpp (macos-x86_64)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "whisper-cpp-macos-x86_64"
+          out-file-path: ./sidecar
+          extract: true
+
+      # Windows x86_64 sidecars
+      - name: Download diarize-cli (windows-x86_64)
+        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "diarize-cli-windows-x86_64.exe"
+          out-file-path: ./sidecar
+          extract: false # Changed
+
+      - name: Download ffmpeg (windows-x86_64)
+        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "ffmpeg-windows-x86_64.exe"
+          out-file-path: ./sidecar
+          extract: false # Changed
+
+      - name: Download whisper-cpp (windows-x86_64)
+        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+        uses: robinraju/release-downloader@v1.10
+        with:
+          token: ${{ secrets.SIDECAR_TOKEN }}
+          repository: ${{ env.SIDECAR_REPO }}
+          tag: 'v0.2.0'
+          fileName: "whisper-cpp-windows-x86_64.exe"
+          out-file-path: ./sidecar
+          extract: false # Changed
+
+      - name: Verify SHA256 Checksums
+        shell: bash
+        run: |
+          echo "Verifying checksums for downloaded sidecars in ./sidecar..."
+          cd ./sidecar || exit 1
+
+          verify_checksum() {
+            local file_path="$1"
+            local expected_checksum="$2"
+            local actual_checksum=""
+
+            if [[ ! -f "$file_path" ]]; then
+              echo "Error: File $file_path not found for checksum verification."
+              exit 1
+            fi
+
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              output=$(certutil -hashfile "$file_path" SHA256)
+              # More robust extraction: get 2nd line, remove all whitespace, convert to lowercase
+              actual_checksum=$(echo "$output" | head -n 2 | tail -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+
+              # Validate the extracted checksum
+              if [[ -z "$actual_checksum" ]] || ! [[ "$actual_checksum" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "Error: Could not extract a valid SHA256 checksum for $file_path from certutil output:"
+                echo "--- certutil output ---"
+                echo "$output"
+                echo "--- extracted checksum ---"
+                echo "$actual_checksum"
+                echo "------------------------"
+                exit 1
+              fi
+            else # macos-latest
+              actual_checksum=$(shasum -a 256 "$file_path" | awk '{print $1}')
+            fi
+
+            # Convert expected checksum to lowercase for consistent comparison
+            expected_checksum=$(echo "$expected_checksum" | tr '[:upper:]' '[:lower:]')
+
+            echo "File: $file_path, Expected: $expected_checksum, Actual: $actual_checksum"
+            if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+              echo "Error: Checksum mismatch for $file_path."
+              echo "Expected: $expected_checksum"
+              echo "Actual:   $actual_checksum"
+              exit 1
+            else
+              echo "Checksum verified for $file_path"
+            fi
+          }
+
+          # Define expected checksums (from issue description, converted to lowercase)
+          # diarize-cli
+          DIARIZE_MAC_ARM64_SHA="44e82634cf317d79e267e6b33d98d536bdde466f7dc61a3130fbda93e6351aa7"
+          DIARIZE_MAC_X64_SHA="5436a46e80e825c9dd7463145c7bf5ad2442dafacea19a68fe0867d54aa1b0bb"
+          DIARIZE_WIN_X64_SHA="46f1a400795ebdcb59b163ad1eed9bbb55bac5fd9f0a0c1bbcac3c4a255f1984"
+          # ffmpeg
+          FFMPEG_MAC_ARM64_SHA="8d5d9087ae4e410ae489fa53e0399b8464e1c70a037649e7c1f4e0a5522cffe2"
+          FFMPEG_MAC_X64_SHA="77b1a3f7ee02a0df27bed19361c9dd6334ebce5cc08d92ddf6b25a3cf71027b6"
+          FFMPEG_WIN_X64_SHA="81f3323f88ff7576da73492aa0a867af15a1314d6209e5aed9e91bd2c27ad47c"
+          # whisper-cpp
+          WHISPER_MAC_ARM64_SHA="e643aa54826743b03acd8bcc326e9b5f53f90fcc59d6a765860f0264a0a3b812"
+          WHISPER_MAC_X64_SHA="e643aa54826743b03acd8bcc326e9b5f53f90fcc59d6a765860f0264a0a3b812" # Note: x64 and arm64 have the same SHA
+          WHISPER_WIN_X64_SHA="1aa98e75f9a3dab37973bd26946b643761d83573b23c1815193de9fcd72c7229"
+
+          if [[ "${{ matrix.os }}" == "macos-latest" && "${{ matrix.arch }}" == "arm64" ]]; then
+            verify_checksum "diarize-cli-macos-arm64" "$DIARIZE_MAC_ARM64_SHA"
+            verify_checksum "ffmpeg-macos-arm64" "$FFMPEG_MAC_ARM64_SHA"
+            verify_checksum "whisper-cpp-macos-arm64" "$WHISPER_MAC_ARM64_SHA"
+          elif [[ "${{ matrix.os }}" == "macos-latest" && "${{ matrix.arch }}" == "x64" ]]; then
+            verify_checksum "diarize-cli-macos-x86_64" "$DIARIZE_MAC_X64_SHA"
+            verify_checksum "ffmpeg-macos-x86_64" "$FFMPEG_MAC_X64_SHA"
+            verify_checksum "whisper-cpp-macos-x86_64" "$WHISPER_MAC_X64_SHA"
+          elif [[ "${{ matrix.os }}" == "windows-latest" && "${{ matrix.arch }}" == "x64" ]]; then
+            verify_checksum "diarize-cli-windows-x86_64.exe" "$DIARIZE_WIN_X64_SHA"
+            verify_checksum "ffmpeg-windows-x86_64.exe" "$FFMPEG_WIN_X64_SHA"
+            verify_checksum "whisper-cpp-windows-x86_64.exe" "$WHISPER_WIN_X64_SHA"
+          fi
+          cd ..
+          echo "All sidecar checksums verified successfully."
 
       - name: Get Latest Pandoc Release Tag
         id: get_pandoc_tag
@@ -92,7 +260,7 @@ jobs:
       - name: Download and Extract Pandoc (macOS)
         if: matrix.os == 'macos-latest'
         env:
-          PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
+          PANDOC_TAG_ENV: ${{ env.PANDOC_LATEST_TAG }} # Renamed to avoid confusion with shell var, though not strictly necessary
         shell: bash
         run: |
           # Determine architecture suffix
@@ -102,9 +270,11 @@ jobs:
             ARCH_DIR_SUFFIX="x86_64"
           fi
 
-          ZIP="pandoc-${PANDOC_TAG}-${ARCH_DIR_SUFFIX}-macOS.zip"
-          URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${ZIP}"
-          echo "Downloading $ZIP..."
+          # Use shell variables for PANDOC_TAG (from env) and ARCH_DIR_SUFFIX (set above)
+          ZIP="pandoc-${PANDOC_TAG_ENV}-${ARCH_DIR_SUFFIX}-macOS.zip"
+          URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG_ENV}/${ZIP}"
+
+          echo "Downloading $ZIP from $URL" # Added URL to echo for better debugging
           curl -fSL "$URL" -o pandoc_macos.zip
 
           echo "Extracting pandoc archive..."
@@ -132,10 +302,10 @@ jobs:
           PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
         shell: bash
         run: |
-          PANDOC_ZIP_FILENAME="pandoc-${PANDOC_TAG}-windows-x86_64.zip"
-          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG}/${PANDOC_ZIP_FILENAME}"
+          PANDOC_ZIP_FILENAME="pandoc-${{env.PANDOC_TAG}}-windows-x86_64.zip"
+          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${{env.PANDOC_TAG}}/${PANDOC_ZIP_FILENAME}"
 
-          echo "Downloading Pandoc version $PANDOC_TAG for Windows (x86_64)..."
+          echo "Downloading Pandoc version ${{env.PANDOC_TAG}} for Windows (x86_64)..."
           echo "Download URL: $PANDOC_DOWNLOAD_URL"
           mkdir -p ./sidecar ./temp_pandoc_extract
           
@@ -150,7 +320,7 @@ jobs:
           echo "Extracting all from Pandoc ZIP for Windows to ./temp_pandoc_extract/"
           unzip -q pandoc_windows.zip -d ./temp_pandoc_extract/
 
-          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${PANDOC_TAG}/pandoc.exe"
+          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${{env.PANDOC_TAG}}/pandoc.exe"
           echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
           
           if [ -f "$EXPECTED_PANDOC_PATH" ]; then
@@ -386,8 +556,10 @@ jobs:
         env:
           DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
         run: |
-          BUNDLE_DIR=src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle
+          BUNDLE_DIR="src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle"
           cd "$BUNDLE_DIR"
+          # Use the DMG_NAME environment variable (made available by the 'env:' block above)
+          # with shell parameter expansion.
           zip_name="${DMG_NAME%.dmg}.zip"
           zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
           echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
