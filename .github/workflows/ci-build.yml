@@ -61,24 +61,107 @@ jobs:
       - name: Prepare sidecar directory
         run: mkdir -p ./sidecar
 
-      - name: Fetch ffmpeg, whisper, diarize-cli from SIDECAR_REPO (v0.2.0)
-        uses: robinraju/release-downloader@v1.10
-        with:
-          token: ${{ secrets.SIDECAR_TOKEN }}
-          repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0' 
-          fileName: |
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'diarize-cli-macos-x86_64' || '' }}
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'ffmpeg-macos-x86_64' || '' }}
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'whisper-cpp-macos-x86_64' || '' }}
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'diarize-cli-macos-arm64' || '' }}
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'ffmpeg-macos-arm64' || '' }}
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'whisper-cpp-macos-arm64' || '' }}
-            ${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'diarize-cli-windows-x86_64.exe' || '' }}
-            ${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'ffmpeg-windows-x86_64.exe' || '' }}
-            ${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'whisper-cpp-windows-x86_64.exe' || '' }}
-          out-file-path: ./sidecar
-          extract: true
+    # macOS arm64 sidecars
+    - name: Download diarize-cli (macos-arm64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "diarize-cli-macos-arm64"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download ffmpeg (macos-arm64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "ffmpeg-macos-arm64"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download whisper-cpp (macos-arm64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "whisper-cpp-macos-arm64"
+        out-file-path: ./sidecar
+        extract: true
+
+    # macOS x86_64 sidecars
+    - name: Download diarize-cli (macos-x86_64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "diarize-cli-macos-x86_64"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download ffmpeg (macos-x86_64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "ffmpeg-macos-x86_64"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download whisper-cpp (macos-x86_64)
+      if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "whisper-cpp-macos-x86_64"
+        out-file-path: ./sidecar
+        extract: true
+
+    # Windows x86_64 sidecars
+    - name: Download diarize-cli (windows-x86_64)
+      if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "diarize-cli-windows-x86_64.exe"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download ffmpeg (windows-x86_64)
+      if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "ffmpeg-windows-x86_64.exe"
+        out-file-path: ./sidecar
+        extract: true
+
+    - name: Download whisper-cpp (windows-x86_64)
+      if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
+      uses: robinraju/release-downloader@v1.10
+      with:
+        token: ${{ secrets.SIDECAR_TOKEN }}
+        repository: ${{ env.SIDECAR_REPO }}
+        tag: 'v0.2.0'
+        fileName: "whisper-cpp-windows-x86_64.exe"
+        out-file-path: ./sidecar
+        extract: true
 
       - name: Verify SHA256 Checksums
         shell: bash
