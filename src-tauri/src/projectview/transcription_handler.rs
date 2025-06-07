@@ -326,15 +326,14 @@ pub async fn import_word_transcript(
         title: String::new(),
         description: String::new(),
         summary: String::new(),
-        duration: None,
+        duration_seconds: None,
         width: None,
         height: None,
-        file_type: Some("application/json".to_string()), // Assuming transcript is JSON
-        source_url: None,
-        tags: Vec::new(),
-        chapters: Vec::new(),
-        scenes: Vec::new(),
-        project_defined_metadata_summary_type: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        creation_time: None,
     };
 
     let asset_metadata = StandardAssetMetadata {
@@ -477,15 +476,14 @@ mod tests {
             title: String::new(),
             description: String::new(),
             summary: String::new(),
-            duration: None,
+            duration_seconds: None,
             width: None,
             height: None,
-            file_type: Some("application/json".to_string()),
-            source_url: None,
-            tags: Vec::new(),
-            chapters: Vec::new(),
-            scenes: Vec::new(),
-            project_defined_metadata_summary_type: None,
+            frame_rate: None,
+            bit_rate: None,
+            audio_codec: None,
+            video_codec: None,
+            creation_time: None,
         };
 
         let asset_metadata = StandardAssetMetadata {
@@ -532,8 +530,9 @@ mod tests {
         assert_eq!(loaded_asset_metadata.metadata.file_name, new_transcript_filename, "Metadata file_name mismatch");
         assert_eq!(loaded_asset_metadata.metadata.file_path, final_transcript_path.to_string_lossy(), "Metadata file_path mismatch");
         assert!(loaded_asset_metadata.metadata.title.is_empty(), "Metadata title should be empty");
-        assert_eq!(loaded_asset_metadata.metadata.file_type, Some("application/json".to_string()), "Metadata file_type mismatch");
-
+        // No specific file_type to assert here for a generic transcript metadata,
+        // as it's not a direct field in the corrected FileMetadata for this context.
+        // If a field like `mime_type` or similar were part of FileMetadata and set, we'd check that.
 
         let updated_project_xml_content = fs::read_to_string(&project_xml_path)?;
         let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_project_xml_content)?;
