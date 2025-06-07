@@ -1,13 +1,14 @@
 <!-- harvey-1.0/src/lib/components/projectview/MediaPlayer.svelte -->
 
 <script>
+	import { project }	from '$lib/stores/projectStore.js';
 	import {
-		project,
+		transcriptStore,
 		updatePlayerTime,
 		setPlayerDuration,
 		togglePlayerPlaying,
 		setAudioBuffer
-	} from '$lib/stores/projectStore.js';
+	} from '$lib/stores/transcriptStore.js';
 	// --- Import get ---
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
@@ -88,7 +89,7 @@
         }
     }
 	$: {
-        const selectedPath = $project.selectedMediaFile?.path;
+        const selectedPath = $transcriptStore.selectedMediaFile?.path;
         (async () => {
             if (selectedPath) {
                 // If the path hasn't changed and we have a URL, do nothing
@@ -174,7 +175,7 @@
                     updatePlayerTime(0);
                     togglePlayerPlaying(false);
                 }
-                if ($project.audioBuffer) {
+                if ($transcriptStore.audioBuffer) {
                     setAudioBuffer(null);
                 }
                 isLoadingMedia = false;
@@ -196,7 +197,7 @@
 	function onPlay()  { togglePlayerPlaying(true); }
 	function onPause() { togglePlayerPlaying(false); }
 	function onTimeUpdate(event) {
-		if (isLoadingMedia || !$project.player.duration) return;
+		if (isLoadingMedia || !$transcriptStore.player.duration) return;
 		const video = event.target;
 		let currentTime = video.currentTime;
 		const duration = video.duration;
@@ -257,7 +258,7 @@
 	function onEnded() {
 		console.log('[MediaPlayer] onEnded event');
 		togglePlayerPlaying(false);
-		const duration = $project.player.duration;
+		const duration = $transcriptStore.player.duration;
 		// If ending during edit/trim loop, jump to start instead of end
 		if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
 			updatePlayerTime(editSegmentStartTime);
@@ -310,12 +311,13 @@
 			alert("Cannot enter trim mode while editing a segment.");
 			return;
 		}
-		const currentProj = get(project); // Get current store state
-		const currentTime = currentProj.player.currentTime;
-		const segments = currentProj.segments;
-		const duration = currentProj.player.duration;
+		const currentTranscriptState = get(transcriptStore); // Get current transcript store state
+		const currentProjectState = get(project); // Get current project store state (for global things if needed)
+		const currentTime = currentTranscriptState.player.currentTime;
+		const segments = currentTranscriptState.segments;
+		const duration = currentTranscriptState.player.duration;
 
-		if (!duration || isLoadingMedia || !$project.audioBuffer || isTrimming) return;
+		if (!duration || isLoadingMedia || !$transcriptStore.audioBuffer || isTrimming) return;
 
 		// Find the segment containing the current playhead time
 		let segmentStartTime = 0;
@@ -338,7 +340,7 @@
 		trimStartTime = segmentStartTime;
 		trimEndTime   = segmentEndTime;
 		 // Ensure player loops within new bounds if playing
-		if ($project.player.isPlaying && videoElement) {
+		if ($transcriptStore.player.isPlaying && videoElement) {
 			 // If current time is outside the new trim range, jump to the start
 			 if (videoElement.currentTime < trimStartTime || videoElement.currentTime >= trimEndTime) {
 				 videoElement.currentTime = trimStartTime;
@@ -387,7 +389,7 @@
 	// Reactive variables used in template
 	// REMOVED isTranscribeDisabled
 	// Disable trim if trimming, loading, no audio buffer, OR if editing another segment
-	$: isTrimDisabled = isTrimming || !mediaUrl || isLoadingMedia || !$project.audioBuffer || isEditingSegment;
+	$: isTrimDisabled = isTrimming || !mediaUrl || isLoadingMedia || !$transcriptStore.audioBuffer || isEditingSegment;
 
 
 	// Exported seekTo method
@@ -449,9 +451,9 @@
 				on:click={handleTogglePlay}
 				class="btn-control"
 				disabled={!mediaUrl || isLoadingMedia}
-				aria-label={$project.player.isPlaying ? 'Pause' : 'Play'}
+				aria-label={$transcriptStore.player.isPlaying ? 'Pause' : 'Play'}
 			>
-				{#if $project.player.isPlaying}
+				{#if $transcriptStore.player.isPlaying}
 					 <!-- Pause Icon -->
 					 <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
 				{:else}
@@ -460,7 +462,7 @@
 				{/if}
 			</button>
 			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
-				{formatTime($project.player.currentTime)} / {formatTime($project.player.duration)}
+				{formatTime($transcriptStore.player.currentTime)} / {formatTime($transcriptStore.player.duration)}
 			</span>
 			<button
 				class="btn-control ml-2 inline-flex items-center space-x-1 text-sm"

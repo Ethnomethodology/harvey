@@ -3,7 +3,8 @@
 	// --- Svelte/Store Imports ---
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { project, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia } from '$lib/stores/projectStore.js';
+	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -76,10 +77,10 @@
             validateSelectedModel();
 
             // --- ADDED: Set Default Model and Language ---
-            const currentStoreState = get(project); // Get current state non-reactively
+            const currentTranscriptState = get(transcriptStore); // Get current state non-reactively
 
             // Set default model if none selected
-            if (!currentStoreState.selectedModelName) {
+            if (!currentTranscriptState.selectedModelName) {
                 let defaultModel = downloadedModelsList[0]?.name; // Try first local model
                 if (!defaultModel && cloudConfig?.consent && cloudConfig?.model) {
                     defaultModel = cloudConfig.model; // Try configured cloud model
@@ -91,15 +92,15 @@
                     console.log('[TopBar] No model selected and no default available.');
                 }
             } else {
-                 console.log(`[TopBar] Model already selected: ${currentStoreState.selectedModelName}`);
+                 console.log(`[TopBar] Model already selected: ${currentTranscriptState.selectedModelName}`);
             }
 
             // Set default language if none selected
-            if (!currentStoreState.selectedLanguage) {
+            if (!currentTranscriptState.selectedLanguage) {
                  console.log('[TopBar] No language selected, setting default: auto');
                  setSelectedLanguage('auto'); // Default to Auto Detect
             } else {
-                 console.log(`[TopBar] Language already selected: ${currentStoreState.selectedLanguage}`);
+                 console.log(`[TopBar] Language already selected: ${currentTranscriptState.selectedLanguage}`);
             }
             // --- END ADDED ---
         }
@@ -107,7 +108,7 @@
 
 
 	// --- Validate Selected Model ---
-	function validateSelectedModel() { const currentSelectedModel = $project.selectedModelName; if (!currentSelectedModel) return; let isModelValid = false; if (downloadedModelsList.some(m => m.name === currentSelectedModel)) { isModelValid = true; } else if ( cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model && cloudConfig.model === currentSelectedModel ) { isModelValid = true; } if (!isModelValid) { console.warn(`TopBar: Previously selected model "${currentSelectedModel}" no longer valid. Resetting selection.`); setSelectedModel(null); } }
+	function validateSelectedModel() { const currentSelectedModel = $transcriptStore.selectedModelName; if (!currentSelectedModel) return; let isModelValid = false; if (downloadedModelsList.some(m => m.name === currentSelectedModel)) { isModelValid = true; } else if ( cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model && cloudConfig.model === currentSelectedModel ) { isModelValid = true; } if (!isModelValid) { console.warn(`TopBar: Previously selected model "${currentSelectedModel}" no longer valid. Resetting selection.`); setSelectedModel(null); } }
 
 	// --- Lifecycle ---
 	onMount(async () => { await loadConfiguration(); });
@@ -115,36 +116,36 @@
 	// --- Event Handlers ---
 	function handleTranscribeClick() {
 		console.log('TopBar: Transcribe icon clicked');
-		if (!$project.selectedMediaFile?.path) {
+		if (!$transcriptStore.selectedMediaFile?.path) {
 			message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
 			return;
 		}
-		if (!$project.selectedModelName) {
+		if (!$transcriptStore.selectedModelName) {
 			message("Please select a transcription model first.", { title: "No Model Selected", type: "warning" });
 			return;
 		}
-		if (!$project.selectedLanguage) {
+		if (!$transcriptStore.selectedLanguage) {
 			message("Please select the audio language first.", { title: "No Language Selected", type: "warning" });
 			return;
 		}
-		requestTranscription();
+		requestTranscription(); // This service function will now internally get state from transcriptStore or be passed it
 	}
 
 	function openExportModal() {
-		if ($project.segments?.length > 0 && $project.currentTranscriptPath) {
+		if ($transcriptStore.segments?.length > 0 && $transcriptStore.currentTranscriptPath) {
 			console.log('Export icon clicked, opening export modal');
-			transcriptPathForExport = $project.currentTranscriptPath;
+			transcriptPathForExport = $transcriptStore.currentTranscriptPath;
 			isExportModalOpen = true;
 		} else {
 			console.log('Export icon clicked but no transcript loaded to export.');
 			message('No transcript data loaded to export.', { title: "Cannot Export", type: "info" });
 		}
 	}
-	async function handleExportConfirm(event) { const { filePath, format } = event.detail; console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format }); const segmentsToExport = $project.segments; if (!segmentsToExport || segmentsToExport.length === 0) { console.error("TopBar: Cannot export, no segments available in store."); message("No transcript data available to export.", { title: "Export Failed", type: "error" }); return; } try { await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport); console.log(`TopBar: Export to ${filePath} (${format}) successful.`); message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" }); } catch (error) { console.error(`TopBar: Export failed to ${filePath} (${format}):`, error); message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" }); } }
-	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $project.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier); const currentLang = $project.selectedLanguage; const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier); if (localModelInfo && currentLang && currentLang !== 'en') { console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`); await showModelInfoDialog(localModelInfo); } } }
-	async function handleLanguageChange(event) { const selectedValue = event.target.value; const newLanguage = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected language:', newLanguage || 'None'); setSelectedLanguage(newLanguage); const currentModelIdentifier = $project.selectedModelName; if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) { const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier); if (localModelInfo) { console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`); await showModelInfoDialog(localModelInfo); } } }
+	async function handleExportConfirm(event) { const { filePath, format } = event.detail; console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format }); const segmentsToExport = $transcriptStore.segments; if (!segmentsToExport || segmentsToExport.length === 0) { console.error("TopBar: Cannot export, no segments available in store."); message("No transcript data available to export.", { title: "Export Failed", type: "error" }); return; } try { await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport); console.log(`TopBar: Export to ${filePath} (${format}) successful.`); message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" }); } catch (error) { console.error(`TopBar: Export failed to ${filePath} (${format}):`, error); message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" }); } }
+	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier); const currentLang = $transcriptStore.selectedLanguage; const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier); if (localModelInfo && currentLang && currentLang !== 'en') { console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`); await showModelInfoDialog(localModelInfo); } } }
+	async function handleLanguageChange(event) { const selectedValue = event.target.value; const newLanguage = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected language:', newLanguage || 'None'); setSelectedLanguage(newLanguage); const currentModelIdentifier = $transcriptStore.selectedModelName; if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) { const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier); if (localModelInfo) { console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`); await showModelInfoDialog(localModelInfo); } } }
 	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return; let infoMessage = `Model Information: ${modelInfo.name}\n\n`; if (modelInfo.description && modelInfo.description.trim() !== '') { infoMessage += `${modelInfo.description}\n\n`; } else if (modelInfo.language && modelInfo.language.trim() !== '') { infoMessage += `Primary Language Focus: ${modelInfo.language}\n`; } else { infoMessage += "General purpose model.\n"; } if (modelInfo.size && modelInfo.size.trim() !== '') { infoMessage += `Size: ${modelInfo.size}`; } if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) { infoMessage += "\n\nNote: This is a multilingual model."; } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) { infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`; } infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`; await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' }); }
-	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); }
+	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
 	function openSpeakersModal() { isSpeakersModalOpen = true; }
 	function handleSpeakersConfirm(event) { const { count, names } = event.detail; console.log("TopBar: Confirmed speakers:", count, names); updateSpeakerConfig(count, names); }
 	function handleMediaSelectionChange(event) {
@@ -162,31 +163,31 @@
 	}
 
 	// --- Helper computed values for binding ---
-	$: modelSelectValue = $project.selectedModelName ?? "";
-	$: languageSelectValue = $project.selectedLanguage ?? "";
+	$: modelSelectValue = $transcriptStore.selectedModelName ?? "";
+	$: languageSelectValue = $transcriptStore.selectedLanguage ?? "";
 
 	// --- Reactive check for Transcribe button disable state ---
 	$: isTranscribeDisabled = (() => {
-		const mediaSelected = !!$project.selectedMediaFile?.path;
-		const modelSelected = !!$project.selectedModelName;
-		const languageSelected = !!$project.selectedLanguage;
+		const mediaSelected = !!$transcriptStore.selectedMediaFile?.path;
+		const modelSelected = !!$transcriptStore.selectedModelName;
+		const languageSelected = !!$transcriptStore.selectedLanguage;
 		const isDisabled = !mediaSelected || !modelSelected || !languageSelected;
 
 		// Keep logging for verification
 		console.log(`[TopBar] isTranscribeDisabled check:
-		  Media Path: ${$project.selectedMediaFile?.path} (Selected: ${mediaSelected})
-		  Model Name: ${$project.selectedModelName} (Selected: ${modelSelected})
-		  Language: ${$project.selectedLanguage} (Selected: ${languageSelected})
+		  Media Path: ${$transcriptStore.selectedMediaFile?.path} (Selected: ${mediaSelected})
+		  Model Name: ${$transcriptStore.selectedModelName} (Selected: ${modelSelected})
+		  Language: ${$transcriptStore.selectedLanguage} (Selected: ${languageSelected})
 		  --> Disabled: ${isDisabled}`);
 
 		return isDisabled;
 	})();
 
 
-	$: isExportDisabled = !$project.currentTranscriptPath || !$project.segments || $project.segments.length === 0 || $project.isTranscribing || $project.isLoading;
+	$: isExportDisabled = !$transcriptStore.currentTranscriptPath || !$transcriptStore.segments || $transcriptStore.segments.length === 0 || $project.isTranscribing || $project.isLoading; // isTranscribing and isLoading can remain from projectStore
 
 	$: mediaFilesForDropdown = (() => {
-		const rootNodes = $project.files || [];
+		const rootNodes = $project.files || []; // files list still comes from projectStore
 		const mediaFiles = [];
 		function findMediaFilesRecursive(nodes) {
 			for (const node of nodes) {
@@ -203,7 +204,7 @@
 		return mediaFiles;
 	})();
 
-	$: selectedMediaValue = $project.selectedMediaFile?.path ?? "";
+	$: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? "";
 
 	// --- Theme Icons ---
 	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
@@ -296,9 +297,9 @@
 					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
 				  </svg>
 				  <span class="text-xs">Add Speakers</span>
-			  {#if $project.speakers.count > 0}
+			  {#if $transcriptStore.speakers.count > 0}
 				<span class="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full text-xs w-4 h-4 flex items-center justify-center">
-					{$project.speakers.count}
+					{$transcriptStore.speakers.count}
 				</span>
 			  {/if}
 			</button>
@@ -312,7 +313,7 @@
 				title="{isTranscribeDisabled ? 'Select media, model, and language first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
 			>
-				{#if $project.isTranscribing}
+				{#if $project.isTranscribing} <!-- isTranscribing can remain from projectStore as it reflects a global state -->
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
@@ -355,7 +356,7 @@
 
 <!-- Modals -->
 <ManageModelsModal bind:showModal="{isManageModalOpen}" on:close="{handleManageModalClose}" />
-<SpeakersModal bind:showModal="{isSpeakersModalOpen}" currentSpeakers="{$project.speakers}" on:confirm="{handleSpeakersConfirm}" />
+<SpeakersModal bind:showModal="{isSpeakersModalOpen}" currentSpeakers="{$transcriptStore.speakers}" on:confirm="{handleSpeakersConfirm}" />
 <ExportModal
 	bind:showModal="{isExportModalOpen}"
 	transcriptPath="{transcriptPathForExport}"

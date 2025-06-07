@@ -1,6 +1,7 @@
 <script>
     import { get } from 'svelte/store';
-    import { project, updateSegment, updatePlayerTime } from '$lib/stores/projectStore.js';
+    import { project } from '$lib/stores/projectStore.js';
+    import { transcriptStore, updateSegment, updatePlayerTime } from '$lib/stores/transcriptStore.js';
     import { onMount, onDestroy, tick, createEventDispatcher, afterUpdate } from 'svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
@@ -199,23 +200,23 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     /* --- Public methods --- */
     export function loadSegment(i) { if (i >= 0 && i < segments.length) { targetIndexForLoad = i; if (i !== currentIndex) { dispatch('navigate', { index: i }); } renderSegmentUI(i); } else { targetIndexForLoad = -1; renderSegmentUI(i); } }
     export function loadSegmentSilent(i) { if (i >= 0 && i < segments.length) { if (i !== currentIndex) { targetIndexForLoad = i; renderSegmentUI(i); } } else { targetIndexForLoad = -1; if (i !== currentIndex) renderSegmentUI(i); } }
-    export function updateTimesFromExternal(newStartTime, newEndTime) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return; let changed = false; const currentSeg = segments[currentIndex]; if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(project).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
+    export function updateTimesFromExternal(newStartTime, newEndTime) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return; let changed = false; const currentSeg = segments[currentIndex]; if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
     export function focusEditor() { /* Lexical focus */ }
     export function forceReloadFromStore() { if (isMounted && currentIndex >= 0 && currentIndex < segments.length) { console.log(`[EditableTranscript] Force reload segment ${currentIndex}.`); renderSegmentUI(currentIndex); } }
 
     /* --- Lifecycle & Store Subscription --- */
-    let unsubscribeProject;
+    let unsubscribeTranscriptStore;
     onMount(() => {
         isMounted = true; window.addEventListener('click', handleClickOutsideSpeaker); window.addEventListener('keydown', handleSegmentNavShortcut, true);
-        unsubscribeProject = project.subscribe((p) => {
+        unsubscribeTranscriptStore = transcriptStore.subscribe((ts) => {
             if (!isMounted) return;
 
             const prevSegmentsLength = segments.length; // Capture length before update
-            const newSegs = p.segments || [];
+            const newSegs = ts.segments || [];
             const segmentsChanged = JSON.stringify(newSegs) !== JSON.stringify(segments); // Deep compare content
             const lengthChanged = newSegs.length !== prevSegmentsLength; // Check for structural change
             segments = newSegs; // Update local copy
-            const currentStoreIndex = p.player?.currentSegmentIndex ?? -1;
+            const currentStoreIndex = ts.player?.currentSegmentIndex ?? -1;
 
             console.log(`[EditableTranscript Sub] SegChanged: ${segmentsChanged}, LenChanged: ${lengthChanged}, StoreIdx: ${currentStoreIndex}, CurrentIdx: ${currentIndex}, EditEnabled: ${editEnabled}`);
 
@@ -249,9 +250,31 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                  }
             }
         });
-        tick().then(() => { if (isMounted) { const initialProjectState = get(project); const initialSegments = initialProjectState.segments || []; let initialIndex = initialProjectState.player?.currentSegmentIndex ?? -1; if (initialIndex < 0 || initialIndex >= initialSegments.length) { initialIndex = initialSegments.length > 0 ? 0 : -1; } renderSegmentUI(initialIndex); } });
+        tick().then(() => {
+            if (isMounted) {
+                const initialTranscriptState = get(transcriptStore);
+                const initialSegments = initialTranscriptState.segments || [];
+                let initialIndex = initialTranscriptState.player?.currentSegmentIndex ?? -1;
+                if (initialIndex < 0 || initialIndex >= initialSegments.length) {
+                    initialIndex = initialSegments.length > 0 ? 0 : -1;
+                }
+                renderSegmentUI(initialIndex);
+            }
+        });
     });
-    onDestroy(() => { isMounted = false; window.removeEventListener('click', handleClickOutsideSpeaker); window.removeEventListener('keydown', handleSegmentNavShortcut, true); unsubscribeProject && unsubscribeProject(); cleanupPlainTextConverter(); try { if (get(project)) { dispatch('segmenteditfocus', { isEditing: false, startTime: 0, endTime: 0 }); } } catch (e) { /* Ignore */ } });
+    onDestroy(() => {
+        isMounted = false;
+        window.removeEventListener('click', handleClickOutsideSpeaker);
+        window.removeEventListener('keydown', handleSegmentNavShortcut, true);
+        unsubscribeTranscriptStore && unsubscribeTranscriptStore();
+        cleanupPlainTextConverter();
+        try {
+            // Check if transcriptStore is still valid before dispatching
+            if (get(transcriptStore)) {
+                dispatch('segmenteditfocus', { isEditing: false, startTime: 0, endTime: 0 });
+            }
+        } catch (e) { /* Ignore if store is already destroyed or invalid */ }
+    });
     $: { const prevEditEnabled = editEnabled; editEnabled = panelEditMode || previewEditMode; if (isMounted && editEnabled !== prevEditEnabled) { dispatchEditState(); } }
 
     /* --- Navigation --- */
@@ -329,7 +352,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             return false;
         }
 
-        const segmentInStore = get(project).segments[currentIndex];
+        const segmentInStore = get(transcriptStore).segments[currentIndex];
         let textChanged = false;
         let timeStartChanged = false;
         let timeEndChanged = false;
@@ -410,7 +433,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>
                                 Unknown
                             </li>
-                            {#each $project.speakers.names as name (name)}
+                            {#each $transcriptStore.speakers.names as name (name)}
                                 <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">
                                     {name.length > 12 ? name.slice(0, 12) + '...' : name}
                                 </li>

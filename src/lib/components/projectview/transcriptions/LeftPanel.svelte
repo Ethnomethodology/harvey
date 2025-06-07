@@ -1,7 +1,8 @@
 <!-- src/lib/components/projectview/transcriptions/LeftPanel.svelte -->
 <script>
 	import { get } from 'svelte/store';
-	import { project, selectMedia } from '$lib/stores/projectStore.js';
+	import { project } from '$lib/stores/projectStore.js';
+	import { transcriptStore, selectMedia } from '$lib/stores/transcriptStore.js';
 	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
 	import TreeNode from './TreeNode.svelte';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
@@ -23,9 +24,10 @@
 	}
 
 	// --- File Tree Logic ---
-	$: selectedMediaPath = $project.selectedMediaFile?.path;
+	$: selectedMediaPath = $transcriptStore.selectedMediaFile?.path;
     // NEW: Get current transcript path for highlighting
-    $: currentTranscriptPath = $project.currentTranscriptPath;
+    // currentTranscriptPath is now sourced from transcriptStore.
+    $: currentTranscriptPath = $transcriptStore.currentTranscriptPath;
 
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
@@ -61,7 +63,7 @@
             if (!mediaIdentifier) {
                 console.warn('[LeftPanel] Transcript item missing media_xml_identifier. Cannot select associated media.');
                 // Proceed to load the transcript anyway, but without guarantees media is correct
-                if (get(project).currentTranscriptPath !== transcriptToLoadPath) {
+                if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
                     try {
                         await loadTranscriptFile(transcriptToLoadPath);
                         console.log('[LeftPanel] Transcript loaded (without associated media selection).');
@@ -96,7 +98,7 @@
             if (!foundMediaEntry) {
                 console.warn('[LeftPanel] Could not find corresponding media file entry for transcript identifier:', mediaIdentifier);
                 // Still try loading the transcript, similar to the no-identifier case
-                 if (get(project).currentTranscriptPath !== transcriptToLoadPath) {
+                 if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
                     try {
                         await loadTranscriptFile(transcriptToLoadPath);
                         console.log('[LeftPanel] Transcript loaded (associated media node not found).');
@@ -112,7 +114,7 @@
 
             // Media entry found!
             console.log(`[LeftPanel] Found associated media entry: ${foundMediaEntry.name}`);
-            const currentSelectedMediaPath = get(project).selectedMediaFile?.path;
+            const currentSelectedMediaPath = get(transcriptStore).selectedMediaFile?.path;
 
             // --- Sequence: Select Media FIRST, then load SPECIFIC transcript ---
             // 1. Select the associated media (if not already selected)
@@ -128,7 +130,7 @@
             }
 
             // 2. Load the *clicked* transcript (even if it overwrites the primary one just loaded by selectMedia)
-            if (get(project).currentTranscriptPath !== transcriptToLoadPath) {
+            if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
                 console.log(`[LeftPanel] Loading the *specifically clicked* transcript file: ${transcriptToLoadPath}`);
                 try {
                     await loadTranscriptFile(transcriptToLoadPath);
