@@ -1,7 +1,6 @@
 // src-tauri/src/projectview/transcription_handler.rs
 use super::shared_types::{
     TranscriptSegment, ProjectXml, ImportedTranscriptEntryXml, FileMetadata,
-    // StandardAssetMetadata, DocumentMetadataEntryXml removed as they are no longer created for .metadata.json
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
 };
 use super::shared_utils::*;
