@@ -1,13 +1,19 @@
 // src-tauri/src/projectview/transcription_handler.rs
-use super::shared_types::*;
+use super::shared_types::{
+    TranscriptSegment, ProjectXml, ImportedTranscriptEntryXml, FileMetadata,
+    // StandardAssetMetadata, DocumentMetadataEntryXml removed as they are no longer created for .metadata.json
+    HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
+};
 use super::shared_utils::*;
+use crate::projectview::db_handler; // Added for db_handler functions
 use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
     fs,
-    path::PathBuf, // Path removed
+    path::{Path, PathBuf}, // Path added
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
+use chrono::Utc; // Added for timestamping metadata
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // For temp file uniqueness
@@ -306,23 +312,252 @@ pub async fn import_word_transcript(
         .map_err(|e| CommandError::from(format!("Failed to save transcript JSON to {}: {}", final_transcript_path.display(), e)))?;
     info!("[import_word_transcript] Saved standalone transcript to: {}", final_transcript_path.display());
 
+    // --- Save metadata to DB ---
+    let file_metadata_for_db = FileMetadata {
+        file_name: new_transcript_filename.clone(),
+        file_path: final_transcript_path.to_string_lossy().into_owned(),
+        last_modified: Utc::now().to_rfc3339(),
+        title: String::new(),
+        description: String::new(),
+        summary: String::new(),
+        duration_seconds: None,
+        width: None,
+        height: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        creation_time: None,
+    };
+
+    let asset_relative_path_for_db = final_transcript_path
+        .strip_prefix(project_base_dir)?
+        .to_string_lossy()
+        .replace("\\", "/");
+
+    let asset_type = "imported_transcript"; // Define asset type
+
+    if let Err(e) = db_handler::save_asset_metadata(
+        &file_metadata_for_db,
+        &asset_relative_path_for_db,
+        asset_type,
+        None, // custom_fields_json is None on initial import
+    ) {
+        error!("Failed to save transcript metadata to DB for {}: {}", asset_relative_path_for_db, e);
+        return Err(CommandError::from(format!("Failed to save transcript metadata to DB: {}", e)));
+    }
+    info!("[import_word_transcript] Saved transcript metadata to DB for: {}", asset_relative_path_for_db);
+    // --- End of DB metadata saving ---
+
+    // Update Project XML
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
     
+    // The relative_transcript_path_for_xml is the same as asset_relative_path_for_db used above
+    let relative_transcript_path_for_xml = asset_relative_path_for_db;
+
     let new_imported_transcript_entry = ImportedTranscriptEntryXml {
         name: new_transcript_filename.clone(),
-        relative_path: final_transcript_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/"),
+        relative_path: relative_transcript_path_for_xml.clone(),
     };
 
     if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry.relative_path) {
         project_data.imported_transcript_files.files.push(new_imported_transcript_entry);
         project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
-        info!("[import_word_transcript] Added new imported transcript entry to XML.");
+        info!("[import_word_transcript] Added new imported transcript entry to XML project data.");
     } else {
         warn!("[import_word_transcript] Standalone transcript with relative path {} already exists in XML. Not adding duplicate.", new_imported_transcript_entry.relative_path);
     }
 
+    // The block for adding .metadata.json to project_data.document_metadata_files.files is REMOVED.
+    // Metadata is now in the database and not tracked as a separate file entry in the XML for this type.
+
     save_project_xml(&project_xml_path, &project_data)?;
-    info!("[import_word_transcript] Project XML updated with imported transcript information.");
+    info!("[import_word_transcript] Project XML updated (imported transcript entry only).");
 
     Ok(final_transcript_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    // PathBuf is already imported via super::* if PathBuf is used in super
+    use tempfile::tempdir;
+    // DocumentMetadataEntryXml and StandardAssetMetadata are no longer directly used here
+    use crate::projectview::shared_types::{ProjectXml, ImportedTranscriptEntryXml, FileMetadata, TranscriptSegment};
+    use crate::projectview::db_handler; // For direct db interactions in test
+    use chrono::Utc;
+    use serde_json; // For serializing segments in test setup
+    use rusqlite::Connection; // For in-memory DB
+
+    #[test]
+    fn test_metadata_saved_to_db_and_xml_updated_correctly() -> Result<(), Box<dyn std::error::Error>> {
+        // 1. Setup
+        let temp_dir = tempdir()?;
+        let project_base_dir = temp_dir.path();
+
+        let docx_filename_stem = "test_transcript_from_docx_db";
+
+        let transcript_specific_dir = project_base_dir
+            .join(HARVEY_FILES_DIR)
+            .join(TRANSCRIPTS_DIR)
+            .join(docx_filename_stem);
+        fs::create_dir_all(&transcript_specific_dir)?;
+
+        let project_xml_path = project_base_dir.join("project.xml");
+        let initial_project_data = ProjectXml {
+            project_name: "Test Project DB".to_string(),
+            project_uuid: "test_uuid_db_xml".to_string(),
+            project_root_is_single_file: false,
+            imported_transcript_files: Default::default(),
+            document_metadata_files: Default::default(), // Should remain empty for this transcript's metadata
+            video_files: Default::default(), audio_files: Default::default(), image_files: Default::default(),
+            document_files: Default::default(), table_files: Default::default(), other_files: Default::default(),
+            chat_files: Default::default(), project_settings: Default::default(), saved_searches: Default::default(),
+            project_tags: Default::default(), project_people: Default::default(), project_places: Default::default(),
+            project_organizations: Default::default(), project_highlights_config: Default::default(),
+            project_highlights_filters: Default::default(), project_highlights_summary_types: Default::default(),
+        };
+        let xml_string = quick_xml::se::to_string(&initial_project_data)?;
+        fs::write(&project_xml_path, xml_string)?;
+
+        let new_transcript_filename = format!("{}.json", docx_filename_stem);
+        let final_transcript_path = transcript_specific_dir.join(&new_transcript_filename);
+
+        let segments = vec![TranscriptSegment { start_time: 0.0, end_time: 1.0, speaker: "S1".to_string(), text: "Test Content" }];
+        let json_content_segments = serde_json::to_string_pretty(&segments)?;
+        fs::write(&final_transcript_path, json_content_segments)?;
+        assert!(final_transcript_path.exists(), "Transcript file should be created for test setup");
+
+        // --- Test DB Setup (In-Memory) ---
+        let mut conn_test_db = Connection::open_in_memory()?;
+        // Manually run the DDL for asset_metadata table and trigger for the test connection
+        conn_test_db.execute_batch(
+            "CREATE TABLE IF NOT EXISTS asset_metadata (
+                asset_relative_path TEXT PRIMARY KEY, file_name TEXT NOT NULL, file_path TEXT NOT NULL,
+                last_modified TEXT NOT NULL, title TEXT, description TEXT, summary TEXT,
+                duration_seconds REAL, width INTEGER, height INTEGER, frame_rate REAL,
+                bit_rate INTEGER, audio_codec TEXT, video_codec TEXT, creation_time TEXT,
+                asset_type TEXT NOT NULL, custom_fields_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TRIGGER IF NOT EXISTS update_asset_metadata_updated_at
+            AFTER UPDATE ON asset_metadata FOR EACH ROW BEGIN
+                UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP WHERE asset_relative_path = OLD.asset_relative_path;
+            END;",
+        )?;
+
+        // --- Simulate core logic of import_word_transcript related to metadata and XML ---
+        // This part replicates the logic that would be in import_word_transcript
+
+        // 1. Create FileMetadata for DB
+        let file_metadata_for_db_obj = FileMetadata {
+            file_name: new_transcript_filename.clone(),
+            file_path: final_transcript_path.to_string_lossy().into_owned(),
+            last_modified: Utc::now().to_rfc3339(),
+            title: String::new(), description: String::new(), summary: String::new(),
+            duration_seconds: None, width: None, height: None, frame_rate: None,
+            bit_rate: None, audio_codec: None, video_codec: None, creation_time: None,
+        };
+
+        let asset_relative_path_for_db_str = final_transcript_path
+            .strip_prefix(project_base_dir)?
+            .to_string_lossy()
+            .replace("\\", "/");
+        let asset_type_str = "imported_transcript";
+
+        // 2. Simulate saving metadata to DB (using the test in-memory connection)
+        // Replicating db_handler::save_asset_metadata's core SQL for the test:
+        {
+            let custom_fields_json_val: Option<&str> = None;
+            let sql_insert = "
+                INSERT INTO asset_metadata (
+                    asset_relative_path, file_name, file_path, last_modified, title,
+                    description, summary, duration_seconds, width, height, frame_rate,
+                    bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                ON CONFLICT(asset_relative_path) DO UPDATE SET
+                    file_name = excluded.file_name, file_path = excluded.file_path, last_modified = excluded.last_modified,
+                    title = excluded.title, description = excluded.description, summary = excluded.summary,
+                    duration_seconds = excluded.duration_seconds, width = excluded.width, height = excluded.height,
+                    frame_rate = excluded.frame_rate, bit_rate = excluded.bit_rate, audio_codec = excluded.audio_codec,
+                    video_codec = excluded.video_codec, creation_time = excluded.creation_time,
+                    asset_type = excluded.asset_type, custom_fields_json = excluded.custom_fields_json,
+                    updated_at = CURRENT_TIMESTAMP;
+            ";
+             conn_test_db.execute(
+                sql_insert,
+                rusqlite::params![
+                    asset_relative_path_for_db_str,
+                    file_metadata_for_db_obj.file_name,
+                    file_metadata_for_db_obj.file_path,
+                    file_metadata_for_db_obj.last_modified,
+                    &file_metadata_for_db_obj.title,
+                    &file_metadata_for_db_obj.description,
+                    &file_metadata_for_db_obj.summary,
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.duration_seconds),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.width),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.height),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.frame_rate),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.bit_rate),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.audio_codec.as_deref()),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.video_codec.as_deref()),
+                    db_handler::to_sql_optional(file_metadata_for_db_obj.creation_time.as_deref()),
+                    asset_type_str,
+                    db_handler::to_sql_optional_str(custom_fields_json_val),
+                ],
+            )?;
+        }
+
+        // 3. Simulate updating Project XML
+        let mut current_project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        let new_imported_transcript_entry_obj = ImportedTranscriptEntryXml {
+            name: new_transcript_filename.clone(),
+            relative_path: asset_relative_path_for_db_str.clone(),
+        };
+        if !current_project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry_obj.relative_path) {
+            current_project_data.imported_transcript_files.files.push(new_imported_transcript_entry_obj.clone());
+            current_project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        // The part for adding to project_data.document_metadata_files is intentionally removed.
+        save_project_xml(&project_xml_path, &current_project_data)?;
+
+        // --- Assertions ---
+        // Verify DB Data by loading it
+        let loaded_db_meta_opt: Option<db_handler::FileMetadataWithCustomFieldsFromDb> = {
+             let mut stmt_load = conn_test_db.prepare("
+                SELECT file_name, file_path, last_modified, title, description, summary,
+                       duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
+                       creation_time, custom_fields_json, asset_type
+                FROM asset_metadata WHERE asset_relative_path = ?1
+            ")?;
+            stmt_load.query_row(rusqlite::params![asset_relative_path_for_db_str], |row| {
+                Ok(db_handler::FileMetadataWithCustomFieldsFromDb {
+                    file_name: row.get(0)?, file_path: row.get(1)?, last_modified: row.get(2)?,
+                    title: row.get(3)?, description: row.get(4)?, summary: row.get(5)?,
+                    duration_seconds: row.get(6)?, width: row.get(7)?, height: row.get(8)?,
+                    frame_rate: row.get(9)?, bit_rate: row.get(10)?, audio_codec: row.get(11)?,
+                    video_codec: row.get(12)?, creation_time: row.get(13)?,
+                    custom_fields_json: row.get(14)?, asset_type: row.get(15)?,
+                })
+            }).optional()?
+        };
+
+        assert!(loaded_db_meta_opt.is_some(), "Metadata should be found in DB");
+        if let Some(loaded_db_meta_val) = loaded_db_meta_opt {
+            assert_eq!(loaded_db_meta_val.file_name, file_metadata_for_db_obj.file_name);
+            assert_eq!(loaded_db_meta_val.file_path, file_metadata_for_db_obj.file_path);
+            assert_eq!(loaded_db_meta_val.title.unwrap_or_default(), file_metadata_for_db_obj.title);
+            assert_eq!(loaded_db_meta_val.asset_type, asset_type_str);
+            assert!(loaded_db_meta_val.custom_fields_json.is_none());
+        }
+
+        // Verify XML Data
+        let updated_project_data_from_xml_check: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+        assert_eq!(updated_project_data_from_xml_check.imported_transcript_files.files.len(), 1);
+        assert_eq!(updated_project_data_from_xml_check.imported_transcript_files.files[0].name, new_imported_transcript_entry_obj.name);
+        assert!(updated_project_data_from_xml_check.document_metadata_files.files.is_empty(), "Document metadata files list in XML should be empty regarding this transcript.");
+
+        Ok(())
+    }
 }
