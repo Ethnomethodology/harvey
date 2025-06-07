@@ -798,7 +798,7 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) { const proj
 
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
-+   const tsState = get(transcriptStore); // Get transcript store state
+    const tsState = get(transcriptStore); // Get transcript store state
     let itemIsDirty = false;
     let itemPath = null;
     let itemName = '';
