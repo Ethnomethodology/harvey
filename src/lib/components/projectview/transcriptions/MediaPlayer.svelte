@@ -14,7 +14,6 @@
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { onMount, onDestroy, tick } from 'svelte';
 	// --- Import service functions ---
-	// Removed requestTranscription, Added handleTrimMediaConfirm, refreshProjectFiles
 	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
 
 	// Loop/Pause Toggle State & Icons
