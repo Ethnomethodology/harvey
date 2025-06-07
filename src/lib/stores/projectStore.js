@@ -521,6 +521,10 @@ listen('item_renamed', (event) => {
             updatedState.currentImportedTranscriptPath = normalized_new_path;
             stateChanged = true;
             console.log('[ProjectStore item_renamed] Updated currentImportedTranscriptPath.');
+        } else if (item_type === 'media' && p.selectedMediaNotePath === normalized_old_path) {
+            updatedState.selectedMediaNotePath = normalized_new_path;
+            stateChanged = true;
+            console.log('[ProjectStore item_renamed] Updated selectedMediaNotePath.');
         }
         // TODO: Add checks for table and image if dedicated selected path variables are introduced.
         // For now, if a table or image was selected via selectedDocumentPath, it will be handled by the 'doc' case

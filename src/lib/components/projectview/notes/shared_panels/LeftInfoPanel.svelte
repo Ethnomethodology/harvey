@@ -11,6 +11,95 @@
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
+    // Helper function to get details of the original asset
+    async function getOriginalAssetDetails(selectedPath, projectStore) {
+        if (!selectedPath || !projectStore || !projectStore.baseDirectory) {
+            console.warn('[getOriginalAssetDetails] Missing selectedPath or projectStore data.');
+            const fallbackName = selectedPath ? await basename(selectedPath) : 'Unknown.file';
+            return {
+                originalRelativePath: selectedPath, // Fallback, might not be relative
+                originalAbsolutePath: selectedPath,
+                originalType: fallbackName.includes('.') ? fallbackName.substring(fallbackName.lastIndexOf('.') + 1) : 'unknown',
+                originalFileName: fallbackName,
+                isView: false
+            };
+        }
+
+        const pathSep = projectStore.baseDirectory.includes('/') ? '/' : '\\';
+        let originalRelativePath = selectedPath.startsWith(projectStore.baseDirectory)
+            ? selectedPath.substring(projectStore.baseDirectory.length + (selectedPath.startsWith(projectStore.baseDirectory + pathSep) ? 1 : 0))
+            : selectedPath; // Fallback if not under base dir (should not happen for project files)
+        originalRelativePath = originalRelativePath.replace(/\\/g, '/'); // Normalize to forward slashes
+
+        let originalAbsolutePath = selectedPath;
+        let originalFileName = await basename(selectedPath);
+        let originalType = await getFileExtname(originalFileName).then(ext => ext ? ext.toLowerCase() : 'unknown');
+        let isView = false;
+
+        const selectedFileExt = await getFileExtname(selectedPath).then(ext => ext ? ext.toLowerCase() : '');
+
+        if (selectedFileExt === 'json') {
+            // This JSON might be a view of another document (e.g., a .docx file)
+            const selectedFileNameStem = originalFileName.substring(0, originalFileName.length - (selectedFileExt.length + 1));
+            const potentialOriginalExtensions = ['docx', 'pdf', 'txt', 'md']; // Add more as needed
+
+            // Check $project.documentFiles
+            if (projectStore.documentFiles && Array.isArray(projectStore.documentFiles)) {
+                for (const docExt of potentialOriginalExtensions) {
+                    const potentialOriginalFileName = `${selectedFileNameStem}.${docExt}`;
+                    // Search for this file in projectStore.documentFiles
+                    // documentFiles usually store relative paths
+                    for (const docFile of projectStore.documentFiles) {
+                        if (docFile.name === potentialOriginalFileName) {
+                            // Found a potential original document
+                            const resolvedOriginalAbsolutePath = await resolve(projectStore.baseDirectory, docFile.relativePath);
+                            const normalizedSelectedPath = normalizePathForComparison(selectedPath);
+                            const normalizedViewPathForOriginal = normalizePathForComparison(await resolve(projectStore.baseDirectory, `${docFile.relativePath}.json`)); // Assuming view is named original.ext.json
+
+                            // Heuristic: if the selected JSON path is what a view of this docFile would be named
+                            // This check needs refinement. For now, we assume if a docx has a json with same stem, it's the view.
+                            // A more robust way would be if the JSON file itself has a pointer to its original.
+                            // Or, if the selected JSON file's name matches "<original_stem>.json" and an "<original_stem>.<docExt>" exists.
+                            // The current check is more direct: is there a docFile whose name matches what we'd expect for an original of this JSON?
+                            // Let's refine the condition for identifying the "view" scenario.
+                            // If selectedPath is "/path/to/file.docx.json" and we find "file.docx"
+                            // A common pattern for derived files is adding an extension, e.g., original.docx -> original.docx.json
+                            // Or, original.docx -> original.json (if in different dir or if only one representation is kept in the same dir)
+
+                            // For this specific task, the problem states: "a JSON representation of a DOCX file"
+                            // e.g. selectedItemPathInStore points to a .json file that is a view of an original document (e.g., a .docx file)
+                            // This implies the JSON file might be, for example, "MyDoc.json" as a view for "MyDoc.docx".
+
+                            // Let's assume the JSON view has the same stem as the original.
+                            const currentJsonStem = selectedFileNameStem;
+                            const originalDocStem = docFile.name.substring(0, docFile.name.lastIndexOf('.'));
+
+                            if (currentJsonStem === originalDocStem) {
+                                originalRelativePath = docFile.relativePath.replace(/\\/g, '/');
+                                originalAbsolutePath = await resolve(projectStore.baseDirectory, docFile.relativePath);
+                                originalFileName = docFile.name;
+                                originalType = await getFileExtname(originalFileName).then(ext => ext ? ext.toLowerCase() : 'unknown');
+                                isView = true;
+                                console.log(`[getOriginalAssetDetails] Identified original asset for JSON view: ${originalFileName} (Rel: ${originalRelativePath})`);
+                                break; // Found original, break from docFile loop
+                            }
+                        }
+                    }
+                    if (isView) break; // Found original, break from potentialOriginalExtensions loop
+                }
+            }
+            // TODO: Could also check $project.files for media if similar pattern applies.
+        }
+
+        return {
+            originalRelativePath,
+            originalAbsolutePath,
+            originalType,
+            originalFileName,
+            isView
+        };
+    }
+
     function formatDuration(seconds) {
         if (!seconds && seconds !== 0) return '';
         const h = Math.floor(seconds / 3600);
@@ -39,6 +128,7 @@
 
     let currentFileMetadata = null; // Will store FileMetadata like structure, including customFields
     let fullLoadedMetadataObject = null; // May store the raw object from DB (FileMetadataWithCustomFieldsFromDb) or be refactored/removed
+    let currentOriginalAssetDetails = null; // Will store { originalRelativePath, originalAbsolutePath, originalType, originalFileName, isView }
     let isEditing = false;
     let editableMetadata = {
         file_name: '',
@@ -67,17 +157,12 @@
 
     onMount(() => {
         console.log('[LeftInfoPanel] Mounted.');
-        // Initialize previousSelectedItemPath when the component mounts.
-        previousSelectedItemPath = selectedItemPathInStore;
-
-        // Initial load if a path is already selected and metadata isn't loaded
-        if (selectedItemPathInStore && !currentFileMetadata) {
-            console.log('[LeftInfoPanel onMount] Initial load for:', selectedItemPathInStore);
-            loadMetadata(selectedItemPathInStore);
-        }
+        previousSelectedItemPath = null;
+        // Log initial selectedItemPathInStore. The reactive block will log derived original path.
+        console.log('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore);
     });
 
-    async function loadMetadata(assetRelativePath) { // Renamed filePath to assetRelativePath for clarity
+    async function loadMetadata(assetRelativePath) { // assetRelativePath is the original relative path
         currentFileMetadata = null;
         fullLoadedMetadataObject = null;
         if (isEditing && assetRelativePath !== previousSelectedItemPath) { // previousSelectedItemPath now stores relative path
@@ -95,10 +180,16 @@
 
             if (result) {
                 // result is FileMetadataWithCustomFieldsFromDb
+                // assetRelativePath is the original relative path
+                // currentOriginalAssetDetails should be up-to-date due to the reactive chain
+                const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath);
+                const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath);
+
                 currentFileMetadata = {
-                    file_name: result.file_name,
-                    file_path: assetRelativePath, // Store the relative path (DB key)
-                    db_absolute_file_path: result.file_path, // Store absolute path from DB
+                    file_name: originalFileNameToUse,       // Use original filename from currentOriginalAssetDetails
+                    file_path: assetRelativePath,           // This is original relative path (DB key)
+                    // Prioritize freshly derived originalAbsolutePath. Fallback to result.file_path if currentOriginalAssetDetails is somehow not fully populated.
+                    db_absolute_file_path: currentOriginalAssetDetails?.originalAbsolutePath || result.file_path,
                     last_modified: result.last_modified,
                     title: result.title || '',
                     description: result.description || '',
@@ -114,61 +205,56 @@
                     customFields: result.custom_fields_json ? JSON.parse(result.custom_fields_json) : [],
                 };
                 fullLoadedMetadataObject = {
-                    metadata: { ...currentFileMetadata }, // currentFileMetadata now correctly has relative file_path and db_absolute_file_path
+                    // Ensure this also uses the definitive original absolute path for its 'file_path' field, consistent with currentFileMetadata
+                    metadata: { ...currentFileMetadata, file_path: currentOriginalAssetDetails?.originalAbsolutePath || result.file_path },
                     customFields: currentFileMetadata.customFields,
-                    asset_type: result.asset_type,
+                    asset_type: currentItemType, // Use currentItemType which is already based on original asset
                     version: "db_1.0"
                 };
                 console.log('[LeftInfoPanel] Metadata loaded from DB:', currentFileMetadata);
             } else {
                 console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath);
-                const baseNameStr = await basename(assetRelativePath);
-                let absPathOnInit = '';
-                if ($project.baseDirectory && assetRelativePath) {
-                    absPathOnInit = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
-                } else {
-                    absPathOnInit = assetRelativePath; // Fallback
-                }
+                // assetRelativePath is original relative path
+                const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath);
+                const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath);
+
                 currentFileMetadata = {
-                    file_name: baseNameStr,
-                    file_path: assetRelativePath, // Relative path
-                    db_absolute_file_path: absPathOnInit, // Constructed absolute path
+                    file_name: originalFileNameToUse,
+                    file_path: assetRelativePath,        // Original relative path
+                    db_absolute_file_path: originalAbsolutePathToUse, // Original absolute path
                     last_modified: new Date().toISOString(),
                     title: '', description: '', summary: '', customFields: [],
                     duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
                 };
-                // Ensure fullLoadedMetadataObject.metadata also has file_path as relative and db_absolute_file_path
-                fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_new" };
+                fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_new" }; // Here, currentFileMetadata.db_absolute_file_path is originalAbsolutePathToUse
             }
         } catch (error) {
             console.error(`[LeftInfoPanel] Error loading metadata from DB for ${assetRelativePath}:`, error);
-            const baseNameStrOnError = await basename(assetRelativePath || '').catch(() => 'Unknown File');
-            let absPathOnError = assetRelativePath || '';
-             if ($project.baseDirectory && assetRelativePath) {
-                absPathOnError = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
-            }
+            const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath || 'Unknown.file').catch(() => 'Unknown.file');
+            const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory && assetRelativePath ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath || '');
+
             currentFileMetadata = {
-                file_name: baseNameStrOnError,
-                file_path: assetRelativePath || '',
-                db_absolute_file_path: absPathOnError,
+                file_name: originalFileNameToUse,       // Original filename
+                file_path: assetRelativePath || '',     // Original relative path
+                db_absolute_file_path: originalAbsolutePathToUse, // Original absolute path
                 last_modified: new Date().toISOString(),
                 title: '', description: '', summary: '', customFields: [],
                 duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
             };
-            fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_error" };
+            fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_error" };  // Here, currentFileMetadata.db_absolute_file_path is originalAbsolutePathToUse
             await message(`Error loading metadata: ${error}`, { title: 'Load Error', type: 'error' });
         }
 
-        if (!currentFileMetadata) {
-            const fallbackBasename = await basename(assetRelativePath || '').catch(() => 'Unknown File');
-            let fallbackAbsPath = assetRelativePath || '';
-            if ($project.baseDirectory && assetRelativePath) {
-                 fallbackAbsPath = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
-            }
+        // Fallback if currentFileMetadata is still null after try-catch
+        if (!currentFileMetadata) { // This block might be redundant if currentOriginalAssetDetails is guaranteed to be set before loadMetadata is called.
+            console.warn('[LeftInfoPanel] currentFileMetadata is null, creating fallback structure (should be rare if reactive flow is correct).');
+            const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath || 'Unknown.file').catch(() => 'Unknown.file');
+            const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory && assetRelativePath ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath || '');
+
             currentFileMetadata = {
-                file_name: fallbackBasename,
-                file_path: assetRelativePath || '', // Relative
-                db_absolute_file_path: fallbackAbsPath, // Absolute
+                file_name: originalFileNameToUse,       // Original filename
+                file_path: assetRelativePath || '',     // Original relative path
+                db_absolute_file_path: originalAbsolutePathToUse, // Original absolute path
                 last_modified: new Date().toISOString(),
                 title: '', description: '', summary: '', customFields: [],
                 duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
@@ -259,15 +345,32 @@
             // due to path changes. This is a common pattern: rename is a distinct operation.
             // If we wanted to save other fields *after* rename, the `assetKeyForDb` would need to be the *new* key.
             if (!renameProcessed) {
-                let absolutePathForPayload = currentFileMetadata.db_absolute_file_path;
-                if (!absolutePathForPayload && $project.baseDirectory && assetKeyForDb) { // assetKeyForDb is relative
-                    absolutePathForPayload = `${$project.baseDirectory}${getPathSep}${assetKeyForDb}`;
+                // currentFileMetadata.file_path is the original relative path (assetKeyForDb)
+                // currentFileMetadata.db_absolute_file_path should be the original absolute path,
+                // populated correctly by loadMetadata from currentOriginalAssetDetails or from DB record.
+                const originalAssetAbsolutePath = currentFileMetadata.db_absolute_file_path;
+
+                if (!originalAssetAbsolutePath || originalAssetAbsolutePath.trim() === '') {
+                    console.error('[LeftInfoPanel] Save error: Original asset absolute path is missing or empty in currentFileMetadata.db_absolute_file_path.');
+                    console.error('[LeftInfoPanel] currentFileMetadata details:', JSON.stringify(currentFileMetadata));
+                    console.error('[LeftInfoPanel] currentOriginalAssetDetails:', JSON.stringify(currentOriginalAssetDetails));
+                    await message('Cannot save: Original asset absolute path could not be determined. Please try reloading the item or checking project integrity.', { title: 'Save Error', type: 'error' });
+                    isEditing = true; // Keep editing mode
+                    return; // Do not proceed
                 }
-                const finalPayloadFilePath = absolutePathForPayload || assetKeyForDb; // Fallback to relative if absolute can't be formed
+
+                // Further check: Ensure it looks like an absolute path (simple check, might need OS-specifics for robustness)
+                // For this project, paths usually start with $project.baseDirectory or are fully qualified.
+                // A simple check is if it contains the project's base directory, or starts with '/' or a drive letter e.g. C:\
+                // This is a basic sanity check. `resolve` in `getOriginalAssetDetails` should ensure it's absolute.
+                if (!originalAssetAbsolutePath.startsWith($project.baseDirectory) && !originalAssetAbsolutePath.startsWith('/') && !/^[a-zA-Z]:\\/.test(originalAssetAbsolutePath)) {
+                     console.warn(`[LeftInfoPanel] Save warning: The determined absolute path "${originalAssetAbsolutePath}" might not be truly absolute. Proceeding, but this could indicate an issue if it's not an intended external path.`);
+                     // Depending on strictness, one might abort here too. For now, a warning.
+                }
 
                 const metadataPayloadForDb = {
-                    file_name: currentFileMetadata.file_name,
-                    file_path: finalPayloadFilePath,
+                    file_name: currentFileMetadata.file_name, // This is originalFileName
+                    file_path: originalAssetAbsolutePath,     // This is originalAbsolutePath
                     last_modified: new Date().toISOString(),
                     title: editableMetadata.title.trim(),
                     description: editableMetadata.description.trim(),
@@ -285,22 +388,25 @@
 
                 const customFieldsToSaveForDb = editableMetadata.customFields || [];
 
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetRelativePath (key for command):', assetKeyForDb);
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayload.file_path (absolute path in payload):', metadataPayloadForDb.file_path);
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetRelativePath (key for command):', assetKeyForDb); // Should be original relative path
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayload.file_path (absolute path in payload):', originalAssetAbsolutePath);
                 console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayloadForDb:', JSON.stringify(metadataPayloadForDb));
                 console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - customFieldsPayload:', JSON.stringify(customFieldsToSaveForDb));
                 console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetType:', currentItemType);
 
                 try {
                     await invoke('update_asset_metadata_command', {
-                        assetRelativePath: assetKeyForDb, // This MUST be the relative path
-                        metadataPayload: metadataPayloadForDb,
+                        assetRelativePath: assetKeyForDb,       // Original relative path (key for DB lookup)
+                        metadataPayload: metadataPayloadForDb,  // Contains original absolute path in its file_path field
                         customFieldsPayload: customFieldsToSaveForDb,
-                        assetType: currentItemType
+                        assetType: currentItemType              // Original asset type
                     });
 
                     // Update local state to reflect saved data
-                    currentFileMetadata.db_absolute_file_path = metadataPayloadForDb.file_path; // Update with the path that was actually saved
+                    // currentFileMetadata.db_absolute_file_path should already be originalAssetAbsolutePath
+                    // If the backend potentially changes the path upon update (e.g. sanitization), the response should provide it.
+                    // For now, assume it remains originalAssetAbsolutePath.
+                    currentFileMetadata.db_absolute_file_path = originalAssetAbsolutePath;
                     currentFileMetadata.title = metadataPayloadForDb.title;
                     currentFileMetadata.description = metadataPayloadForDb.description;
                     currentFileMetadata.summary = metadataPayloadForDb.summary;
@@ -313,6 +419,11 @@
                     }
                     isEditing = false;
                     await message('Metadata saved successfully!', { title: 'Success' });
+
+                    // Explicitly reload metadata to refresh UI with any backend-derived changes (e.g. last_modified)
+                    // assetKeyForDb is the original relative path, which is what loadMetadata expects
+                    console.log('[LeftInfoPanel] Explicitly reloading metadata after save for:', assetKeyForDb);
+                    await loadMetadata(assetKeyForDb);
 
                 } catch (err) {
                     console.error('[LeftInfoPanel] Error saving metadata to DB:', err);
@@ -329,128 +440,118 @@
 
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
-    let currentItemType = null;
-    $: if (selectedItemPathInStore && $project.baseDirectory) {
-        const path = selectedItemPathInStore;
-        const name = currentFileMetadata?.file_name || (path ? path.substring(path.lastIndexOf(getPathSep) + 1) : '');
-        const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    let currentItemType = null; // This will now be derived from currentOriginalAssetDetails.originalType primarily
 
-        if (AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) {
-            if (currentItemType !== 'media') {
-                currentItemType = 'media';
-                console.log(`[LeftInfoPanel] Determined currentItemType: media for path: ${path} (name: ${name}, ext: ${ext})`);
-            }
-        } else if (IMAGE_EXTENSIONS.has(ext)) {
-            if (currentItemType !== 'image') {
-                currentItemType = 'image';
-                console.log(`[LeftInfoPanel] Determined currentItemType: image for path: ${path} (name: ${name}, ext: ${ext})`);
-            }
-        } else if (ext === 'pdf' || ext === 'json' || ext === 'txt' || ext === 'md') {
-            const determineIfImportedTranscript = async (selectedPath) => {
-                if (!$project.importedTranscriptFiles) return false;
-                for (const f of $project.importedTranscriptFiles) {
-                    if (!f.relativePath) continue;
-                    try {
-                        const constructedAbsolutePath = await resolve($project.baseDirectory, f.relativePath);
-                        // Ensure this log is active (not commented out) for debugging:
-                        console.log(
-                            `[LeftInfoPanel Type Check DEBUG] Comparing for imported transcript:
-        Selected Path (from store, should be absolute): "${selectedPath}"
-        File Entry Relative Path (from XML): "${f.relativePath}"
-        Project Base Directory: "${$project.baseDirectory}"
-        Resolved Constructed Absolute Path: "${constructedAbsolutePath}"
-        Match Found: ${selectedPath === constructedAbsolutePath}`
-                        );
-                        if (selectedPath === constructedAbsolutePath) { // Direct comparison with resolved absolute path
-                            return true;
-                        }
-                    } catch (e) {
-                        console.error("[LeftInfoPanel Type Check DEBUG] Error resolving path for imported transcript check:", $project.baseDirectory, f.relativePath, e);
-                        continue;
-                    }
-                }
-                return false;
-            };
-
-            determineIfImportedTranscript(path).then(isImpTrans => {
-                if (isImpTrans) {
-                    if (currentItemType !== 'imported_transcript') {
-                        currentItemType = 'imported_transcript';
-                        console.log(`[LeftInfoPanel] Determined currentItemType (async): imported_transcript for path: ${path} (name: ${name}, ext: ${ext})`);
-                    }
-                } else {
-                    if (currentItemType !== 'doc') {
-                        currentItemType = 'doc';
-                        console.log(`[LeftInfoPanel] Determined currentItemType (async): doc for path: ${path} (name: ${name}, ext: ${ext})`);
-                    }
-                }
-            }).catch(e => {
-                console.error("[LeftInfoPanel Type Check DEBUG] Error in determineIfImportedTranscript promise:", e);
-                if (currentItemType !== 'doc') { // Fallback
-                    currentItemType = 'doc';
-                    console.log(`[LeftInfoPanel] Determined currentItemType (async error fallback): doc for path: ${path} (name: ${name}, ext: ${ext})`);
-                }
-            });
-        } else if (ext === 'csv' || ext === 'xlsx') {
-            if (currentItemType !== 'table') {
-                currentItemType = 'table';
-                console.log(`[LeftInfoPanel] Determined currentItemType: table for path: ${path} (name: ${name}, ext: ${ext})`);
-            }
-        } else {
-            if (currentItemType !== 'unknown') {
-                currentItemType = 'unknown';
-                console.log(`[LeftInfoPanel] Determined currentItemType: unknown for path: ${path} (name: ${name}, ext: ${ext})`);
-            }
-        }
-    } else {
-        if (currentItemType !== null) {
-            currentItemType = null;
-            // console.log(`[LeftInfoPanel] currentItemType reset to null as no item is selected or baseDirectory is missing.`);
-        }
-    }
-
+    // Main reactive block for deriving current asset details and loading metadata
     $: {
-        // selectedItemPathInStore is an absolute path from the projectStore
-        // It needs to be converted to a relative path for DB operations and for previousSelectedItemPath tracking
-        let currentRelativePath = null;
-        if (selectedItemPathInStore && $project.baseDirectory && selectedItemPathInStore.startsWith($project.baseDirectory)) {
-            let relPath = selectedItemPathInStore.substring($project.baseDirectory.length);
-            const pathSep = $project.baseDirectory.includes('/') ? '/' : '\\'; // Determine separator from baseDirectory
-            if (relPath.startsWith(pathSep)) {
-                relPath = relPath.substring(1);
-            }
-            currentRelativePath = relPath.replace(/\\/g, '/'); // Normalize to forward slashes
-        } else if (selectedItemPathInStore) {
-            // If it's not under baseDirectory, it might be an external file or an issue.
-            // For now, treat it as if no valid selection for DB metadata.
-            console.warn(`[LeftInfoPanel] Selected path ${selectedItemPathInStore} is not relative to project base ${$project.baseDirectory}. Cannot load DB metadata.`);
-        }
+        // Log selectedItemPathInStore changes directly in the reaction if needed, or rely on onMount + path change logs
+        // This $: block will run when selectedItemPathInStore (or $project.baseDirectory) changes.
 
-        if (currentRelativePath !== previousSelectedItemPath) {
-            console.log(`[LeftInfoPanel] Relative path for metadata has changed FROM '${previousSelectedItemPath}' TO '${currentRelativePath}'.`);
-            if (isEditing) {
-                console.log('[LeftInfoPanel] Resetting isEditing to false due to path change.');
-                isEditing = false;
+        let newCurrentRelativePath = null;
+        let newCurrentItemType = null;
+        let newOriginalAssetDetails = null;
+
+        (async () => {
+            // Log change of selectedItemPathInStore that triggers this async block
+            console.log('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', selectedItemPathInStore);
+
+            if (selectedItemPathInStore && $project && $project.baseDirectory) {
+                newOriginalAssetDetails = await getOriginalAssetDetails(selectedItemPathInStore, $project);
+                currentOriginalAssetDetails = newOriginalAssetDetails;
+                console.log('[LeftInfoPanel Reactive] currentOriginalAssetDetails determined:', currentOriginalAssetDetails);
+
+
+                if (newOriginalAssetDetails) {
+                    newCurrentRelativePath = newOriginalAssetDetails.originalRelativePath;
+                    // Log newCurrentRelativePath when it's derived
+                    console.log('[LeftInfoPanel Reactive] originalRelativePath derived by getOriginalAssetDetails is:', newCurrentRelativePath);
+                    const originalExt = newOriginalAssetDetails.originalType;
+
+                    // --- Start of new currentItemType derivation ---
+                    if (AUDIO_EXTENSIONS.has(originalExt) || VIDEO_EXTENSIONS.has(originalExt)) {
+                        newCurrentItemType = 'media';
+                    } else if (IMAGE_EXTENSIONS.has(originalExt)) {
+                        newCurrentItemType = 'image';
+                    } else if (originalExt === 'pdf' || originalExt === 'json' || originalExt === 'txt' || originalExt === 'md' || originalExt === 'docx' || originalExt === 'rtf' || originalExt === 'odt') { // Added docx etc.
+                        // Check if it's an imported transcript based on its *original* path
+                        let isImpTrans = false;
+                        if ($project.importedTranscriptFiles && newOriginalAssetDetails.originalAbsolutePath) {
+                            for (const f of $project.importedTranscriptFiles) {
+                                if (!f.relativePath) continue;
+                                try {
+                                    const constructedAbsolutePath = await resolve($project.baseDirectory, f.relativePath);
+                                    if (normalizePathForComparison(newOriginalAssetDetails.originalAbsolutePath) === normalizePathForComparison(constructedAbsolutePath)) {
+                                        isImpTrans = true;
+                                        break;
+                                    }
+                                } catch (e) {
+                                    console.error("[LeftInfoPanel Type Check] Error resolving path for imported transcript check:", e);
+                                }
+                            }
+                        }
+                        if (isImpTrans) {
+                            newCurrentItemType = 'imported_transcript';
+                        } else {
+                            newCurrentItemType = 'doc'; // Covers docx, pdf, txt, md, and also standalone json if not a view
+                        }
+                    } else if (originalExt === 'csv' || originalExt === 'xlsx') {
+                        newCurrentItemType = 'table';
+                    } else {
+                        newCurrentItemType = 'unknown';
+                    }
+                    console.log(`[LeftInfoPanel] Derived currentItemType: ${newCurrentItemType} for original asset type: ${originalExt} (Path: ${newCurrentRelativePath})`);
+                    // --- End of new currentItemType derivation ---
+
+                } else {
+                    console.warn(`[LeftInfoPanel] getOriginalAssetDetails returned null/undefined for ${selectedItemPathInStore}.`);
+                }
+            } else if (selectedItemPathInStore) {
+                console.warn(`[LeftInfoPanel] Selected path ${selectedItemPathInStore} exists, but project or baseDirectory might be missing. Cannot derive original asset details.`);
             }
-            if (currentRelativePath) {
-                loadMetadata(currentRelativePath);
-            } else {
+
+            // Update currentItemType reactively
+            if (currentItemType !== newCurrentItemType) {
+                currentItemType = newCurrentItemType;
+            }
+
+            // Logic for loading metadata based on path changes (adapted from existing)
+            if (newCurrentRelativePath !== previousSelectedItemPath) {
+                // This log is good and indicates the key change for metadata loading
+                console.log(`[LeftInfoPanel Reactive] Original relative path for metadata (previousSelectedItemPath) has changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`);
+                if (isEditing) {
+                    console.log('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.');
+                    isEditing = false;
+                }
+                if (newCurrentRelativePath) {
+                    // Ensure loadMetadata is called with the new original relative path
+                    loadMetadata(newCurrentRelativePath);
+                } else {
+                    currentFileMetadata = null;
+                    fullLoadedMetadataObject = null;
+                    // currentItemType = null; // Already handled above by newCurrentItemType
+                }
+                previousSelectedItemPath = newCurrentRelativePath; // Store the original relative path
+            } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
+                console.log(`[LeftInfoPanel] Original relative path became null (was '${previousSelectedItemPath}'). Resetting metadata.`);
                 currentFileMetadata = null;
                 fullLoadedMetadataObject = null;
-                currentItemType = null;
+                // currentItemType = null; // Already handled by newCurrentItemType
+                if (isEditing) {
+                    isEditing = false;
+                }
+                previousSelectedItemPath = null;
             }
-            previousSelectedItemPath = currentRelativePath; // Store the relative path now
-        } else if (!currentRelativePath && previousSelectedItemPath !== null) {
-            console.log(`[LeftInfoPanel] Relative path became null (was '${previousSelectedItemPath}'). Resetting metadata.`);
-            currentFileMetadata = null;
-            fullLoadedMetadataObject = null;
-            currentItemType = null;
-            if (isEditing) {
-                isEditing = false;
-            }
-            previousSelectedItemPath = null;
-        }
+        })();
+    } // End of main reactive block
+
+    // Remove or comment out the old currentItemType derivation block, as it's now handled within the main reactive block
+    /*
+    $: if (selectedItemPathInStore && $project.baseDirectory) {
+        // ... old logic ...
+    } else {
+        // ... old logic ...
     }
+    */
 
     $: if (isEditing && currentFileMetadata) {
         console.log('[LeftInfoPanel] Populating editableMetadata because isEditing is true and currentFileMetadata exists.');
