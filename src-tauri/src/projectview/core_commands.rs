@@ -1771,4 +1771,3 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
     info!("[Backend Rename] Success for: {}", item_path);
     Ok(())
 }
-[end of src-tauri/src/projectview/core_commands.rs]
