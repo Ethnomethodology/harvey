@@ -283,7 +283,7 @@
     $: if (selectedItemPathInStore && $project.baseDirectory) {
         const path = selectedItemPathInStore;
         // Try to get the actual filename from currentFileMetadata first, as it's most reliable after load
-        const name = currentFileMetadata?.file_name || (path ? path.substring(path.lastIndexOf(sep()) + 1) : '');
+        const name = currentFileMetadata?.file_name || (path ? path.substring(path.lastIndexOf(getPathSep) + 1) : '');
         const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
 
         if (AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) {
@@ -291,7 +291,7 @@
         } else if (IMAGE_EXTENSIONS.has(ext)) {
             currentItemType = 'image';
         } else if (ext === 'pdf' || ext === 'json' || ext === 'txt' || ext === 'md') {
-            const isImportedTranscript = $project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}${sep()}${f.relativePath}` === path);
+            const isImportedTranscript = $project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}${getPathSep}${f.relativePath}` === path);
             if (isImportedTranscript) {
                 currentItemType = 'imported_transcript';
             } else {
