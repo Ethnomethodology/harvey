@@ -6,7 +6,7 @@ use crate::welcome::config::CommandError; // Assuming this is your custom error 
 use crate::projectview::db_handler; // Added
 use chrono::Utc;
 use serde_json;
-use log::{info, warn, error, debug}; // debug added back for consistency, error already present
+use log::{info, warn, error}; // debug removed
 use std::{
     fs,
     // io::{Read, Write} removed as per instruction, assuming File ops below don't need direct trait import

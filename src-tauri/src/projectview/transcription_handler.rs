@@ -10,7 +10,7 @@ use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
     fs,
-    path::{Path, PathBuf}, // Path added
+    path::PathBuf, // Path removed, PathBuf remains
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
 use chrono::Utc; // Added for timestamping metadata

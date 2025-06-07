@@ -618,6 +618,11 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if project_data.image_files.files.len() < initial_image_len {
                     info!("[Backend Delete] Cleaned up XML image entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
+                    if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
+                        warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for non-existent image {}: {}", item_relative_path_guess, e);
+                    } else {
+                        info!("[Backend Delete] Deleted asset metadata from DB during cleanup for non-existent image {}", item_relative_path_guess);
+                    }
                 }
             },
             _ => {
@@ -850,6 +855,12 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
             if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "image") {
                 warn!("[Backend Delete] Failed to delete image annotations from DB for {}: {}. File deletion proceeded.", item_relative_path, db_err);
+            }
+
+            if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
+                warn!("[Backend Delete Image] Failed to delete asset metadata from DB for image {}: {}", item_relative_path, e);
+            } else {
+                info!("[Backend Delete Image] Deleted asset metadata from DB for image {}", item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
@@ -1760,5 +1771,4 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
     info!("[Backend Rename] Success for: {}", item_path);
     Ok(())
 }
-
 [end of src-tauri/src/projectview/core_commands.rs]
