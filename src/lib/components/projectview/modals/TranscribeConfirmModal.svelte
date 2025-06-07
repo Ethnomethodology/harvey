@@ -4,6 +4,7 @@
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	// Import project store to read progress data
 	import { project } from '$lib/stores/projectStore.js';
+	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 
 	// Props
 	export let showModal = false;
@@ -103,15 +104,15 @@
 	// --- Reactive Derivations from Store ---
 	// Get progress directly from the global store when the modal is potentially running/cancelling
 	// Use internal status to gate reading from store, otherwise show defaults
-	$: currentProgressPercent = (status === 'running' || status === 'cancelling') && $project.isTranscribing
-								? $project.transcriptionProgress.percent
+	$: currentProgressPercent = (status === 'running' || status === 'cancelling') && $transcriptStore.isTranscribing
+								? $transcriptStore.transcriptionProgress.percent
 								: (status === 'done' ? 100 : 0);
 
-	$: currentProgressMessage = status === 'running' ? ($project.transcriptionProgress.message || 'Processing...')
-							   : status === 'cancelling' ? ($project.transcriptionProgress.message || 'Cancelling...')
+	$: currentProgressMessage = status === 'running' ? ($transcriptStore.transcriptionProgress.message || 'Processing...')
+							   : status === 'cancelling' ? ($transcriptStore.transcriptionProgress.message || 'Cancelling...')
 							   : ''; // No message needed in other states displayed here
 
-	$: currentJobId = $project.transcriptionJobId; // Get current Job ID from store
+	$: currentJobId = $transcriptStore.transcriptionJobId; // Get current Job ID from store
 
 	// --- Title Logic ---
 	$: modalTitle = status === 'confirm' ? 'Confirm Transcription Settings' :
@@ -127,7 +128,7 @@
 	$: if (showModal && typeof window !== 'undefined') {
 		window.addEventListener('keydown', handleKeydown);
 		// Sync status when modal opens, in case transcription was already running
-		if (status === 'confirm' && $project.isTranscribing) {
+		if (status === 'confirm' && $transcriptStore.isTranscribing) {
 			console.log('[Modal] Syncing on show: Active transcription detected, setting status to running.');
 			status = 'running';
 		}

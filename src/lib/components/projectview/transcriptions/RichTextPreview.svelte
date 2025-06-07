@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
-	import { project, updatePlayerCurrentSegmentIndex, prepareDocumentView } from '$lib/stores/projectStore.js';
+	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
+	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick } from 'svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
@@ -162,9 +163,9 @@
 	let canUndo = false;
 	let canRedo = false;
 	$: {
-	  const segs = $project.segments || [];
-	  canUndo = ($project.transcriptUndoStack?.length || 0) > 0;
-	  canRedo = ($project.transcriptRedoStack?.length || 0) > 0;
+	  const segs = $transcriptStore.segments || [];
+	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
+	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
 	  processedSegments = segs.map((seg, segIdx) => {
 	    const rawContent = seg.text;
 	    // --- Begin: detect and wrap bare node JSON if needed ---
@@ -216,7 +217,7 @@
 	}
 
     // --- Highlight and Scroll Logic ---
-    let previewScrollContainerRef; $: activeSegmentIndex = $project.player?.currentSegmentIndex ?? -1;
+    let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
     $: if (activeSegmentIndex !== -1 && isMounted) { tick().then(() => { if (!previewScrollContainerRef) return; const currentElement = document.getElementById(`segment-${activeSegmentIndex}`); if (!currentElement) return; const containerRect = previewScrollContainerRef.getBoundingClientRect(); const currentElementRect = currentElement.getBoundingClientRect(); const nextIndex = activeSegmentIndex + 1; const nextElement = document.getElementById(`segment-${nextIndex}`); const SCROLL_AHEAD_MARGIN_PX = 150; const isCurrentElementNearBottom = currentElementRect.bottom > (containerRect.bottom - SCROLL_AHEAD_MARGIN_PX); let elementToScroll = currentElement; if (nextElement && isCurrentElementNearBottom) { elementToScroll = nextElement; } elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
     let isMounted = false; onMount(() => { isMounted = true; });
 
@@ -267,7 +268,7 @@
     async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = processedSegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
-    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(project).segments; const mediaDuration = get(project).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
+    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
 
 	// --- SVG Icons (Unchanged) ---
 	const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;

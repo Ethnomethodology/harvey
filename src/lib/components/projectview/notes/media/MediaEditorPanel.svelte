@@ -16,7 +16,7 @@
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
 
-    import MediaPlayer from '../../MediaPlayer.svelte';
+    import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
 
     export let mediaPath = null;

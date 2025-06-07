@@ -46,14 +46,15 @@ import { dirname, basename, sep } from '@tauri-apps/api/path';
 
 import {
 	project,
-	setTranscriptData,
-	toggleTranscribeModal,
-	setTranscriptionStatus,
-	updateTranscriptionProgress,
-	clearTranscriptionStatus,
-	selectMedia, // For main transcriptions view
-	clearTranscriptState,
-	markTranscriptAsSaved,
+    // Functions moved to transcriptStore:
+	// setTranscriptData,
+	// toggleTranscribeModal,
+	// setTranscriptionStatus,
+	// updateTranscriptionProgress,
+	// clearTranscriptionStatus,
+	// selectMedia,
+	// clearTranscriptState,
+	// markTranscriptAsSaved,
 
     prepareDocumentView,
     setLoadedDocumentData,
@@ -80,6 +81,18 @@ import {
     prepareMediaNoteView,
     markMediaNoteTranscriptChangesDiscarded // For media notes
 } from '$lib/stores/projectStore.js';
+
+import {
+    transcriptStore,
+    setTranscriptData,
+    toggleTranscribeModal,
+    setTranscriptionStatus,
+    updateTranscriptionProgress,
+    clearTranscriptionStatus,
+    selectMedia, // For main transcriptions view
+    clearTranscriptState,
+    markTranscriptAsSaved
+} from '$lib/stores/transcriptStore.js';
 
 import { getCloudConfig } from './configureActions.js';
 
@@ -579,26 +592,204 @@ export async function loadTableData(tablePath) { if (!tablePath) throw new Error
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
 export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }
-export async function loadTranscriptFile(transcriptFilePath) { if (!transcriptFilePath) { project.update(p => ({ ...p, isTranscriptLoading: false, error: "Transcript file path is missing." })); throw new Error("Transcript file path is required."); } if (!transcriptFilePath.toLowerCase().endsWith('.json')) {} const filename = transcriptFilePath.split(/[\\/]/).pop(); project.update(p => ({ ...p, isTranscriptLoading: true, error: null, statusMessage: `Loading transcript ${filename}...` })); try { const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath }); const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString); setTranscriptData(transcriptFilePath, segmentsArray, false); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.` })); throw new Error(`Failed to load transcript: ${errorMessage}`); } }
-export async function saveTranscriptData() { const projData = get(project); const transcriptPath = projData.currentTranscriptPath; const transcriptSegments = projData.segments; const projectXmlPath = projData.xmlPath; if (!transcriptPath) throw new Error("Cannot save, no transcript loaded."); if (!projectXmlPath) throw new Error("Cannot save, project path unknown."); if (!transcriptPath.toLowerCase().endsWith('.json')) throw new Error("Transcript must be saved as .json."); const filename = transcriptPath.split(/[\\/]/).pop(); project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` })); let fullLexicalTableJsonString = ""; try { const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), }); await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); pSpeaker.append(_createTextNode(segment.speaker || "Unknown")); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); }); fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON()); } catch (assemblyError) { project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` })); throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`); } try { await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString }); markTranscriptAsSaved(); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` })); throw new Error(`Failed to save transcript: ${errorMessage}`); } }
+export async function loadTranscriptFile(transcriptFilePath) {
+    // project.update for isTranscriptLoading, error, statusMessage should be handled by transcriptStore now or via updateProjectStoreState
+    if (!transcriptFilePath) {
+        // transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false, error: "Transcript file path is missing." }));
+        project.update(p => ({ ...p, error: "Transcript file path is missing."})); // Keep global error for now
+        throw new Error("Transcript file path is required.");
+    }
+    if (!transcriptFilePath.toLowerCase().endsWith('.json')) {}
+    const filename = transcriptFilePath.split(/[\\/]/).pop();
+    // transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, error: null }));
+    project.update(p => ({ ...p, statusMessage: `Loading transcript ${filename}...` })); // Global status
+    try {
+        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath });
+        const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
+        setTranscriptData(transcriptFilePath, segmentsArray, false); // This will update transcriptStore, including isTranscriptLoading: false
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        // transcriptStore.update(ts => ({ ...ts, segments: [], currentTranscriptPath: null, transcriptDirty: false, isTranscriptLoading: false, error: `Transcript load failed: ${errorMessage}` }));
+        project.update(p => ({ ...p, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.`})); // Global error
+        throw new Error(`Failed to load transcript: ${errorMessage}`);
+    }
+}
+export async function saveTranscriptData() {
+    const projData = get(project); // For projectXmlPath
+    const tsData = get(transcriptStore); // For transcript data
+    const transcriptPath = tsData.currentTranscriptPath;
+    const transcriptSegments = tsData.segments;
+    const projectXmlPath = projData.xmlPath;
+
+    if (!transcriptPath) throw new Error("Cannot save, no transcript loaded.");
+    if (!projectXmlPath) throw new Error("Cannot save, project path unknown.");
+    if (!transcriptPath.toLowerCase().endsWith('.json')) throw new Error("Transcript must be saved as .json.");
+    const filename = transcriptPath.split(/[\\/]/).pop();
+    project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` })); // Global status
+    let fullLexicalTableJsonString = "";
+    try {
+        const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), });
+        await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); pSpeaker.append(_createTextNode(segment.speaker || "Unknown")); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
+        fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
+    } catch (assemblyError) {
+        project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
+        throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
+    }
+    try {
+        await invoke('save_transcript_json', { projectXmlPath: projectXmlPath, transcriptPath: transcriptPath, lexicalTableJsonString: fullLexicalTableJsonString });
+        markTranscriptAsSaved(); // This now comes from transcriptStore and updates it.
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        project.update(p => ({ ...p, error: `Save failed: ${errorMessage}`, statusMessage: `Error saving transcript.` }));
+        throw new Error(`Failed to save transcript: ${errorMessage}`);
+    }
+}
 
 export async function refreshProjectFiles() { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try { await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath }); project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}. Refreshing...` })); await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' }); project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false })); throw error; } }
-export async function deleteProjectItem(itemPath) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot delete.', { title: 'Delete Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath) { await message('Missing item path.', { title: 'Delete Error', type: 'error' }); throw new Error('Missing parameters.'); } const filename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Deleting ${filename}...`, isLoading: true })); try { await invoke('delete_project_item', { itemPath: itemPath, projectXmlPath: projectXmlPath }); const projState = get(project); const wasSelectedMedia = projState.selectedMediaFile?.path === itemPath; const wasCurrentTranscript = projState.currentTranscriptPath === itemPath; const wasSelectedDocument = projState.selectedDocumentPath === itemPath; const wasSelectedImportedTranscript = projState.currentImportedTranscriptPath === itemPath; const wasSelectedMediaNote = projState.selectedMediaNotePath === itemPath; if (wasSelectedMedia) selectMedia(null); else if (wasCurrentTranscript) clearTranscriptState(); else if (wasSelectedDocument) prepareDocumentView(null); else if (wasSelectedImportedTranscript) prepareImportedTranscriptView(null); else if (wasSelectedMediaNote) prepareMediaNoteView(null); await refreshProjectFiles(); project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`})); // isLoading will be handled by refreshProjectFiles
+export async function deleteProjectItem(itemPath) {
+    const currentProj = get(project);
+    const currentTs = get(transcriptStore);
+    const projectXmlPath = currentProj.xmlPath;
+    if (!projectXmlPath) { await message('Project data not loaded. Cannot delete.', { title: 'Delete Error', type: 'error' }); throw new Error('Project path missing.'); }
+    if (!itemPath) { await message('Missing item path.', { title: 'Delete Error', type: 'error' }); throw new Error('Missing parameters.'); }
+    const filename = await basename(itemPath);
+    project.update(p => ({ ...p, statusMessage: `Deleting ${filename}...`, isLoading: true }));
+    try {
+        await invoke('delete_project_item', { itemPath: itemPath, projectXmlPath: projectXmlPath });
+
+        const wasSelectedMedia = currentTs.selectedMediaFile?.path === itemPath;
+        const wasCurrentTranscript = currentTs.currentTranscriptPath === itemPath;
+        // These remain projectStore checks as they are not part of transcriptStore
+        const wasSelectedDocument = currentProj.selectedDocumentPath === itemPath;
+        const wasSelectedImportedTranscript = currentProj.currentImportedTranscriptPath === itemPath;
+        const wasSelectedMediaNote = currentProj.selectedMediaNotePath === itemPath;
+
+        if (wasSelectedMedia) selectMedia(null); // from transcriptStore
+        else if (wasCurrentTranscript) clearTranscriptState(); // from transcriptStore
+        else if (wasSelectedDocument) prepareDocumentView(null); // from projectStore
+        else if (wasSelectedImportedTranscript) prepareImportedTranscriptView(null); // from projectStore
+        else if (wasSelectedMediaNote) prepareMediaNoteView(null); // from projectStore
+
+        await refreshProjectFiles();
+        project.update(p => ({ ...p, statusMessage: `Deleted ${filename}.`})); // isLoading will be handled by refreshProjectFiles
  } catch (error) { const errorMessage = error?.message || String(error); await message(`Error deleting item: ${errorMessage}`, { title: 'Delete Failed', type: 'error' }); project.update(p => ({ ...p, error: `Delete failed: ${errorMessage}`, statusMessage: `Error deleting ${filename}.`, isLoading: false })); throw error; } }
 export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTime) { if (!originalMediaPath || typeof startTime !== 'number' || typeof endTime !== 'number' || startTime < 0 || endTime <= startTime) throw new Error(`Invalid trim parameters provided.`); const filename = await basename(originalMediaPath); project.update(p => ({ ...p, isImportingAsset: true, statusMessage: `Trimming ${filename}...` })); try { const updatedFiles = await invoke('trim_media', { originalMediaPath, startTime, endTime }); if (Array.isArray(updatedFiles)) { project.update(p => ({ ...p, files: updatedFiles, isImportingAsset: false, error: null, statusMessage: 'Media trimmed successfully.', isLoading: false })); let trimmedEntry = null; const originalFilename = await basename(originalMediaPath); const originalExtension = originalFilename.includes('.') ? originalFilename.substring(originalFilename.lastIndexOf('.')) : ''; function findTrimmedRecursive(nodes, stemPrefix, extension) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory && node.name.startsWith(stemPrefix) && node.name.includes('_trimmed_') && node.name.endsWith(extension)) return node; if (node.children && node.children.length > 0) { const found = findTrimmedRecursive(node.children, stemPrefix, extension); if (found) return found; } } return null; } const originalStem = originalFilename.includes('.') ? originalFilename.substring(0, originalFilename.lastIndexOf('.')) : originalFilename; trimmedEntry = findTrimmedRecursive(updatedFiles, originalStem, originalExtension); if (trimmedEntry) selectMedia(trimmedEntry); else { let firstMedia = null; function findFirstMediaRecursive(nodes) { if (!Array.isArray(nodes)) return null; for (const node of nodes) { if (node.file_type === 'media' && !node.is_directory) return node; if (node.children && node.children.length > 0) { const found = findFirstMediaRecursive(node.children); if (found) return found; } } return null; } firstMedia = findFirstMediaRecursive(updatedFiles); if (firstMedia) selectMedia(firstMedia); } } else { await refreshProjectFiles(); throw new Error("Received invalid data from trim process."); } } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, isImportingAsset: false, error: `Trim failed: ${errorMessage}`, statusMessage: `Error trimming media.`, isLoading: false })); throw new Error(`Trim failed: ${errorMessage}`); } }
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
-export async function requestTranscription() { const currentProj = get(project); if (!currentProj.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; } if (!currentProj.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; } if (currentProj.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; } toggleTranscribeModal(true); }
-export async function handleConfirmStartTranscription() { const currentProj = get(project); const jobId = uuidv4(); if (!currentProj.selectedMediaFile?.path || !currentProj.selectedModelName) { transcribeModalInstance?.setStatusError('Error: Missing media file or model selection.'); clearTranscriptionStatus('Transcription failed.', 'Missing media file or model selection.'); toggleTranscribeModal(false); return; } const selectedModelIdentifier = currentProj.selectedModelName; const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-'); setTranscriptionStatus(true, jobId, `Preparing ${isCloudModel ? 'cloud' : 'local'} transcription...`); try { let invokePromise; const args = { mediaPath: currentProj.selectedMediaFile.path, language: currentProj.selectedLanguage || '', numSpeakers: currentProj.speakers.count, speakerNames: currentProj.speakers.names || [], jobId: jobId }; if (isCloudModel) { let cloudConfig; try { cloudConfig = await getCloudConfig(); } catch (e) { throw new Error(`Failed to get cloud configuration: ${e.message}`); } if (!cloudConfig?.consent) throw new Error("Cloud transcription consent not given."); if (!cloudConfig?.api_key) throw new Error("Cloud API Key is missing."); const cloudArgs = { ...args, cloudModelId: selectedModelIdentifier, apiKey: cloudConfig.api_key }; invokePromise = invoke('run_cloud_transcription', cloudArgs); } else { const localArgs = { ...args, modelName: selectedModelIdentifier }; invokePromise = invoke('run_transcription', localArgs); } const result = await invokePromise; if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure."); setTranscriptData(result.transcript_file_path, result.segments, false); transcribeModalInstance?.setStatusDone('Transcription complete!'); clearTranscriptionStatus('Transcription complete.'); await refreshProjectFiles(); setTimeout(() => { toggleTranscribeModal(false); }, 1500); } catch (error) { const errorMessage = error?.message || String(error); if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) { transcribeModalInstance?.setStatusCancelled('Transcription cancelled.'); clearTranscriptionStatus('Transcription cancelled.'); setTimeout(() => { toggleTranscribeModal(false); }, 1500); } else { transcribeModalInstance?.setStatusError(`Transcription failed: ${errorMessage}`); clearTranscriptionStatus('Transcription failed.', errorMessage); } } }
-export async function handleCancelTranscriptionRequest() { const currentProj = get(project); const jobId = currentProj.transcriptionJobId; if (!jobId || !currentProj.isTranscribing) return; const modelUsedForJob = currentProj.selectedModelName; const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-')); const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription'; transcribeModalInstance?.setStatusCancelling('Requesting cancellation...'); try { await invoke(cancelCommand, { jobId }); } catch (error) { const errorMessage = error?.message || String(error); transcribeModalInstance?.setStatusError(`Failed to send cancel request: ${errorMessage}`); project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` })); } }
-export let progressListenerInitialized = false; export let progressUnlistenFn = null; export async function initializeProgressListener() { if (progressListenerInitialized) return; try { progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => { const payload = event.payload; if (!payload || typeof payload !== 'object') return; const eventJobId = payload.jobId ?? payload.job_id; const currentJobId = get(project).transcriptionJobId; if (currentJobId && eventJobId === currentJobId) updateTranscriptionProgress({ jobId: currentJobId, percent: payload.percent ?? 0, message: payload.message ?? '' }); }); progressListenerInitialized = true; } catch (e) { project.update(p => ({ ...p, error: "Failed to initialize progress listener." })); } }
+export async function requestTranscription() {
+    const currentTs = get(transcriptStore);
+    const currentProj = get(project); // For isTranscribing
+    if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
+    if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
+    if (currentProj.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
+    toggleTranscribeModal(true); // from transcriptStore
+}
+export async function handleConfirmStartTranscription() {
+    const currentTs = get(transcriptStore);
+    const currentProj = get(project); // For projectXmlPath
+    const jobId = uuidv4();
+    if (!currentTs.selectedMediaFile?.path || !currentTs.selectedModelName) {
+        transcribeModalInstance?.setStatusError('Error: Missing media file or model selection.');
+        clearTranscriptionStatus('Transcription failed.', 'Missing media file or model selection.'); // from transcriptStore
+        toggleTranscribeModal(false); // from transcriptStore
+        return;
+    }
+    const selectedModelIdentifier = currentTs.selectedModelName;
+    const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
+    setTranscriptionStatus(true, jobId, `Preparing ${isCloudModel ? 'cloud' : 'local'} transcription...`); // from transcriptStore
+    try {
+        let invokePromise;
+        const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
+        if (isCloudModel) {
+            let cloudConfig;
+            try { cloudConfig = await getCloudConfig(); } catch (e) { throw new Error(`Failed to get cloud configuration: ${e.message}`); }
+            if (!cloudConfig?.consent) throw new Error("Cloud transcription consent not given.");
+            if (!cloudConfig?.api_key) throw new Error("Cloud API Key is missing.");
+            const cloudArgs = { ...args, cloudModelId: selectedModelIdentifier, apiKey: cloudConfig.api_key };
+            invokePromise = invoke('run_cloud_transcription', cloudArgs);
+        } else {
+            const localArgs = { ...args, modelName: selectedModelIdentifier };
+            invokePromise = invoke('run_transcription', localArgs);
+        }
+        const result = await invokePromise;
+        if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure.");
+        setTranscriptData(result.transcript_file_path, result.segments, false); // from transcriptStore
+        transcribeModalInstance?.setStatusDone('Transcription complete!');
+        clearTranscriptionStatus('Transcription complete.'); // from transcriptStore
+        await refreshProjectFiles();
+        setTimeout(() => { toggleTranscribeModal(false); }, 1500); // from transcriptStore
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
+            transcribeModalInstance?.setStatusCancelled('Transcription cancelled.');
+            clearTranscriptionStatus('Transcription cancelled.'); // from transcriptStore
+            setTimeout(() => { toggleTranscribeModal(false); }, 1500); // from transcriptStore
+        } else {
+            transcribeModalInstance?.setStatusError(`Transcription failed: ${errorMessage}`);
+            clearTranscriptionStatus('Transcription failed.', errorMessage); // from transcriptStore
+        }
+    }
+}
+export async function handleCancelTranscriptionRequest() {
+    const currentProj = get(project); // For transcriptionJobId, isTranscribing (global states)
+    const currentTs = get(transcriptStore); // For selectedModelName
+    const jobId = currentProj.transcriptionJobId;
+    if (!jobId || !currentProj.isTranscribing) return;
+    const modelUsedForJob = currentTs.selectedModelName;
+    const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
+    const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
+    transcribeModalInstance?.setStatusCancelling('Requesting cancellation...');
+    try {
+        await invoke(cancelCommand, { jobId });
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        transcribeModalInstance?.setStatusError(`Failed to send cancel request: ${errorMessage}`);
+        project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` }));
+    }
+}
+export let progressListenerInitialized = false; export let progressUnlistenFn = null; export async function initializeProgressListener() { if (progressListenerInitialized) return; try { progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => { const payload = event.payload; if (!payload || typeof payload !== 'object') return; const eventJobId = payload.jobId ?? payload.job_id; const currentJobId = get(transcriptStore).transcriptionJobId; if (currentJobId && eventJobId === currentJobId) updateTranscriptionProgress({ jobId: currentJobId, percent: payload.percent ?? 0, message: payload.message ?? '' }); }); progressListenerInitialized = true; } catch (e) { project.update(p => ({ ...p, error: "Failed to initialize progress listener." })); } }
 export function cleanupProgressListener() { if (progressUnlistenFn) { progressUnlistenFn(); progressUnlistenFn = null; } progressListenerInitialized = false; }
 
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }
 export function isLexicalJson(jsonString) { if (!jsonString || typeof jsonString !== 'string') return false; try { const parsed = JSON.parse(jsonString); return parsed && typeof parsed === 'object' && parsed.root && typeof parsed.root === 'object' && Array.isArray(parsed.root.children); } catch (e) { return false; } }
 
-export async function convertAndSaveTranscriptAsDoc() { const projData = get(project); const transcriptPath = projData.currentTranscriptPath; const selectedMedia = projData.selectedMediaFile; const projectXmlPath = projData.xmlPath; const projectBaseDir = projData.baseDirectory; if (!transcriptPath) throw new Error("No transcript file loaded."); if (!selectedMedia?.path) throw new Error("No media file selected."); if (!projectBaseDir) throw new Error("Project base directory not found."); if (!projectXmlPath) throw new Error("Project XML path not found."); project.update(p => ({ ...p, statusMessage: `Converting transcript to table document...` })); const finalTableEditor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `doc-table-finalizer-${Date.now()}`, onError: (error) => console.error(error), }); let finalLexicalJsonString = ""; try { const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath }); if (!fullLexicalTableString) throw new Error("Transcript file content is empty."); finalLexicalJsonString = fullLexicalTableString; const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => { const mediaName = selectedMedia.name; return mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; })(); const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_'); const now = new Date(); const dateStr = now.toISOString().split('T')[0]; const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`; project.update(p => ({ ...p, statusMessage: `Saving transcript document...` })); const targetFullPath = await invoke('get_unique_document_path', { projectBaseDirStr: projectBaseDir, baseName: docFilenameBase, extension: 'json' }); const docFilename = await basename(targetFullPath); await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString }); project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` })); await refreshProjectFiles(); return targetFullPath; } catch (error) { project.update(p => ({ ...p, statusMessage: `Error converting transcript: ${error.message || error}` })); throw error; } }
+export async function convertAndSaveTranscriptAsDoc() {
+    const projData = get(project); // For projectXmlPath, baseDirectory
+    const tsData = get(transcriptStore); // For transcriptPath, selectedMediaFile
+    const transcriptPath = tsData.currentTranscriptPath;
+    const selectedMedia = tsData.selectedMediaFile;
+    const projectXmlPath = projData.xmlPath;
+    const projectBaseDir = projData.baseDirectory;
+    if (!transcriptPath) throw new Error("No transcript file loaded.");
+    if (!selectedMedia?.path) throw new Error("No media file selected.");
+    if (!projectBaseDir) throw new Error("Project base directory not found.");
+    if (!projectXmlPath) throw new Error("Project XML path not found.");
+    project.update(p => ({ ...p, statusMessage: `Converting transcript to table document...` }));
+    const finalTableEditor = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `doc-table-finalizer-${Date.now()}`, onError: (error) => console.error(error), });
+    let finalLexicalJsonString = "";
+    try {
+        const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
+        if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
+        finalLexicalJsonString = fullLexicalTableString;
+        const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => { const mediaName = selectedMedia.name; return mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; })();
+        const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`;
+        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+        const targetFullPath = await invoke('get_unique_document_path', { projectBaseDirStr: projectBaseDir, baseName: docFilenameBase, extension: 'json' });
+        const docFilename = await basename(targetFullPath);
+        await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
+        project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
+        await refreshProjectFiles();
+        return targetFullPath;
+    } catch (error) {
+        project.update(p => ({ ...p, statusMessage: `Error converting transcript: ${error.message || error}` }));
+        throw error;
+    }
+}
 export async function loadActiveDocumentContent() { const currentProj = get(project); const filePath = currentProj.selectedDocumentPath; if (!filePath) { project.update(p => ({...p, isDocumentLoading: false, documentError: null })); return; } const filename = await basename(filePath); project.update(p => ({ ...p, isDocumentLoading: true, documentError: null })); try { const jsonContent = await invoke('load_note_json', { filePath }); if (!jsonContent || jsonContent.trim() === '') throw new Error("Loaded document content empty/invalid."); try { JSON.parse(jsonContent); } catch (e) { throw new Error(`Loaded document content not valid JSON.`); } setLoadedDocumentData(filePath, jsonContent); } catch (error) { const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); setDocumentLoadFailed(filePath, errorMessage); await message(`Error loading document '${filename}': ${errorMessage}`, { title: 'Load Document Error', type: 'error' }); } }
 export async function saveCurrentPdfAnnotations() { const projState = get(project); if (!projState.selectedDocumentPath || !projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) return; if (!projState.isPdfAnnotationsDirty) return; const projectBaseDir = projState.baseDirectory; if (!projectBaseDir) return; let relativePdfPath = projState.selectedDocumentPath; if (relativePdfPath.startsWith(projectBaseDir + sep) || relativePdfPath.startsWith(projectBaseDir + '/')) relativePdfPath = relativePdfPath.substring(projectBaseDir.length + 1); else if (relativePdfPath.startsWith(projectBaseDir)) { relativePdfPath = relativePdfPath.substring(projectBaseDir.length); if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) relativePdfPath = relativePdfPath.substring(1); } relativePdfPath = relativePdfPath.replace(/\\/g, '/'); try { const annList = projState.currentPdfAnnotations ?? []; await invoke('save_pdf_annotations', { originalPdfRelativePathStr: relativePdfPath, annotationsJsonContent: JSON.stringify(annList) }); markPdfAnnotationsAsSaved(); } catch (error) {} }
 export async function saveDocumentContent(filePath, jsonContent) { if (filePath && filePath.toLowerCase().endsWith('.pdf')) { project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'})); throw new Error("PDF content saving is not handled by saveDocumentContent."); } if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); } try { const parsed = JSON.parse(jsonContent); if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure."); } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); } const filename = await basename(filePath); project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` })); let mainContentSaveError = null; try { await invoke('save_note_json', { targetPath: filePath, jsonContent: jsonContent }); markDocumentAsSaved(jsonContent); } catch (error) { mainContentSaveError = error; const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` })); } const projState = get(project); let metadataSaveError = null; if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) { try { await saveDocumentMetadata(filePath); } catch (error) { metadataSaveError = error; } } if (mainContentSaveError) { await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' }); throw mainContentSaveError; } if (metadataSaveError) throw metadataSaveError; }
@@ -607,6 +798,7 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) { const proj
 
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
+    const tsState = get(transcriptStore); // Get transcript store state
     let itemIsDirty = false;
     let itemPath = null;
     let itemName = '';
@@ -675,15 +867,16 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         } else {
             discardFunction = () => markImportedTranscriptChangesDiscarded(itemPath);
         }
-    } else if (projState.currentTranscriptPath && projState.transcriptDirty) {
+    } else if (tsState.currentTranscriptPath && tsState.transcriptDirty) { // Check transcriptStore
         itemIsDirty = true;
-        itemPath = projState.currentTranscriptPath;
+        itemPath = tsState.currentTranscriptPath;
         itemTypeForPrompt = 'main transcript';
         saveFunction = async () => saveTranscriptData(); // Service call for main transcript
         discardFunction = () => {
             // Revert to last saved state (or initial if no undo stack)
-            const undoStack = get(project).transcriptUndoStack;
-            project.update(p => ({ ...p, segments: undoStack.length > 0 ? undoStack[0] : p.segments, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
+            const undoStack = get(transcriptStore).transcriptUndoStack; // From transcriptStore
+            // Update transcriptStore, not projectStore for these
+            transcriptStore.update(ts => ({ ...ts, segments: undoStack.length > 0 ? undoStack[0] : ts.segments, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
         };
         // No direct editor ref reset needed here typically as view re-renders from store
     }

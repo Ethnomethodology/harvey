@@ -20,15 +20,22 @@
 	} from '$lib/services/projectService.js';
 	import {
         project,
-        toggleTranscribeModal,
-        selectMedia as selectMediaStoreAction,
+        // toggleTranscribeModal, // Moved
+        // selectMedia as selectMediaStoreAction, // Moved
         hideUnsavedChangesPrompt,
         hideConversionPrompt,
-        clearTranscriptState,
+        // clearTranscriptState, // Moved
         prepareDocumentView,
         prepareImportedTranscriptView,
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
+    import {
+        transcriptStore, // Import the store itself
+        toggleTranscribeModal,
+        selectMedia as selectMediaStoreAction, // Keep alias if used
+        clearTranscriptState
+        // Add other functions from transcriptStore if ProjectView.svelte directly uses them
+    } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -99,6 +106,7 @@
 
 	function handleGlobalKeys(event) {
         const proj = get(project);
+        const ts = get(transcriptStore); // Add this if not already getting transcriptStore state
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const modKey = isMac ? event.metaKey : event.ctrlKey;
         if (modKey && event.key.toLowerCase() === 's') {
@@ -122,8 +130,8 @@
             } return;
         }
         if (modKey && event.key.toLowerCase() === 'e') { if (selectedTab === 'transcriptions' && transcriptionsViewRef) { event.preventDefault(); transcriptionsViewRef.handleToggleEditMode(); } return; }
-        if (modKey && event.key.toLowerCase() === 'z' && !event.shiftKey) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptUndoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleUndoRequest(); } return; }
-        if (modKey && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && proj.transcriptRedoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleRedoRequest(); } return; }
+        if (modKey && event.key.toLowerCase() === 'z' && !event.shiftKey) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && ts.transcriptUndoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleUndoRequest(); } return; }
+        if (modKey && (event.key.toLowerCase() === 'y' || (event.shiftKey && event.key.toLowerCase() === 'z'))) { if (selectedTab === 'transcriptions' && transcriptionsViewRef && ts.transcriptRedoStack?.length > 0) { event.preventDefault(); transcriptionsViewRef.handleRedoRequest(); } return; }
         if (event.key === 'F8') { if (selectedTab === 'transcriptions' && transcriptionsViewRef && transcriptionsViewRef.mediaPlayerRef) { event.preventDefault(); transcriptionsViewRef.mediaPlayerRef.handleTogglePlay(); } return; }
     }
 
@@ -140,7 +148,7 @@
             if (selectedTab === 'notes') {
                 canProceed = await checkUnsavedChangesThenProceed(null, "closing the project window");
             } else if (selectedTab === 'transcriptions') {
-                const isDirty = get(project).transcriptDirty;
+                const isDirty = get(transcriptStore).transcriptDirty;
                 if (isDirty) {
                     const confirmClose = await confirm("You have unsaved media transcript changes. Discard them and close?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Close", cancelLabel: "Cancel" });
                     if (confirmClose) { clearTranscriptState(); canProceed = true; } else { canProceed = false; }
@@ -170,7 +178,7 @@
         if (selectedTab === 'notes') {
             canProceed = await checkUnsavedChangesThenProceed(null, "switching tabs");
         } else if (selectedTab === 'transcriptions') {
-            const isDirty = get(project).transcriptDirty;
+            const isDirty = get(transcriptStore).transcriptDirty;
             if (isDirty && transcriptionsViewRef) {
                 const confirmSwitch = await confirm( "You have unsaved media transcript changes. Discard them and switch tabs?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Switch", cancelLabel: "Cancel Switch" });
                 if (!confirmSwitch) canProceed = false;
@@ -221,7 +229,7 @@
         if (selectedTab === 'notes') {
             canProceed = await checkUnsavedChangesThenProceed(path, actionContext);
         } else if (selectedTab === 'transcriptions') {
-            if (get(project).transcriptDirty && transcriptionsViewRef) {
+            if (get(transcriptStore).transcriptDirty && transcriptionsViewRef) {
                 const confirmSwitch = await confirm( `Discard unsaved transcript changes to ${actionContext}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Proceed", cancelLabel: "Cancel"});
                 if (!confirmSwitch) canProceed = false;
                 else { clearTranscriptState(); if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
@@ -410,8 +418,8 @@
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
-	$: modalProps = { fileName: $project.selectedMediaFile?.name ?? 'N/A', modelName: $project.selectedModelName ?? 'None Selected', language: $project.selectedLanguage ?? 'N/A', speakers: $project.speakers, jobId: $project.transcriptionJobId };
-    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $project.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
+	// $: modalProps = { fileName: $transcriptStore.selectedMediaFile?.name ?? 'N/A', modelName: $transcriptStore.selectedModelName ?? 'None Selected', language: $transcriptStore.selectedLanguage ?? 'N/A', speakers: $transcriptStore.speakers, jobId: $transcriptStore.transcriptionJobId };
+    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $transcriptStore.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 
@@ -444,7 +452,17 @@
 		<BottomBar />
 	</div>
 
-	<TranscribeConfirmModal bind:this={transcribeModalRef} bind:showModal={$project.showTranscribeModal} fileName={modalProps.fileName} modelName={modalProps.modelName} language={modalProps.language} speakers={modalProps.speakers} jobId={modalProps.jobId} on:confirmStart={handleConfirmStartTranscription} on:cancelRequest={handleCancelTranscriptionRequest} on:close={handleModalClose} />
+	<TranscribeConfirmModal
+        bind:this={transcribeModalRef}
+        bind:showModal={$transcriptStore.showTranscribeModal}
+        fileName={$transcriptStore.selectedMediaFile?.name ?? 'N/A'}
+        modelName={$transcriptStore.selectedModelName ?? 'None Selected'}
+        language={$transcriptStore.selectedLanguage ?? 'N/A'}
+        speakers={$transcriptStore.speakers}
+        jobId={$transcriptStore.transcriptionJobId}
+        on:confirmStart={handleConfirmStartTranscription}
+        on:cancelRequest={handleCancelTranscriptionRequest}
+        on:close={handleModalClose} />
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>

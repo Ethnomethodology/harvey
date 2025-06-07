@@ -1,13 +1,14 @@
 <!-- harvey-1.0/src/lib/components/projectview/MediaPlayer.svelte -->
 
 <script>
+	import { project } from '$lib/stores/projectStore.js';
 	import {
-		project,
-		updatePlayerTime, // This is for the main transcriptions view player state
-		setPlayerDuration,  // This is for the main transcriptions view player state
-		togglePlayerPlaying, // This is for the main transcriptions view player state
-		setAudioBuffer // This is for the main transcriptions view player state
-	} from '$lib/stores/projectStore.js';
+		transcriptStore,
+		updatePlayerTime,
+		setPlayerDuration,
+		togglePlayerPlaying,
+		setAudioBuffer
+	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
@@ -100,7 +101,7 @@
 
 	// Reactive block to load media when explicitMediaPath changes or (if not explicit) when global selectedMediaFile changes
 	$: {
-        const mediaPathToLoad = explicitMediaPath || $project.selectedMediaFile?.path;
+        const mediaPathToLoad = explicitMediaPath || $transcriptStore.selectedMediaFile?.path;
 
         (async () => {
             if (mediaPathToLoad) {
@@ -204,10 +205,10 @@
                 }
                 // If this is the main player, update global store too
                 if (!explicitMediaPath) {
-                    if ($project.audioBuffer) setAudioBuffer(null);
-                    if ($project.player.duration > 0) setPlayerDuration(0);
-                    if ($project.player.currentTime > 0) updatePlayerTime(0);
-                    if ($project.player.isPlaying) togglePlayerPlaying(false);
+                    if ($transcriptStore.audioBuffer) setAudioBuffer(null); // from transcriptStore
+                    if ($transcriptStore.player.duration > 0) setPlayerDuration(0); // from transcriptStore
+                    if ($transcriptStore.player.currentTime > 0) updatePlayerTime(0); // from transcriptStore
+                    if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false); // from transcriptStore
                 }
                 isLoadingMedia = false;
             }
@@ -348,11 +349,12 @@
 			alert("Cannot enter trim mode while editing a segment.");
 			return;
 		}
-		const currentProj = get(project);
-		const currentTimeToUse = explicitMediaPath ? localCurrentTime : currentProj.player.currentTime;
-		const segmentsToUse = explicitMediaPath ? [] : currentProj.segments; // Trim based on segments only for main player
-		const durationToUse = explicitMediaPath ? localDuration : currentProj.player.duration;
-        const audioBufferToUse = explicitMediaPath ? localAudioBuffer : currentProj.audioBuffer;
+		const currentProj = get(project); // Still needed for other project properties if any
+		const currentTs = get(transcriptStore);
+		const currentTimeToUse = explicitMediaPath ? localCurrentTime : currentTs.player.currentTime;
+		const segmentsToUse = explicitMediaPath ? [] : currentTs.segments;
+		const durationToUse = explicitMediaPath ? localDuration : currentTs.player.duration;
+        const audioBufferToUse = explicitMediaPath ? localAudioBuffer : currentTs.audioBuffer;
 
 
 		if (!durationToUse || isLoadingMedia || !audioBufferToUse || isTrimming) return;
@@ -375,7 +377,7 @@
         dispatch('trimModeEntered', { startTime: trimStartTime, endTime: trimEndTime });
 
 
-		if ((explicitMediaPath ? localIsPlaying : $project.player.isPlaying) && videoElement) {
+		if ((explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying) && videoElement) {
 			 if (videoElement.currentTime < trimStartTime || videoElement.currentTime >= trimEndTime) {
 				 videoElement.currentTime = trimStartTime;
                  localCurrentTime = trimStartTime;
@@ -392,8 +394,8 @@
     }
 
 	async function confirmTrim() { // For main player context usually
-		if (!isTrimming || !(loadedPathFromProp || $project.selectedMediaFile?.path)) return;
-        const pathToTrim = loadedPathFromProp || $project.selectedMediaFile?.path;
+		if (!isTrimming || !(loadedPathFromProp || get(transcriptStore).selectedMediaFile?.path)) return;
+        const pathToTrim = loadedPathFromProp || get(transcriptStore).selectedMediaFile?.path;
 		console.log(`[MediaPlayer] Confirming trim for ${pathToTrim} from ${trimStartTime.toFixed(3)}s to ${trimEndTime.toFixed(3)}s.`);
 
 		try {
@@ -452,9 +454,9 @@
     }
 
     // Determine which player state to display
-    $: displayTime = explicitMediaPath ? localCurrentTime : $project.player.currentTime;
-    $: displayDuration = explicitMediaPath ? localDuration : $project.player.duration;
-    $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $project.player.isPlaying;
+    $: displayTime = explicitMediaPath ? localCurrentTime : $transcriptStore.player.currentTime;
+    $: displayDuration = explicitMediaPath ? localDuration : $transcriptStore.player.duration;
+    $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying;
 
 </script>
 

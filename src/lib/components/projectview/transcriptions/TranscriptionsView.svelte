@@ -2,15 +2,16 @@
 <script>
     import { tick, createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
+    import { project } from '$lib/stores/projectStore.js';
     import {
-        project,
+        transcriptStore,
         deleteTranscriptSegment,
         undoTranscriptChange,
         redoTranscriptChange,
-        markTranscriptAsSaved,
+        markTranscriptAsSaved, // This is now in transcriptStore, but saveTranscriptData service calls it.
         insertTranscriptSegment,
-        updatePlayerCurrentSegmentIndex,
-    } from '$lib/stores/projectStore.js';
+        updatePlayerCurrentSegmentIndex
+    } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
         requestTranscription as requestTranscriptionService, // Renamed to avoid conflict
@@ -20,7 +21,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
-    import MediaPlayer from '../MediaPlayer.svelte';
+    import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from './InteractiveWaveform.svelte';
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';
@@ -50,7 +51,7 @@
     function handleSegmentClick(event) {
         if (panelEditModeActive) return;
         const index = event.detail;
-        const segment = get(project).segments?.[index];
+        const segment = get(transcriptStore).segments?.[index];
         if (segment && typeof segment.start_time === 'number') {
             editableTranscriptRef?.loadSegment?.(index);
             if (mediaPlayerRef) {
@@ -66,7 +67,7 @@
         if (detail && typeof detail.time === 'number') {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === 'number') {
-            const segment = get(project).segments?.[detail.index];
+            const segment = get(transcriptStore).segments?.[detail.index];
             if (segment && mediaPlayerRef) {
                 const seekTime = isSegmentEditingActive ? Math.max(currentEditSegmentStart, Math.min(segment.start_time, currentEditSegmentEnd - 0.001)) : segment.start_time;
                 mediaPlayerRef.seekTo(seekTime);
@@ -118,7 +119,7 @@
 
     export async function handleToggleEditMode() {
         const wasEditing = panelEditModeActive;
-        const isDirty = get(project).transcriptDirty;
+        const isDirty = get(transcriptStore).transcriptDirty;
         if (wasEditing && isDirty) {
             try {
                 await handleSaveTranscript();
@@ -126,9 +127,10 @@
             } catch (error) {
                  const discard = await confirm( `Failed to save changes: ${error.message}\n\nDiscard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warning", okLabel: "Discard & Exit", cancelLabel: "Keep Editing" } );
                  if (discard) {
-                     project.update(p => ({ ...p, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
-                     panelEditModeActive = false;
-                     editableTranscriptRef?.forceReloadFromStore?.();
+                    // transcriptDirty, transcriptUndoStack, transcriptRedoStack are in transcriptStore now
+                    transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
+                    panelEditModeActive = false;
+                    editableTranscriptRef?.forceReloadFromStore?.();
                  }
             }
         } else if (wasEditing && !isDirty) {
@@ -145,21 +147,21 @@
             const editsCommitted = editableTranscriptRef.commitCurrentSegmentEdits();
             if (editsCommitted) await tick();
         }
-        const proj = get(project);
-        if (!proj.transcriptDirty) {
+        const tsStore = get(transcriptStore);
+        if (!tsStore.transcriptDirty) {
             if(topBarRef) topBarRef.showSavedIndicator(false);
             return;
         }
         try {
-            project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' }));
-            await saveTranscriptData();
-            // markTranscriptAsSaved(); // Called by service
+            project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' })); // Global loading state
+            await saveTranscriptData(); // This service will use get(transcriptStore) for currentTranscriptPath and segments
+            // markTranscriptAsSaved(); // This is now called by saveTranscriptData service via transcriptStore.
             if (panelEditModeActive) panelEditModeActive = false;
-            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' }));
+            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' })); // Global status
             if(topBarRef) topBarRef.showSavedIndicator(true);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            project.update(p => ({ ...p, isLoading: false, error: `Save failed: ${errorMsg}`, statusMessage: 'Save failed.' }));
+            project.update(p => ({ ...p, isLoading: false, error: `Save failed: ${errorMsg}`, statusMessage: 'Save failed.' })); // Global error
             if(topBarRef) topBarRef.showSavedIndicator(false);
             await message(`Error saving transcript: ${errorMsg}`, {title: "Save Error", type: "error"});
             throw error;
@@ -171,7 +173,7 @@
     }
 
     async function handleConvertToDocumentEvent() {
-        if (get(project).transcriptDirty) {
+        if (get(transcriptStore).transcriptDirty) {
 			const confirmConvert = await confirm( "You have unsaved transcript changes. Save them before converting?", { title: "Unsaved Changes", type: "warning", okLabel: "Save & Convert", cancelLabel: "Cancel" });
 			if (!confirmConvert) return;
 			try { await handleSaveTranscript(); }
@@ -296,14 +298,14 @@
     </div>
     <div class="h-24 w-full px-1 pb-1 flex-shrink-0">
         <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow">
-            {#if $project.selectedMediaFile && $project.audioBuffer}
+            {#if $transcriptStore.selectedMediaFile && $transcriptStore.audioBuffer}
                 <InteractiveWaveform
-                    audioBuffer={$project.audioBuffer}
-                    currentTime={$project.player.currentTime}
-                    duration={$project.player.duration}
-                    segments={$project.segments}
-                    isPlaying={$project.player.isPlaying}
-                    currentSegmentIndex={$project.player.currentSegmentIndex}
+                    audioBuffer={$transcriptStore.audioBuffer}
+                    currentTime={$transcriptStore.player.currentTime}
+                    duration={$transcriptStore.player.duration}
+                    segments={$transcriptStore.segments}
+                    isPlaying={$transcriptStore.player.isPlaying}
+                    currentSegmentIndex={$transcriptStore.player.currentSegmentIndex}
                     on:seek={(e) => mediaPlayerRef?.seekTo(e.detail.time)}
                     bind:isEditingSegment={isSegmentEditingActive}
                     bind:editSegmentStartTime={currentEditSegmentStart}
@@ -316,9 +318,9 @@
                     on:trimupdate={handleWaveformTrimUpdate}
                     on:segmentupdate={handleWaveformSegmentUpdate}
                 />
-            {:else if $project.selectedMediaFile && !$project.audioBuffer && !$project.isLoading && !$project.error?.includes('Media Error')}
+            {:else if $transcriptStore.selectedMediaFile && !$transcriptStore.audioBuffer && !$project.isLoading && !$project.error?.includes('Media Error')}
                 <div class="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">
-                    {#if $project.selectedMediaFile?.name?.toLowerCase().endsWith('.mp4') || $project.selectedMediaFile?.name?.toLowerCase().endsWith('.mov')  || $project.selectedMediaFile?.name?.toLowerCase().endsWith('.webm') || $project.selectedMediaFile?.name?.toLowerCase().endsWith('.mkv') || $project.selectedMediaFile?.name?.toLowerCase().endsWith('.avi')}
+                    {#if $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mp4') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mov')  || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.webm') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mkv') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.avi')}
                         Video file loaded. Waveform view is for audio analysis.
                     {:else if $project.error && $project.error.includes("decode")}
                         Could not decode audio data for waveform.
@@ -326,7 +328,7 @@
                         Audio buffer not available for waveform.
                     {/if}
                 </div>
-            {:else if !$project.selectedMediaFile && !$project.isLoading}
+            {:else if !$transcriptStore.selectedMediaFile && !$project.isLoading}
                     <div class="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">Select media to view waveform.</div>
             {/if}
         </div>
