@@ -21,7 +21,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
-    import MediaPlayer from '../MediaPlayer.svelte';
+    import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from './InteractiveWaveform.svelte';
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';

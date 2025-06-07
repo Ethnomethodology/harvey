@@ -1,7 +1,5 @@
 // src/lib/stores/projectStore.js
 import { writable, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
-import { message } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event'; // Added for media_renamed event
 
 const HARVEY_FILES_DIR = "harvey_files";
@@ -36,23 +34,9 @@ const initialState = {
     imageFiles: [],
     importedTranscriptFiles: [],
     documentMetadataFiles: [],
-    // segments: [], // Moved to transcriptStore
-    // currentTranscriptPath: null, // Moved to transcriptStore
-    // transcriptDirty: false, // Moved to transcriptStore
-    // selectedMediaFile: null, // Moved to transcriptStore
-    // selectedModelName: null, // Moved to transcriptStore
-    // selectedLanguage: null, // Moved to transcriptStore
-    // speakers: { count: 0, names: [] }, // Moved to transcriptStore
-    // player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 }, // Moved to transcriptStore
-    // audioBuffer: null, // Moved to transcriptStore
     isLoading: true,
-    // isTranscriptLoading: false, // Moved to transcriptStore
     error: null,
     statusMessage: 'Initializing...',
-    // isTranscribing: false, // Moved to transcriptStore
-    // transcriptionProgress: { percent: 0, message: '' }, // Moved to transcriptStore
-    // transcriptionJobId: null, // Moved to transcriptStore
-    // showTranscribeModal: false, // Moved to transcriptStore
     requestedNoteToLoad: null,
 
     selectedDocumentPath: null,
@@ -109,16 +93,6 @@ const initialState = {
 };
 
 export const project = writable({ ...initialState });
-
-// const MAX_UNDO_STACK_SIZE = 50; // Moved to transcriptStore
-
-// All transcript-related functions (pushToUndoStack, undoTranscriptChange, redoTranscriptChange,
-// markTranscriptAsSaved, clearTranscriptState, selectMedia, updatePlayerTime, setPlayerDuration,
-// togglePlayerPlaying, updatePlayerCurrentSegmentIndex, setTranscriptData, updateSegment,
-// deleteTranscriptSegment, insertTranscriptSegment, setSelectedModel, setSelectedLanguage,
-// updateSpeakerConfig, setAudioBuffer, toggleTranscribeModal, setTranscriptionStatus,
-// updateTranscriptionProgress, clearTranscriptionStatus)
-// have been moved to transcriptStore.js
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 
@@ -434,26 +408,6 @@ listen('media_renamed', (event) => {
         let updatedState = { ...p };
         let stateChanged = false;
 
-        // Update selectedMediaFile (for Transcriptions tab player) - This state is now in transcriptStore.
-        // However, the media_renamed event might still need to inform transcriptStore if the *currently selected* media for transcription was renamed.
-        // This might require a new event listener in transcriptStore or a way for projectStore to notify it.
-        // For now, direct update to p.selectedMediaFile is removed.
-        // Consider if transcriptStore needs to listen to 'media_renamed' itself.
-        // if (p.selectedMediaFile && p.selectedMediaFile.media_xml_identifier === old_media_stem) {
-        //     const newFileName = new_absolute_path.split(/[\/]/).pop();
-        //     // This would need to be updated in transcriptStore, not here.
-        //     // updatedState.selectedMediaFile = {
-        //     //     ...p.selectedMediaFile,
-        //     //     name: newFileName,
-        //     //     path: new_absolute_path,
-        //     //     relative_path: new_media_file_relative_path,
-        //     //     media_xml_identifier: new_media_stem, // This should be new_media_stem
-        //     // };
-        //     // updatedState.statusMessage = `Current media renamed to: ${newFileName}`;
-        //     // stateChanged = true;
-        //     console.log('[ProjectStore] media_renamed: selectedMediaFile in transcriptStore would need update.');
-        // }
-
         // Update selectedMediaNotePath (for Notes tab player)
         if (p.selectedMediaNotePath) {
             const currentNoteFileNameWithExt = p.selectedMediaNotePath.split(/[\/]/).pop();
@@ -673,26 +627,6 @@ listen('item_renamed', (event) => {
                 updatedState.files = transcriptTreeUpdateResult.updatedNodes;
                 stateChanged = true;
             }
-
-            // Also update the `associated_transcripts` array on the parent media file entry
-            // This part is tricky as selectedMediaFile is in transcriptStore.
-            // The `files` tree in projectStore *will* be updated by the main `filesUpdateResult` logic for 'media_renamed'.
-            // If a transcript item is renamed (item_type === 'transcript'), the `updateTranscriptInTreeRecursive`
-            // function below handles updating the `files` tree.
-            // The `associated_transcripts` on a media file entry within the `files` tree also needs updating.
-            // This should ideally happen when the `files` tree is traversed and updated.
-
-            // The following block specific to `updatedState.selectedMediaFile.associated_transcripts`
-            // is removed because `selectedMediaFile` is no longer in this store.
-            // The update to the `files` tree should handle the renaming of transcripts
-            // within their respective media file's `associated_transcripts` list if that
-            // data is part of the `files` tree structure. If `associated_transcripts` is only on
-            // the `selectedMediaFile` object (now in transcriptStore), then transcriptStore
-            // would need to handle this update, possibly by also listening to `item_renamed` or `media_renamed`.
-
-            // if (updatedState.selectedMediaFile && updatedState.selectedMediaFile.associated_transcripts) {
-            //    // ... logic removed ...
-            // }
         }
 
         return stateChanged ? updatedState : p;

@@ -223,7 +223,7 @@ This section handles transcripts generated *within* Harvey from audio/video medi
 * **Frontend Components**:
     * `TranscriptionsView.svelte`: Main container for the media transcription interface.
     * `EditableTranscript.svelte`: Interactive transcript editor linked to media playback (likely Lexical-based).
-    * `transcriptions/MediaPlayer.svelte`: A versatile component responsible for audio/video playback.
+    * `src/lib/components/projectview/shared/MediaPlayer.svelte`: A versatile component responsible for audio/video playback.
         *   When used within the "Transcriptions" view (without an `explicitMediaPath` prop), it interacts heavily with `transcriptStore.js` to play the currently selected media (`$transcriptStore.selectedMediaFile`), synchronize with its player state (`$transcriptStore.player`), and manage its audio buffer (`$transcriptStore.audioBuffer`). It uses functions from `transcriptStore.js` (like `updatePlayerTime`, `togglePlayerPlaying`) to update this shared state.
         *   It can also be instantiated with an `explicitMediaPath` prop (e.g., in the "Fieldnotes" view for media notes) to play specific media files independently of the main transcriptions view's state, managing its playback state locally in such cases.
         *   Provides UI controls for playback and includes logic for media loading, decoding, and error handling. It also supports functionalities like media trimming when used in the main transcriptions context.

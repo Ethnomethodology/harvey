@@ -19,10 +19,6 @@ export const initialTranscriptState = {
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
     audioBuffer: null,
     isTranscriptLoading: false,
-    // error and statusMessage are currently global in projectStore, but we might
-    // want transcript-specific ones later.
-    // transcriptError: null,
-    // transcriptStatusMessage: 'Initializing transcript system...',
     isTranscribing: false,
     transcriptionProgress: { percent: 0, message: '' },
     transcriptionJobId: null,
