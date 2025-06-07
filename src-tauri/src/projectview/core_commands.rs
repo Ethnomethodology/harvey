@@ -14,7 +14,7 @@ use quick_xml;
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
-use super::db_handler::{delete_annotations_from_db, rename_annotations_in_db};
+use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db}; // Added db_handler for general use
 use tauri::Emitter;
 
 #[derive(Clone, serde::Serialize)]
@@ -610,12 +610,15 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     info!("[Backend Delete] Cleaned up XML imported transcript entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
                 }
-                let initial_meta_len = project_data.document_metadata_files.files.len();
-                project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path_guess);
-                if project_data.document_metadata_files.files.len() < initial_meta_len {
-                    info!("[Backend Delete] Cleaned up XML document metadata entry for original imported transcript '{}'.", item_relative_path_guess);
-                    xml_changed = true;
+                // Metadata is in DB, attempt to delete it as well during cleanup
+                if xml_changed { // Only if the main transcript entry was found and removed from XML
+                    if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
+                        warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for non-existent path {}: {}", item_relative_path_guess, e);
+                    } else {
+                        info!("[Backend Delete] Deleted asset metadata from DB during cleanup for non-existent path {}", item_relative_path_guess);
+                    }
                 }
+                // The document_metadata_files list is no longer updated for imported transcript metadata.
             },
             "doc" => {
                 let initial_doc_len = project_data.document_files.files.len();
@@ -761,27 +764,26 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 }
             }
 
-            if let Ok(metadata_path) = get_document_metadata_path_for_doc(&item_path_buf) {
-                if metadata_path.exists() {
-                    info!("[Backend Delete] Deleting metadata file for imported transcript: {}", metadata_path.display());
-                    if let Err(e) = fs::remove_file(&metadata_path) {
-                        warn!("[Backend Delete] Failed to delete metadata file for imported transcript {}: {}", metadata_path.display(), e);
-                    }
-                }
+            // Delete metadata from DB
+            if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
+                warn!("[Backend Delete] Failed to delete asset metadata from DB for {}: {}. Main file was deleted.", item_relative_path, e);
+                // Continue with XML cleanup even if DB deletion fails, as main file is gone.
+            } else {
+                info!("[Backend Delete] Deleted asset metadata from DB for {}", item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_entries = project_data.imported_transcript_files.files.len();
             project_data.imported_transcript_files.files.retain(|t| t.relative_path != item_relative_path);
-            let initial_meta = project_data.document_metadata_files.files.len();
-            project_data.document_metadata_files.files.retain(|m| m.original_document_relative_path != item_relative_path);
 
-            if project_data.imported_transcript_files.files.len() < initial_entries
-                || project_data.document_metadata_files.files.len() < initial_meta
-            {
+            // document_metadata_files list in XML is no longer managed for imported transcript metadata
+
+            if project_data.imported_transcript_files.files.len() < initial_entries {
                 save_project_xml(&xml_path_buf, &project_data)?;
-                info!("[Backend Delete] XML updated for imported transcript and its metadata.");
+                info!("[Backend Delete] XML updated for imported transcript.");
+            } else {
+                warn!("[Backend Delete] Deleted imported transcript file, but no matching entry found in XML for path '{}'.", item_relative_path);
             }
         },
         "doc" => {
@@ -1192,6 +1194,10 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             }
         },
         "imported_transcript" => {
+            let old_transcript_file_abs_path = &item_path_buf;
+            let old_transcript_folder_abs_path = parent_dir;
+            let old_transcript_relative_path = &item_relative_path; // This is key for DB
+
             let new_transcript_stem_str = new_name_trimmed;
             if contains_invalid_chars(new_transcript_stem_str) { return Err(CommandError::from("New transcript name contains invalid characters.")); }
             if new_transcript_stem_str.starts_with('.') { return Err(CommandError::from("Transcript name cannot start with a dot.")); }
@@ -1199,201 +1205,100 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let new_transcript_filename_with_ext_str = format!("{}.json", new_transcript_stem_str);
             let new_transcript_filename_pathbuf = PathBuf::from(&new_transcript_filename_with_ext_str);
 
-            let old_transcript_file_path = &item_path_buf;
-            let old_transcript_folder_path = parent_dir;
+            let new_transcript_file_path_in_old_folder = old_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
 
-            let new_transcript_file_path_in_old_folder = old_transcript_folder_path.join(&new_transcript_filename_pathbuf);
-
-            let transcripts_root_path = old_transcript_folder_path.parent()
-                .ok_or_else(|| CommandError::from(format!("Could not get Transcripts root from {}", old_transcript_folder_path.display())))?;
+            let transcripts_root_abs_path = old_transcript_folder_abs_path.parent()
+                .ok_or_else(|| CommandError::from(format!("Could not get Transcripts root from {}", old_transcript_folder_abs_path.display())))?;
             
-            let new_transcript_folder_path = transcripts_root_path.join(new_transcript_stem_str);
+            let new_transcript_folder_abs_path = transcripts_root_abs_path.join(new_transcript_stem_str);
 
-            if *old_transcript_file_path == new_transcript_file_path_in_old_folder && old_transcript_folder_path == &new_transcript_folder_path {
+            // Check if no effective change
+            if *old_transcript_file_abs_path == new_transcript_file_path_in_old_folder && old_transcript_folder_abs_path == &new_transcript_folder_abs_path {
                 info!("[Backend Rename] Imported transcript name and folder name are effectively unchanged. No action needed.");
                 return Ok(());
             }
-            if old_transcript_folder_path != &new_transcript_folder_path && new_transcript_folder_path.exists() {
+
+            // Check for conflicts
+            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path && new_transcript_folder_abs_path.exists() {
                 return Err(CommandError::from(format!("A folder named '{}' already exists for imported transcripts. Cannot rename folder.", new_transcript_stem_str)));
             }
-            let final_target_transcript_file_path = new_transcript_folder_path.join(&new_transcript_filename_pathbuf);
-            if final_target_transcript_file_path.exists() {
-                let canon_old_abs = fs::canonicalize(old_transcript_file_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {}", old_transcript_file_path.display(), e)))?;
-                let canon_final_target_abs = fs::canonicalize(&final_target_transcript_file_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {}", final_target_transcript_file_path.display(), e)))?;
+            let final_new_transcript_file_abs_path = new_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
+            if final_new_transcript_file_abs_path.exists() {
+                let canon_old_abs = fs::canonicalize(old_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {}", old_transcript_file_abs_path.display(), e)))?;
+                let canon_final_target_abs = fs::canonicalize(&final_new_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {}", final_new_transcript_file_abs_path.display(), e)))?;
                 if canon_final_target_abs != canon_old_abs {
-                    return Err(CommandError::from(format!("An imported transcript file named '{}' already exists in the target location '{}'.", new_transcript_filename_with_ext_str, new_transcript_folder_path.display())));
+                    return Err(CommandError::from(format!("An imported transcript file named '{}' already exists in the target location '{}'.", new_transcript_filename_with_ext_str, new_transcript_folder_abs_path.display())));
                  }
             }
 
-            if old_transcript_file_path != &new_transcript_file_path_in_old_folder {
-                info!("[Backend Rename] Renaming imported transcript file {} -> {}", old_transcript_file_path.display(), new_transcript_file_path_in_old_folder.display());
-                fs::rename(old_transcript_file_path, &new_transcript_file_path_in_old_folder)
+            // 1. Rename the main transcript file (if its name changes within the folder)
+            if old_transcript_file_abs_path != &new_transcript_file_path_in_old_folder {
+                info!("[Backend Rename] Renaming imported transcript file {} -> {}", old_transcript_file_abs_path.display(), new_transcript_file_path_in_old_folder.display());
+                fs::rename(old_transcript_file_abs_path, &new_transcript_file_path_in_old_folder)
                     .map_err(|e| CommandError::from(format!("Failed to rename imported transcript file: {}", e)))?;
             }
 
-            if let Ok(old_metadata_path) = get_document_metadata_path_for_doc(old_transcript_file_path) {
-                if old_metadata_path.exists() {
-                    if let Ok(new_metadata_path_in_old_folder) = get_document_metadata_path_for_doc(&new_transcript_file_path_in_old_folder) {
-                        if old_metadata_path != new_metadata_path_in_old_folder {
-                            info!("[Backend Rename] Renaming metadata for imported transcript: {} -> {}", old_metadata_path.display(), new_metadata_path_in_old_folder.display());
-                            if new_metadata_path_in_old_folder.exists() {
-                                warn!("[Backend Rename] Target metadata file {} already exists. Skipping rename of old metadata {}.", new_metadata_path_in_old_folder.display(), old_metadata_path.display());
-                            } else {
-                                if let Err(e) = fs::rename(&old_metadata_path, &new_metadata_path_in_old_folder) {
-                                    warn!("[Backend Rename] Failed to rename metadata for imported transcript: {}. Reverting main transcript rename.", e);
-                                    if old_transcript_file_path != &new_transcript_file_path_in_old_folder {
-                                        let _ = fs::rename(&new_transcript_file_path_in_old_folder, old_transcript_file_path);
-                                    }
-                                    return Err(CommandError::from(format!("Failed to rename metadata for imported transcript: {}", e)));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Current path of the transcript file after potential rename, still in old folder if folder name changes
+            let current_transcript_path_before_folder_rename = new_transcript_file_path_in_old_folder.clone();
 
-            let mut current_transcript_folder_path_for_xml_update = old_transcript_folder_path.clone();
-            if old_transcript_folder_path != &new_transcript_folder_path {
-                info!("[Backend Rename] Renaming imported transcript folder {} -> {}", old_transcript_folder_path.display(), new_transcript_folder_path.display());
-                if let Err(e) = fs::rename(old_transcript_folder_path, &new_transcript_folder_path) {
-                    warn!("[Backend Rename] Failed to rename imported transcript folder: {}. Attempting to revert file renames.", e);
-                    if let Ok(old_meta_p) = get_document_metadata_path_for_doc(old_transcript_file_path) {
-                        if let Ok(new_meta_p_temp) = get_document_metadata_path_for_doc(&new_transcript_file_path_in_old_folder) {
-                            if old_meta_p != new_meta_p_temp && new_meta_p_temp.exists() { let _ = fs::rename(&new_meta_p_temp, &old_meta_p); }
-                        }
-                    }
-                    if old_transcript_file_path != &new_transcript_file_path_in_old_folder && new_transcript_file_path_in_old_folder.exists() {
-                        let _ = fs::rename(&new_transcript_file_path_in_old_folder, old_transcript_file_path);
+            // 2. Rename the folder (if stem changes)
+            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path {
+                info!("[Backend Rename] Renaming imported transcript folder {} -> {}", old_transcript_folder_abs_path.display(), new_transcript_folder_abs_path.display());
+                if let Err(e) = fs::rename(old_transcript_folder_abs_path, &new_transcript_folder_abs_path) {
+                    warn!("[Backend Rename] Failed to rename imported transcript folder: {}. Attempting to revert file rename.", e);
+                    if old_transcript_file_abs_path != &current_transcript_path_before_folder_rename && current_transcript_path_before_folder_rename.exists() {
+                        let _ = fs::rename(&current_transcript_path_before_folder_rename, old_transcript_file_abs_path);
                     }
                     return Err(CommandError::from(format!("Failed to rename imported transcript folder: {}", e)));
                 }
-                current_transcript_folder_path_for_xml_update = &new_transcript_folder_path;
             }
 
-            let final_new_transcript_file_abs_path = current_transcript_folder_path_for_xml_update.join(&new_transcript_filename_pathbuf);
-            let new_relative_path_for_transcript_xml = final_new_transcript_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+            // final_new_transcript_file_abs_path is the ultimate new absolute path
+            // new_transcript_filename_with_ext_str is the new filename "new_stem.json"
+            let new_relative_path_for_xml_and_db = final_new_transcript_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
-            let old_asset_metadata_path_result = get_document_metadata_path_for_doc(old_transcript_file_path);
-            let new_asset_metadata_path_result = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path);
-
-            match (old_asset_metadata_path_result, new_asset_metadata_path_result) {
-                (Ok(old_asset_meta_path), Ok(new_asset_meta_path)) => {
-                    let mut asset_metadata_to_write: Option<StandardAssetMetadata> = None;
-
-                    if old_asset_meta_path.exists() && old_asset_meta_path != new_asset_meta_path {
-                        info!("[Backend Rename] Attempting to read old imported transcript asset metadata: {}", old_asset_meta_path.display());
-                        match fs::read_to_string(&old_asset_meta_path) {
-                            Ok(json_content) => {
-                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
-                                    Ok(mut parsed_meta) => {
-                                        parsed_meta.metadata.file_name = new_transcript_filename_with_ext_str.clone();
-                                        parsed_meta.metadata.file_path = final_new_transcript_file_abs_path.to_string_lossy().into_owned();
-                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
-                                        asset_metadata_to_write = Some(parsed_meta);
-                                        info!("[Backend Rename] Parsed and updated old imported transcript asset metadata.");
-                                    }
-                                    Err(e) => warn!("[Backend Rename] Failed to parse old imported transcript asset metadata as StandardAssetMetadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                                }
-                            }
-                            Err(e) => warn!("[Backend Rename] Failed to read old imported transcript asset metadata {}: {}. New one will be created.", old_asset_meta_path.display(), e),
-                        }
-                        if old_asset_meta_path != new_asset_meta_path {
-                            if let Err(e) = fs::remove_file(&old_asset_meta_path) {
-                                warn!("[Backend Rename] Failed to remove old imported transcript asset metadata {}: {}", old_asset_meta_path.display(), e);
-                            }
-                        }
-                    } else if new_asset_meta_path.exists() {
-                         info!("[Backend Rename] Attempting to read existing imported transcript asset metadata for in-place update: {}", new_asset_meta_path.display());
-                         match fs::read_to_string(&new_asset_meta_path) {
-                            Ok(json_content) => {
-                                match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
-                                    Ok(mut parsed_meta) => {
-                                        parsed_meta.metadata.file_name = new_transcript_filename_with_ext_str.clone();
-                                        parsed_meta.metadata.file_path = final_new_transcript_file_abs_path.to_string_lossy().into_owned();
-                                        parsed_meta.metadata.last_modified = Utc::now().to_rfc3339();
-                                        asset_metadata_to_write = Some(parsed_meta);
-                                        info!("[Backend Rename] Parsed and updated existing imported transcript asset metadata for in-place update.");
-                                    }
-                                    Err(e) => warn!("[Backend Rename] Failed to parse existing imported transcript asset metadata as StandardAssetMetadata {}: {}. It will be overwritten.", new_asset_meta_path.display(), e),
-                                }
-                            }
-                            Err(e) => warn!("[Backend Rename] Failed to read existing imported transcript asset metadata {}: {}. It will be overwritten.", new_asset_meta_path.display(), e),
-                        }
-                    } else {
-                         info!("[Backend Rename] Old imported transcript asset metadata {} not found or same as new path. New one will be created/overwritten at {}.", old_asset_meta_path.display(), new_asset_meta_path.display());
+            // 3. Update database entry
+            if let Err(e) = db_handler::rename_asset_metadata_key(
+                old_transcript_relative_path, // old key
+                &new_relative_path_for_xml_and_db, // new key
+                &final_new_transcript_file_abs_path.to_string_lossy(), // new full file_path field value
+                &new_transcript_filename_with_ext_str, // new file_name field value
+            ) {
+                warn!("[Backend Rename] Failed to rename/update asset metadata in DB for imported transcript {} -> {}: {}. File system changes were successful. Attempting to revert FS changes.", old_transcript_relative_path, new_relative_path_for_xml_and_db, e);
+                // Attempt to revert FS operations (best effort)
+                if old_transcript_folder_abs_path != &new_transcript_folder_abs_path && new_transcript_folder_abs_path.exists() { // if folder was renamed
+                    let _ = fs::rename(&new_transcript_folder_abs_path, old_transcript_folder_abs_path); // revert folder rename
+                     // After folder revert, the file is at old_transcript_folder_abs_path.join(new_transcript_filename_pathbuf) if it was renamed
+                    let path_after_folder_revert = old_transcript_folder_abs_path.join(new_transcript_filename_pathbuf);
+                    if path_after_folder_revert.exists() && path_after_folder_revert != *old_transcript_file_abs_path {
+                         let _ = fs::rename(path_after_folder_revert, old_transcript_file_abs_path); // revert file rename
                     }
-
-                    let final_asset_metadata = asset_metadata_to_write.unwrap_or_else(|| {
-                        StandardAssetMetadata {
-                            metadata: FileMetadata {
-                                file_name: new_transcript_filename_with_ext_str.clone(),
-                                file_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
-                                last_modified: Utc::now().to_rfc3339(),
-                                title: "".to_string(),
-                                description: "".to_string(),
-                                summary: "".to_string(),
-                                duration_seconds: None,
-                                width: None,
-                                height: None,
-                                frame_rate: None,
-                                bit_rate: None,
-                                audio_codec: None,
-                                video_codec: None,
-                                creation_time: None,
-                            },
-                            highlights: Vec::new(),
-                        }
-                    });
-
-                    match serde_json::to_string_pretty(&final_asset_metadata) {
-                        Ok(json_string) => {
-                            if let Err(e) = fs::write(&new_asset_meta_path, json_string) {
-                                warn!("[Backend Rename] Failed to write imported transcript asset metadata to {}: {}", new_asset_meta_path.display(), e);
-                            } else {
-                                info!("[Backend Rename] Wrote imported transcript asset metadata to {}", new_asset_meta_path.display());
-                            }
-                        }
-                        Err(e) => warn!("[Backend Rename] Failed to serialize imported transcript asset metadata for {}: {}", new_asset_meta_path.display(), e),
-                    }
+                } else if old_transcript_file_abs_path != &current_transcript_path_before_folder_rename && current_transcript_path_before_folder_rename.exists() { // if only file was renamed
+                     let _ = fs::rename(&current_transcript_path_before_folder_rename, old_transcript_file_abs_path); // revert file rename
                 }
-                (Err(e), _) => warn!("[Backend Rename] Could not determine old imported transcript asset metadata path: {:?}", e),
-                (_, Err(e)) => warn!("[Backend Rename] Could not determine new imported transcript asset metadata path: {:?}", e),
+                return Err(CommandError::from(format!("Failed to update transcript metadata in DB: {}. File system changes attempted to be reverted.", e)));
+            } else {
+                info!("[Backend Rename] Successfully renamed/updated asset metadata in DB for imported transcript {} -> {}", old_transcript_relative_path, new_relative_path_for_xml_and_db);
             }
 
-            let mut new_app_metadata_relative_path_for_xml: Option<String> = None;
-            if let Ok(final_new_app_metadata_abs_path) = get_document_metadata_path_for_doc(&final_new_transcript_file_abs_path) {
-                if final_new_app_metadata_abs_path.exists() {
-                    new_app_metadata_relative_path_for_xml = Some(final_new_app_metadata_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\","/"));
-                }
-            }
-
-            info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_transcript_xml, new_transcript_filename_with_ext_str);
+            // 4. Update Project XML
+            // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
+            info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let mut updated_xml = false;
 
-            if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == item_relative_path) {
+            if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.clone();
-                entry.relative_path = new_relative_path_for_transcript_xml.clone();
+                entry.relative_path = new_relative_path_for_xml_and_db.clone();
                 project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 updated_xml = true;
                 info!("[Backend Rename] XML imported transcript entry updated.");
             } else {
-                warn!("[Backend Rename] Renamed imported transcript and/or folder, but could not find matching old relative path '{}' in XML for main transcript.", item_relative_path);
+                // This should ideally not happen if DB update was successful, as it means XML was out of sync.
+                warn!("[Backend Rename] Renamed imported transcript (FS & DB), but could not find matching old relative path '{}' in XML.", old_transcript_relative_path);
             }
 
-            if let Some(new_rel_meta_path) = new_app_metadata_relative_path_for_xml {
-                if let Some(metadata_entry) = project_data.document_metadata_files.files.iter_mut().find(|m| m.original_document_relative_path == item_relative_path) {
-                    let new_meta_filename = PathBuf::from(&new_rel_meta_path).file_name().unwrap_or_default().to_string_lossy().to_string();
-                    metadata_entry.name = new_meta_filename;
-                    metadata_entry.original_document_relative_path = new_relative_path_for_transcript_xml.clone();
-                    metadata_entry.relative_path = new_rel_meta_path;
-                    project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                    updated_xml = true;
-                    info!("[Backend Rename] XML document metadata entry updated for imported transcript.");
-                } else {
-                    warn!("[Backend Rename] Imported transcript metadata file renamed/moved, but could not find matching old original_document_relative_path '{}' in XML for metadata.", item_relative_path);
-                }
-            }
+            // Logic for updating project_data.document_metadata_files.files is REMOVED.
 
             if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
@@ -1411,7 +1316,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
                 }
             }
-
         },
         "doc" => {
             let new_filename_with_ext_str = new_name_trimmed;

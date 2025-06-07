@@ -89,6 +89,10 @@ pub fn run() {
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
 
+            // --- Project view METADATA commands (asset_metadata table) ---
+            projectview::metadata_commands::get_asset_metadata_command,
+            projectview::metadata_commands::update_asset_metadata_command,
+
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,
             projectview::transcription_commands::save_transcript_json,

@@ -1,11 +1,33 @@
 // src-tauri/src/projectview/db_handler.rs
-use rusqlite::{Connection, Result, params, OptionalExtension};
+use rusqlite::{Connection, Result, params, OptionalExtension, ToSql};
 use std::path::PathBuf;
 use std::fs;
 use crate::welcome::config::get_config_dir; // Assuming this function gives PathBuf
-use log::{info, debug};
+use log::{info, debug, error}; // Added error
+use serde::{Serialize, Deserialize}; // Added for the new struct
+use crate::projectview::shared_types::FileMetadata; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey_annotations.sqlite";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileMetadataWithCustomFieldsFromDb {
+    pub file_name: String,
+    pub file_path: String,
+    pub last_modified: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub summary: Option<String>,
+    pub duration_seconds: Option<f64>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub frame_rate: Option<f32>,
+    pub bit_rate: Option<i64>,
+    pub audio_codec: Option<String>,
+    pub video_codec: Option<String>,
+    pub creation_time: Option<String>,
+    pub custom_fields_json: Option<String>,
+    pub asset_type: String,
+}
 
 fn get_db_path() -> Result<PathBuf, String> {
     let config_dir = get_config_dir().map_err(|e| format!("Failed to get config dir: {}", e.message))?;
@@ -50,9 +72,251 @@ pub fn init_db() -> Result<()> {
         END;",
         [],
     )?;
-    info!("[DB] Database initialized successfully.");
+
+    // asset_metadata table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS asset_metadata (
+            asset_relative_path TEXT PRIMARY KEY,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            last_modified TEXT NOT NULL,
+            title TEXT,
+            description TEXT,
+            summary TEXT,
+            duration_seconds REAL,
+            width INTEGER,
+            height INTEGER,
+            frame_rate REAL,
+            bit_rate INTEGER,
+            audio_codec TEXT,
+            video_codec TEXT,
+            creation_time TEXT,
+            asset_type TEXT NOT NULL,
+            custom_fields_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_asset_metadata_updated_at
+        AFTER UPDATE ON asset_metadata
+        FOR EACH ROW
+        BEGIN
+            UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP WHERE asset_relative_path = OLD.asset_relative_path;
+        END;",
+        [],
+    )?;
+
+    info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
+
+// Helper to convert Option<T> to dyn ToSql for rusqlite
+fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
+    match opt {
+        Some(val) => Box::new(val),
+        None => Box::new(rusqlite::types::Null),
+    }
+}
+// Helper to convert Option<&str> to dyn ToSql
+fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
+    match opt_str {
+        Some(s) => Box::new(s.to_string()), // Convert &str to String before boxing
+        None => Box::new(rusqlite::types::Null),
+    }
+}
+
+
+pub fn save_asset_metadata(
+    metadata: &FileMetadata,
+    asset_relative_path: &str,
+    asset_type: &str,
+    custom_fields_json: Option<&str>,
+) -> Result<()> {
+    debug!(
+        "[DB] Saving asset metadata for: {} (type: {})",
+        asset_relative_path, asset_type
+    );
+    let db_path = get_db_path().map_err(|e| {
+        error!("[DB] Failed to get DB path: {}", e);
+        rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+    })?;
+    let conn = Connection::open(&db_path)?;
+
+    if let Some(parent_dir) = db_path.parent() {
+        if !parent_dir.exists() {
+            fs::create_dir_all(parent_dir).map_err(|e| {
+                error!("[DB] Failed to create db directory: {}", e);
+                rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(1),
+                    Some(format!("Failed to create db directory: {}", e)),
+                )
+            })?;
+        }
+    }
+
+    let sql = "
+        INSERT INTO asset_metadata (
+            asset_relative_path, file_name, file_path, last_modified, title,
+            description, summary, duration_seconds, width, height, frame_rate,
+            bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+        ON CONFLICT(asset_relative_path) DO UPDATE SET
+            file_name = excluded.file_name,
+            file_path = excluded.file_path,
+            last_modified = excluded.last_modified,
+            title = excluded.title,
+            description = excluded.description,
+            summary = excluded.summary,
+            duration_seconds = excluded.duration_seconds,
+            width = excluded.width,
+            height = excluded.height,
+            frame_rate = excluded.frame_rate,
+            bit_rate = excluded.bit_rate,
+            audio_codec = excluded.audio_codec,
+            video_codec = excluded.video_codec,
+            creation_time = excluded.creation_time,
+            asset_type = excluded.asset_type,
+            custom_fields_json = excluded.custom_fields_json,
+            updated_at = CURRENT_TIMESTAMP;
+    ";
+
+    conn.execute(
+        sql,
+        params![
+            asset_relative_path,
+            metadata.file_name,
+            metadata.file_path,
+            metadata.last_modified,
+            &metadata.title,
+            &metadata.description,
+            &metadata.summary,
+            to_sql_optional(metadata.duration_seconds),
+            to_sql_optional(metadata.width),
+            to_sql_optional(metadata.height),
+            to_sql_optional(metadata.frame_rate),
+            to_sql_optional(metadata.bit_rate),
+            to_sql_optional_str(metadata.audio_codec.as_deref()),
+            to_sql_optional_str(metadata.video_codec.as_deref()),
+            to_sql_optional_str(metadata.creation_time.as_deref()),
+            asset_type,
+            to_sql_optional_str(custom_fields_json),
+        ],
+    )?;
+
+    info!(
+        "[DB] Asset metadata saved successfully for: {} (type: {})",
+        asset_relative_path, asset_type
+    );
+    Ok(())
+}
+
+pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetadataWithCustomFieldsFromDb>> {
+    debug!("[DB] Loading asset metadata for: {}", asset_relative_path);
+    let db_path = get_db_path().map_err(|e| {
+        error!("[DB] Failed to get DB path: {}", e);
+        rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+    })?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Returning None for asset: {}", db_path.display(), asset_relative_path);
+        return Ok(None);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("
+        SELECT file_name, file_path, last_modified, title, description, summary,
+               duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
+               creation_time, custom_fields_json, asset_type
+        FROM asset_metadata
+        WHERE asset_relative_path = ?1
+    ")?;
+
+    let result = stmt.query_row(params![asset_relative_path], |row| {
+        Ok(FileMetadataWithCustomFieldsFromDb {
+            file_name: row.get(0)?,
+            file_path: row.get(1)?,
+            last_modified: row.get(2)?,
+            title: row.get(3)?,
+            description: row.get(4)?,
+            summary: row.get(5)?,
+            duration_seconds: row.get(6)?,
+            width: row.get(7)?,
+            height: row.get(8)?,
+            frame_rate: row.get(9)?,
+            bit_rate: row.get(10)?,
+            audio_codec: row.get(11)?,
+            video_codec: row.get(12)?,
+            creation_time: row.get(13)?,
+            custom_fields_json: row.get(14)?,
+            asset_type: row.get(15)?,
+        })
+    }).optional()?;
+
+    debug!("[DB] Load asset metadata result for {}: {}", asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    Ok(result)
+}
+
+pub fn delete_asset_metadata(asset_relative_path: &str) -> Result<()> {
+    debug!("[DB] Deleting asset metadata for: {}", asset_relative_path);
+    let db_path = get_db_path().map_err(|e| {
+        error!("[DB] Failed to get DB path: {}", e);
+        rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+    })?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Nothing to delete for asset: {}", db_path.display(), asset_relative_path);
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    let changes = conn.execute("DELETE FROM asset_metadata WHERE asset_relative_path = ?1", params![asset_relative_path])?;
+
+    if changes > 0 {
+        info!("[DB] Asset metadata deleted successfully for: {} ({} rows affected)", asset_relative_path, changes);
+    } else {
+        debug!("[DB] No asset metadata found to delete for: {}", asset_relative_path);
+    }
+    Ok(())
+}
+
+pub fn rename_asset_metadata_key(
+    old_relative_path: &str,
+    new_relative_path: &str,
+    new_file_path: &str,
+    new_file_name: &str,
+) -> Result<()> {
+    debug!(
+        "[DB] Renaming asset metadata key from {} to {}, new_path: {}, new_name: {}",
+        old_relative_path, new_relative_path, new_file_path, new_file_name
+    );
+    let db_path = get_db_path().map_err(|e| {
+        error!("[DB] Failed to get DB path: {}", e);
+        rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+    })?;
+     if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Nothing to rename for asset: {}", db_path.display(), old_relative_path);
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    // Note: last_modified is updated to reflect the change in the metadata record itself (key change),
+    // while updated_at will be handled by the trigger.
+    let changes = conn.execute(
+        "UPDATE asset_metadata
+         SET asset_relative_path = ?1, file_path = ?2, file_name = ?3, last_modified = CURRENT_TIMESTAMP
+         WHERE asset_relative_path = ?4",
+        params![new_relative_path, new_file_path, new_file_name, old_relative_path],
+    )?;
+
+    if changes > 0 {
+        info!(
+            "[DB] Asset metadata key renamed successfully from {} to {} ({} rows affected)",
+            old_relative_path, new_relative_path, changes
+        );
+    } else {
+        debug!("[DB] No asset metadata found to rename for old key: {}", old_relative_path);
+    }
+    Ok(())
+}
+
 
 pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<Option<String>> {
     debug!("[DB] Loading annotations for: {} (type: {})", document_path, doc_type);
