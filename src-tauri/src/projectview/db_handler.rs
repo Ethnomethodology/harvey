@@ -164,8 +164,6 @@ pub fn save_asset_metadata(
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
         ON CONFLICT(asset_relative_path) DO UPDATE SET
-            file_name = excluded.file_name,
-            file_path = excluded.file_path,
             last_modified = excluded.last_modified,
             title = excluded.title,
             description = excluded.description,
@@ -179,7 +177,10 @@ pub fn save_asset_metadata(
             video_codec = excluded.video_codec,
             creation_time = excluded.creation_time,
             custom_fields_json = excluded.custom_fields_json,
-            updated_at = CURRENT_TIMESTAMP;
+            updated_at = CURRENT_TIMESTAMP
+        -- file_name, file_path, and asset_type are NOT updated from 'excluded' during an update.
+        -- asset_type was already not being updated, which is correct.
+        ;
     ";
 
     conn.execute(
