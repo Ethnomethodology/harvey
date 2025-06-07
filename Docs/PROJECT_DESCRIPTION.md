@@ -223,7 +223,10 @@ This section handles transcripts generated *within* Harvey from audio/video medi
 * **Frontend Components**:
     * `TranscriptionsView.svelte`: Main container for the media transcription interface.
     * `EditableTranscript.svelte`: Interactive transcript editor linked to media playback (likely Lexical-based).
-    * `MediaPlayer.svelte`: Handles audio/video playback.
+    * `transcriptions/MediaPlayer.svelte`: A versatile component responsible for audio/video playback.
+        *   When used within the "Transcriptions" view (without an `explicitMediaPath` prop), it interacts heavily with `transcriptStore.js` to play the currently selected media (`$transcriptStore.selectedMediaFile`), synchronize with its player state (`$transcriptStore.player`), and manage its audio buffer (`$transcriptStore.audioBuffer`). It uses functions from `transcriptStore.js` (like `updatePlayerTime`, `togglePlayerPlaying`) to update this shared state.
+        *   It can also be instantiated with an `explicitMediaPath` prop (e.g., in the "Fieldnotes" view for media notes) to play specific media files independently of the main transcriptions view's state, managing its playback state locally in such cases.
+        *   Provides UI controls for playback and includes logic for media loading, decoding, and error handling. It also supports functionalities like media trimming when used in the main transcriptions context.
     * `InteractiveWaveform.svelte`: Displays an interactive audio waveform.
     * `RichTextPreview.svelte`: Displays the transcript and includes a feature to "Convert Media Transcript to Document".
     * `LeftPanel.svelte`: A panel within this view, possibly for media files or settings.
@@ -253,7 +256,20 @@ This section outlines key JavaScript/TypeScript modules that provide core fronte
 * **Frontend Components/Modules**:
     * `services/projectService.js`: This service is the **primary communication bridge** between the SvelteKit frontend components and the Rust backend. It encapsulates almost all `invoke` calls to Tauri's backend command handlers. Its critical role is to abstract these backend interactions for the UI components, managing the flow of data and responses for a wide range of application functionalities. This includes, but is not limited to, project creation/loading, media import, initiating transcription requests, document saving/loading, and handling PDF/image annotation operations. It essentially centralizes the frontend's side of the frontend-backend contract.
     * `services/configureActions.js`: Contains functions for managing application configuration (models, API keys, themes, download location) and initiating actions like transcript export.
-    * `stores/projectStore.js`: Manages the reactive state for the currently loaded project, including file lists, editor states, selections, and UI states. This Svelte store allows different components to react to changes in project data dynamically.
+    * `stores/projectStore.js`: Manages the core reactive state for the currently loaded project and general application UI. Its responsibilities include:
+        *   **Project Configuration**: Storing the project name, XML path, and base directory.
+        *   **File System Representation**: Holding the hierarchical list of project files and assets (`files`, `documentFiles`, `tableFiles`, `imageFiles`, `importedTranscriptFiles`, `documentMetadataFiles`).
+        *   **Document and Note Management**: Tracking the state for editing non-transcript text documents, PDFs (including annotations), imported transcripts (as documents), and media-specific notes. This includes selected paths, current content, dirty states, loading states, and active editor references for these items.
+        *   **General UI State**: Managing global UI states such as overall loading indicators (`isLoading`), general error messages (`error`), status messages (`statusMessage`), autosave preference (`autosaveEnabled`), and the state for UI prompts like unsaved changes (for non-transcript items) and file conversion confirmations.
+        *   It no longer manages the detailed state for media-based transcript editing, media player control, or the transcription process itself; these responsibilities have been moved to `transcriptStore.js`. This Svelte store allows different components to react to changes in project data dynamically.
+    * `stores/transcriptStore.js`: This Svelte store is dedicated to managing all state related to media transcription and playback within the main "Transcriptions" view. Its key responsibilities include:
+        *   **Transcript Segments**: Holding and managing the array of transcript segments, including their text content, start/end times, and speaker assignments. It supports operations like loading segments, updating individual segments, inserting new segments, and deleting segments.
+        *   **Undo/Redo**: Manages undo and redo stacks specifically for changes made to transcript segments.
+        *   **Media Player State**: Controls the state of the main media player in the transcriptions view, such as current playback time, total duration, play/pause status, and the associated audio buffer for waveform display.
+        *   **Selected Media**: Tracks the currently selected media file (`selectedMediaFile`) that is active in the transcriptions view.
+        *   **Speaker Configuration**: Manages the speaker count and their names for the active media's transcript.
+        *   **Transcription Process State**: Handles state related to the transcription process itself, including the selected transcription model (`selectedModelName`), selected language (`selectedLanguage`), whether a transcription is currently in progress (`isTranscribing`), the progress of an ongoing transcription (`transcriptionProgress` including percent and message), the unique ID of the current transcription job (`transcriptionJobId`), and the visibility of the transcription confirmation modal (`showTranscribeModal`).
+        *   **Dirty State**: Tracks whether the current transcript has unsaved changes (`transcriptDirty`).
     * `stores/themeStore.js`: Manages theme (light/dark/system) preferences, persisting them and applying them across the application.
 
 #### Frontend Workers
