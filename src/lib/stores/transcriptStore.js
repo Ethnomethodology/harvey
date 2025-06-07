@@ -1,11 +1,11 @@
 // src/lib/stores/transcriptStore.js
 import { writable, get } from 'svelte/store';
-// import { invoke } from '@tauri-apps/api/core';
-// import { message } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
+import { message } from '@tauri-apps/plugin-dialog';
 // Import projectStore to access project-level details.
 // This creates a partial cyclic dependency that we might want to resolve later
 // by passing necessary values as arguments or through a service.
-// import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
+import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
 
 export const initialTranscriptState = {
@@ -37,7 +37,6 @@ export const MAX_UNDO_STACK_SIZE = 50;
 
 // --- Transcript Management Functions ---
 
-/*
 export function pushToUndoStack(currentSegments) {
     transcriptStore.update(ts => {
         const newUndoStack = [...ts.transcriptUndoStack, currentSegments];
@@ -295,13 +294,11 @@ export function updatePlayerTime(time) {
 export function setPlayerDuration(duration) {
     transcriptStore.update((ts) => ({ ...ts, player: { ...ts.player, duration: duration } }));
 }
-*/
 
 export function togglePlayerPlaying(isPlaying) {
     transcriptStore.update((ts) => ({ ...ts, player: { ...ts.player, isPlaying: isPlaying } }));
 }
 
-/*
 export function updatePlayerCurrentSegmentIndex(index) {
     const newIndex = (typeof index === 'number' && index >= -1) ? index : -1;
     transcriptStore.update((ts) => {
@@ -678,7 +675,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
 }
-*/
+
 // Helper to update projectStore's status and error, if needed by transcript functions
 // This is a placeholder for a better way to handle global state updates.
 // export function updateGlobalStatus(statusMessage, error = null) {
@@ -690,10 +687,9 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
 // export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 // This updateProjectStoreState would need to be added to projectStore.js
 
-// import { listen } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 
 // Listen for media rename events from the backend
-/*
 listen('media_renamed', (event) => {
     console.log('[TranscriptStore] Received media_renamed event:', event.payload);
     if (!event.payload) return;
@@ -741,4 +737,3 @@ listen('item_renamed', (event) => {
         return ts;
     });
 });
-*/
