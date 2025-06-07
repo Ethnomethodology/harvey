@@ -434,48 +434,58 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         }
     }
 
-    match get_media_metadata_path(&destination_media_path) {
-        Ok(metadata_path) => {
-            let file_name_var_for_meta = destination_media_path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .to_string();
+    // --- Remove old .metadata.json file creation logic ---
+    // The entire 'match get_media_metadata_path(...){...}' block has been removed.
 
-            let metadata_content = StandardAssetMetadata {
-                metadata: FileMetadata {
-                    file_name: file_name_var_for_meta,
-                    file_path: destination_media_path.to_string_lossy().into_owned(),
-                    last_modified: Utc::now().to_rfc3339(),
-                    title: "".to_string(),
-                    description: "".to_string(),
-                    summary: "".to_string(),
-                    duration_seconds,
-                    width,
-                    height,
-                    frame_rate,
-                    bit_rate: bit_rate_overall,
-                    audio_codec,
-                    video_codec,
-                    creation_time: creation_time_tag,
-                },
-                highlights: Vec::new(),
-            };
+    // --- Prepare and save metadata to SQLite database ---
+    let file_metadata_for_db = FileMetadata {
+        file_name: source_filename.clone(), // source_filename is available from earlier
+        file_path: destination_media_path.to_string_lossy().into_owned(), // Absolute path
+        last_modified: Utc::now().to_rfc3339(), // For new assets, set current time
+        title: String::new(),
+        description: String::new(),
+        summary: String::new(),
+        duration_seconds, // From ffprobe
+        width,            // From ffprobe
+        height,           // From ffprobe
+        frame_rate,       // From ffprobe
+        bit_rate: bit_rate_overall, // From ffprobe
+        audio_codec: audio_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
+        video_codec: video_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
+        creation_time: creation_time_tag.clone(), // From ffprobe (ensure cloned if Option<String>)
+    };
 
-            match serde_json::to_string_pretty(&metadata_content) {
-                Ok(json_string) => {
-                    if let Err(e) = fs::write(&metadata_path, json_string) {
-                        error!("[Backend Import] Failed to write metadata file {}: {}", metadata_path.display(), e);
-                    } else {
-                        info!("[Backend Import] Created metadata file: {}", metadata_path.display());
-                    }
-                }
-                Err(e) => {
-                    error!("[Backend Import] Failed to serialize metadata for {}: {}", metadata_path.display(), e);
-                }
-            }
-        }
+    let final_asset_type: String;
+    if video_codec.is_some() {
+        final_asset_type = "video".to_string();
+    } else if audio_codec.is_some() {
+        final_asset_type = "audio".to_string();
+    } else {
+        final_asset_type = source_path.extension()
+            .and_then(|s| s.to_str())
+            .map_or_else(|| "media".to_string(), |ext| ext.to_lowercase());
+    }
+
+    // destination_relative_path_for_xml is calculated before this block for XML update, use it as DB key
+    let destination_relative_path_for_xml_calc = Path::new(HARVEY_FILES_DIR)
+        .join(MEDIA_DIR)
+        .join(media_stem_identifier) // media_stem_identifier is from source_path.file_stem()
+        .join(MEDIA_SUBDIR)
+        .join(&source_filename) // source_filename is from source_path.file_name()
+        .to_string_lossy()
+        .replace("\\", "/");
+    let db_key_relative_path = destination_relative_path_for_xml_calc;
+
+
+    match db_handler::save_asset_metadata(
+        &file_metadata_for_db,
+        &db_key_relative_path,
+        &final_asset_type,
+        None, // custom_fields_json (None for initial import)
+    ) {
+        Ok(_) => info!("[Backend Import] Successfully saved media metadata to DB for: {}", db_key_relative_path),
         Err(e) => {
-            error!("[Backend Import] Failed to get media metadata path for {}: {:?}", destination_media_path.display(), e);
+            warn!("[Backend Import] Failed to save media metadata to DB for {}: {}. Proceeding with XML update.", db_key_relative_path, e);
         }
     }
 

@@ -127,32 +127,37 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
         .any(|m| m.original_document_relative_path == relative_path_for_doc_xml);
 
     if is_new_document_entry || !metadata_exists_in_xml {
-        if !metadata_path.exists() {
-            info!("[Backend Save Doc] Creating empty metadata file for new/untracked document at: {}", metadata_path.display());
-            // Create default DocumentHighlightData with populated file_name and last_modified
-            let mut default_metadata_content = DocumentHighlightData::default(); // metadata is now FileMetadata::default()
-            default_metadata_content.metadata.file_name = document_name.clone(); // Use the name of the document being saved
-            default_metadata_content.metadata.file_path = target_path_buf.to_string_lossy().into_owned(); // Set the file_path
-            default_metadata_content.metadata.last_modified = Utc::now().to_rfc3339();
+        // --- Block for creating .metadata.json file REMOVED ---
+        // The following code block was removed:
+        // if !metadata_path.exists() {
+        //     info!("[Backend Save Doc] Creating empty metadata file for new/untracked document at: {}", metadata_path.display());
+        //     // Create default DocumentHighlightData with populated file_name and last_modified
+        //     let mut default_metadata_content = DocumentHighlightData::default(); // metadata is now FileMetadata::default()
+        //     default_metadata_content.metadata.file_name = document_name.clone(); // Use the name of the document being saved
+        //     default_metadata_content.metadata.file_path = target_path_buf.to_string_lossy().into_owned(); // Set the file_path
+        //     default_metadata_content.metadata.last_modified = Utc::now().to_rfc3339();
+        //
+        //     let metadata_json_content = serde_json::to_string_pretty(&default_metadata_content)
+        //         .map_err(|e| CommandError::from(format!("Failed to serialize default metadata to JSON: {}", e)))?;
+        //     fs::write(&metadata_path, metadata_json_content)
+        //         .map_err(|e| CommandError::from(format!("Failed to write initial empty metadata file: {}", e)))?;
+        // }
 
-            let metadata_json_content = serde_json::to_string_pretty(&default_metadata_content)
-                .map_err(|e| CommandError::from(format!("Failed to serialize default metadata to JSON: {}", e)))?;
-            fs::write(&metadata_path, metadata_json_content)
-                .map_err(|e| CommandError::from(format!("Failed to write initial empty metadata file: {}", e)))?;
-        }
-
-        if !metadata_exists_in_xml {
-            let metadata_filename = metadata_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let metadata_relative_path = metadata_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-            let new_metadata_xml_entry = DocumentMetadataEntryXml {
-                name: metadata_filename,
-                original_document_relative_path: relative_path_for_doc_xml.clone(),
-                relative_path: metadata_relative_path,
-            };
-            project_data.document_metadata_files.files.push(new_metadata_xml_entry);
-            project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-            info!("[Backend Save Doc] Added metadata entry to XML for document: {}", relative_path_for_doc_xml);
-        }
+        // --- Block for adding DocumentMetadataEntryXml to project.xml REMOVED ---
+        // The following code block was removed:
+        // if !metadata_exists_in_xml {
+        //     let metadata_filename = metadata_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        //     let metadata_relative_path = metadata_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+        //     let new_metadata_xml_entry = DocumentMetadataEntryXml {
+        //         name: metadata_filename,
+        //         original_document_relative_path: relative_path_for_doc_xml.clone(),
+        //         relative_path: metadata_relative_path,
+        //     };
+        //     project_data.document_metadata_files.files.push(new_metadata_xml_entry);
+        //     project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+        //     info!("[Backend Save Doc] Added metadata entry to XML for document: {}", relative_path_for_doc_xml);
+        // }
+        debug!("[Backend Save Doc] .metadata.json file creation and XML entry addition are now disabled for document: {}", relative_path_for_doc_xml);
     }
 
     save_project_xml(&project_xml_path_buf, &project_data)?;

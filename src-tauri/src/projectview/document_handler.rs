@@ -1,12 +1,13 @@
 // src-tauri/src/projectview/document_handler.rs
 use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{
-    ProjectXml, DocumentEntryXml, DocumentMetadataEntryXml,
+    ProjectXml, DocumentEntryXml, // DocumentMetadataEntryXml removed
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS,
-    StandardAssetMetadata, FileMetadata // Added imports
+    FileMetadata // StandardAssetMetadata removed
 };
 use crate::projectview::shared_utils::{save_project_xml, ensure_base_asset_dirs};
-use crate::projectview::document_commands::{get_document_metadata_path};
+// get_document_metadata_path removed as it's no longer used
+use crate::projectview::db_handler; // Added db_handler import
 
 use std::{
     fs,
@@ -19,7 +20,7 @@ use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
 use uuid::Uuid;
 use quick_xml;
-// use serde::{Serialize, Deserialize}; // Removed as per instruction (if unused)
+// use serde::{Serialize, Deserialize};
 use chrono::Utc;
 // Local FileMetadata and StandardAssetMetadata structs removed, shared_types versions will be used.
 
@@ -110,58 +111,50 @@ pub async fn import_document(
                 main_doc_xml_changed = true;
             }
 
-            // --- Handle .metadata.json (our app's general metadata) ---
-            let app_metadata_path = get_document_metadata_path(&final_pdf_path)?;
-            if !app_metadata_path.exists() {
-                // Create new StandardAssetMetadata instead of DocumentHighlightData
-                let new_standard_metadata = StandardAssetMetadata {
-                    metadata: FileMetadata {
-                        file_name: final_pdf_name.clone(), // final_pdf_name is from the existing PDF logic
-                        file_path: final_pdf_path.to_string_lossy().into_owned(), // final_pdf_path is existing
-                        last_modified: Utc::now().to_rfc3339(),
-                        title: "".to_string(),
-                        description: "".to_string(),
-                        summary: "".to_string(),
-                        duration_seconds: None,
-                        width: None,
-                        height: None,
-                        frame_rate: None,
-                        bit_rate: None,
-                        audio_codec: None,
-                        video_codec: None,
-                        creation_time: None,
-                    },
-                    highlights: Vec::new(), // Standardized, starts empty
-                };
-                let app_metadata_json_content = serde_json::to_string_pretty(&new_standard_metadata)
-                    .map_err(|e| CommandError::from(format!("Failed to serialize standard asset metadata for PDF: {}",e)))?;
-                fs::write(&app_metadata_path, app_metadata_json_content)
-                    .map_err(|e| CommandError::from(format!("Failed to write standard asset metadata for PDF: {}", e)))?;
-                info!("[import_document] Created standard asset metadata file for PDF: {}", app_metadata_path.display());
-            }
-            let app_metadata_filename_xml = app_metadata_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let app_metadata_relative_path_xml = app_metadata_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-            let mut app_metadata_xml_changed = false;
-            if !project_data.document_metadata_files.files.iter().any(|m| m.original_document_relative_path == relative_path_for_pdf_xml) {
-                project_data.document_metadata_files.files.push(DocumentMetadataEntryXml {
-                    name: app_metadata_filename_xml,
-                    original_document_relative_path: relative_path_for_pdf_xml.clone(),
-                    relative_path: app_metadata_relative_path_xml,
-                });
-                project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                info!("[import_document] Added app metadata entry to XML for PDF: {}", relative_path_for_pdf_xml);
-                app_metadata_xml_changed = true;
-            }
+            // --- .metadata.json handling removed ---
+            // Logic for app_metadata_path, StandardAssetMetadata, JSON serialization,
+            // DocumentMetadataEntryXml, and app_metadata_xml_changed has been deleted.
 
             // --- PDF Annotations are now handled by the database, no file creation or XML entry needed here ---
             info!("[import_document] PDF annotation file/XML entry is no longer created for PDF: {}", relative_path_for_pdf_xml);
-            let _pdf_annotation_xml_changed = false; // Ensure this doesn't interfere with save_project_xml logic
+            // let _pdf_annotation_xml_changed = false; // This variable is no longer needed.
 
-            if main_doc_xml_changed || app_metadata_xml_changed { // Removed pdf_annotation_xml_changed
+            if main_doc_xml_changed { // Condition changed from main_doc_xml_changed || app_metadata_xml_changed
                 save_project_xml(&project_xml_path, &project_data)?;
-                info!("[import_document] Project XML updated successfully for PDF and/or its metadata/annotations.");
+                info!("[import_document] Project XML updated successfully for PDF document entry.");
             } else {
-                info!("[import_document] PDF and its metadata/annotations entries already existed in XML. No XML changes made.");
+                info!("[import_document] PDF document entry already existed in XML. No XML changes made for document entry.");
+            }
+
+            // Construct FileMetadata for SQLite
+            let pdf_file_metadata = FileMetadata {
+                file_name: final_pdf_name.clone(),
+                file_path: final_pdf_path.to_string_lossy().into_owned(),
+                last_modified: Utc::now().to_rfc3339(),
+                title: String::new(),
+                description: String::new(),
+                summary: String::new(),
+                duration_seconds: None,
+                width: None,
+                height: None,
+                frame_rate: None,
+                bit_rate: None,
+                audio_codec: None,
+                video_codec: None,
+                creation_time: None,
+            };
+
+            // Save metadata to SQLite database
+            match db_handler::save_asset_metadata(
+                &pdf_file_metadata,
+                &relative_path_for_pdf_xml, // This is the relative path of the PDF asset
+                "pdf",                        // asset_type for PDFs
+                None,                         // custom_fields_json (None for initial import)
+            ) {
+                Ok(_) => info!("[import_document] Successfully saved PDF metadata to DB for: {}", relative_path_for_pdf_xml),
+                Err(e) => {
+                    warn!("[import_document] Failed to save PDF metadata to DB for {}: {}. The PDF was imported, but its metadata might be missing from the database.", relative_path_for_pdf_xml, e);
+                }
             }
 
             final_or_temp_path = final_pdf_path_str;
@@ -232,6 +225,61 @@ pub async fn import_document(
             if !temp_html_path.exists() || fs::metadata(&temp_html_path)?.len() == 0 {
                  warn!("[import_document] Pandoc {} success but output missing/empty: {}", conversion_type, temp_html_path.display());
                  return Err(CommandError::from(format!("Pandoc {} success but output empty/missing.", conversion_type)));
+            }
+
+            // Metadata saving logic for non-PDF documents
+            let original_doc_filename = source_filename_with_ext.clone();
+            let conceptual_original_doc_path = doc_folder.join(&original_doc_filename);
+
+            let asset_relative_path_for_db = conceptual_original_doc_path
+                .strip_prefix(project_base_dir)
+                .map_err(|_| CommandError::from(format!("Failed to strip prefix for DB relative path of document: {}", conceptual_original_doc_path.display())))?
+                .to_string_lossy()
+                .replace("\\", "/")
+                .to_string();
+
+            let last_modified_timestamp = match fs::metadata(&source_path) {
+                Ok(metadata) => {
+                    match metadata.modified() {
+                        Ok(time) => {
+                            let secs = time.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+                            chrono::DateTime::from_timestamp(secs as i64, 0)
+                                .map(|dt| dt.to_rfc3339())
+                                .unwrap_or_else(|| Utc::now().to_rfc3339())
+                        }
+                        Err(_) => Utc::now().to_rfc3339(),
+                    }
+                }
+                Err(_) => Utc::now().to_rfc3339(),
+            };
+
+            let doc_file_metadata = FileMetadata {
+                file_name: original_doc_filename,
+                file_path: conceptual_original_doc_path.to_string_lossy().into_owned(),
+                last_modified: last_modified_timestamp,
+                title: String::new(),
+                description: String::new(),
+                summary: String::new(),
+                duration_seconds: None,
+                width: None,
+                height: None,
+                frame_rate: None,
+                bit_rate: None,
+                audio_codec: None,
+                video_codec: None,
+                creation_time: None, // Could also attempt to get from source_path metadata if needed
+            };
+
+            match db_handler::save_asset_metadata(
+                &doc_file_metadata,
+                &asset_relative_path_for_db,
+                &source_extension, // Use specific extension like "docx", "txt" as asset_type
+                None,
+            ) {
+                Ok(_) => info!("[import_document] Successfully saved document metadata to DB for: {} (type: {})", asset_relative_path_for_db, source_extension),
+                Err(e) => {
+                    warn!("[import_document] Failed to save document metadata to DB for {}: {}. Proceeding with import.", asset_relative_path_for_db, e);
+                }
             }
 
             info!("[import_document] Pandoc {} successful to temp HTML: {}", conversion_type, temp_html_path.display());
