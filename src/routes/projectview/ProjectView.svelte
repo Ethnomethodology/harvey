@@ -418,8 +418,8 @@
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
-	$: modalProps = { fileName: $project.selectedMediaFile?.name ?? 'N/A', modelName: $project.selectedModelName ?? 'None Selected', language: $project.selectedLanguage ?? 'N/A', speakers: $project.speakers, jobId: $project.transcriptionJobId };
-    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $project.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
+	// $: modalProps = { fileName: $transcriptStore.selectedMediaFile?.name ?? 'N/A', modelName: $transcriptStore.selectedModelName ?? 'None Selected', language: $transcriptStore.selectedLanguage ?? 'N/A', speakers: $transcriptStore.speakers, jobId: $transcriptStore.transcriptionJobId };
+    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $transcriptStore.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 
@@ -452,7 +452,17 @@
 		<BottomBar />
 	</div>
 
-	<TranscribeConfirmModal bind:this={transcribeModalRef} bind:showModal={$transcriptStore.showTranscribeModal} fileName={modalProps.fileName} modelName={modalProps.modelName} language={modalProps.language} speakers={modalProps.speakers} jobId={modalProps.jobId} on:confirmStart={handleConfirmStartTranscription} on:cancelRequest={handleCancelTranscriptionRequest} on:close={handleModalClose} />
+	<TranscribeConfirmModal
+        bind:this={transcribeModalRef}
+        bind:showModal={$transcriptStore.showTranscribeModal}
+        fileName={$transcriptStore.selectedMediaFile?.name ?? 'N/A'}
+        modelName={$transcriptStore.selectedModelName ?? 'None Selected'}
+        language={$transcriptStore.selectedLanguage ?? 'N/A'}
+        speakers={$transcriptStore.speakers}
+        jobId={$transcriptStore.transcriptionJobId}
+        on:confirmStart={handleConfirmStartTranscription}
+        on:cancelRequest={handleCancelTranscriptionRequest}
+        on:close={handleModalClose} />
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>
