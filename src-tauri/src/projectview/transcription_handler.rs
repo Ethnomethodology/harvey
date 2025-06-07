@@ -1,13 +1,18 @@
 // src-tauri/src/projectview/transcription_handler.rs
-use super::shared_types::*;
+use super::shared_types::{
+    TranscriptSegment, ProjectXml, ImportedTranscriptEntryXml,
+    StandardAssetMetadata, FileMetadata, DocumentMetadataEntryXml,
+    HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
+};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
     fs,
-    path::PathBuf, // Path removed
+    path::{Path, PathBuf}, // Path added
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
+use chrono::Utc; // Added for timestamping metadata
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // For temp file uniqueness
@@ -306,23 +311,242 @@ pub async fn import_word_transcript(
         .map_err(|e| CommandError::from(format!("Failed to save transcript JSON to {}: {}", final_transcript_path.display(), e)))?;
     info!("[import_word_transcript] Saved standalone transcript to: {}", final_transcript_path.display());
 
+    // Create metadata file
+    let final_transcript_path_obj = Path::new(&final_transcript_path); // Use Path for operations
+    let transcript_dir = final_transcript_path_obj.parent().ok_or_else(|| CommandError::from("Could not get transcript directory"))?;
+    let transcript_filename_stem = final_transcript_path_obj.file_stem().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename stem"))?;
+
+    let metadata_filename = format!(".{}.metadata.json", transcript_filename_stem);
+    let metadata_file_path = transcript_dir.join(&metadata_filename);
+
+    let file_meta = FileMetadata {
+        file_name: new_transcript_filename.clone(), // Name of the main JSON transcript file
+        file_path: final_transcript_path.to_string_lossy().into_owned(), // Full absolute path to the main JSON transcript file
+        last_modified: Utc::now().to_rfc3339(),
+        title: String::new(),
+        description: String::new(),
+        summary: String::new(),
+        duration_seconds: None,
+        width: None,
+        height: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        creation_time: None,
+    };
+
+    let asset_metadata = StandardAssetMetadata {
+        metadata: file_meta,
+        highlights: Vec::new(),
+    };
+
+    let metadata_json_content = serde_json::to_string_pretty(&asset_metadata)
+        .map_err(|e| CommandError::from(format!("Failed to serialize metadata to JSON: {}", e)))?;
+
+    fs::write(&metadata_file_path, metadata_json_content)
+        .map_err(|e| CommandError::from(format!("Failed to save metadata JSON to {}: {}", metadata_file_path.display(), e)))?;
+    info!("[import_word_transcript] Saved transcript metadata to: {}", metadata_file_path.display());
+
+    // Update Project XML
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
     
+    let relative_transcript_path_for_xml = final_transcript_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
     let new_imported_transcript_entry = ImportedTranscriptEntryXml {
-        name: new_transcript_filename.clone(),
-        relative_path: final_transcript_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/"),
+        name: new_transcript_filename.clone(), // This is correct: transcript file name
+        relative_path: relative_transcript_path_for_xml.clone(), // This is correct: relative path to transcript json
     };
 
     if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry.relative_path) {
         project_data.imported_transcript_files.files.push(new_imported_transcript_entry);
         project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
-        info!("[import_word_transcript] Added new imported transcript entry to XML.");
+        info!("[import_word_transcript] Added new imported transcript entry to XML project data.");
     } else {
         warn!("[import_word_transcript] Standalone transcript with relative path {} already exists in XML. Not adding duplicate.", new_imported_transcript_entry.relative_path);
     }
 
+    // Add metadata file entry to project XML
+    let metadata_relative_path_for_xml = metadata_file_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+    let metadata_entry_xml = DocumentMetadataEntryXml {
+        name: metadata_file_path.file_name().and_then(|s| s.to_str()).unwrap_or(&metadata_filename).to_string(), // Name of the .metadata.json file
+        original_document_relative_path: relative_transcript_path_for_xml, // Relative path to the main transcript json file
+        relative_path: metadata_relative_path_for_xml, // Relative path to the .metadata.json file
+    };
+
+    if !project_data.document_metadata_files.files.iter().any(|f| f.relative_path == metadata_entry_xml.relative_path) {
+        project_data.document_metadata_files.files.push(metadata_entry_xml);
+        project_data.document_metadata_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        info!("[import_word_transcript] Added new transcript metadata entry to XML project data: {}", metadata_file_path.display());
+    } else {
+        warn!("[import_word_transcript] Transcript metadata file with relative path {} already exists in XML. Not adding duplicate.", metadata_entry_xml.relative_path);
+    }
+
     save_project_xml(&project_xml_path, &project_data)?;
-    info!("[import_word_transcript] Project XML updated with imported transcript information.");
+    info!("[import_word_transcript] Project XML updated successfully with transcript and its metadata.");
 
     Ok(final_transcript_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+    use crate::projectview::shared_types::{ProjectXml, DocumentMetadataEntryXml, ImportedTranscriptEntryXml, StandardAssetMetadata, FileMetadata, TranscriptSegment};
+    use chrono::Utc;
+    use serde_json; // For serializing segments in test setup
+
+    #[test]
+    fn test_metadata_creation_and_xml_update_for_transcript() -> Result<(), Box<dyn std::error::Error>> {
+        // 1. Setup
+        let temp_dir = tempdir()?;
+        let project_base_dir = temp_dir.path();
+
+        let docx_filename_stem = "test_transcript_from_docx"; // Simulating a stem from a docx
+
+        // Create HARVEY_FILES_DIR/TRANSCRIPTS_DIR/<stem> a similar structure to main code
+        let transcript_specific_dir = project_base_dir
+            .join(HARVEY_FILES_DIR)
+            .join(TRANSCRIPTS_DIR)
+            .join(docx_filename_stem);
+        fs::create_dir_all(&transcript_specific_dir)?;
+
+        let project_xml_path = project_base_dir.join("project.xml");
+        let initial_project_data = ProjectXml {
+            project_name: "Test Project".to_string(),
+            project_uuid: "test_uuid".to_string(),
+            project_root_is_single_file: false,
+            video_files: Default::default(),
+            audio_files: Default::default(),
+            image_files: Default::default(),
+            document_files: Default::default(),
+            table_files: Default::default(),
+            other_files: Default::default(),
+            imported_transcript_files: Default::default(),
+            document_metadata_files: Default::default(),
+            chat_files: Default::default(),
+            project_settings: Default::default(),
+            saved_searches: Default::default(),
+            project_tags: Default::default(),
+            project_people: Default::default(),
+            project_places: Default::default(),
+            project_organizations: Default::default(),
+            project_highlights_config: Default::default(),
+            project_highlights_filters: Default::default(),
+            project_highlights_summary_types: Default::default(),
+        };
+        let xml_string = quick_xml::se::to_string(&initial_project_data)?;
+        fs::write(&project_xml_path, xml_string)?;
+
+        // Paths for the main transcript JSON file
+        let new_transcript_filename = format!("{}.json", docx_filename_stem);
+        let final_transcript_path = transcript_specific_dir.join(&new_transcript_filename);
+
+        // 2. Simulate pre-requisites: Create a dummy transcript JSON file
+        let segments = vec![
+            TranscriptSegment {
+                start_time: 0.0,
+                end_time: 1.0,
+                speaker: "Speaker1".to_string(),
+                text: "Hello".to_string(),
+            },
+        ];
+        let json_content = serde_json::to_string_pretty(&segments)?;
+        fs::write(&final_transcript_path, json_content)?;
+        assert!(final_transcript_path.exists(), "Transcript file should be created for test setup");
+
+        // Load initial project data (though we'll re-load it after simulating the core logic)
+        let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+
+        // --- Start of logic copied and adapted from import_word_transcript ---
+        // Metadata File Creation Logic
+        let final_transcript_path_obj = Path::new(&final_transcript_path);
+        let transcript_dir = final_transcript_path_obj.parent().ok_or_else(|| "Could not get transcript directory in test")?;
+        let transcript_filename_stem_str = final_transcript_path_obj.file_stem().and_then(|s| s.to_str()).ok_or_else(|| "Could not get transcript filename stem in test")?;
+
+        let metadata_filename = format!(".{}.metadata.json", transcript_filename_stem_str);
+        let metadata_file_path = transcript_dir.join(&metadata_filename);
+
+        let file_meta = FileMetadata {
+            file_name: new_transcript_filename.clone(),
+            file_path: final_transcript_path.to_string_lossy().into_owned(),
+            last_modified: Utc::now().to_rfc3339(),
+            title: String::new(),
+            description: String::new(),
+            summary: String::new(),
+            duration_seconds: None,
+            width: None,
+            height: None,
+            frame_rate: None,
+            bit_rate: None,
+            audio_codec: None,
+            video_codec: None,
+            creation_time: None,
+        };
+
+        let asset_metadata = StandardAssetMetadata {
+            metadata: file_meta.clone(), // Clone for later assertion
+            highlights: Vec::new(),
+        };
+
+        let metadata_json_content = serde_json::to_string_pretty(&asset_metadata)?;
+        fs::write(&metadata_file_path, metadata_json_content)?;
+
+        // ProjectXml Update Logic
+        let relative_transcript_path_for_xml = final_transcript_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+        let new_imported_transcript_entry = ImportedTranscriptEntryXml {
+            name: new_transcript_filename.clone(),
+            relative_path: relative_transcript_path_for_xml.clone(),
+        };
+
+        if !project_data.imported_transcript_files.files.iter().any(|t| t.relative_path == new_imported_transcript_entry.relative_path) {
+            project_data.imported_transcript_files.files.push(new_imported_transcript_entry.clone()); // Clone for assertion
+            project_data.imported_transcript_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        let metadata_relative_path_for_xml = metadata_file_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+        let metadata_entry_xml = DocumentMetadataEntryXml {
+            name: metadata_file_path.file_name().and_then(|s| s.to_str()).unwrap_or(&metadata_filename).to_string(),
+            original_document_relative_path: relative_transcript_path_for_xml.clone(),
+            relative_path: metadata_relative_path_for_xml.clone(),
+        };
+
+        if !project_data.document_metadata_files.files.iter().any(|f| f.relative_path == metadata_entry_xml.relative_path) {
+            project_data.document_metadata_files.files.push(metadata_entry_xml.clone()); // Clone for assertion
+            project_data.document_metadata_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+
+        save_project_xml(&project_xml_path, &project_data)?; // Use the actual save function
+        // --- End of logic copied and adapted ---
+
+        // 3. Assertions
+        assert!(metadata_file_path.exists(), "Metadata file should be created");
+
+        let loaded_metadata_content = fs::read_to_string(&metadata_file_path)?;
+        let loaded_asset_metadata: StandardAssetMetadata = serde_json::from_str(&loaded_metadata_content)?;
+
+        assert_eq!(loaded_asset_metadata.metadata.file_name, new_transcript_filename, "Metadata file_name mismatch");
+        assert_eq!(loaded_asset_metadata.metadata.file_path, final_transcript_path.to_string_lossy(), "Metadata file_path mismatch");
+        assert!(loaded_asset_metadata.metadata.title.is_empty(), "Metadata title should be empty");
+        // No specific file_type to assert here for a generic transcript metadata,
+        // as it's not a direct field in the corrected FileMetadata for this context.
+        // If a field like `mime_type` or similar were part of FileMetadata and set, we'd check that.
+
+        let updated_project_xml_content = fs::read_to_string(&project_xml_path)?;
+        let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_project_xml_content)?;
+
+        assert_eq!(updated_project_data.imported_transcript_files.files.len(), 1, "Should be one imported transcript file in XML");
+        assert_eq!(updated_project_data.imported_transcript_files.files[0].name, new_imported_transcript_entry.name, "Imported transcript name mismatch in XML");
+        assert_eq!(updated_project_data.imported_transcript_files.files[0].relative_path, new_imported_transcript_entry.relative_path, "Imported transcript relative_path mismatch in XML");
+
+
+        assert_eq!(updated_project_data.document_metadata_files.files.len(), 1, "Should be one document metadata file in XML");
+        assert_eq!(updated_project_data.document_metadata_files.files[0].name, metadata_entry_xml.name, "Metadata entry name mismatch in XML");
+        assert_eq!(updated_project_data.document_metadata_files.files[0].original_document_relative_path, metadata_entry_xml.original_document_relative_path, "Metadata entry original_document_relative_path mismatch in XML");
+        assert_eq!(updated_project_data.document_metadata_files.files[0].relative_path, metadata_entry_xml.relative_path, "Metadata entry relative_path mismatch in XML");
+
+        Ok(())
+    }
 }
