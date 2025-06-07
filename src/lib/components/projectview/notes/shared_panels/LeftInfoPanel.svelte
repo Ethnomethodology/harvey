@@ -4,7 +4,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     // fsRename might still be used by projectService.js, direct fs calls for metadata are removed.
-    import { basename, extname as getFileExtname, sep as getPathSep } from '@tauri-apps/api/path'; // dirname removed
+    import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path'; // Added resolve
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
@@ -49,6 +49,13 @@
     };
     let showAddFieldModal = false;
 
+    function normalizePathForComparison(p) {
+        if (!p) return '';
+        let normalized = p.replace(/\\/g, '/'); // Convert all backslashes to forward slashes
+        normalized = normalized.replace(/\/\/{2,}/g, '/'); // Collapse multiple (2 or more) forward slashes into one
+        return normalized;
+    }
+
     const EDIT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
     const CANCEL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-circle" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>`;
 
@@ -90,7 +97,8 @@
                 // result is FileMetadataWithCustomFieldsFromDb
                 currentFileMetadata = {
                     file_name: result.file_name,
-                    file_path: result.file_path, // This is the relative path (key)
+                    file_path: assetRelativePath, // Store the relative path (DB key)
+                    db_absolute_file_path: result.file_path, // Store absolute path from DB
                     last_modified: result.last_modified,
                     title: result.title || '',
                     description: result.description || '',
@@ -106,7 +114,7 @@
                     customFields: result.custom_fields_json ? JSON.parse(result.custom_fields_json) : [],
                 };
                 fullLoadedMetadataObject = {
-                    metadata: { ...currentFileMetadata },
+                    metadata: { ...currentFileMetadata }, // currentFileMetadata now correctly has relative file_path and db_absolute_file_path
                     customFields: currentFileMetadata.customFields,
                     asset_type: result.asset_type,
                     version: "db_1.0"
@@ -114,26 +122,57 @@
                 console.log('[LeftInfoPanel] Metadata loaded from DB:', currentFileMetadata);
             } else {
                 console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath);
-                const baseNameStr = await basename(assetRelativePath); // Get basename from relative path
+                const baseNameStr = await basename(assetRelativePath);
+                let absPathOnInit = '';
+                if ($project.baseDirectory && assetRelativePath) {
+                    absPathOnInit = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
+                } else {
+                    absPathOnInit = assetRelativePath; // Fallback
+                }
                 currentFileMetadata = {
                     file_name: baseNameStr,
-                    file_path: assetRelativePath,
+                    file_path: assetRelativePath, // Relative path
+                    db_absolute_file_path: absPathOnInit, // Constructed absolute path
                     last_modified: new Date().toISOString(),
-                    title: '', description: '', summary: '', customFields: []
+                    title: '', description: '', summary: '', customFields: [],
+                    duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
                 };
+                // Ensure fullLoadedMetadataObject.metadata also has file_path as relative and db_absolute_file_path
                 fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_new" };
             }
         } catch (error) {
             console.error(`[LeftInfoPanel] Error loading metadata from DB for ${assetRelativePath}:`, error);
-            const baseNameStrOnError = await basename(assetRelativePath).catch(() => assetRelativePath);
-            currentFileMetadata = { file_name: baseNameStrOnError, file_path: assetRelativePath, title: '', description: '', summary: '', customFields: [] };
+            const baseNameStrOnError = await basename(assetRelativePath || '').catch(() => 'Unknown File');
+            let absPathOnError = assetRelativePath || '';
+             if ($project.baseDirectory && assetRelativePath) {
+                absPathOnError = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
+            }
+            currentFileMetadata = {
+                file_name: baseNameStrOnError,
+                file_path: assetRelativePath || '',
+                db_absolute_file_path: absPathOnError,
+                last_modified: new Date().toISOString(),
+                title: '', description: '', summary: '', customFields: [],
+                duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
+            };
             fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_error" };
             await message(`Error loading metadata: ${error}`, { title: 'Load Error', type: 'error' });
         }
 
-        if (!currentFileMetadata) { // Should have been initialized by logic above
-            const fallbackBasename = await basename(assetRelativePath).catch(() => 'Unknown File');
-            currentFileMetadata = { file_name: fallbackBasename, file_path: assetRelativePath, title: '', description: '', summary: '', customFields: [] };
+        if (!currentFileMetadata) {
+            const fallbackBasename = await basename(assetRelativePath || '').catch(() => 'Unknown File');
+            let fallbackAbsPath = assetRelativePath || '';
+            if ($project.baseDirectory && assetRelativePath) {
+                 fallbackAbsPath = `${$project.baseDirectory}${getPathSep}${assetRelativePath}`;
+            }
+            currentFileMetadata = {
+                file_name: fallbackBasename,
+                file_path: assetRelativePath || '', // Relative
+                db_absolute_file_path: fallbackAbsPath, // Absolute
+                last_modified: new Date().toISOString(),
+                title: '', description: '', summary: '', customFields: [],
+                duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
+            };
             if (isEditing) isEditing = false;
         }
     }
@@ -220,10 +259,16 @@
             // due to path changes. This is a common pattern: rename is a distinct operation.
             // If we wanted to save other fields *after* rename, the `assetKeyForDb` would need to be the *new* key.
             if (!renameProcessed) {
+                let absolutePathForPayload = currentFileMetadata.db_absolute_file_path;
+                if (!absolutePathForPayload && $project.baseDirectory && assetKeyForDb) { // assetKeyForDb is relative
+                    absolutePathForPayload = `${$project.baseDirectory}${getPathSep}${assetKeyForDb}`;
+                }
+                const finalPayloadFilePath = absolutePathForPayload || assetKeyForDb; // Fallback to relative if absolute can't be formed
+
                 const metadataPayloadForDb = {
-                    file_name: currentFileMetadata.file_name, // This should be the current, correct filename
-                    file_path: assetKeyForDb,                 // This is the asset's relative path (key)
-                    last_modified: new Date().toISOString(),  // Will be updated by DB trigger too
+                    file_name: currentFileMetadata.file_name,
+                    file_path: finalPayloadFilePath,
+                    last_modified: new Date().toISOString(),
                     title: editableMetadata.title.trim(),
                     description: editableMetadata.description.trim(),
                     summary: editableMetadata.summary.trim(),
@@ -240,26 +285,31 @@
 
                 const customFieldsToSaveForDb = editableMetadata.customFields || [];
 
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetRelativePath (key for command):', assetKeyForDb);
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayload.file_path (absolute path in payload):', metadataPayloadForDb.file_path);
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayloadForDb:', JSON.stringify(metadataPayloadForDb));
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - customFieldsPayload:', JSON.stringify(customFieldsToSaveForDb));
+                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetType:', currentItemType);
+
                 try {
-                    console.log(`[LeftInfoPanel] Saving metadata to DB for: ${assetKeyForDb}`);
                     await invoke('update_asset_metadata_command', {
-                        assetRelativePath: assetKeyForDb,
+                        assetRelativePath: assetKeyForDb, // This MUST be the relative path
                         metadataPayload: metadataPayloadForDb,
                         customFieldsPayload: customFieldsToSaveForDb,
                         assetType: currentItemType
                     });
 
                     // Update local state to reflect saved data
+                    currentFileMetadata.db_absolute_file_path = metadataPayloadForDb.file_path; // Update with the path that was actually saved
                     currentFileMetadata.title = metadataPayloadForDb.title;
                     currentFileMetadata.description = metadataPayloadForDb.description;
                     currentFileMetadata.summary = metadataPayloadForDb.summary;
                     currentFileMetadata.last_modified = metadataPayloadForDb.last_modified; // Reflect new save time
                     currentFileMetadata.customFields = JSON.parse(JSON.stringify(customFieldsToSaveForDb));
 
-                    if (fullLoadedMetadataObject) { // Update this as well if it's being used
-                        fullLoadedMetadataObject.metadata = { ...currentFileMetadata }; // Update its metadata part
+                    if (fullLoadedMetadataObject) {
+                        fullLoadedMetadataObject.metadata = { ...currentFileMetadata, file_path: metadataPayloadForDb.file_path }; // Ensure full object also reflects absolute path in its 'metadata.file_path'
                         fullLoadedMetadataObject.customFields = currentFileMetadata.customFields;
-                        // fullLoadedMetadataObject.asset_type should already be correct from load
                     }
                     isEditing = false;
                     await message('Metadata saved successfully!', { title: 'Success' });
@@ -282,29 +332,81 @@
     let currentItemType = null;
     $: if (selectedItemPathInStore && $project.baseDirectory) {
         const path = selectedItemPathInStore;
-        // Try to get the actual filename from currentFileMetadata first, as it's most reliable after load
         const name = currentFileMetadata?.file_name || (path ? path.substring(path.lastIndexOf(getPathSep) + 1) : '');
         const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
 
         if (AUDIO_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) {
-            currentItemType = 'media';
-        } else if (IMAGE_EXTENSIONS.has(ext)) {
-            currentItemType = 'image';
-        } else if (ext === 'pdf' || ext === 'json' || ext === 'txt' || ext === 'md') {
-            const isImportedTranscript = $project.importedTranscriptFiles?.some(f => f.relativePath && `${$project.baseDirectory}${getPathSep}${f.relativePath}` === path);
-            if (isImportedTranscript) {
-                currentItemType = 'imported_transcript';
-            } else {
-                currentItemType = 'doc';
+            if (currentItemType !== 'media') {
+                currentItemType = 'media';
+                console.log(`[LeftInfoPanel] Determined currentItemType: media for path: ${path} (name: ${name}, ext: ${ext})`);
             }
+        } else if (IMAGE_EXTENSIONS.has(ext)) {
+            if (currentItemType !== 'image') {
+                currentItemType = 'image';
+                console.log(`[LeftInfoPanel] Determined currentItemType: image for path: ${path} (name: ${name}, ext: ${ext})`);
+            }
+        } else if (ext === 'pdf' || ext === 'json' || ext === 'txt' || ext === 'md') {
+            const determineIfImportedTranscript = async (selectedPath) => {
+                if (!$project.importedTranscriptFiles) return false;
+                for (const f of $project.importedTranscriptFiles) {
+                    if (!f.relativePath) continue;
+                    try {
+                        const constructedAbsolutePath = await resolve($project.baseDirectory, f.relativePath);
+                        // Ensure this log is active (not commented out) for debugging:
+                        console.log(
+                            `[LeftInfoPanel Type Check DEBUG] Comparing for imported transcript:
+        Selected Path (from store, should be absolute): "${selectedPath}"
+        File Entry Relative Path (from XML): "${f.relativePath}"
+        Project Base Directory: "${$project.baseDirectory}"
+        Resolved Constructed Absolute Path: "${constructedAbsolutePath}"
+        Match Found: ${selectedPath === constructedAbsolutePath}`
+                        );
+                        if (selectedPath === constructedAbsolutePath) { // Direct comparison with resolved absolute path
+                            return true;
+                        }
+                    } catch (e) {
+                        console.error("[LeftInfoPanel Type Check DEBUG] Error resolving path for imported transcript check:", $project.baseDirectory, f.relativePath, e);
+                        continue;
+                    }
+                }
+                return false;
+            };
+
+            determineIfImportedTranscript(path).then(isImpTrans => {
+                if (isImpTrans) {
+                    if (currentItemType !== 'imported_transcript') {
+                        currentItemType = 'imported_transcript';
+                        console.log(`[LeftInfoPanel] Determined currentItemType (async): imported_transcript for path: ${path} (name: ${name}, ext: ${ext})`);
+                    }
+                } else {
+                    if (currentItemType !== 'doc') {
+                        currentItemType = 'doc';
+                        console.log(`[LeftInfoPanel] Determined currentItemType (async): doc for path: ${path} (name: ${name}, ext: ${ext})`);
+                    }
+                }
+            }).catch(e => {
+                console.error("[LeftInfoPanel Type Check DEBUG] Error in determineIfImportedTranscript promise:", e);
+                if (currentItemType !== 'doc') { // Fallback
+                    currentItemType = 'doc';
+                    console.log(`[LeftInfoPanel] Determined currentItemType (async error fallback): doc for path: ${path} (name: ${name}, ext: ${ext})`);
+                }
+            });
         } else if (ext === 'csv' || ext === 'xlsx') {
-            currentItemType = 'table';
+            if (currentItemType !== 'table') {
+                currentItemType = 'table';
+                console.log(`[LeftInfoPanel] Determined currentItemType: table for path: ${path} (name: ${name}, ext: ${ext})`);
+            }
         } else {
-            currentItemType = 'unknown';
+            if (currentItemType !== 'unknown') {
+                currentItemType = 'unknown';
+                console.log(`[LeftInfoPanel] Determined currentItemType: unknown for path: ${path} (name: ${name}, ext: ${ext})`);
+            }
         }
-        console.log(`[LeftInfoPanel] Determined currentItemType: ${currentItemType} for path: ${path} (name: ${name}, ext: ${ext})`);
     } else {
-        currentItemType = null;
+        if (currentItemType !== null) {
+            currentItemType = null;
+            // console.log(`[LeftInfoPanel] currentItemType reset to null as no item is selected or baseDirectory is missing.`);
+        }
     }
 
     $: {

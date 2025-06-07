@@ -178,7 +178,6 @@ pub fn save_asset_metadata(
             audio_codec = excluded.audio_codec,
             video_codec = excluded.video_codec,
             creation_time = excluded.creation_time,
-            asset_type = excluded.asset_type,
             custom_fields_json = excluded.custom_fields_json,
             updated_at = CURRENT_TIMESTAMP;
     ";
