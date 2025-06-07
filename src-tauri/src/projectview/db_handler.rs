@@ -114,7 +114,7 @@ pub fn init_db() -> Result<()> {
 }
 
 // Helper to convert Option<T> to dyn ToSql for rusqlite
-fn to_sql_optional<T: ToSql>(opt: Option<T>) -> Box<dyn ToSql> {
+fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
     match opt {
         Some(val) => Box::new(val),
         None => Box::new(rusqlite::types::Null),
