@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata}; // StandardAssetMetadata might be removable if not used by media/docs
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -14,7 +14,7 @@ use quick_xml;
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
-use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db}; // Added db_handler for general use
+use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
 use tauri::Emitter;
 
 #[derive(Clone, serde::Serialize)]
@@ -39,7 +39,7 @@ struct ItemRenamedPayload {
 #[derive(Deserialize, Debug, Default, Clone)]
 struct FFProbeStreamTags {
     #[serde(rename = "DURATION")]
-    duration: Option<String>, // e.g., "00:00:45.420000000" (from video stream for some formats)
+    duration: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -48,9 +48,9 @@ struct FFProbeStream {
     codec_name: Option<String>,
     width: Option<i32>,
     height: Option<i32>,
-    avg_frame_rate: Option<String>, // e.g., "25/1"
-    r_frame_rate: Option<String>,   // e.g., "25/1"
-    bit_rate: Option<String>,       // e.g., "1500000" (bps)
+    avg_frame_rate: Option<String>,
+    r_frame_rate: Option<String>,
+    bit_rate: Option<String>,
     #[serde(default)]
     tags: FFProbeStreamTags,
 }
@@ -58,16 +58,16 @@ struct FFProbeStream {
 #[derive(Deserialize, Debug, Default, Clone)]
 struct FFProbeFormatTags {
     #[serde(rename = "creation_time")]
-    creation_time: Option<String>, // ISO 8601 string
+    creation_time: Option<String>,
     #[serde(rename = "DURATION")]
     duration: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
 struct FFProbeFormat {
-    duration: Option<String>,       // e.g., "45.423000" (seconds)
-    bit_rate: Option<String>,       // e.g., "1607049" (bps)
-    #[serde(default)] // Make tags optional as they might not always be present
+    duration: Option<String>,
+    bit_rate: Option<String>,
+    #[serde(default)]
     tags: Option<FFProbeFormatTags>,
     format_name: Option<String>,
 }
@@ -76,7 +76,7 @@ struct FFProbeFormat {
 struct FFProbeOutput {
     #[serde(default)]
     streams: Vec<FFProbeStream>,
-    #[serde(default)] // Make format default as well, to be safe
+    #[serde(default)]
     format: FFProbeFormat,
 }
 
@@ -112,7 +112,7 @@ fn parse_frame_rate_str(s_opt: Option<String>) -> Option<f32> {
     })
 }
 
-// Helper function to get document metadata path (used by imported transcripts as well)
+// Helper function to get document metadata path (ONLY for .harvey_metadata.json files, not SQLite based metadata)
 fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, CommandError> {
     let doc_parent_dir = doc_path.parent().ok_or_else(|| {
         CommandError::from(format!(
@@ -130,7 +130,7 @@ fn get_document_metadata_path_for_doc(doc_path: &Path) -> Result<PathBuf, Comman
     Ok(doc_parent_dir.join(metadata_filename))
 }
 
-// Helper function to get media metadata path
+// Helper function to get media metadata path (for .metadata.json, specific to media assets if they still use it)
 pub fn get_media_metadata_path(media_path: &Path) -> Result<PathBuf, CommandError> {
     let parent_dir = media_path.parent().ok_or_else(|| {
         CommandError::from(format!(
@@ -149,44 +149,9 @@ pub fn get_media_metadata_path(media_path: &Path) -> Result<PathBuf, CommandErro
     Ok(parent_dir.join(metadata_filename))
 }
 
-// Helper function to get asset metadata path for an image
-pub fn get_image_asset_metadata_path(image_path: &Path) -> Result<PathBuf, CommandError> {
-    let parent_dir = image_path.parent().ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get parent directory for image asset: {}",
-            image_path.display()
-        ))
-    })?;
-    let image_stem = image_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get file stem for image asset: {}",
-            image_path.display()
-        ))
-    })?;
-
-    let metadata_filename = format!(".{}.metadata.json", image_stem); // Hidden file
-    Ok(parent_dir.join(metadata_filename))
-}
-
-// Helper function to get asset metadata path for a table
-pub fn get_table_asset_metadata_path(table_path: &Path) -> Result<PathBuf, CommandError> {
-    let parent_dir = table_path.parent().ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get parent directory for table asset: {}",
-            table_path.display()
-        ))
-    })?;
-    let table_stem = table_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| {
-        CommandError::from(format!(
-            "Could not get file stem for table asset: {}",
-            table_path.display()
-        ))
-    })?;
-
-    let metadata_filename = format!(".{}.metadata.json", table_stem); // Hidden file
-    Ok(parent_dir.join(metadata_filename))
-}
-
+// get_image_asset_metadata_path and get_table_asset_metadata_path are removed as image and table metadata are now in DB.
+// If any other part of the codebase was using them, those parts would need updating.
+// For now, they are removed from core_commands.rs as per the refactoring direction.
 
 #[tauri::command]
 pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewData, CommandError> {
@@ -338,7 +303,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.table_files.files.len(),
         project_data.image_files.files.len(),
         project_data.imported_transcript_files.files.len(),
-        project_data.document_metadata_files.files.len()
+        project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
     );
 
     Ok(ProjectViewData {
@@ -640,7 +605,6 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if project_data.table_files.files.len() < initial_table_len {
                     info!("[Backend Delete] Cleaned up XML table entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
-                    // Attempt to delete from DB if only XML entry is being cleaned up
                     if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
                         warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for table {}: {}", item_relative_path_guess, e);
                     } else {
@@ -670,7 +634,7 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
          if item_type != "directory_media_stem" {
             return Err(CommandError::from(format!("Deleting arbitrary directories ('{}') is not supported via this function. Delete the associated media file or asset instead.", item_type)));
          }
-         warn!("[Backend Delete] Request path '{}' is a media stem directory. Deletion will be handled by logic for its primary media file.", item_path);
+         warn!("[Backend Delete] Request path '{}' is a directory, but rename should be triggered by logic for its primary media file.", item_path);
     }
 
     let (item_type, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
@@ -842,10 +806,8 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 warn!("[Backend Delete] Table folder {} not found. Assuming already deleted.", folder_path.display());
             }
 
-            // Delete metadata from DB
             if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
                 warn!("[Backend Delete Table] Failed to delete asset metadata from DB for table {}: {}", item_relative_path, e);
-                // Continue with XML cleanup even if DB deletion fails.
             } else {
                 info!("[Backend Delete Table] Deleted asset metadata from DB for table {}", item_relative_path);
             }
@@ -1598,7 +1560,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             ) {
                 warn!("[Backend Rename Table] Failed to rename/update asset metadata in DB for table {} -> {}: {}. File system changes were successful and will not be reverted.", item_relative_path, new_relative_path_for_xml, e);
                 // Not attempting to revert FS changes here as it's complex and might fail further.
-                // The primary file operation succeeded. DB metadata is auxiliary.
             } else {
                 info!("[Backend Rename Table] Successfully renamed/updated asset metadata in DB for table {} -> {}", item_relative_path, new_relative_path_for_xml);
             }
@@ -1672,8 +1633,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             
             let new_image_file_path_in_old_folder = old_image_folder_abs_path.join(&new_image_filename_pathbuf);
 
-            let old_asset_metadata_abs_path = get_image_asset_metadata_path(&old_image_file_abs_path)?;
-            let new_asset_metadata_abs_path = get_image_asset_metadata_path(&final_new_image_file_abs_path)?;
+            // JSON metadata file logic for images is removed. DB will be updated instead.
+            // let old_asset_metadata_abs_path = get_image_asset_metadata_path(&old_image_file_abs_path)?;
+            // let new_asset_metadata_abs_path = get_image_asset_metadata_path(&final_new_image_file_abs_path)?;
 
             if old_image_file_abs_path == final_new_image_file_abs_path {
                 if old_image_folder_abs_path == new_image_folder_abs_path {
@@ -1691,27 +1653,6 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 let canon_final_target_abs = fs::canonicalize(&final_new_image_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target image path {}: {}", final_new_image_file_abs_path.display(), e)))?;
                 if canon_final_target_abs != canon_old_abs {
                     return Err(CommandError::from(format!("An image file named '{}' already exists in the target location '{}'.", new_image_filename_with_ext_str, new_image_folder_abs_path.display())));
-                }
-            }
-
-            let mut parsed_old_metadata_content: Option<StandardAssetMetadata> = None;
-            if old_asset_metadata_abs_path.exists() {
-                info!("[Backend Rename Image] Attempting to read old asset metadata from: {}", old_asset_metadata_abs_path.display());
-                match fs::read_to_string(&old_asset_metadata_abs_path) {
-                    Ok(json_content) => {
-                        match serde_json::from_str::<StandardAssetMetadata>(&json_content) {
-                            Ok(parsed_meta) => {
-                                parsed_old_metadata_content = Some(parsed_meta);
-                                info!("[Backend Rename Image] Successfully parsed old asset metadata.");
-                            }
-                            Err(e) => {
-                                warn!("[Backend Rename Image] Failed to parse old asset metadata from {}: {}. Will create new metadata if needed.", old_asset_metadata_abs_path.display(), e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("[Backend Rename Image] Failed to read old asset metadata from {}: {}. Will create new metadata if needed.", old_asset_metadata_abs_path.display(), e);
-                    }
                 }
             }
 
@@ -1759,85 +1700,23 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                  }
             }
 
-            let final_metadata_to_write: StandardAssetMetadata;
-            if let Some(mut metadata) = parsed_old_metadata_content.take() {
-                info!("[Backend Rename Image] Updating existing asset metadata for {}", new_asset_metadata_abs_path.display());
-                metadata.metadata.file_name = new_image_filename_with_ext_str.to_string();
-                metadata.metadata.file_path = final_new_image_file_abs_path.to_string_lossy().into_owned();
-                metadata.metadata.last_modified = Utc::now().to_rfc3339();
-                final_metadata_to_write = metadata;
-
-                if old_asset_metadata_abs_path != new_asset_metadata_abs_path {
-                    let path_of_old_meta_to_remove = if folder_renamed {
-                        new_image_folder_abs_path.join(old_asset_metadata_abs_path.file_name().unwrap_or_default())
-                    } else {
-                        old_asset_metadata_abs_path.clone()
-                    };
-                    if path_of_old_meta_to_remove.exists() && path_of_old_meta_to_remove != new_asset_metadata_abs_path {
-                        info!("[Backend Rename Image] Removing old/moved asset metadata file from: {}", path_of_old_meta_to_remove.display());
-                        if let Err(e) = fs::remove_file(&path_of_old_meta_to_remove) {
-                            warn!("[Backend Rename Image] Failed to remove old/moved asset metadata {}: {}", path_of_old_meta_to_remove.display(), e);
-                        }
-                    } else if !path_of_old_meta_to_remove.exists() && old_asset_metadata_abs_path.exists() && old_asset_metadata_abs_path != new_asset_metadata_abs_path {
-                        info!("[Backend Rename Image] Removing original asset metadata file from: {}", old_asset_metadata_abs_path.display());
-                         if let Err(e) = fs::remove_file(&old_asset_metadata_abs_path) {
-                            warn!("[Backend Rename Image] Failed to remove original asset metadata {}: {}", old_asset_metadata_abs_path.display(), e);
-                        }
-                    }
-                }
-            } else {
-                info!("[Backend Rename Image] Creating new default asset metadata for {}", new_asset_metadata_abs_path.display());
-                final_metadata_to_write = StandardAssetMetadata {
-                    metadata: FileMetadata {
-                        file_name: new_image_filename_with_ext_str.to_string(),
-                        file_path: final_new_image_file_abs_path.to_string_lossy().into_owned(),
-                        last_modified: Utc::now().to_rfc3339(),
-                        title: "".to_string(),
-                        description: "".to_string(),
-                        summary: "".to_string(),
-                        duration_seconds: None,
-                        width: None,
-                        height: None,
-                        frame_rate: None,
-                        bit_rate: None,
-                        audio_codec: None,
-                        video_codec: None,
-                        creation_time: None,
-                    },
-                    highlights: Vec::new(),
-                };
-            }
-
-            match serde_json::to_string_pretty(&final_metadata_to_write) {
-                Ok(json_string) => {
-                    info!("[Backend Rename Image] Writing asset metadata to {}", new_asset_metadata_abs_path.display());
-                    if let Err(e) = fs::write(&new_asset_metadata_abs_path, json_string) {
-                        warn!("[Backend Rename Image] Failed to write asset metadata to {}: {}. Attempting full rollback.", new_asset_metadata_abs_path.display(), e);
-                        if final_new_image_file_abs_path.exists() && final_new_image_file_abs_path != current_image_path_before_final_rename {
-                           let _ = fs::rename(&final_new_image_file_abs_path, &current_image_path_before_final_rename);
-                        }
-                        if folder_renamed {
-                            let _ = fs::rename(&new_image_folder_abs_path, &old_image_folder_abs_path);
-                        }
-                        if old_image_file_abs_path != new_image_file_path_in_old_folder {
-                             let path_to_revert_from = if folder_renamed { old_image_folder_abs_path.join(new_image_file_path_in_old_folder.file_name().unwrap_or_default()) } else { new_image_file_path_in_old_folder.clone() };
-                             if path_to_revert_from.exists() {
-                                 let _ = fs::rename(path_to_revert_from, &old_image_file_abs_path);
-                             }
-                        }
-                        return Err(CommandError::from(format!("Failed to write asset metadata: {}", e)));
-                    }
-                }
-                Err(e) => {
-                     warn!("[Backend Rename Image] Failed to serialize asset metadata for {}: {}", new_asset_metadata_abs_path.display(), e);
-                    return Err(CommandError::from(format!("Failed to serialize asset metadata: {}",e)));
-                }
-            }
-
             let new_relative_path_for_image_xml = final_new_image_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
+            // After FS operations for image file and folder, and after PDF annotation DB rename (if applicable for images)
             if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &new_relative_path_for_image_xml, "image") {
-                warn!("[Backend Rename Image] Failed to rename image annotations in DB from {} to {}: {}. File and XML operations may have succeeded, but DB might be inconsistent.", item_relative_path, new_relative_path_for_image_xml, db_err);
+                 warn!("[Backend Rename Image] Failed to rename image annotations in DB from {} to {}: {}. Main file operations succeeded.", item_relative_path, new_relative_path_for_image_xml, db_err);
+            }
+
+            // Update metadata in DB for the image asset itself
+            if let Err(e) = db_handler::rename_asset_metadata_key(
+                &item_relative_path, // old_relative_path (old DB key)
+                &new_relative_path_for_image_xml, // new_relative_path (new DB key)
+                &final_new_image_file_abs_path.to_string_lossy(), // new full file_path field value for DB
+                &new_image_filename_with_ext_str, // new file_name field value for DB
+            ) {
+                warn!("[Backend Rename Image] Failed to rename/update asset metadata in DB for image {} -> {}: {}. File system and annotation DB changes were successful.", item_relative_path, new_relative_path_for_image_xml, e);
+            } else {
+                info!("[Backend Rename Image] Successfully renamed/updated asset metadata in DB for image {} -> {}", item_relative_path, new_relative_path_for_image_xml);
             }
 
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
@@ -1881,3 +1760,5 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
     info!("[Backend Rename] Success for: {}", item_path);
     Ok(())
 }
+
+[end of src-tauri/src/projectview/core_commands.rs]

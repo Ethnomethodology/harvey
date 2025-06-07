@@ -1786,7 +1786,6 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-shell",
- "tempfile",
  "tokio",
  "uuid",
  "zip 1.1.4",
