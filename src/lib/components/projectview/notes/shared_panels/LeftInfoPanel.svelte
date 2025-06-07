@@ -10,6 +10,7 @@
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
+    import { customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js';
 
     // Helper function to get details of the original asset
     async function getOriginalAssetDetails(selectedPath, projectStore) {
@@ -154,12 +155,20 @@
     const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
     let previousSelectedItemPath = null;
+    let displayableCustomFields = []; // For read mode
 
-    onMount(() => {
+    onMount(async () => {
         console.log('[LeftInfoPanel] Mounted.');
         previousSelectedItemPath = null;
-        // Log initial selectedItemPathInStore. The reactive block will log derived original path.
         console.log('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore);
+        try {
+            console.log('[LeftInfoPanel onMount] Loading all custom field definitions...');
+            await loadAllDefinitions();
+            console.log('[LeftInfoPanel onMount] Custom field definitions loaded.');
+        } catch (error) {
+            console.error('[LeftInfoPanel onMount] Error loading custom field definitions:', error);
+            message(`Error loading custom field definitions: ${error.message || error}`, { title: 'Error', type: 'error' });
+        }
     });
 
     async function loadMetadata(assetRelativePath) { // assetRelativePath is the original relative path
@@ -553,39 +562,81 @@
     }
     */
 
-    $: if (isEditing && currentFileMetadata) {
-        console.log('[LeftInfoPanel] Populating editableMetadata because isEditing is true and currentFileMetadata exists.');
-        // For file_name, only populate the stem for editing
-        if (currentFileMetadata.file_name) {
-            // extname returns extension without a dot, e.g., "png"
-            const ext = currentFileMetadata.file_name.includes('.') ? currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.') + 1) : '';
-            const nameWithoutExt = ext ? currentFileMetadata.file_name.substring(0, currentFileMetadata.file_name.length - (ext.length + (ext ? 1:0)) ) : currentFileMetadata.file_name;
-            editableMetadata.file_name = nameWithoutExt;
+    // Reactive block to manage editableMetadata and displayableCustomFields based on definitions and current asset data
+    $: {
+        if (currentFileMetadata && $customFieldDefinitionsStore) {
+            const assetCustomValues = currentFileMetadata.customFields || []; // These are {key, value, type} from asset's JSON
+
+            let newEditableCustomFields = [];
+            let newDisplayableCustomFields = [];
+
+            for (const def of $customFieldDefinitionsStore) {
+                // Determine if the definition is applicable by scope
+                let isApplicable = false;
+                if (def.scope?.type === 'Project' || def.scope === 'project') { // Handle both object and string from older store versions
+                    isApplicable = true;
+                } else if ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) {
+                    isApplicable = true;
+                }
+
+                if (isApplicable) {
+                    const existingAssetField = assetCustomValues.find(cf => cf.key === def.field_key);
+                    const valueToUse = existingAssetField?.value ?? def.default_value ?? '';
+
+                    if (isEditing) {
+                        newEditableCustomFields.push({
+                            key: def.field_key,
+                            name: def.field_name, // Display name from definition
+                            type: def.field_type, // Type from definition
+                            value: valueToUse
+                        });
+                    }
+                    // For read mode, only display if there's a value or if you want to show defaults
+                    // Here, we only show if there's an actual value saved on the asset, or if a default is defined.
+                    if (existingAssetField || def.default_value) {
+                         newDisplayableCustomFields.push({
+                            key: def.field_key,
+                            name: def.field_name,
+                            type: def.field_type,
+                            value: valueToUse
+                        });
+                    } else if (!existingAssetField && !def.default_value && isEditing) {
+                        // If in edit mode and no value and no default, still list it so it can be set
+                        // This case is covered by the newEditableCustomFields logic above.
+                    }
+                }
+            }
+            // Sort fields alphabetically by name for consistent display
+            newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+            newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+
+            editableMetadata.customFields = newEditableCustomFields;
+            displayableCustomFields = newDisplayableCustomFields;
         } else {
-            editableMetadata.file_name = '';
+            editableMetadata.customFields = [];
+            displayableCustomFields = [];
         }
-        editableMetadata.title = currentFileMetadata.title || '';
-        editableMetadata.description = currentFileMetadata.description || '';
-        editableMetadata.summary = currentFileMetadata.summary || '';
-        editableMetadata.customFields = JSON.parse(JSON.stringify(currentFileMetadata.customFields || [])); // Deep copy
-    } else if (!isEditing) {
-        // Clear form when not editing or no metadata
-        editableMetadata = { file_name: '', title: '', description: '', summary: '', customFields: [] };
+
+        // Populate standard metadata fields for editing
+        if (isEditing && currentFileMetadata) {
+            if (currentFileMetadata.file_name) {
+                const ext = currentFileMetadata.file_name.includes('.') ? currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.') + 1) : '';
+                const nameWithoutExt = ext ? currentFileMetadata.file_name.substring(0, currentFileMetadata.file_name.length - (ext.length + (ext ? 1:0)) ) : currentFileMetadata.file_name;
+                editableMetadata.file_name = nameWithoutExt;
+            } else {
+                editableMetadata.file_name = '';
+            }
+            editableMetadata.title = currentFileMetadata.title || '';
+            editableMetadata.description = currentFileMetadata.description || '';
+            editableMetadata.summary = currentFileMetadata.summary || '';
+        } else if (!isEditing) {
+            editableMetadata = { file_name: '', title: '', description: '', summary: '', customFields: editableMetadata.customFields }; // Keep custom fields structure for consistency
+        }
     }
 
-    function handleAddCustomFieldConfirm(event) {
-        const newField = event.detail; // { key, type, value }
-        if (!editableMetadata.customFields) {
-            editableMetadata.customFields = [];
-        }
-        // Enforce unique field names (case-insensitive)
-        if (editableMetadata.customFields.some(f => f.key.toLowerCase() === newField.key.toLowerCase())) {
-            message(`A custom field with the name "${newField.key}" already exists.`, { title: 'Duplicate Field Name', type: 'warning' });
-            return; // Keep the modal open by not setting showAddFieldModal to false
-        }
-        editableMetadata.customFields = [...editableMetadata.customFields, newField];
-        showAddFieldModal = false;
-    }
+
+    // This function is no longer used as AddFieldModal directly calls the store.
+    // function handleAddCustomFieldConfirm(event) { ... }
 
 </script>
 
@@ -738,7 +789,7 @@
                 <!-- End of Technical Metadata Section -->
 
                 <!-- Custom Fields Section -->
-                {#if ( (!isEditing && currentFileMetadata?.customFields?.length > 0) || (isEditing && editableMetadata?.customFields?.length > 0) || isEditing )}
+                {#if $customFieldDefinitionsStore && ($customFieldDefinitionsStore.length > 0 || isEditing)}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
@@ -746,7 +797,7 @@
                             <button
                                 on:click={() => showAddFieldModal = true}
                                 class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                title="Add Custom Field"
+                                title="Add Custom Field Definition"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle" viewBox="0 0 16 16">
                                     <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
@@ -758,29 +809,34 @@
                 {/if}
 
                 <!-- Read Mode Custom Fields -->
-                {#if !isEditing && currentFileMetadata && currentFileMetadata.customFields}
-                    {#each currentFileMetadata.customFields as field, index (field.key + '-' + index)}
+                {#if !isEditing}
+                    {#each displayableCustomFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
-                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.key}:</label>
+                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
                             <span class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap' : 'break-all'} block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">
                                 {field.value || ''}
                             </span>
                         </div>
                     {/each}
+                    {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom field values set for this item. Edit to add.</p>
+                    {:else if $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType))).length === 0}
+                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields defined for this project/item type. Click "Edit Metadata" then "+" to define new fields.</p>
+                    {/if}
                 {/if}
 
                 <!-- Edit Mode Custom Fields -->
-                {#if isEditing && editableMetadata && editableMetadata.customFields}
+                {#if isEditing}
                     {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
-                            <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.key}:</label>
+                            <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
                             {#if field.type === 'small_text'}
                                 <input
                                     type="text"
                                     id={`custom-field-edit-${index}`}
                                     bind:value={editableMetadata.customFields[index].value}
                                     class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
-                                    placeholder={`Enter value for ${field.key}`}
+                                    placeholder={`Enter value for ${field.name || field.key}`}
                                     autocorrect="off" autocomplete="off"/>
                             {:else if field.type === 'long_text'}
                                 <textarea
@@ -788,13 +844,17 @@
                                     rows="3"
                                     bind:value={editableMetadata.customFields[index].value}
                                     class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
-                                    placeholder={`Enter value for ${field.key}`}
+                                    placeholder={`Enter value for ${field.name || field.key}`}
                                     autocorrect="off" autocomplete="off"></textarea>
                             {/if}
-                            <!-- Optional: Add a small remove button here later -->
-                            <!-- <button on:click={() => removeCustomField(index)} class="text-red-500 text-xs">Remove</button> -->
+                            <!-- TODO: Add support for other field types (number, date, boolean) -->
                         </div>
                     {/each}
+                    {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Edit to add.</p>
+                    {:else if $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType))).length === 0}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields defined for this project or item type. Click "+" to define new fields.</p>
+                    {/if}
                 {/if}
                 <!-- End of custom fields rendering -->
 
@@ -829,4 +889,4 @@
     
 </div>
 
-<AddFieldModal bind:showModal={showAddFieldModal} on:confirm={handleAddCustomFieldConfirm} on:close={() => showAddFieldModal = false} />
+<AddFieldModal bind:showModal={showAddFieldModal} currentItemType={currentItemType} on:close={() => showAddFieldModal = false} />

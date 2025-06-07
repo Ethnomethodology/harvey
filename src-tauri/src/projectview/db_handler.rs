@@ -109,6 +109,32 @@ pub fn init_db() -> Result<()> {
         [],
     )?;
 
+    // custom_field_definitions table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS custom_field_definitions (
+            field_key TEXT PRIMARY KEY NOT NULL,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            default_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )",
+        [],
+    )?;
+
+    // Trigger for custom_field_definitions updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_custom_field_definitions_updated_at
+        AFTER UPDATE ON custom_field_definitions
+        FOR EACH ROW
+        BEGIN
+            UPDATE custom_field_definitions SET updated_at = CURRENT_TIMESTAMP WHERE field_key = OLD.field_key;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized custom_field_definitions table and trigger.");
+
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
@@ -316,6 +342,140 @@ pub fn rename_asset_metadata_key(
     }
     Ok(())
 }
+
+// --- Custom Field Definition Functions ---
+
+use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope};
+
+pub fn add_custom_field_definition(definition: &CustomFieldDefinition) -> Result<()> {
+    debug!("[DB] Adding custom field definition: {}", definition.field_key);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(db_path)?;
+
+    conn.execute(
+        "INSERT INTO custom_field_definitions (field_key, field_name, field_type, scope, default_value, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            definition.field_key,
+            definition.field_name,
+            definition.field_type,
+            definition.scope.to_db_string(),
+            definition.default_value,
+            definition.created_at,
+            definition.updated_at
+        ],
+    )?;
+    info!("[DB] Custom field definition added successfully: {}", definition.field_key);
+    Ok(())
+}
+
+pub fn get_custom_field_definition(field_key: &str) -> Result<Option<CustomFieldDefinition>> {
+    debug!("[DB] Getting custom field definition for key: {}", field_key);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT field_key, field_name, field_type, scope, default_value, created_at, updated_at
+         FROM custom_field_definitions WHERE field_key = ?1",
+    )?;
+
+    let def_option = stmt.query_row(params![field_key], |row| {
+        let scope_str: String = row.get(3)?;
+        Ok(CustomFieldDefinition {
+            field_key: row.get(0)?,
+            field_name: row.get(1)?,
+            field_type: row.get(2)?,
+            scope: CustomFieldScope::from_db_string(&scope_str),
+            default_value: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    }).optional()?;
+
+    if def_option.is_some() {
+        info!("[DB] Custom field definition found for key: {}", field_key);
+    } else {
+        info!("[DB] No custom field definition found for key: {}", field_key);
+    }
+    Ok(def_option)
+}
+
+pub fn get_all_custom_field_definitions() -> Result<Vec<CustomFieldDefinition>> {
+    debug!("[DB] Getting all custom field definitions");
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT field_key, field_name, field_type, scope, default_value, created_at, updated_at
+         FROM custom_field_definitions",
+    )?;
+
+    let def_iter = stmt.query_map([], |row| {
+        let scope_str: String = row.get(3)?;
+        Ok(CustomFieldDefinition {
+            field_key: row.get(0)?,
+            field_name: row.get(1)?,
+            field_type: row.get(2)?,
+            scope: CustomFieldScope::from_db_string(&scope_str),
+            default_value: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    })?;
+
+    let mut definitions = Vec::new();
+    for def in def_iter {
+        definitions.push(def?);
+    }
+    info!("[DB] Retrieved {} custom field definitions.", definitions.len());
+    Ok(definitions)
+}
+
+pub fn update_custom_field_definition(definition: &CustomFieldDefinition) -> Result<()> {
+    debug!("[DB] Updating custom field definition: {}", definition.field_key);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(db_path)?;
+    // The trigger 'update_custom_field_definitions_updated_at' will handle updating 'updated_at'.
+    let changes = conn.execute(
+        "UPDATE custom_field_definitions
+         SET field_name = ?1, field_type = ?2, scope = ?3, default_value = ?4
+         WHERE field_key = ?5",
+        params![
+            definition.field_name,
+            definition.field_type,
+            definition.scope.to_db_string(),
+            definition.default_value,
+            definition.field_key
+        ],
+    )?;
+
+    if changes > 0 {
+        info!("[DB] Custom field definition updated successfully: {}", definition.field_key);
+    } else {
+        info!("[DB] No custom field definition found to update for key: {}", definition.field_key);
+    }
+    Ok(())
+}
+
+pub fn delete_custom_field_definition(field_key: &str) -> Result<()> {
+    debug!("[DB] Deleting custom field definition: {}", field_key);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(db_path)?;
+
+    let changes = conn.execute(
+        "DELETE FROM custom_field_definitions WHERE field_key = ?1",
+        params![field_key],
+    )?;
+
+    if changes > 0 {
+        info!("[DB] Custom field definition deleted successfully: {}", field_key);
+    } else {
+        info!("[DB] No custom field definition found to delete for key: {}", field_key);
+    }
+    Ok(())
+}
+
+// --- End Custom Field Definition Functions ---
 
 
 pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<Option<String>> {

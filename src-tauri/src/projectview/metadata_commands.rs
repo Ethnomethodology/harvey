@@ -16,7 +16,7 @@ pub async fn get_asset_metadata_command(
     debug!("[CMD] get_asset_metadata_command for path: {}", asset_relative_path);
     load_asset_metadata(&asset_relative_path)
         .map_err(|e| {
-            error!("Failed to load asset metadata for {}: {}", asset_relative_path, e);
+            error!("[CMD] Error in get_asset_metadata_command for {}: {}", asset_relative_path, e);
             e.to_string()
         })
 }
@@ -60,7 +60,75 @@ pub async fn update_asset_metadata_command(
         custom_fields_json_string.as_deref(),
     )
     .map_err(|e| {
-        error!("Failed to save asset metadata for {}: {}", asset_relative_path, e);
+        error!("[CMD] Error in update_asset_metadata_command for {}: {}", asset_relative_path, e);
         e.to_string()
     })
+}
+
+// --- Custom Field Definition Commands ---
+
+use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope};
+use crate::projectview::db_handler::{
+    add_custom_field_definition,
+    get_all_custom_field_definitions
+    // get_custom_field_definition, // Import if individual get needed later
+    // update_custom_field_definition, // Import if update command needed later
+    // delete_custom_field_definition  // Import if delete command needed later
+};
+use log::info;
+
+
+#[tauri::command]
+pub async fn create_custom_field_definition_command(
+    _app_handle: AppHandle,
+    field_key: String,
+    field_name: String,
+    field_type: String,
+    scope_str: String,
+    default_value: Option<String>
+) -> Result<(), String> {
+    debug!("[CMD] create_custom_field_definition_command: key='{}', name='{}', type='{}', scope='{}'",
+           field_key, field_name, field_type, scope_str);
+
+    let scope = CustomFieldScope::from_db_string(&scope_str);
+
+    let current_timestamp = Utc::now().to_rfc3339();
+
+    let definition = CustomFieldDefinition {
+        field_key: field_key.clone(),
+        field_name,
+        field_type,
+        scope,
+        default_value,
+        created_at: current_timestamp.clone(),
+        updated_at: current_timestamp,
+    };
+
+    match add_custom_field_definition(&definition) {
+        Ok(_) => {
+            info!("[CMD] Custom field definition created successfully: {}", field_key);
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] Error creating custom field definition {}: {}", field_key, e);
+            Err(format!("Failed to create custom field definition '{}': {}", field_key, e))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_all_custom_field_definitions_command(
+    _app_handle: AppHandle
+) -> Result<Vec<CustomFieldDefinition>, String> {
+    debug!("[CMD] get_all_custom_field_definitions_command called");
+    match get_all_custom_field_definitions() {
+        Ok(definitions) => {
+            info!("[CMD] Retrieved {} custom field definitions.", definitions.len());
+            Ok(definitions)
+        }
+        Err(e) => {
+            error!("[CMD] Error retrieving all custom field definitions: {}", e);
+            Err(format!("Failed to retrieve custom field definitions: {}", e))
+        }
+    }
 }
