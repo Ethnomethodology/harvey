@@ -15,6 +15,10 @@
 
     const JOURNAL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-journals" viewBox="0 0 16 16"><path d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 2 2 0 0 1-2 2H3a2 2 0 0 1-2-2h1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1H1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1H3a2 2 0 0 1 2-2"/><path d="M1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 2.5v.5H.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1H2v-.5a.5.5 0 0 0-1 0"/></svg>`;
 
+    function handleToggleNotesLeftPanel() {
+        panelStateStore.toggleNotesLeftPanel();
+    }
+
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
 
@@ -450,11 +454,12 @@
 	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed}
         class:justify-center={$panelStateStore.notesLeftPanelCollapsed}>
+    {#if !showSearchBox}
         <div class="flex items-center space-x-2">
             <button
                 type="button"
                 class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                on:click={() => panelStateStore.toggleNotesLeftPanel()}
+                on:click={handleToggleNotesLeftPanel}
                 title={$panelStateStore.notesLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}
             >
                 {@html JOURNAL_ICON_SVG}
@@ -463,6 +468,7 @@
                 <span>Data</span>
             {/if}
         </div>
+    {/if}
         {#if !$panelStateStore.notesLeftPanelCollapsed}
             {#if !showSearchBox}
             <button
@@ -494,7 +500,7 @@
             autocapitalize="off"
             spellcheck="false"
             placeholder="Search..."
-            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-xs pl-12 pr-10 {showSearchBox ? 'opacity-100 w-full' : 'opacity-0 w-0'}"
+            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-xs {showSearchBox ? 'opacity-100 w-full pl-2 pr-10' : 'opacity-0 w-0 pl-12 pr-10'}"
             on:click|stopPropagation
             />
         {/if}
