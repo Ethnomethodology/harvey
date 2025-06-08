@@ -116,7 +116,7 @@
             autocomplete="off"
           />
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Field Key (auto-generated): <span class="font-mono bg-gray-100 dark:bg-gray-700 p-0.5 rounded">{generatedFieldKey || "[will appear here]"}</span>
+            Field names should be unique within this project. The Field Key will be auto-generated based on this name.
           </p>
         </div>
 
