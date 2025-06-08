@@ -183,36 +183,68 @@ export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(
 
 export function prepareImportedTranscriptView(filePath) {
     console.debug(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`); // DEBUG
-    const newIsLoading = !!filePath;
-    project.update(p => ({
-        ...p,
-        currentImportedTranscriptPath: filePath,
-        currentImportedTranscriptLexicalJson: p.currentImportedTranscriptPath === filePath ? p.currentImportedTranscriptLexicalJson : null,
-        initialImportedTranscriptLexicalJson: p.currentImportedTranscriptPath === filePath ? p.initialImportedTranscriptLexicalJson : null,
-        isImportedTranscriptDirty: p.currentImportedTranscriptPath === filePath ? p.isImportedTranscriptDirty : false,
-        isImportedTranscriptLoading: newIsLoading,
-        importedTranscriptError: null,
-        activeImportedTranscriptEditorRef: p.currentImportedTranscriptPath === filePath ? p.activeImportedTranscriptEditorRef : null,
-        statusMessage: filePath ? `Loading imported transcript: ${filePath.split(/[\\/]/).pop()}` : 'Imported transcript selection cleared.',
-        isLoading: newIsLoading || p.isLoading,
+    project.update(p => {
+        // Determine if the exact same path is being re-selected and if its data is already loaded.
+        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath &&
+                                           !!filePath && // Ensures filePath is not null/empty
+                                           !!p.currentImportedTranscriptLexicalJson;
 
-        selectedDocumentPath: null,
-        currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
-        currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
-        currentDocumentHighlights: [], isDocumentMetadataDirty: false,
-        currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+        let finalIsImportedTranscriptLoading;
+        let finalIsGlobalLoading;
+        let finalStatusMessage;
 
-        selectedMediaNotePath: null,
-        currentMediaNoteTranscriptJson: null,
-        initialMediaNoteTranscriptJson: null,
-        isMediaNoteTranscriptDirty: false,
-        mediaNoteTranscriptError: null,
-        isMediaNoteTranscriptLoading: false,
-        activeMediaNoteEditorRef: null,
-    }));
-    if (!filePath) {
-        project.update(p => ({ ...p, isImportedTranscriptLoading: false, isLoading: false }));
-    }
+        if (!filePath) { // Case 1: Selection is cleared
+            finalIsImportedTranscriptLoading = false;
+            finalStatusMessage = 'Imported transcript selection cleared.';
+            finalIsGlobalLoading = false; // If clearing selection, this view isn't loading.
+        } else if (isReselectingSameLoadedPath) { // Case 2: Same path re-selected, data already loaded
+            finalIsImportedTranscriptLoading = false;
+            finalStatusMessage = `Viewing imported transcript: ${filePath.split(/[\/]/).pop()}`;
+            finalIsGlobalLoading = false; // Explicitly stop loading for this case.
+        } else { // Case 3: New path, or same path but data needs re-loading (e.g. was null)
+            finalIsImportedTranscriptLoading = true;
+            finalStatusMessage = `Loading imported transcript: ${filePath.split(/[\/]/).pop()}`;
+            finalIsGlobalLoading = true; // This action will trigger a load.
+        }
+
+        return {
+            ...p,
+            currentImportedTranscriptPath: filePath,
+            currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
+            initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
+            isImportedTranscriptDirty: isReselectingSameLoadedPath ? p.isImportedTranscriptDirty : false,
+
+            isImportedTranscriptLoading: finalIsImportedTranscriptLoading,
+            importedTranscriptError: null,
+            activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
+
+            statusMessage: finalStatusMessage,
+            isLoading: finalIsGlobalLoading,
+
+            // Clear other view states to ensure focus on the imported transcript view
+            selectedDocumentPath: null,
+            currentDocumentJson: null,
+            initialDocumentJson: null,
+            isDocumentDirty: false,
+            isDocumentLoading: false,
+            documentError: null,
+            activeDocumentEditorRef: null,
+            currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+            currentDocumentHighlights: [],
+            isDocumentMetadataDirty: false,
+            currentPdfAnnotations: [],
+            initialPdfAnnotations: [],
+            isPdfAnnotationsDirty: false,
+
+            selectedMediaNotePath: null,
+            currentMediaNoteTranscriptJson: null,
+            initialMediaNoteTranscriptJson: null,
+            isMediaNoteTranscriptDirty: false,
+            mediaNoteTranscriptError: null,
+            isMediaNoteTranscriptLoading: false,
+            activeMediaNoteEditorRef: null,
+        };
+    });
 }
 export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.info(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); } // INFO
 export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); } // ERROR
