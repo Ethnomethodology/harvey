@@ -699,15 +699,23 @@
         class:mb-0={$panelStateStore.leftCollapsed}
         class:justify-between={!$panelStateStore.leftCollapsed}
         class:justify-center={$panelStateStore.leftCollapsed} >
-        <button
-            on:click={panelStateStore.toggleLeftPanel}
-            class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
-        >
-            <FileEarmarkCodeIcon class="w-4 h-4"/>
-        </button>
+
+        <!-- Group for left-aligned items -->
+        <div class="flex items-center">
+            <button
+                on:click={panelStateStore.toggleLeftPanel}
+                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
+            >
+                <FileEarmarkCodeIcon class="w-4 h-4"/>
+            </button>
+            {#if !$panelStateStore.leftCollapsed}
+                <span class="ml-2">Metadata</span>
+            {/if}
+        </div>
+
+        <!-- Group for right-aligned items (or items that will be pushed to the right by justify-between) -->
         {#if !$panelStateStore.leftCollapsed}
-            <span class="ml-2">Metadata</span>
             {#if currentFileMetadata}
                 <button
                     on:click={toggleEditMode}
@@ -716,7 +724,7 @@
                 >
                     {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
                 </button>
-            {/if}
+            {/if} <!-- :else placeholder removed as it's not needed for this layout -->
         {/if}
     </h2>
     <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
