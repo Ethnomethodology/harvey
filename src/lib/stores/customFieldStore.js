@@ -21,19 +21,44 @@ function getCurrentProjectId() {
     if (currentProject && currentProject.xmlPath) {
         const path = currentProject.xmlPath.replace(/\\/g, '/'); // Normalize separators
         const parts = path.split('/');
-        // Expecting structure like .../projects/PROJECT_NAME/project.xml
-        // So, project.xml is the last part, PROJECT_NAME is the second to last.
-        if (parts.length >= 2 && parts[parts.length - 1].toLowerCase() === 'project.xml') {
-            const projectId = parts[parts.length - 2];
+
+        // Primary parsing strategy: Find 'projects' directory index
+        const projectsDirIndex = parts.lastIndexOf('projects');
+
+        if (projectsDirIndex !== -1 &&
+            projectsDirIndex < parts.length - 2 && // Ensure there's a project name and project.xml after 'projects'
+            parts[parts.length - 1].toLowerCase() === 'project.xml') {
+
+            const projectId = parts[projectsDirIndex + 1]; // Project name is the segment after 'projects'
+
             if (projectId && projectId.trim() !== '') {
-                console.debug(`[customFieldStore] Determined projectId: ${projectId}`);
+                console.debug(`[customFieldStore] Determined projectId: ${projectId} (using 'projects' segment)`);
                 return projectId;
             }
         }
-        console.error('[customFieldStore] Could not parse projectId from xmlPath:', currentProject.xmlPath);
+
+        // Fallback parsing strategy: Original logic (second to last part)
+        // This is useful if the "projects" folder name isn't standard but the project name is still the parent of project.xml
+        if (parts.length >= 2 && parts[parts.length - 1].toLowerCase() === 'project.xml') {
+            const projectId = parts[parts.length - 2];
+            if (projectId && projectId.trim() !== '') {
+                // Log as warn if primary strategy failed but fallback worked
+                if (projectsDirIndex === -1 || projectsDirIndex >= parts.length - 2) {
+                     console.warn(`[customFieldStore] Determined projectId: "${projectId}" using fallback path parsing (path did not contain '/projects/[projectName]/project.xml' structure as expected). Path was: ${currentProject.xmlPath}`);
+                } else {
+                    // This case should ideally not be hit if primary logic for projectId.trim() worked.
+                    // However, if primary logic found 'projects' but projectId was empty, and fallback found a non-empty one.
+                    console.debug(`[customFieldStore] Determined projectId: "${projectId}" using fallback path parsing (primary 'projects' segment was empty/invalid). Path was: ${currentProject.xmlPath}`);
+                }
+                return projectId;
+            }
+        }
+
+        console.error('[customFieldStore] Could not parse projectId from xmlPath after trying primary and fallback strategies:', currentProject.xmlPath);
         return null;
     }
-    console.error('[customFieldStore] No active project or xmlPath found in project store.');
+    // Changed to warn because this state (no project loaded) can be normal (e.g. on app startup before a project is opened)
+    console.warn('[customFieldStore] No active project or xmlPath found in project store when trying to get projectId.');
     return null;
 }
 
