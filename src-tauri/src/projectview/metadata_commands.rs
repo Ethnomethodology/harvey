@@ -81,14 +81,15 @@ use log::info;
 #[tauri::command]
 pub async fn create_custom_field_definition_command(
     _app_handle: AppHandle,
+    project_id: String,
     field_key: String,
     field_name: String,
     field_type: String,
     scope_str: String
     // default_value: Option<String> // Removed from signature
 ) -> Result<(), String> {
-    debug!("[CMD] create_custom_field_definition_command: key='{}', name='{}', type='{}', scope='{}'",
-           field_key, field_name, field_type, scope_str);
+    debug!("[CMD] create_custom_field_definition_command for project_id '{}': key='{}', name='{}', type='{}', scope='{}'",
+           project_id, field_key, field_name, field_type, scope_str);
 
     let scope = CustomFieldScope::from_db_string(&scope_str);
 
@@ -104,31 +105,32 @@ pub async fn create_custom_field_definition_command(
         updated_at: current_timestamp,
     };
 
-    match add_custom_field_definition(&definition) {
+    match add_custom_field_definition(project_id.as_str(), &definition) {
         Ok(_) => {
-            info!("[CMD] Custom field definition created successfully: {}", field_key);
+            info!("[CMD] Custom field definition created successfully for project_id {}: {}", project_id, field_key);
             Ok(())
         }
         Err(e) => {
-            error!("[CMD] Error creating custom field definition {}: {}", field_key, e);
-            Err(format!("Failed to create custom field definition '{}': {}", field_key, e))
+            error!("[CMD] Error creating custom field definition for project_id {}: {}: {}", project_id, field_key, e);
+            Err(format!("Failed to create custom field definition for project_id '{}', key '{}': {}", project_id, field_key, e))
         }
     }
 }
 
 #[tauri::command]
 pub async fn get_all_custom_field_definitions_command(
-    _app_handle: AppHandle
+    _app_handle: AppHandle,
+    project_id: String,
 ) -> Result<Vec<CustomFieldDefinition>, String> {
-    debug!("[CMD] get_all_custom_field_definitions_command called");
-    match get_all_custom_field_definitions() {
+    debug!("[CMD] get_all_custom_field_definitions_command called for project_id: {}", project_id);
+    match get_all_custom_field_definitions(project_id.as_str()) {
         Ok(definitions) => {
-            info!("[CMD] Retrieved {} custom field definitions.", definitions.len());
+            info!("[CMD] Retrieved {} custom field definitions for project_id {}.", definitions.len(), project_id);
             Ok(definitions)
         }
         Err(e) => {
-            error!("[CMD] Error retrieving all custom field definitions: {}", e);
-            Err(format!("Failed to retrieve custom field definitions: {}", e))
+            error!("[CMD] Error retrieving all custom field definitions for project_id {}: {}", project_id, e);
+            Err(format!("Failed to retrieve custom field definitions for project_id {}: {}", project_id, e))
         }
     }
 }

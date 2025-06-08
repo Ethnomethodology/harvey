@@ -308,7 +308,10 @@ impl CustomFieldScope {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+// TODO: Add TypeShare derive if this needs to be synced with frontend automatically
+// #[derive(Serialize, Deserialize, Debug, Clone, TypeShare)]
 pub struct CustomFieldDefinition {
+    pub project_id: String, // Added project_id
     pub field_key: String,
     pub field_name: String,
     pub field_type: String, // Example types: "small_text", "long_text", "number", "date", "boolean"
