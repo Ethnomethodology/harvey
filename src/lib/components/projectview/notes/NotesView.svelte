@@ -123,7 +123,7 @@
 
 	<div class="flex flex-grow p-1 gap-1 w-full min-h-0">
 
-		<div class="{ $panelStateStore.notesLeftPanelCollapsed ? 'w-14' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+		<div class="{ $panelStateStore.notesLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<NotesLeftPanel
                 on:requestmediaselection={forwardEvent}
                 on:requestviewchange={ (event) => handleViewChangeRequest(event.detail) }
