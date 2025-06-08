@@ -200,15 +200,18 @@
                     const columnDefinitions = tabulatorInstance.getColumnDefinitions();
                     const layoutToSave = {
                         columns: {},
-                        // defaultColumnWidth: tabulatorInstance.options.columnDefaults.width, // Or some other default
                     };
                     columnDefinitions.forEach((colDef, index) => {
                         if (colDef.field) { // Ensure field exists
-                            layoutToSave.columns[colDef.field] = {
-                                width: colDef.width || null, // Store actual width; null if not set
+                            const columnLayoutData = {
                                 order: index,
-                                visible: colDef.visible, // Store visibility
+                                visible: colDef.visible, // colDef.visible should reflect current state
                             };
+                            // Only add width to the saved layout if it's a valid positive number
+                            if (typeof colDef.width === 'number' && colDef.width > 0) {
+                                columnLayoutData.width = colDef.width;
+                            }
+                            layoutToSave.columns[colDef.field] = columnLayoutData;
                         }
                     });
                     console.debug(`[TableViewerPanel saveCurrentTableLayout] Saving layout for ${relativePathForSave}:`, JSON.stringify(layoutToSave, null, 2));
