@@ -578,11 +578,11 @@
             let newDisplayableCustomFields = [];
 
             console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
-            console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
             for (const def of $customFieldDefinitionsStore) {
                 // Determine if the definition is applicable by scope
                 let isApplicable = false;
-                if (def.scope?.type === 'Project' || def.scope === 'project') { // Handle both object and string from older store versions
+                // Updated condition to include checking for "Project" (capital P) string
+                if (def.scope?.type === 'Project' || def.scope === 'project' || def.scope === 'Project') {
                     isApplicable = true;
                 } else if ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) {
                     isApplicable = true;
