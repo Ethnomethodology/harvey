@@ -587,7 +587,7 @@
                 // Updated condition to include checking for "Project" (capital P) string
                 if (def.scope?.type === 'Project' || def.scope === 'project' || def.scope === 'Project') {
                     isApplicable = true;
-                } else if ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) {
+                } else if ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope.toLowerCase() === currentItemType)) {
                     isApplicable = true;
                 }
 
