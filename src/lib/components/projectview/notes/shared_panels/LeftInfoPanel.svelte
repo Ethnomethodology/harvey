@@ -578,6 +578,7 @@
             let newDisplayableCustomFields = [];
 
             console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
+            console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
             for (const def of $customFieldDefinitionsStore) {
                 // Determine if the definition is applicable by scope
                 let isApplicable = false;
