@@ -143,10 +143,12 @@
             try {
                 savedLayout = await loadTableLayoutPrefs(relativeTablePath);
                 if (savedLayout) {
-                    console.debug(`[TableViewerPanel] Loaded saved layout for ${relativeTablePath}:`, savedLayout);
+                    console.debug(`[TableViewerPanel] Loaded saved layout for ${relativeTablePath}:`, JSON.stringify(savedLayout, null, 2)); // Log the full object
+                } else {
+                    console.debug(`[TableViewerPanel] No saved layout found for ${relativeTablePath}.`);
                 }
             } catch (e) {
-                console.error(`[TableViewerPanel] Error loading saved layout for ${currentLoadedPath}:`, e);
+                console.error(`[TableViewerPanel] Error loading saved layout for ${relativeTablePath}:`, e); // Corrected path variable for error log
                 // Continue with default layout
             }
 
@@ -209,6 +211,7 @@
                             };
                         }
                     });
+                    console.debug(`[TableViewerPanel saveCurrentTableLayout] Saving layout for ${relativePathForSave}:`, JSON.stringify(layoutToSave, null, 2));
                     await saveTableLayoutPrefs(relativePathForSave, JSON.stringify(layoutToSave));
                     console.info(`[TableViewerPanel] Layout saved for ${relativePathForSave}`);
                 } catch (error) {
@@ -342,6 +345,7 @@
 
     // Function to generate column definitions
     function generateColumns(data, savedLayoutObj) { // Added savedLayoutObj
+        console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2));
         if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}]; // Return a placeholder if no data
         const headers = Object.keys(data[0]);
         let columnDefs = headers.map(header => {
@@ -355,14 +359,15 @@
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
                 const savedCol = savedLayoutObj.columns[header];
-                if (typeof savedCol.width === 'number') {
+                console.debug(`[TableViewerPanel generateColumns] Applying saved layout for column '${header}': width=${savedCol.width}, order=${savedCol.order}, visible=${savedCol.visible}`);
+                if (typeof savedCol.width === 'number' && savedCol.width > 0) { // Ensure width is positive number
                     colDef.width = savedCol.width;
+                } else {
+                    console.debug(`[TableViewerPanel generateColumns] No valid saved width for column '${header}', default will be used by Tabulator.`);
                 }
-                // 'visible' could be handled here if implemented: colDef.visible = savedCol.visible;
-                // Note: Tabulator handles column visibility directly, this saved 'visible' state
-                // would primarily be for initially hiding columns if that feature is added.
-                // If a column was saved as visible:false, Tabulator might need specific setup
-                // or you might filter them out before passing to Tabulator if it doesn't hide them by default from def.
+                colDef.visible = savedCol.visible; // Keep this as it was
+            } else {
+                console.debug(`[TableViewerPanel generateColumns] No saved layout found for column '${header}'.`);
             }
             return colDef;
         });
@@ -388,6 +393,7 @@
                 }
             });
         }
+        console.debug('[TableViewerPanel generateColumns] Final column definitions after applying layout and sort:', JSON.stringify(columnDefs.map(c => ({ field: c.field, width: c.width, visible: c.visible, order: savedLayoutObj?.columns[c.field]?.order })), null, 2));
         return columnDefs;
     }
 
