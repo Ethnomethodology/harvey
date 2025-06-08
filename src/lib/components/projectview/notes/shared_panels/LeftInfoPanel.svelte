@@ -577,7 +577,6 @@
             let newEditableCustomFields = [];
             let newDisplayableCustomFields = [];
 
-            console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
             for (const def of $customFieldDefinitionsStore) {
                 // Determine if the definition is applicable by scope
                 let isApplicable = false;
@@ -599,27 +598,19 @@
                             type: def.field_type, // Type from definition
                             value: valueToUse
                         });
-                    }
-                    // For read mode, only display if there's a value or if you want to show defaults
-                    // Here, we only show if there's an actual value saved on the asset, or if a default is defined.
-                    if (existingAssetField || def.default_value) {
-                         newDisplayableCustomFields.push({
+                    } else { // This is for read mode (i.e., !isEditing)
+                        newDisplayableCustomFields.push({
                             key: def.field_key,
                             name: def.field_name,
                             type: def.field_type,
                             value: valueToUse
                         });
-                    } else if (!existingAssetField && !def.default_value && isEditing) {
-                        // If in edit mode and no value and no default, still list it so it can be set
-                        // This case is covered by the newEditableCustomFields logic above.
                     }
                 }
             }
             // Sort fields alphabetically by name for consistent display
             newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
-            console.debug('[LeftInfoPanel CustomFieldsBlock] editableMetadata.customFields will be updated. Count:', newEditableCustomFields.length);
             newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
-            console.debug('[LeftInfoPanel CustomFieldsBlock] displayableCustomFields will be updated. Count:', newDisplayableCustomFields.length);
 
             editableMetadata.customFields = newEditableCustomFields;
             displayableCustomFields = newDisplayableCustomFields;
