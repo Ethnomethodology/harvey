@@ -137,9 +137,76 @@ pub fn init_db() -> Result<()> {
     )?;
     info!("[DB] Initialized custom_field_definitions table and trigger.");
 
+    // table_layout_preferences table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_layout_preferences (
+            table_asset_relative_path TEXT PRIMARY KEY,
+            layout_json TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            FOREIGN KEY (table_asset_relative_path) REFERENCES asset_metadata(asset_relative_path) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized table_layout_preferences table.");
+
+    // Trigger for table_layout_preferences updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_layout_preferences_updated_at
+        AFTER UPDATE ON table_layout_preferences
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_layout_preferences SET updated_at = CURRENT_TIMESTAMP WHERE table_asset_relative_path = OLD.table_asset_relative_path;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_table_layout_preferences_updated_at trigger.");
+
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
+
+// --- Table Layout Preferences Functions ---
+
+pub fn save_table_layout_preferences(table_asset_relative_path: &str, layout_json: &str) -> Result<()> {
+    debug!("[DB] Saving table layout preferences for: {}", table_asset_relative_path);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "INSERT INTO table_layout_preferences (table_asset_relative_path, layout_json)
+         VALUES (?1, ?2)
+         ON CONFLICT(table_asset_relative_path) DO UPDATE SET
+             layout_json = excluded.layout_json,
+             updated_at = CURRENT_TIMESTAMP",
+        params![table_asset_relative_path, layout_json],
+    )?;
+    info!("[DB] Table layout preferences saved successfully for: {}", table_asset_relative_path);
+    Ok(())
+}
+
+pub fn load_table_layout_preferences(table_asset_relative_path: &str) -> Result<Option<String>> {
+    debug!("[DB] Loading table layout preferences for: {}", table_asset_relative_path);
+    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Returning None for table layout: {}", db_path.display(), table_asset_relative_path);
+        return Ok(None);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("
+        SELECT layout_json
+        FROM table_layout_preferences
+        WHERE table_asset_relative_path = ?1
+    ")?;
+
+    let result = stmt.query_row(params![table_asset_relative_path], |row| {
+        row.get(0)
+    }).optional()?;
+
+    debug!("[DB] Load table layout prefs result for {}: {}", table_asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    Ok(result)
+}
+
+// --- End Table Layout Preferences Functions ---
 
 // Helper to convert Option<T> to dyn ToSql for rusqlite
 fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
@@ -339,6 +406,26 @@ pub fn rename_asset_metadata_key(
             "[DB] Asset metadata key renamed successfully from {} to {} ({} rows affected)",
             old_relative_path, new_relative_path, changes
         );
+
+        // Also attempt to rename in table_layout_preferences if an entry exists
+        match conn.execute(
+            "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE table_asset_relative_path = ?2",
+            params![new_relative_path, old_relative_path],
+        ) {
+            Ok(layout_changes) if layout_changes > 0 => {
+                info!("[DB] Renamed corresponding table_layout_preferences key from {} to {}", old_relative_path, new_relative_path);
+            }
+            Ok(_) => {
+                // No corresponding layout prefs, or no change needed, not an error
+                debug!("[DB] No corresponding table_layout_preferences key found or updated for {}", old_relative_path);
+            }
+            Err(e) => {
+                error!("[DB] Error trying to rename table_layout_preferences key from {} to {}: {}", old_relative_path, new_relative_path, e);
+                // Propagate the error if critical, otherwise just log.
+                // For now, let's log and continue, as the primary rename succeeded.
+                // return Err(e); // Uncomment to make this error critical
+            }
+        }
     } else {
         debug!("[DB] No asset metadata found to rename for old key: {}", old_relative_path);
     }

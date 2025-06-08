@@ -131,6 +131,8 @@ pub fn run() {
             // --- Project view TABLE commands ---
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
+            projectview::core_commands::save_table_layout_prefs,
+            projectview::core_commands::load_table_layout_prefs,
 
             // --- Project view IMAGE commands ---
             projectview::image_handler::import_image_file,
