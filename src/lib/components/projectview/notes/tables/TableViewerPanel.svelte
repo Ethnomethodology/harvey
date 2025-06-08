@@ -339,7 +339,7 @@
               </svg>
             </button>
             <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    onclick={() => { console.log('TODO: Add new row placeholder action'); alert('Add Row (Placeholder)'); }} // Keep log for placeholder
+                    onclick={() => { console.log('TODO: Add new row placeholder action'); alert('Add Row (Placeholder)'); }}
                     title="Add New Row">
                 Add Row
             </button>

@@ -477,8 +477,10 @@
                     const originalExt = newOriginalAssetDetails.originalType;
 
                     // --- Start of new currentItemType derivation ---
-                    if (AUDIO_EXTENSIONS.has(originalExt) || VIDEO_EXTENSIONS.has(originalExt)) {
-                        newCurrentItemType = 'media'; // Assign to declared variable
+                    if (AUDIO_EXTENSIONS.has(originalExt)) {
+                        newCurrentItemType = 'audio'; // Assign to declared variable
+                    } else if (VIDEO_EXTENSIONS.has(originalExt)) {
+                        newCurrentItemType = 'video'; // Assign to declared variable
                     } else if (IMAGE_EXTENSIONS.has(originalExt)) {
                         newCurrentItemType = 'image'; // Assign to declared variable
                     } else if (originalExt === 'pdf' || originalExt === 'json' || originalExt === 'txt' || originalExt === 'md' || originalExt === 'docx' || originalExt === 'rtf' || originalExt === 'odt') {
@@ -577,13 +579,31 @@
             let newEditableCustomFields = [];
             let newDisplayableCustomFields = [];
 
+            console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
+            console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
             for (const def of $customFieldDefinitionsStore) {
+                if (def.field_key === 'only_audio' || def.field_key === 'cod' || def.field_key === 'only_tables' || def.field_key === 'cat' || def.field_key === 'only_for_docs' || def.field_key === 'available_across_project' || def.field_key === 'test235' || def.field_key === 'date_added') {
+                    console.debug(`[LeftInfoPanel CustomFieldsBlock] Definition for key '${def.field_key}':`, JSON.stringify(def));
+                }
                 // Determine if the definition is applicable by scope
-                let isApplicable = false;
-                if (def.scope?.type === 'Project' || def.scope === 'project') { // Handle both object and string from older store versions
-                    isApplicable = true;
-                } else if ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) {
-                    isApplicable = true;
+                let isApplicable = false; // Default to false
+                if (typeof def.scope === 'string') {
+                    // Handles project scope when it's a string like "Project" (case-insensitive)
+                    if (def.scope.toLowerCase() === 'project') {
+                        isApplicable = true;
+                    }
+                } else if (def.scope && typeof def.scope === 'object') { // Handles object scopes if def.scope is a non-null object
+                    // Check for asset-type specific scopes like { "AssetType": "image" }
+                    if (typeof def.scope.AssetType === 'string') {
+                        const assetTypeScopeValue = def.scope.AssetType.toLowerCase();
+                        if (assetTypeScopeValue === currentItemType) { // currentItemType is already lowercase
+                            isApplicable = true;
+                        } else if (assetTypeScopeValue === 'media' &&
+                                   (currentItemType === 'audio' || currentItemType === 'video')) {
+                            // Backward compatibility: "media" scope applies to new "audio" and "video" currentItemTypes
+                            isApplicable = true;
+                        }
+                    }
                 }
 
                 if (isApplicable) {
@@ -597,25 +617,21 @@
                             type: def.field_type, // Type from definition
                             value: valueToUse
                         });
-                    }
-                    // For read mode, only display if there's a value or if you want to show defaults
-                    // Here, we only show if there's an actual value saved on the asset, or if a default is defined.
-                    if (existingAssetField || def.default_value) {
-                         newDisplayableCustomFields.push({
+                    } else { // This is for read mode (i.e., !isEditing)
+                        newDisplayableCustomFields.push({
                             key: def.field_key,
                             name: def.field_name,
                             type: def.field_type,
                             value: valueToUse
                         });
-                    } else if (!existingAssetField && !def.default_value && isEditing) {
-                        // If in edit mode and no value and no default, still list it so it can be set
-                        // This case is covered by the newEditableCustomFields logic above.
                     }
                 }
             }
             // Sort fields alphabetically by name for consistent display
             newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+            console.debug('[LeftInfoPanel CustomFieldsBlock] newEditableCustomFields populated. Count:', newEditableCustomFields.length);
             newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+            console.debug('[LeftInfoPanel CustomFieldsBlock] newDisplayableCustomFields populated. Count:', newDisplayableCustomFields.length);
 
             editableMetadata.customFields = newEditableCustomFields;
             displayableCustomFields = newDisplayableCustomFields;
@@ -830,10 +846,8 @@
                             </span>
                         </div>
                     {/each}
-                    {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
+                    {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || def.scope === 'Project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom field values set for this item. Edit to add.</p>
-                    {:else if $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType))).length === 0}
-                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields defined for this project/item type. Click "Edit Metadata" then "+" to define new fields.</p>
                     {/if}
                 {/if}
 
@@ -862,10 +876,8 @@
                             <!-- TODO: Add support for other field types (number, date, boolean) -->
                         </div>
                     {/each}
-                    {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
+                    {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || def.scope === 'Project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType)) ).length > 0}
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Edit to add.</p>
-                    {:else if $customFieldDefinitionsStore.filter(def => def.scope?.type === 'Project' || def.scope === 'project' || ((def.scope?.type === 'AssetType' && def.scope?.value === currentItemType) || (typeof def.scope === 'string' && def.scope === currentItemType))).length === 0}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields defined for this project or item type. Click "+" to define new fields.</p>
                     {/if}
                 {/if}
                 <!-- End of custom fields rendering -->
