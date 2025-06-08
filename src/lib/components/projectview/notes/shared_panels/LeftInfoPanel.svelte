@@ -582,6 +582,9 @@
             console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
             console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
             for (const def of $customFieldDefinitionsStore) {
+                if (def.field_key === 'only_audio' || def.field_key === 'cod' || def.field_key === 'only_tables' || def.field_key === 'cat' || def.field_key === 'only_for_docs' || def.field_key === 'available_across_project' || def.field_key === 'test235' || def.field_key === 'date_added') {
+                    console.debug(`[LeftInfoPanel CustomFieldsBlock] Definition for key '${def.field_key}':`, JSON.stringify(def));
+                }
                 // Determine if the definition is applicable by scope
                 let isApplicable = false; // Default to false
                 if (typeof def.scope === 'string') {
