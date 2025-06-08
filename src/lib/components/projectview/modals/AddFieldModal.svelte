@@ -1,40 +1,84 @@
 <!-- src/lib/components/projectview/modals/AddFieldModal.svelte -->
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { message } from '@tauri-apps/plugin-dialog'; // Using Tauri dialog for consistency
+  import { message } from '@tauri-apps/plugin-dialog';
+  import { addDefinition } from '$lib/stores/customFieldStore.js';
 
   export let showModal = false;
+  export let currentItemType = ''; // e.g., "doc", "image", "project" (if 'project' is a possibility for currentItemType)
 
-  let fieldName = '';
-  let fieldType = 'small_text'; // Default to 'small_text'
-  let fieldValue = '';
+  // Removed duplicate export let currentItemType = '';
+  let uiErrorMessage = '';
+
+  let userInputFieldName = '';
+  let generatedFieldKey = '';
+
+  let fieldType = 'small_text';
+  // let fieldValue = ''; // Removed for Default Value
+  let selectedScope = 'project';
 
   const dispatch = createEventDispatcher();
 
+  function sanitizeToKey(inputName) {
+    if (!inputName) return '';
+    const trimmed = inputName.trim();
+    if (!trimmed) return '';
+
+    return trimmed
+      .toLowerCase()
+      .replace(/\s+/g, '_') // Replace spaces (one or more) with a single underscore
+      .replace(/_+/g, '_')   // Replace multiple underscores with a single underscore
+      .replace(/[^a-z0-9_]/g, '') // Remove any character that is not lowercase alphanumeric or underscore
+      .substring(0, 50); // Max length for key
+  }
+
+  $: generatedFieldKey = sanitizeToKey(userInputFieldName);
+
+  $: if (userInputFieldName) uiErrorMessage = '';
+
   async function handleAdd() {
-    const trimmedFieldName = fieldName.trim();
-    if (!trimmedFieldName) {
-      // Using Tauri's message dialog instead of alert()
+    uiErrorMessage = '';
+    const finalFieldName = userInputFieldName.trim();
+    const finalFieldKey = generatedFieldKey; // Already sanitized and reactively updated
+
+    if (!finalFieldName) {
       await message('Field Name cannot be empty.', { title: 'Validation Error', type: 'error' });
       return;
     }
-    dispatch('confirm', {
-      key: trimmedFieldName,
-      type: fieldType,
-      value: fieldValue.trim()
-    });
-    closeModal();
+    if (!finalFieldKey) {
+      await message('Field Key cannot be generated from the Field Name. Please ensure it contains alphanumeric characters.', { title: 'Validation Error', type: 'error' });
+      return;
+    }
+    // Final check on generated key format, though sanitizeToKey should handle it.
+    if (!/^[a-z0-9_]+$/.test(finalFieldKey) || finalFieldKey.startsWith('_') || finalFieldKey.endsWith('_')) {
+       await message('Generated Field Key is invalid (must be alphanumeric with underscores, not starting/ending with underscore). Please adjust Field Name.', { title: 'Validation Error', type: 'error' });
+       return;
+    }
+
+    try {
+      // Call addDefinition without the fieldValue (default value)
+      await addDefinition(finalFieldKey, finalFieldName, fieldType, selectedScope);
+      closeModalAndDispatchClose(); // Close modal on success
+    } catch (err) {
+      // The error from addDefinition is already logged in the store.
+      // Here, we just inform the user.
+      // console.error("Error adding custom field definition in AddFieldModal:", err); // Redundant if store logs it.
+      uiErrorMessage = err.message || 'Failed to add custom field definition.';
+      // Do not close modal on error
+    }
   }
 
-  function closeModal() {
-    fieldName = '';
+  function closeModalAndDispatchClose() {
+    userInputFieldName = '';
+    // generatedFieldKey will reset reactively
     fieldType = 'small_text';
-    fieldValue = '';
-    // showModal = false; // Parent controls this prop, but good for internal state if used differently
+    // fieldValue = ''; // Removed
+    selectedScope = 'project';
     dispatch('close');
   }
 
-  // Base input/select/textarea classes - adapted from prompt and project context
+
+  // Base input/select/textarea classes
   const formElementClasses = "block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 px-3 py-2 bg-white text-gray-900 shadow-sm";
 
 </script>
@@ -42,7 +86,7 @@
 {#if showModal}
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
-    on:click={closeModal}
+    on:click={closeModalAndDispatchClose}
     role="dialog"
     aria-modal="true"
     aria-labelledby="addFieldModalTitle"
@@ -51,21 +95,58 @@
       class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-100"
       on:click|stopPropagation
     >
-      <h2 id="addFieldModalTitle" class="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Add Custom Field</h2>
+      <h2 id="addFieldModalTitle" class="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Add Custom Field Definition</h2>
+
+      {#if uiErrorMessage}
+        <div class="text-red-500 text-sm mb-4 p-2 border border-red-300 bg-red-50 rounded">
+          {uiErrorMessage}
+        </div>
+      {/if}
 
       <div class="space-y-4">
         <div>
-          <label for="fieldNameInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Name</label>
+          <label for="userInputFieldName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Name</label>
           <input
             type="text"
-            id="fieldNameInput"
-            bind:value={fieldName}
+            id="userInputFieldName"
+            bind:value={userInputFieldName}
             class="{formElementClasses}"
-            placeholder="e.g., Case ID, Location"
+            placeholder="e.g., Collected Date, Interviewer Name"
             autocorrect="off"
             autocomplete="off"
           />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Field names should be unique.
+          </p>
         </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scope</label>
+          <div class="mt-1 space-y-2">
+            <div class="flex items-center">
+              <input id="scopeProject" name="scope" type="radio" bind:group={selectedScope} value={"project"}
+                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600">
+              <label for="scopeProject" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                Make available across the project
+              </label>
+            </div>
+            <div class="flex items-center">
+              <input id="scopeSpecific" name="scope" type="radio" bind:group={selectedScope} value={currentItemType}
+                     disabled={!currentItemType || currentItemType === 'project'}
+                     class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600"
+                     class:cursor-not-allowed={!currentItemType || currentItemType === 'project'}
+                     class:opacity-50={!currentItemType || currentItemType === 'project'}>
+              <label for="scopeSpecific" class="ml-2 block text-sm text-gray-900 dark:text-gray-300"
+                     class:opacity-50={!currentItemType || currentItemType === 'project'}>
+                Only applicable to {currentItemType || 'current type'}
+                {#if !currentItemType || currentItemType === 'project'}
+                    <span class="text-xs text-gray-500 dark:text-gray-400"> (Select an asset to enable this scope)</span>
+                {/if}
+              </label>
+            </div>
+          </div>
+        </div>
+
 
         <div>
           <label for="fieldTypeSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Type</label>
@@ -76,17 +157,21 @@
           >
             <option value="small_text">Small Text</option>
             <option value="long_text">Long Text</option>
+            <!-- Add other types like number, date, boolean as needed -->
           </select>
         </div>
 
+        <!-- REMOVED Default Value Section -->
+        <!--
         <div>
-          <label for="fieldValueInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Value</label>
+          <label for="fieldValueInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Default Value (Optional)</label>
           {#if fieldType === 'small_text'}
             <input
               type="text"
               id="fieldValueInput"
               bind:value={fieldValue}
               class="{formElementClasses}"
+              placeholder="Enter default value for this field"
               autocorrect="off"
               autocomplete="off"
             />
@@ -96,18 +181,20 @@
               rows="3"
               bind:value={fieldValue}
               class="{formElementClasses}"
+              placeholder="Enter default value for this field"
               autocorrect="off"
               autocomplete="off"
             ></textarea>
           {/if}
         </div>
+        -->
       </div>
 
       <!-- Buttons -->
       <div class="mt-8 flex justify-end space-x-3">
         <button
           type="button"
-          on:click={closeModal}
+          on:click={closeModalAndDispatchClose}
           class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
         >
           Cancel

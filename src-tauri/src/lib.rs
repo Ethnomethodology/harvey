@@ -92,6 +92,10 @@ pub fn run() {
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
             projectview::metadata_commands::update_asset_metadata_command,
+            // --- Custom Field Definition Commands ---
+            projectview::metadata_commands::create_custom_field_definition_command,
+            projectview::metadata_commands::get_all_custom_field_definitions_command,
+            projectview::metadata_commands::delete_custom_field_definition_command, // Added this line
 
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,

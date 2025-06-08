@@ -19,7 +19,7 @@
         if (event.type === 'requestviewchange' || event.type === 'requestmediaselection' ||
             event.type === 'requestTranscriptionTabWithMedia' || event.type === 'requestTrimInTranscriptionTab') {
             // Specific events handled by ProjectView or this component
-             console.log(`[NotesView] Forwarding event: ${event.type} with detail:`, event.detail);
+             console.debug(`[NotesView] Forwarding event: ${event.type} with detail:`, event.detail); // DEBUG
         }
 		dispatch(event.type, event.detail);
 	}
@@ -65,7 +65,7 @@
         if (activeItemPath !== pathFromStore || activeViewType !== typeFromStore) {
             activeItemPath = pathFromStore;
             activeViewType = typeFromStore;
-            console.log(`[NotesView Store Sub] Synced local Svelte state. Path: ${activeItemPath}, ViewType: ${activeViewType}`);
+            console.debug(`[NotesView Store Sub] Synced local Svelte state. Path: ${activeItemPath}, ViewType: ${activeViewType}`); // DEBUG
         }
     });
 
@@ -73,10 +73,10 @@
         const pathForView = eventDetailFromDispatch?.itemPath;
         const typeForView = eventDetailFromDispatch?.viewType;
 
-        console.log(`[NotesView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
+        console.debug(`[NotesView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`); // DEBUG
 
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
-            console.error(`[NotesView] ABORTING: Invalid path or type from event. Path: '${pathForView}', Type: '${typeForView}'.`);
+            console.error(`[NotesView] ABORTING: Invalid path or type from event. Path: '${pathForView}', Type: '${typeForView}'.`); // ERROR
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
             prepareMediaNoteView(null);
@@ -85,33 +85,33 @@
 
         const canProceed = await checkUnsavedChangesThenProceed(pathForView, typeForView);
         if (!canProceed) {
-            console.log('[NotesView] View change cancelled by unsaved changes check.');
+            console.info('[NotesView] View change cancelled by unsaved changes check.'); // INFO
             return;
         }
 
-        console.log(`[NotesView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
+        console.debug(`[NotesView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`); // DEBUG
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
-            console.log(`[NotesView] Calling prepareDocumentView for Path: ${pathForView}, Type: ${typeForView}`);
+            console.debug(`[NotesView] Calling prepareDocumentView for Path: ${pathForView}, Type: ${typeForView}`); // DEBUG
             prepareDocumentView(pathForView, typeForView);
         } else if (typeForView === 'imported_transcript') {
-            console.log(`[NotesView] Calling prepareImportedTranscriptView for Path: ${pathForView}`);
+            console.debug(`[NotesView] Calling prepareImportedTranscriptView for Path: ${pathForView}`); // DEBUG
             prepareImportedTranscriptView(pathForView);
         } else if (typeForView === 'media_note') {
-            console.log(`[NotesView] Calling prepareMediaNoteView for Path: ${pathForView}`);
+            console.debug(`[NotesView] Calling prepareMediaNoteView for Path: ${pathForView}`); // DEBUG
             prepareMediaNoteView(pathForView);
         } else {
-            console.warn(`[NotesView] Unknown typeForView: '${typeForView}'. Clearing all specific views.`);
+            console.warn(`[NotesView] Unknown typeForView: '${typeForView}'. Clearing all specific views.`); // WARN
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
             prepareMediaNoteView(null);
         }
-        console.log(`[NotesView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
+        console.debug(`[NotesView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`); // DEBUG
     }
 
 
 	onMount(() => {
-		console.log('[NotesView] Component container mounted.');
+		console.debug('[NotesView] Component container mounted.'); // DEBUG
 	});
 
 </script>

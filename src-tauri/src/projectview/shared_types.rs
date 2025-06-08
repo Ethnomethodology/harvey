@@ -280,6 +280,48 @@ impl Default for DocumentHighlightData {
     }
 }
 
+// --- Custom Field Definitions ---
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum CustomFieldScope {
+    Project,
+    AssetType(String), // e.g., "image", "doc", "media"
+}
+
+impl CustomFieldScope {
+    pub fn to_db_string(&self) -> String {
+        match self {
+            CustomFieldScope::Project => "project".to_string(),
+            CustomFieldScope::AssetType(s) => s.clone(),
+        }
+    }
+
+    pub fn from_db_string(s: &str) -> Self {
+        // This is a simple heuristic. Consider a more robust way if asset types can overlap with "project" string.
+        // For now, any string that isn't exactly "project" is treated as an AssetType.
+        if s.to_lowercase() == "project" {
+            CustomFieldScope::Project
+        } else {
+            CustomFieldScope::AssetType(s.to_string())
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+// TODO: Add TypeShare derive if this needs to be synced with frontend automatically
+// #[derive(Serialize, Deserialize, Debug, Clone, TypeShare)]
+pub struct CustomFieldDefinition {
+    pub project_id: String, // Added project_id
+    pub field_key: String,
+    pub field_name: String,
+    pub field_type: String, // Example types: "small_text", "long_text", "number", "date", "boolean"
+    pub scope: CustomFieldScope,
+    pub default_value: Option<String>,
+    // Using String for datetime fields for simplicity, assuming they are formatted appropriately by DB
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 // Default implementation for FileMetadata
 impl Default for FileMetadata {
     fn default() -> Self {
