@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/notes/NotesView.svelte -->
 <script>
 	import { onMount, createEventDispatcher } from 'svelte';
+	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import NotesTopBar from './NotesTopBar.svelte';
 	import NotesLeftPanel from './NotesLeftPanel.svelte';
     import DocumentView from './documents/DocumentView.svelte';
@@ -122,14 +123,14 @@
 
 	<div class="flex flex-grow p-1 gap-1 w-full min-h-0">
 
-		<div class="w-[15%] h-full flex-shrink-0">
+		<div class="{ $panelStateStore.notesLeftPanelCollapsed ? 'w-14' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<NotesLeftPanel
                 on:requestmediaselection={forwardEvent}
                 on:requestviewchange={ (event) => handleViewChangeRequest(event.detail) }
             />
 		</div>
 
-        <div class="w-[85%] h-full">
+        <div class="flex-grow h-full">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -168,6 +169,6 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    .w-\[15\%\] { width: 15%; }
-    .w-\[85\%\] { width: 85%; }
+    /* .w-\[15\%\] { width: 15%; } */ /* No longer needed as Tailwind handles it or it's inline */
+    /* .w-\[85\%\] { width: 85%; } */ /* No longer needed as flex-grow is used */
 </style>
