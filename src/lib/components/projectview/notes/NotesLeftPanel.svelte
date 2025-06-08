@@ -453,12 +453,12 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden"
      class:p-3={!$panelStateStore.notesLeftPanelCollapsed}
-     class:p-2={$panelStateStore.notesLeftPanelCollapsed}
-     class:w-full={!$panelStateStore.notesLeftPanelCollapsed}
-     class:w-14={$panelStateStore.notesLeftPanelCollapsed}>
-	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-10"
+     class:p-2={$panelStateStore.notesLeftPanelCollapsed}>
+	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-10"
+        class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
+        class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed}
         class:justify-center={$panelStateStore.notesLeftPanelCollapsed}>
     {#if !showSearchBox}
