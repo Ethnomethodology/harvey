@@ -1,6 +1,8 @@
 <!-- src/lib/components/projectview/notes/shared_panels/RightInfoPanel.svelte -->
 <script>
     import { onMount } from 'svelte';
+    import { slide } from 'svelte/transition';
+    import { sineInOut } from 'svelte/easing';
     import StickiesIcon from '$lib/components/icons/StickiesIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
@@ -35,13 +37,15 @@
             <span class="ml-2">Highlights</span>
         {/if}
     </h2>
-    <div class="flex-grow overflow-y-auto min-h-0" class:hidden={$panelStateStore.rightCollapsed}>
+    {#if !$panelStateStore.rightCollapsed}
+    <div class="flex-grow overflow-y-auto min-h-0" transition:slide={{ duration: 300, easing: sineInOut }}>
          <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">
             Coding tools or analysis features will appear here. (Placeholder)
         </p>
         <!-- Example: {#if itemType === 'document'} Show coding tools {/if} -->
         <!-- Example: {#if itemType === 'table'} Show chart options {/if} -->
     </div>
+    {/if}
 </div>
 
  <style lang="postcss">
