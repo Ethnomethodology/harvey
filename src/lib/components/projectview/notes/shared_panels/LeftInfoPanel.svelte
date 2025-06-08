@@ -517,14 +517,14 @@
                     if (newCurrentRelativePath && newCurrentRelativePath !== previousSelectedItemPath) {
                         console.info(`[LeftInfoPanel Reactive] Path changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`); // Kept as info
                         if (isEditing) {
-                            console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.'); // Downgraded
+                            console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.');
                             isEditing = false;
                         }
-                        currentOriginalAssetDetails = newDetails; // Set before loadMetadata
+                        currentOriginalAssetDetails = newOriginalAssetDetails; // USE DECLARED VARIABLE
                         await loadMetadata(newCurrentRelativePath);
-                        previousSelectedItemPath = newCurrentRelativePath; // CRITICAL: Update after load
+                        previousSelectedItemPath = newCurrentRelativePath;
                     } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
-                        console.info(`[LeftInfoPanel Reactive] Path became null (was '${previousSelectedItemPath}'). Resetting metadata.`); // Kept as info
+                        console.info(`[LeftInfoPanel Reactive] Path became null (was '${previousSelectedItemPath}'). Resetting metadata.`);
                         currentFileMetadata = null;
                         fullLoadedMetadataObject = null;
                         currentOriginalAssetDetails = null;
@@ -532,14 +532,15 @@
                         if (isEditing) isEditing = false;
                         previousSelectedItemPath = null;
                     } else if (newCurrentRelativePath && newCurrentRelativePath === previousSelectedItemPath) {
-                        if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newDetails)) {
-                             currentOriginalAssetDetails = newDetails;
-                             console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.'); // Downgraded
+                        // Ensure consistent use of newOriginalAssetDetails
+                        if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newOriginalAssetDetails)) {
+                             currentOriginalAssetDetails = newOriginalAssetDetails;
+                             console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.');
                         }
                     }
-                } else { // newDetails is null
-                    console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`); // Keep as warn
-                    if (previousSelectedItemPath !== null) { // If there was a path before, now it's gone
+                } else { // newOriginalAssetDetails is null
+                    console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`);
+                    if (previousSelectedItemPath !== null) {
                         currentFileMetadata = null;
                         fullLoadedMetadataObject = null;
                         currentOriginalAssetDetails = null;
