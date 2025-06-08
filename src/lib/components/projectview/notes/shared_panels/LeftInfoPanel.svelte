@@ -453,38 +453,42 @@
     $: {
         // Log selectedItemPathInStore changes directly in the reaction if needed, or rely on onMount + path change logs
 
-        let newCurrentRelativePath = null;
-        let newCurrentItemType = null;
-        // let newOriginalAssetDetails = null; // Not needed here, use currentOriginalAssetDetails directly after await
+        // Variables newCurrentRelativePath and newCurrentItemType were previously declared here.
+        // They need to be inside the async IIFE or passed if their values before await are important.
+        // Based on the logic, they are determined *after* `await getOriginalAssetDetails`, so their declaration
+        // should be inside the async IIFE.
 
         (async () => {
+            // CORRECTED: Declare variables at the top of the async function scope
+            let newOriginalAssetDetails = null;
+            let newCurrentRelativePath = null;
+            let newCurrentItemType = null; // Was `newType` in the erroneous example, matching to actual code.
+
             const currentSelectedPathFromStore = selectedItemPathInStore; // Capture for this async operation
-            console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore); // Downgraded
+            console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore);
 
             if (currentSelectedPathFromStore && $project && $project.baseDirectory) {
-                const newDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project);
-                // currentOriginalAssetDetails = newDetails; // Assign later, more strategically
-                console.debug('[LeftInfoPanel Reactive] currentOriginalAssetDetails determined:', newDetails); // Downgraded, removed full object log
+                newOriginalAssetDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project); // Assign to declared variable
+                console.debug('[LeftInfoPanel Reactive] newOriginalAssetDetails determined:', newOriginalAssetDetails);
 
-                if (newDetails) {
-                    newCurrentRelativePath = newDetails.originalRelativePath;
-                    console.debug('[LeftInfoPanel Reactive] originalRelativePath derived is:', newCurrentRelativePath); // Downgraded
-                    const originalExt = newDetails.originalType;
+                if (newOriginalAssetDetails) {
+                    newCurrentRelativePath = newOriginalAssetDetails.originalRelativePath; // Assign to declared variable
+                    console.debug('[LeftInfoPanel Reactive] originalRelativePath derived is:', newCurrentRelativePath);
+                    const originalExt = newOriginalAssetDetails.originalType;
 
                     // --- Start of new currentItemType derivation ---
                     if (AUDIO_EXTENSIONS.has(originalExt) || VIDEO_EXTENSIONS.has(originalExt)) {
-                        newCurrentItemType = 'media';
+                        newCurrentItemType = 'media'; // Assign to declared variable
                     } else if (IMAGE_EXTENSIONS.has(originalExt)) {
-                        newCurrentItemType = 'image';
-                    } else if (originalExt === 'pdf' || originalExt === 'json' || originalExt === 'txt' || originalExt === 'md' || originalExt === 'docx' || originalExt === 'rtf' || originalExt === 'odt') { // Added docx etc.
-                        // Check if it's an imported transcript based on its *original* path
+                        newCurrentItemType = 'image'; // Assign to declared variable
+                    } else if (originalExt === 'pdf' || originalExt === 'json' || originalExt === 'txt' || originalExt === 'md' || originalExt === 'docx' || originalExt === 'rtf' || originalExt === 'odt') {
                         let isImpTrans = false;
-                        if ($project.importedTranscriptFiles && newOriginalAssetDetails.originalAbsolutePath) {
+                        if ($project.importedTranscriptFiles && newOriginalAssetDetails.originalAbsolutePath) { // Uses newOriginalAssetDetails
                             for (const f of $project.importedTranscriptFiles) {
                                 if (!f.relativePath) continue;
                                 try {
                                     const constructedAbsolutePath = await resolve($project.baseDirectory, f.relativePath);
-                                    if (normalizePathForComparison(newOriginalAssetDetails.originalAbsolutePath) === normalizePathForComparison(constructedAbsolutePath)) {
+                                    if (normalizePathForComparison(newOriginalAssetDetails.originalAbsolutePath) === normalizePathForComparison(constructedAbsolutePath)) { // Uses newOriginalAssetDetails
                                         isImpTrans = true;
                                         break;
                                     }
@@ -494,20 +498,19 @@
                             }
                         }
                         if (isImpTrans) {
-                            newCurrentItemType = 'imported_transcript';
+                            newCurrentItemType = 'imported_transcript'; // Assign to declared variable
                         } else {
-                            newType = 'doc'; // Covers docx, pdf, txt, md, and also standalone json if not a view
+                            newCurrentItemType = 'doc'; // Assign to declared variable
                         }
                     } else if (originalExt === 'csv' || originalExt === 'xlsx') {
-                        newType = 'table';
+                        newCurrentItemType = 'table'; // Assign to declared variable
                     } else {
-                        newType = 'unknown';
+                        newCurrentItemType = 'unknown'; // Assign to declared variable
                     }
-                    // console.log(`[LeftInfoPanel] Derived currentItemType: ${newType} for original asset type: ${originalExt} (Path: ${newCurrentRelativePath})`); // Can be debug if needed
                     // --- End of new currentItemType derivation ---
-                    if (currentItemType !== newType) {
-                        currentItemType = newType;
-                         console.debug(`[LeftInfoPanel Reactive] currentItemType updated to: ${currentItemType}`); // Downgraded
+                    if (currentItemType !== newCurrentItemType) { // Compare with component-level currentItemType
+                        currentItemType = newCurrentItemType; // Update component-level currentItemType
+                         console.debug(`[LeftInfoPanel Reactive] currentItemType updated to: ${currentItemType}`);
                     }
 
 
