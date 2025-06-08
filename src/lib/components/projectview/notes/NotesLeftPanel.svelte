@@ -458,14 +458,14 @@
      class:p-2={$panelStateStore.notesLeftPanelCollapsed}
      class:w-full={!$panelStateStore.notesLeftPanelCollapsed}
      class:w-14={$panelStateStore.notesLeftPanelCollapsed}>
-	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-10"
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed}
         class:justify-center={$panelStateStore.notesLeftPanelCollapsed}>
     {#if !showSearchBox}
         <div class="flex items-center space-x-2">
             <button
                 type="button"
-                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 z-20"
                 on:click={handleToggleNotesLeftPanel}
                 title={$panelStateStore.notesLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}
             >
@@ -507,7 +507,7 @@
             autocapitalize="off"
             spellcheck="false"
             placeholder="Search..."
-            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-xs {showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-1.5' : 'opacity-0 w-0 pl-12 pr-10 py-1.5'}"
+            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm {showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-2' : 'opacity-0 w-0 pl-12 pr-10 py-2'}"
             on:click|stopPropagation
             />
         {/if}
