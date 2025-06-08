@@ -637,7 +637,12 @@
             editableMetadata.description = currentFileMetadata.description || '';
             editableMetadata.summary = currentFileMetadata.summary || '';
         } else if (!isEditing) {
-            editableMetadata = { file_name: '', title: '', description: '', summary: '', customFields: editableMetadata.customFields }; // Keep custom fields structure for consistency
+            // When exiting edit mode, clear all editable fields
+            editableMetadata.file_name = '';
+            editableMetadata.title = '';
+            editableMetadata.description = '';
+            editableMetadata.summary = '';
+            editableMetadata.customFields = []; // Explicitly clear custom fields as well
         }
     }
 
