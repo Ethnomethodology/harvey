@@ -96,6 +96,41 @@ import {
 
 import { getCloudConfig } from './configureActions.js';
 
+export async function saveTableLayoutPrefs(tablePath, layoutJson) {
+    if (!tablePath || !layoutJson) {
+        console.error('[ProjectService] saveTableLayoutPrefs: Missing tablePath or layoutJson.');
+        throw new Error('Missing tablePath or layoutJson for saving table layout preferences.');
+    }
+    try {
+        await invoke('save_table_layout_prefs', { tablePath, layoutJson });
+        console.info(`[ProjectService] Table layout preferences saved for ${tablePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving table layout preferences for ${tablePath}:`, error);
+        // Optionally, notify the user via a toast or silent fail
+        throw error; // Re-throw if the caller needs to handle it
+    }
+}
+
+export async function loadTableLayoutPrefs(tablePath) {
+    if (!tablePath) {
+        console.error('[ProjectService] loadTableLayoutPrefs: Missing tablePath.');
+        return null; // Or throw error, depending on desired handling
+    }
+    try {
+        const layoutJson = await invoke('load_table_layout_prefs', { tablePath });
+        if (layoutJson) {
+            console.info(`[ProjectService] Table layout preferences loaded for ${tablePath}`);
+            return JSON.parse(layoutJson); // Parse it before returning
+        }
+        console.info(`[ProjectService] No saved table layout preferences found for ${tablePath}`);
+        return null;
+    } catch (error) {
+        console.error(`[ProjectService] Error loading table layout preferences for ${tablePath}:`, error);
+        // Optionally, notify the user or silent fail
+        return null; // Return null on error to allow table to load with defaults
+    }
+}
+
 // Helper to locate the imported media's actual path in the project tree
 function findMediaPathByName(nodes, filename) {
   if (!Array.isArray(nodes)) return null;

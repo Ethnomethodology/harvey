@@ -14,8 +14,32 @@ use quick_xml;
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
+// Ensure db_handler is appropriately used or imported.
+// If db_handler is already imported as `super::db_handler`, then specific functions might need to be brought into scope if not covered by `self`.
+// However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
+// The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
 use tauri::Emitter;
+
+// --- Table Layout Preferences Commands ---
+#[tauri::command]
+pub async fn save_table_layout_prefs(table_path: String, layout_json: String) -> Result<(), String> {
+    db_handler::save_table_layout_preferences(&table_path, &layout_json)
+        .map_err(|e| {
+            log::error!("Failed to save table layout prefs for {}: {}", table_path, e);
+            e.to_string()
+        })
+}
+
+#[tauri::command]
+pub async fn load_table_layout_prefs(table_path: String) -> Result<Option<String>, String> {
+    db_handler::load_table_layout_preferences(&table_path)
+        .map_err(|e| {
+            log::error!("Failed to load table layout prefs for {}: {}", table_path, e);
+            e.to_string()
+        })
+}
+// --- End Table Layout Preferences Commands ---
 
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {

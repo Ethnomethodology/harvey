@@ -2,7 +2,10 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
-    import { loadTableData } from '$lib/services/projectService.js';
+    import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs } from '$lib/services/projectService.js'; // Added new functions
+    import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
+    import { get } from 'svelte/store'; // To read store value
+    import { sep } from '@tauri-apps/api/path'; // For path manipulation
 
     export let tablePath = '';
 
@@ -46,6 +49,27 @@
             cell.getElement().classList.toggle('cell-highlighted-placeholder');
          }
      }
+
+    function getRelativePath(absolutePath, baseDir) {
+        if (!absolutePath || !baseDir) return null;
+        let relativePath = absolutePath;
+        if (absolutePath.startsWith(baseDir)) {
+            relativePath = absolutePath.substring(baseDir.length);
+            if (relativePath.startsWith(sep) || relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+                relativePath = relativePath.substring(1);
+            }
+        }
+        return relativePath.replace(/\\/g, '/'); // Normalize to forward slashes
+    }
+
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
 
     async function initializeTable(pathForTable) {
         if (!pathForTable || !tableContainer) {
@@ -94,11 +118,56 @@
                  return;
             }
 
-            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`); // DEBUG
+            const projectBaseDir = get(project)?.baseDirectory;
+            if (!projectBaseDir) {
+                console.error("[TableViewerPanel] Project baseDirectory not available from store. Cannot determine relative path for layout prefs.");
+                // Proceed without layout prefs, or handle error more gracefully
+                error = "Project configuration error: base directory missing.";
+                isLoading = false;
+                currentLoadedPath = null;
+                return;
+            }
+            const relativeTablePath = getRelativePath(pathForTable, projectBaseDir);
+
+            if (!relativeTablePath) {
+                console.error(`[TableViewerPanel] Could not determine relative path for ${pathForTable} against base ${projectBaseDir}`);
+                error = "Error determining asset relative path.";
+                isLoading = false;
+                currentLoadedPath = null; // Reset if failed
+                return;
+            }
+            console.debug(`[TableViewerPanel] Absolute path: ${pathForTable}, Relative path for DB: ${relativeTablePath}`);
+
+
+            let savedLayout = null;
+            try {
+                savedLayout = await loadTableLayoutPrefs(relativeTablePath);
+                if (savedLayout) {
+                    console.debug(`[TableViewerPanel] Loaded saved layout for ${relativeTablePath}:`, savedLayout);
+                }
+            } catch (e) {
+                console.error(`[TableViewerPanel] Error loading saved layout for ${currentLoadedPath}:`, e);
+                // Continue with default layout
+            }
+
+            let initialLayoutMode = "fitDataTable"; // Default
+            if (!savedLayout) {
+                if (relativeTablePath && relativeTablePath.toLowerCase().endsWith('.csv')) {
+                    initialLayoutMode = "fitDataStretch"; // Stretch for CSVs if no saved layout
+                    console.debug(`[TableViewerPanel] No saved layout for CSV ${relativeTablePath}, using ${initialLayoutMode}.`);
+                } else if (relativeTablePath) {
+                    console.debug(`[TableViewerPanel] No saved layout for ${relativeTablePath}, using default ${initialLayoutMode}.`);
+                }
+            } else {
+                initialLayoutMode = "fitData"; // Use fitData if layout is loaded to respect saved widths
+                console.debug(`[TableViewerPanel] Saved layout found for ${relativeTablePath}, using ${initialLayoutMode}.`);
+            }
+
+            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable} (relative: ${relativeTablePath})`); // DEBUG
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitDataTable", // Changed back from fitColumns
-                columns: generateColumns(tableData),
+                layout: initialLayoutMode,
+                columns: generateColumns(tableData, savedLayout),
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
@@ -109,6 +178,48 @@
                 paginationSize: 20,
                 paginationMode: 'local',
             });
+
+            const saveCurrentTableLayout = debounce(async () => {
+                if (!tabulatorInstance || !currentLoadedPath) return;
+
+                const baseDirForSave = get(project)?.baseDirectory;
+                if (!baseDirForSave) {
+                    console.error("[TableViewerPanel saveLayout] baseDirectory not available. Cannot save layout.");
+                    return;
+                }
+                const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
+                if (!relativePathForSave) {
+                    console.error(`[TableViewerPanel saveLayout] Could not determine relative path for ${currentLoadedPath}. Cannot save layout.`);
+                    return;
+                }
+
+                console.debug(`[TableViewerPanel] Attempting to save layout for ${relativePathForSave} (abs: ${currentLoadedPath})`);
+                try {
+                    const columnDefinitions = tabulatorInstance.getColumnDefinitions();
+                    const layoutToSave = {
+                        columns: {},
+                        // defaultColumnWidth: tabulatorInstance.options.columnDefaults.width, // Or some other default
+                    };
+                    columnDefinitions.forEach((colDef, index) => {
+                        if (colDef.field) { // Ensure field exists
+                            layoutToSave.columns[colDef.field] = {
+                                width: colDef.width || null, // Store actual width; null if not set
+                                order: index,
+                                visible: colDef.visible, // Store visibility
+                            };
+                        }
+                    });
+                    await saveTableLayoutPrefs(relativePathForSave, JSON.stringify(layoutToSave));
+                    console.info(`[TableViewerPanel] Layout saved for ${relativePathForSave}`);
+                } catch (error) {
+                    console.error(`[TableViewerPanel] Failed to save layout for ${relativePathForSave}:`, error);
+                }
+            }, 750); // Debounce for 750ms
+
+            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
+            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
+            // tabulatorInstance.on("columnVisibilityChanged", saveCurrentTableLayout);
+
 
             tabulatorInstance.on("rowClick", function(e, row){
                  console.debug("Row Clicked:", row.getData()); // DEBUG
@@ -229,20 +340,58 @@
         }
     }
 
-    // Function to generate column definitions (Unchanged)
-    function generateColumns(data) {
+    // Function to generate column definitions
+    function generateColumns(data, savedLayoutObj) { // Added savedLayoutObj
         if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}]; // Return a placeholder if no data
         const headers = Object.keys(data[0]);
-        return headers.map(header => ({
-            title: header,
-            field: header,
-            headerFilter: "input",
-            sorter: inferSorter(data, header),
-            formatter: "textarea", // Added for text wrapping
-        }));
+        let columnDefs = headers.map(header => {
+            const colDef = {
+                title: header,
+                field: header,
+                headerFilter: "input",
+                sorter: inferSorter(data, header),
+                formatter: "textarea",
+            };
+
+            if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
+                const savedCol = savedLayoutObj.columns[header];
+                if (typeof savedCol.width === 'number') {
+                    colDef.width = savedCol.width;
+                }
+                // 'visible' could be handled here if implemented: colDef.visible = savedCol.visible;
+                // Note: Tabulator handles column visibility directly, this saved 'visible' state
+                // would primarily be for initially hiding columns if that feature is added.
+                // If a column was saved as visible:false, Tabulator might need specific setup
+                // or you might filter them out before passing to Tabulator if it doesn't hide them by default from def.
+            }
+            return colDef;
+        });
+
+        if (savedLayoutObj && savedLayoutObj.columns) {
+            columnDefs.sort((a, b) => {
+                const orderA = savedLayoutObj.columns[a.field]?.order ?? Infinity;
+                const orderB = savedLayoutObj.columns[b.field]?.order ?? Infinity;
+                return orderA - orderB;
+            });
+             // Apply visibility based on saved layout *after* sorting by order
+            // This is important if Tabulator doesn't automatically hide columns based on `visible: false` in the definition
+            // upon initial load. However, Tabulator usually respects `visible: false` in column definitions.
+            // If direct manipulation is needed:
+            // columnDefs = columnDefs.filter(colDef => {
+            //     const savedCol = savedLayoutObj.columns[colDef.field];
+            //     return savedCol ? savedCol.visible !== false : true; // Default to visible if not in saved layout
+            // });
+            // Or, to set the visible property for Tabulator to interpret:
+            columnDefs.forEach(colDef => {
+                if (savedLayoutObj.columns[colDef.field] && typeof savedLayoutObj.columns[colDef.field].visible === 'boolean') {
+                    colDef.visible = savedLayoutObj.columns[colDef.field].visible;
+                }
+            });
+        }
+        return columnDefs;
     }
 
-     // Very basic type inference for better default sorting (Unchanged)
+     // Very basic type inference for better default sorting
      function inferSorter(data, field) {
          if (!data || data.length === 0 || !data[0].hasOwnProperty(field)) return "string";
          const firstValue = data[0][field];
