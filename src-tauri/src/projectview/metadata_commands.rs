@@ -119,6 +119,38 @@ pub async fn create_custom_field_definition_command(
 }
 
 #[tauri::command]
+pub async fn delete_custom_field_definition_command(
+    _app_handle: AppHandle, // Or app_handle if you plan to use it
+    project_id: String,
+    field_key: String,
+) -> Result<(), String> {
+    debug!(
+        "[CMD] delete_custom_field_definition_command for project_id: {}, field_key: {}",
+        project_id, field_key
+    );
+
+    match crate::projectview::db_handler::delete_custom_field_definition(&project_id, &field_key) {
+        Ok(_) => {
+            info!(
+                "[CMD] Custom field definition deleted successfully for project_id: {}, field_key: {}",
+                project_id, field_key
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!(
+                "[CMD] Error deleting custom field definition for project_id: {}, field_key: {}: {}",
+                project_id, field_key, e
+            );
+            Err(format!(
+                "Failed to delete custom field definition '{}' for project '{}': {}",
+                field_key, project_id, e
+            ))
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn get_all_custom_field_definitions_command(
     _app_handle: AppHandle,
     project_id: String,

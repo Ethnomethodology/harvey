@@ -10,7 +10,28 @@
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
-    import { customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js';
+    import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
+
+    const TRASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47ZM8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z"/></svg>`;
+
+    async function handleDeleteCustomField(fieldKey) {
+        const confirmed = await confirm(
+            'Are you sure you want to delete this custom field definition? This will remove it from the project and cannot be reversed. Any data stored in this field for assets will also be effectively orphaned.',
+            { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }
+        );
+        if (confirmed) {
+            try {
+                console.debug(`[LeftInfoPanel] User confirmed deletion for fieldKey: ${fieldKey}`);
+                await deleteDefinition(fieldKey); // This already calls loadAllDefinitions
+                await message('Custom field definition deleted successfully.', { title: 'Success' });
+            } catch (error) {
+                console.error(`[LeftInfoPanel] Error deleting custom field definition ${fieldKey}:`, error);
+                await message(`Failed to delete custom field: ${error.message || error}`, { title: 'Error', type: 'error' });
+            }
+        } else {
+            console.debug(`[LeftInfoPanel] User cancelled deletion for fieldKey: ${fieldKey}`);
+        }
+    }
 
     // Helper function to get details of the original asset
     async function getOriginalAssetDetails(selectedPath, projectStore) {
@@ -855,7 +876,16 @@
                 {#if isEditing}
                     {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
-                            <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
+                            <div class="flex justify-between items-center mb-1">
+                                <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
+                                <button
+                                    on:click={() => handleDeleteCustomField(field.key)}
+                                    title={`Delete '${field.name || field.key}' definition`}
+                                    class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500"
+                                >
+                                    {@html TRASH_ICON_SVG}
+                                </button>
+                            </div>
                             {#if field.type === 'small_text'}
                                 <input
                                     type="text"

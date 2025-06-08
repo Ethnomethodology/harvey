@@ -134,6 +134,37 @@ export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr) { 
     }
 }
 
+/**
+ * Deletes a custom field definition via a backend command and then refreshes the list.
+ * @param {string} fieldKey - The unique key for the field to be deleted.
+ * @returns {Promise<{success: boolean}>} A promise that resolves to an object indicating success.
+ * @throws {Error} If the backend command fails or projectId is not found, an error is thrown.
+ */
+export async function deleteDefinition(fieldKey) {
+    const projectId = getCurrentProjectId();
+
+    if (!projectId) {
+        const errorMsg = `[customFieldStore] Cannot delete definition: No active project or project ID could not be determined for fieldKey: ${fieldKey}`;
+        console.error(errorMsg);
+        throw new Error("Cannot delete definition: Project ID not found."); // User-facing
+    }
+
+    console.debug(`[customFieldStore] Attempting to delete definition for projectId ${projectId}, key: '${fieldKey}'`);
+    try {
+        await invoke('delete_custom_field_definition_command', {
+            projectId,
+            fieldKey
+        });
+        console.info(`[customFieldStore] Definition deleted successfully for projectId ${projectId}, key: ${fieldKey}`);
+        await loadAllDefinitions(); // Refresh the list
+        return { success: true };
+    } catch (err) {
+        const errorMessage = err.message || String(err);
+        console.error(`[customFieldStore] Error deleting definition for projectId ${projectId}, key ${fieldKey}:`, errorMessage);
+        throw new Error(`Failed to delete custom field '${fieldKey}': ${errorMessage}`);
+    }
+}
+
 // Example of how to initialize the store when the app loads,
 // though this might be better placed in a root component like App.svelte or a layout file.
 // loadAllDefinitions(); // Auto-load on store initialization - commented out, should be called from UI layer.
