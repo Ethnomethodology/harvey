@@ -13,16 +13,16 @@
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
-        console.log(`[TableView] Forwarding event: ${event.type}`);
+        console.debug(`[TableView] Forwarding event: ${event.type}`); // DEBUG
 		dispatch(event.type, event.detail);
 	}
 
     onMount(() => {
-		console.log('[TableView] Component container mounted. Table path:', itemPath);
+		console.debug('[TableView] Component container mounted. Table path:', itemPath); // DEBUG
 	});
 
     $: { // Log when path changes
-        console.log(`[TableView] Path is now ${itemPath}`);
+        console.debug(`[TableView] Path is now ${itemPath}`); // DEBUG
     }
 
 </script>

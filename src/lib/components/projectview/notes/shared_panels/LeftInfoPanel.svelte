@@ -15,7 +15,7 @@
     // Helper function to get details of the original asset
     async function getOriginalAssetDetails(selectedPath, projectStore) {
         if (!selectedPath || !projectStore || !projectStore.baseDirectory) {
-            console.warn('[getOriginalAssetDetails] Missing selectedPath or projectStore data.');
+            console.warn('[LeftInfoPanel] getOriginalAssetDetails: Missing selectedPath or projectStore data.'); // Kept as warn
             const fallbackName = selectedPath ? await basename(selectedPath) : 'Unknown.file';
             return {
                 originalRelativePath: selectedPath, // Fallback, might not be relative
@@ -81,7 +81,7 @@
                                 originalFileName = docFile.name;
                                 originalType = await getFileExtname(originalFileName).then(ext => ext ? ext.toLowerCase() : 'unknown');
                                 isView = true;
-                                console.log(`[getOriginalAssetDetails] Identified original asset for JSON view: ${originalFileName} (Rel: ${originalRelativePath})`);
+                                console.debug(`[LeftInfoPanel] getOriginalAssetDetails: Identified original asset for JSON view: ${originalFileName} (Rel: ${originalRelativePath})`); // Downgraded
                                 break; // Found original, break from docFile loop
                             }
                         }
@@ -158,16 +158,16 @@
     let displayableCustomFields = []; // For read mode
 
     onMount(async () => {
-        console.log('[LeftInfoPanel] Mounted.');
+        console.debug('[LeftInfoPanel] Mounted.'); // Downgraded
         previousSelectedItemPath = null;
-        console.log('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore);
+        console.debug('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore); // Downgraded
         try {
-            console.log('[LeftInfoPanel onMount] Loading all custom field definitions...');
+            console.debug('[LeftInfoPanel onMount] Loading all custom field definitions...'); // Downgraded
             await loadAllDefinitions();
-            console.log('[LeftInfoPanel onMount] Custom field definitions loaded.');
+            console.info('[LeftInfoPanel onMount] Custom field definitions loaded.'); // Kept as info - important one-time setup
         } catch (error) {
-            console.error('[LeftInfoPanel onMount] Error loading custom field definitions:', error);
-            message(`Error loading custom field definitions: ${error.message || error}`, { title: 'Error', type: 'error' });
+            console.error('[LeftInfoPanel onMount] Error loading custom field definitions:', error); // Keep as error
+            message(`Error loading custom field definitions: ${error.message || error}`, { title: 'Error', type: 'error' }); // Keep for user
         }
     });
 
@@ -179,12 +179,12 @@
         }
 
         if (!assetRelativePath) {
-            console.warn('[LeftInfoPanel] loadMetadata called with no assetRelativePath.');
+            console.warn('[LeftInfoPanel] loadMetadata called with no assetRelativePath.'); // Keep as warn
             return;
         }
 
         try {
-            console.log(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`);
+            console.debug(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`); // Downgraded
             const result = await invoke('get_asset_metadata_command', { assetRelativePath: assetRelativePath });
 
             if (result) {
@@ -220,9 +220,9 @@
                     asset_type: currentItemType, // Use currentItemType which is already based on original asset
                     version: "db_1.0"
                 };
-                console.log('[LeftInfoPanel] Metadata loaded from DB:', currentFileMetadata);
+                console.debug('[LeftInfoPanel] Metadata loaded from DB for:', assetRelativePath); // Downgraded, removed full object log
             } else {
-                console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath);
+                console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath); // Keep as warn
                 // assetRelativePath is original relative path
                 const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath);
                 const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath);
@@ -251,12 +251,12 @@
                 duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
             };
             fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_error" };  // Here, currentFileMetadata.db_absolute_file_path is originalAbsolutePathToUse
-            await message(`Error loading metadata: ${error}`, { title: 'Load Error', type: 'error' });
+            await message(`Error loading metadata: ${error}`, { title: 'Load Error', type: 'error' }); // Keep for user
         }
 
         // Fallback if currentFileMetadata is still null after try-catch
         if (!currentFileMetadata) { // This block might be redundant if currentOriginalAssetDetails is guaranteed to be set before loadMetadata is called.
-            console.warn('[LeftInfoPanel] currentFileMetadata is null, creating fallback structure (should be rare if reactive flow is correct).');
+            console.warn('[LeftInfoPanel] currentFileMetadata is null after load attempt, creating fallback structure for:', assetRelativePath); // Keep as warn
             const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath || 'Unknown.file').catch(() => 'Unknown.file');
             const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory && assetRelativePath ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath || '');
 
@@ -273,22 +273,22 @@
     }
 
     function toggleEditMode() {
-        console.log('[LeftInfoPanel] toggleEditMode called. isEditing before:', isEditing);
+        console.debug('[LeftInfoPanel] toggleEditMode called. isEditing before:', isEditing); // Downgraded
         isEditing = !isEditing;
-        console.log('[LeftInfoPanel] isEditing after:', isEditing);
+        console.debug('[LeftInfoPanel] isEditing after:', isEditing); // Downgraded
     }
 
     async function handleSaveMetadata() {
-        console.log('[LeftInfoPanel] handleSaveMetadata called.');
+        console.debug('[LeftInfoPanel] handleSaveMetadata called.'); // Downgraded
         let renameProcessed = false;
         if (!currentFileMetadata || !currentFileMetadata.file_path) { // file_path is the relative path (DB key)
-            console.error('[LeftInfoPanel] Save error: Missing file_path in currentFileMetadata.');
-            await message('Cannot save: File path information is missing.', { title: 'Save Error', type: 'error' });
+            console.error('[LeftInfoPanel] Save error: Missing file_path in currentFileMetadata.'); // Keep as error
+            await message('Cannot save: File path information is missing.', { title: 'Save Error', type: 'error' }); // Keep for user
             return;
         }
         if (!currentItemType) {
-            console.error('[LeftInfoPanel] Save error: currentItemType is not set.');
-            await message('Cannot save: Item type is unknown.', { title: 'Save Error', type: 'error' });
+            console.error('[LeftInfoPanel] Save error: currentItemType is not set.'); // Keep as error
+            await message('Cannot save: Item type is unknown.', { title: 'Save Error', type: 'error' }); // Keep for user
             return;
         }
 
@@ -360,10 +360,10 @@
                 const originalAssetAbsolutePath = currentFileMetadata.db_absolute_file_path;
 
                 if (!originalAssetAbsolutePath || originalAssetAbsolutePath.trim() === '') {
-                    console.error('[LeftInfoPanel] Save error: Original asset absolute path is missing or empty in currentFileMetadata.db_absolute_file_path.');
-                    console.error('[LeftInfoPanel] currentFileMetadata details:', JSON.stringify(currentFileMetadata));
-                    console.error('[LeftInfoPanel] currentOriginalAssetDetails:', JSON.stringify(currentOriginalAssetDetails));
-                    await message('Cannot save: Original asset absolute path could not be determined. Please try reloading the item or checking project integrity.', { title: 'Save Error', type: 'error' });
+                    console.error('[LeftInfoPanel] Save error: Original asset absolute path is missing or empty in currentFileMetadata.db_absolute_file_path.'); // Keep as error
+                    // console.error('[LeftInfoPanel] currentFileMetadata details:', JSON.stringify(currentFileMetadata)); // Removed verbose object log
+                    // console.error('[LeftInfoPanel] currentOriginalAssetDetails:', JSON.stringify(currentOriginalAssetDetails)); // Removed verbose object log
+                    await message('Cannot save: Original asset absolute path could not be determined. Please try reloading the item or checking project integrity.', { title: 'Save Error', type: 'error' }); // Keep for user
                     isEditing = true; // Keep editing mode
                     return; // Do not proceed
                 }
@@ -373,8 +373,7 @@
                 // A simple check is if it contains the project's base directory, or starts with '/' or a drive letter e.g. C:\
                 // This is a basic sanity check. `resolve` in `getOriginalAssetDetails` should ensure it's absolute.
                 if (!originalAssetAbsolutePath.startsWith($project.baseDirectory) && !originalAssetAbsolutePath.startsWith('/') && !/^[a-zA-Z]:\\/.test(originalAssetAbsolutePath)) {
-                     console.warn(`[LeftInfoPanel] Save warning: The determined absolute path "${originalAssetAbsolutePath}" might not be truly absolute. Proceeding, but this could indicate an issue if it's not an intended external path.`);
-                     // Depending on strictness, one might abort here too. For now, a warning.
+                     console.warn(`[LeftInfoPanel] Save warning: The determined absolute path "${originalAssetAbsolutePath}" might not be truly absolute.`); // Keep as warn
                 }
 
                 const metadataPayloadForDb = {
@@ -397,11 +396,10 @@
 
                 const customFieldsToSaveForDb = editableMetadata.customFields || [];
 
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetRelativePath (key for command):', assetKeyForDb); // Should be original relative path
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayload.file_path (absolute path in payload):', originalAssetAbsolutePath);
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - metadataPayloadForDb:', JSON.stringify(metadataPayloadForDb));
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - customFieldsPayload:', JSON.stringify(customFieldsToSaveForDb));
-                console.log('[LeftInfoPanel] CRITICAL SAVE CHECK - assetType:', currentItemType);
+                console.debug('[LeftInfoPanel] Save Details - Key:', assetKeyForDb, 'AbsPath:', originalAssetAbsolutePath, 'Type:', currentItemType); // Downgraded critical checks
+                // console.debug('[LeftInfoPanel] Save Payload - Metadata:', JSON.stringify(metadataPayloadForDb)); // Downgraded verbose object log
+                // console.debug('[LeftInfoPanel] Save Payload - Custom Fields:', JSON.stringify(customFieldsToSaveForDb)); // Downgraded verbose object log
+
 
                 try {
                     await invoke('update_asset_metadata_command', {
@@ -427,22 +425,22 @@
                         fullLoadedMetadataObject.customFields = currentFileMetadata.customFields;
                     }
                     isEditing = false;
-                    await message('Metadata saved successfully!', { title: 'Success' });
+                    await message('Metadata saved successfully!', { title: 'Success' }); // Keep for user
 
                     // Explicitly reload metadata to refresh UI with any backend-derived changes (e.g. last_modified)
                     // assetKeyForDb is the original relative path, which is what loadMetadata expects
-                    console.log('[LeftInfoPanel] Explicitly reloading metadata after save for:', assetKeyForDb);
+                    console.info('[LeftInfoPanel] Explicitly reloading metadata after save for:', assetKeyForDb); // Kept as info
                     await loadMetadata(assetKeyForDb);
 
                 } catch (err) {
-                    console.error('[LeftInfoPanel] Error saving metadata to DB:', err);
-                    await message(`Error saving metadata: ${err}. Please check console.`, { title: 'Save Failed', type: 'error' });
+                    console.error('[LeftInfoPanel] Error saving metadata to DB:', err); // Keep as error
+                    await message(`Error saving metadata: ${err}. Please check console.`, { title: 'Save Failed', type: 'error' }); // Keep for user
                     // isEditing = true; // Optionally keep editing mode
                 }
             }
         } catch (err) {
-            console.error('[LeftInfoPanel] General error in handleSaveMetadata:', err);
-            await message(`An unexpected error occurred: ${err.message || err}.`, { title: 'Error', type: 'error' });
+            console.error('[LeftInfoPanel] General error in handleSaveMetadata:', err); // Keep as error
+            await message(`An unexpected error occurred: ${err.message || err}.`, { title: 'Error', type: 'error' }); // Keep for user
             isEditing = true;
         }
     }
@@ -454,27 +452,24 @@
     // Main reactive block for deriving current asset details and loading metadata
     $: {
         // Log selectedItemPathInStore changes directly in the reaction if needed, or rely on onMount + path change logs
-        // This $: block will run when selectedItemPathInStore (or $project.baseDirectory) changes.
 
         let newCurrentRelativePath = null;
         let newCurrentItemType = null;
-        let newOriginalAssetDetails = null;
+        // let newOriginalAssetDetails = null; // Not needed here, use currentOriginalAssetDetails directly after await
 
         (async () => {
-            // Log change of selectedItemPathInStore that triggers this async block
-            console.log('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', selectedItemPathInStore);
+            const currentSelectedPathFromStore = selectedItemPathInStore; // Capture for this async operation
+            console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore); // Downgraded
 
-            if (selectedItemPathInStore && $project && $project.baseDirectory) {
-                newOriginalAssetDetails = await getOriginalAssetDetails(selectedItemPathInStore, $project);
-                currentOriginalAssetDetails = newOriginalAssetDetails;
-                console.log('[LeftInfoPanel Reactive] currentOriginalAssetDetails determined:', currentOriginalAssetDetails);
+            if (currentSelectedPathFromStore && $project && $project.baseDirectory) {
+                const newDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project);
+                // currentOriginalAssetDetails = newDetails; // Assign later, more strategically
+                console.debug('[LeftInfoPanel Reactive] currentOriginalAssetDetails determined:', newDetails); // Downgraded, removed full object log
 
-
-                if (newOriginalAssetDetails) {
-                    newCurrentRelativePath = newOriginalAssetDetails.originalRelativePath;
-                    // Log newCurrentRelativePath when it's derived
-                    console.log('[LeftInfoPanel Reactive] originalRelativePath derived by getOriginalAssetDetails is:', newCurrentRelativePath);
-                    const originalExt = newOriginalAssetDetails.originalType;
+                if (newDetails) {
+                    newCurrentRelativePath = newDetails.originalRelativePath;
+                    console.debug('[LeftInfoPanel Reactive] originalRelativePath derived is:', newCurrentRelativePath); // Downgraded
+                    const originalExt = newDetails.originalType;
 
                     // --- Start of new currentItemType derivation ---
                     if (AUDIO_EXTENSIONS.has(originalExt) || VIDEO_EXTENSIONS.has(originalExt)) {
@@ -501,53 +496,62 @@
                         if (isImpTrans) {
                             newCurrentItemType = 'imported_transcript';
                         } else {
-                            newCurrentItemType = 'doc'; // Covers docx, pdf, txt, md, and also standalone json if not a view
+                            newType = 'doc'; // Covers docx, pdf, txt, md, and also standalone json if not a view
                         }
                     } else if (originalExt === 'csv' || originalExt === 'xlsx') {
-                        newCurrentItemType = 'table';
+                        newType = 'table';
                     } else {
-                        newCurrentItemType = 'unknown';
+                        newType = 'unknown';
                     }
-                    console.log(`[LeftInfoPanel] Derived currentItemType: ${newCurrentItemType} for original asset type: ${originalExt} (Path: ${newCurrentRelativePath})`);
+                    // console.log(`[LeftInfoPanel] Derived currentItemType: ${newType} for original asset type: ${originalExt} (Path: ${newCurrentRelativePath})`); // Can be debug if needed
                     // --- End of new currentItemType derivation ---
+                    if (currentItemType !== newType) {
+                        currentItemType = newType;
+                         console.debug(`[LeftInfoPanel Reactive] currentItemType updated to: ${currentItemType}`); // Downgraded
+                    }
 
-                } else {
-                    console.warn(`[LeftInfoPanel] getOriginalAssetDetails returned null/undefined for ${selectedItemPathInStore}.`);
-                }
-            } else if (selectedItemPathInStore) {
-                console.warn(`[LeftInfoPanel] Selected path ${selectedItemPathInStore} exists, but project or baseDirectory might be missing. Cannot derive original asset details.`);
-            }
 
-            // Update currentItemType reactively
-            if (currentItemType !== newCurrentItemType) {
-                currentItemType = newCurrentItemType;
-            }
-
-            // Logic for loading metadata based on path changes (adapted from existing)
-            if (newCurrentRelativePath !== previousSelectedItemPath) {
-                // This log is good and indicates the key change for metadata loading
-                console.log(`[LeftInfoPanel Reactive] Original relative path for metadata (previousSelectedItemPath) has changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`);
-                if (isEditing) {
-                    console.log('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.');
-                    isEditing = false;
+                    if (newCurrentRelativePath && newCurrentRelativePath !== previousSelectedItemPath) {
+                        console.info(`[LeftInfoPanel Reactive] Path changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`); // Kept as info
+                        if (isEditing) {
+                            console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.'); // Downgraded
+                            isEditing = false;
+                        }
+                        currentOriginalAssetDetails = newDetails; // Set before loadMetadata
+                        await loadMetadata(newCurrentRelativePath);
+                        previousSelectedItemPath = newCurrentRelativePath; // CRITICAL: Update after load
+                    } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
+                        console.info(`[LeftInfoPanel Reactive] Path became null (was '${previousSelectedItemPath}'). Resetting metadata.`); // Kept as info
+                        currentFileMetadata = null;
+                        fullLoadedMetadataObject = null;
+                        currentOriginalAssetDetails = null;
+                        currentItemType = null;
+                        if (isEditing) isEditing = false;
+                        previousSelectedItemPath = null;
+                    } else if (newCurrentRelativePath && newCurrentRelativePath === previousSelectedItemPath) {
+                        if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newDetails)) {
+                             currentOriginalAssetDetails = newDetails;
+                             console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.'); // Downgraded
+                        }
+                    }
+                } else { // newDetails is null
+                    console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`); // Keep as warn
+                    if (previousSelectedItemPath !== null) { // If there was a path before, now it's gone
+                        currentFileMetadata = null;
+                        fullLoadedMetadataObject = null;
+                        currentOriginalAssetDetails = null;
+                        currentItemType = null;
+                        if (isEditing) isEditing = false;
+                        previousSelectedItemPath = null;
+                    }
                 }
-                if (newCurrentRelativePath) {
-                    // Ensure loadMetadata is called with the new original relative path
-                    loadMetadata(newCurrentRelativePath);
-                } else {
-                    currentFileMetadata = null;
-                    fullLoadedMetadataObject = null;
-                    // currentItemType = null; // Already handled above by newCurrentItemType
-                }
-                previousSelectedItemPath = newCurrentRelativePath; // Store the original relative path
-            } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
-                console.log(`[LeftInfoPanel] Original relative path became null (was '${previousSelectedItemPath}'). Resetting metadata.`);
+            } else if (!currentSelectedPathFromStore && previousSelectedItemPath !== null) {
+                console.info(`[LeftInfoPanel Reactive] No item selected (currentSelectedPathFromStore is null). Resetting metadata.`); // Kept as info
                 currentFileMetadata = null;
                 fullLoadedMetadataObject = null;
-                // currentItemType = null; // Already handled by newCurrentItemType
-                if (isEditing) {
-                    isEditing = false;
-                }
+                currentOriginalAssetDetails = null;
+                currentItemType = null;
+                if (isEditing) isEditing = false;
                 previousSelectedItemPath = null;
             }
         })();

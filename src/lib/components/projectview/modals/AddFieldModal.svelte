@@ -7,7 +7,7 @@
   export let showModal = false;
   export let currentItemType = ''; // e.g., "doc", "image", "project" (if 'project' is a possibility for currentItemType)
 
-  export let currentItemType = '';
+  // Removed duplicate export let currentItemType = '';
 
   let userInputFieldName = '';
   let generatedFieldKey = '';
@@ -55,7 +55,9 @@
       await addDefinition(finalFieldKey, finalFieldName, fieldType, selectedScope, fieldValue.trim() || null);
       closeModalAndDispatchClose(); // Close modal on success
     } catch (err) {
-      console.error("Error adding custom field definition:", err);
+      // The error from addDefinition is already logged in the store.
+      // Here, we just inform the user.
+      // console.error("Error adding custom field definition in AddFieldModal:", err); // Redundant if store logs it.
       await message(err.message || 'Failed to add custom field definition.', { title: 'Error', type: 'error' });
       // Do not close modal on error
     }

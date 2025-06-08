@@ -22,14 +22,14 @@
     // Placeholder functions (Unchanged)
     function openRowForm(row) {
         const rowData = row.getData();
-        console.log("Placeholder: Open form view for row:", rowData);
+        console.log("Placeholder: Open form view for row:", rowData); // Keep as is (placeholder)
         alert(`Open Form View (Placeholder)\n\nRow Data:\n${JSON.stringify(rowData, null, 2)}`);
     }
     function addComment(cell) {
         const cellValue = cell.getValue();
         const columnName = cell.getColumn().getField();
         const rowData = cell.getRow().getData();
-        console.log(`Placeholder: Add comment to cell (${columnName}: ${cellValue})`, rowData);
+        console.log(`Placeholder: Add comment to cell (${columnName}: ${cellValue})`, rowData); // Keep as is (placeholder)
         const comment = prompt(`Add comment for "${columnName}" in this row:`, "");
         if (comment !== null) {
             alert(`Comment Added (Placeholder):\n"${comment}"`);
@@ -39,7 +39,7 @@
         const cellValue = cell.getValue();
         const columnName = cell.getColumn().getField();
         const rowData = cell.getRow().getData();
-        console.log(`Placeholder: Add highlight to cell (${columnName}: ${cellValue})`, rowData);
+        console.log(`Placeholder: Add highlight to cell (${columnName}: ${cellValue})`, rowData); // Keep as is (placeholder)
          const highlight = confirm(`Highlight this cell?`);
          if (highlight) {
              alert(`Cell Highlighted (Placeholder)`);
@@ -49,30 +49,30 @@
 
     async function initializeTable(pathForTable) {
         if (!pathForTable || !tableContainer) {
-            console.log('[TableViewerPanel initializeTable] Skipping: no path or container.', { pathForTable, tableContainerExists: !!tableContainer });
+            console.debug('[TableViewerPanel initializeTable] Skipping: no path or container.', { pathForTable, tableContainerExists: !!tableContainer }); // DEBUG
             isLoading = false; // Ensure loading is false if we skip
             return;
         }
 
         // Prevent re-initialization if already loading or loaded for this path
         if (isLoading && currentLoadedPath === pathForTable) {
-            console.log(`[TableViewerPanel initializeTable] Already loading ${pathForTable}, skipping.`);
+            console.debug(`[TableViewerPanel initializeTable] Already loading ${pathForTable}, skipping.`); // DEBUG
             return;
         }
         if (!isLoading && tabulatorInstance && currentLoadedPath === pathForTable) {
-            console.log(`[TableViewerPanel initializeTable] Table for ${pathForTable} already initialized and loaded.`);
+            console.debug(`[TableViewerPanel initializeTable] Table for ${pathForTable} already initialized and loaded.`); // DEBUG
             return;
         }
 
 
-        console.log(`[TableViewerPanel initializeTable] Initializing for path: ${pathForTable}`);
+        console.info(`[TableViewerPanel initializeTable] Initializing for path: ${pathForTable}`); // INFO
         currentLoadedPath = pathForTable; // Set path being processed
         isLoading = true;
         error = null;
         tableData = [];
 
         if (tabulatorInstance) {
-            console.log('[TableViewerPanel initializeTable] Destroying previous Tabulator instance.');
+            console.debug('[TableViewerPanel initializeTable] Destroying previous Tabulator instance.'); // DEBUG
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
@@ -81,20 +81,20 @@
             tableData = await loadTableData(pathForTable);
 
             if (tableData.length === 0) {
-                console.log('[TableViewerPanel initializeTable] No data returned from loadTableData.');
+                console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.'); // WARN
             }
 
             await tick(); // Ensure DOM is ready if container was re-rendered
 
             if (!tableContainer) {
-                 console.error('[TableViewerPanel initializeTable] Table container element became null during data load for path:', pathForTable);
+                 console.error('[TableViewerPanel initializeTable] Table container element became null during data load for path:', pathForTable); // ERROR
                  error = 'Failed to initialize table viewer: container lost.';
                  isLoading = false;
                  currentLoadedPath = null; // Reset if failed
                  return;
             }
 
-            console.log(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`);
+            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable}`); // DEBUG
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 layout: "fitDataTable", // Changed back from fitColumns
@@ -111,7 +111,7 @@
             });
 
             tabulatorInstance.on("rowClick", function(e, row){
-                 console.log("Row Clicked:", row.getData());
+                 console.debug("Row Clicked:", row.getData()); // DEBUG
             });
 
             // Disable macOS autocorrect/autocomplete on column header filters
@@ -128,7 +128,7 @@
             // After setting up event handlers:
             setTimeout(() => {
                 if (tabulatorInstance && typeof tabulatorInstance.redraw === 'function') {
-                    console.log('[TableViewerPanel initializeTable] Triggering a gentle redraw after short delay.');
+                    console.debug('[TableViewerPanel initializeTable] Triggering a gentle redraw after short delay.'); // DEBUG
                     tabulatorInstance.redraw(); // Using redraw() without 'true' for a less disruptive redraw
                 }
             }, 100); // 100ms delay, can be adjusted
@@ -136,10 +136,10 @@
             const columns = tabulatorInstance.getColumnDefinitions();
             columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder'); // Store actual field names
 
-            console.log(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`);
+            console.info(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`); // INFO
 
         } catch (err) {
-            console.error(`[TableViewerPanel initializeTable] Error for path ${pathForTable}:`, err);
+            console.error(`[TableViewerPanel initializeTable] Error for path ${pathForTable}:`, err); // ERROR
             error = `Failed to load table: ${err.message || err}`;
             currentLoadedPath = null; // Reset if failed
         } finally {
@@ -148,7 +148,7 @@
             if (currentLoadedPath === pathForTable) {
                 isLoading = false;
             }
-            console.log(`[TableViewerPanel initializeTable] Finished for ${pathForTable}. isLoading: ${isLoading}`);
+            console.debug(`[TableViewerPanel initializeTable] Finished for ${pathForTable}. isLoading: ${isLoading}`); // DEBUG
         }
     }
 
@@ -175,14 +175,14 @@
         } else {
             currentMatchIndex = -1;
         }
-        console.log(`Found ${searchMatches.length} rows matching "${term}"`);
+        console.debug(`Found ${searchMatches.length} rows matching "${term}"`); // DEBUG
     }
 
     function clearHighlights() {
         if (tabulatorInstance) {
             tabulatorInstance.deselectRow(); // Deselect all rows
         }
-        console.log("clearHighlights called: deselected all rows.");
+        console.debug("clearHighlights called: deselected all rows."); // DEBUG
     }
 
     async function navigateToMatch(index) {
@@ -206,7 +206,7 @@
                 await rowComponent.scrollTo();
                 await rowComponent.select(); // Select the current row
             } catch (err) {
-                console.error("Error navigating to match:", err);
+                console.error("Error navigating to match:", err); // ERROR
             }
         }
     }
@@ -255,7 +255,7 @@
 
 
     onMount(() => {
-        console.log('[TableViewerPanel] Mounted. Initial Path:', tablePath);
+        console.debug('[TableViewerPanel] Mounted. Initial Path:', tablePath); // DEBUG
         // tableContainer should be available here due to bind:this
         if (tablePath && tableContainer) {
              initializeTable(tablePath);
@@ -267,15 +267,15 @@
     // React to tablePath changes
     $: {
         if (tablePath && tablePath !== currentLoadedPath) {
-            console.log(`[TableViewerPanel reactive] tablePath changed to '${tablePath}'`);
+            console.debug(`[TableViewerPanel reactive] tablePath changed to '${tablePath}'`); // DEBUG
             if (tableContainer) {
                 initializeTable(tablePath);
             } else {
-                console.log(`[TableViewerPanel reactive] Container not ready, deferring init for ${tablePath}`);
+                console.debug(`[TableViewerPanel reactive] Container not ready, deferring init for ${tablePath}`); // DEBUG
                 if (!isLoading) isLoading = true;
             }
         } else if (!tablePath && tabulatorInstance) {
-            console.log(`[TableViewerPanel reactive] tablePath cleared, destroying table`);
+            console.info(`[TableViewerPanel reactive] tablePath cleared, destroying table`); // INFO
             tabulatorInstance.destroy();
             tabulatorInstance = null;
             tableData = [];
@@ -286,7 +286,7 @@
     }
 
     onDestroy(() => {
-        console.log('[TableViewerPanel] Destroyed.');
+        console.debug('[TableViewerPanel] Destroyed.'); // DEBUG
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
@@ -339,7 +339,7 @@
               </svg>
             </button>
             <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    onclick={() => { console.log('TODO: Add new row'); alert('Add Row (Placeholder)'); }}
+                    onclick={() => { console.log('TODO: Add new row placeholder action'); alert('Add Row (Placeholder)'); }} // Keep log for placeholder
                     title="Add New Row">
                 Add Row
             </button>

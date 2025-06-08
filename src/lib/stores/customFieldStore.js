@@ -14,14 +14,14 @@ export const definitionError = writable(null);
 export async function loadAllDefinitions() {
     isLoadingDefinitions.set(true);
     definitionError.set(null);
-    console.log('[customFieldStore] Attempting to load all definitions...');
+    console.debug('[customFieldStore] Attempting to load all definitions...'); // Downgraded
     try {
         const definitions = await invoke('get_all_custom_field_definitions_command');
         customFieldDefinitions.set(definitions || []); // Ensure it's an array, even if null/undefined from backend
-        console.log('[customFieldStore] Definitions loaded successfully:', definitions);
+        console.info('[customFieldStore] Definitions loaded successfully. Count:', definitions?.length || 0); // Info, less verbose
     } catch (err) {
         const errorMessage = err.message || String(err);
-        console.error('[customFieldStore] Error loading definitions:', errorMessage);
+        console.error('[customFieldStore] Error loading definitions:', errorMessage); // Keep error
         definitionError.set(errorMessage);
         customFieldDefinitions.set([]); // Clear definitions on error to avoid displaying stale data
     } finally {
@@ -40,7 +40,7 @@ export async function loadAllDefinitions() {
  * @throws {Error} If the backend command fails, an error is thrown with the message.
  */
 export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr, defaultValue = null) {
-    console.log(`[customFieldStore] Attempting to add definition: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`);
+    console.debug(`[customFieldStore] Attempting to add definition: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`); // Downgraded
     try {
         await invoke('create_custom_field_definition_command', {
             fieldKey,
@@ -49,12 +49,12 @@ export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr, de
             scopeStr,
             defaultValue // This can be null, Option<String> on Rust side handles it
         });
-        console.log('[customFieldStore] Definition added successfully for key:', fieldKey);
+        console.info('[customFieldStore] Definition added successfully for key:', fieldKey); // Keep as info
         await loadAllDefinitions(); // Refresh the list to include the new definition
         return { success: true };
     } catch (err) {
         const errorMessage = err.message || String(err);
-        console.error('[customFieldStore] Error adding definition for key:', fieldKey, errorMessage);
+        console.error('[customFieldStore] Error adding definition for key:', fieldKey, errorMessage); // Keep error
         // Propagate error message for UI handling
         throw new Error(errorMessage);
     }
