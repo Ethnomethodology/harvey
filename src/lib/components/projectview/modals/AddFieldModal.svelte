@@ -116,7 +116,7 @@
             autocomplete="off"
           />
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Field names should be unique within this project. The Field Key will be auto-generated based on this name.
+            Field names should be unique.
           </p>
         </div>
 
