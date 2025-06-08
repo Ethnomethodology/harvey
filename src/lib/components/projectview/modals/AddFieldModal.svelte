@@ -7,36 +7,52 @@
   export let showModal = false;
   export let currentItemType = ''; // e.g., "doc", "image", "project" (if 'project' is a possibility for currentItemType)
 
-  let fieldKey = '';
-  let fieldNameDisplay = '';
-  let fieldType = 'small_text'; // Default to 'small_text'
-  let fieldValue = ''; // This is for the default_value of the definition
-  let selectedScope = 'project'; // Default scope
+  export let currentItemType = '';
+
+  let userInputFieldName = '';
+  let generatedFieldKey = '';
+
+  let fieldType = 'small_text';
+  let fieldValue = '';
+  let selectedScope = 'project';
 
   const dispatch = createEventDispatcher();
 
-  async function handleAdd() {
-    const trimmedFieldKey = fieldKey.trim();
-    const trimmedFieldNameDisplay = fieldNameDisplay.trim();
+  function sanitizeToKey(inputName) {
+    if (!inputName) return '';
+    const trimmed = inputName.trim();
+    if (!trimmed) return '';
 
-    if (!trimmedFieldKey) {
-      await message('Field Key cannot be empty.', { title: 'Validation Error', type: 'error' });
+    return trimmed
+      .toLowerCase()
+      .replace(/\s+/g, '_') // Replace spaces (one or more) with a single underscore
+      .replace(/_+/g, '_')   // Replace multiple underscores with a single underscore
+      .replace(/[^a-z0-9_]/g, '') // Remove any character that is not lowercase alphanumeric or underscore
+      .substring(0, 50); // Max length for key
+  }
+
+  $: generatedFieldKey = sanitizeToKey(userInputFieldName);
+
+  async function handleAdd() {
+    const finalFieldName = userInputFieldName.trim();
+    const finalFieldKey = generatedFieldKey; // Already sanitized and reactively updated
+
+    if (!finalFieldName) {
+      await message('Field Name cannot be empty.', { title: 'Validation Error', type: 'error' });
       return;
     }
-    // Basic validation for fieldKey format (no spaces, alphanumeric + underscore/hyphen)
-    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedFieldKey)) {
-        await message('Field Key can only contain letters, numbers, underscores, and hyphens (no spaces or special characters).', { title: 'Validation Error', type: 'error' });
-        return;
-    }
-    if (!trimmedFieldNameDisplay) {
-      await message('Field Name (Display) cannot be empty.', { title: 'Validation Error', type: 'error' });
+    if (!finalFieldKey) {
+      await message('Field Key cannot be generated from the Field Name. Please ensure it contains alphanumeric characters.', { title: 'Validation Error', type: 'error' });
       return;
+    }
+    // Final check on generated key format, though sanitizeToKey should handle it.
+    if (!/^[a-z0-9_]+$/.test(finalFieldKey) || finalFieldKey.startsWith('_') || finalFieldKey.endsWith('_')) {
+       await message('Generated Field Key is invalid (must be alphanumeric with underscores, not starting/ending with underscore). Please adjust Field Name.', { title: 'Validation Error', type: 'error' });
+       return;
     }
 
     try {
-      // The scopeStr is simply selectedScope. If currentItemType is chosen, selectedScope will hold its value.
-      await addDefinition(trimmedFieldKey, trimmedFieldNameDisplay, fieldType, selectedScope, fieldValue.trim() || null);
-      // addDefinition in store already calls loadAllDefinitions()
+      await addDefinition(finalFieldKey, finalFieldName, fieldType, selectedScope, fieldValue.trim() || null);
       closeModalAndDispatchClose(); // Close modal on success
     } catch (err) {
       console.error("Error adding custom field definition:", err);
@@ -46,12 +62,12 @@
   }
 
   function closeModalAndDispatchClose() {
-    fieldKey = '';
-    fieldNameDisplay = '';
+    userInputFieldName = '';
+    // generatedFieldKey will reset reactively
     fieldType = 'small_text';
     fieldValue = '';
     selectedScope = 'project';
-    dispatch('close'); // Parent controls showModal prop
+    dispatch('close');
   }
 
 
@@ -63,7 +79,7 @@
 {#if showModal}
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
-    on:click={closeModalAndDispatchClose}
+    on:click={closeModalAndDispatchClose} // Use the combined function
     role="dialog"
     aria-modal="true"
     aria-labelledby="addFieldModalTitle"
@@ -76,29 +92,19 @@
 
       <div class="space-y-4">
         <div>
-          <label for="fieldKeyInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Key</label>
+          <label for="userInputFieldName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Name</label>
           <input
             type="text"
-            id="fieldKeyInput"
-            bind:value={fieldKey}
+            id="userInputFieldName"
+            bind:value={userInputFieldName}
             class="{formElementClasses}"
-            placeholder="e.g., case_id, photo_location (unique ID)"
+            placeholder="e.g., Collected Date, Interviewer Name"
             autocorrect="off"
             autocomplete="off"
           />
-        </div>
-
-        <div>
-          <label for="fieldNameDisplayInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Field Name (Display)</label>
-          <input
-            type="text"
-            id="fieldNameDisplayInput"
-            bind:value={fieldNameDisplay}
-            class="{formElementClasses}"
-            placeholder="e.g., Case ID, Photo Location"
-            autocorrect="off"
-            autocomplete="off"
-          />
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Field Key (auto-generated): <span class="font-mono bg-gray-100 dark:bg-gray-700 p-0.5 rounded">{generatedFieldKey || "[will appear here]"}</span>
+          </p>
         </div>
 
         <div>
@@ -174,13 +180,6 @@
         <button
           type="button"
           on:click={closeModalAndDispatchClose}
-          class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          on:click={closeModal}
           class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
         >
           Cancel
