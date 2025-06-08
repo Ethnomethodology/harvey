@@ -84,8 +84,8 @@ pub async fn create_custom_field_definition_command(
     field_key: String,
     field_name: String,
     field_type: String,
-    scope_str: String,
-    default_value: Option<String>
+    scope_str: String
+    // default_value: Option<String> // Removed from signature
 ) -> Result<(), String> {
     debug!("[CMD] create_custom_field_definition_command: key='{}', name='{}', type='{}', scope='{}'",
            field_key, field_name, field_type, scope_str);
@@ -99,7 +99,7 @@ pub async fn create_custom_field_definition_command(
         field_name,
         field_type,
         scope,
-        default_value,
+        default_value: None, // Explicitly set to None
         created_at: current_timestamp.clone(),
         updated_at: current_timestamp,
     };

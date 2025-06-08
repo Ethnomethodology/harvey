@@ -520,7 +520,7 @@
                             console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.');
                             isEditing = false;
                         }
-                        currentOriginalAssetDetails = newOriginalAssetDetails; // USE DECLARED VARIABLE
+                        currentOriginalAssetDetails = newOriginalAssetDetails;
                         await loadMetadata(newCurrentRelativePath);
                         previousSelectedItemPath = newCurrentRelativePath;
                     } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
@@ -532,13 +532,12 @@
                         if (isEditing) isEditing = false;
                         previousSelectedItemPath = null;
                     } else if (newCurrentRelativePath && newCurrentRelativePath === previousSelectedItemPath) {
-                        // Ensure consistent use of newOriginalAssetDetails
                         if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newOriginalAssetDetails)) {
                              currentOriginalAssetDetails = newOriginalAssetDetails;
                              console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.');
                         }
                     }
-                } else { // newOriginalAssetDetails is null
+                } else {
                     console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`);
                     if (previousSelectedItemPath !== null) {
                         currentFileMetadata = null;

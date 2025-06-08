@@ -13,7 +13,7 @@
   let generatedFieldKey = '';
 
   let fieldType = 'small_text';
-  let fieldValue = '';
+  // let fieldValue = ''; // Removed for Default Value
   let selectedScope = 'project';
 
   const dispatch = createEventDispatcher();
@@ -52,7 +52,8 @@
     }
 
     try {
-      await addDefinition(finalFieldKey, finalFieldName, fieldType, selectedScope, fieldValue.trim() || null);
+      // Call addDefinition without the fieldValue (default value)
+      await addDefinition(finalFieldKey, finalFieldName, fieldType, selectedScope);
       closeModalAndDispatchClose(); // Close modal on success
     } catch (err) {
       // The error from addDefinition is already logged in the store.
@@ -67,7 +68,7 @@
     userInputFieldName = '';
     // generatedFieldKey will reset reactively
     fieldType = 'small_text';
-    fieldValue = '';
+    // fieldValue = ''; // Removed
     selectedScope = 'project';
     dispatch('close');
   }
@@ -150,6 +151,8 @@
           </select>
         </div>
 
+        <!-- REMOVED Default Value Section -->
+        <!--
         <div>
           <label for="fieldValueInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Default Value (Optional)</label>
           {#if fieldType === 'small_text'}
@@ -173,8 +176,8 @@
               autocomplete="off"
             ></textarea>
           {/if}
-          <!-- Add inputs for other field types if necessary -->
         </div>
+        -->
       </div>
 
       <!-- Buttons -->

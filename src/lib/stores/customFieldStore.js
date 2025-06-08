@@ -35,21 +35,20 @@ export async function loadAllDefinitions() {
  * @param {string} fieldName - The user-friendly name for the field.
  * @param {string} fieldType - The type of the field (e.g., "small_text").
  * @param {string} scopeStr - The scope string (e.g., "project", "image").
- * @param {string|null} [defaultValue=null] - Optional default value for the field.
  * @returns {Promise<{success: boolean}>} A promise that resolves to an object indicating success.
  * @throws {Error} If the backend command fails, an error is thrown with the message.
  */
-export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr, defaultValue = null) {
-    console.debug(`[customFieldStore] Attempting to add definition: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`); // Downgraded
+export async function addDefinition(fieldKey, fieldName, fieldType, scopeStr) { // Removed defaultValue
+    console.debug(`[customFieldStore] Attempting to add definition: key='${fieldKey}', name='${fieldName}', type='${fieldType}', scope='${scopeStr}'`);
     try {
         await invoke('create_custom_field_definition_command', {
             fieldKey,
             fieldName,
             fieldType,
-            scopeStr,
-            defaultValue // This can be null, Option<String> on Rust side handles it
+            scopeStr
+            // defaultValue field removed from payload
         });
-        console.info('[customFieldStore] Definition added successfully for key:', fieldKey); // Keep as info
+        console.info('[customFieldStore] Definition added successfully for key:', fieldKey);
         await loadAllDefinitions(); // Refresh the list to include the new definition
         return { success: true };
     } catch (err) {
