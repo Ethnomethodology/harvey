@@ -378,20 +378,21 @@ pub fn get_custom_field_definition(project_id: &str, field_key: &str) -> Result<
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT field_key, field_name, field_type, scope, default_value, created_at, updated_at
+        "SELECT project_id, field_key, field_name, field_type, scope, default_value, created_at, updated_at
          FROM custom_field_definitions WHERE project_id = ?1 AND field_key = ?2",
     )?;
 
     let def_option = stmt.query_row(params![project_id, field_key], |row| {
-        let scope_str: String = row.get(3)?;
+        let scope_str: String = row.get(4)?; // Adjusted index
         Ok(CustomFieldDefinition {
-            field_key: row.get(0)?,
-            field_name: row.get(1)?,
-            field_type: row.get(2)?,
+            project_id: row.get(0)?, // Added project_id
+            field_key: row.get(1)?,    // Adjusted index
+            field_name: row.get(2)?,   // Adjusted index
+            field_type: row.get(3)?,   // Adjusted index
             scope: CustomFieldScope::from_db_string(&scope_str),
-            default_value: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get(6)?,
+            default_value: row.get(5)?, // Adjusted index
+            created_at: row.get(6)?,    // Adjusted index
+            updated_at: row.get(7)?,    // Adjusted index
         })
     }).optional()?;
 
@@ -409,20 +410,21 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
     let conn = Connection::open(db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT field_key, field_name, field_type, scope, default_value, created_at, updated_at
+        "SELECT project_id, field_key, field_name, field_type, scope, default_value, created_at, updated_at
          FROM custom_field_definitions WHERE project_id = ?1",
     )?;
 
     let def_iter = stmt.query_map(params![project_id], |row| {
-        let scope_str: String = row.get(3)?;
+        let scope_str: String = row.get(4)?; // Adjusted index
         Ok(CustomFieldDefinition {
-            field_key: row.get(0)?,
-            field_name: row.get(1)?,
-            field_type: row.get(2)?,
+            project_id: row.get(0)?, // Added project_id
+            field_key: row.get(1)?,    // Adjusted index
+            field_name: row.get(2)?,   // Adjusted index
+            field_type: row.get(3)?,   // Adjusted index
             scope: CustomFieldScope::from_db_string(&scope_str),
-            default_value: row.get(4)?,
-            created_at: row.get(5)?,
-            updated_at: row.get(6)?,
+            default_value: row.get(5)?, // Adjusted index
+            created_at: row.get(6)?,    // Adjusted index
+            updated_at: row.get(7)?,    // Adjusted index
         })
     })?;
 

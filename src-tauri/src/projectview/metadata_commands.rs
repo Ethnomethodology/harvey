@@ -96,6 +96,7 @@ pub async fn create_custom_field_definition_command(
     let current_timestamp = Utc::now().to_rfc3339();
 
     let definition = CustomFieldDefinition {
+        project_id: project_id.clone(), // Added project_id field
         field_key: field_key.clone(),
         field_name,
         field_type,
