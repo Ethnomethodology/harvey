@@ -238,6 +238,7 @@
             field: header,
             headerFilter: "input",
             sorter: inferSorter(data, header),
+            formatter: "textarea", // Added for text wrapping
         }));
     }
 
