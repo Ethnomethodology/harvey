@@ -18,7 +18,10 @@ function toggleRightPanel() {
 }
 
 function toggleNotesLeftPanel() {
-    panelState.update(state => ({ ...state, notesLeftPanelCollapsed: !state.notesLeftPanelCollapsed }));
+    panelState.update(state => {
+        console.log('[panelStateStore] Toggling notesLeftPanelCollapsed from', state.notesLeftPanelCollapsed, 'to', !state.notesLeftPanelCollapsed);
+        return { ...state, notesLeftPanelCollapsed: !state.notesLeftPanelCollapsed };
+    });
 }
 
 export default {
