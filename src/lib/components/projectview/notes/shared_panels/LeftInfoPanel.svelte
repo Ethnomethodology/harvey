@@ -583,13 +583,25 @@
             console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
             for (const def of $customFieldDefinitionsStore) {
                 // Determine if the definition is applicable by scope
-                let isApplicable = false;
-                // Updated condition to include checking for "Project" (capital P) string
-                if (def.scope?.type === 'Project' || def.scope === 'project' || def.scope === 'Project') {
-                    isApplicable = true;
-                } else if ((def.scope?.type === 'AssetType' && typeof def.scope?.value === 'string' && def.scope.value.toLowerCase() === currentItemType) ||
-                           (typeof def.scope === 'string' && def.scope.toLowerCase() === currentItemType)) {
-                    isApplicable = true;
+                let isApplicable = false; // Default to false
+                if (typeof def.scope === 'string') {
+                    const scopeStrLower = def.scope.toLowerCase();
+                    // Check if it's a project scope (case-insensitive) or matches the current item type (case-insensitive)
+                    if (scopeStrLower === 'project' || scopeStrLower === currentItemType) { // currentItemType is already lowercase
+                        isApplicable = true;
+                    }
+                } else if (def.scope && typeof def.scope === 'object') { // Check if it's a non-null object
+                    // Handles object scopes like { type: 'AssetType', value: 'image' }
+                    // Assumes 'AssetType' is the only relevant object structure for scopes for now.
+                    if (def.scope.type === 'AssetType' && typeof def.scope.value === 'string') {
+                        if (def.scope.value.toLowerCase() === currentItemType) { // currentItemType is already lowercase
+                            isApplicable = true;
+                        }
+                    }
+                    // If project scope could also be an object like { type: 'Project' },
+                    // an additional check like 'else if (def.scope.type === 'Project') { isApplicable = true; }'
+                    // would be needed here. However, based on logs, project scope appears as a string "Project",
+                    // which is handled by the (typeof def.scope === 'string') block.
                 }
 
                 if (isApplicable) {
