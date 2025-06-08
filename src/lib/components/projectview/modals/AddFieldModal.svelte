@@ -8,6 +8,7 @@
   export let currentItemType = ''; // e.g., "doc", "image", "project" (if 'project' is a possibility for currentItemType)
 
   // Removed duplicate export let currentItemType = '';
+  let uiErrorMessage = '';
 
   let userInputFieldName = '';
   let generatedFieldKey = '';
@@ -33,7 +34,10 @@
 
   $: generatedFieldKey = sanitizeToKey(userInputFieldName);
 
+  $: if (userInputFieldName) uiErrorMessage = '';
+
   async function handleAdd() {
+    uiErrorMessage = '';
     const finalFieldName = userInputFieldName.trim();
     const finalFieldKey = generatedFieldKey; // Already sanitized and reactively updated
 
@@ -59,7 +63,7 @@
       // The error from addDefinition is already logged in the store.
       // Here, we just inform the user.
       // console.error("Error adding custom field definition in AddFieldModal:", err); // Redundant if store logs it.
-      await message(err.message || 'Failed to add custom field definition.', { title: 'Error', type: 'error' });
+      uiErrorMessage = err.message || 'Failed to add custom field definition.';
       // Do not close modal on error
     }
   }
@@ -92,6 +96,12 @@
       on:click|stopPropagation
     >
       <h2 id="addFieldModalTitle" class="text-lg font-semibold mb-6 text-gray-900 dark:text-white">Add Custom Field Definition</h2>
+
+      {#if uiErrorMessage}
+        <div class="text-red-500 text-sm mb-4 p-2 border border-red-300 bg-red-50 rounded">
+          {uiErrorMessage}
+        </div>
+      {/if}
 
       <div class="space-y-4">
         <div>

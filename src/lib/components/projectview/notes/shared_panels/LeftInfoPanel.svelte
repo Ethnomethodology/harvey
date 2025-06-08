@@ -577,6 +577,7 @@
             let newEditableCustomFields = [];
             let newDisplayableCustomFields = [];
 
+            console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
             for (const def of $customFieldDefinitionsStore) {
                 // Determine if the definition is applicable by scope
                 let isApplicable = false;
@@ -615,7 +616,9 @@
             }
             // Sort fields alphabetically by name for consistent display
             newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+            console.debug('[LeftInfoPanel CustomFieldsBlock] editableMetadata.customFields will be updated. Count:', newEditableCustomFields.length);
             newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
+            console.debug('[LeftInfoPanel CustomFieldsBlock] displayableCustomFields will be updated. Count:', newDisplayableCustomFields.length);
 
             editableMetadata.customFields = newEditableCustomFields;
             displayableCustomFields = newDisplayableCustomFields;
