@@ -21,6 +21,7 @@
     let currentMatchIndex = -1;
     // It might be useful to also store the actual column fields for easy access
     let columnFields = [];
+    let tableLayoutSnapshot = { columns: {} };
 
     // Placeholder functions (Unchanged)
     function openRowForm(row) {
@@ -49,6 +50,26 @@
             cell.getElement().classList.toggle('cell-highlighted-placeholder');
          }
      }
+
+    function updateTableLayoutSnapshot() {
+        if (!tabulatorInstance) return;
+        const currentColumnDefs = tabulatorInstance.getColumnDefinitions();
+        const newSnapshotColumns = {};
+        currentColumnDefs.forEach((colDef, index) => {
+            if (colDef.field) {
+                const columnComponent = tabulatorInstance.getColumn(colDef.field); // Get column component
+                if (columnComponent) {
+                    newSnapshotColumns[colDef.field] = {
+                        order: index, // Or columnComponent.getPosition(true) - 1 if more robust for order
+                        visible: columnComponent.isVisible(),
+                        width: columnComponent.getWidth(), // Get live width
+                    };
+                }
+            }
+        });
+        tableLayoutSnapshot.columns = newSnapshotColumns;
+        // console.debug('[TableViewerPanel updateTableLayoutSnapshot] Snapshot updated:', JSON.stringify(tableLayoutSnapshot, null, 2));
+    }
 
     function getRelativePath(absolutePath, baseDir) {
         if (!absolutePath || !baseDir) return null;
@@ -191,48 +212,67 @@
                 }
                 const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
                 if (!relativePathForSave) {
-                    console.error(`[TableViewerPanel saveLayout] Could not determine relative path for ${currentLoadedPath}. Cannot save layout.`);
+                    console.error(`[TableViewerPanel saveCurrentTableLayout] Could not determine relative path for DB key. Absolute path: ${currentLoadedPath}`);
                     return;
                 }
 
-                console.debug(`[TableViewerPanel] Attempting to save layout for ${relativePathForSave} (abs: ${currentLoadedPath})`);
+                console.debug(`[TableViewerPanel saveCurrentTableLayout] Attempting to save layout for ${relativePathForSave} using snapshot:`, JSON.stringify(tableLayoutSnapshot, null, 2));
                 try {
-                    const columnDefinitions = tabulatorInstance.getColumnDefinitions();
-                    const layoutToSave = {
-                        columns: {},
-                    };
-                    columnDefinitions.forEach((colDef, index) => {
-                        if (colDef.field) { // Ensure field exists
-                            const columnLayoutData = {
-                                order: index,
-                                visible: colDef.visible, // colDef.visible should reflect current state
-                            };
-                            // Only add width to the saved layout if it's a valid positive number
-                            if (typeof colDef.width === 'number' && colDef.width > 0) {
-                                columnLayoutData.width = colDef.width;
-                            }
-                            layoutToSave.columns[colDef.field] = columnLayoutData;
+                    const layoutToSave = { columns: {} };
+                    for (const field in tableLayoutSnapshot.columns) {
+                        const colData = tableLayoutSnapshot.columns[field];
+                        const columnSaveData = {
+                            order: colData.order,
+                            visible: colData.visible,
+                        };
+                        if (typeof colData.width === 'number' && colData.width > 0) {
+                            columnSaveData.width = colData.width;
                         }
-                    });
+                        layoutToSave.columns[field] = columnSaveData;
+                    }
+
                     console.debug(`[TableViewerPanel saveCurrentTableLayout] Saving layout for ${relativePathForSave}:`, JSON.stringify(layoutToSave, null, 2));
                     await saveTableLayoutPrefs(relativePathForSave, JSON.stringify(layoutToSave));
                     console.info(`[TableViewerPanel] Layout saved for ${relativePathForSave}`);
                 } catch (error) {
                     console.error(`[TableViewerPanel] Failed to save layout for ${relativePathForSave}:`, error);
                 }
-            }, 750); // Debounce for 750ms
+            }, 750);
 
-            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
-            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
-            // tabulatorInstance.on("columnVisibilityChanged", saveCurrentTableLayout);
+            tabulatorInstance.on("columnResized", (column) => {
+                // console.debug(`[TableViewerPanel columnResized] Column: ${column.getField()}, Width: ${column.getWidth()}`);
+                if (tableLayoutSnapshot.columns[column.getField()]) {
+                    tableLayoutSnapshot.columns[column.getField()].width = column.getWidth();
+                } else { // Should ideally not happen if snapshot is initialized correctly
+                    tableLayoutSnapshot.columns[column.getField()] = {
+                        width: column.getWidth(),
+                        order: column.getPosition(true) -1, // Be cautious with order here
+                        visible: column.isVisible()
+                    };
+                }
+                // Update orders for all columns as resizing one might affect others in some layouts
+                updateTableLayoutSnapshot(); // This will re-capture all orders and widths
+                saveCurrentTableLayout(); // Call debounced save
+            });
+
+            tabulatorInstance.on("columnMoved", (column, columns) => { // columns is array of all column components in new order
+                // console.debug(`[TableViewerPanel columnMoved] Column: ${column.getField()} moved.`);
+                updateTableLayoutSnapshot(); // This will re-capture all new orders and existing widths
+                saveCurrentTableLayout(); // Call debounced save
+            });
+            // tabulatorInstance.on("columnVisibilityChanged", (column, visible) => {
+            //     updateTableLayoutSnapshot();
+            //     saveCurrentTableLayout();
+            // });
 
 
             tabulatorInstance.on("rowClick", function(e, row){
                  console.debug("Row Clicked:", row.getData()); // DEBUG
             });
 
-            // Disable macOS autocorrect/autocomplete on column header filters
+            // Disable macOS autocorrect/autocomplete on column header filters and init snapshot
             tabulatorInstance.on("renderComplete", () => {
+                updateTableLayoutSnapshot(); // Initial snapshot after table is fully rendered
                 const filters = tableContainer.querySelectorAll(".tabulator-header-filter input");
                 filters.forEach(input => {
                     input.setAttribute("autocomplete", "off");
