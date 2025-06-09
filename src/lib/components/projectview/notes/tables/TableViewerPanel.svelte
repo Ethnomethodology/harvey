@@ -175,16 +175,19 @@
 
             // initialLayoutMode logic removed
 
-            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable} (relative: ${relativeTablePath})`); // DEBUG
+            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable} (relative: ${relativeTablePath}) with layout: fitColumns`); // DEBUG
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitColumns", // Ensure this is hardcoded
+                layout: "fitColumns", // Unconditionally use fitColumns
                 columns: generateColumns(tableData, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
                 movableColumns: true,
                 resizableColumnFit: true,
+                columnDefaults: { // Add this section
+                    maxWidth: 500, // Set a maximum width for all columns (in pixels)
+                },
                 // Pagination options
                 pagination: true,
                 paginationSize: 20,
