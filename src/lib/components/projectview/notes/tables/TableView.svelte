@@ -31,9 +31,7 @@
 <div class="flex flex-grow p-0 gap-1 w-full min-h-0 h-full">
 
     <!-- Left Panel (Shared) -->
-    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
-         class:w-12={$panelStateStore.leftCollapsed}
-         class:w-1/5={!$panelStateStore.leftCollapsed}>
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out" class:w-12={$panelStateStore.leftCollapsed} class:w-1/5={!$panelStateStore.leftCollapsed}>
         <LeftInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
@@ -50,9 +48,7 @@
     </div>
 
     <!-- Right Panel (Shared) -->
-    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
-         class:w-12={$panelStateStore.rightCollapsed}
-         class:w-1/5={!$panelStateStore.rightCollapsed}>
+    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out" class:w-12={$panelStateStore.rightCollapsed} class:w-1/5={!$panelStateStore.rightCollapsed}>
         <RightInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
