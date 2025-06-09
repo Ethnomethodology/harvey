@@ -408,7 +408,7 @@
                         element.classList.add('search-match-selected');
                     }
                 }
-            } catch (err)
+            } catch (err) {
                 console.error("[TableViewerPanel navigateToMatch] Error navigating to match:", err);
             }
         }
