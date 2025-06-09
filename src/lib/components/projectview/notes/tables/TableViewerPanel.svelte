@@ -417,6 +417,7 @@
                     console.debug(`[TableViewerPanel generateColumns] New column '${header}' in existing layout, will be sized by Tabulator or current layout mode.`);
                 }
             }
+            console.debug(`[TableViewerPanel generateColumns] Final effective width for column '${header}': ${colDef.width}, minWidth: ${colDef.minWidth}, visible: ${colDef.visible}`);
             return colDef;
         });
 
