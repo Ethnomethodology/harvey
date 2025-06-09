@@ -42,7 +42,7 @@
     </div>
 
     <!-- Middle Panel - The Table Viewer -->
-    <div class="h-full flex-grow min-w-0"> <!-- Added min-w-0 here -->
+    <div class="h-full w-3/5">
         {#key itemPath} {#if itemPath}
              <TableViewerPanel tablePath={itemPath} />
         {:else}
