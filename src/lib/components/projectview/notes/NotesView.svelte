@@ -130,7 +130,7 @@
             />
 		</div>
 
-        <div class="flex-grow h-full">
+        <div class="flex-grow h-full min-w-0">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
