@@ -22,18 +22,24 @@
     let tooltipY = 0;
 
     function showTooltip(event) {
+        console.log('[LeftInfoPanel] showTooltip CALLED');
         if (!$panelStateStore.leftCollapsed) {
+            console.log('[LeftInfoPanel] showTooltip: panel is NOT collapsed ($panelStateStore.leftCollapsed is false), returning.');
             return;
         }
+        console.log('[LeftInfoPanel] showTooltip: panel IS collapsed ($panelStateStore.leftCollapsed is true), proceeding to show tooltip.');
         const buttonRect = event.currentTarget.getBoundingClientRect();
         tooltipContentName = 'Metadata Panel';
         tooltipContentFiles = [{ name: 'View and manage details and custom fields for the selected item.' }];
         tooltipX = buttonRect.right + 8;
         tooltipY = buttonRect.top;
+        console.log('[LeftInfoPanel] showTooltip: setting tooltipVisible = true');
         tooltipVisible = true;
     }
 
     function hideTooltip() {
+        console.log('[LeftInfoPanel] hideTooltip CALLED');
+        console.log('[LeftInfoPanel] hideTooltip: setting tooltipVisible = false');
         tooltipVisible = false;
     }
 
