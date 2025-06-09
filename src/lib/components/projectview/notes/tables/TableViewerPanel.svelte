@@ -383,23 +383,12 @@
 
         if (rowComponent) {
             try {
-                // --- Page Navigation Logic ---
-                const rowPage = rowComponent.getPage();
-                if (rowPage) { // Check if the row is part of a page (it should be with pagination enabled)
-                    const targetPageNum = rowPage.getPosition(); // getPosition() returns the page number (1-indexed)
-                    const currentPageNum = tabulatorInstance.getPage(); // getPage() returns current page number (1-indexed)
+                await tabulatorInstance.showRow(rowComponent, true); // Handles page change and scroll
+                await tick(); // Allow Svelte and Tabulator to settle
 
-                    // Ensure targetPageNum is valid (getPosition might return false if page is not found, though unlikely here)
-                    if (targetPageNum !== false && targetPageNum !== currentPageNum) {
-                        console.debug(`[TableViewerPanel navigateToMatch] Search match on page ${targetPageNum}, current page is ${currentPageNum}. Navigating.`); // DEBUG
-                        await tabulatorInstance.setPage(targetPageNum);
-                        await tick(); // Wait for Svelte to process DOM updates after page change
-                    }
-                }
-                // --- End Page Navigation Logic ---
-
-                await rowComponent.scrollTo(); // Scroll to the row
-                await rowComponent.select();   // Apply .tabulator-selected (styled subtly)
+                // select the row to apply .tabulator-selected (styled subtly by our CSS)
+                // and to ensure Tabulator knows it's selected for any internal logic.
+                await rowComponent.select();
 
                 // Apply .search-match-selected for prominent highlight
                 if (typeof rowComponent.getElement === 'function') {
