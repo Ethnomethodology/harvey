@@ -173,19 +173,12 @@
                 // Continue with default layout
             }
 
-            let initialLayoutMode;
-            if (!savedLayout) {
-                initialLayoutMode = "fitColumns"; // Changed from fitDataTable
-                console.debug(`[TableViewerPanel] No saved layout for ${relativeTablePath}, using ${initialLayoutMode} for first load.`);
-            } else {
-                initialLayoutMode = "fitData";
-                console.debug(`[TableViewerPanel] Saved layout found for ${relativeTablePath}, using ${initialLayoutMode}.`);
-            }
+            // initialLayoutMode logic removed
 
             console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable} (relative: ${relativeTablePath})`); // DEBUG
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: initialLayoutMode,
+                layout: "fitColumns", // Ensure this is hardcoded
                 columns: generateColumns(tableData, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
