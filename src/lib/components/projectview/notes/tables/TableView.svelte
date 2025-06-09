@@ -25,15 +25,19 @@
         console.debug(`[TableView] Path is now ${itemPath}`); // DEBUG
     }
 
+    let leftPanelClasses;
+    $: leftPanelClasses = `h-full flex-shrink-0 transition-all duration-300 ease-in-out ${$panelStateStore.leftCollapsed ? 'w-12' : 'w-1/5'}`;
+
+    let rightPanelClasses;
+    $: rightPanelClasses = `h-full flex-shrink-0 transition-all duration-300 ease-in-out ${$panelStateStore.rightCollapsed ? 'w-12' : 'w-1/5'}`;
+
 </script>
 
 <!-- Main container for the Table View -->
 <div class="flex flex-grow p-0 gap-1 w-full min-h-0 h-full">
 
     <!-- Left Panel (Shared) -->
-    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
-         class:w-12={$panelStateStore.leftCollapsed}
-         class:w-[20.588%]={!$panelStateStore.leftCollapsed}>
+    <div class="{leftPanelClasses}">
         <LeftInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
@@ -50,9 +54,7 @@
     </div>
 
     <!-- Right Panel (Shared) -->
-    <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
-         class:w-12={$panelStateStore.rightCollapsed}
-         class:w-[20.588%]={!$panelStateStore.rightCollapsed}>
+    <div class="{rightPanelClasses}">
         <RightInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
@@ -61,5 +63,5 @@
 <style>
 	.min-h-0 { min-height: 0; }
     /* Define width classes using arbitrary values */
-    .w-\[20\.588\%\] { width: 20.58825%; }
+    /* .w-\[20\.588\%\] { width: 20.58825%; } */ /* Replaced with w-1/5 */
 </style>

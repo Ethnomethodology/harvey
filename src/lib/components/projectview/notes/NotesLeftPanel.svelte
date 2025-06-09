@@ -2,6 +2,7 @@
 <script>
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
 	import { get } from 'svelte/store';
+	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
@@ -9,8 +10,23 @@
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { convertFileSrc } from '@tauri-apps/api/core';
+    import CategoryTooltip from './CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
+
+    const JOURNAL_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-journals" viewBox="0 0 16 16"><path d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 2 2 0 0 1-2 2H3a2 2 0 0 1-2-2h1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1H1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1H3a2 2 0 0 1 2-2"/><path d="M1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 2.5v.5H.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1H2v-.5a.5.5 0 0 0-1 0"/></svg>`;
+
+    function handleToggleNotesLeftPanel() {
+        tooltipVisible = false;
+        console.log('[NotesLeftPanel] handleToggleNotesLeftPanel called');
+        panelStateStore.toggleNotesLeftPanel();
+    }
+
+    $: {
+        if ($panelStateStore && typeof $panelStateStore.notesLeftPanelCollapsed !== 'undefined') {
+            console.log('[NotesLeftPanel] Detected change in $panelStateStore.notesLeftPanelCollapsed:', $panelStateStore.notesLeftPanelCollapsed);
+        }
+    }
 
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
@@ -45,6 +61,8 @@
     }
 
     onMount(() => {
+      console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
+      console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
       const listener = () => {
         if (categoryContextMenuVisible) closeCategoryContextMenu();
       };
@@ -437,46 +455,139 @@
   
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
+    let tooltipVisible = false;
+    let tooltipCategoryName = '';
+    let tooltipFiles = [];
+    let tooltipX = 0;
+    let tooltipY = 0;
+
+    function showTooltip(event, category) {
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
+
+        tooltipCategoryName = category.name;
+        tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
+        tooltipX = buttonRect.right + 8;
+        tooltipY = buttonRect.top;
+        tooltipVisible = true;
+    }
+
+    function hideTooltip() {
+        tooltipVisible = false;
+    }
+
+    let activeCollapsedCategoryType = null;
+
+    $: {
+        if (selectedItemPathInStore && $project.baseDirectory) {
+            const path = selectedItemPathInStore;
+            const extension = path.split('.').pop()?.toLowerCase() || '';
+            let determinedItemType = null;
+
+            // Check project file lists first
+            const projectFileLists = [
+                { files: $project.mediaFiles, type: 'audio', extensions: AUDIO_EXTENSIONS },
+                { files: $project.mediaFiles, type: 'video', extensions: VIDEO_EXTENSIONS },
+                { files: $project.imageFiles, type: 'image', isRelative: true },
+                { files: $project.tableFiles, type: 'table', isRelative: true },
+                { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true },
+                { files: $project.documentFiles, type: 'document', isRelative: true }
+            ];
+
+            for (const listInfo of projectFileLists) {
+                if (listInfo.files?.some(f => {
+                    const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
+                    if (filePathToCheck === path) {
+                        if (listInfo.extensions) { // For mediaFiles that contain both audio and video
+                            return listInfo.extensions.has(extension);
+                        }
+                        return true;
+                    }
+                    return false;
+                })) {
+                    determinedItemType = listInfo.type;
+                    break;
+                }
+            }
+
+            // Fallback for general document types if not caught by specific lists
+            if (!determinedItemType) {
+                if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
+                    determinedItemType = 'document';
+                } else if (extension === 'json') {
+                    // If it's a JSON file not already identified as an imported_transcript or other specific JSON type from lists
+                    determinedItemType = 'document';
+                }
+            }
+
+            activeCollapsedCategoryType = determinedItemType;
+            console.log('[NotesLeftPanel] Active Category Type for Highlighting:', activeCollapsedCategoryType);
+        } else {
+            activeCollapsedCategoryType = null;
+        }
+    }
+
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow p-3 flex flex-col overflow-hidden">
-	<h2 class="relative flex items-center text-sm font-semibold mb-3 border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">
-		<span>Data</span>
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
+	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-7"
+        class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
+        class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
+        class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
+        class:justify-center={$panelStateStore.notesLeftPanelCollapsed || showSearchBox}>
     {#if !showSearchBox}
-      <button
-        type="button"
-        class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-        on:click|stopPropagation={handleSearchClick}
-        title="Search Data"
-      >
-        {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
-      </button>
-    {:else}
-      {#if searchQuery.trim() !== ''}
-        <button
-          type="button"
-          class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-          on:click|stopPropagation={handleSearchClear}
-          title="Clear Search"
-        >
-          {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>`}
-        </button>
-      {/if}
+        <div class="flex items-center space-x-2">
+            <button
+                type="button"
+                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 z-20"
+                on:click={handleToggleNotesLeftPanel}
+                title={$panelStateStore.notesLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}
+            >
+                {@html JOURNAL_ICON_SVG}
+            </button>
+            {#if !$panelStateStore.notesLeftPanelCollapsed}
+                <span>Data</span>
+            {/if}
+        </div>
     {/if}
-    <input
-      id="notes-search-input"
-      bind:value={searchQuery}
-      type="text"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      spellcheck="false"
-      placeholder="Search..."
-      class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-xs pl-2 pr-10 {showSearchBox ? 'opacity-100 w-full' : 'opacity-0 w-0'}"
-      on:click|stopPropagation
-    />
+        {#if !$panelStateStore.notesLeftPanelCollapsed}
+            {#if !showSearchBox}
+            <button
+                type="button"
+                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                on:click|stopPropagation={handleSearchClick}
+                title="Search Data"
+            >
+                {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
+            </button>
+            {:else}
+            {#if searchQuery.trim() !== ''}
+                <button
+                type="button"
+                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                on:click|stopPropagation={handleSearchClear}
+                title="Clear Search"
+                >
+                {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>`}
+                </button>
+            {/if}
+            {/if}
+            <input
+            id="notes-search-input"
+            bind:value={searchQuery}
+            type="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="Search..."
+            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm {showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-0.5' : 'opacity-0 w-0 pl-12 pr-10 py-0.5'}"
+            on:click|stopPropagation
+            />
+        {/if}
 	</h2>
 
+{#if !$panelStateStore.notesLeftPanelCollapsed}
 	<div class="flex-grow overflow-y-auto min-h-0 -mr-2 pr-2">
 		<ul class="space-y-2 text-xs">
             {#each filteredCategories as category (category.type)}
@@ -530,10 +641,41 @@
         </ul>
         {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
 	</div>
+{:else}
+    <!-- Collapsed Content (Vertical Icons) -->
+    <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
+        {#each CATEGORIES_BASE as category (category.type)}
+            <button
+                type="button"
+                class="p-1.5 rounded-md focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
+                class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
+                class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
+                class:focus:ring-2={category.type !== activeCollapsedCategoryType}
+                class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
+                class:bg-blue-200={category.type === activeCollapsedCategoryType}
+                class:dark:bg-blue-700={category.type === activeCollapsedCategoryType}
+                class:text-gray-500={category.type !== activeCollapsedCategoryType}
+                class:dark:text-gray-400={category.type !== activeCollapsedCategoryType}
+                class:text-blue-600={category.type === activeCollapsedCategoryType}
+                class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
+                class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
+                class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
+                title={category.name}
+                on:click={handleToggleNotesLeftPanel}
+                on:mouseenter={(event) => showTooltip(event, category)}
+                on:mouseleave={hideTooltip}
+                on:focus={(event) => showTooltip(event, category)}
+                on:blur={hideTooltip}
+            >
+                {@html category.icon}
+            </button>
+        {/each}
+    </div>
+{/if}
 
     <!-- Metadata Display Section Removed -->
 
-	{#if contextMenuVisible && contextMenuItem}
+	{#if contextMenuVisible && contextMenuItem && !$panelStateStore.notesLeftPanelCollapsed}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
@@ -570,7 +712,7 @@
             {/if}
 		</div>
 	{/if}
-    {#if categoryContextMenuVisible}
+    {#if categoryContextMenuVisible && !$panelStateStore.notesLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
         class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
@@ -597,6 +739,14 @@
       </div>
     {/if}
 </div>
+
+<CategoryTooltip
+    bind:visible={tooltipVisible}
+    categoryName={tooltipCategoryName}
+    files={tooltipFiles}
+    x={tooltipX}
+    y={tooltipY}
+/>
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
