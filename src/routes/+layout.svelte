@@ -3,6 +3,7 @@
     import { onMount } from 'svelte';
     import { get } from 'svelte/store'; // Ensure 'get' is imported
     import '../app.css';
+    import '$lib/styles/tabulator-tailwind-theme.scss';
   
     // --- Import theme store loader ---
     import { loadThemePreferenceFromBackend } from '$lib/stores/themeStore.js';
