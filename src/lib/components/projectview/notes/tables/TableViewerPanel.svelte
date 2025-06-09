@@ -179,6 +179,9 @@
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 layout: "fitColumns", // Unconditionally use fitColumns
+                columnDefaults: { // Add this section
+                    maxWidth: 500, // Set a maximum width for all columns (in pixels)
+                },
                 columns: generateColumns(tableData, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
@@ -408,9 +411,9 @@
             } else {
                 // No saved layout for this specific column
                 if (isFirstLoad) {
-                    colDef.width = 200; // Default width for first load
+                    // colDef.width = 200; // REMOVED
                     colDef.minWidth = 50; // Default minWidth for first load
-                    console.debug(`[TableViewerPanel generateColumns] First load: Applying default width 200px and minWidth 50px for column '${header}'.`);
+                    console.debug(`[TableViewerPanel generateColumns] First load for column '${header}': Applying minWidth 50px. Width to be determined by layout mode.`);
                 } else {
                     // New column in an existing layout, let Tabulator's fitDataTable handle it, or set other defaults
                     console.debug(`[TableViewerPanel generateColumns] New column '${header}' in existing layout, will be sized by Tabulator or current layout mode.`);
