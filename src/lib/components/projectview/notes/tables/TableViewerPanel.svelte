@@ -411,8 +411,8 @@
             } else {
                 // No saved layout for this specific column
                 if (isFirstLoad) {
-                    // colDef.width = 200; // REMOVED
-                    colDef.minWidth = 50; // Default minWidth for first load
+                    colDef.width = 200; // REMOVED
+                    // colDef.minWidth = 50; // Default minWidth for first load
                     console.debug(`[TableViewerPanel generateColumns] First load for column '${header}': Applying minWidth 50px. Width to be determined by layout mode.`);
                 } else {
                     // New column in an existing layout, let Tabulator's fitDataTable handle it, or set other defaults
