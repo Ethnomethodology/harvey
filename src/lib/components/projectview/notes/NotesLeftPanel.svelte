@@ -10,6 +10,7 @@
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { convertFileSrc } from '@tauri-apps/api/core';
+    import CategoryTooltip from './CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
 
@@ -451,6 +452,78 @@
   
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
+    let tooltipVisible = false;
+    let tooltipCategoryName = '';
+    let tooltipFiles = [];
+    let tooltipX = 0;
+    let tooltipY = 0;
+
+    function showTooltip(event, category) {
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
+
+        tooltipCategoryName = category.name;
+        tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
+        tooltipX = buttonRect.right + 8;
+        tooltipY = buttonRect.top;
+        tooltipVisible = true;
+    }
+
+    function hideTooltip() {
+        tooltipVisible = false;
+    }
+
+    let activeCollapsedCategoryType = null;
+
+    $: {
+        if (selectedItemPathInStore && $project.baseDirectory) {
+            const path = selectedItemPathInStore;
+            const extension = path.split('.').pop()?.toLowerCase() || '';
+            let determinedItemType = null;
+
+            // Check project file lists first
+            const projectFileLists = [
+                { files: $project.mediaFiles, type: 'audio', extensions: AUDIO_EXTENSIONS },
+                { files: $project.mediaFiles, type: 'video', extensions: VIDEO_EXTENSIONS },
+                { files: $project.imageFiles, type: 'image', isRelative: true },
+                { files: $project.tableFiles, type: 'table', isRelative: true },
+                { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true },
+                { files: $project.documentFiles, type: 'document', isRelative: true }
+            ];
+
+            for (const listInfo of projectFileLists) {
+                if (listInfo.files?.some(f => {
+                    const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
+                    if (filePathToCheck === path) {
+                        if (listInfo.extensions) { // For mediaFiles that contain both audio and video
+                            return listInfo.extensions.has(extension);
+                        }
+                        return true;
+                    }
+                    return false;
+                })) {
+                    determinedItemType = listInfo.type;
+                    break;
+                }
+            }
+
+            // Fallback for general document types if not caught by specific lists
+            if (!determinedItemType) {
+                if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
+                    determinedItemType = 'document';
+                } else if (extension === 'json') {
+                    // If it's a JSON file not already identified as an imported_transcript or other specific JSON type from lists
+                    determinedItemType = 'document';
+                }
+            }
+
+            activeCollapsedCategoryType = determinedItemType;
+            // console.log('[NotesLeftPanel] Active collapsed category type:', activeCollapsedCategoryType, 'for path:', path);
+        } else {
+            activeCollapsedCategoryType = null;
+        }
+    }
+
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
@@ -565,6 +638,34 @@
         </ul>
         {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
 	</div>
+{:else}
+    <!-- Collapsed Content (Vertical Icons) -->
+    <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
+        {#each CATEGORIES_BASE as category (category.type)}
+            <button
+                type="button"
+                class="p-1.5 rounded-md focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
+                class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
+                class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
+                class:focus:ring-2={category.type !== activeCollapsedCategoryType}
+                class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
+                class:bg-blue-200={category.type === activeCollapsedCategoryType}
+                class:dark:bg-blue-700={category.type === activeCollapsedCategoryType}
+                class:text-blue-700={category.type === activeCollapsedCategoryType}
+                class:dark:text-blue-300={category.type === activeCollapsedCategoryType}
+                class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
+                class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
+                title={category.name}
+                on:click={handleToggleNotesLeftPanel}
+                on:mouseenter={(event) => showTooltip(event, category)}
+                on:mouseleave={hideTooltip}
+                on:focus={(event) => showTooltip(event, category)}
+                on:blur={hideTooltip}
+            >
+                {@html category.icon}
+            </button>
+        {/each}
+    </div>
 {/if}
 
     <!-- Metadata Display Section Removed -->
@@ -633,6 +734,14 @@
       </div>
     {/if}
 </div>
+
+<CategoryTooltip
+    bind:visible={tooltipVisible}
+    categoryName={tooltipCategoryName}
+    files={tooltipFiles}
+    x={tooltipX}
+    y={tooltipY}
+/>
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
