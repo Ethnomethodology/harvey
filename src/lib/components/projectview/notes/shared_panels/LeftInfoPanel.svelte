@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/shared_panels/LeftInfoPanel.svelte -->
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     // fsRename might still be used by projectService.js, direct fs calls for metadata are removed.
@@ -20,6 +20,8 @@
     let labelTooltipText = '';
     let labelTooltipX = 0;
     let labelTooltipY = 0;
+
+    let documentClickHandler = null;
 
     function showLabelTooltip(event, title, textContent) {
         if (!$panelStateStore.leftCollapsed) return; // Ensure panel is actually collapsed
@@ -59,11 +61,33 @@
         labelTooltipX = potentialX;
         labelTooltipY = potentialY;
         labelTooltipVisible = true;
+
+        if (labelTooltipVisible && !documentClickHandler) {
+            documentClickHandler = (e_click) => {
+                hideLabelTooltip();
+            };
+            setTimeout(() => {
+                if (labelTooltipVisible) {
+                    document.addEventListener('click', documentClickHandler);
+                }
+            }, 0);
+        }
     }
 
     function hideLabelTooltip() {
+        if (documentClickHandler) {
+            document.removeEventListener('click', documentClickHandler);
+            documentClickHandler = null;
+        }
         labelTooltipVisible = false;
     }
+
+    onDestroy(() => {
+        if (documentClickHandler) {
+            document.removeEventListener('click', documentClickHandler);
+            documentClickHandler = null;
+        }
+    });
 
     async function handleDeleteCustomField(fieldKey) {
         const confirmed = await confirm(
