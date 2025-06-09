@@ -480,7 +480,7 @@
             {#if !showSearchBox}
             <button
                 type="button"
-                class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 on:click|stopPropagation={handleSearchClick}
                 title="Search Data"
             >
@@ -490,7 +490,7 @@
             {#if searchQuery.trim() !== ''}
                 <button
                 type="button"
-                class="absolute inset-y-0 right-0 p-2 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 on:click|stopPropagation={handleSearchClear}
                 title="Clear Search"
                 >
