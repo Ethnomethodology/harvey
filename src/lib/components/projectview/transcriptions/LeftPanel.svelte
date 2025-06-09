@@ -3,7 +3,7 @@
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { transcriptStore, selectMedia } from '$lib/stores/transcriptStore.js';
-	import { panelStateStore } from '$lib/stores/panelStateStore.js'; // Added import
+	import panelStateStore from '$lib/stores/panelStateStore.js'; // Corrected import
 	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
 	import TreeNode from './TreeNode.svelte';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
