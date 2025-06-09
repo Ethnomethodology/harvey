@@ -173,8 +173,8 @@ pub async fn import_table_file(
         "table", // asset_type
         None,    // custom_fields_json is None on initial import
     ) {
-        error!("[import_table_file] Failed to save table metadata to DB for {}: {}", relative_path_for_xml, e);
-        return Err(CommandError::from(format!("Failed to save table metadata to DB: {}", e)));
+        error!("[import_table_file] Failed to save table metadata to DB for table '{}' (path: {}): {}", final_table_name, relative_path_for_xml, e);
+        return Err(e);
     }
     info!("[import_table_file] Saved table metadata to DB for: {}", relative_path_for_xml);
 
