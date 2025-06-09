@@ -146,7 +146,7 @@ $paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
       justify-content: flex-end;
       .tabulator-page {
         background-color: transparent;
-        color: var(--ui-text-color); // Actual theme value
+        color: var(--ui-optgroup-text); // CHANGED HERE - Actual theme value
         border: 1px solid var(--ui-select-border); // Actual theme value
         border-radius: $borderRadius / 2;
         padding: ($paddingSmall * 0.5) ($paddingSmall * 0.75);
