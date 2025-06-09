@@ -1,3 +1,89 @@
+<!--
+START OF INSTRUCTIONS FOR NEW JULES AGENT (Task: Custom Tabulator Theming)
+
+**Project Goal: Create a Custom Tabulator Theme Using Tailwind CSS**
+
+**Current Situation:**
+
+1.  **Existing Table Styling:**
+    *   The application currently uses Tabulator tables.
+    *   The styling for these tables is primarily coming from a pre-built Tabulator theme linked in this very file (`src/lib/components/projectview/notes/tables/TableViewerPanel.svelte`) via a <svelte:head> block:
+        <link href="/tabulator_themes/tabulator_modern.min.css" rel="stylesheet">
+    *   This `tabulator_modern.min.css` theme (located in `static/tabulator_themes/`) does not match the application's overall Tailwind CSS aesthetic, particularly the dark mode.
+
+2.  **Desired Table Styling:**
+    *   The goal is to make Tabulator tables visually consistent with the rest of the application, which is styled using Tailwind CSS.
+    *   This means table elements (headers, rows, cells, borders, backgrounds, pagination, filters, etc.) should adopt the color schemes, spacing, typography, and border styles defined by the app's Tailwind configuration and global CSS variables (found in `tailwind.config.js` and `src/app.css`).
+    *   The application has a dark mode, and the Tabulator theme should respect this, primarily by using the CSS variables defined in `src/app.css` (e.g., `--ui-select-bg`, `--ui-text-color`, `--ui-select-border`).
+
+3.  **Progress So Far (Setup):**
+    *   **Sass Installed:** The `sass` preprocessor (`npm install -D sass` or `yarn add -D sass`) is installed as a dev dependency. This is necessary for `svelte-preprocess` to compile SCSS.
+    *   **Custom Theme File Created:** An SCSS file has been created at `src/lib/styles/tabulator-tailwind-theme.scss`. This is the designated location for the new custom Tabulator theme code (it may be empty or have preliminary content at the moment of handover).
+
+**Path to Achieve Desired Styling (Instructions for the New Agent):**
+
+The core idea is to leverage Tabulator's SCSS-based theming system. You will populate the custom SCSS theme file (`src/lib/styles/tabulator-tailwind-theme.scss`) to override Tabulator's default variables with values derived from the application's Tailwind theme and CSS variables. This custom theme will then be compiled (automatically by the existing Svelte build process because `sass` is installed and `svelte-preprocess` is configured) and imported globally.
+
+**Detailed Steps to Implement:**
+
+1.  **Write/Populate the Custom SCSS Theme (`src/lib/styles/tabulator-tailwind-theme.scss`):**
+    *   **Objective:** Fill this file with SCSS code that defines custom values for Tabulator's theming variables and potentially adds some CSS overrides to align with the app's Tailwind look and feel.
+    *   **Content Structure:**
+        *   **SCSS Variables:** At the top of the file, define SCSS variables (e.g., `$backgroundColor`, `$textColor`, `$borderColor`, `$headerBackgroundColor`, `$rowHoverBackgroundColor`, `$fontSize`, `$borderRadius`, etc.).
+        *   **Use App's CSS Variables:** For the values of these SCSS variables, use the CSS `var()` function to reference the existing theme variables from `src/app.css` (e.g., `$backgroundColor: var(--ui-select-bg);`). This is crucial for ensuring the Tabulator theme automatically adapts to light/dark mode changes if `src/app.css` handles that.
+        *   **Tailwind Values:** For aspects like font sizes, border radius, or specific colors not covered by CSS variables, refer to `tailwind.config.js` or standard Tailwind utility values (e.g., `$fontSize: 0.875rem;` for `text-sm`, `$borderRadius: 0.375rem;` for `rounded-md`).
+        *   **Import Core Tabulator SCSS:** After defining all your variable overrides, you **MUST** import the main Tabulator SCSS file. The path will be relative from `src/lib/styles/tabulator-tailwind-theme.scss` to `node_modules/tabulator-tables/src/scss/tabulator.scss`. A highly likely correct path is:
+            ```scss
+            @import "../../../node_modules/tabulator-tables/src/scss/tabulator";
+            ```
+            *(This path is critical. If incorrect, the theme will not build or apply correctly.)*
+        *   **CSS Overrides (Optional but Recommended):** Below the `@import` line, you can add specific CSS rules to fine-tune elements that variables alone can't control, or to apply Tailwind-like structural styles. For example:
+            ```scss
+            .tabulator {
+              border-radius: $borderRadius;
+              border: 1px solid $borderColor;
+              // ... more specific rules for .tabulator-header, .tabulator-row, etc.
+            }
+            ```
+    *   **(The previous Jules agent can provide the specific SCSS content that was outlined as a strong starting point for this file if you prompt for it).**
+
+2.  **Ensure SCSS Compilation (Handled by Existing Setup):**
+    *   **Information:** The project's `svelte.config.js` includes `sveltePreprocess({ postcss: true })`. Since `sass` is installed, `svelte-preprocess` will automatically find and compile any SCSS files that are imported into Svelte components or global style entry points (like `+layout.svelte`).
+    *   **No specific action is needed for compilation itself, provided `sass` is correctly installed and the SCSS file is imported as described in the next step.**
+
+3.  **Import the Custom Theme Globally:**
+    *   **Objective:** Make the compiled CSS from your custom theme available to the entire application, ensuring Tabulator tables are styled wherever they appear.
+    *   **Action:**
+        1.  Open the main Svelte layout file: `src/routes/+layout.svelte`.
+        2.  In the `<script>` section at the top (it doesn't need to be `context="module"`), add an import for your new SCSS theme file:
+            ```javascript
+            import '$lib/styles/tabulator-tailwind-theme.scss';
+            ```
+        *   This tells Vite (via SvelteKit and svelte-preprocess) to process this SCSS file and include its compiled CSS in the application's global stylesheet bundle.
+
+4.  **Remove Old Tabulator Theme Link:**
+    *   **Objective:** Stop using the `tabulator_modern.min.css` theme.
+    *   **Action:**
+        1.  Open this current file: `src/lib/components/projectview/notes/tables/TableViewerPanel.svelte`.
+        2.  Find and **delete** the following `<svelte:head>` block:
+            ```html
+            <svelte:head>
+                <link href="/tabulator_themes/tabulator_modern.min.css" rel="stylesheet">
+            </svelte:head>
+            ```
+
+5.  **Restart Development Server and Test:**
+    *   **Action:**
+        1.  If your development server is currently running, stop it.
+        2.  Restart the development server (e.g., `npm run dev` or `yarn dev`). This is crucial for the build system to pick up the new SCSS file import and compile it correctly.
+        3.  Open the application in your browser and navigate to a page displaying a Tabulator table.
+    *   **Observe & Provide Feedback:**
+        *   Carefully examine the table's appearance. Does it now reflect your app's Tailwind styling (especially considering dark mode colors, fonts, borders, padding as defined by your CSS variables in `src/app.css`)?
+        *   Note any discrepancies or areas that don't look right (e.g., "header font is too light," "pagination buttons are not styled like my app's buttons," "cell borders are missing").
+        *   This feedback will be essential for iteratively refining the SCSS variables and any custom CSS overrides in `src/lib/styles/tabulator-tailwind-theme.scss`.
+
+END OF INSTRUCTIONS FOR NEW JULES AGENT
+-->
 <!-- src/lib/components/projectview/notes/tables/TableViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
