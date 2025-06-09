@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/notes/CategoryTooltip.svelte -->
 <script>
   export let categoryName = '';
-  export let files = []; // Expected: array of objects like { name: string, path: string }
+  export let items = []; // Expected: array of objects like { name: string, path: string }
   export let visible = false;
   export let x = 0;
   export let y = 0;
@@ -22,14 +22,14 @@
       <strong class="block mb-1">{categoryName}</strong>
     {/if}
 
-    {#if files && files.length > 0}
+    {#if items && items.length > 0}
       <ul class="list-none p-0 m-0 max-h-48 overflow-y-auto">
-        {#each files as file (file.path || file.name)}
-          <li class="truncate" title={file.name}>{file.name}</li>
+        {#each items as item (item.path || item.name)}
+          <li class="truncate" title={item.name}>{item.name}</li>
         {/each}
       </ul>
     {:else}
-      <p class="italic m-0">No files in this category.</p>
+      <p class="italic m-0">No items to display.</p>
     {/if}
   </div>
 {/if}
