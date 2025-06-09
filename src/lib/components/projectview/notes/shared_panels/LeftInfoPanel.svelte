@@ -725,7 +725,7 @@
             {/if} <!-- :else placeholder removed as it's not needed for this layout -->
         {/if}
     </h2>
-    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative overflow-x-hidden">
+    <div class="flex-grow overflow-y-auto min-h-0 text-xs relative">
         {#if !$panelStateStore.leftCollapsed}
                 <!-- Expanded View -->
                 {#if currentFileMetadata}
@@ -748,7 +748,7 @@
                 <!-- File Path (read-only) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
-                    <span class="text-gray-900 dark:text-gray-100 break-words block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
+                    <span class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
                 </div>
 
                 <!-- Last Modified (read-only) -->
