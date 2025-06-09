@@ -207,6 +207,7 @@
                     console.error("[TableViewerPanel saveLayout] baseDirectory not available. Cannot save layout.");
                     return;
                 }
+                console.debug(`[TableViewerPanel saveCurrentTableLayout] Inputs for getRelativePath - currentLoadedPath: ${currentLoadedPath}, baseDirForSave: ${baseDirForSave}`);
                 const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
                 if (!relativePathForSave) {
                     console.error(`[TableViewerPanel saveCurrentTableLayout] Could not determine relative path for DB key. Absolute path: ${currentLoadedPath}`);
