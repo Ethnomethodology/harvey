@@ -108,18 +108,18 @@ pub async fn run_transcription(
                         Some(records)
                     }
                     Err(e) => {
-                        error!("[Transcription][Job '{}'] Failed parse RTTM '{}': {}", job_id, rttm_path.display(), e.message);
+                        error!("[Transcription][Job '{}'] Failed parse RTTM '{}': {}", job_id, rttm_path.display(), e);
                         let _ = emit_progress(&app_handle, &job_id, 85.0, "RTTM parse failed.").await;
                         None
                     }
                 }
             },
             Err(e) => {
-                if e.message.contains("cancelled") || e.message.contains("canceled") {
+                if format!("{}", e).contains("cancelled") || format!("{}", e).contains("canceled") {
                     info!("[Transcription][Job '{}'] Diarization explicitly cancelled.", job_id);
                      return Err(CommandError::from("Diarization cancelled."));
                  } else {
-                    error!("[Transcription][Job '{}'] Diarization failed: {}.", job_id, e.message);
+                    error!("[Transcription][Job '{}'] Diarization failed: {}.", job_id, e);
                     warn!("Ensure diarization CLI (diarize-cli) is installed and accessible (e.g., via pipx or venv).");
                     let _ = emit_progress(&app_handle, &job_id, 85.0, "Diarization failed.").await;
                     None

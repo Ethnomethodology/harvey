@@ -1306,13 +1306,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
             info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
+            let mut _updated_xml = false;
 
             if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.clone();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
                 project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                updated_xml = true;
+                _updated_xml = true;
                 info!("[Backend Rename] XML imported transcript entry updated.");
             } else {
                 // This should ideally not happen if DB update was successful, as it means XML was out of sync.
@@ -1321,7 +1321,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             // Logic for updating project_data.document_metadata_files.files is REMOVED.
 
-            if updated_xml {
+            if _updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
 
@@ -1515,7 +1515,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get old table filename string from {}", old_table_file_abs_path.display())))?
                 .to_string();
-            let old_table_stem_str = old_table_file_abs_path.file_stem()
+            let _old_table_stem_str = old_table_file_abs_path.file_stem()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| CommandError::from(format!("Could not get old table stem string from {}", old_table_file_abs_path.display())))?
                 .to_string();

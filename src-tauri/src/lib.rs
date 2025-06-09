@@ -22,7 +22,7 @@ pub struct TranscriptionCancellationState(pub Arc<DashMap<String, Arc<AtomicBool
 pub fn run() {
     if let Err(e) = crate::welcome::config::ensure_config_dir_exists() {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-        log::error!("Fatal Error: Failed to ensure config directory exists: {}", e.message);
+        log::error!("Fatal Error: Failed to ensure config directory exists: {}", e);
     } else {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     }

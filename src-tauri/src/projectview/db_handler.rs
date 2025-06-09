@@ -29,13 +29,13 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub asset_type: String,
 }
 
-fn get_db_path() -> Result<PathBuf, String> {
-    let config_dir = get_config_dir().map_err(|e| format!("Failed to get config dir: {}", e.message))?;
+fn get_db_path() -> Result<PathBuf, CommandError> {
+    let config_dir = get_config_dir().map_err(|e| CommandError::Message(format!("Failed to get config dir from welcome/config: {}", e)))?;
     Ok(config_dir.join(DB_FILE_NAME))
 }
 
-pub fn init_db() -> Result<()> {
-    let db_path = get_db_path().map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+pub fn init_db() -> Result<(), CommandError> {
+    let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     debug!("[DB] Initializing database at: {}", db_path.display());
@@ -169,7 +169,7 @@ pub fn init_db() -> Result<()> {
 
 pub fn save_table_layout_preferences(table_asset_relative_path: &str, layout_json: &str) -> Result<(), CommandError> {
     debug!("[DB] Saving table layout preferences for: {}", table_asset_relative_path);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     // Check if asset metadata exists
@@ -196,7 +196,7 @@ pub fn save_table_layout_preferences(table_asset_relative_path: &str, layout_jso
 
 pub fn load_table_layout_preferences(table_asset_relative_path: &str) -> Result<Option<String>, CommandError> {
     debug!("[DB] Loading table layout preferences for: {}", table_asset_relative_path);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None for table layout: {}", db_path.display(), table_asset_relative_path);
         return Ok(None);
@@ -244,7 +244,7 @@ pub fn save_asset_metadata(
         "[DB] Saving asset metadata for: {} (type: {})",
         asset_relative_path, asset_type
     );
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     if let Some(parent_dir) = db_path.parent() {
@@ -311,7 +311,7 @@ pub fn save_asset_metadata(
 
 pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
     debug!("[DB] Loading asset metadata for: {}", asset_relative_path);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None for asset: {}", db_path.display(), asset_relative_path);
         return Ok(None);
@@ -352,7 +352,7 @@ pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetad
 
 pub fn delete_asset_metadata(asset_relative_path: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting asset metadata for: {}", asset_relative_path);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to delete for asset: {}", db_path.display(), asset_relative_path);
         return Ok(());
@@ -378,7 +378,7 @@ pub fn rename_asset_metadata_key(
         "[DB] Renaming asset metadata key from {} to {}, new_path: {}, new_name: {}",
         old_relative_path, new_relative_path, new_file_path, new_file_name
     );
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
      if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to rename for asset: {}", db_path.display(), old_relative_path);
         return Ok(());
@@ -430,7 +430,7 @@ use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope};
 
 pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDefinition) -> Result<(), CommandError> {
     debug!("[DB] Adding custom field definition for project_id {}: {}", project_id, definition.field_key);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     conn.execute(
@@ -453,7 +453,7 @@ pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDef
 
 pub fn get_custom_field_definition(project_id: &str, field_key: &str) -> Result<Option<CustomFieldDefinition>, CommandError> {
     debug!("[DB] Getting custom field definition for project_id {} and key: {}", project_id, field_key);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare(
@@ -485,7 +485,7 @@ pub fn get_custom_field_definition(project_id: &str, field_key: &str) -> Result<
 
 pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFieldDefinition>, CommandError> {
     debug!("[DB] Getting all custom field definitions for project_id {}", project_id);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     let mut stmt = conn.prepare(
@@ -517,7 +517,7 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
 
 pub fn update_custom_field_definition(project_id: &str, definition: &CustomFieldDefinition) -> Result<(), CommandError> {
     debug!("[DB] Updating custom field definition for project_id {}: {}", project_id, definition.field_key);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
     // The trigger 'update_custom_field_definitions_updated_at' will handle updating 'updated_at'.
     let changes = conn.execute(
@@ -544,7 +544,7 @@ pub fn update_custom_field_definition(project_id: &str, definition: &CustomField
 
 pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting custom field definition for project_id {}: {}", project_id, field_key);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(db_path)?;
 
     let changes = conn.execute(
@@ -565,7 +565,7 @@ pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Resu
 
 pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<Option<String>, CommandError> {
     debug!("[DB] Loading annotations for: {} (type: {})", document_path, doc_type);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None.", db_path.display());
         return Ok(None);
@@ -579,7 +579,7 @@ pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<O
 
 pub fn save_annotations_to_db(document_path: &str, annotations_json: &str, doc_type: &str) -> Result<(), CommandError> {
     debug!("[DB] Saving annotations for: {} (type: {})", document_path, doc_type);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
     if let Some(parent_dir) = db_path.parent() {
@@ -603,7 +603,7 @@ pub fn save_annotations_to_db(document_path: &str, annotations_json: &str, doc_t
 
 pub fn delete_annotations_from_db(document_path: &str, doc_type: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting annotations for: {} (type: {})", document_path, doc_type);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
      if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to delete for {} (type: {}).", db_path.display(), document_path, doc_type);
         return Ok(());
@@ -620,7 +620,7 @@ pub fn delete_annotations_from_db(document_path: &str, doc_type: &str) -> Result
 
 pub fn rename_annotations_in_db(old_document_path: &str, new_document_path: &str, doc_type: &str) -> Result<(), CommandError> {
     debug!("[DB] Renaming annotations from {} to {} (type: {})", old_document_path, new_document_path, doc_type);
-    let db_path = get_db_path().map_err(|e| CommandError::RusqliteError(format!("Failed to get DB path: {}", e)))?;
+    let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to rename for {} (type: {}).", db_path.display(), old_document_path, doc_type);
         return Ok(());

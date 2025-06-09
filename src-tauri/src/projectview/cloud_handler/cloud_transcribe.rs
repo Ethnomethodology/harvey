@@ -272,8 +272,8 @@ pub async fn run_cloud_transcription(
                     warn!("[Gemini Parse][Job '{}'] Skipping segment {} due to end time ({}) <= start time ({}): Text='{}...'", job_id, idx, gs.end_time, gs.start_time, gs.text.chars().take(30).collect::<String>());
                 }
             }
-            (Err(e_start), _) => { error!("[Gemini Parse][Job '{}'] Failed parsing start time '{}' for segment {}: {}", job_id, gs.start_time, idx, e_start.message); }
-            (_, Err(e_end)) => { error!("[Gemini Parse][Job '{}'] Failed parsing end time '{}' for segment {}: {}", job_id, gs.end_time, idx, e_end.message); }
+            (Err(e_start), _) => { error!("[Gemini Parse][Job '{}'] Failed parsing start time '{}' for segment {}: {}", job_id, gs.start_time, idx, e_start); }
+            (_, Err(e_end)) => { error!("[Gemini Parse][Job '{}'] Failed parsing end time '{}' for segment {}: {}", job_id, gs.end_time, idx, e_end); }
         }
     }
     info!("[Gemini Transcribe][Job '{}'] Successfully parsed {} plain text segments from Gemini response.", job_id, plain_text_segments.len());
