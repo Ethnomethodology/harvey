@@ -65,12 +65,45 @@ $paddingLarge: 1rem; // Equivalent to Tailwind's p-4
     .tabulator-col {
       border-right: 1px solid $headerBorderColor;
 
+      &:hover {
+        background-color: var(--ui-icon-hover-bg); // Use a pre-defined hover color
+      }
+
+      // Styles for sortable columns
+      &.tabulator-sortable {
+        // Hover state for a sortable column (before it's sorted)
+        &:hover {
+          background-color: var(--ui-icon-hover-bg);
+        }
+
+        // Styles for a column that IS currently sorted
+        &[aria-sort] {
+          // Use a distinct background to indicate it's an active sorting column
+          background-color: var(--ui-option-hover-bg);
+          color: $headerTextColor; // Ensure text remains readable
+
+          // Style for the sort arrow
+          .tabulator-col-content .tabulator-arrow {
+             border-top-color: $headerTextColor; // Color for up arrow
+             border-bottom-color: $headerTextColor; // Color for down arrow
+          }
+        }
+
+        // Hover state for an ALREADY sorted column
+        &[aria-sort]:hover {
+          // Can be the same as general column hover or slightly different
+          background-color: var(--ui-icon-hover-bg);
+          // filter: brightness(95%); // Alternative if you want to slightly change the --ui-icon-hover-bg
+        }
+      }
+
       .tabulator-col-content {
         padding: $paddingSmall $paddingMedium;
       }
 
       .tabulator-col-title {
         white-space: normal;
+        // Add overrides here if needed (e.g., for specific hover states on title)
       }
 
       .tabulator-header-filter {
@@ -86,6 +119,7 @@ $paddingLarge: 1rem; // Equivalent to Tailwind's p-4
           &:focus {
             border-color: var(--ui-select-border-focus, #3b82f6);
             outline: none;
+            box-shadow: none; // Remove default focus shadow if any
           }
         }
       }
