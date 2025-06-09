@@ -456,9 +456,7 @@
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden"
      class:p-3={!$panelStateStore.notesLeftPanelCollapsed}
      class:p-2={$panelStateStore.notesLeftPanelCollapsed}>
-	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
-        class:h-7={$panelStateStore.notesLeftPanelCollapsed}
-        class:h-10={!$panelStateStore.notesLeftPanelCollapsed}
+	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-7"
         class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
@@ -509,7 +507,7 @@
             autocapitalize="off"
             spellcheck="false"
             placeholder="Search..."
-            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm {showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-2' : 'opacity-0 w-0 pl-12 pr-10 py-2'}"
+            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm {showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-0.5' : 'opacity-0 w-0 pl-12 pr-10 py-0.5'}"
             on:click|stopPropagation
             />
         {/if}
