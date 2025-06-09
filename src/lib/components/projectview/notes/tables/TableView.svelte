@@ -33,7 +33,7 @@
     <!-- Left Panel (Shared) -->
     <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
          class:w-12={$panelStateStore.leftCollapsed}
-         class:w-[20.588%]={!$panelStateStore.leftCollapsed}>
+         class:w-1/5={!$panelStateStore.leftCollapsed}>
         <LeftInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
@@ -52,7 +52,7 @@
     <!-- Right Panel (Shared) -->
     <div class="h-full flex-shrink-0 transition-all duration-300 ease-in-out"
          class:w-12={$panelStateStore.rightCollapsed}
-         class:w-[20.588%]={!$panelStateStore.rightCollapsed}>
+         class:w-1/5={!$panelStateStore.rightCollapsed}>
         <RightInfoPanel itemPath={itemPath} itemType="table" />
     </div>
 
@@ -61,5 +61,5 @@
 <style>
 	.min-h-0 { min-height: 0; }
     /* Define width classes using arbitrary values */
-    .w-\[20\.588\%\] { width: 20.58825%; }
+    /* .w-\[20\.588\%\] { width: 20.58825%; } */ /* Replaced with w-1/5 */
 </style>

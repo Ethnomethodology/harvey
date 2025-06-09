@@ -689,9 +689,7 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
-      class:p-3={!$panelStateStore.leftCollapsed}
-      class:p-2={$panelStateStore.leftCollapsed}
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out p-2"
       class:w-full={!$panelStateStore.leftCollapsed}
       class:w-12={$panelStateStore.leftCollapsed} >
     <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center h-7"
