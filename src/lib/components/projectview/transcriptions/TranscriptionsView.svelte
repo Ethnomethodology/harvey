@@ -241,7 +241,7 @@
 
 </script>
 
-<div class="flex flex-col h-screen w-full overflow-visible">
+<div class="flex flex-col h-screen w-full overflow-hidden">
     <TopBar
         bind:this={topBarRef}
         bind:editMode={panelEditModeActive}
@@ -250,7 +250,7 @@
         on:toggleEditMode={handleToggleEditMode}
     />
     <div class="flex flex-grow min-h-0 p-1 gap-1 w-full">
-        <div class="w-[15%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-visible">
+        <div class="w-[15%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">

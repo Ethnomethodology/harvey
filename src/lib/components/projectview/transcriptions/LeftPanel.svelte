@@ -3,36 +3,13 @@
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { transcriptStore, selectMedia } from '$lib/stores/transcriptStore.js';
-	import panelStateStore from '$lib/stores/panelStateStore.js'; // Corrected import
 	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
 	import TreeNode from './TreeNode.svelte';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { createEventDispatcher } from 'svelte';
-    import CategoryTooltip from '../notes/CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
-
-	// --- Tooltip State ---
-	let tooltipVisible = false;
-	let tooltipCategoryName = '';
-	let tooltipItems = [];
-	let tooltipX = 0;
-	let tooltipY = 0;
-
-	// --- Tooltip Functions ---
-	function showTooltip(event, category, items) {
-		const buttonRect = event.currentTarget.getBoundingClientRect();
-		tooltipCategoryName = category;
-		tooltipItems = items;
-		tooltipX = buttonRect.right + 8; // Position to the right of the button
-		tooltipY = buttonRect.top;
-		tooltipVisible = true;
-	}
-
-	function hideTooltip() {
-		tooltipVisible = false;
-	}
 
 	// --- State for Accordion Sections ---
 	let openSection = 'files';
@@ -285,7 +262,6 @@
 <!-- Main Container -->
 <div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200">
 
-	{#if !$panelStateStore.leftCollapsed}
 	<!-- Media Files Accordion Header -->
 	<div class="border-b border-gray-300 dark:border-gray-700 flex-shrink-0">
 		<div
@@ -348,32 +324,6 @@
 			</ul>
 		</div>
 	{/if}
-	{:else}
-	<!-- Collapsed Panel Buttons -->
-	<div class="flex flex-col items-center space-y-2 py-2 border-b border-gray-300 dark:border-gray-700 flex-shrink-0">
-		<button
-			class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-			title="Media Files"
-			on:mouseenter={(event) => showTooltip(event, 'Media Files', $project.files && $project.files.length > 0 ? $project.files.filter(f => f.file_type === 'media').slice(0, 5).map(f => ({name: f.name || f.path})) : [{name: 'No media files'}])}
-			on:mouseleave={hideTooltip}
-			on:focus={(event) => showTooltip(event, 'Media Files', $project.files && $project.files.length > 0 ? $project.files.filter(f => f.file_type === 'media').slice(0, 5).map(f => ({name: f.name || f.path})) : [{name: 'No media files'}])}
-			on:blur={hideTooltip}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.5a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h3.879a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H18A2.25 2.25 0 0 1 20.25 9v.776" /></svg>
-		</button>
-		<button
-			class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-			title="Shortcuts"
-			on:mouseenter={(event) => showTooltip(event, 'Shortcuts', [{name: 'Ctrl + E: Edit Segment'}, {name: 'Ctrl + S: Save Transcript'}, {name: 'F8: Play/Pause'}])}
-			on:mouseleave={hideTooltip}
-			on:focus={(event) => showTooltip(event, 'Shortcuts', [{name: 'Ctrl + E: Edit Segment'}, {name: 'Ctrl + S: Save Transcript'}, {name: 'F8: Play/Pause'}])}
-			on:blur={hideTooltip}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
-		</button>
-	</div>
-	{/if}
-
 
 	<!-- Context Menu -->
 	{#if contextMenuVisible && contextMenuItem}
@@ -411,14 +361,6 @@
 	itemType={itemToRename?.file_type || ''}
 	on:confirm={handleRenameConfirm}
 	on:close={handleRenameModalClose}
-/>
-
-<CategoryTooltip
-	bind:visible={tooltipVisible}
-	categoryName={tooltipCategoryName}
-	items={tooltipItems}
-	x={tooltipX}
-	y={tooltipY}
 />
 
 <style>

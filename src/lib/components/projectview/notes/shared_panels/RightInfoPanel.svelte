@@ -1,14 +1,37 @@
 <!-- src/lib/components/projectview/notes/shared_panels/RightInfoPanel.svelte -->
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { slide } from 'svelte/transition';
     import { sineInOut } from 'svelte/easing';
     import StickiesIcon from '$lib/components/icons/StickiesIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
+    import CategoryTooltip from '../CategoryTooltip.svelte';
 
     // This panel is now generic, props might be needed later
     // export let itemPath = null;
     // export let itemType = null; // e.g., 'document', 'table'
+
+    let tooltipVisible = false;
+    let tooltipContentName = 'Highlights';
+    let tooltipContentFiles = [];
+    let tooltipX = 0;
+    let tooltipY = 0;
+
+    function showTooltip(event) {
+        if (!$panelStateStore.rightCollapsed) {
+            return;
+        }
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        tooltipContentName = 'Highlights Panel';
+        tooltipContentFiles = [{ name: 'View and manage item metadata and highlights.' }];
+        tooltipX = buttonRect.right + 8;
+        tooltipY = buttonRect.top;
+        tooltipVisible = true;
+    }
+
+    function hideTooltip() {
+        tooltipVisible = false;
+    }
 
     onMount(() => {
         console.log('[RightInfoPanel] Mounted.');
@@ -27,7 +50,11 @@
         <button
             on:click={panelStateStore.toggleRightPanel}
             class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            title={$panelStateStore.rightCollapsed ? 'Expand Highlights' : 'Collapse Highlights'}
+            title={$panelStateStore.rightCollapsed ? 'Expand Highlights Panel' : 'Collapse Highlights Panel'}
+            on:mouseenter={showTooltip}
+            on:mouseleave={hideTooltip}
+            on:focus={showTooltip}
+            on:blur={hideTooltip}
         >
             <StickiesIcon class="w-4 h-4"/>
         </button>
@@ -45,6 +72,14 @@
     </div>
     {/if}
 </div>
+
+<CategoryTooltip
+    bind:visible={tooltipVisible}
+    categoryName={tooltipContentName}
+    files={tooltipContentFiles}
+    x={tooltipX}
+    y={tooltipY}
+/>
 
  <style lang="postcss">
     .min-h-0 { min-height: 0; }
