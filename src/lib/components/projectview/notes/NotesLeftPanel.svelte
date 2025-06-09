@@ -478,54 +478,63 @@
 
     let activeCollapsedCategoryType = null;
 
-    $: {
-        if (selectedItemPathInStore && $project.baseDirectory) {
-            const path = selectedItemPathInStore;
-            const extension = path.split('.').pop()?.toLowerCase() || '';
-            let determinedItemType = null;
+$: {
+    if (selectedItemPathInStore && $project.baseDirectory) {
+        const path = selectedItemPathInStore;
+        const extension = path.split('.').pop()?.toLowerCase() || '';
+        let determinedItemType = null;
 
-            // Check project file lists first
-            const projectFileLists = [
-                { files: $project.mediaFiles, type: 'audio', extensions: AUDIO_EXTENSIONS },
-                { files: $project.mediaFiles, type: 'video', extensions: VIDEO_EXTENSIONS },
-                { files: $project.imageFiles, type: 'image', isRelative: true },
-                { files: $project.tableFiles, type: 'table', isRelative: true },
-                { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true },
-                { files: $project.documentFiles, type: 'document', isRelative: true }
+        if (AUDIO_EXTENSIONS.has(extension)) {
+            determinedItemType = 'audio';
+        } else if (VIDEO_EXTENSIONS.has(extension)) {
+            determinedItemType = 'video';
+        } else {
+            // Check specific project file lists for other types
+            // IMPORTANT: IMAGE_EXTENSIONS is already defined in the file.
+            // Define Table and specific Document extensions for clarity.
+            const TABLE_EXTENSIONS = new Set(['csv', 'xlsx']);
+            const DOC_JSON_EXTENSIONS = new Set(['json']); // Specifically for general JSON documents
+            const TRANSCRIPT_EXTENSIONS = new Set(['json']); // Specifically for transcript JSON
+
+            const projectFileListsForOthers = [
+                // Order can be important if extensions overlap (e.g., JSON for transcripts vs general docs)
+                { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
+                { files: $project.imageFiles, type: 'image', isRelative: true, exts: IMAGE_EXTENSIONS },
+                { files: $project.tableFiles, type: 'table', isRelative: true, exts: TABLE_EXTENSIONS },
+                { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) } // Add others like pdf, txt, md
             ];
 
-            for (const listInfo of projectFileLists) {
+            for (const listInfo of projectFileListsForOthers) {
                 if (listInfo.files?.some(f => {
                     const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
-                    if (filePathToCheck === path) {
-                        if (listInfo.extensions) { // For mediaFiles that contain both audio and video
-                            return listInfo.extensions.has(extension);
-                        }
-                        return true;
-                    }
-                    return false;
+                    // Check path AND also that the extension matches the list's specified extensions
+                    return filePathToCheck === path && (listInfo.exts ? listInfo.exts.has(extension) : true);
                 })) {
                     determinedItemType = listInfo.type;
                     break;
                 }
             }
 
-            // Fallback for general document types if not caught by specific lists
+            // Fallback for general document types if not caught by specific lists AND not already determined
             if (!determinedItemType) {
                 if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
                     determinedItemType = 'document';
-                } else if (extension === 'json') {
-                    // If it's a JSON file not already identified as an imported_transcript or other specific JSON type from lists
+                } else if (DOC_JSON_EXTENSIONS.has(extension)) {
+                    // This ensures any .json not caught as a transcript (checked first) or specific document type
+                    // is treated as a general document.
                     determinedItemType = 'document';
                 }
+                // Note: Fallbacks for table or image extensions are less likely needed here
+                // if they are robustly caught by $project.tableFiles / $project.imageFiles with their exts.
             }
-
-            activeCollapsedCategoryType = determinedItemType;
-            console.log('[NotesLeftPanel] Active Category Type for Highlighting:', activeCollapsedCategoryType);
-        } else {
-            activeCollapsedCategoryType = null;
         }
+
+        activeCollapsedCategoryType = determinedItemType;
+        console.log('[NotesLeftPanel] Active Category Type for Highlighting:', activeCollapsedCategoryType);
+    } else {
+        activeCollapsedCategoryType = null;
     }
+}
 
 </script>
 
