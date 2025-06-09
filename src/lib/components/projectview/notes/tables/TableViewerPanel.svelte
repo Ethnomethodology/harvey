@@ -173,13 +173,12 @@
                 // Continue with default layout
             }
 
-            let initialLayoutMode = "fitDataTable"; // Default
+            let initialLayoutMode;
             if (!savedLayout) {
-                // On first load (no saved layout), always use fitDataTable to enable specific column widths
-                initialLayoutMode = "fitDataTable";
+                initialLayoutMode = "fitColumns"; // Changed from fitDataTable
                 console.debug(`[TableViewerPanel] No saved layout for ${relativeTablePath}, using ${initialLayoutMode} for first load.`);
             } else {
-                initialLayoutMode = "fitData"; // Use fitData if layout is loaded to respect saved widths
+                initialLayoutMode = "fitData";
                 console.debug(`[TableViewerPanel] Saved layout found for ${relativeTablePath}, using ${initialLayoutMode}.`);
             }
 
@@ -395,7 +394,10 @@
                 field: header,
                 headerFilter: "input",
                 sorter: inferSorter(data, header),
-                formatter: "textarea",
+                formatter: "textarea", // Current formatter
+                formatterParams: { // Add this
+                    autoResize: false // Prevent textarea from resizing to content
+                }
             };
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
@@ -602,4 +604,26 @@
     font-weight: bold !important;
     border-color: #0d6efd !important; /* Ensure border matches */
 }
+
+        :global(.tabulator-cell) {
+            overflow: hidden; /* Prevent cell itself from showing overflow if textarea somehow fails */
+            word-break: break-all; /* Help break very long words at cell level */
+        }
+
+        :global(.tabulator-cell textarea) {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: auto; /* Important: allow scrollbars within the textarea */
+            white-space: pre-wrap; /* Respect newlines, wrap text */
+            word-break: break-all; /* Break long words within textarea */
+            border: none;
+            resize: none;
+            padding: 2px 4px; /* Adjust to match Tabulator's default cell padding or desired look */
+            margin: 0;
+            background-color: transparent; /* Inherit cell background */
+            color: inherit; /* Inherit cell text color */
+            font-family: inherit; /* Inherit cell font */
+            font-size: inherit; /* Inherit cell font size */
+        }
 </style>
