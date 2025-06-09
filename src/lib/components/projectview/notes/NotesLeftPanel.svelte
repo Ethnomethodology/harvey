@@ -456,11 +456,13 @@
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden"
      class:p-3={!$panelStateStore.notesLeftPanelCollapsed}
      class:p-2={$panelStateStore.notesLeftPanelCollapsed}>
-	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-10"
+	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+        class:h-7={$panelStateStore.notesLeftPanelCollapsed}
+        class:h-10={!$panelStateStore.notesLeftPanelCollapsed}
         class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
-        class:justify-between={!$panelStateStore.notesLeftPanelCollapsed}
-        class:justify-center={$panelStateStore.notesLeftPanelCollapsed}>
+        class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
+        class:justify-center={$panelStateStore.notesLeftPanelCollapsed || showSearchBox}>
     {#if !showSearchBox}
         <div class="flex items-center space-x-2">
             <button
