@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/shared_panels/LeftInfoPanel.svelte -->
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     // fsRename might still be used by projectService.js, direct fs calls for metadata are removed.
@@ -11,8 +11,83 @@
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
+    import CategoryTooltip from '../CategoryTooltip.svelte';
 
     const TRASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47ZM8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z"/></svg>`;
+
+    let labelTooltipVisible = false;
+    let labelTooltipTitle = '';
+    let labelTooltipText = '';
+    let labelTooltipX = 0;
+    let labelTooltipY = 0;
+
+    let documentClickHandler = null;
+
+    function showLabelTooltip(event, title, textContent) {
+        if (!$panelStateStore.leftCollapsed) return; // Ensure panel is actually collapsed
+
+        const GITHUB_ISSUE_MAX_TOOLTIP_WIDTH = 280; // Max width in px, adjust as needed
+        const GITHUB_ISSUE_TOOLTIP_OFFSET_X = 4; // Offset from the right edge of the label
+        const GITHUB_ISSUE_VIEWPORT_MARGIN = 8; // Margin from viewport edges
+
+        const targetRect = event.currentTarget.getBoundingClientRect();
+
+        labelTooltipTitle = title;
+        labelTooltipText = textContent || ''; // Ensure textContent is not null/undefined
+
+        // Position tooltip to the right of the label
+        let potentialX = targetRect.right + GITHUB_ISSUE_TOOLTIP_OFFSET_X;
+        let potentialY = targetRect.top;
+
+        // Basic collision detection with viewport (assuming tooltip width)
+        // This doesn't dynamically get the tooltip's rendered width, uses a constant
+        if (potentialX + GITHUB_ISSUE_MAX_TOOLTIP_WIDTH > window.innerWidth - GITHUB_ISSUE_VIEWPORT_MARGIN) {
+            // If it overflows right, position it to the left of the label
+            potentialX = targetRect.left - GITHUB_ISSUE_MAX_TOOLTIP_WIDTH - GITHUB_ISSUE_TOOLTIP_OFFSET_X;
+            if (potentialX < GITHUB_ISSUE_VIEWPORT_MARGIN) { // If it also overflows left, reset to right
+                 potentialX = targetRect.right + GITHUB_ISSUE_TOOLTIP_OFFSET_X;
+            }
+        }
+
+        // Basic Y collision (less common for tooltips usually, but good to have)
+        // Assuming tooltip height is roughly targetRect.height for simplicity here, real height unknown
+        if (potentialY + targetRect.height > window.innerHeight - GITHUB_ISSUE_VIEWPORT_MARGIN) {
+            potentialY = targetRect.bottom - targetRect.height; // Adjust if it overflows bottom
+        }
+        if (potentialY < GITHUB_ISSUE_VIEWPORT_MARGIN) {
+            potentialY = GITHUB_ISSUE_VIEWPORT_MARGIN; // Adjust if it overflows top
+        }
+
+        labelTooltipX = potentialX;
+        labelTooltipY = potentialY;
+        labelTooltipVisible = true;
+
+        if (labelTooltipVisible && !documentClickHandler) {
+            documentClickHandler = (e_click) => {
+                hideLabelTooltip();
+            };
+            setTimeout(() => {
+                if (labelTooltipVisible) {
+                    document.addEventListener('click', documentClickHandler);
+                }
+            }, 0);
+        }
+    }
+
+    function hideLabelTooltip() {
+        if (documentClickHandler) {
+            document.removeEventListener('click', documentClickHandler);
+            documentClickHandler = null;
+        }
+        labelTooltipVisible = false;
+    }
+
+    onDestroy(() => {
+        if (documentClickHandler) {
+            document.removeEventListener('click', documentClickHandler);
+            documentClickHandler = null;
+        }
+    });
 
     async function handleDeleteCustomField(fieldKey) {
         const confirmed = await confirm(
@@ -21,22 +96,22 @@
         );
         if (confirmed) {
             try {
-                console.debug(`[LeftInfoPanel] User confirmed deletion for fieldKey: ${fieldKey}`);
+                // console.debug(`[LeftInfoPanel] User confirmed deletion for fieldKey: ${fieldKey}`); // Removed
                 await deleteDefinition(fieldKey); // This already calls loadAllDefinitions
                 await message('Custom field definition deleted successfully.', { title: 'Success' });
             } catch (error) {
-                console.error(`[LeftInfoPanel] Error deleting custom field definition ${fieldKey}:`, error);
+                // console.error(`[LeftInfoPanel] Error deleting custom field definition ${fieldKey}:`, error); // Removed
                 await message(`Failed to delete custom field: ${error.message || error}`, { title: 'Error', type: 'error' });
             }
         } else {
-            console.debug(`[LeftInfoPanel] User cancelled deletion for fieldKey: ${fieldKey}`);
+            // console.debug(`[LeftInfoPanel] User cancelled deletion for fieldKey: ${fieldKey}`); // Removed
         }
     }
 
     // Helper function to get details of the original asset
     async function getOriginalAssetDetails(selectedPath, projectStore) {
         if (!selectedPath || !projectStore || !projectStore.baseDirectory) {
-            console.warn('[LeftInfoPanel] getOriginalAssetDetails: Missing selectedPath or projectStore data.'); // Kept as warn
+            // console.warn('[LeftInfoPanel] getOriginalAssetDetails: Missing selectedPath or projectStore data.'); // Kept as warn // Removed
             const fallbackName = selectedPath ? await basename(selectedPath) : 'Unknown.file';
             return {
                 originalRelativePath: selectedPath, // Fallback, might not be relative
@@ -102,7 +177,7 @@
                                 originalFileName = docFile.name;
                                 originalType = await getFileExtname(originalFileName).then(ext => ext ? ext.toLowerCase() : 'unknown');
                                 isView = true;
-                                console.debug(`[LeftInfoPanel] getOriginalAssetDetails: Identified original asset for JSON view: ${originalFileName} (Rel: ${originalRelativePath})`); // Downgraded
+                                // console.debug(`[LeftInfoPanel] getOriginalAssetDetails: Identified original asset for JSON view: ${originalFileName} (Rel: ${originalRelativePath})`); // Downgraded // Removed
                                 break; // Found original, break from docFile loop
                             }
                         }
@@ -179,15 +254,15 @@
     let displayableCustomFields = []; // For read mode
 
     onMount(async () => {
-        console.debug('[LeftInfoPanel] Mounted.'); // Downgraded
+        // console.debug('[LeftInfoPanel] Mounted.'); // Downgraded // Removed
         previousSelectedItemPath = null;
-        console.debug('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore); // Downgraded
+        // console.debug('[LeftInfoPanel onMount] Initial selectedItemPathInStore (at mount):', selectedItemPathInStore); // Downgraded // Removed
         try {
-            console.debug('[LeftInfoPanel onMount] Loading all custom field definitions...'); // Downgraded
+            // console.debug('[LeftInfoPanel onMount] Loading all custom field definitions...'); // Downgraded // Removed
             await loadAllDefinitions();
-            console.info('[LeftInfoPanel onMount] Custom field definitions loaded.'); // Kept as info - important one-time setup
+            // console.info('[LeftInfoPanel onMount] Custom field definitions loaded.'); // Kept as info - important one-time setup // Removed
         } catch (error) {
-            console.error('[LeftInfoPanel onMount] Error loading custom field definitions:', error); // Keep as error
+            // console.error('[LeftInfoPanel onMount] Error loading custom field definitions:', error); // Keep as error // Removed
             message(`Error loading custom field definitions: ${error.message || error}`, { title: 'Error', type: 'error' }); // Keep for user
         }
     });
@@ -200,12 +275,12 @@
         }
 
         if (!assetRelativePath) {
-            console.warn('[LeftInfoPanel] loadMetadata called with no assetRelativePath.'); // Keep as warn
+            // console.warn('[LeftInfoPanel] loadMetadata called with no assetRelativePath.'); // Keep as warn // Removed
             return;
         }
 
         try {
-            console.debug(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`); // Downgraded
+            // console.debug(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`); // Downgraded // Removed
             const result = await invoke('get_asset_metadata_command', { assetRelativePath: assetRelativePath });
 
             if (result) {
@@ -241,9 +316,9 @@
                     asset_type: currentItemType, // Use currentItemType which is already based on original asset
                     version: "db_1.0"
                 };
-                console.debug('[LeftInfoPanel] Metadata loaded from DB for:', assetRelativePath); // Downgraded, removed full object log
+                // console.debug('[LeftInfoPanel] Metadata loaded from DB for:', assetRelativePath); // Downgraded, removed full object log // Removed
             } else {
-                console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath); // Keep as warn
+                // console.warn('[LeftInfoPanel] No metadata found in DB for:', assetRelativePath); // Keep as warn // Removed
                 // assetRelativePath is original relative path
                 const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath);
                 const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath);
@@ -259,7 +334,7 @@
                 fullLoadedMetadataObject = { metadata: { ...currentFileMetadata }, customFields: [], version: "db_1.0_new" }; // Here, currentFileMetadata.db_absolute_file_path is originalAbsolutePathToUse
             }
         } catch (error) {
-            console.error(`[LeftInfoPanel] Error loading metadata from DB for ${assetRelativePath}:`, error);
+            // console.error(`[LeftInfoPanel] Error loading metadata from DB for ${assetRelativePath}:`, error); // Removed
             const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath || 'Unknown.file').catch(() => 'Unknown.file');
             const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory && assetRelativePath ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath || '');
 
@@ -277,7 +352,7 @@
 
         // Fallback if currentFileMetadata is still null after try-catch
         if (!currentFileMetadata) { // This block might be redundant if currentOriginalAssetDetails is guaranteed to be set before loadMetadata is called.
-            console.warn('[LeftInfoPanel] currentFileMetadata is null after load attempt, creating fallback structure for:', assetRelativePath); // Keep as warn
+            // console.warn('[LeftInfoPanel] currentFileMetadata is null after load attempt, creating fallback structure for:', assetRelativePath); // Keep as warn // Removed
             const originalFileNameToUse = currentOriginalAssetDetails?.originalFileName || await basename(assetRelativePath || 'Unknown.file').catch(() => 'Unknown.file');
             const originalAbsolutePathToUse = currentOriginalAssetDetails?.originalAbsolutePath || ($project.baseDirectory && assetRelativePath ? `${$project.baseDirectory}${getPathSep}${assetRelativePath}` : assetRelativePath || '');
 
@@ -294,21 +369,21 @@
     }
 
     function toggleEditMode() {
-        console.debug('[LeftInfoPanel] toggleEditMode called. isEditing before:', isEditing); // Downgraded
+        // console.debug('[LeftInfoPanel] toggleEditMode called. isEditing before:', isEditing); // Downgraded // Removed
         isEditing = !isEditing;
-        console.debug('[LeftInfoPanel] isEditing after:', isEditing); // Downgraded
+        // console.debug('[LeftInfoPanel] isEditing after:', isEditing); // Downgraded // Removed
     }
 
     async function handleSaveMetadata() {
-        console.debug('[LeftInfoPanel] handleSaveMetadata called.'); // Downgraded
+        // console.debug('[LeftInfoPanel] handleSaveMetadata called.'); // Downgraded // Removed
         let renameProcessed = false;
         if (!currentFileMetadata || !currentFileMetadata.file_path) { // file_path is the relative path (DB key)
-            console.error('[LeftInfoPanel] Save error: Missing file_path in currentFileMetadata.'); // Keep as error
+            // console.error('[LeftInfoPanel] Save error: Missing file_path in currentFileMetadata.'); // Keep as error // Removed
             await message('Cannot save: File path information is missing.', { title: 'Save Error', type: 'error' }); // Keep for user
             return;
         }
         if (!currentItemType) {
-            console.error('[LeftInfoPanel] Save error: currentItemType is not set.'); // Keep as error
+            // console.error('[LeftInfoPanel] Save error: currentItemType is not set.'); // Keep as error // Removed
             await message('Cannot save: Item type is unknown.', { title: 'Save Error', type: 'error' }); // Keep for user
             return;
         }
@@ -348,12 +423,12 @@
                 }
 
                 try {
-                    console.log(`[LeftInfoPanel] Calling renameProjectItem service: path=${assetKeyForDb}, nameToSend=${nameToSendToBackendRenameService}, type=${currentItemType}`);
+                    // console.log(`[LeftInfoPanel] Calling renameProjectItem service: path=${assetKeyForDb}, nameToSend=${nameToSendToBackendRenameService}, type=${currentItemType}`); // Removed
                     // renameProjectItem service is expected to handle renaming in DB (key and fields) and filesystem, then update XML.
                     // The store update from XML change should trigger a reactive reload of metadata.
                     await renameProjectItem(assetKeyForDb, nameToSendToBackendRenameService, currentItemType);
 
-                    console.log('[LeftInfoPanel] Rename successful via renameProjectItem. Store update should handle metadata reload.');
+                    // console.log('[LeftInfoPanel] Rename successful via renameProjectItem. Store update should handle metadata reload.'); // Removed
                     isEditing = false;
                     renameProcessed = true;
                     // Important: After a successful rename, currentFileMetadata might be stale if the path/key changed.
@@ -363,7 +438,7 @@
                     // The user would effectively save title/desc *after* the rename is committed and UI reloads.
                     // For now, if renameProcessed is true, we skip the direct metadata save part below.
                 } catch (err) {
-                    console.error(`[LeftInfoPanel] renameProjectItem failed:`, err);
+                    // console.error(`[LeftInfoPanel] renameProjectItem failed:`, err); // Removed
                     await message(`Error renaming item: ${err.message || err}`, { title: 'Rename Failed', type: 'error' });
                     isEditing = true;
                     return;
@@ -381,7 +456,7 @@
                 const originalAssetAbsolutePath = currentFileMetadata.db_absolute_file_path;
 
                 if (!originalAssetAbsolutePath || originalAssetAbsolutePath.trim() === '') {
-                    console.error('[LeftInfoPanel] Save error: Original asset absolute path is missing or empty in currentFileMetadata.db_absolute_file_path.'); // Keep as error
+                    // console.error('[LeftInfoPanel] Save error: Original asset absolute path is missing or empty in currentFileMetadata.db_absolute_file_path.'); // Keep as error // Removed
                     // console.error('[LeftInfoPanel] currentFileMetadata details:', JSON.stringify(currentFileMetadata)); // Removed verbose object log
                     // console.error('[LeftInfoPanel] currentOriginalAssetDetails:', JSON.stringify(currentOriginalAssetDetails)); // Removed verbose object log
                     await message('Cannot save: Original asset absolute path could not be determined. Please try reloading the item or checking project integrity.', { title: 'Save Error', type: 'error' }); // Keep for user
@@ -394,7 +469,7 @@
                 // A simple check is if it contains the project's base directory, or starts with '/' or a drive letter e.g. C:\
                 // This is a basic sanity check. `resolve` in `getOriginalAssetDetails` should ensure it's absolute.
                 if (!originalAssetAbsolutePath.startsWith($project.baseDirectory) && !originalAssetAbsolutePath.startsWith('/') && !/^[a-zA-Z]:\\/.test(originalAssetAbsolutePath)) {
-                     console.warn(`[LeftInfoPanel] Save warning: The determined absolute path "${originalAssetAbsolutePath}" might not be truly absolute.`); // Keep as warn
+                     // console.warn(`[LeftInfoPanel] Save warning: The determined absolute path "${originalAssetAbsolutePath}" might not be truly absolute.`); // Keep as warn // Removed
                 }
 
                 const metadataPayloadForDb = {
@@ -417,9 +492,9 @@
 
                 const customFieldsToSaveForDb = editableMetadata.customFields || [];
 
-                console.debug('[LeftInfoPanel] Save Details - Key:', assetKeyForDb, 'AbsPath:', originalAssetAbsolutePath, 'Type:', currentItemType); // Downgraded critical checks
-                // console.debug('[LeftInfoPanel] Save Payload - Metadata:', JSON.stringify(metadataPayloadForDb)); // Downgraded verbose object log
-                // console.debug('[LeftInfoPanel] Save Payload - Custom Fields:', JSON.stringify(customFieldsToSaveForDb)); // Downgraded verbose object log
+                // console.debug('[LeftInfoPanel] Save Details - Key:', assetKeyForDb, 'AbsPath:', originalAssetAbsolutePath, 'Type:', currentItemType); // Downgraded critical checks // Removed
+                // console.debug('[LeftInfoPanel] Save Payload - Metadata:', JSON.stringify(metadataPayloadForDb)); // Downgraded verbose object log // Removed
+                // console.debug('[LeftInfoPanel] Save Payload - Custom Fields:', JSON.stringify(customFieldsToSaveForDb)); // Downgraded verbose object log // Removed
 
 
                 try {
@@ -450,17 +525,17 @@
 
                     // Explicitly reload metadata to refresh UI with any backend-derived changes (e.g. last_modified)
                     // assetKeyForDb is the original relative path, which is what loadMetadata expects
-                    console.info('[LeftInfoPanel] Explicitly reloading metadata after save for:', assetKeyForDb); // Kept as info
+                    // console.info('[LeftInfoPanel] Explicitly reloading metadata after save for:', assetKeyForDb); // Kept as info // Removed
                     await loadMetadata(assetKeyForDb);
 
                 } catch (err) {
-                    console.error('[LeftInfoPanel] Error saving metadata to DB:', err); // Keep as error
+                    // console.error('[LeftInfoPanel] Error saving metadata to DB:', err); // Keep as error // Removed
                     await message(`Error saving metadata: ${err}. Please check console.`, { title: 'Save Failed', type: 'error' }); // Keep for user
                     // isEditing = true; // Optionally keep editing mode
                 }
             }
         } catch (err) {
-            console.error('[LeftInfoPanel] General error in handleSaveMetadata:', err); // Keep as error
+            // console.error('[LeftInfoPanel] General error in handleSaveMetadata:', err); // Keep as error // Removed
             await message(`An unexpected error occurred: ${err.message || err}.`, { title: 'Error', type: 'error' }); // Keep for user
             isEditing = true;
         }
@@ -486,15 +561,15 @@
             let newCurrentItemType = null; // Was `newType` in the erroneous example, matching to actual code.
 
             const currentSelectedPathFromStore = selectedItemPathInStore; // Capture for this async operation
-            console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore);
+            // console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore); // Removed
 
             if (currentSelectedPathFromStore && $project && $project.baseDirectory) {
                 newOriginalAssetDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project); // Assign to declared variable
-                console.debug('[LeftInfoPanel Reactive] newOriginalAssetDetails determined:', newOriginalAssetDetails);
+                // console.debug('[LeftInfoPanel Reactive] newOriginalAssetDetails determined:', newOriginalAssetDetails); // Removed
 
                 if (newOriginalAssetDetails) {
                     newCurrentRelativePath = newOriginalAssetDetails.originalRelativePath; // Assign to declared variable
-                    console.debug('[LeftInfoPanel Reactive] originalRelativePath derived is:', newCurrentRelativePath);
+                    // console.debug('[LeftInfoPanel Reactive] originalRelativePath derived is:', newCurrentRelativePath); // Removed
                     const originalExt = newOriginalAssetDetails.originalType;
 
                     // --- Start of new currentItemType derivation ---
@@ -516,7 +591,7 @@
                                         break;
                                     }
                                 } catch (e) {
-                                    console.error("[LeftInfoPanel Type Check] Error resolving path for imported transcript check:", e);
+                                    // console.error("[LeftInfoPanel Type Check] Error resolving path for imported transcript check:", e); // Removed
                                 }
                             }
                         }
@@ -533,21 +608,21 @@
                     // --- End of new currentItemType derivation ---
                     if (currentItemType !== newCurrentItemType) { // Compare with component-level currentItemType
                         currentItemType = newCurrentItemType; // Update component-level currentItemType
-                         console.debug(`[LeftInfoPanel Reactive] currentItemType updated to: ${currentItemType}`);
+                         // console.debug(`[LeftInfoPanel Reactive] currentItemType updated to: ${currentItemType}`); // Removed
                     }
 
 
                     if (newCurrentRelativePath && newCurrentRelativePath !== previousSelectedItemPath) {
-                        console.info(`[LeftInfoPanel Reactive] Path changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`); // Kept as info
+                        // console.info(`[LeftInfoPanel Reactive] Path changed FROM '${previousSelectedItemPath}' TO '${newCurrentRelativePath}'. Triggering metadata load.`); // Kept as info // Removed
                         if (isEditing) {
-                            console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.');
+                            // console.debug('[LeftInfoPanel Reactive] Resetting isEditing to false due to path change.'); // Removed
                             isEditing = false;
                         }
                         currentOriginalAssetDetails = newOriginalAssetDetails;
                         await loadMetadata(newCurrentRelativePath);
                         previousSelectedItemPath = newCurrentRelativePath;
                     } else if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
-                        console.info(`[LeftInfoPanel Reactive] Path became null (was '${previousSelectedItemPath}'). Resetting metadata.`);
+                        // console.info(`[LeftInfoPanel Reactive] Path became null (was '${previousSelectedItemPath}'). Resetting metadata.`); // Removed
                         currentFileMetadata = null;
                         fullLoadedMetadataObject = null;
                         currentOriginalAssetDetails = null;
@@ -557,11 +632,11 @@
                     } else if (newCurrentRelativePath && newCurrentRelativePath === previousSelectedItemPath) {
                         if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newOriginalAssetDetails)) {
                              currentOriginalAssetDetails = newOriginalAssetDetails;
-                             console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.');
+                             // console.debug('[LeftInfoPanel Reactive] Updated currentOriginalAssetDetails as content changed but path remained same.'); // Removed
                         }
                     }
                 } else {
-                    console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`);
+                    // console.warn(`[LeftInfoPanel Reactive] getOriginalAssetDetails returned null/undefined for ${currentSelectedPathFromStore}.`); // Removed
                     if (previousSelectedItemPath !== null) {
                         currentFileMetadata = null;
                         fullLoadedMetadataObject = null;
@@ -572,7 +647,7 @@
                     }
                 }
             } else if (!currentSelectedPathFromStore && previousSelectedItemPath !== null) {
-                console.info(`[LeftInfoPanel Reactive] No item selected (currentSelectedPathFromStore is null). Resetting metadata.`); // Kept as info
+                // console.info(`[LeftInfoPanel Reactive] No item selected (currentSelectedPathFromStore is null). Resetting metadata.`); // Kept as info // Removed
                 currentFileMetadata = null;
                 fullLoadedMetadataObject = null;
                 currentOriginalAssetDetails = null;
@@ -600,12 +675,12 @@
             let newEditableCustomFields = [];
             let newDisplayableCustomFields = [];
 
-            console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType);
-            console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store"));
+            // console.debug('[LeftInfoPanel CustomFieldsBlock] Running. Definitions count:', $customFieldDefinitionsStore.length, 'isEditing:', isEditing, 'currentItemType:', currentItemType); // Removed
+            // console.debug('[LeftInfoPanel CustomFieldsBlock] Store content (first item):', JSON.stringify($customFieldDefinitionsStore.length > 0 ? $customFieldDefinitionsStore[0] : "Empty store")); // Removed
             for (const def of $customFieldDefinitionsStore) {
-                if (def.field_key === 'only_audio' || def.field_key === 'cod' || def.field_key === 'only_tables' || def.field_key === 'cat' || def.field_key === 'only_for_docs' || def.field_key === 'available_across_project' || def.field_key === 'test235' || def.field_key === 'date_added') {
-                    console.debug(`[LeftInfoPanel CustomFieldsBlock] Definition for key '${def.field_key}':`, JSON.stringify(def));
-                }
+                // if (def.field_key === 'only_audio' || def.field_key === 'cod' || def.field_key === 'only_tables' || def.field_key === 'cat' || def.field_key === 'only_for_docs' || def.field_key === 'available_across_project' || def.field_key === 'test235' || def.field_key === 'date_added') { // Removed
+                    // console.debug(`[LeftInfoPanel CustomFieldsBlock] Definition for key '${def.field_key}':`, JSON.stringify(def)); // Removed
+                // } // Removed
                 // Determine if the definition is applicable by scope
                 let isApplicable = false; // Default to false
                 if (typeof def.scope === 'string') {
@@ -650,9 +725,9 @@
             }
             // Sort fields alphabetically by name for consistent display
             newEditableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
-            console.debug('[LeftInfoPanel CustomFieldsBlock] newEditableCustomFields populated. Count:', newEditableCustomFields.length);
+            // console.debug('[LeftInfoPanel CustomFieldsBlock] newEditableCustomFields populated. Count:', newEditableCustomFields.length); // Removed
             newDisplayableCustomFields.sort((a, b) => a.name.localeCompare(b.name));
-            console.debug('[LeftInfoPanel CustomFieldsBlock] newDisplayableCustomFields populated. Count:', newDisplayableCustomFields.length);
+            // console.debug('[LeftInfoPanel CustomFieldsBlock] newDisplayableCustomFields populated. Count:', newDisplayableCustomFields.length); // Removed
 
             editableMetadata.customFields = newEditableCustomFields;
             displayableCustomFields = newDisplayableCustomFields;
@@ -689,7 +764,7 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden transition-all duration-300 ease-in-out p-2"
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2"
       class:w-full={!$panelStateStore.leftCollapsed}
       class:w-12={$panelStateStore.leftCollapsed} >
     <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center h-7"
@@ -937,16 +1012,66 @@
         {:else}
             <!-- Collapsed View: Vertical Labels -->
             <div class="pt-2 flex flex-col items-center space-y-1.5 text-gray-600 dark:text-gray-400 w-full px-0.5">
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`File Name: ${currentFileMetadata?.file_name ?? 'N/A'}`}>Name</div>
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`File Path: ${currentFileMetadata?.file_path ?? 'N/A'}`}>Path</div>
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Date: ${currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : 'N/A'}`}>Date</div>
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Title: ${currentFileMetadata?.title ?? 'N/A'}`}>Title</div>
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Description: ${currentFileMetadata?.description ?? 'N/A'}`}>Desc</div>
-                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm" title={`Summary: ${currentFileMetadata?.summary ?? 'N/A'}`}>Summ</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'File Name', currentFileMetadata?.file_name ?? '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'File Name', currentFileMetadata?.file_name ?? '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Name</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'File Path', currentFileMetadata?.file_path ?? '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'File Path', currentFileMetadata?.file_path ?? '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Path</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'Last Modified', currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'Last Modified', currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Date</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'Title', currentFileMetadata?.title ?? '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'Title', currentFileMetadata?.title ?? '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Title</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'Description', currentFileMetadata?.description ?? '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'Description', currentFileMetadata?.description ?? '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Desc</div>
+                <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
+                     on:mouseenter={(event) => showLabelTooltip(event, 'Summary', currentFileMetadata?.summary ?? '')}
+                     on:mouseleave={hideLabelTooltip}
+                     on:focus={(event) => showLabelTooltip(event, 'Summary', currentFileMetadata?.summary ?? '')}
+                     on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
+                     role="button" tabindex="0">Summ</div>
             </div>
         {/if}
     </div>
     
 </div>
+
+<CategoryTooltip
+    bind:visible={labelTooltipVisible}
+    categoryName={labelTooltipTitle}
+    files={[{ name: labelTooltipText }]}
+    x={labelTooltipX}
+    y={labelTooltipY}
+/>
 
 <AddFieldModal bind:showModal={showAddFieldModal} currentItemType={currentItemType} on:close={() => showAddFieldModal = false} />
