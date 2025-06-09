@@ -1,0 +1,203 @@
+// src/lib/styles/tabulator-tailwind-theme.scss
+
+// 1. Define SCSS Variables (Static fallbacks for problematic ones first)
+
+// Typography & Spacing (Generally safe as CSS vars or static)
+$fontSize: 0.875rem; // Equivalent to Tailwind's text-sm
+$fontFamily: inherit; // Inherit from the app's body styles
+$lineHeight: 1.25rem; // Tailwind's leading-tight for text-sm
+$borderRadius: 0.375rem; // Equivalent to Tailwind's rounded-md
+$paddingSmall: 0.5rem; // Equivalent to Tailwind's p-2
+$paddingMedium: 0.75rem; // Equivalent to Tailwind's p-3
+$paddingLarge: 1rem; // Equivalent to Tailwind's p-4
+
+// Static Fallbacks for Sass compile time for Tabulator's internal calculations
+$backgroundColor: #ffffff;             // Static light theme plain background
+$textColor: #1f2937;                 // Static light theme primary text (e.g., gray-800)
+$borderColor: #d1d5db;               // Static light theme border (e.g., gray-300)
+
+$headerBackgroundColor: #f3f4f6;       // Static light theme header bg (e.g., gray-100)
+$headerTextColor: #374151;             // Static light theme header text (e.g., gray-700)
+$headerBorderColor: #d1d5db;           // Static light theme border for header context
+$headerFilterBackgroundColor: #ffffff;  // Static for filter input background
+$headerFilterBorderColor: #d1d5db;     // Static for filter input border
+$headerFilterTextColor: #1f2937;       // Static for filter input text
+
+$rowBackgroundColor: #ffffff;           // Static for row background
+$rowAltBackgroundColor: #f9fafb;       // Static for alternate row background (e.g., gray-50)
+$rowSelectedTextColor: #111827;        // Static for selected row text (e.g., gray-900)
+
+$footerBackgroundColor: #f3f4f6;       // Static for footer background
+$footerTextColor: #374151;             // Static for footer text
+$footerBorderColor: #d1d5db;           // Static for footer border
+
+$paginationButtonColor: #374151;                     // Static for pagination button text
+$paginationButtonDisabledColor: #9ca3af;             // Static for disabled pagination button text (e.g., gray-400)
+$paginationButtonActiveBgColor: #cccccc;              // Static for active pagination button background (generic grey)
+$paginationButtonActiveTextColor: #111827;           // Static for active pagination button text (e.g., gray-900)
+
+// Variables that can remain CSS vars if Tabulator core doesn't use them in functions,
+// or if they are only used in our overrides AFTER the import.
+$rowHoverBackgroundColor: var(--ui-icon-hover-bg);
+$rowSelectedBackgroundColor: var(--ui-option-hover-bg);
+$paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
+// $paginationButtonActiveBgColor is now static above, will be overridden with var() below.
+
+// 2. Import Core Tabulator SCSS
+@import "../../../node_modules/tabulator-tables/src/scss/tabulator";
+
+// 3. CSS Overrides & Tailwind Styling (Re-apply CSS variables for dynamic theming)
+.tabulator {
+  background-color: var(--ui-select-bg); // Actual theme value
+  border: 1px solid var(--ui-select-border);
+  color: var(--ui-text-color);
+  border-radius: $borderRadius;
+  font-size: $fontSize;
+  font-family: $fontFamily;
+  line-height: $lineHeight;
+  overflow: hidden;
+
+  .tabulator-header {
+    background-color: var(--ui-optgroup-bg); // Actual theme value
+    color: var(--ui-optgroup-text);
+    border-bottom: 1px solid var(--ui-select-border); // Actual theme value
+    font-weight: 600;
+
+    .tabulator-col {
+      border-right: 1px solid var(--ui-select-border); // Actual theme value
+
+      .tabulator-col-content {
+        padding: $paddingSmall $paddingMedium;
+      }
+      .tabulator-col-title { white-space: normal; }
+
+      .tabulator-header-filter input {
+        background-color: var(--ui-select-bg); // Actual theme value
+        color: var(--ui-text-color);
+        border: 1px solid var(--ui-select-border); // Actual theme value
+        border-radius: $borderRadius / 2;
+        padding: $paddingSmall * 0.75;
+        font-size: $fontSize * 0.9;
+        margin-top: $paddingSmall / 2;
+        &:focus {
+          border-color: var(--ui-select-border-focus, #3b82f6);
+          outline: none;
+          box-shadow: none;
+        }
+      }
+      &:last-child { border-right: none; }
+
+      // Overrides for sortable columns using actual theme values
+      &.tabulator-sortable {
+        &:hover { background-color: var(--ui-icon-hover-bg); }
+        &[aria-sort] {
+          background-color: var(--ui-option-hover-bg);
+          color: var(--ui-optgroup-text); // Use actual theme text color for sorted header
+          .tabulator-col-content .tabulator-arrow {
+             border-top-color: var(--ui-optgroup-text);
+             border-bottom-color: var(--ui-optgroup-text);
+          }
+        }
+        &[aria-sort]:hover { background-color: var(--ui-icon-hover-bg); }
+      }
+    }
+  }
+
+  .tabulator-tableholder {
+    .tabulator-table {
+      color: var(--ui-text-color); // Actual theme value
+    }
+  }
+
+  .tabulator-row {
+    background-color: var(--ui-select-bg); // Actual theme value
+    border-bottom: 1px solid var(--ui-select-border); // Actual theme value
+    display: flex; // ADDED
+    align-items: stretch; // ADDED
+    // For striped rows, you could add:
+    // &.tabulator-row-even { background-color: var(--ui-disabled-bg); }
+
+    &.tabulator-selectable:hover {
+      background-color: $rowHoverBackgroundColor; // This is var(--ui-icon-hover-bg)
+    }
+
+    // Default click selection (now subtle or same as normal row)
+    &.tabulator-selected {
+      background-color: var(--ui-select-bg) !important; // Match normal row background
+      color: var(--ui-text-color) !important;          // Match normal row text
+    }
+
+    // Prominent selection for search matches
+    &.search-match-selected {
+      background-color: var(--ui-option-hover-bg) !important;
+      color: var(--ui-option-text) !important;
+    }
+
+    .tabulator-cell {
+      border-right: 1px solid var(--ui-select-border); // Actual theme value
+      padding: $paddingSmall $paddingMedium;
+      line-height: $lineHeight;
+      color: var(--ui-text-color); // Ensure cells get the theme text color
+      &:last-child { border-right: none; }
+    }
+  }
+
+  .tabulator-footer {
+    background-color: var(--ui-optgroup-bg); // Actual theme value
+    color: var(--ui-optgroup-text);
+    border-top: 1px solid var(--ui-select-border); // Actual theme value
+    padding: $paddingSmall;
+    font-size: $fontSize * 0.9;
+
+    .tabulator-paginator {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      .tabulator-page {
+        background-color: transparent;
+        color: var(--ui-optgroup-text); // CHANGED HERE - Actual theme value
+        border: 1px solid var(--ui-select-border); // Actual theme value
+        border-radius: $borderRadius / 2;
+        padding: ($paddingSmall * 0.5) ($paddingSmall * 0.75);
+        margin: 0 $paddingSmall / 4;
+        font-weight: normal;
+        transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+
+        &:hover:not([disabled]) {
+          background-color: $paginationButtonHoverBgColor; // This is already var(--ui-icon-hover-bg)
+          border-color: var(--ui-select-border); // Actual theme value
+        }
+        &.active {
+          background-color: var(--ui-separator-bg) !important; // Actual theme value for active page background
+          color: var(--ui-separator-text) !important; // Actual theme value for active page text
+          border-color: var(--ui-select-border); // Actual theme value
+          font-weight: 600;
+        }
+        &[disabled] {
+          color: var(--ui-disabled-text); // Actual theme value for disabled text
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+      }
+    }
+    .tabulator-page-size select {
+      background-color: var(--ui-select-bg); // Actual theme value
+      color: var(--ui-text-color);
+      border: 1px solid var(--ui-select-border); // Actual theme value
+      border-radius: $borderRadius / 2;
+      padding: ($paddingSmall * 0.5) ($paddingSmall * 1.5) ($paddingSmall * 0.5) ($paddingSmall * 0.75);
+      font-size: $fontSize;
+    }
+  }
+  .tabulator-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    span {
+      color: var(--ui-text-color); // Actual theme value
+      opacity: 0.7;
+      font-style: italic;
+    }
+  }
+}

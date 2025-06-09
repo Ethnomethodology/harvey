@@ -494,13 +494,8 @@
 
 </script>
 
-<!-- Import Tabulator CSS -->
-<svelte:head>
-	<link href="/tabulator_themes/tabulator_modern.min.css" rel="stylesheet">
-</svelte:head>
-
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
-     <div class="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-600 flex-shrink-0">
+     <div class="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate pr-2" title={tablePath}>
             Data: {tablePath ? tablePath.split(/[\\/]/).pop() : 'No table selected'}
         </h3>
