@@ -11,8 +11,31 @@
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
+    import CategoryTooltip from '../CategoryTooltip.svelte';
 
     const TRASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0zm1.958 1-.846 10.58a1 1 0 0 1-.997.92h-6.23a1 1 0 0 1-.997-.92L3.042 3.5zm-7.487 1a.5.5 0 0 1 .528.47l.5 8.5a.5.5 0 0 1-.998.06L5 5.03a.5.5 0 0 1 .47-.53Zm5.058 0a.5.5 0 0 1 .47.53l-.5 8.5a.5.5 0 1 1-.998-.06l.5-8.5a.5.5 0 0 1 .528-.47ZM8 4.5a.5.5 0 0 1 .5.5v8.5a.5.5 0 0 1-1 0V5a.5.5 0 0 1 .5-.5z"/></svg>`;
+
+    let tooltipVisible = false;
+    let tooltipContentName = 'Metadata';
+    let tooltipContentFiles = [{ name: 'View and manage details and custom fields for the selected item.' }];
+    let tooltipX = 0;
+    let tooltipY = 0;
+
+    function showTooltip(event) {
+        if (!$panelStateStore.leftCollapsed) {
+            return;
+        }
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        tooltipContentName = 'Metadata Panel';
+        tooltipContentFiles = [{ name: 'View and manage details and custom fields for the selected item.' }];
+        tooltipX = buttonRect.right + 8;
+        tooltipY = buttonRect.top;
+        tooltipVisible = true;
+    }
+
+    function hideTooltip() {
+        tooltipVisible = false;
+    }
 
     async function handleDeleteCustomField(fieldKey) {
         const confirmed = await confirm(
@@ -703,7 +726,11 @@
             <button
                 on:click={panelStateStore.toggleLeftPanel}
                 class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
+                title={$panelStateStore.leftCollapsed ? 'Expand Metadata Panel' : 'Collapse Metadata Panel'}
+                on:mouseenter={showTooltip}
+                on:mouseleave={hideTooltip}
+                on:focus={showTooltip}
+                on:blur={hideTooltip}
             >
                 <FileEarmarkCodeIcon class="w-4 h-4"/>
             </button>
@@ -948,5 +975,13 @@
     </div>
     
 </div>
+
+<CategoryTooltip
+    bind:visible={tooltipVisible}
+    categoryName={tooltipContentName}
+    files={tooltipContentFiles}
+    x={tooltipX}
+    y={tooltipY}
+/>
 
 <AddFieldModal bind:showModal={showAddFieldModal} currentItemType={currentItemType} on:close={() => showAddFieldModal = false} />
