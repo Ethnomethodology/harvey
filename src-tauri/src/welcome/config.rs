@@ -11,6 +11,7 @@ use std::{
     fs::{self, File},
     io::{BufWriter, Write},
     path::PathBuf,
+    fmt,
 };
 use csv;
 use tauri_plugin_shell;
@@ -79,28 +80,58 @@ pub struct CloudConfigPayload {
     pub consent: Option<bool>,
 }
 
-
 #[derive(Debug, Serialize)]
-pub struct CommandError {
-    pub message: String,
+pub enum CommandError {
+    Io(String),
+    XmlProcessing(String),
+    XmlDeserialization(String),
+    Message(String),
+    HttpDownload(String),
+    ZipExtraction(String),
+    CsvProcessing(String),
+    ShellCommand(String),
+    TauriApi(String),
+    AssetMetadataNotFound(String), // New variant
+    RusqliteError(String), // Added for rusqlite errors
 }
 
-// --- Error conversions (Unchanged) ---
-impl From<std::io::Error> for CommandError { fn from(error: std::io::Error) -> Self { CommandError { message: format!("IO Error: {}", error) } } }
-impl From<quick_xml::Error> for CommandError { fn from(error: quick_xml::Error) -> Self { CommandError { message: format!("XML Processing Error: {}", error) } } }
-impl From<quick_xml::DeError> for CommandError { fn from(error: quick_xml::DeError) -> Self { CommandError { message: format!("XML Deserialization Error: {}", error) } } }
-impl From<String> for CommandError { fn from(message: String) -> Self { CommandError { message } } }
-impl From<&str> for CommandError { fn from(message: &str) -> Self { CommandError { message: message.to_string() } } }
-impl From<reqwest::Error> for CommandError { fn from(error: reqwest::Error) -> Self { CommandError { message: format!("HTTP Download Error: {}", error) } } }
-impl From<zip::result::ZipError> for CommandError { fn from(error: zip::result::ZipError) -> Self { CommandError { message: format!("ZIP Extraction Error: {}", error) } } }
-impl From<csv::Error> for CommandError { fn from(error: csv::Error) -> Self { CommandError { message: format!("CSV Processing Error: {}", error) } } }
-impl From<tauri_plugin_shell::Error> for CommandError { fn from(error: tauri_plugin_shell::Error) -> Self { CommandError { message: format!("Shell Command Error: {}", error) } } }
-impl From<tauri::Error> for CommandError { fn from(error: tauri::Error) -> Self { CommandError { message: format!("Tauri API Error: {}", error) } } }
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommandError::Io(msg) => write!(f, "IO Error: {}", msg),
+            CommandError::XmlProcessing(msg) => write!(f, "XML Processing Error: {}", msg),
+            CommandError::XmlDeserialization(msg) => write!(f, "XML Deserialization Error: {}", msg),
+            CommandError::Message(msg) => write!(f, "{}", msg),
+            CommandError::HttpDownload(msg) => write!(f, "HTTP Download Error: {}", msg),
+            CommandError::ZipExtraction(msg) => write!(f, "ZIP Extraction Error: {}", msg),
+            CommandError::CsvProcessing(msg) => write!(f, "CSV Processing Error: {}", msg),
+            CommandError::ShellCommand(msg) => write!(f, "Shell Command Error: {}", msg),
+            CommandError::TauriApi(msg) => write!(f, "Tauri API Error: {}", msg),
+            CommandError::AssetMetadataNotFound(msg) => write!(f, "{}", msg),
+            CommandError::RusqliteError(msg) => write!(f, "Database Error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
+
+// --- Error conversions ---
+impl From<std::io::Error> for CommandError { fn from(error: std::io::Error) -> Self { CommandError::Io(error.to_string()) } }
+impl From<quick_xml::Error> for CommandError { fn from(error: quick_xml::Error) -> Self { CommandError::XmlProcessing(error.to_string()) } }
+impl From<quick_xml::DeError> for CommandError { fn from(error: quick_xml::DeError) -> Self { CommandError::XmlDeserialization(error.to_string()) } }
+impl From<String> for CommandError { fn from(message: String) -> Self { CommandError::Message(message) } }
+impl From<&str> for CommandError { fn from(message: &str) -> Self { CommandError::Message(message.to_string()) } }
+impl From<reqwest::Error> for CommandError { fn from(error: reqwest::Error) -> Self { CommandError::HttpDownload(error.to_string()) } }
+impl From<zip::result::ZipError> for CommandError { fn from(error: zip::result::ZipError) -> Self { CommandError::ZipExtraction(error.to_string()) } }
+impl From<csv::Error> for CommandError { fn from(error: csv::Error) -> Self { CommandError::CsvProcessing(error.to_string()) } }
+impl From<tauri_plugin_shell::Error> for CommandError { fn from(error: tauri_plugin_shell::Error) -> Self { CommandError::ShellCommand(error.to_string()) } }
+impl From<tauri::Error> for CommandError { fn from(error: tauri::Error) -> Self { CommandError::TauriApi(error.to_string()) } }
+impl From<rusqlite::Error> for CommandError { fn from(error: rusqlite::Error) -> Self { CommandError::RusqliteError(error.to_string()) } }
 // --- End Error Conversions ---
 
 
 // --- Config functions ---
-pub fn get_config_dir() -> Result<PathBuf, CommandError> { UserDirs::new().map(|dirs| dirs.home_dir().join(CONFIG_DIR_NAME)).ok_or_else(|| CommandError::from("Could not find user home directory.")) }
+pub fn get_config_dir() -> Result<PathBuf, CommandError> { UserDirs::new().map(|dirs| dirs.home_dir().join(CONFIG_DIR_NAME)).ok_or_else(|| CommandError::Message("Could not find user home directory.".to_string())) }
 pub fn get_config_file_path() -> Result<PathBuf, CommandError> { get_config_dir().map(|dir| dir.join(CONFIG_FILE_NAME)) }
 pub fn ensure_config_dir_exists() -> Result<PathBuf, CommandError> { let config_dir = get_config_dir()?; fs::create_dir_all(&config_dir)?; Ok(config_dir) }
 pub fn read_config() -> Result<Config, CommandError> {
