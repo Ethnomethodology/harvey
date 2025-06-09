@@ -669,7 +669,6 @@ $: {
                 class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
                 class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
                 class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
-                title={category.name}
                 on:click={handleToggleNotesLeftPanel}
                 on:mouseenter={(event) => showTooltip(event, category)}
                 on:mouseleave={hideTooltip}
