@@ -31,7 +31,7 @@
         const targetRect = event.currentTarget.getBoundingClientRect();
 
         labelTooltipTitle = title;
-        labelTooltipText = textContent || 'N/A'; // Ensure textContent is not null/undefined
+        labelTooltipText = textContent || ''; // Ensure textContent is not null/undefined
 
         // Position tooltip to the right of the label
         let potentialX = targetRect.right + GITHUB_ISSUE_TOOLTIP_OFFSET_X;
@@ -993,36 +993,48 @@
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'File Name', currentFileMetadata?.file_name ?? '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Name</div>
                 <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
                      on:mouseenter={(event) => showLabelTooltip(event, 'File Path', currentFileMetadata?.file_path ?? '')}
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'File Path', currentFileMetadata?.file_path ?? '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Path</div>
                 <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
                      on:mouseenter={(event) => showLabelTooltip(event, 'Last Modified', currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : '')}
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'Last Modified', currentFileMetadata?.last_modified ? new Date(currentFileMetadata.last_modified).toLocaleString() : '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Date</div>
                 <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
                      on:mouseenter={(event) => showLabelTooltip(event, 'Title', currentFileMetadata?.title ?? '')}
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'Title', currentFileMetadata?.title ?? '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Title</div>
                 <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
                      on:mouseenter={(event) => showLabelTooltip(event, 'Description', currentFileMetadata?.description ?? '')}
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'Description', currentFileMetadata?.description ?? '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Desc</div>
                 <div class="text-xs w-full text-center truncate border border-gray-300 dark:border-gray-600 px-1 py-0.5 bg-gray-50 dark:bg-gray-700/30 rounded-sm"
                      on:mouseenter={(event) => showLabelTooltip(event, 'Summary', currentFileMetadata?.summary ?? '')}
                      on:mouseleave={hideLabelTooltip}
                      on:focus={(event) => showLabelTooltip(event, 'Summary', currentFileMetadata?.summary ?? '')}
                      on:blur={hideLabelTooltip}
+                     on:click={() => panelStateStore.toggleLeftPanel()}
+                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') panelStateStore.toggleLeftPanel(); }}
                      role="button" tabindex="0">Summ</div>
             </div>
         {/if}
