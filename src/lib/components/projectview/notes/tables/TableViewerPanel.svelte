@@ -175,12 +175,9 @@
 
             let initialLayoutMode = "fitDataTable"; // Default
             if (!savedLayout) {
-                if (relativeTablePath && relativeTablePath.toLowerCase().endsWith('.csv')) {
-                    initialLayoutMode = "fitDataStretch"; // Stretch for CSVs if no saved layout
-                    console.debug(`[TableViewerPanel] No saved layout for CSV ${relativeTablePath}, using ${initialLayoutMode}.`);
-                } else if (relativeTablePath) {
-                    console.debug(`[TableViewerPanel] No saved layout for ${relativeTablePath}, using default ${initialLayoutMode}.`);
-                }
+                // On first load (no saved layout), always use fitDataTable to enable specific column widths
+                initialLayoutMode = "fitDataTable";
+                console.debug(`[TableViewerPanel] No saved layout for ${relativeTablePath}, using ${initialLayoutMode} for first load.`);
             } else {
                 initialLayoutMode = "fitData"; // Use fitData if layout is loaded to respect saved widths
                 console.debug(`[TableViewerPanel] Saved layout found for ${relativeTablePath}, using ${initialLayoutMode}.`);
@@ -190,7 +187,7 @@
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 layout: initialLayoutMode,
-                columns: generateColumns(tableData, savedLayout),
+                columns: generateColumns(tableData, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
@@ -387,8 +384,8 @@
     }
 
     // Function to generate column definitions
-    function generateColumns(data, savedLayoutObj) { // Added savedLayoutObj
-        console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2));
+    function generateColumns(data, savedLayoutObj, isFirstLoad) { // Added isFirstLoad
+        console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}]; // Return a placeholder if no data
         const headers = Object.keys(data[0]);
         let columnDefs = headers.map(header => {
@@ -410,7 +407,15 @@
                 }
                 colDef.visible = savedCol.visible; // Keep this as it was
             } else {
-                console.debug(`[TableViewerPanel generateColumns] No saved layout found for column '${header}'.`);
+                // No saved layout for this specific column
+                if (isFirstLoad) {
+                    colDef.width = 200; // Default width for first load
+                    colDef.minWidth = 50; // Default minWidth for first load
+                    console.debug(`[TableViewerPanel generateColumns] First load: Applying default width 200px and minWidth 50px for column '${header}'.`);
+                } else {
+                    // New column in an existing layout, let Tabulator's fitDataTable handle it, or set other defaults
+                    console.debug(`[TableViewerPanel generateColumns] New column '${header}' in existing layout, will be sized by Tabulator or current layout mode.`);
+                }
             }
             return colDef;
         });
