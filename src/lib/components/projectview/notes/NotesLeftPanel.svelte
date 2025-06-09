@@ -61,6 +61,8 @@
     }
 
     onMount(() => {
+      console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
+      console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
       const listener = () => {
         if (categoryContextMenuVisible) closeCategoryContextMenu();
       };
