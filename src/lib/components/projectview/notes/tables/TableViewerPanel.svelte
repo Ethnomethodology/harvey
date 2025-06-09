@@ -337,72 +337,36 @@
 
     function clearHighlights() {
         if (tabulatorInstance) {
-            tabulatorInstance.deselectRow(); // Clears .tabulator-selected from the currently selected row
+            tabulatorInstance.deselectRow(); // Deselect all rows
+        }
+        console.debug("clearHighlights called: deselected all rows."); // DEBUG
+    }
 
-            const rows = tabulatorInstance.getRows();
-            if (rows && Array.isArray(rows)) {
-                rows.forEach(row => {
-                    if (row && typeof row.getElement === 'function') {
-                        const element = row.getElement();
-                        if (element) {
-                             element.classList.remove('search-match-selected');
-                        }
-                    }
-                });
+    async function navigateToMatch(index) {
+        if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
+            currentMatchIndex = -1;
+            // If no valid match, ensure nothing is selected from search
+            if (tabulatorInstance) tabulatorInstance.deselectRow();
+            return;
+        }
+
+        // It's good practice to clear any programmatically set selections before new action
+        if (tabulatorInstance) {
+            tabulatorInstance.deselectRow();
+        }
+
+        currentMatchIndex = index;
+        const rowComponent = searchMatches[currentMatchIndex];
+
+        if (rowComponent) {
+            try {
+                await rowComponent.scrollTo();
+                await rowComponent.select(); // Select the current row
+            } catch (err) {
+                console.error("Error navigating to match:", err); // ERROR
             }
         }
-        console.debug("clearHighlights called: deselected Tabulator row and cleared all search-match-selected classes.");
     }
-
-async function navigateToMatch(index) {
-    // Clear .search-match-selected from the *previously* highlighted search match
-    if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
-        const oldMatchRow = searchMatches[currentMatchIndex];
-        if (oldMatchRow && typeof oldMatchRow.getElement === 'function') {
-            const oldElement = oldMatchRow.getElement();
-            if (oldElement) {
-                oldElement.classList.remove('search-match-selected');
-            }
-        }
-    }
-
-    if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
-        currentMatchIndex = -1;
-        if (tabulatorInstance) { // Ensure instance exists
-            tabulatorInstance.deselectRow(); // Clear any existing .tabulator-selected
-        }
-        return;
-    }
-
-    if (tabulatorInstance) {
-        tabulatorInstance.deselectRow(); // Clear .tabulator-selected from any row
-    }
-
-    currentMatchIndex = index;
-    const rowComponent = searchMatches[currentMatchIndex];
-
-    if (rowComponent) {
-        try {
-            // Ensure this is the direct call:
-            await tabulatorInstance.showRow(rowComponent, true);
-            await tick(); // Allow Svelte and Tabulator to settle
-
-            // select the row to apply .tabulator-selected (styled subtly by our CSS)
-            // and to ensure Tabulator knows it's selected for any internal logic.
-            await rowComponent.select();
-
-            // Apply .search-match-selected for prominent highlight
-            if (typeof rowComponent.getElement === 'function') {
-                const element = rowComponent.getElement();
-                if (element) {
-                    element.classList.add('search-match-selected');
-                }
-            }
-        } catch (err) {
-            console.error("[TableViewerPanel navigateToMatch] Error navigating to match:", err);
-        }
-    }
-}
 
     function goToNextMatch() {
         if (searchMatches.length > 0 && currentMatchIndex < searchMatches.length - 1) {
