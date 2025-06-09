@@ -337,22 +337,45 @@
 
     function clearHighlights() {
         if (tabulatorInstance) {
-            tabulatorInstance.deselectRow(); // Deselect all rows
+            tabulatorInstance.deselectRow(); // Clears .tabulator-selected from the currently selected row
+
+            const rows = tabulatorInstance.getRows();
+            if (rows && Array.isArray(rows)) {
+                rows.forEach(row => {
+                    if (row && typeof row.getElement === 'function') {
+                        const element = row.getElement();
+                        if (element) {
+                             element.classList.remove('search-match-selected');
+                        }
+                    }
+                });
+            }
         }
-        console.debug("clearHighlights called: deselected all rows."); // DEBUG
+        console.debug("clearHighlights called: deselected Tabulator row and cleared all search-match-selected classes.");
     }
 
     async function navigateToMatch(index) {
+        // Clear .search-match-selected from the *previously* highlighted search match
+        if (searchMatches.length > 0 && currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
+            const oldMatchRow = searchMatches[currentMatchIndex];
+            if (oldMatchRow && typeof oldMatchRow.getElement === 'function') {
+                const oldElement = oldMatchRow.getElement();
+                if (oldElement) {
+                    oldElement.classList.remove('search-match-selected');
+                }
+            }
+        }
+
         if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
             currentMatchIndex = -1;
-            // If no valid match, ensure nothing is selected from search
-            if (tabulatorInstance) tabulatorInstance.deselectRow();
+            if (tabulatorInstance) { // Ensure instance exists
+                tabulatorInstance.deselectRow(); // Clear any existing .tabulator-selected
+            }
             return;
         }
 
-        // It's good practice to clear any programmatically set selections before new action
         if (tabulatorInstance) {
-            tabulatorInstance.deselectRow();
+            tabulatorInstance.deselectRow(); // Clear .tabulator-selected from any row
         }
 
         currentMatchIndex = index;
@@ -360,10 +383,33 @@
 
         if (rowComponent) {
             try {
-                await rowComponent.scrollTo();
-                await rowComponent.select(); // Select the current row
-            } catch (err) {
-                console.error("Error navigating to match:", err); // ERROR
+                // --- Page Navigation Logic ---
+                const rowPage = rowComponent.getPage();
+                if (rowPage) { // Check if the row is part of a page (it should be with pagination enabled)
+                    const targetPageNum = rowPage.getPosition(); // getPosition() returns the page number (1-indexed)
+                    const currentPageNum = tabulatorInstance.getPage(); // getPage() returns current page number (1-indexed)
+
+                    // Ensure targetPageNum is valid (getPosition might return false if page is not found, though unlikely here)
+                    if (targetPageNum !== false && targetPageNum !== currentPageNum) {
+                        console.debug(`[TableViewerPanel navigateToMatch] Search match on page ${targetPageNum}, current page is ${currentPageNum}. Navigating.`); // DEBUG
+                        await tabulatorInstance.setPage(targetPageNum);
+                        await tick(); // Wait for Svelte to process DOM updates after page change
+                    }
+                }
+                // --- End Page Navigation Logic ---
+
+                await rowComponent.scrollTo(); // Scroll to the row
+                await rowComponent.select();   // Apply .tabulator-selected (styled subtly)
+
+                // Apply .search-match-selected for prominent highlight
+                if (typeof rowComponent.getElement === 'function') {
+                    const element = rowComponent.getElement();
+                    if (element) {
+                        element.classList.add('search-match-selected');
+                    }
+                }
+            } catch (err)
+                console.error("[TableViewerPanel navigateToMatch] Error navigating to match:", err);
             }
         }
     }

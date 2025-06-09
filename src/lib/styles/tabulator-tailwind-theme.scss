@@ -120,10 +120,19 @@ $paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
     &.tabulator-selectable:hover {
       background-color: $rowHoverBackgroundColor; // This is var(--ui-icon-hover-bg)
     }
+
+    // Default click selection (now subtle or same as normal row)
     &.tabulator-selected {
-      background-color: $rowSelectedBackgroundColor !important; // This is var(--ui-option-hover-bg)
-      color: var(--ui-option-text) !important; // Actual theme value for selected text
+      background-color: var(--ui-select-bg) !important; // Match normal row background
+      color: var(--ui-text-color) !important;          // Match normal row text
     }
+
+    // Prominent selection for search matches
+    &.search-match-selected {
+      background-color: var(--ui-option-hover-bg) !important;
+      color: var(--ui-option-text) !important;
+    }
+
     .tabulator-cell {
       border-right: 1px solid var(--ui-select-border); // Actual theme value
       padding: $paddingSmall $paddingMedium;
