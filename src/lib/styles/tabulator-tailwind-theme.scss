@@ -112,14 +112,16 @@ $paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
   .tabulator-row {
     background-color: var(--ui-select-bg); // Actual theme value
     border-bottom: 1px solid var(--ui-select-border); // Actual theme value
+    display: flex; // ADDED
+    align-items: stretch; // ADDED
     // For striped rows, you could add:
     // &.tabulator-row-even { background-color: var(--ui-disabled-bg); }
 
     &.tabulator-selectable:hover {
-      background-color: $rowHoverBackgroundColor; // This is already var(--ui-icon-hover-bg)
+      background-color: $rowHoverBackgroundColor; // This is var(--ui-icon-hover-bg)
     }
     &.tabulator-selected {
-      background-color: $rowSelectedBackgroundColor !important; // This is already var(--ui-option-hover-bg)
+      background-color: $rowSelectedBackgroundColor !important; // This is var(--ui-option-hover-bg)
       color: var(--ui-option-text) !important; // Actual theme value for selected text
     }
     .tabulator-cell {
