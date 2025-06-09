@@ -1,0 +1,194 @@
+// src/lib/styles/tabulator-tailwind-theme.scss
+
+// 1. Define SCSS Variables using CSS variables from src/app.css and Tailwind values
+
+// Colors & Backgrounds (Referencing src/app.css for dynamic light/dark mode)
+$backgroundColor: var(--ui-select-bg); // For table background
+$textColor: var(--ui-text-color); // For general text
+$borderColor: var(--ui-select-border); // For borders
+
+// Header specific
+$headerBackgroundColor: var(--ui-optgroup-bg); // A slightly different background for header
+$headerTextColor: var(--ui-optgroup-text);
+$headerBorderColor: var(--ui-select-border);
+$headerFilterBackgroundColor: var(--ui-select-bg); // Background for filter inputs
+$headerFilterBorderColor: var(--ui-select-border); // Border for filter inputs
+$headerFilterTextColor: var(--ui-text-color); // Text color for filter inputs
+
+// Rows
+$rowBackgroundColor: var(--ui-select-bg);
+$rowAltBackgroundColor: var(--ui-disabled-bg); // For striped rows (optional)
+$rowHoverBackgroundColor: var(--ui-icon-hover-bg); // For row hover
+$rowSelectedBackgroundColor: var(--ui-option-hover-bg); // For selected rows
+$rowSelectedTextColor: var(--ui-option-text); // Text color for selected rows
+
+// Footer & Pagination
+$footerBackgroundColor: var(--ui-optgroup-bg);
+$footerTextColor: var(--ui-optgroup-text);
+$footerBorderColor: var(--ui-select-border);
+$paginationButtonColor: var(--ui-text-color);
+$paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
+$paginationButtonDisabledColor: var(--ui-disabled-text);
+$paginationButtonActiveBgColor: var(--ui-separator-bg); // A distinct background for active page
+$paginationButtonActiveTextColor: var(--ui-separator-text); // A distinct text for active page
+
+// Typography & Spacing (Referencing Tailwind defaults)
+$fontSize: 0.875rem; // Equivalent to Tailwind's text-sm
+$fontFamily: inherit; // Inherit from the app's body styles (Tailwind sets this up)
+$lineHeight: 1.25rem; // Tailwind's leading-tight for text-sm often
+$borderRadius: 0.375rem; // Equivalent to Tailwind's rounded-md
+$paddingSmall: 0.5rem; // Equivalent to Tailwind's p-2
+$paddingMedium: 0.75rem; // Equivalent to Tailwind's p-3
+$paddingLarge: 1rem; // Equivalent to Tailwind's p-4
+
+// 2. Import Core Tabulator SCSS
+@import "../../../node_modules/tabulator-tables/src/scss/tabulator";
+
+// 3. CSS Overrides & Tailwind Styling
+
+.tabulator {
+  background-color: $backgroundColor;
+  border: 1px solid $borderColor;
+  border-radius: $borderRadius;
+  color: $textColor;
+  font-size: $fontSize;
+  font-family: $fontFamily;
+  line-height: $lineHeight;
+  overflow: hidden;
+
+  .tabulator-header {
+    background-color: $headerBackgroundColor;
+    color: $headerTextColor;
+    border-bottom: 1px solid $headerBorderColor;
+    font-weight: 600; // Tailwind's font-semibold
+
+    .tabulator-col {
+      border-right: 1px solid $headerBorderColor;
+
+      .tabulator-col-content {
+        padding: $paddingSmall $paddingMedium;
+      }
+
+      .tabulator-col-title {
+        white-space: normal;
+      }
+
+      .tabulator-header-filter {
+        input {
+          background-color: $headerFilterBackgroundColor;
+          color: $headerFilterTextColor;
+          border: 1px solid $headerFilterBorderColor;
+          border-radius: $borderRadius / 2;
+          padding: $paddingSmall * 0.75;
+          font-size: $fontSize * 0.9;
+          margin-top: $paddingSmall / 2;
+
+          &:focus {
+            border-color: var(--ui-select-border-focus, #3b82f6);
+            outline: none;
+          }
+        }
+      }
+       &:last-child {
+        border-right: none;
+      }
+    }
+  }
+
+  .tabulator-tableholder {
+    .tabulator-table {
+      color: $textColor;
+    }
+  }
+
+  .tabulator-row {
+    background-color: $rowBackgroundColor;
+    border-bottom: 1px solid $borderColor;
+
+    &.tabulator-selectable:hover {
+      background-color: $rowHoverBackgroundColor;
+    }
+
+    &.tabulator-selected {
+      background-color: $rowSelectedBackgroundColor !important;
+      color: $rowSelectedTextColor !important;
+    }
+
+    .tabulator-cell {
+      border-right: 1px solid $borderColor;
+      padding: $paddingSmall $paddingMedium;
+      line-height: $lineHeight;
+
+      &:last-child {
+        border-right: none;
+      }
+    }
+  }
+
+  .tabulator-footer {
+    background-color: $footerBackgroundColor;
+    color: $footerTextColor;
+    border-top: 1px solid $footerBorderColor;
+    padding: $paddingSmall;
+    font-size: $fontSize * 0.9;
+
+    .tabulator-paginator {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+
+      .tabulator-page {
+        background-color: transparent;
+        color: $paginationButtonColor;
+        border: 1px solid $borderColor;
+        border-radius: $borderRadius / 2;
+        padding: ($paddingSmall * 0.5) ($paddingSmall * 0.75);
+        margin: 0 $paddingSmall / 4;
+        font-weight: normal;
+        transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+
+        &:hover:not([disabled]) {
+          background-color: $paginationButtonHoverBgColor;
+          border-color: $borderColor;
+        }
+
+        &.active {
+          background-color: $paginationButtonActiveBgColor !important;
+          color: $paginationButtonActiveTextColor !important;
+          border-color: $borderColor;
+          font-weight: 600;
+        }
+
+        &[disabled] {
+          color: $paginationButtonDisabledColor;
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .tabulator-page-size {
+      margin-left: $paddingMedium;
+      select {
+        background-color: $headerFilterBackgroundColor;
+        color: $headerFilterTextColor;
+        border: 1px solid $headerFilterBorderColor;
+        border-radius: $borderRadius / 2;
+        padding: ($paddingSmall * 0.5) ($paddingSmall * 1.5) ($paddingSmall * 0.5) ($paddingSmall * 0.75);
+        font-size: $fontSize;
+      }
+    }
+  }
+
+  .tabulator-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    span {
+      color: $textColor;
+      opacity: 0.7;
+      font-style: italic;
+    }
+  }
+}
