@@ -479,7 +479,8 @@
         dispatch('requestNotesTrim', {
             mediaPath: explicitMediaPath,
             duration: localDuration,
-            audioBuffer: localAudioBuffer
+            audioBuffer: localAudioBuffer,
+            isReady: isMediaReadyForProcessing // Add this line
         });
     }
 
