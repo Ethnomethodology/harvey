@@ -86,7 +86,7 @@
 				// console.log(`[Waveform] actualMediaDuration synced from currentAudioBuffer: ${actualMediaDuration}`);
 				zoomLevel = 1;
 				scrollOffsetPx = 0;
-				if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0;
+				// if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0; // Pure virtual scroll
 				requestRedraw(true);
 			} else {
 				actualMediaDuration = 0;
@@ -126,7 +126,7 @@
 	function resetZoomAndScrollState(clearBuffer = true) {
 		zoomLevel = 1; scrollOffsetPx = 0; autoScrollEnabled = true;
 		clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null;
-		if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0;
+		// if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0; // Pure virtual scroll
 		lastDrawnTime = -1; lastDrawnScrollOffset = -1; lastDrawnZoomLevel = -1;
 		lastDrawnSegmentIndex = -1; if (clearBuffer) lastDrawnBuffer = null;
 		lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
@@ -161,7 +161,7 @@
 		tick().then(() => {
 			if (isMounted) {
 				if (waveformScrollContainerRef) {
-					visibleCanvasWidth = Math.floor(waveformScrollContainerRef.clientWidth) || 0;
+					visibleCanvasWidth = waveformScrollContainerRef.clientWidth || 0;
 					waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
 				}
 				setupResizeObserver();
@@ -189,49 +189,73 @@
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
 	});
 
-	function setupResizeObserver() { if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) { isObserverSetup = true; waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; resizeObserverInstance = new ResizeObserver((entries) => { let needsRedraw = false; let needsScrollUpdate = false; let newScrollOffset = scrollOffsetPx; for (const entry of entries) { if (entry.target === waveformScrollContainerRef) { const newWidth = Math.floor(entry.contentRect.width); const newContainerHeight = entry.contentRect.height; const newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT; if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) { waveformCanvasHeight = newWaveformHeight; needsRedraw = true; } if (newWidth > 0 && newWidth !== visibleCanvasWidth) { const oldVisibleWidth = visibleCanvasWidth; const oldTotalLogicalWidth = totalLogicalWidth; visibleCanvasWidth = newWidth; const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth); if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) { const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2; const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0; const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel; newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2); newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth))); } else { newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll)); } if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) { scrollOffsetPx = Math.round(newScrollOffset); needsScrollUpdate = true; } needsRedraw = true; } else if (newWidth <= 0 && visibleCanvasWidth !== 0) { visibleCanvasWidth = 0; scrollOffsetPx = 0; needsScrollUpdate = true; clearWaveformCanvases(); needsRedraw = false; } } } if (needsScrollUpdate && waveformScrollContainerRef) { const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; waveformScrollContainerRef.scrollLeft = scrollOffsetPx; autoScrollEnableTimer = setTimeout(() => { if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled; autoScrollEnableTimer = null; }, 100); } if (needsRedraw) requestRedraw(); }); resizeObserverInstance.observe(waveformScrollContainerRef); if (waveformScrollContainerRef) { visibleCanvasWidth = Math.floor(waveformScrollContainerRef.clientWidth); waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; } requestRedraw(true); } }
+	function setupResizeObserver() { if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) { isObserverSetup = true; waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; resizeObserverInstance = new ResizeObserver((entries) => { let needsRedraw = false; let needsScrollUpdate = false; let newScrollOffset = scrollOffsetPx; for (const entry of entries) { if (entry.target === waveformScrollContainerRef) { const newWidth = entry.contentRect.width; const newContainerHeight = entry.contentRect.height; const newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT; if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) { waveformCanvasHeight = newWaveformHeight; needsRedraw = true; } if (newWidth > 0 && newWidth !== visibleCanvasWidth) { const oldVisibleWidth = visibleCanvasWidth; const oldTotalLogicalWidth = totalLogicalWidth; visibleCanvasWidth = newWidth; const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth); if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) { const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2; const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0; const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel; newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2); newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth))); } else { newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll)); } if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) { scrollOffsetPx = Math.round(newScrollOffset); needsScrollUpdate = true; } needsRedraw = true; } else if (newWidth <= 0 && visibleCanvasWidth !== 0) { visibleCanvasWidth = 0; scrollOffsetPx = 0; needsScrollUpdate = true; clearWaveformCanvases(); needsRedraw = false; } } } if (needsScrollUpdate /*&& waveformScrollContainerRef*/) { const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; /* waveformScrollContainerRef.scrollLeft = scrollOffsetPx; */ autoScrollEnableTimer = setTimeout(() => { if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled; autoScrollEnableTimer = null; }, 100); } if (needsRedraw) requestRedraw(); }); resizeObserverInstance.observe(waveformScrollContainerRef); if (waveformScrollContainerRef) { visibleCanvasWidth = waveformScrollContainerRef.clientWidth; waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; } requestRedraw(true); } }
 	$: if (waveformScrollContainerRef && !isObserverSetup && isMounted) { setupResizeObserver(); }
 
-	function handleScroll(event) { const newScrollOffset = Math.round(event.target.scrollLeft); if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) { const wasManualScroll = isScrolling; if (autoScrollEnabled && !wasManualScroll && !isTrimming && !isEditingSegment) { autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } scrollOffsetPx = newScrollOffset; isScrolling = true; clearTimeout(debounceScrollTimer); debounceScrollTimer = setTimeout(() => { isScrolling = false; if (!autoScrollEnabled && !autoScrollEnableTimer && !isTrimming && !isEditingSegment) { autoScrollEnableTimer = setTimeout(() => { autoScrollEnabled = true; autoScrollEnableTimer = null; requestRedraw(true); }, 1500); } requestRedraw(true); }, 150); requestRedraw(); } }
+	function handleScroll(event) {
+		// const newScrollOffset = Math.round(event.target.scrollLeft);
+		// if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) {
+		//     const wasManualScroll = isScrolling;
+		//     if (autoScrollEnabled && !wasManualScroll && !isTrimming && !isEditingSegment) {
+		//         autoScrollEnabled = false;
+		//         clearTimeout(autoScrollEnableTimer);
+		//         autoScrollEnableTimer = null;
+		//     }
+		//     scrollOffsetPx = newScrollOffset;
+		//     isScrolling = true;
+		//     clearTimeout(debounceScrollTimer);
+		//     debounceScrollTimer = setTimeout(() => {
+		//         isScrolling = false;
+		//         if (!autoScrollEnabled && !autoScrollEnableTimer && !isTrimming && !isEditingSegment) {
+		//             autoScrollEnableTimer = setTimeout(() => {
+		//                 autoScrollEnabled = true;
+		//                 autoScrollEnableTimer = null;
+		//                 requestRedraw(true);
+		//             }, 1500);
+		//         }
+		//         requestRedraw(true);
+		//     }, 150);
+		//     requestRedraw();
+		// }
+	}
 
 	function handleCanvasClick(e) { const dur = actualMediaDuration; if (isTrimming || isEditingSegment || !segmentWaveformCanvas || !currentAudioBuffer || dur <= 0 || !waveformScrollContainerRef || visibleCanvasWidth <= 0 || totalLogicalWidth <= 0) return; const rect = waveformScrollContainerRef.getBoundingClientRect(); const clickX = e.clientX - rect.left; const time = pxToTime(clickX, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); if (!autoScrollEnabled) { autoScrollEnabled = true; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } dispatch('navigate', { time: time }); }
 
 	function handleZoom(direction) {
-		if (waveformScrollContainerRef) {
-			scrollOffsetPx = waveformScrollContainerRef.scrollLeft;
-		}
+		// if (waveformScrollContainerRef) { // No longer reading from DOM
+		// 	scrollOffsetPx = waveformScrollContainerRef.scrollLeft;
+		// }
 		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || !actualMediaDuration) {
-			// console.warn('[Waveform.handleZoom] Guard hit: Conditions not met for zoom. actualMediaDuration:', actualMediaDuration);
 			return;
 		}
 		const oldZoomLevel = zoomLevel;
-		const oldTotalLogicalWidth = totalLogicalWidth;
-		const initialScrollOffsetPx = scrollOffsetPx;
-		// console.log(`[Waveform.handleZoom START] Dir: ${direction}, OldZoom: ${oldZoomLevel.toFixed(2)}, OldTotalWidth: ${oldTotalLogicalWidth.toFixed(2)}, VisWidth: ${visibleCanvasWidth}, Scroll: ${initialScrollOffsetPx.toFixed(2)}, actualMediaDuration: ${actualMediaDuration.toFixed(3)}`);
+		// const oldTotalLogicalWidth = totalLogicalWidth; // Not needed for right-edge anchor
+		// const initialScrollOffsetPx = scrollOffsetPx; // scrollOffsetPx is already the initial state
+
 		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
 		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
-		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) { /* console.log('[Waveform.handleZoom] Zoom level change too small.'); */ return; }
 
-		const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx);
-		// console.log(`[Waveform.handleZoom] ViewCenterTimeBeforeZoom: ${viewCenterTimeBeforeZoom.toFixed(3)}`);
+		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) { return; }
 
-		zoomLevel = newZoomLevel;
+		// const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx); // Old centering logic
+
+		zoomLevel = newZoomLevel; // Update zoomLevel state first
 
 		tick().then(() => {
-			const newTotalLogicalWidthAfterZoom = totalLogicalWidth;
-			// console.log(`[Waveform.handleZoom tick] NewZoom: ${zoomLevel.toFixed(2)}, NewTotalWidth: ${newTotalLogicalWidthAfterZoom.toFixed(2)}`);
-			let newScrollOffset = timeToLogicalPx(viewCenterTimeBeforeZoom, actualMediaDuration, newTotalLogicalWidthAfterZoom) - (visibleCanvasWidth / 2);
-			// console.log(`[Waveform.handleZoom tick] NewScrollOffset (pre-clamp): ${newScrollOffset.toFixed(2)}`);
+			const newTotalLogicalWidthAfterZoom = totalLogicalWidth; // totalLogicalWidth is now updated due to zoomLevel change
+
+			// Right-edge anchoring logic
+			let newScrollOffset = newTotalLogicalWidthAfterZoom - visibleCanvasWidth;
+
 			const newMaxScroll = Math.max(0, newTotalLogicalWidthAfterZoom - visibleCanvasWidth);
-			// console.log(`[Waveform.handleZoom tick] NewMaxScroll: ${newMaxScroll.toFixed(2)}`);
-			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
-			scrollOffsetPx = Math.round(newScrollOffset);
-			// console.log(`[Waveform.handleZoom tick] ScrollOffsetPx (post-clamp): ${scrollOffsetPx}`);
+			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll)); // Clamping
+
+			scrollOffsetPx = Math.round(newScrollOffset); // Update scrollOffsetPx state
+
 			const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer);
-			if (waveformScrollContainerRef) {
-				waveformScrollContainerRef.scrollLeft = scrollOffsetPx;
-				// console.log(`[Waveform.handleZoom tick] waveformScrollContainerRef.scrollLeft set to: ${scrollOffsetPx}`);
-			}
+			// if (waveformScrollContainerRef) { // No longer writing to DOM
+			// 	waveformScrollContainerRef.scrollLeft = scrollOffsetPx;
+			// }
 			requestRedraw(true);
 			autoScrollEnableTimer = setTimeout(() => {
 				if (isMounted && !isTrimming && !isEditingSegment) { autoScrollEnabled = wasAutoScrollEnabled; }
