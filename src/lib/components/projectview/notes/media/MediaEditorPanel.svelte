@@ -15,6 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
+    import { tick } from 'svelte'; // Added tick
     import { project as projectStore } from '$lib/stores/projectStore.js'; // Renamed to avoid conflict with project prop if any, and ensure it's the store
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Added projectService
 
@@ -89,13 +90,6 @@
             }
              console.log(`[MediaEditorPanel] In reactive block: isAttemptingShowTrimUI is true, but data not ready. Buffer: ${!!notesMediaPlayerAudioBuffer}, Duration: ${notesMediaPlayerDuration}`);
         }
-    }
-
-    // Ensure that if showNotesTrimUI is ever false, isAttemptingShowTrimUI is also false.
-    // This handles cases where the UI might be hidden by other means (e.g. after confirm/cancel).
-    $: if (!showNotesTrimUI && isAttemptingShowTrimUI) {
-      isAttemptingShowTrimUI = false;
-      console.log('[MediaEditorPanel] Resetting isAttemptingShowTrimUI because showNotesTrimUI became false.');
     }
 
     const defaultEmptyJson = JSON.stringify({
@@ -462,8 +456,8 @@
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe}
-                on:requestNotesTrim={handleRequestNotesTrim}
+                on:requestNotesTranscribe={handleRequestNotesTranscribe} // Retained if another UI element calls it
+                on:requestNotesTrim={handleRequestNotesTrim} // This is now for toggling local trim UI
                 on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
             />
         {:else}
