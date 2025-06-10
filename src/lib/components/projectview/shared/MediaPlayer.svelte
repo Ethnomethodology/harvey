@@ -39,6 +39,7 @@
 	export let showLoopPauseButton = true; // Default to true for main player
 	export let showNotesTranscribeButton = false; // Default to false
 	export let showNotesTrimButton = false; // Default to false
+	export let showMainTrimButton = true; // Default to true
 
 	// --- Internal State ---
 	let localMediaUrl = ''; // URL for the <video> src
@@ -47,10 +48,12 @@
 	let loadedPathFromProp = null; // Keep track of the loaded explicit path
 
 	// Local player state (independent of global store's player state unless this is the main player)
-	let localCurrentTime = 0;
-	let localDuration = 0;
-	let localIsPlaying = false;
-	let localAudioBuffer = null;
+	// Exported to allow parent components to read these values via a ref (bind:this)
+	export let localCurrentTime = 0;
+	export let localDuration = 0;
+	export let localIsPlaying = false;
+	export let localAudioBuffer = null;
+	export let isMediaReadyForProcessing = false; // Default to false
 
 	// --- Audio Context State ---
 	let audioContext = null;
@@ -147,9 +150,10 @@
                          try {
                              decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
                              localAudioBuffer = decodedBuffer;
+                             console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. localAudioBuffer is now ${localAudioBuffer ? 'set (AudioBuffer object)' : 'null'}. Duration of buffer: ${localAudioBuffer?.duration}s`);
                              if (!explicitMediaPath) setAudioBuffer(decodedBuffer); // Update global for main player
                          } catch (decodeError) {
-                             console.error('[MediaPlayer] Error decoding audio:', decodeError);
+                             console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
                              localAudioBuffer = null;
                              if (!explicitMediaPath) setAudioBuffer(null);
                          }
@@ -184,8 +188,26 @@
                     localDuration = 0;
                     localCurrentTime = 0;
                     localIsPlaying = false;
+                    // isMediaReadyForProcessing is set in the finally block
                 } finally {
                     isLoadingMedia = false;
+                    // Fallback for localDuration if video metadata didn't provide it but AudioBuffer did
+                    if (localAudioBuffer && localAudioBuffer.duration > 0 && (localDuration === 0 || localDuration === undefined || isNaN(localDuration))) {
+                        console.log(`[MediaPlayer] Updating localDuration (was: ${localDuration}) with localAudioBuffer.duration (${localAudioBuffer.duration}).`);
+                        localDuration = localAudioBuffer.duration;
+                        if (!explicitMediaPath) {
+                            setPlayerDuration(localDuration);
+                        }
+                    }
+                    // Update isMediaReadyForProcessing based on the final state of buffer and duration
+                    console.log(`[MediaPlayer] CHECK_READY_STATE: For ${mediaPathToLoad || loadedPathFromProp || 'unknown media'} - localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}.`);
+                    if (localAudioBuffer && localDuration > 0) {
+                        isMediaReadyForProcessing = true;
+                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to TRUE for ${mediaPathToLoad || loadedPathFromProp}`);
+                    } else {
+                        isMediaReadyForProcessing = false;
+                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to FALSE for ${mediaPathToLoad || loadedPathFromProp}. Reason: localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}`);
+                    }
                 }
             } else { // No mediaPathToLoad
                 if (isTrimming && !explicitMediaPath) cancelTrimMode();
@@ -211,6 +233,8 @@
                     if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false); // from transcriptStore
                 }
                 isLoadingMedia = false;
+                isMediaReadyForProcessing = false; // Explicitly false when no media path
+                console.log(`[MediaPlayer] MEDIA_UNLOADED: Resetting state for ${loadedPathFromProp || 'previous media'}. isMediaReadyForProcessing is now ${isMediaReadyForProcessing}.`);
             }
         })();
     }
@@ -333,6 +357,8 @@
         localDuration = 0;
         localCurrentTime = 0;
         localAudioBuffer = null;
+        isMediaReadyForProcessing = false; // Ensure it's false on error too
+        console.log(`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || 'unknown media'}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`);
     }
 
 	// --- Utility Functions ---
@@ -450,7 +476,12 @@
         dispatch('requestNotesTranscribe', { mediaPath: explicitMediaPath });
     }
     function handleNotesTrimClick() {
-        dispatch('requestNotesTrim', { mediaPath: explicitMediaPath });
+        dispatch('requestNotesTrim', {
+            mediaPath: explicitMediaPath,
+            duration: localDuration,
+            audioBuffer: localAudioBuffer,
+            isReady: isMediaReadyForProcessing // Add this line
+        });
     }
 
     // Determine which player state to display
@@ -533,15 +564,15 @@
                  <button
                     on:click={handleNotesTrimClick}
                     class="btn-control"
-                    title="Trim this media in main Transcriptions tab"
-                    disabled={!localMediaUrl || isLoadingMedia || !localAudioBuffer}
+                    title="Trim this media"
+                    disabled={isLoadingMedia || !isMediaReadyForProcessing}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
                     </svg>
                     <span class="sr-only">Trim</span>
                 </button>
-            {:else if !explicitMediaPath}
+            {:else if showMainTrimButton && !explicitMediaPath}
                 <button
                     on:click={enterTrimMode}
                     class="btn-control"

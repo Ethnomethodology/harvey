@@ -266,6 +266,7 @@
                     showLoopPauseButton={true}
                     showNotesTranscribeButton={false}
                     showNotesTrimButton={false}
+                    showMainTrimButton={false}
                     on:trimModeEntered={handleMediaPlayerTrimModeEntered}
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
                 />
