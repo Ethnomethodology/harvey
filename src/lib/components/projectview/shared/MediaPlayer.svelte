@@ -191,6 +191,14 @@
                     // isMediaReadyForProcessing is set in the finally block
                 } finally {
                     isLoadingMedia = false;
+                    // Fallback for localDuration if video metadata didn't provide it but AudioBuffer did
+                    if (localAudioBuffer && localAudioBuffer.duration > 0 && (localDuration === 0 || localDuration === undefined || isNaN(localDuration))) {
+                        console.log(`[MediaPlayer] Updating localDuration (was: ${localDuration}) with localAudioBuffer.duration (${localAudioBuffer.duration}).`);
+                        localDuration = localAudioBuffer.duration;
+                        if (!explicitMediaPath) {
+                            setPlayerDuration(localDuration);
+                        }
+                    }
                     // Update isMediaReadyForProcessing based on the final state of buffer and duration
                     console.log(`[MediaPlayer] CHECK_READY_STATE: For ${mediaPathToLoad || loadedPathFromProp || 'unknown media'} - localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}.`);
                     if (localAudioBuffer && localDuration > 0) {
