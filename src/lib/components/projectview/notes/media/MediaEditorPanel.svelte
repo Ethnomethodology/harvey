@@ -15,7 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
-    import { tick } from 'svelte';
+    // import { tick } from 'svelte';
     import { project as projectStore } from '$lib/stores/projectStore.js';
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js';
 
