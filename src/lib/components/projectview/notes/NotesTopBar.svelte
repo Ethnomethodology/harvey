@@ -4,6 +4,7 @@
     import { message } from '@tauri-apps/plugin-dialog';
     import { project, toggleAutosave } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
+    import { basename } from '@tauri-apps/api/path';
   
     const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
     const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
@@ -30,8 +31,10 @@
     let isAnythingDirty = false;
     let canSave = false;
     let showDirtyIndicator = false;
+
+    let displayTitle = '';
   
-    $: {
+    $: { // This is the existing reactive block for autosave related logic
         const p = $project;
         autosaveEnabled = p.autosaveEnabled;
         isDocumentDirty = p.isDocumentDirty || p.isDocumentMetadataDirty; // Combine content and metadata dirty for documents
@@ -46,6 +49,36 @@
         isAnythingDirty = isDocumentDirty || isImportedTranscriptDirty || isMediaNoteTranscriptDirty || isPdfAnnotationsDirty;
         canSave = !autosaveEnabled && isAnythingDirty;
         showDirtyIndicator = isAnythingDirty;
+    }
+
+    // New reactive block for displayTitle
+    $: {
+        if ($project && $project.name) {
+            let currentFileName = null;
+            let activePath = $project.selectedDocumentPath ||
+                             $project.selectedMediaNotePath ||
+                             $project.currentImportedTranscriptPath ||
+                             $project.selectedTablePath ||
+                             $project.selectedImagePath;
+
+            if (activePath) {
+                basename(activePath).then(name => {
+                    currentFileName = name;
+                    if (currentFileName) {
+                        displayTitle = `${$project.name} : ${currentFileName}`;
+                    } else {
+                        displayTitle = $project.name;
+                    }
+                }).catch(err => {
+                    console.error("Error getting basename for top bar:", err);
+                    displayTitle = $project.name; // Fallback
+                });
+            } else {
+                displayTitle = $project.name;
+            }
+        } else {
+            displayTitle = 'Harvey'; // Default if project or name is not available
+        }
     }
   
     async function handleManualSave() {
@@ -167,8 +200,8 @@
     class="flex items-center justify-between px-3 h-14 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
     data-tauri-drag-region
   >
-    <div class="flex items-center">
-        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1">Harvey</span>
+    <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
+        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
     </div>
   
     <div class="flex items-center space-x-3 flex-shrink-0">
