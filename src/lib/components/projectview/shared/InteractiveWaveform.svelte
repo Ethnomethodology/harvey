@@ -301,8 +301,10 @@
 		role="region" aria-label="Interactive Waveform Timeline"
 		on:scroll={handleScroll}
 	>
-		<canvas bind:this={timescaleCanvas} class="timescale-canvas" style="height: {TIMESCALE_HEIGHT}px;" aria-hidden="true" />
-		<canvas bind:this={segmentWaveformCanvas} class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment) ? 'cursor-pointer' : 'cursor-default'}" style="height: {waveformCanvasHeight}px; top: {TIMESCALE_HEIGHT}px;" aria-label="Waveform visualization. Click to seek audio." on:click|self={handleCanvasClick} on:wheel|preventDefault={(e) => { if (e.ctrlKey || e.metaKey) { handleZoom(e.deltaY < 0 ? 'in' : 'out'); } }} />
+		<div class="waveform-content-wrapper" style="width: {totalLogicalWidth}px; height: 100%; position: relative;">
+			<canvas bind:this={timescaleCanvas} class="timescale-canvas" style="height: {TIMESCALE_HEIGHT}px;" aria-hidden="true" />
+			<canvas bind:this={segmentWaveformCanvas} class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment) ? 'cursor-pointer' : 'cursor-default'}" style="height: {waveformCanvasHeight}px; top: {TIMESCALE_HEIGHT}px;" aria-label="Waveform visualization. Click to seek audio." on:click|self={handleCanvasClick} on:wheel|preventDefault={(e) => { if (e.ctrlKey || e.metaKey) { handleZoom(e.deltaY < 0 ? 'in' : 'out'); } }} />
+		</div>
 		{#if !webAudioApiSupported} <div class="waveform-overlay"><p class="waveform-overlay-text text-red-600">Web Audio API not supported.</p></div> {:else if !currentAudioBuffer} <div class="waveform-overlay"><p class="waveform-overlay-text">Load audio/video media to view waveform.</p></div> {/if}
 
 		{#if isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
