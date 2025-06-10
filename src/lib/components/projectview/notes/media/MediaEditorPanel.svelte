@@ -15,6 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
+    import { tick } from 'svelte'; // Added tick
     import { project as projectStore } from '$lib/stores/projectStore.js'; // Renamed to avoid conflict with project prop if any, and ensure it's the store
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Added projectService
 
@@ -341,19 +342,32 @@
     // This function is now called when the MediaPlayer's "Trim" button (via showNotesTrimButton) is clicked.
     function handleRequestNotesTrim(event) {
         console.log('[MediaEditorPanel] Handling requestNotesTrim event from MediaPlayer. Event detail:', event.detail);
-        showNotesTrimUI = !showNotesTrimUI;
-        if (showNotesTrimUI) {
-            notesTrimStartTime = 0;
-            if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
-                notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
-                console.log(`[MediaEditorPanel] Initialized trim times for UI: ${notesTrimStartTime} to ${notesTrimEndTime}`);
+
+        const shouldShowUI = !showNotesTrimUI;
+
+        if (shouldShowUI) {
+            const eventDuration = event.detail.duration;
+            const eventAudioBuffer = event.detail.audioBuffer; // This is the actual AudioBuffer object instance
+
+            if (eventAudioBuffer && eventDuration > 0) {
+                notesTrimStartTime = 0;
+                notesTrimEndTime = eventDuration;
+                showNotesTrimUI = true; // Now actually show the UI
+                console.log(`[MediaEditorPanel] Trim UI initialized. Duration: ${eventDuration}, Start: ${notesTrimStartTime}, End: ${notesTrimEndTime}`);
             } else {
-                notesTrimEndTime = 0;
-                console.warn('[MediaEditorPanel] Could not get duration from mediaPlayerInNotesRef to initialize trim times for UI.');
+                // Data from event is not valid, so don't show the UI.
+                // showNotesTrimUI remains false (or its current state if it was already false)
+                console.error(`[MediaEditorPanel] Error: Valid audioBuffer or duration not received in requestNotesTrim event. Duration: ${eventDuration}, Buffer: ${eventAudioBuffer ? 'present' : 'absent'}`);
+                alert("Cannot initialize trim UI: Media data is not fully loaded or is invalid. Please ensure the media has played or loaded completely.");
+                // Do not toggle showNotesTrimUI here, let it be as it was or ensure it's false
+                showNotesTrimUI = false;
+                return;
             }
-            // Ensure waveform also gets these initial values if it's about to be rendered
         } else {
+            // If UI is currently shown, this call means we're hiding it.
+            showNotesTrimUI = false;
             console.log('[MediaEditorPanel] Trim UI hidden.');
+            // Optionally, reset times here if preferred, though handleCancelNotesTrim also does it.
         }
     }
 
@@ -432,8 +446,8 @@
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe}
-                on:requestNotesTrim={handleRequestNotesTrim}
+                on:requestNotesTranscribe={handleRequestNotesTranscribe} // Retained if another UI element calls it
+                on:requestNotesTrim={handleRequestNotesTrim} // This is now for toggling local trim UI
                 on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
             />
         {:else}

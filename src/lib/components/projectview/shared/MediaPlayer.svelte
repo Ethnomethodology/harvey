@@ -452,7 +452,11 @@
         dispatch('requestNotesTranscribe', { mediaPath: explicitMediaPath });
     }
     function handleNotesTrimClick() {
-        dispatch('requestNotesTrim', { mediaPath: explicitMediaPath });
+        dispatch('requestNotesTrim', {
+            mediaPath: explicitMediaPath,
+            duration: localDuration,
+            audioBuffer: localAudioBuffer
+        });
     }
 
     // Determine which player state to display
