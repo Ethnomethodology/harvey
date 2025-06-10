@@ -332,7 +332,7 @@
                     Adjust start and end times by dragging the red bars on both sides: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
                 </p>
                 {#if currentTrimAudioBuffer && notesTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded">
+                    <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={notesMediaPlayerCurrentTime}
