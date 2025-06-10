@@ -39,6 +39,7 @@
 	export let showLoopPauseButton = true; // Default to true for main player
 	export let showNotesTranscribeButton = false; // Default to false
 	export let showNotesTrimButton = false; // Default to false
+	export let showMainTrimButton = true; // Default to true
 
 	// --- Internal State ---
 	let localMediaUrl = ''; // URL for the <video> src
@@ -47,10 +48,11 @@
 	let loadedPathFromProp = null; // Keep track of the loaded explicit path
 
 	// Local player state (independent of global store's player state unless this is the main player)
-	let localCurrentTime = 0;
-	let localDuration = 0;
-	let localIsPlaying = false;
-	let localAudioBuffer = null;
+	// Exported to allow parent components to read these values via a ref (bind:this)
+	export let localCurrentTime = 0;
+	export let localDuration = 0;
+	export let localIsPlaying = false;
+	export let localAudioBuffer = null;
 
 	// --- Audio Context State ---
 	let audioContext = null;
@@ -541,7 +543,7 @@
                     </svg>
                     <span class="sr-only">Trim</span>
                 </button>
-            {:else if !explicitMediaPath}
+            {:else if showMainTrimButton && !explicitMediaPath}
                 <button
                     on:click={enterTrimMode}
                     class="btn-control"

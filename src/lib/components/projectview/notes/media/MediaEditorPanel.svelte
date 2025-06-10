@@ -15,13 +15,21 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
+    import { tick } from 'svelte'; // Added tick
+    import { project as projectStore } from '$lib/stores/projectStore.js'; // Renamed to avoid conflict with project prop if any, and ensure it's the store
+    import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Added projectService
 
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
 
     export let mediaPath = null;
 
     const dispatch = createEventDispatcher();
+
+    let showNotesTrimUI = false;
+    let notesTrimStartTime = 0;
+    let notesTrimEndTime = 0;
 
     const mediaToolbarConfig = {
       undo: true,
@@ -43,7 +51,7 @@
     };
 
     let lexicalEditorRef;
-    let mediaPlayerInNotesRef;
+    let mediaPlayerInNotesRef; // This will hold the reference to the MediaPlayer component
 
     let localEditorJsonState = '';
     let associatedTranscriptPath = null;
@@ -297,6 +305,8 @@
             localEditorJsonState = defaultEmptyJson;
             if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         }
+        // Ensure showNotesTrimUI is reset if the component is remounted with a new mediaPath or on initial mount
+        showNotesTrimUI = false;
     });
 
 	onDestroy(() => {
@@ -323,12 +333,93 @@
 
     function handleRequestNotesTranscribe(event) {
         console.log('[MediaEditorPanel] Requesting Transcribe Tab with media:', event.detail.mediaPath);
+        // This event is now disconnected from the MediaPlayer's own "Transcribe" button by default.
+        // If a general "Transcribe this media" button is added to MediaEditorPanel's UI later,
+        // it can call this function.
         dispatch('requestTranscriptionTabWithMedia', { mediaPath: event.detail.mediaPath });
     }
 
+    // This function is now called when the MediaPlayer's "Trim" button (via showNotesTrimButton) is clicked.
     function handleRequestNotesTrim(event) {
-        console.log('[MediaEditorPanel] Requesting Trim in Transcribe Tab for media:', event.detail.mediaPath);
-        dispatch('requestTrimInTranscriptionTab', { mediaPath: event.detail.mediaPath });
+        console.log('[MediaEditorPanel] Handling requestNotesTrim event from MediaPlayer. Event detail:', event.detail);
+        showNotesTrimUI = !showNotesTrimUI;
+        if (showNotesTrimUI) {
+            notesTrimStartTime = 0;
+            if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
+                notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
+                console.log(`[MediaEditorPanel] Initialized trim times for UI: ${notesTrimStartTime} to ${notesTrimEndTime}`);
+            } else {
+                notesTrimEndTime = 0;
+                console.warn('[MediaEditorPanel] Could not get duration from mediaPlayerInNotesRef to initialize trim times for UI.');
+            }
+            // Ensure waveform also gets these initial values if it's about to be rendered
+        } else {
+            console.log('[MediaEditorPanel] Trim UI hidden.');
+        }
+    }
+
+    function handleWaveformTrimUpdate(event) {
+        if (event.detail) {
+            notesTrimStartTime = event.detail.startTime;
+            notesTrimEndTime = event.detail.endTime;
+            // console.log(`[MediaEditorPanel] Waveform trim update: ${notesTrimStartTime} - ${notesTrimEndTime}`);
+        }
+    }
+
+    async function handleConfirmNotesTrim() {
+        if (!mediaPath) {
+            console.error("Trim Error: No mediaPath specified.");
+            alert("Error: No media file is specified for trimming.");
+            return;
+        }
+        if (notesTrimEndTime <= notesTrimStartTime) {
+            alert("Error: Trim end time must be after start time.");
+            return;
+        }
+
+        projectStore.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media in notes...' }));
+
+        try {
+            await handleTrimMediaConfirm(mediaPath, notesTrimStartTime, notesTrimEndTime);
+            projectStore.update(p => ({ ...p, isLoading: false, statusMessage: 'Trim complete! Reloading media...' }));
+            alert('Media trimmed successfully! The media player will now reload.');
+
+            showNotesTrimUI = false;
+
+            // Reload media in the player
+            const tempPath = mediaPath;
+            mediaPath = null; // Force reactivity by changing the prop
+            await tick(); // Wait for Svelte to process the change
+            mediaPath = tempPath; // Set it back to trigger reload in MediaPlayer
+
+            // Reset trim times to full duration after successful trim and reload
+            if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
+                notesTrimStartTime = 0;
+                notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
+            } else { // Fallback if duration isn't immediately available post-reload
+                notesTrimStartTime = 0;
+                notesTrimEndTime = 0; // Or some sensible default
+            }
+
+        } catch (error) {
+            console.error('[MediaEditorPanel] Trim failed:', error);
+            projectStore.update(p => ({ ...p, isLoading: false, error: `Trim failed: ${error.message || error}`, statusMessage: 'Trim failed.' }));
+            alert(`Failed to trim media: ${error.message || error}`);
+            // Do not hide UI on failure
+        }
+    }
+
+    function handleCancelNotesTrim() {
+        showNotesTrimUI = false;
+        // Reset trim times to what they were when UI was opened (full duration or last set)
+        if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
+            notesTrimStartTime = 0;
+            notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
+        } else {
+            notesTrimStartTime = 0;
+            notesTrimEndTime = 0; // Fallback
+        }
+        console.log('[MediaEditorPanel] Trim cancelled. UI hidden, times reset.');
     }
 
 </script>
@@ -340,10 +431,10 @@
                 bind:this={mediaPlayerInNotesRef}
                 explicitMediaPath={mediaPath}
                 showLoopPauseButton={false}
-                showNotesTranscribeButton={true}
+                showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe}
-                on:requestNotesTrim={handleRequestNotesTrim}
+                on:requestNotesTranscribe={handleRequestNotesTranscribe} // Retained if another UI element calls it
+                on:requestNotesTrim={handleRequestNotesTrim} // This is now for toggling local trim UI
                 on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
             />
         {:else}
@@ -354,6 +445,47 @@
     </div>
 
     <div class="flex-grow min-h-0 overflow-hidden">
+        <!-- Trim UI - this will be fixed positioned, so its location in the DOM here is less critical for layout -->
+        {#if showNotesTrimUI && mediaPath}
+            <div class="inline-trim-ui-wrapper">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 class="text-sm font-semibold">Inline Media Trimming</h3>
+                    <div class="space-x-2">
+                        <button class="btn-action-sm" on:click={handleConfirmNotesTrim}>Confirm Trim</button>
+                        <button class="btn-secondary-sm" on:click={handleCancelNotesTrim}>Cancel</button>
+                    </div>
+                </div>
+                <p class="text-xs mb-1 text-gray-600 dark:text-gray-400">
+                    Adjust start and end times: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
+                </p>
+                {#if mediaPlayerInNotesRef?.localAudioBuffer}
+                    <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded">
+                        <InteractiveWaveform
+                            externalAudioBuffer={mediaPlayerInNotesRef.localAudioBuffer}
+                            externalCurrentTime={mediaPlayerInNotesRef.localCurrentTime}
+                            externalDuration={mediaPlayerInNotesRef.localDuration}
+                            externalIsPlaying={mediaPlayerInNotesRef.localIsPlaying}
+                            externalSegments={[]}
+                            externalCurrentSegmentIndex={-1}
+                            isTrimming={true}
+                            bind:trimStartTime={notesTrimStartTime}
+                            bind:trimEndTime={notesTrimEndTime}
+                            isEditingSegment={false}
+                            editSegmentStartTime={0}
+                            editSegmentEndTime={0}
+                            on:trimupdate={handleWaveformTrimUpdate}
+                            on:seek={(e) => mediaPlayerInNotesRef?.seekTo(e.detail.time)}
+                        />
+                    </div>
+                {:else}
+                    <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-500">
+                        Audio data not available for waveform.
+                    </div>
+                {/if}
+            </div>
+        {/if}
+
+        <!-- Main Content Area - Now always potentially visible -->
         {#if isTranscriptLoading && mediaPath}
             <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
                 Loading notes for <span class="font-semibold ml-1">{transcriptName}</span>...
@@ -364,9 +496,8 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                     <p class="font-semibold">No Transcription Yet</p>
                     <p class="text-xs mt-1">
-                        Please click on the <span class="font-medium">Transcribe</span> button above the player to open this media in the Transcriptions tab and generate one.
+                        To generate a transcript, you can use the main "Transcribe" feature in the Transcriptions tab.
                     </p>
-                    <!-- LexicalEditor is NOT shown in this specific informational state -->
                 </div>
             {:else}
                 <div class="flex-grow flex flex-col items-center justify-center text-orange-600 dark:text-orange-400 p-4 text-center">
@@ -440,4 +571,31 @@
     .flex-grow.min-h-0 {
         min-height: 0;
     }
+
+    .inline-trim-ui-wrapper {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%; /* Use 100% to be contained by parent if it creates a stacking context, or 100vw for viewport width */
+        z-index: 100; /* Ensure it's above most other content */
+        background-color: var(--color-bg-app-dark, #1f2937); /* Fallback to a dark slate color */
+        padding: 0.5rem;
+        border-top: 1px solid var(--color-border-strong, #374151); /* Fallback border */
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1); /* Optional: add some shadow for separation */
+    }
+
+    /* Ensure light mode has appropriate colors if variables are not defined */
+    :global(html:not(.dark)) .inline-trim-ui-wrapper {
+        background-color: var(--color-bg-app-light, #f9fafb); /* Fallback to a light gray */
+        border-top: 1px solid var(--color-border-strong-light, #e5e7eb); /* Fallback light border */
+    }
+
+    .waveform-container {
+        /* Basic styling for the waveform container itself */
+        border: 1px solid var(--theme-dark-border, #4b5563); /* Using existing variable for consistency */
+    }
+     :global(html:not(.dark)) .waveform-container {
+        border: 1px solid var(--theme-border, #d1d5db);
+    }
+
 </style>
