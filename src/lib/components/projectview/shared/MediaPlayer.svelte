@@ -53,7 +53,7 @@
 	export let localDuration = 0;
 	export let localIsPlaying = false;
 	export let localAudioBuffer = null;
-	export let isMediaReadyForProcessing = false;
+	export let isMediaReadyForProcessing = false; // Default to false
 
 	// --- Audio Context State ---
 	let audioContext = null;
@@ -150,9 +150,10 @@
                          try {
                              decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
                              localAudioBuffer = decodedBuffer;
+                             console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. localAudioBuffer is now ${localAudioBuffer ? 'set (AudioBuffer object)' : 'null'}. Duration of buffer: ${localAudioBuffer?.duration}s`);
                              if (!explicitMediaPath) setAudioBuffer(decodedBuffer); // Update global for main player
                          } catch (decodeError) {
-                             console.error('[MediaPlayer] Error decoding audio:', decodeError);
+                             console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
                              localAudioBuffer = null;
                              if (!explicitMediaPath) setAudioBuffer(null);
                          }
@@ -187,9 +188,18 @@
                     localDuration = 0;
                     localCurrentTime = 0;
                     localIsPlaying = false;
+                    // isMediaReadyForProcessing is set in the finally block
                 } finally {
                     isLoadingMedia = false;
-                    isMediaReadyForProcessing = (localAudioBuffer && localDuration > 0);
+                    // Update isMediaReadyForProcessing based on the final state of buffer and duration
+                    console.log(`[MediaPlayer] CHECK_READY_STATE: For ${mediaPathToLoad || loadedPathFromProp || 'unknown media'} - localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}.`);
+                    if (localAudioBuffer && localDuration > 0) {
+                        isMediaReadyForProcessing = true;
+                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to TRUE for ${mediaPathToLoad || loadedPathFromProp}`);
+                    } else {
+                        isMediaReadyForProcessing = false;
+                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to FALSE for ${mediaPathToLoad || loadedPathFromProp}. Reason: localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}`);
+                    }
                 }
             } else { // No mediaPathToLoad
                 if (isTrimming && !explicitMediaPath) cancelTrimMode();
@@ -215,7 +225,8 @@
                     if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false); // from transcriptStore
                 }
                 isLoadingMedia = false;
-                isMediaReadyForProcessing = false;
+                isMediaReadyForProcessing = false; // Explicitly false when no media path
+                console.log(`[MediaPlayer] MEDIA_UNLOADED: Resetting state for ${loadedPathFromProp || 'previous media'}. isMediaReadyForProcessing is now ${isMediaReadyForProcessing}.`);
             }
         })();
     }
@@ -338,7 +349,8 @@
         localDuration = 0;
         localCurrentTime = 0;
         localAudioBuffer = null;
-        isMediaReadyForProcessing = false;
+        isMediaReadyForProcessing = false; // Ensure it's false on error too
+        console.log(`[MediaPlayer] MEDIA_ERROR_STATE: Error during playback for ${explicitMediaPath || 'unknown media'}. isMediaReadyForProcessing is ${isMediaReadyForProcessing}. Error: ${errorMsg}`);
     }
 
 	// --- Utility Functions ---
