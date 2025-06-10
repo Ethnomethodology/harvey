@@ -194,7 +194,66 @@
 	/* -------------------------------------------------- */
 	/* Waveform Zoom Handlers                              */
 	/* -------------------------------------------------- */
-	function handleZoom(direction) { if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || totalLogicalWidth <= 0) return; const oldZoomLevel = zoomLevel; const oldTotalLogicalWidth = totalLogicalWidth; let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep; newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel)); if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) return; zoomLevel = newZoomLevel; const newTotalLogicalWidth = visibleCanvasWidth * zoomLevel; const oldViewCenterLogicalPx = scrollOffsetPx + visibleCanvasWidth / 2; const centerProportion = oldTotalLogicalWidth > 0 ? oldViewCenterLogicalPx / oldTotalLogicalWidth : 0; let newScrollOffset = (centerProportion * newTotalLogicalWidth) - (visibleCanvasWidth / 2); const newMaxScroll = Math.max(0, newTotalLogicalWidth - visibleCanvasWidth); newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll)); scrollOffsetPx = Math.round(newScrollOffset); const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer); tick().then(() => { if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = scrollOffsetPx; requestRedraw(); autoScrollEnableTimer = setTimeout(() => { if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled; autoScrollEnableTimer = null; requestRedraw(true); }, 100); }); }
+	function handleZoom(direction) {
+		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || !currentMediaDuration) { // Guard against zero duration
+			console.warn('[Waveform.handleZoom] Guard hit: Conditions not met for zoom.');
+			return;
+		}
+
+		const oldZoomLevel = zoomLevel;
+		const oldTotalLogicalWidth = totalLogicalWidth; // Capture before zoomLevel changes
+		const initialScrollOffsetPx = scrollOffsetPx; // Capture initial scrollOffsetPx
+
+		console.log(`[Waveform.handleZoom START] Direction: ${direction}, OldZoom: ${oldZoomLevel}, OldTotalWidth: ${oldTotalLogicalWidth}, VisWidth: ${visibleCanvasWidth}, ScrollOffset: ${initialScrollOffsetPx}`);
+
+		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
+		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
+
+		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) {
+			console.log('[Waveform.handleZoom] Zoom level change too small, exiting.');
+			return;
+		}
+
+		const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, currentMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx);
+		console.log(`[Waveform.handleZoom] ViewCenterTimeBeforeZoom: ${viewCenterTimeBeforeZoom}`);
+
+		zoomLevel = newZoomLevel; // This will trigger reactive $: totalLogicalWidth
+
+		// Wait for Svelte to update totalLogicalWidth based on new zoomLevel
+		tick().then(() => {
+			const newTotalLogicalWidthAfterZoom = totalLogicalWidth; // This is the updated totalLogicalWidth
+			console.log(`[Waveform.handleZoom tick] NewZoom: ${zoomLevel}, NewTotalWidth: ${newTotalLogicalWidthAfterZoom}`);
+
+			let newScrollOffset = timeToLogicalPx(viewCenterTimeBeforeZoom, currentMediaDuration, newTotalLogicalWidthAfterZoom) - (visibleCanvasWidth / 2);
+			console.log(`[Waveform.handleZoom tick] NewScrollOffset (pre-clamp): ${newScrollOffset}`);
+
+			const newMaxScroll = Math.max(0, newTotalLogicalWidthAfterZoom - visibleCanvasWidth);
+			console.log(`[Waveform.handleZoom tick] NewMaxScroll: ${newMaxScroll}`);
+
+			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
+			scrollOffsetPx = Math.round(newScrollOffset);
+			console.log(`[Waveform.handleZoom tick] ScrollOffsetPx (post-clamp): ${scrollOffsetPx}`);
+
+			const wasAutoScrollEnabled = autoScrollEnabled;
+			autoScrollEnabled = false; // Temporarily disable autoScroll
+			clearTimeout(autoScrollEnableTimer);
+
+			if (waveformScrollContainerRef) {
+				waveformScrollContainerRef.scrollLeft = scrollOffsetPx;
+				console.log(`[Waveform.handleZoom tick] waveformScrollContainerRef.scrollLeft set to: ${scrollOffsetPx}`);
+			}
+
+			requestRedraw(true); // Force redraw due to zoom and potential scroll changes
+
+			autoScrollEnableTimer = setTimeout(() => {
+				if (isMounted && !isTrimming && !isEditingSegment) {
+					autoScrollEnabled = wasAutoScrollEnabled;
+				}
+				autoScrollEnableTimer = null;
+				// requestRedraw(true); // Redraw might be needed if autoScroll state itself affects drawing
+			}, 100);
+		});
+	}
 	function zoomIn() { handleZoom('in'); }
 	function zoomOut() { handleZoom('out'); }
 
@@ -202,7 +261,33 @@
 	/* Trim Dragging Handlers                             */
 	/* -------------------------------------------------- */
 	function startTrimDrag(handle, event) { if (!isTrimming || !currentMediaDuration || !segmentWaveformCanvas || isEditingSegment) return; event.preventDefault(); draggingHandle = handle; window.addEventListener('mousemove', handleTrimMouseMove); window.addEventListener('mouseup', handleTrimMouseUp, { once: true }); }
-	function handleTrimMouseMove(event) { if (draggingHandle !== 'trim-left' && draggingHandle !== 'trim-right') return; if (!isTrimming || !segmentWaveformCanvas || visibleCanvasWidth <= 0 || !currentMediaDuration) return; event.preventDefault(); const rect = segmentWaveformCanvas.getBoundingClientRect(); const clickX = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - rect.left)); let newTime = pxToTime(clickX, currentMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const minDuration = 0.1; let newStartTime = trimStartTime; let newEndTime = trimEndTime; if (draggingHandle === 'trim-left') { newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration)); } else { newEndTime = Math.min(currentMediaDuration, Math.max(newTime, trimStartTime + minDuration)); } if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) { dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime }); } }
+	function handleTrimMouseMove(event) {
+		if (draggingHandle !== 'trim-left' && draggingHandle !== 'trim-right') return;
+		if (!isTrimming || !segmentWaveformCanvas || visibleCanvasWidth <= 0 || !currentMediaDuration) return;
+		event.preventDefault();
+
+		const rect = segmentWaveformCanvas.getBoundingClientRect();
+		const clickX = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - rect.left));
+
+		const newTime = pxToTime(clickX, currentMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
+		const minDuration = 0.1;
+		let newStartTime = trimStartTime;
+		let newEndTime = trimEndTime;
+
+		if (draggingHandle === 'trim-left') {
+			newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration));
+		} else { // trim-right
+			newEndTime = Math.min(currentMediaDuration, Math.max(newTime, trimStartTime + minDuration));
+			console.log(`[Waveform.trim-right] clientX: ${event.clientX.toFixed(2)}, rect.left: ${rect.left.toFixed(2)}, clickX: ${clickX.toFixed(2)}`);
+			console.log(`[Waveform.trim-right] duration: ${currentMediaDuration.toFixed(3)}, totalWidth: ${totalLogicalWidth.toFixed(2)}, visWidth: ${visibleCanvasWidth.toFixed(2)}, scroll: ${scrollOffsetPx.toFixed(2)}`);
+			console.log(`[Waveform.trim-right] newTime: ${newTime.toFixed(3)}, trimStart: ${trimStartTime.toFixed(3)}, newEnd (pre-dispatch): ${newEndTime.toFixed(3)}`);
+		}
+
+		if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) {
+			dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime });
+			// console.log(`[Waveform.trim-right] Dispatched trimupdate. newEndTime: ${newEndTime.toFixed(3)}`);
+		}
+	}
 	function handleTrimMouseUp() { if (draggingHandle === 'trim-left' || draggingHandle === 'trim-right') { draggingHandle = null; window.removeEventListener('mousemove', handleTrimMouseMove); } }
 
 	/* -------------------------------------------------- */

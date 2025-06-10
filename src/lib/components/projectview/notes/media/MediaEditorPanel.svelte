@@ -15,7 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
-    // import { tick } from 'svelte';
+    import { tick } from 'svelte';
     import { project as projectStore } from '$lib/stores/projectStore.js';
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js';
 
@@ -87,10 +87,10 @@
             transcriptName = mediaStem;
             const mediaDir = await dirname(currentMediaPath);
             const mediaParentDir = await dirname(mediaDir);
-            if (!mediaParentDir) { return null; }
+            if (!mediaParentDir) { console.error(`[MediaEditorPanel] Could not derive mediaParentDir from ${mediaDir}`); return null; }
             const notesDir = await join(mediaParentDir, 'transcripts');
             return await join(notesDir, `${mediaStem}.json`);
-        } catch (e) { return null; }
+        } catch (e) { console.error(`[MediaEditorPanel] Error deriving transcript path for ${currentMediaPath}:`, e); return null; }
     }
 
     async function loadTranscript(path) {
@@ -99,9 +99,7 @@
             return;
         }
         projectStore.update(p => {
-            if (p.selectedMediaNotePath === mediaPath) {
-                return { ...p, isMediaNoteTranscriptLoading: true, mediaNoteTranscriptError: null };
-            }
+            if (p.selectedMediaNotePath === mediaPath) { return { ...p, isMediaNoteTranscriptLoading: true, mediaNoteTranscriptError: null }; }
             return p;
         });
         localEditorJsonState = defaultEmptyJson;
@@ -112,9 +110,8 @@
                 setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
             } else {
                 let parsed = JSON.parse(jsonContent);
-                if (parsed && parsed.root && parsed.root.children) {
-                    setLoadedMediaNoteTranscriptData(mediaPath, jsonContent);
-                } else { throw new Error("Invalid Lexical JSON structure."); }
+                if (parsed && parsed.root && parsed.root.children) { setLoadedMediaNoteTranscriptData(mediaPath, jsonContent); }
+                else { throw new Error("Invalid Lexical JSON structure."); }
             }
         } catch (error) {
             const errorMessage = error.message || String(error);
@@ -127,7 +124,8 @@
     let previousMediaPath = null;
     $: if (mediaPath && mediaPath !== previousMediaPath) {
         previousMediaPath = mediaPath;
-        showNotesTrimUI = false; currentTrimAudioBuffer = null; // Hide trim UI on media change
+        console.log(`[MediaEditorPanel] mediaPath changed to: ${mediaPath}`);
+        showNotesTrimUI = false; currentTrimAudioBuffer = null;
         deriveTranscriptPath(mediaPath).then(path => {
             associatedTranscriptPath = path;
             if (path) { loadTranscript(path); }
@@ -157,11 +155,34 @@
         }
 	}
 
-    async function handleSave() { /* ... (existing unchanged, uses projectStore) ... */ }
-    async function handleDiscard() { /* ... (existing unchanged, uses projectStore) ... */ }
+    async function handleSave() {
+        if (!mediaPath) { console.error("[MediaEditorPanel] Save Error: No mediaPath for context."); await message("Cannot save: No media file is active for this note.", { title: "Save Error", type: "error" }); return; }
+        if (!associatedTranscriptPath) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated notes path is not determined.`); await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" }); return; }
+        if (isTranscriptLoading || (transcriptLoadError && !isFileNotFoundInfo)) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state.`); await message(`Cannot save: ${isTranscriptLoading ? 'Note is still loading.' : `Note failed to load (${transcriptLoadError})`}`, { title: "Save Error", type: "error" }); return; }
+        const finalJsonToSave = localEditorJsonState || defaultEmptyJson;
+        projectStore.update(p => ({ ...p, statusMessage: `Saving notes for ${transcriptName}...`}));
+        try {
+            await invoke('save_note_json', { targetPath: associatedTranscriptPath, jsonContent: finalJsonToSave });
+            if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave); }
+            projectStore.update(p => ({ ...p, statusMessage: `Notes for ${transcriptName} saved.`}));
+        } catch (error) {
+             await message(`Failed to save notes: ${error.message || error}`, { title: 'Save Error', type: 'error' });
+             projectStore.update(p => ({ ...p, statusMessage: `Error saving notes for ${transcriptName}.`}));
+        }
+    }
+
+    async function handleDiscard() {
+        const currentStoreState = get(projectStore);
+        const dirtyFlagForThisNote = currentStoreState.selectedMediaNotePath === mediaPath && currentStoreState.isMediaNoteTranscriptDirty;
+        if (dirtyFlagForThisNote) {
+            const userConfirmed = await confirm(`Discard unsaved changes to the notes for "${mediaPath.split(/[\\/]/).pop()}"?`, { type: 'warning', title: 'Discard Changes' });
+            if (userConfirmed) {
+                if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptChangesDiscarded(mediaPath); }
+            }
+        }
+    }
 
     onMount(() => {
-        console.log(`[MediaEditorPanel] Mounted with mediaPath: ${mediaPath}`);
         setActiveMediaNoteEditorRef(mediaPath, self);
         if (mediaPath && !currentTranscriptJson && !isTranscriptLoading && !transcriptLoadError) {
             deriveTranscriptPath(mediaPath).then(path => {
@@ -181,11 +202,8 @@
     });
 
 	onDestroy(() => {
-        console.log(`[MediaEditorPanel] Destroyed for mediaPath: ${mediaPath}`);
         const activeRefTuple = get(projectStore).activeMediaNoteEditorRef;
-        if (activeRefTuple && activeRefTuple.path === mediaPath) {
-             clearActiveMediaNoteEditorRef();
-        }
+        if (activeRefTuple && activeRefTuple.path === mediaPath) { clearActiveMediaNoteEditorRef(); }
         unsubscribeProject();
 	});
 
