@@ -224,7 +224,7 @@
 			let newScrollOffset = newTotalLogicalWidthAfterZoom - visibleCanvasWidth;
 
 			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
-			scrollOffsetPx = Math.round(newScrollOffset);
+			scrollOffsetPx = Math.ceil(newScrollOffset);
 
 			const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer);
 			if (waveformScrollContainerRef) {
