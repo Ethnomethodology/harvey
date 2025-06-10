@@ -227,7 +227,7 @@ This section handles transcripts generated *within* Harvey from audio/video medi
         *   When used within the "Transcriptions" view (without an `explicitMediaPath` prop), it interacts heavily with `transcriptStore.js` to play the currently selected media (`$transcriptStore.selectedMediaFile`), synchronize with its player state (`$transcriptStore.player`), and manage its audio buffer (`$transcriptStore.audioBuffer`). It uses functions from `transcriptStore.js` (like `updatePlayerTime`, `togglePlayerPlaying`) to update this shared state.
         *   It can also be instantiated with an `explicitMediaPath` prop (e.g., in the "Fieldnotes" view for media notes) to play specific media files independently of the main transcriptions view's state, managing its playback state locally in such cases.
         *   Provides UI controls for playback and includes logic for media loading, decoding, and error handling. It also supports functionalities like media trimming when used in the main transcriptions context.
-    * `InteractiveWaveform.svelte`: Displays an interactive audio waveform.
+    * `src/lib/components/projectview/shared/InteractiveWaveform.svelte`: Displays an interactive audio waveform.
     * `RichTextPreview.svelte`: Displays the transcript and includes a feature to "Convert Media Transcript to Document".
     * `LeftPanel.svelte`: A panel within this view, possibly for media files or settings.
     * `TopBar.svelte`: Toolbar specific to the transcriptions view.
