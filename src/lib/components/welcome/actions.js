@@ -59,7 +59,7 @@ export async function openProjectWindow(project, { setRecentProjects, setStatusM
     const windowLabel = `project-${safePathForLabel}`;
     console.log(`[ProjectWindow] Generated window label: ${windowLabel}`);
     console.log(`[ProjectWindow] Attempting to create/get window handle with label: ${windowLabel}`);
-    projectWindowHandle = new WebviewWindow(windowLabel, { url: `/projectview?xmlPath=${encodeURIComponent(project.path)}`, title: `Project: ${project.name}`, width: 1000, height: 700, minWidth: 800, minHeight: 600, fullscreen: false, center: true });
+    projectWindowHandle = new WebviewWindow(windowLabel, { url: `/projectview?xmlPath=${encodeURIComponent(project.path)}`, title: `Harvey`, width: 1000, height: 700, minWidth: 800, minHeight: 600, fullscreen: false, center: true });
     console.log(`[ProjectWindow] Obtained window handle for ${windowLabel}.`);
     const errorListenerCleanup = await projectWindowHandle.once('tauri://error', (e) => {
       console.error(`[ProjectWindow] Tauri window error for ${windowLabel}:`, e.payload);
