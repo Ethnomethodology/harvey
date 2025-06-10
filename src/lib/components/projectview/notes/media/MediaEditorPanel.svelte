@@ -15,7 +15,6 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
-    import { tick } from 'svelte'; // Added tick
     import { project as projectStore } from '$lib/stores/projectStore.js'; // Renamed to avoid conflict with project prop if any, and ensure it's the store
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Added projectService
 
@@ -446,8 +445,8 @@
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe} // Retained if another UI element calls it
-                on:requestNotesTrim={handleRequestNotesTrim} // This is now for toggling local trim UI
+                on:requestNotesTranscribe={handleRequestNotesTranscribe}
+                on:requestNotesTrim={handleRequestNotesTrim}
                 on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
             />
         {:else}
