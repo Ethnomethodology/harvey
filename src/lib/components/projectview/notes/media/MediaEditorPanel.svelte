@@ -28,7 +28,7 @@
     const dispatch = createEventDispatcher();
 
     let showNotesTrimUI = false;
-    // let currentTrimAudioBuffer = null; // Removed
+    let isAttemptingShowTrimUI = false; // New state variable
     let notesTrimStartTime = 0;
     let notesTrimEndTime = 0;
 
@@ -71,6 +71,33 @@
     $: notesMediaPlayerDuration = mediaPlayerInNotesRef?.localDuration;
     $: notesMediaPlayerCurrentTime = mediaPlayerInNotesRef?.localCurrentTime;
     $: notesMediaPlayerIsPlaying = mediaPlayerInNotesRef?.localIsPlaying;
+
+    $: if (isAttemptingShowTrimUI) {
+        if (notesMediaPlayerAudioBuffer && notesMediaPlayerDuration > 0) {
+            showNotesTrimUI = true; // Now set this to actually show the UI
+            notesTrimStartTime = 0;
+            notesTrimEndTime = notesMediaPlayerDuration;
+            isAttemptingShowTrimUI = false; // Reset the flag as we've processed the attempt
+            console.log(`[MediaEditorPanel] Trim UI shown after reactive data became available. Duration: ${notesMediaPlayerDuration}, Start: 0, End: ${notesMediaPlayerDuration}`);
+        } else {
+            // Data not yet ready, this block will re-evaluate if notesMediaPlayerAudioBuffer or notesMediaPlayerDuration changes.
+            // Setting showNotesTrimUI = false here could be problematic if it was already true from a previous valid state.
+            // The main toggle is handled by handleRequestNotesTrim.
+            // This block is purely for *showing* once conditions are met after an attempt.
+            // However, if an attempt is made and data is bad, we should ensure showNotesTrimUI is false.
+            if (showNotesTrimUI) { // If it somehow got true but data is now bad (unlikely with this flow)
+               // showNotesTrimUI = false; // Or just let the template's #if handle it
+            }
+             console.log(`[MediaEditorPanel] In reactive block: isAttemptingShowTrimUI is true, but data not ready. Buffer: ${!!notesMediaPlayerAudioBuffer}, Duration: ${notesMediaPlayerDuration}`);
+        }
+    }
+
+    // Ensure that if showNotesTrimUI is ever false, isAttemptingShowTrimUI is also false.
+    // This handles cases where the UI might be hidden by other means (e.g. after confirm/cancel).
+    $: if (!showNotesTrimUI && isAttemptingShowTrimUI) {
+      isAttemptingShowTrimUI = false;
+      console.log('[MediaEditorPanel] Resetting isAttemptingShowTrimUI because showNotesTrimUI became false.');
+    }
 
     const defaultEmptyJson = JSON.stringify({
         root: {
@@ -348,30 +375,16 @@
 
     // This function is now called when the MediaPlayer's "Trim" button (via showNotesTrimButton) is clicked.
     function handleRequestNotesTrim(event) {
-        showNotesTrimUI = !showNotesTrimUI;
-        if (showNotesTrimUI) {
-            notesTrimStartTime = 0;
-            notesTrimEndTime = notesMediaPlayerDuration || 0;
-            // The event.detail.audioBuffer and event.detail.duration from MediaPlayer's requestNotesTrim event
-            // are implicitly trusted here because the button in MediaPlayer is disabled if these aren't valid.
-            // The reactive notesMediaPlayerAudioBuffer and notesMediaPlayerDuration should ideally be up-to-date.
-            if (!notesMediaPlayerAudioBuffer || !(notesMediaPlayerDuration > 0)) {
-                console.warn(`[MediaEditorPanel] Trim UI is being shown, but reactively derived media data (buffer or duration) might be initially unavailable. This should resolve once the MediaPlayer child updates. Buffer ready: ${!!notesMediaPlayerAudioBuffer}, Duration valid: ${notesMediaPlayerDuration > 0}`);
-                // Optionally, if this state is critical and shouldn't rely on quick reactive updates:
-                // const eventDuration = event.detail.duration;
-                // const eventAudioBuffer = event.detail.audioBuffer;
-                // if (!eventAudioBuffer || !(eventDuration > 0)) {
-                //     showNotesTrimUI = false; // Revert if data from event is also bad
-                //     alert("Cannot initialize trim UI: Critical media data missing from event.");
-                //     return;
-                // }
-                // notesTrimEndTime = eventDuration; // Prefer event data if taking this route
-            }
-             console.log(`[MediaEditorPanel] Trim UI shown. Initial Start: ${notesTrimStartTime}, End: ${notesTrimEndTime}`);
-        } else {
-            console.log('[MediaEditorPanel] Trim UI hidden.');
+        if (showNotesTrimUI) { // If UI is currently shown, this click means hide it
+            showNotesTrimUI = false;
+            isAttemptingShowTrimUI = false; // Reset attempt flag
+            console.log('[MediaEditorPanel] Trim UI explicitly hidden by button toggle.');
+        } else { // If UI is currently hidden, this click means attempt to show it
+            isAttemptingShowTrimUI = true;
+            console.log('[MediaEditorPanel] Attempting to show Trim UI. Waiting for data via reactive block...');
+            // Do not set showNotesTrimUI = true here directly.
+            // The reactive block below will handle it.
         }
-        // No 'else' needed to clear buffer, as we are not using currentTrimAudioBuffer anymore
     }
 
     function handleWaveformTrimUpdate(event) {
@@ -401,6 +414,7 @@
             alert('Media trimmed successfully! The media player will now reload.');
 
             showNotesTrimUI = false;
+            isAttemptingShowTrimUI = false;
 
             // Reload media in the player
             const tempPath = mediaPath;
@@ -427,6 +441,7 @@
 
     function handleCancelNotesTrim() {
         showNotesTrimUI = false;
+        isAttemptingShowTrimUI = false;
         // currentTrimAudioBuffer = null; // Removed
         // Reset trim times to what they were when UI was opened (full duration or last set)
         // It's better to use the initially set notesTrimEndTime if available, or reset to 0 if not.
