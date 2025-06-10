@@ -254,17 +254,30 @@
     }
 
     async function handleConfirmNotesTrim() {
-        if (!mediaPath) { console.error("Trim Error: No mediaPath specified."); alert("Error: No media file is specified for trimming."); return; }
-        if (notesTrimEndTime <= notesTrimStartTime) { alert("Error: Trim end time must be after start time."); return; }
+        if (!mediaPath) { console.error("Trim Error: No mediaPath specified."); await message("Error: No media file is specified for trimming.", { title: "Trim Error", type: "error" }); return; }
+        if (notesTrimEndTime <= notesTrimStartTime) { await message("Error: Trim end time must be after start time.", { title: "Trim Error", type: "error" }); return; }
         projectStore.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media in notes...' }));
         try {
-            await handleTrimMediaConfirm(mediaPath, notesTrimStartTime, notesTrimEndTime);
-            projectStore.update(p => ({ ...p, isLoading: false, statusMessage: 'Trim complete! Reloading media...' }));
-            alert('Media trimmed successfully! The media player will now reload.');
+            await handleTrimMediaConfirm(mediaPath, notesTrimStartTime, notesTrimEndTime); // This is an existing external function call
+
+            const fileName = await basename(mediaPath);
+            let mediaTypeFolder = 'Media'; // Default or could be 'Output' or similar if type unknown
+            if (fileName) {
+                const lowerFileName = fileName.toLowerCase();
+                if (lowerFileName.endsWith('.mp3') || lowerFileName.endsWith('.wav') || lowerFileName.endsWith('.m4a') || lowerFileName.endsWith('.ogg') || lowerFileName.endsWith('.aac')) {
+                    mediaTypeFolder = 'Audios';
+                } else if (lowerFileName.endsWith('.mp4') || lowerFileName.endsWith('.mov') || lowerFileName.endsWith('.avi') || lowerFileName.endsWith('.webm') || lowerFileName.endsWith('.mkv')) {
+                    mediaTypeFolder = 'Videos';
+                }
+            }
+
+            projectStore.update(p => ({ ...p, isLoading: false, statusMessage: `Trimmed ${fileName} saved to ${mediaTypeFolder}. Reloading media...` }));
+            await message(`Trimmed ${fileName} saved to ${mediaTypeFolder}.`, { title: 'Trim Successful' });
+
             showNotesTrimUI = false;
             currentTrimAudioBuffer = null;
             const tempPath = mediaPath;
-            mediaPath = null;
+            mediaPath = null; // This triggers reactivity to reload the player
             await tick();
             mediaPath = tempPath;
             notesTrimStartTime = 0;
@@ -272,7 +285,7 @@
         } catch (error) {
             console.error('[MediaEditorPanel] Trim failed:', error);
             projectStore.update(p => ({ ...p, isLoading: false, error: `Trim failed: ${error.message || error}`, statusMessage: 'Trim failed.' }));
-            alert(`Failed to trim media: ${error.message || error}`);
+            await message(`Failed to trim media: ${error.message || error}`, { title: 'Trim Failed', type: 'error' });
         }
     }
 
@@ -311,12 +324,12 @@
                 <div class="flex justify-between items-center mb-1">
                     <h3 class="text-sm font-semibold">Inline Media Trimming</h3>
                     <div class="space-x-2">
-                        <button class="btn-action-sm" on:click={handleConfirmNotesTrim}>Confirm Trim</button>
-                        <button class="btn-secondary-sm" on:click={handleCancelNotesTrim}>Cancel</button>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmNotesTrim}>Trim</button>
+                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelNotesTrim}>Cancel</button>
                     </div>
                 </div>
                 <p class="text-xs mb-1 text-gray-600 dark:text-gray-400">
-                    Adjust start and end times: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
+                    Adjust start and end times by dragging the red bars on both sides: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
                 </p>
                 {#if currentTrimAudioBuffer && notesTrimEndTime > 0}
                     <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded">

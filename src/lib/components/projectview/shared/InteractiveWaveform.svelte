@@ -197,36 +197,35 @@
 	function handleCanvasClick(e) { const dur = actualMediaDuration; if (isTrimming || isEditingSegment || !segmentWaveformCanvas || !currentAudioBuffer || dur <= 0 || !waveformScrollContainerRef || visibleCanvasWidth <= 0 || totalLogicalWidth <= 0) return; const rect = waveformScrollContainerRef.getBoundingClientRect(); const clickX = e.clientX - rect.left; const time = pxToTime(clickX, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); if (!autoScrollEnabled) { autoScrollEnabled = true; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } dispatch('navigate', { time: time }); }
 
 	function handleZoom(direction) {
-		if (waveformScrollContainerRef) {
-			scrollOffsetPx = waveformScrollContainerRef.scrollLeft;
-		}
+		// if (waveformScrollContainerRef) { // scrollOffsetPx is captured if needed, but new logic recalculates.
+		// 	scrollOffsetPx = waveformScrollContainerRef.scrollLeft;
+		// }
 		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || !actualMediaDuration) {
-			// console.warn('[Waveform.handleZoom] Guard hit: Conditions not met for zoom. actualMediaDuration:', actualMediaDuration);
 			return;
 		}
 		const oldZoomLevel = zoomLevel;
-		const oldTotalLogicalWidth = totalLogicalWidth;
-		const initialScrollOffsetPx = scrollOffsetPx;
-		// console.log(`[Waveform.handleZoom START] Dir: ${direction}, OldZoom: ${oldZoomLevel.toFixed(2)}, OldTotalWidth: ${oldTotalLogicalWidth.toFixed(2)}, VisWidth: ${visibleCanvasWidth}, Scroll: ${initialScrollOffsetPx.toFixed(2)}, actualMediaDuration: ${actualMediaDuration.toFixed(3)}`);
+		// const oldTotalLogicalWidth = totalLogicalWidth; // Not strictly needed for new logic
+		// const initialScrollOffsetPx = scrollOffsetPx; // Not strictly needed for new logic
+
 		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
 		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
-		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) { /* console.log('[Waveform.handleZoom] Zoom level change too small.'); */ return; }
 
-		const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx);
-		// console.log(`[Waveform.handleZoom] ViewCenterTimeBeforeZoom: ${viewCenterTimeBeforeZoom.toFixed(3)}`);
+		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) { return; }
+
+		// const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx); // Not needed for new logic
 
 		zoomLevel = newZoomLevel;
 
 		tick().then(() => {
-			const newTotalLogicalWidthAfterZoom = totalLogicalWidth;
-			// console.log(`[Waveform.handleZoom tick] NewZoom: ${zoomLevel.toFixed(2)}, NewTotalWidth: ${newTotalLogicalWidthAfterZoom.toFixed(2)}`);
-			let newScrollOffset = timeToLogicalPx(viewCenterTimeBeforeZoom, actualMediaDuration, newTotalLogicalWidthAfterZoom) - (visibleCanvasWidth / 2);
-			// console.log(`[Waveform.handleZoom tick] NewScrollOffset (pre-clamp): ${newScrollOffset.toFixed(2)}`);
+			const newTotalLogicalWidthAfterZoom = totalLogicalWidth; // This correctly uses the updated zoomLevel
 			const newMaxScroll = Math.max(0, newTotalLogicalWidthAfterZoom - visibleCanvasWidth);
-			// console.log(`[Waveform.handleZoom tick] NewMaxScroll: ${newMaxScroll.toFixed(2)}`);
+
+			// *** This is the core change ***
+			let newScrollOffset = newTotalLogicalWidthAfterZoom - visibleCanvasWidth;
+
 			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
 			scrollOffsetPx = Math.round(newScrollOffset);
-			// console.log(`[Waveform.handleZoom tick] ScrollOffsetPx (post-clamp): ${scrollOffsetPx}`);
+
 			const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer);
 			if (waveformScrollContainerRef) {
 				waveformScrollContainerRef.scrollLeft = scrollOffsetPx;
