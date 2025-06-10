@@ -4,6 +4,7 @@
     import { get } from 'svelte/store'; // Ensure 'get' is imported
     import '../app.css';
     import '$lib/styles/tabulator-tailwind-theme.scss';
+    import { appWindow } from '@tauri-apps/api/window';
   
     // --- Import theme store loader ---
     import { loadThemePreferenceFromBackend } from '$lib/stores/themeStore.js';
@@ -13,6 +14,7 @@
     import { tick } from 'svelte';
   
     onMount(async () => {
+      await appWindow.setTitle('Harvey'); // Set the window title
       console.debug('[+layout.svelte] onMount started.'); // DEBUG
       // --- Load theme preference ---
       try {
