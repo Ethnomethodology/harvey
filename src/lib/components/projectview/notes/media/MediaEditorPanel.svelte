@@ -15,6 +15,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
+    import { tick } from 'svelte'; // Added tick
     import { project as projectStore } from '$lib/stores/projectStore.js'; // Renamed to avoid conflict with project prop if any, and ensure it's the store
     import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Added projectService
 
@@ -27,6 +28,7 @@
     const dispatch = createEventDispatcher();
 
     let showNotesTrimUI = false;
+    // let currentTrimAudioBuffer = null; // Removed
     let notesTrimStartTime = 0;
     let notesTrimEndTime = 0;
 
@@ -63,6 +65,12 @@
     let transcriptLoadError = null; // Can be "INFO:FILE_NOT_FOUND" or actual error string
     
     $: isFileNotFoundInfo = transcriptLoadError === "INFO:FILE_NOT_FOUND";
+
+    // Reactive declarations for MediaPlayer properties
+    $: notesMediaPlayerAudioBuffer = mediaPlayerInNotesRef?.localAudioBuffer;
+    $: notesMediaPlayerDuration = mediaPlayerInNotesRef?.localDuration;
+    $: notesMediaPlayerCurrentTime = mediaPlayerInNotesRef?.localCurrentTime;
+    $: notesMediaPlayerIsPlaying = mediaPlayerInNotesRef?.localIsPlaying;
 
     const defaultEmptyJson = JSON.stringify({
         root: {
@@ -340,34 +348,30 @@
 
     // This function is now called when the MediaPlayer's "Trim" button (via showNotesTrimButton) is clicked.
     function handleRequestNotesTrim(event) {
-        console.log('[MediaEditorPanel] Handling requestNotesTrim event from MediaPlayer. Event detail:', event.detail);
-
-        const shouldShowUI = !showNotesTrimUI;
-
-        if (shouldShowUI) {
-            const eventDuration = event.detail.duration;
-            const eventAudioBuffer = event.detail.audioBuffer; // This is the actual AudioBuffer object instance
-
-            if (eventAudioBuffer && eventDuration > 0) {
-                notesTrimStartTime = 0;
-                notesTrimEndTime = eventDuration;
-                showNotesTrimUI = true; // Now actually show the UI
-                console.log(`[MediaEditorPanel] Trim UI initialized. Duration: ${eventDuration}, Start: ${notesTrimStartTime}, End: ${notesTrimEndTime}`);
-            } else {
-                // Data from event is not valid, so don't show the UI.
-                // showNotesTrimUI remains false (or its current state if it was already false)
-                console.error(`[MediaEditorPanel] Error: Valid audioBuffer or duration not received in requestNotesTrim event. Duration: ${eventDuration}, Buffer: ${eventAudioBuffer ? 'present' : 'absent'}`);
-                alert("Cannot initialize trim UI: Media data is not fully loaded or is invalid. Please ensure the media has played or loaded completely.");
-                // Do not toggle showNotesTrimUI here, let it be as it was or ensure it's false
-                showNotesTrimUI = false;
-                return;
+        showNotesTrimUI = !showNotesTrimUI;
+        if (showNotesTrimUI) {
+            notesTrimStartTime = 0;
+            notesTrimEndTime = notesMediaPlayerDuration || 0;
+            // The event.detail.audioBuffer and event.detail.duration from MediaPlayer's requestNotesTrim event
+            // are implicitly trusted here because the button in MediaPlayer is disabled if these aren't valid.
+            // The reactive notesMediaPlayerAudioBuffer and notesMediaPlayerDuration should ideally be up-to-date.
+            if (!notesMediaPlayerAudioBuffer || !(notesMediaPlayerDuration > 0)) {
+                console.warn(`[MediaEditorPanel] Trim UI is being shown, but reactively derived media data (buffer or duration) might be initially unavailable. This should resolve once the MediaPlayer child updates. Buffer ready: ${!!notesMediaPlayerAudioBuffer}, Duration valid: ${notesMediaPlayerDuration > 0}`);
+                // Optionally, if this state is critical and shouldn't rely on quick reactive updates:
+                // const eventDuration = event.detail.duration;
+                // const eventAudioBuffer = event.detail.audioBuffer;
+                // if (!eventAudioBuffer || !(eventDuration > 0)) {
+                //     showNotesTrimUI = false; // Revert if data from event is also bad
+                //     alert("Cannot initialize trim UI: Critical media data missing from event.");
+                //     return;
+                // }
+                // notesTrimEndTime = eventDuration; // Prefer event data if taking this route
             }
+             console.log(`[MediaEditorPanel] Trim UI shown. Initial Start: ${notesTrimStartTime}, End: ${notesTrimEndTime}`);
         } else {
-            // If UI is currently shown, this call means we're hiding it.
-            showNotesTrimUI = false;
             console.log('[MediaEditorPanel] Trim UI hidden.');
-            // Optionally, reset times here if preferred, though handleCancelNotesTrim also does it.
         }
+        // No 'else' needed to clear buffer, as we are not using currentTrimAudioBuffer anymore
     }
 
     function handleWaveformTrimUpdate(event) {
@@ -403,15 +407,15 @@
             mediaPath = null; // Force reactivity by changing the prop
             await tick(); // Wait for Svelte to process the change
             mediaPath = tempPath; // Set it back to trigger reload in MediaPlayer
+            // currentTrimAudioBuffer = null; // Removed
 
             // Reset trim times to full duration after successful trim and reload
-            if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
-                notesTrimStartTime = 0;
-                notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
-            } else { // Fallback if duration isn't immediately available post-reload
-                notesTrimStartTime = 0;
-                notesTrimEndTime = 0; // Or some sensible default
-            }
+            // Note: mediaPlayerInNotesRef.localDuration might not be updated immediately after mediaPath is reset.
+            // It's safer to rely on the duration that would be fetched upon new load or use a temporary value.
+            // For now, setting to 0, assuming UI will re-init correctly when media reloads.
+            notesTrimStartTime = 0;
+            notesTrimEndTime = 0;
+
 
         } catch (error) {
             console.error('[MediaEditorPanel] Trim failed:', error);
@@ -423,14 +427,13 @@
 
     function handleCancelNotesTrim() {
         showNotesTrimUI = false;
+        // currentTrimAudioBuffer = null; // Removed
         // Reset trim times to what they were when UI was opened (full duration or last set)
-        if (mediaPlayerInNotesRef && typeof mediaPlayerInNotesRef.localDuration === 'number') {
-            notesTrimStartTime = 0;
-            notesTrimEndTime = mediaPlayerInNotesRef.localDuration;
-        } else {
-            notesTrimStartTime = 0;
-            notesTrimEndTime = 0; // Fallback
-        }
+        // It's better to use the initially set notesTrimEndTime if available, or reset to 0 if not.
+        // If mediaPlayerInNotesRef.localDuration was used, it might reflect an old value if mediaPath was nullified.
+        // For simplicity, just resetting to 0,0 as the UI is hidden.
+        notesTrimStartTime = 0;
+        notesTrimEndTime = 0;
         console.log('[MediaEditorPanel] Trim cancelled. UI hidden, times reset.');
     }
 
@@ -445,8 +448,8 @@
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe}
-                on:requestNotesTrim={handleRequestNotesTrim}
+                on:requestNotesTranscribe={handleRequestNotesTranscribe} // Retained if another UI element calls it
+                on:requestNotesTrim={handleRequestNotesTrim} // This is now for toggling local trim UI
                 on:mediaLoadError={(e) => project.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
             />
         {:else}
@@ -470,13 +473,13 @@
                 <p class="text-xs mb-1 text-gray-600 dark:text-gray-400">
                     Adjust start and end times: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
                 </p>
-                {#if mediaPlayerInNotesRef?.localAudioBuffer}
+                {#if notesMediaPlayerAudioBuffer && notesMediaPlayerDuration > 0}
                     <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded">
                         <InteractiveWaveform
-                            externalAudioBuffer={mediaPlayerInNotesRef.localAudioBuffer}
-                            externalCurrentTime={mediaPlayerInNotesRef.localCurrentTime}
-                            externalDuration={mediaPlayerInNotesRef.localDuration}
-                            externalIsPlaying={mediaPlayerInNotesRef.localIsPlaying}
+                            externalAudioBuffer={notesMediaPlayerAudioBuffer}
+                            externalCurrentTime={notesMediaPlayerCurrentTime}
+                            externalDuration={notesMediaPlayerDuration}
+                            externalIsPlaying={notesMediaPlayerIsPlaying}
                             externalSegments={[]}
                             externalCurrentSegmentIndex={-1}
                             isTrimming={true}
