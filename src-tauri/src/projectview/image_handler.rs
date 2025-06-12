@@ -20,8 +20,8 @@ const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp
 // Placeholder for project path resolution - NEEDS PROPER IMPLEMENTATION
 fn get_project_data_path(project_id: &str) -> Result<PathBuf, String> {
     let base_projects_dir = dirs_next::config_dir()
-        .or_else(dirs_next::data_dir))
-        .or_else(dirs_next::home_dir)
+        .or_else(|| dirs_next::data_dir())      // Corrected
+        .or_else(|| dirs_next::home_dir())      // Corrected
         .ok_or_else(|| "Failed to determine a base directory for projects.".to_string())?
         .join(".harvey_projects"); // Assuming projects are stored here
 
