@@ -1,7 +1,7 @@
 // src-tauri/src/projectview/image_handler.rs
 use super::shared_types::*;
 use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
-use crate::welcome::config::CommandError; // Assuming this is your custom error type
+use crate::welcome::config::{CommandError, get_config_dir};
 // get_image_asset_metadata_path removed
 use crate::projectview::db_handler; // Added
     use chrono::Utc; // Removed Local
@@ -15,20 +15,19 @@ use quick_xml;
     // TODO: Refactor to use base64::engine::general_purpose::STANDARD.decode() or similar
     // as base64::decode is deprecated.
     use base64::{decode};
-    use directories::UserDirs; // Changed from dirs_next
+    // UserDirs is no longer needed as we use get_config_dir
 
 const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
 
 // Placeholder for project path resolution - NEEDS PROPER IMPLEMENTATION
 fn get_project_data_path(project_id: &str) -> Result<PathBuf, String> {
-    let user_dirs = UserDirs::new().ok_or_else(|| "Could not get user directories information.".to_string())?;
+    // Use the shared get_config_dir function to get the application's base configuration directory.
+    // This function is expected to return the path to a directory like ".../.harvey"
+    let app_config_base_dir = get_config_dir()
+        .map_err(|e| format!("Failed to get application config directory: {}", e))?;
 
-    // Using config_dir as the primary base for .harvey_projects.
-    // This is an interpretation of the previous fallback logic.
-    // A more robust solution might involve ProjectDirs or a configurable base path.
-    let base_dir_path = user_dirs.config_dir().to_path_buf();
-
-    let harvey_projects_path = base_dir_path.join(".harvey_projects");
+    // Construct the path to the ".harvey_projects" directory, which should be inside the app_config_base_dir.
+    let harvey_projects_path = app_config_base_dir.join(".harvey_projects");
 
     // Ensure this base .harvey_projects directory exists
     // Note: The original placeholder for get_project_data_path (in the save_screenshot command)
