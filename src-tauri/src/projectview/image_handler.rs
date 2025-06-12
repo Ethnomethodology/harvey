@@ -4,7 +4,7 @@ use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
 use crate::welcome::config::CommandError; // Assuming this is your custom error type
 // get_image_asset_metadata_path removed
 use crate::projectview::db_handler; // Added
-    use chrono::{Utc, Local};
+    use chrono::Utc; // Removed Local
 use serde_json;
 use log::{info, warn, error}; // debug removed
 use std::{
@@ -12,24 +12,40 @@ use std::{
         path::{Path, PathBuf},
 };
 use quick_xml;
-    use base64::{decode}; // Added base64
-    use dirs_next; // For project path
+    // TODO: Refactor to use base64::engine::general_purpose::STANDARD.decode() or similar
+    // as base64::decode is deprecated.
+    use base64::{decode};
+    use directories::UserDirs; // Changed from dirs_next
 
 const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
 
 // Placeholder for project path resolution - NEEDS PROPER IMPLEMENTATION
 fn get_project_data_path(project_id: &str) -> Result<PathBuf, String> {
-    let base_projects_dir = dirs_next::config_dir()
-        .or_else(|| dirs_next::data_dir())      // Corrected
-        .or_else(|| dirs_next::home_dir())      // Corrected
-        .ok_or_else(|| "Failed to determine a base directory for projects.".to_string())?
-        .join(".harvey_projects"); // Assuming projects are stored here
+    let user_dirs = UserDirs::new().ok_or_else(|| "Could not get user directories information.".to_string())?;
 
-    let project_path = base_projects_dir.join(project_id);
+    // Using config_dir as the primary base for .harvey_projects.
+    // This is an interpretation of the previous fallback logic.
+    // A more robust solution might involve ProjectDirs or a configurable base path.
+    let base_dir_path = user_dirs.config_dir().to_path_buf();
 
+    let harvey_projects_path = base_dir_path.join(".harvey_projects");
+
+    // Ensure this base .harvey_projects directory exists
+    // Note: The original placeholder for get_project_data_path (in the save_screenshot command)
+    // also included creation of this directory if it didn't exist.
+    // This part of the logic was previously in the save_screenshot command itself.
+    // It's moved here for consistency if this function becomes the sole source of project paths.
+    // However, for save_screenshot, the project_id specific folder should already exist.
+    // Let's assume .harvey_projects should exist or be creatable.
+    if !harvey_projects_path.exists() {
+         fs::create_dir_all(&harvey_projects_path)
+            .map_err(|e| format!("Failed to create .harvey_projects directory at {}: {}", harvey_projects_path.display(), e))?;
+    }
+
+    let project_path = harvey_projects_path.join(project_id);
+
+    // Project-specific directory must exist for saving a screenshot into it.
     if !project_path.exists() || !project_path.is_dir() {
-        // In a real scenario, for saving a screenshot, the project directory must exist.
-        // We won't create it here as that's part of project creation.
         error!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display());
         return Err(format!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display()));
     }
@@ -108,7 +124,7 @@ fn register_project_image(
         &file_metadata_for_db,
         &relative_path_for_xml,
         "image",
-        custom_fields_json,
+        custom_fields_json.as_deref(), // Corrected line
     ) {
         error!("[save_screenshot] Failed to save screenshot metadata to DB for {}: {}", relative_path_for_xml, e);
         return Err(CommandError::from(format!("Failed to save screenshot metadata to DB: {}", e)));
@@ -168,6 +184,7 @@ pub async fn save_screenshot(
 
     let file_path = image_folder_for_media.join(&screenshot_filename_with_ext);
 
+    // TODO: Refactor to use base64::engine::general_purpose::STANDARD.decode()
     let image_bytes = decode(&image_data_base64)
         .map_err(|e| format!("Failed to decode base64 image data: {}", e))?;
 
