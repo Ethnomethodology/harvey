@@ -334,6 +334,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_name,
         project_xml_path,
         base_directory,
+        project_uuid: project_data.project_uuid.clone(),
         files: file_entries,
         document_files: project_data.document_files.files,
         table_files: project_data.table_files.files,
@@ -1804,4 +1805,65 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
     info!("[Backend Rename] Success for: {}", item_path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is in scope if needed for direct construction, though here we rely on its deserialization.
+
+    #[tokio::test]
+    async fn test_load_project_data_includes_uuid() {
+        let test_uuid = "test-uuid-123-abc";
+        let project_name_test = "Test Project for UUID";
+
+        let xml_content = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <project>
+                <name>{}</name>
+                <project_uuid>{}</project_uuid>
+                <mediaFiles/>
+                <documentFiles/>
+                <tableFiles/>
+                <imageFiles/>
+                <importedTranscriptFiles/>
+                <documentMetadataFiles/>
+            </project>"#,
+            project_name_test, test_uuid
+        );
+
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
+        temp_file.write_all(xml_content.as_bytes()).expect("Failed to write to temp file");
+        let temp_file_path_str = temp_file.path().to_str().unwrap().to_string();
+
+        // Create the harvey_files directory structure as ensure_base_asset_dirs expects it
+        let temp_dir = temp_file.path().parent().expect("Temp file has no parent");
+        let harvey_files_dir = temp_dir.join(HARVEY_FILES_DIR);
+        fs::create_dir_all(&harvey_files_dir.join(MEDIA_DIR)).expect("Failed to create test media dir");
+        fs::create_dir_all(&harvey_files_dir.join(DOCS_DIR)).expect("Failed to create test docs dir");
+        fs::create_dir_all(&harvey_files_dir.join(TABLES_DIR)).expect("Failed to create test tables dir");
+        fs::create_dir_all(&harvey_files_dir.join(IMAGES_DIR)).expect("Failed to create test images dir");
+        fs::create_dir_all(&harvey_files_dir.join(TRANSCRIPTS_DIR)).expect("Failed to create test transcripts dir");
+
+
+        match load_project_data(temp_file_path_str.clone()).await {
+            Ok(project_view_data) => {
+                assert_eq!(project_view_data.project_uuid, test_uuid, "ProjectViewData.project_uuid should match the UUID in the XML.");
+                assert_eq!(project_view_data.project_name, project_name_test, "ProjectViewData.project_name should match the name in the XML.");
+                assert_eq!(project_view_data.project_xml_path, temp_file_path_str, "ProjectViewData.project_xml_path should match the temp file path.");
+            }
+            Err(e) => {
+                panic!("load_project_data failed: {:?}", e);
+            }
+        }
+
+        // temp_file is automatically deleted when it goes out of scope.
+        // However, we need to manually clean up directories created for ensure_base_asset_dirs
+        if harvey_files_dir.exists() {
+            fs::remove_dir_all(&harvey_files_dir).expect("Failed to remove test harvey_files dir");
+        }
+    }
 }

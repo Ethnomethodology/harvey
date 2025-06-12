@@ -224,6 +224,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
 
         const dataToSet = {
             name: loadedData.project_name,
+            id: loadedData.project_uuid,
             xmlPath: loadedData.project_xml_path,
             baseDirectory: loadedData.base_directory,
             files: loadedData.files || [],

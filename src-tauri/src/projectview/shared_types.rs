@@ -175,6 +175,8 @@ pub struct MediaFiles {
 pub struct ProjectXml {
     #[serde(rename = "name")]
     pub name: String,
+    #[serde(default)] // If project_uuid is missing in XML, it defaults to String::new()
+    pub project_uuid: String,
     #[serde(rename = "mediaFiles", default)]
     pub media_files: MediaFiles,
     #[serde(rename = "documentFiles", default)]
@@ -217,6 +219,7 @@ pub struct ProjectViewData {
     pub project_name: String,
     pub project_xml_path: String,
     pub base_directory: String,
+    pub project_uuid: String,
     pub files: Vec<FileEntry>,
     pub document_files: Vec<DocumentEntryXml>,
     pub table_files: Vec<TableEntryXml>,
