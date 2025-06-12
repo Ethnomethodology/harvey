@@ -138,6 +138,7 @@ pub fn run() {
             projectview::image_handler::import_image_file,
             projectview::image_handler::load_image_annotations,
             projectview::image_handler::save_image_annotations,
+            projectview::image_handler::save_screenshot,
 
             // --- Project view TRANSCRIPT IMPORT command ---
             projectview::transcription_handler::import_word_transcript

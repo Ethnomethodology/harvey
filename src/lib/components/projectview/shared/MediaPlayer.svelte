@@ -11,6 +11,7 @@
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
+	import { invoke } from '@tauri-apps/api/core'; // Ensure invoke is imported
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 	import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Keep for trim confirm logic
 
@@ -121,6 +122,84 @@
 	// --- Rewind/Forward Icons & Functions ---
 	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/></svg>`;
 	const ICON_FORWARD = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/></svg>`;
+	const ICON_CAMERA = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-camera" viewBox="0 0 16 16"><path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828-.828A2 2 0 0 1 3.172 4z"/><path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5m0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0"/></svg>`;
+
+	async function handleScreenshot() {
+		if (!videoElement || !localMediaUrl || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+			project.update(p => ({ ...p, statusMessage: 'Media not loaded or video dimensions unavailable.', error: 'Screenshot failed.' }));
+			console.error('Screenshot attempt failed: No videoElement, localMediaUrl, or video dimensions are zero.');
+			return;
+		}
+
+		// User feedback was "iff being played". For now, let's interpret this as "if media is active and has a frame to show".
+		// If strict "must be actively playing" is needed, add: if (videoElement.paused) { ... }
+		// For now, allowing screenshot from a paused frame.
+
+		console.log('Attempting to capture screenshot...');
+		project.update(p => ({ ...p, statusMessage: 'Capturing screenshot...', isLoading: true, error: null }));
+
+		try {
+			const canvas = document.createElement('canvas');
+			canvas.width = videoElement.videoWidth;
+			canvas.height = videoElement.videoHeight;
+			const ctx = canvas.getContext('2d');
+
+			if (!ctx) {
+				project.update(p => ({ ...p, statusMessage: 'Failed to get canvas context.', error: 'Screenshot failed.', isLoading: false }));
+				console.error('Failed to get canvas 2D context.');
+				return;
+			}
+
+			ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+			const dataUrl = canvas.toDataURL('image/png');
+			// console.log('Screenshot data URL:', dataUrl.substring(0, 100) + '...'); // Log a snippet
+
+			// For now, just log the data URL. Next step will involve sending this to Tauri.
+			// To prepare for Tauri, which will take base64 data *without* the prefix:
+			const base64ImageData = dataUrl.replace(/^data:image\/png;base64,/, '');
+
+			// --- Begin Tauri Invocation ---
+			console.log('Base64 image data ready. Invoking Tauri command...');
+
+			const currentProjectId = get(project)?.id;
+			if (!currentProjectId) {
+				project.update(p => ({ ...p, statusMessage: 'Project ID not found.', error: 'Screenshot failed.', isLoading: false }));
+				console.error('Project ID not found for screenshot.');
+				return;
+			}
+
+			let mediaFileName = "unknown_media";
+			const currentSelectedMedia = get(transcriptStore)?.selectedMediaFile;
+			if (explicitMediaPath) {
+					const pathParts = explicitMediaPath.split(/[\/]/);
+					mediaFileName = pathParts.pop() || mediaFileName;
+			} else if (currentSelectedMedia && currentSelectedMedia.path) {
+					const pathParts = currentSelectedMedia.path.split(/[\/]/);
+					mediaFileName = pathParts.pop() || mediaFileName;
+			} else if (loadedPathFromProp) {
+					const pathParts = loadedPathFromProp.split(/[\/]/);
+					mediaFileName = pathParts.pop() || mediaFileName;
+			}
+
+			// *** Actual Tauri invoke call ***
+			await invoke('save_screenshot', {
+				projectId: currentProjectId,
+				mediaFileName: mediaFileName,
+				timestamp: localCurrentTime,
+				imageDataBase64: base64ImageData
+			});
+
+			project.update(p => ({ ...p, statusMessage: `Screenshot saved from ${mediaFileName}!`, isLoading: false, error: null }));
+			console.log('Screenshot successfully processed by Tauri.');
+			// --- End Tauri Invocation ---
+
+		} catch (err) {
+			const errorMessage = typeof err === 'string' ? err : (err.message || 'Unknown error');
+			project.update(p => ({ ...p, statusMessage: 'Error saving screenshot.', error: `Save failed: ${errorMessage}`, isLoading: false }));
+			console.error('Error during screenshot saving via Tauri:', err);
+		}
+	}
 
 	function rewind10s() {
 		if (!videoElement || isLoadingMedia) return;
@@ -778,6 +857,17 @@
 				</span>
 			</button>
 			{/if}
+
+			<!-- Screenshot Button -->
+			<button
+				on:click={handleScreenshot}
+				class="btn-control"
+				title="Take screenshot"
+				aria-label="Take screenshot of current video frame"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				{@html ICON_CAMERA}
+			</button>
 
 			<!-- Conditional Trim Buttons -->
 			{#if showNotesTrimButton}

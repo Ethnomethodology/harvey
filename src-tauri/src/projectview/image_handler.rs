@@ -4,23 +4,185 @@ use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
 use crate::welcome::config::CommandError; // Assuming this is your custom error type
 // get_image_asset_metadata_path removed
 use crate::projectview::db_handler; // Added
-use chrono::Utc;
+    use chrono::{Utc, Local};
 use serde_json;
 use log::{info, warn, error}; // debug removed
 use std::{
     fs,
-    // io::{Read, Write} removed as per instruction, assuming File ops below don't need direct trait import
-    path::PathBuf,
+        path::{Path, PathBuf},
 };
 use quick_xml;
+    use base64::{decode}; // Added base64
+    use dirs_next; // For project path
 
 const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
+
+// Placeholder for project path resolution - NEEDS PROPER IMPLEMENTATION
+fn get_project_data_path(project_id: &str) -> Result<PathBuf, String> {
+    let base_projects_dir = dirs_next::config_dir()
+        .or_else(dirs_next::data_dir))
+        .or_else(dirs_next::home_dir)
+        .ok_or_else(|| "Failed to determine a base directory for projects.".to_string())?
+        .join(".harvey_projects"); // Assuming projects are stored here
+
+    let project_path = base_projects_dir.join(project_id);
+
+    if !project_path.exists() || !project_path.is_dir() {
+        // In a real scenario, for saving a screenshot, the project directory must exist.
+        // We won't create it here as that's part of project creation.
+        error!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display());
+        return Err(format!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display()));
+    }
+    Ok(project_path)
+}
 // Constants from shared_utils, ensure they are accessible or defined here if not.
 // For example:
 // const HARVEY_FILES_DIR: &str = ".harvey_files";
 // const IMAGES_DIR: &str = "Images";
 
 // FileMetadata is available via shared_types::*, StandardAssetMetadata is no longer needed here.
+
+// Placeholder for a function that might exist in image_handler.rs or similar
+// to register the image with the project (e.g., update a manifest, db, etc.)
+fn register_project_image(
+    project_base_dir: &Path,
+    project_xml_path: &Path,
+    image_filename_with_ext: &str,
+    media_file_name_stem: &str,
+    timestamp: f64
+) -> Result<(), CommandError> {
+    info!("[save_screenshot] Registering image '{}' for project at '{}'", image_filename_with_ext, project_base_dir.display());
+
+    let xml_content = fs::read_to_string(project_xml_path)?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+
+    let images_dir_name = IMAGES_DIR;
+    let image_folder_name = media_file_name_stem;
+
+    let relative_path_for_xml = Path::new(HARVEY_FILES_DIR)
+        .join(images_dir_name)
+        .join(image_folder_name)
+        .join(image_filename_with_ext)
+        .to_string_lossy()
+        .replace("\\", "/");
+
+    let new_image_entry = ImageEntryXml {
+        name: image_filename_with_ext.to_string(),
+        relative_path: relative_path_for_xml.clone(),
+    };
+
+    if project_data.image_files.files.iter().any(|f| f.relative_path == relative_path_for_xml) {
+        warn!("[save_screenshot] Image with relative path '{}' already exists in XML. This shouldn't happen with unique filenames.", relative_path_for_xml);
+    } else {
+        project_data.image_files.files.push(new_image_entry);
+    }
+    project_data.image_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    save_project_xml(project_xml_path, &project_data)?;
+    info!("[save_screenshot] Project XML updated successfully for screenshot.");
+
+    let abs_image_path = project_base_dir.join(&relative_path_for_xml);
+
+    let file_metadata_for_db = FileMetadata {
+        file_name: image_filename_with_ext.to_string(),
+        file_path: abs_image_path.to_string_lossy().into_owned(),
+        last_modified: Utc::now().to_rfc3339(),
+        title: format!("Screenshot from {} at {}s", media_file_name_stem, timestamp.round()),
+        description: format!("Screenshot captured from media '{}' at timestamp {} seconds.", media_file_name_stem, timestamp),
+        summary: String::new(),
+        duration_seconds: None,
+        width: None,
+        height: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        creation_time: Some(Utc::now().to_rfc3339()),
+    };
+
+    let mut custom_fields = serde_json::Map::new();
+    custom_fields.insert("source_media_filename_stem".to_string(), serde_json::Value::String(media_file_name_stem.to_string()));
+    custom_fields.insert("media_timestamp_seconds".to_string(), serde_json::json!(timestamp));
+    let custom_fields_json = Some(serde_json::Value::Object(custom_fields).to_string());
+
+    if let Err(e) = db_handler::save_asset_metadata(
+        &file_metadata_for_db,
+        &relative_path_for_xml,
+        "image",
+        custom_fields_json,
+    ) {
+        error!("[save_screenshot] Failed to save screenshot metadata to DB for {}: {}", relative_path_for_xml, e);
+        return Err(CommandError::from(format!("Failed to save screenshot metadata to DB: {}", e)));
+    }
+    info!("[save_screenshot] Saved screenshot metadata to DB for: {}", relative_path_for_xml);
+    Ok(())
+}
+
+
+#[tauri::command]
+pub async fn save_screenshot(
+    project_id: String,
+    media_file_name: String,
+    timestamp: f64,
+    image_data_base64: String,
+) -> Result<(), String> {
+    info!("[save_screenshot] Received screenshot for project_id: {}, media: {}, timestamp: {}", project_id, media_file_name, timestamp);
+
+    let project_base_dir = get_project_data_path(&project_id)?;
+    let project_xml_path = project_base_dir.join(format!("{}.harvey.xml", project_id));
+    if !project_xml_path.exists() {
+        return Err(format!("Project XML not found for project_id: {}. Expected at: {}", project_id, project_xml_path.display()));
+    }
+
+    let sanitized_media_name_stem = Path::new(&media_file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("media")
+        .to_string();
+
+    let images_base_dir = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
+    let image_folder_for_media = images_base_dir.join(&sanitized_media_name_stem);
+
+    fs::create_dir_all(&image_folder_for_media)
+        .map_err(|e| format!("Failed to create Images sub-directory for {}: {}", sanitized_media_name_stem, e))?;
+
+    let secs = timestamp.trunc() as u64;
+    let millis = (timestamp.fract() * 1000.0).round() as u32;
+    let timestamp_str = format!("T{}_{:03}", secs, millis);
+
+    let mut counter = 0;
+    let screenshot_filename_with_ext = loop {
+        let prospective_name = if counter == 0 {
+            format!("{}_{}.png", sanitized_media_name_stem, timestamp_str)
+        } else {
+            format!("{}_{}_{}.png", sanitized_media_name_stem, timestamp_str, counter)
+        };
+        let candidate_path = image_folder_for_media.join(&prospective_name);
+        if !candidate_path.exists() {
+            break prospective_name;
+        }
+        counter += 1;
+        if counter > 100 {
+            return Err(format!("Could not generate a unique filename for screenshot from {} at timestamp {}", sanitized_media_name_stem, timestamp_str));
+        }
+    };
+
+    let file_path = image_folder_for_media.join(&screenshot_filename_with_ext);
+
+    let image_bytes = decode(&image_data_base64)
+        .map_err(|e| format!("Failed to decode base64 image data: {}", e))?;
+
+    fs::write(&file_path, image_bytes)
+        .map_err(|e| format!("Failed to save screenshot to '{}': {}", file_path.display(), e))?;
+    info!("[save_screenshot] Screenshot saved to: {}", file_path.display());
+
+    register_project_image(&project_base_dir, &project_xml_path, &screenshot_filename_with_ext, &sanitized_media_name_stem, timestamp)
+        .map_err(|e| format!("Failed to register screenshot in project: {}", e))?;
+
+    // TODO: Emit event to frontend if UI needs to refresh image list
+    // Example: app_handle.emit_all("new_screenshot_added", file_path.to_string_lossy().to_string()).unwrap_or_default();
+
+    Ok(())
+}
 
 // Helper to get a unique path in the Images directory
 // Removed get_unique_image_path function as it is no longer used
