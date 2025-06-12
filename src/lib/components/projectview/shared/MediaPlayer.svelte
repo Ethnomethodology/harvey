@@ -109,6 +109,11 @@
 	let progressTooltipText = '00:00:00';
 	let progressTooltipLeft = '0px';
 
+	// --- Overlay Icon State & Icons ---
+	let isHoveringVideo = false;
+	const ICON_PLAY_OVERLAY = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-play-circle-fill" viewBox="0 0 16 16" style="filter: drop-shadow(0 0 5px rgba(0,0,0,0.7));"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814l-3.5-2.5z"/></svg>`;
+	const ICON_PAUSE_OVERLAY = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor" class="bi bi-pause-circle-fill" viewBox="0 0 16 16" style="filter: drop-shadow(0 0 5px rgba(0,0,0,0.7));"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM6.25 5C5.56 5 5 5.56 5 6.25v3.5a1.25 1.25 0 1 0 2.5 0v-3.5C7.5 5.56 6.94 5 6.25 5zm3.5 0c-.69 0-1.25.56-1.25 1.25v3.5a1.25 1.25 0 1 0 2.5 0v-3.5C11 5.56 10.44 5 9.75 5z"/></svg>`;
+
 	// --- Rewind/Forward Icons & Functions ---
 	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.16c-.12.1-.12.284 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>`;
 	const ICON_FORWARD = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36-1.966A.25.25 0 0 1 8 4.466z"/></svg>`;
@@ -381,6 +386,7 @@
             const duration = event.target.duration;
             localDuration = duration;
             localCurrentTime = 0;
+            if (videoElement) videoElement.currentTime = 0; // Explicitly set video element's time
             if (!explicitMediaPath) {
                 setPlayerDuration(duration);
                 updatePlayerTime(0);
@@ -388,6 +394,7 @@
         } else {
             localDuration = 0;
             localCurrentTime = 0;
+            if (videoElement) videoElement.currentTime = 0; // Explicitly set video element's time
             if (!explicitMediaPath) {
                 setPlayerDuration(0);
                 updatePlayerTime(0);
@@ -473,22 +480,31 @@
 	// --- Progress Bar Tooltip Handlers ---
 	function handleMouseMoveOnProgressBar(event) {
 		if (!localDuration || !progressBarElement || !progressTooltipElement) return;
-		const rect = progressBarElement.getBoundingClientRect();
-		const x = event.clientX - rect.left;
-		const percent = Math.max(0, Math.min(1, x / rect.width));
-		const hoverTime = percent * localDuration;
 
+		const progressBarRect = progressBarElement.getBoundingClientRect();
+		const mouseX_relative = event.clientX - progressBarRect.left; // Cursor's X relative to progress bar's start
+
+		// Calculate hover time based on the true mouse position
+		const percent = Math.max(0, Math.min(1, mouseX_relative / progressBarRect.width));
+		const hoverTime = percent * localDuration;
 		progressTooltipText = formatTimeWithHours(hoverTime);
 
-		// Calculate left position for the tooltip
+		// Calculate the ideal center position for the tooltip (directly under mouse)
+		let idealTooltipCenter = mouseX_relative;
+
+		// Adjust idealTooltipCenter to prevent tooltip edges from going outside progressBarElement
 		const tooltipWidth = progressTooltipElement.offsetWidth;
-		let newLeft = x - (tooltipWidth / 2);
+		const minAllowedCenter = tooltipWidth / 2;
+		const maxAllowedCenter = progressBarRect.width - (tooltipWidth / 2);
 
-		// Prevent tooltip from going off-screen
-		if (newLeft < 0) newLeft = 0;
-		if (newLeft + tooltipWidth > rect.width) newLeft = rect.width - tooltipWidth;
+		let clampedTooltipCenter;
+		if (progressBarRect.width < tooltipWidth) { // Tooltip wider than bar
+			clampedTooltipCenter = progressBarRect.width / 2; // Center tooltip on the bar
+		} else {
+			clampedTooltipCenter = Math.max(minAllowedCenter, Math.min(idealTooltipCenter, maxAllowedCenter));
+		}
 
-		progressTooltipLeft = `${newLeft}px`;
+		progressTooltipLeft = `${clampedTooltipCenter}px`;
 		showProgressTooltip = true;
 	}
 
@@ -627,6 +643,8 @@
 		aria-label="Play or pause video"
 		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTogglePlay(); }}
 		tabindex="0"
+		on:mouseenter={() => { isHoveringVideo = true; }}
+	on:mouseleave={() => { isHoveringVideo = false; }}
 	>
 		{#if isLoadingMedia}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"><span>Loading media...</span></div>
@@ -649,6 +667,17 @@
 					><!-- tabindex -1 to keep it out of tab order as we have custom controls -->
 				</video>
 			{/key}
+			<!-- Overlay Icon Div -->
+			<div
+				class="absolute inset-0 flex items-center justify-center pointer-events-none"
+				style="color: white; opacity: { (isHoveringVideo || (!displayIsPlaying && !isLoadingMedia && localMediaUrl)) ? 0.85 : 0 }; transition: opacity 0.2s ease-in-out;"
+			>
+				{#if displayIsPlaying}
+					{@html ICON_PAUSE_OVERLAY}
+				{:else}
+					{@html ICON_PLAY_OVERLAY}
+				{/if}
+			</div>
 		{:else}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400">
 				<span>No media selected or media failed to load</span>
@@ -718,29 +747,6 @@
 			>
 				{@html ICON_FORWARD}
 			</button>
-
-			<!-- Mute Button -->
-			<button
-				on:click={toggleMute}
-				class="btn-control"
-				disabled={!localMediaUrl || isLoadingMedia}
-				aria-label={isMuted ? 'Unmute' : 'Mute'}
-			>
-				{@html isMuted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP}
-			</button>
-
-			<!-- Volume Slider -->
-			<input
-				type="range"
-				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
-				min="0"
-				max="1"
-				step="0.05"
-				bind:value={currentVolume}
-				on:input={handleVolumeChange}
-				disabled={!localMediaUrl || isLoadingMedia || !videoElement}
-				aria-label="Volume control"
-			/>
 
 			<!-- Time Display -->
 			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
@@ -822,6 +828,29 @@
 
 			<!-- Spacer to push fullscreen to the right if needed, or rely on flex-wrap and natural spacing -->
 			<div class="flex-grow"></div>
+
+			<!-- Mute Button -->
+			<button
+				on:click={toggleMute}
+				class="btn-control"
+				disabled={!localMediaUrl || isLoadingMedia}
+				aria-label={isMuted ? 'Unmute' : 'Mute'}
+			>
+				{@html isMuted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP}
+			</button>
+
+			<!-- Volume Slider -->
+			<input
+				type="range"
+				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
+				min="0"
+				max="1"
+				step="0.05"
+				bind:value={currentVolume}
+				on:input={handleVolumeChange}
+				disabled={!localMediaUrl || isLoadingMedia || !videoElement}
+				aria-label="Volume control"
+			/>
 
 			<!-- Fullscreen Button -->
 			<button
