@@ -121,14 +121,14 @@
 	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.16c-.12.1-.12.284 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>`;
 	const ICON_FORWARD = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36-1.966A.25.25 0 0 1 8 4.466z"/></svg>`;
 
-	function rewind30s() {
+	function rewind10s() {
 		if (!videoElement || isLoadingMedia) return;
-		const newTime = Math.max(0, videoElement.currentTime - 30);
+		const newTime = Math.max(0, videoElement.currentTime - 10);
 		seekTo(newTime);
 	}
-	function forward30s() {
+	function forward10s() {
 		if (!videoElement || isLoadingMedia || !localDuration) return;
-		const newTime = Math.min(localDuration, videoElement.currentTime + 30);
+		const newTime = Math.min(localDuration, videoElement.currentTime + 10);
 		seekTo(newTime);
 	}
 
@@ -623,10 +623,10 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800"> <!-- Removed bind:this={playerContainerElement} -->
-	{#if !isVideoMinimized}
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800">
 	<div
-		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto cursor-pointer"
+		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 cursor-pointer"
+		class:hidden={isVideoMinimized}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
 		role="button"
@@ -674,7 +674,6 @@
 			</div>
 		{/if}
 	</div>
-	{/if}
 
 	<!-- Custom Controls Bar -->
 	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
@@ -705,10 +704,10 @@
 		<div class="flex items-center w-full gap-x-2 flex-wrap">
 			<!-- Rewind Button -->
 			<button
-				on:click={rewind30s}
+				on:click={rewind10s}
 				class="btn-control"
-				title="Rewind 30s"
-				aria-label="Rewind 30 seconds"
+				title="Rewind 10s"
+				aria-label="Rewind 10 seconds"
 				disabled={!localMediaUrl || isLoadingMedia}
 			>
 				{@html ICON_REWIND}
@@ -730,10 +729,10 @@
 
 			<!-- Forward Button -->
 			<button
-				on:click={forward30s}
+				on:click={forward10s}
 				class="btn-control"
-				title="Forward 30s"
-				aria-label="Forward 30 seconds"
+				title="Forward 10s"
+				aria-label="Forward 10 seconds"
 				disabled={!localMediaUrl || isLoadingMedia || !localDuration}
 			>
 				{@html ICON_FORWARD}
