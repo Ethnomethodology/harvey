@@ -102,6 +102,28 @@
 	const ICON_FULLSCREEN_ENTER = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>`;
 	const ICON_FULLSCREEN_EXIT = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 0 .5.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5"/></svg>`;
 
+	// --- Progress Bar Tooltip State ---
+	let progressTooltipElement;
+	let progressBarElement; // bind:this to the progress bar input
+	let showProgressTooltip = false;
+	let progressTooltipText = '00:00:00';
+	let progressTooltipLeft = '0px';
+
+	// --- Rewind/Forward Icons & Functions ---
+	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.16c-.12.1-.12.284 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/></svg>`;
+	const ICON_FORWARD = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36-1.966A.25.25 0 0 1 8 4.466z"/></svg>`;
+
+	function rewind30s() {
+		if (!videoElement || isLoadingMedia) return;
+		const newTime = Math.max(0, videoElement.currentTime - 30);
+		seekTo(newTime);
+	}
+	function forward30s() {
+		if (!videoElement || isLoadingMedia || !localDuration) return;
+		const newTime = Math.min(localDuration, videoElement.currentTime + 30);
+		seekTo(newTime);
+	}
+
 	async function toggleFullscreen() {
 		if (!document.fullscreenEnabled || !playerContainerElement) return; // Use playerContainerElement
 		try {
@@ -440,6 +462,40 @@
         return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
+	function formatTimeWithHours(totalSeconds) {
+		if (isNaN(totalSeconds) || totalSeconds < 0) return '00:00:00';
+		const hours = Math.floor(totalSeconds / 3600);
+		const minutes = Math.floor((totalSeconds % 3600) / 60);
+		const seconds = Math.floor(totalSeconds % 60);
+		return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+	}
+
+	// --- Progress Bar Tooltip Handlers ---
+	function handleMouseMoveOnProgressBar(event) {
+		if (!localDuration || !progressBarElement || !progressTooltipElement) return;
+		const rect = progressBarElement.getBoundingClientRect();
+		const x = event.clientX - rect.left;
+		const percent = Math.max(0, Math.min(1, x / rect.width));
+		const hoverTime = percent * localDuration;
+
+		progressTooltipText = formatTimeWithHours(hoverTime);
+
+		// Calculate left position for the tooltip
+		const tooltipWidth = progressTooltipElement.offsetWidth;
+		let newLeft = x - (tooltipWidth / 2);
+
+		// Prevent tooltip from going off-screen
+		if (newLeft < 0) newLeft = 0;
+		if (newLeft + tooltipWidth > rect.width) newLeft = rect.width - tooltipWidth;
+
+		progressTooltipLeft = `${newLeft}px`;
+		showProgressTooltip = true;
+	}
+
+	function handleMouseLeaveProgressBar() {
+		showProgressTooltip = false;
+	}
+
 	// --- Trim Mode Functions (mostly for main player, can be called via ref) ---
 	export function enterTrimMode() {
 		if (isEditingSegment && !explicitMediaPath) { // Only relevant for main player
@@ -563,7 +619,15 @@
 </script>
 
 <div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800" bind:this={playerContainerElement}>
-	<div class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto" id="video-container-wrapper">
+	<div
+		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto cursor-pointer"
+		id="video-container-wrapper"
+		on:click={handleTogglePlay}
+		role="button"
+		aria-label="Play or pause video"
+		on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTogglePlay(); }}
+		tabindex="0"
+	>
 		{#if isLoadingMedia}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"><span>Loading media...</span></div>
 		{:else if localMediaUrl}
@@ -586,145 +650,188 @@
 				</video>
 			{/key}
 		{:else}
-			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400"><span>No media selected or media failed to load</span></div>
+			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400">
+				<span>No media selected or media failed to load</span>
+			</div>
 		{/if}
 	</div>
 
 	<!-- Custom Controls Bar -->
 	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
-		<!-- Timeline -->
-		<input
-			type="range"
-			class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
-			min="0"
-			max={displayDuration > 0 ? displayDuration : 0}
-			bind:value={displayTime}
-			on:input={(e) => seekTo(parseFloat(e.target.value))}
-			disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
-			aria-label="Video progress bar"
-		/>
+		<!-- Timeline with Tooltip -->
+		<div class="relative w-full">
+			<input
+				type="range"
+				bind:this={progressBarElement}
+				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
+				min="0"
+				max={displayDuration > 0 ? displayDuration : 0}
+				bind:value={displayTime}
+				on:input={(e) => seekTo(parseFloat(e.target.value))}
+				on:mousemove={handleMouseMoveOnProgressBar}
+				on:mouseleave={handleMouseLeaveProgressBar}
+				disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
+				aria-label="Video progress bar"
+			/>
+			<span
+				bind:this={progressTooltipElement}
+				class="absolute bg-black text-white text-xs p-1 rounded pointer-events-none whitespace-nowrap"
+				style="bottom: 16px; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'}; left: {progressTooltipLeft};"
+			>
+				{progressTooltipText}
+			</span>
+		</div>
+		<!-- Single row for all controls, managing space with gap -->
+		<div class="flex items-center w-full gap-x-2 flex-wrap">
+			<!-- Rewind Button -->
+			<button
+				on:click={rewind30s}
+				class="btn-control"
+				title="Rewind 30s"
+				aria-label="Rewind 30 seconds"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				{@html ICON_REWIND}
+			</button>
 
-		<div class="flex items-center justify-between w-full">
-			<div class="flex items-center space-x-2">
-				<button
-					on:click={handleTogglePlay}
-					class="btn-control"
-					disabled={!localMediaUrl || isLoadingMedia}
-					aria-label={displayIsPlaying ? 'Pause' : 'Play'}
-				>
-					{#if displayIsPlaying}
-						<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
-					{:else}
-						<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
-					{/if}
-				</button>
-				<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
-					{formatTime(displayTime)} / {formatTime(displayDuration)}
+			<!-- Play/Pause Button -->
+			<button
+				on:click={handleTogglePlay}
+				class="btn-control"
+				disabled={!localMediaUrl || isLoadingMedia}
+				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
+			>
+				{#if displayIsPlaying}
+					<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
+				{:else}
+					<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
+				{/if}
+			</button>
+
+			<!-- Forward Button -->
+			<button
+				on:click={forward30s}
+				class="btn-control"
+				title="Forward 30s"
+				aria-label="Forward 30 seconds"
+				disabled={!localMediaUrl || isLoadingMedia || !localDuration}
+			>
+				{@html ICON_FORWARD}
+			</button>
+
+			<!-- Mute Button -->
+			<button
+				on:click={toggleMute}
+				class="btn-control"
+				disabled={!localMediaUrl || isLoadingMedia}
+				aria-label={isMuted ? 'Unmute' : 'Mute'}
+			>
+				{@html isMuted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP}
+			</button>
+
+			<!-- Volume Slider -->
+			<input
+				type="range"
+				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
+				min="0"
+				max="1"
+				step="0.05"
+				bind:value={currentVolume}
+				on:input={handleVolumeChange}
+				disabled={!localMediaUrl || isLoadingMedia || !videoElement}
+				aria-label="Volume control"
+			/>
+
+			<!-- Time Display -->
+			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
+				{formatTime(displayTime)} / {formatTime(displayDuration)}
+			</span>
+
+			<!-- Playback Speed Selector -->
+			<select
+				id="playbackSpeedSelect"
+				class="btn-control text-xs"
+				on:change={changePlaybackRate}
+				bind:value={selectedPlaybackRate}
+				title="Playback Speed"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				{#each playbackRates as rate}
+					<option value={rate}>{rate}x</option>
+				{/each}
+			</select>
+
+			<!-- Loop Button (if showLoopPauseButton is true) -->
+			{#if showLoopPauseButton}
+			<button
+				class="btn-control inline-flex items-center space-x-1 text-sm"
+				on:click={toggleLoop}
+				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
+				aria-label={isLooping ? 'Loop while editing' : 'Pause while editing'}
+			>
+				{@html isLooping ? LOOP_ICON : PAUSE_ICON}
+				<span class="ml-1 text-xs hidden sm:inline">
+					{isLooping ? 'Loop' : 'Pause'}
 				</span>
+			</button>
+			{/if}
 
-				{#if showLoopPauseButton}
+			<!-- Conditional Trim Buttons -->
+			{#if showNotesTrimButton}
 				<button
-					class="btn-control ml-1 inline-flex items-center space-x-1 text-sm"
-					on:click={toggleLoop}
-					title={isLooping ? 'Loop while editing' : 'Pause while editing'}
-					aria-label={isLooping ? 'Loop while editing' : 'Pause while editing'}
-				>
-					{@html isLooping ? LOOP_ICON : PAUSE_ICON}
-					<span class="ml-1 text-xs hidden sm:inline">
-						{isLooping ? 'Loop' : 'Pause'}
-					</span>
-				</button>
-				{/if}
-			</div>
-
-			<div class="flex items-center space-x-2">
-				<!-- Playback Speed Dropdown -->
-				<select
-					id="playbackSpeedSelect"
-					class="btn-control text-xs"
-					on:change={changePlaybackRate}
-					bind:value={selectedPlaybackRate}
-					title="Playback Speed"
-					disabled={!localMediaUrl || isLoadingMedia}
-				>
-					{#each playbackRates as rate}
-						<option value={rate}>{rate}x</option>
-					{/each}
-				</select>
-
-				<!-- Volume Controls -->
-				<button
-					on:click={toggleMute}
+					on:click={handleNotesTrimClick}
 					class="btn-control"
-					disabled={!localMediaUrl || isLoadingMedia}
-					aria-label={isMuted ? 'Unmute' : 'Mute'}
+					title="Trim this media"
+					disabled={isLoadingMedia || !isMediaReadyForProcessing}
 				>
-					{@html isMuted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP}
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
+					</svg>
+					<span class="sr-only">Trim</span>
 				</button>
-				<input
-					type="range"
-					class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
-					min="0"
-					max="1"
-					step="0.05"
-					bind:value={currentVolume}
-					on:input={handleVolumeChange}
-					disabled={!localMediaUrl || isLoadingMedia || !videoElement}
-					aria-label="Volume control"
-				/>
-
-				<!-- Fullscreen Toggle -->
-				<button
-					on:click={toggleFullscreen}
-					class="btn-control"
-					disabled={!localMediaUrl || isLoadingMedia || !playerContainerElement}
-					aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-				>
-					{@html isFullscreen ? ICON_FULLSCREEN_EXIT : ICON_FULLSCREEN_ENTER}
-				</button>
-
-				<!-- Other Action Buttons (Trim, Transcribe) -->
-				{#if showNotesTranscribeButton}
-                <button
-					on:click={handleNotesTranscribeClick}
-					class="btn-action text-xs"
-					title="Transcribe this media in main Transcriptions tab"
-					disabled={!localMediaUrl || isLoadingMedia}
-				>
-					Transcribe
-				</button>
-				{/if}
-
-				{#if showNotesTrimButton}
-					<button
-						on:click={handleNotesTrimClick}
-						class="btn-control"
-						title="Trim this media"
-						disabled={isLoadingMedia || !isMediaReadyForProcessing}
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
-						</svg>
-						<span class="sr-only">Trim</span>
-					</button>
-				{:else if showMainTrimButton && !explicitMediaPath}
+			{:else if showMainTrimButton && !explicitMediaPath}
+				{#if isTrimming}
+					<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
+					<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
+				{:else}
 					<button
 						on:click={enterTrimMode}
 						class="btn-control"
 						title="Trim Media"
 						disabled={isTrimDisabled}
 					>
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
-					</svg>
-					<span class="sr-only">Trim</span>
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
+						</svg>
+						<span class="sr-only">Trim</span>
 					</button>
-					{#if isTrimming}
-						<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
-						<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
-					{/if}
 				{/if}
-			</div>
+			{/if}
+
+			<!-- Conditional Notes Transcribe Button -->
+			{#if showNotesTranscribeButton}
+			<button
+				on:click={handleNotesTranscribeClick}
+				class="btn-action text-xs"
+				title="Transcribe this media in main Transcriptions tab"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				Transcribe
+			</button>
+			{/if}
+
+			<!-- Spacer to push fullscreen to the right if needed, or rely on flex-wrap and natural spacing -->
+			<div class="flex-grow"></div>
+
+			<!-- Fullscreen Button -->
+			<button
+				on:click={toggleFullscreen}
+				class="btn-control"
+				disabled={!localMediaUrl || isLoadingMedia || !playerContainerElement}
+				aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+			>
+				{@html isFullscreen ? ICON_FULLSCREEN_EXIT : ICON_FULLSCREEN_ENTER}
+			</button>
 		</div>
 	</div>
 </div>
@@ -865,7 +972,7 @@
 	}
 
 	/* Custom styling for range inputs */
-	.video-progress, .volume-slider {
+	.video-progress { /* Keep existing styles if they work, or adjust */
 		-webkit-appearance: none;
 		appearance: none;
 		width: 100%;
@@ -876,13 +983,13 @@
 		opacity: 0.9;
 		transition: opacity .15s ease-in-out;
 	}
-	.dark .video-progress, .dark .volume-slider {
+	.dark .video-progress {
 		background: #4b5563; /* dark:bg-gray-600 */
 	}
-	.video-progress:hover, .volume-slider:hover {
+	.video-progress:hover {
 		opacity: 1;
 	}
-	.video-progress::-webkit-slider-thumb, .volume-slider::-webkit-slider-thumb {
+	.video-progress::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
 		width: 1rem; /* 16px */
@@ -892,11 +999,11 @@
 		cursor: pointer;
 		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
-	.dark .video-progress::-webkit-slider-thumb, .dark .volume-slider::-webkit-slider-thumb {
+	.dark .video-progress::-webkit-slider-thumb {
 		background: #2563eb; /* dark theme color */
 		border-color: #374151; /* dark border for thumb */
 	}
-	.video-progress::-moz-range-thumb, .volume-slider::-moz-range-thumb {
+	.video-progress::-moz-range-thumb {
 		width: 0.875rem; /* 14px */
 		height: 0.875rem; /* 14px */
 		border-radius: 50%;
@@ -904,21 +1011,47 @@
 		cursor: pointer;
 		border: 1px solid white;
 	}
-	.dark .video-progress::-moz-range-thumb, .dark .volume-slider::-moz-range-thumb {
+	.dark .video-progress::-moz-range-thumb {
 		background: #2563eb;
 		border-color: #374151;
 	}
+
 	.volume-slider {
-		width: 6rem; /* Specific width for volume slider */
-		height: 0.375rem; /* 6px, slightly thinner */
+		-webkit-appearance: none;
+		appearance: none;
+		/* width: 100%; */ /* Already has w-16 */
+		height: 0.5rem; /* 8px */
+		border-radius: 0.25rem; /* 4px */
+		background: #d1d5db; /* bg-gray-300 */
+		outline: none;
+		opacity: 0.9;
+		transition: opacity .15s ease-in-out;
+	}
+	.dark .volume-slider {
+		background: #4b5563; /* dark:bg-gray-600 */
+	}
+	.volume-slider:hover {
+		opacity: 1;
 	}
 	.volume-slider::-webkit-slider-thumb {
 		width: 0.875rem; /* 14px */
 		height: 0.875rem; /* 14px */
 	}
+	.dark .volume-slider::-webkit-slider-thumb {
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
+	}
 	.volume-slider::-moz-range-thumb {
 		width: 0.75rem; /* 12px */
 		height: 0.75rem; /* 12px */
+		border-radius: 50%;
+		background: #3b82f6;
+		cursor: pointer;
+		border: 1px solid white;
+	}
+	.dark .volume-slider::-moz-range-thumb {
+		background: #2563eb;
+		border-color: #374151;
 	}
 
 </style>
