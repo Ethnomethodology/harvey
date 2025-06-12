@@ -96,11 +96,14 @@
 		videoElement.muted = isMuted;
 	}
 
-	// --- Fullscreen State ---
-	let isFullscreen = false;
-	let playerContainerElement = null; // For requesting fullscreen on the container
-	const ICON_FULLSCREEN_ENTER = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>`;
-	const ICON_FULLSCREEN_EXIT = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 0 .5.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5"/></svg>`;
+	// --- Video Minimize State & Icons ---
+	let isVideoMinimized = false;
+	const ICON_MINIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-collapse" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m-.5 11.707-1.146 1.147a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 11.707V15.5a.5.5 0 0 1-1 0z"/></svg>`;
+	const ICON_MAXIMIZE_VIDEO = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-expand" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10"/></svg>`;
+
+	function toggleMinimizeVideo() {
+		isVideoMinimized = !isVideoMinimized;
+	}
 
 	// --- Progress Bar Tooltip State ---
 	let progressTooltipElement;
@@ -129,24 +132,6 @@
 		seekTo(newTime);
 	}
 
-	async function toggleFullscreen() {
-		if (!document.fullscreenEnabled || !playerContainerElement) return; // Use playerContainerElement
-		try {
-			if (!document.fullscreenElement) {
-				await playerContainerElement.requestFullscreen(); // Request fullscreen on container
-			} else {
-				await document.exitFullscreen();
-			}
-		} catch (err) {
-			console.error("Fullscreen toggle error:", err);
-		}
-		// isFullscreen will be updated by the event listener
-	}
-
-	function handleFullscreenChange() {
-		isFullscreen = !!document.fullscreenElement;
-	}
-
 	// --- Audio Context State ---
 	let audioContext = null;
 	let webAudioApiSupported = true;
@@ -160,12 +145,12 @@
         } catch (e) {
             webAudioApiSupported = false;
         }
-		document.addEventListener('fullscreenchange', handleFullscreenChange);
+		// document.addEventListener('fullscreenchange', handleFullscreenChange); // Removed
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
-			document.removeEventListener('fullscreenchange', handleFullscreenChange);
+			// document.removeEventListener('fullscreenchange', handleFullscreenChange); // Removed
         };
     });
 	onDestroy(() => {
@@ -175,7 +160,7 @@
         if (currentBlobUrl) {
             URL.revokeObjectURL(currentBlobUrl);
         }
-		document.removeEventListener('fullscreenchange', handleFullscreenChange);
+		// document.removeEventListener('fullscreenchange', handleFullscreenChange); // Removed
     });
 
 	// --- File Handling & Audio Processing ---
@@ -386,7 +371,9 @@
             const duration = event.target.duration;
             localDuration = duration;
             localCurrentTime = 0;
-            if (videoElement) videoElement.currentTime = 0; // Explicitly set video element's time
+            if (videoElement) videoElement.currentTime = 0;
+            if (progressBarElement) progressBarElement.value = '0'; // Ensure progress bar visually resets
+
             if (!explicitMediaPath) {
                 setPlayerDuration(duration);
                 updatePlayerTime(0);
@@ -394,7 +381,9 @@
         } else {
             localDuration = 0;
             localCurrentTime = 0;
-            if (videoElement) videoElement.currentTime = 0; // Explicitly set video element's time
+            if (videoElement) videoElement.currentTime = 0;
+            if (progressBarElement) progressBarElement.value = '0'; // Ensure progress bar visually resets
+
             if (!explicitMediaPath) {
                 setPlayerDuration(0);
                 updatePlayerTime(0);
@@ -634,7 +623,8 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800" bind:this={playerContainerElement}>
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800"> <!-- Removed bind:this={playerContainerElement} -->
+	{#if !isVideoMinimized}
 	<div
 		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto cursor-pointer"
 		id="video-container-wrapper"
@@ -684,6 +674,7 @@
 			</div>
 		{/if}
 	</div>
+	{/if}
 
 	<!-- Custom Controls Bar -->
 	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
@@ -852,35 +843,29 @@
 				aria-label="Volume control"
 			/>
 
-			<!-- Fullscreen Button -->
+			<!-- Minimize/Maximize Video Button -->
 			<button
-				on:click={toggleFullscreen}
+				on:click={toggleMinimizeVideo}
 				class="btn-control"
-				disabled={!localMediaUrl || isLoadingMedia || !playerContainerElement}
-				aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+				title={isVideoMinimized ? 'Show video' : 'Hide video player'}
+				aria-label={isVideoMinimized ? 'Show video player' : 'Hide video player'}
+				disabled={!localMediaUrl || isLoadingMedia}
 			>
-				{@html isFullscreen ? ICON_FULLSCREEN_EXIT : ICON_FULLSCREEN_ENTER}
+				{#if isVideoMinimized}
+					{@html ICON_MAXIMIZE_VIDEO}
+				{:else}
+					{@html ICON_MINIMIZE_VIDEO}
+				{/if}
 			</button>
 		</div>
 	</div>
 </div>
 
 <style>
-	/* Ensure this is defined if not already part of your global styles or Tailwind imports */
-	#video-container-wrapper:fullscreen { /* Target the wrapper for fullscreen */
-		max-width: 100% !important;
-		max-height: 100% !important;
-		width: 100% !important;
-		height: 100% !important;
-		display: flex;
-	flex-direction: column;
-	}
-	#video-container-wrapper:fullscreen video {
-		object-fit: contain;
-		width: 100% !important;
-	height: 100% !important;
-	}
-
+	/*
+	REMOVED: #video-container-wrapper:fullscreen and #video-container-wrapper:fullscreen video styles
+	as fullscreen functionality is removed.
+	*/
 
 	.btn-control {
 		padding: 0.35rem; /* Slightly smaller padding for denser controls */
