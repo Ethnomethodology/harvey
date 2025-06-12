@@ -55,6 +55,71 @@
 	export let localAudioBuffer = null;
 	export let isMediaReadyForProcessing = false; // Default to false
 
+	// --- Playback Speed State ---
+	const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+	let selectedPlaybackRate = 1;
+
+	function changePlaybackRate(event) {
+		selectedPlaybackRate = parseFloat(event.target.value);
+		if (videoElement) {
+			videoElement.playbackRate = selectedPlaybackRate;
+		}
+	}
+
+	// --- Volume Control State ---
+	let currentVolume = 1;
+	let isMuted = false;
+	let previousVolume = 1;
+	const ICON_VOLUME_UP = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.536 14.01A8.47 8.47 0 0 0 14.026 8a8.47 8.47 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303zM10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.482 5.482 0 0 1 11.025 8a5.482 5.482 0 0 1-1.61 3.89zm-2.07-2.07A4.486 4.486 0 0 0 9.025 8a4.486 4.486 0 0 0-1.004-2.524l-.707.707A3.488 3.488 0 0 1 8.025 8c0 .966-.39 1.841-1.031 2.476l.707.707M6.717 4.04A.5.5 0 0 1 7 4.5v7a.5.5 0 0 1-.812.39L3.825 9.5H1.5A.5.5 0 0 1 1 9V7a.5.5 0 0 1 .5-.5h2.325l2.363-2.39a.5.5 0 0 1 .529-.07z"/></svg>`;
+	const ICON_VOLUME_MUTE = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M6.717 4.04A.5.5 0 0 1 7 4.5v7a.5.5 0 0 1-.812.39L3.825 9.5H1.5A.5.5 0 0 1 1 9V7a.5.5 0 0 1 .5-.5h2.325l2.363-2.39a.5.5 0 0 1 .529-.07zM11.031 8.031c0 .966-.39 1.841-1.031 2.476l-.707-.707A3.488 3.488 0 0 0 9.025 8c0-.966-.39-1.841-1.031-2.476l.707-.707A3.488 3.488 0 0 0 11.025 8M12.5 8c0-1.306-.474-2.475-1.232-3.369l-.707.707A4.486 4.486 0 0 1 11.525 8a4.486 4.486 0 0 1-1.004 2.524l.707.707A5.482 5.482 0 0 0 12.5 8m2.071-3.992L13.864 3.3A8.47 8.47 0 0 0 11.536.99l-.707.707A7.476 7.476 0 0 1 13.125 3C13.125 4.38 12.78 5.625 12.15 6.68l.708.707c.722-1.196 1.143-2.567 1.143-4.018M10.5 8a.5.5 0 0 0-.5.5v1.5H8.5a.5.5 0 0 0 0 1H10v1.5a.5.5 0 0 0 1 0V11h1.5a.5.5 0 0 0 0-1H11V8.5a.5.5 0 0 0-.5-.5"/></svg>`;
+
+	function handleVolumeChange(event) {
+		currentVolume = parseFloat(event.target.value);
+		if (videoElement) {
+			videoElement.volume = currentVolume;
+			videoElement.muted = currentVolume === 0;
+		}
+		isMuted = currentVolume === 0;
+	}
+
+	function toggleMute() {
+		if (!videoElement) return;
+		isMuted = !isMuted;
+		if (isMuted) {
+			previousVolume = videoElement.volume;
+			videoElement.volume = 0;
+			currentVolume = 0;
+		} else {
+			videoElement.volume = previousVolume > 0 ? previousVolume : 0.1;
+			currentVolume = videoElement.volume;
+		}
+		videoElement.muted = isMuted;
+	}
+
+	// --- Fullscreen State ---
+	let isFullscreen = false;
+	let playerContainerElement = null; // For requesting fullscreen on the container
+	const ICON_FULLSCREEN_ENTER = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>`;
+	const ICON_FULLSCREEN_EXIT = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5m5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10 4.5v-4a.5.5 0 0 1 .5-.5M0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5m10 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 0 .5.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5"/></svg>`;
+
+	async function toggleFullscreen() {
+		if (!document.fullscreenEnabled || !playerContainerElement) return; // Use playerContainerElement
+		try {
+			if (!document.fullscreenElement) {
+				await playerContainerElement.requestFullscreen(); // Request fullscreen on container
+			} else {
+				await document.exitFullscreen();
+			}
+		} catch (err) {
+			console.error("Fullscreen toggle error:", err);
+		}
+		// isFullscreen will be updated by the event listener
+	}
+
+	function handleFullscreenChange() {
+		isFullscreen = !!document.fullscreenElement;
+	}
+
 	// --- Audio Context State ---
 	let audioContext = null;
 	let webAudioApiSupported = true;
@@ -68,10 +133,12 @@
         } catch (e) {
             webAudioApiSupported = false;
         }
+		document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
+			document.removeEventListener('fullscreenchange', handleFullscreenChange);
         };
     });
 	onDestroy(() => {
@@ -81,6 +148,7 @@
         if (currentBlobUrl) {
             URL.revokeObjectURL(currentBlobUrl);
         }
+		document.removeEventListener('fullscreenchange', handleFullscreenChange);
     });
 
 	// --- File Handling & Audio Processing ---
@@ -306,6 +374,9 @@
         if (videoElement) {
             localIsPlaying = !videoElement.paused;
             if (!explicitMediaPath) togglePlayerPlaying(!videoElement.paused);
+            videoElement.playbackRate = selectedPlaybackRate;
+            videoElement.volume = currentVolume; // Initialize volume
+			videoElement.muted = isMuted;
         }
     }
 	function onSeeked() {
@@ -485,14 +556,14 @@
     }
 
     // Determine which player state to display
-    $: displayTime = explicitMediaPath ? localCurrentTime : $transcriptStore.player.currentTime;
-    $: displayDuration = explicitMediaPath ? localDuration : $transcriptStore.player.duration;
+    $: displayTime = explicitMediaPath ? localCurrentTime : ($transcriptStore.player.currentTime || 0);
+    $: displayDuration = explicitMediaPath ? localDuration : ($transcriptStore.player.duration || 0);
     $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying;
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800">
-	<div class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1">
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800" bind:this={playerContainerElement}>
+	<div class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto" id="video-container-wrapper">
 		{#if isLoadingMedia}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-400 animate-pulse"><span>Loading media...</span></div>
 		{:else if localMediaUrl}
@@ -509,108 +580,189 @@
 					on:seeked={onSeeked}
 					on:error={onError}
 					preload="metadata"
-					controls
 					controlslist="nodownload noremoteplayback"
-				></video>
+					tabindex="-1"
+					><!-- tabindex -1 to keep it out of tab order as we have custom controls -->
+				</video>
 			{/key}
 		{:else}
 			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400"><span>No media selected or media failed to load</span></div>
 		{/if}
 	</div>
-	<div class="flex items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full">
-		<div class="flex items-center space-x-3">
-			<button
-				on:click={handleTogglePlay}
-				class="btn-control"
-				disabled={!localMediaUrl || isLoadingMedia}
-				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
-			>
-				{#if displayIsPlaying}
-					 <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
-				{:else}
-					 <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
-				{/if}
-			</button>
-			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
-				{formatTime(displayTime)} / {formatTime(displayDuration)}
-			</span>
-			{#if showLoopPauseButton}
-			<button
-				class="btn-control ml-2 inline-flex items-center space-x-1 text-sm"
-				on:click={toggleLoop}
-				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
-				aria-label={isLooping ? 'Loop while editing' : 'Pause while editing'}
-			>
-				{@html isLooping ? LOOP_ICON : PAUSE_ICON}
-				<span class="ml-1">
-					{isLooping ? 'Loop while editing' : 'Pause while editing'}
-				</span>
-			</button>
-            {/if}
-		</div>
-		<div class="flex items-center space-x-2">
-            {#if showNotesTranscribeButton}
-                <button
-                    on:click={handleNotesTranscribeClick}
-                    class="btn-action"
-                    title="Transcribe this media in main Transcriptions tab"
-                    disabled={!localMediaUrl || isLoadingMedia}
-                >
-                    Transcribe
-                </button>
-            {/if}
 
-            {#if showNotesTrimButton}
-                 <button
-                    on:click={handleNotesTrimClick}
-                    class="btn-control"
-                    title="Trim this media"
-                    disabled={isLoadingMedia || !isMediaReadyForProcessing}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
-                    </svg>
-                    <span class="sr-only">Trim</span>
-                </button>
-            {:else if showMainTrimButton && !explicitMediaPath}
+	<!-- Custom Controls Bar -->
+	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
+		<!-- Timeline -->
+		<input
+			type="range"
+			class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
+			min="0"
+			max={displayDuration > 0 ? displayDuration : 0}
+			bind:value={displayTime}
+			on:input={(e) => seekTo(parseFloat(e.target.value))}
+			disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
+			aria-label="Video progress bar"
+		/>
+
+		<div class="flex items-center justify-between w-full">
+			<div class="flex items-center space-x-2">
+				<button
+					on:click={handleTogglePlay}
+					class="btn-control"
+					disabled={!localMediaUrl || isLoadingMedia}
+					aria-label={displayIsPlaying ? 'Pause' : 'Play'}
+				>
+					{#if displayIsPlaying}
+						<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
+					{:else}
+						<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
+					{/if}
+				</button>
+				<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
+					{formatTime(displayTime)} / {formatTime(displayDuration)}
+				</span>
+
+				{#if showLoopPauseButton}
+				<button
+					class="btn-control ml-1 inline-flex items-center space-x-1 text-sm"
+					on:click={toggleLoop}
+					title={isLooping ? 'Loop while editing' : 'Pause while editing'}
+					aria-label={isLooping ? 'Loop while editing' : 'Pause while editing'}
+				>
+					{@html isLooping ? LOOP_ICON : PAUSE_ICON}
+					<span class="ml-1 text-xs hidden sm:inline">
+						{isLooping ? 'Loop' : 'Pause'}
+					</span>
+				</button>
+				{/if}
+			</div>
+
+			<div class="flex items-center space-x-2">
+				<!-- Playback Speed Dropdown -->
+				<select
+					id="playbackSpeedSelect"
+					class="btn-control text-xs"
+					on:change={changePlaybackRate}
+					bind:value={selectedPlaybackRate}
+					title="Playback Speed"
+					disabled={!localMediaUrl || isLoadingMedia}
+				>
+					{#each playbackRates as rate}
+						<option value={rate}>{rate}x</option>
+					{/each}
+				</select>
+
+				<!-- Volume Controls -->
+				<button
+					on:click={toggleMute}
+					class="btn-control"
+					disabled={!localMediaUrl || isLoadingMedia}
+					aria-label={isMuted ? 'Unmute' : 'Mute'}
+				>
+					{@html isMuted ? ICON_VOLUME_MUTE : ICON_VOLUME_UP}
+				</button>
+				<input
+					type="range"
+					class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
+					min="0"
+					max="1"
+					step="0.05"
+					bind:value={currentVolume}
+					on:input={handleVolumeChange}
+					disabled={!localMediaUrl || isLoadingMedia || !videoElement}
+					aria-label="Volume control"
+				/>
+
+				<!-- Fullscreen Toggle -->
+				<button
+					on:click={toggleFullscreen}
+					class="btn-control"
+					disabled={!localMediaUrl || isLoadingMedia || !playerContainerElement}
+					aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+				>
+					{@html isFullscreen ? ICON_FULLSCREEN_EXIT : ICON_FULLSCREEN_ENTER}
+				</button>
+
+				<!-- Other Action Buttons (Trim, Transcribe) -->
+				{#if showNotesTranscribeButton}
                 <button
-                    on:click={enterTrimMode}
-                    class="btn-control"
-                    title="Trim Media"
-                    disabled={isTrimDisabled}
-                >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
-                  </svg>
-                <span class="sr-only">Trim</span>
-                </button>
-                {#if isTrimming}
-                    <button on:click={confirmTrim} class="btn-action-trim" title="Confirm Trim">Trim</button>
-                    <button on:click={cancelTrimMode} class="btn-action-cancel" title="Cancel Trim">Cancel</button>
-                {/if}
-            {/if}
+					on:click={handleNotesTranscribeClick}
+					class="btn-action text-xs"
+					title="Transcribe this media in main Transcriptions tab"
+					disabled={!localMediaUrl || isLoadingMedia}
+				>
+					Transcribe
+				</button>
+				{/if}
+
+				{#if showNotesTrimButton}
+					<button
+						on:click={handleNotesTrimClick}
+						class="btn-control"
+						title="Trim this media"
+						disabled={isLoadingMedia || !isMediaReadyForProcessing}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
+						</svg>
+						<span class="sr-only">Trim</span>
+					</button>
+				{:else if showMainTrimButton && !explicitMediaPath}
+					<button
+						on:click={enterTrimMode}
+						class="btn-control"
+						title="Trim Media"
+						disabled={isTrimDisabled}
+					>
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
+					</svg>
+					<span class="sr-only">Trim</span>
+					</button>
+					{#if isTrimming}
+						<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
+						<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
+					{/if}
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>
 
 <style>
+	/* Ensure this is defined if not already part of your global styles or Tailwind imports */
+	#video-container-wrapper:fullscreen { /* Target the wrapper for fullscreen */
+		max-width: 100% !important;
+		max-height: 100% !important;
+		width: 100% !important;
+		height: 100% !important;
+		display: flex;
+	flex-direction: column;
+	}
+	#video-container-wrapper:fullscreen video {
+		object-fit: contain;
+		width: 100% !important;
+	height: 100% !important;
+	}
+
+
 	.btn-control {
-		padding: 0.5rem;
+		padding: 0.35rem; /* Slightly smaller padding for denser controls */
 		background: #e5e7eb; /* bg-gray-200 */
-        color: #1f2937; /* text-gray-800 */
+		color: #1f2937; /* text-gray-800 */
 		border: 1px solid #d1d5db; /* border-gray-300 */
-		border-radius: 0.375rem; /* rounded-md */
+		border-radius: 0.25rem; /* rounded-sm for a bit tighter look */
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		transition: background-color 0.15s ease-in-out;
 	}
-    .dark .btn-control {
-        background: #4b5563; /* dark:bg-gray-600 */
-        border-color: #6b7280; /* dark:border-gray-500 */
-        color: #f3f4f6; /* dark:text-gray-100 */
-    }
+	.dark .btn-control {
+		background: #4b5563; /* dark:bg-gray-600 */
+		border-color: #6b7280; /* dark:border-gray-500 */
+		color: #f3f4f6; /* dark:text-gray-100 */
+	}
 	.btn-control:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
@@ -618,20 +770,25 @@
 	.btn-control:hover:not(:disabled) {
 		background: #d1d5db; /* hover:bg-gray-300 */
 	}
-    .dark .btn-control:hover:not(:disabled) {
-        background: #6b7280; /* dark:hover:bg-gray-500 */
-    }
-	.btn-control svg {
-		width: 1em;
-		height: 1em;
+	.dark .btn-control:hover:not(:disabled) {
+		background: #6b7280; /* dark:hover:bg-gray-500 */
 	}
+	.btn-control svg { /* Default icon size */
+		width: 1.15em;
+		height: 1.15em;
+	}
+	.size-5 { /* For specific icons if needed, like trim */
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
 
 	.btn-action {
-		padding: 0.4rem 1rem;
+		padding: 0.35rem 0.75rem; /* Slightly smaller */
 		background: #3b82f6; /* bg-blue-500 */
 		color: white;
 		border: none;
-		border-radius: 0.375rem; /* rounded-md */
+		border-radius: 0.25rem; /* rounded-sm */
 		cursor: pointer;
 		font-size: 0.875rem; /* text-sm */
 		font-weight: 500; /* font-medium */
@@ -649,17 +806,17 @@
 	.btn-action:hover:not(:disabled) {
 		background: #2563eb; /* hover:bg-blue-600 */
 	}
-    .dark .btn-action:disabled {
-        background: #6b7280; /* dark:bg-gray-500 */
-        opacity: 0.5;
-    }
+	.dark .btn-action:disabled {
+		background: #6b7280; /* dark:bg-gray-500 */
+		opacity: 0.5;
+	}
 
 	.btn-action-trim {
-		padding: 0.4rem 1rem;
+		padding: 0.35rem 0.75rem;
 		background: #10b981; /* bg-emerald-500 */
 		color: white;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: 0.25rem;
 		cursor: pointer;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -669,11 +826,11 @@
 		background: #059669; /* hover:bg-emerald-600 */
 	}
 	.btn-action-cancel {
-		padding: 0.4rem 1rem;
+		padding: 0.35rem 0.75rem;
 		background: #ef4444; /* bg-red-500 */
 		color: white;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: 0.25rem;
 		cursor: pointer;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -706,8 +863,62 @@
 		white-space: nowrap;
 		border-width: 0;
 	}
-    .size-6 {
-        width: 1.5rem;
-        height: 1.5rem;
-    }
+
+	/* Custom styling for range inputs */
+	.video-progress, .volume-slider {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 100%;
+		height: 0.5rem; /* 8px */
+		border-radius: 0.25rem; /* 4px */
+		background: #d1d5db; /* bg-gray-300 */
+		outline: none;
+		opacity: 0.9;
+		transition: opacity .15s ease-in-out;
+	}
+	.dark .video-progress, .dark .volume-slider {
+		background: #4b5563; /* dark:bg-gray-600 */
+	}
+	.video-progress:hover, .volume-slider:hover {
+		opacity: 1;
+	}
+	.video-progress::-webkit-slider-thumb, .volume-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 1rem; /* 16px */
+		height: 1rem; /* 16px */
+		border-radius: 50%;
+		background: #3b82f6; /* theme color, e.g. blue-500 */
+		cursor: pointer;
+		border: 2px solid white; /* Optional: add a border to the thumb */
+	}
+	.dark .video-progress::-webkit-slider-thumb, .dark .volume-slider::-webkit-slider-thumb {
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
+	}
+	.video-progress::-moz-range-thumb, .volume-slider::-moz-range-thumb {
+		width: 0.875rem; /* 14px */
+		height: 0.875rem; /* 14px */
+		border-radius: 50%;
+		background: #3b82f6;
+		cursor: pointer;
+		border: 1px solid white;
+	}
+	.dark .video-progress::-moz-range-thumb, .dark .volume-slider::-moz-range-thumb {
+		background: #2563eb;
+		border-color: #374151;
+	}
+	.volume-slider {
+		width: 6rem; /* Specific width for volume slider */
+		height: 0.375rem; /* 6px, slightly thinner */
+	}
+	.volume-slider::-webkit-slider-thumb {
+		width: 0.875rem; /* 14px */
+		height: 0.875rem; /* 14px */
+	}
+	.volume-slider::-moz-range-thumb {
+		width: 0.75rem; /* 12px */
+		height: 0.75rem; /* 12px */
+	}
+
 </style>
