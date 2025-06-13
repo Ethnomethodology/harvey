@@ -43,6 +43,8 @@
     let mediaPlayerTrimStart = 0;
     let mediaPlayerTrimEnd = 0;
 
+    let isMediaPlayerHidden = false; // New state variable
+
     let isSegmentEditingActive = false;
     let currentEditSegmentStart = 0;
     let currentEditSegmentEnd = 0;
@@ -266,6 +268,7 @@
                     bind:editSegmentStartTime={currentEditSegmentStart}
                     bind:editSegmentEndTime={currentEditSegmentEnd}
                     projectId={$project.id}
+                    bind:isVideoMinimized={isMediaPlayerHidden}
                     showLoopPauseButton={true}
                     showNotesTranscribeButton={false}
                     showNotesTrimButton={false}
@@ -274,7 +277,7 @@
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
                 />
             </div>
-            <div class="h-1/2 min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
+            <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
                  <EditableTranscript
                     bind:this={editableTranscriptRef}
                     bind:panelEditMode={panelEditModeActive}
