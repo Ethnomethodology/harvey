@@ -20,6 +20,7 @@ use serde::Serialize;
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
 use tauri::Emitter;
+use uuid::Uuid; // Added for UUID generation
 
 // --- Table Layout Preferences Commands ---
 #[tauri::command]
@@ -193,9 +194,19 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     ensure_base_asset_dirs(project_base_dir)?;
 
     let project_xml_content = fs::read_to_string(&xml_path).map_err(|e| CommandError::from(format!("Failed to read XML {}: {}", xml_path.display(), e)))?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
+
+    let mut was_uuid_generated = false;
+    if project_data.project_uuid.is_empty() {
+        let new_uuid = Uuid::new_v4().to_string();
+        info!("[Backend Load XML] Project UUID was missing or empty. Generated new UUID: {}", new_uuid);
+        project_data.project_uuid = new_uuid;
+        was_uuid_generated = true;
+    }
+
     let project_name = project_data.name.clone();
     info!("[Backend Load XML] Project Name: {}", project_name);
+    info!("[Backend Load XML] Project UUID: {}", project_data.project_uuid); // Log the UUID being used
 
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
@@ -329,6 +340,13 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.imported_transcript_files.files.len(),
         project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
     );
+
+    if was_uuid_generated {
+        match save_project_xml(&xml_path, &project_data) {
+            Ok(_) => info!("[Backend Load XML] Successfully saved updated project XML with new UUID to {}", xml_path.display()),
+            Err(e) => warn!("[Backend Load XML] Failed to save updated project XML with new UUID to {}: {}. The new UUID will be used for this session, but not persisted.", xml_path.display(), e),
+        }
+    }
 
     Ok(ProjectViewData {
         project_name,
