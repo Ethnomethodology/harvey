@@ -258,7 +258,7 @@
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
-            <div class="h-1/2 bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
+            <div class="{isMediaPlayerHidden ? '' : 'h-1/2'} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
                     bind:this={mediaPlayerRef}
                     bind:isTrimming={isMediaPlayerTrimming}
