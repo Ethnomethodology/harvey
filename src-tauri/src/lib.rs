@@ -2,8 +2,9 @@
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
+use log; // Added log import
 use tauri::Manager; // Ensure Manager is used for app.handle()
-use tauri_plugin_global_shortcut::{self, Code, ShortcutState}; // Removed Modifiers and GlobalShortcutExt
+use tauri_plugin_global_shortcut::{self, Code, ShortcutState};
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -46,25 +47,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcuts(["F7", "F8", "F9"])
-            .expect("Failed to register shortcuts with the plugin builder") // Added expect here
-            .with_handler(|app, shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    let app_handle = app.app_handle();
-                    match shortcut.key { // Changed from shortcut.key()
-                        Code::F7 => { app_handle.emit("shortcut-event", "rewind").unwrap_or_default(); }
-                        Code::F8 => { app_handle.emit("shortcut-event", "play-pause").unwrap_or_default(); }
-                        Code::F9 => { app_handle.emit("shortcut-event", "forward").unwrap_or_default(); }
-                        _ => {}
-                    }
-                }
-            })
-            .build() // Removed .expect() from here
-        )
-        .setup(|app| {
+        // Global shortcut plugin is now initialized in .setup
+        .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(debug_assertions)] {
-                 match app.get_webview_window("main") {
+                 match app_mut_ref.get_webview_window("main") {
                     Some(window) => {
                          log::debug!("Opening devtools for main window");
                          window.open_devtools();
@@ -73,7 +59,31 @@ pub fn run() {
                  }
             }
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            app_mut_ref.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+            let global_shortcut_plugin = tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcuts(["F7", "F8", "F9"])?
+                .with_handler(|app_handle, shortcut, event| { // app_handle is &AppHandle
+                    if event.state == ShortcutState::Pressed {
+                        match shortcut.key {
+                            Code::F7 => {
+                                log::info!("F7 shortcut pressed (Rust handler)");
+                                app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
+                            }
+                            Code::F8 => {
+                                log::info!("F8 shortcut pressed (Rust handler)");
+                                app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
+                            }
+                            Code::F9 => {
+                                log::info!("F9 shortcut pressed (Rust handler)");
+                                app_handle.emit("shortcut-event", "forward").unwrap_or_default();
+                            }
+                            _ => {}
+                        }
+                    }
+                })
+                .build();
+            app_mut_ref.handle().plugin(global_shortcut_plugin)?;
 
             Ok(())
          })

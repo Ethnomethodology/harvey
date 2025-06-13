@@ -398,7 +398,9 @@
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
 
 		unlistenShortcut = await listen('shortcut-event', (event) => {
-			console.log('Shortcut event received:', event.payload);
+			console.log('Received shortcut event from Rust:', event); // Log the whole event
+			console.log('Shortcut event payload:', event.payload); // Specifically log the payload
+			// console.log('Shortcut event received:', event.payload); // Keep old log for now, or remove if redundant
 			if (event.payload === 'rewind') {
 				rewind10s();
 			} else if (event.payload === 'play-pause') {
