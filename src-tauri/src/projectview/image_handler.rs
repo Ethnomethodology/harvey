@@ -63,26 +63,27 @@ fn register_project_image(
     project_base_dir: &Path,
     project_xml_path: &Path,
     image_filename_with_ext: &str,
-    media_file_name_stem: &str,
+    image_folder_name_for_xml: &str, // Renamed parameter
+    original_media_stem_for_metadata: &str, // New parameter
     timestamp: f64
 ) -> Result<(), CommandError> {
-    info!("[save_screenshot] Registering image '{}' for project at '{}'", image_filename_with_ext, project_base_dir.display());
+    info!("[save_screenshot] Registering image '{}' (from media '{}') for project at '{}'", image_filename_with_ext, original_media_stem_for_metadata, project_base_dir.display());
 
     let xml_content = fs::read_to_string(project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
 
     let images_dir_name = IMAGES_DIR;
-    let image_folder_name = media_file_name_stem;
+    // let image_folder_name = media_file_name_stem; // Old logic
 
     let relative_path_for_xml = Path::new(HARVEY_FILES_DIR)
         .join(images_dir_name)
-        .join(image_folder_name)
+        .join(image_folder_name_for_xml) // Use new parameter for path
         .join(image_filename_with_ext)
         .to_string_lossy()
         .replace("\\", "/");
 
     let new_image_entry = ImageEntryXml {
-        name: image_filename_with_ext.to_string(),
+        name: image_filename_with_ext.to_string(), // The actual file name, might have _counter
         relative_path: relative_path_for_xml.clone(),
     };
 
@@ -101,8 +102,8 @@ fn register_project_image(
         file_name: image_filename_with_ext.to_string(),
         file_path: abs_image_path.to_string_lossy().into_owned(),
         last_modified: Utc::now().to_rfc3339(),
-        title: format!("Screenshot from {} at {}s", media_file_name_stem, timestamp.round()),
-        description: format!("Screenshot captured from media '{}' at timestamp {} seconds.", media_file_name_stem, timestamp),
+        title: format!("Screenshot from {} at {}s", original_media_stem_for_metadata, timestamp.round()), // Use new parameter
+        description: format!("Screenshot captured from media '{}' at timestamp {} seconds.", original_media_stem_for_metadata, timestamp), // Use new parameter
         summary: String::new(),
         duration_seconds: None,
         width: None,
@@ -115,7 +116,7 @@ fn register_project_image(
     };
 
     let mut custom_fields = serde_json::Map::new();
-    custom_fields.insert("source_media_filename_stem".to_string(), serde_json::Value::String(media_file_name_stem.to_string()));
+    custom_fields.insert("source_media_filename_stem".to_string(), serde_json::Value::String(original_media_stem_for_metadata.to_string())); // Use new parameter
     custom_fields.insert("media_timestamp_seconds".to_string(), serde_json::json!(timestamp));
     let custom_fields_json = Some(serde_json::Value::Object(custom_fields).to_string());
 
@@ -154,42 +155,53 @@ pub async fn save_screenshot(
         return Err(format!("Project XML file not found at the specified path: {}", project_xml_path_str));
     }
 
-    let sanitized_media_name_stem = Path::new(&media_file_name)
+    // 1. Derive original_media_stem
+    let original_media_stem = Path::new(&media_file_name)
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("media")
+        .unwrap_or("media") // Fallback
         .to_string();
 
-    let images_base_dir = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
-    let image_folder_for_media = images_base_dir.join(&sanitized_media_name_stem);
-
-    fs::create_dir_all(&image_folder_for_media)
-        .map_err(|e| format!("Failed to create Images sub-directory for {}: {}", sanitized_media_name_stem, e))?;
-
+    // 2. Generate timestamp_str
     let secs = timestamp.trunc() as u64;
     let millis = (timestamp.fract() * 1000.0).round() as u32;
     let timestamp_str = format!("T{}_{:03}", secs, millis);
 
+    // 3. Create screenshot_base_folder_name
+    let screenshot_base_folder_name = format!("{}_{}", original_media_stem, timestamp_str);
+
+    // 4. Determine image_folder_for_screenshot
+    let images_root_dir = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
+    let image_folder_for_screenshot = images_root_dir.join(&screenshot_base_folder_name);
+
+    // 5. Create the directory
+    fs::create_dir_all(&image_folder_for_screenshot)
+        .map_err(|e| format!("Failed to create Images sub-directory for screenshot {}: {}", screenshot_base_folder_name, e))?;
+
+    // 6. Determine unique final_screenshot_filename_with_ext
     let mut counter = 0;
-    let screenshot_filename_with_ext = loop {
-        let prospective_name = if counter == 0 {
-            format!("{}_{}.png", sanitized_media_name_stem, timestamp_str)
+    let final_screenshot_filename_with_ext: String;
+    loop {
+        let prospective_file_name = if counter == 0 {
+            format!("{}.png", screenshot_base_folder_name) // File name matches folder name initially
         } else {
-            format!("{}_{}_{}.png", sanitized_media_name_stem, timestamp_str, counter)
+            format!("{}_{}.png", screenshot_base_folder_name, counter)
         };
-        let candidate_path = image_folder_for_media.join(&prospective_name);
+        let candidate_path = image_folder_for_screenshot.join(&prospective_file_name);
         if !candidate_path.exists() {
-            break prospective_name;
+            final_screenshot_filename_with_ext = prospective_file_name;
+            break;
         }
         counter += 1;
-        if counter > 100 {
-            return Err(format!("Could not generate a unique filename for screenshot from {} at timestamp {}", sanitized_media_name_stem, timestamp_str));
+        if counter > 100 { // Safety break
+            return Err(format!("Could not generate a unique filename for screenshot from {} at timestamp {}", original_media_stem, timestamp_str));
         }
-    };
+    }
 
-    let file_path = image_folder_for_media.join(&screenshot_filename_with_ext);
+    // 7. Set file_path
+    let file_path = image_folder_for_screenshot.join(&final_screenshot_filename_with_ext);
 
-    // TODO: Refactor to use base64::engine::general_purpose::STANDARD.decode()
+    // 8. Save the image data (as before)
     let image_bytes = decode(&image_data_base64)
         .map_err(|e| format!("Failed to decode base64 image data: {}", e))?;
 
@@ -197,8 +209,15 @@ pub async fn save_screenshot(
         .map_err(|e| format!("Failed to save screenshot to '{}': {}", file_path.display(), e))?;
     info!("[save_screenshot] Screenshot saved to: {}", file_path.display());
 
-    register_project_image(&project_base_dir, &project_xml_path, &screenshot_filename_with_ext, &sanitized_media_name_stem, timestamp)
-        .map_err(|e| format!("Failed to register screenshot in project: {}", e))?;
+    // 9. Call register_project_image with updated arguments
+    register_project_image(
+        &project_base_dir,
+        &project_xml_path,
+        &final_screenshot_filename_with_ext,
+        &screenshot_base_folder_name, // This is image_folder_name_for_xml
+        &original_media_stem,         // This is original_media_stem_for_metadata
+        timestamp
+    ).map_err(|e| format!("Failed to register screenshot in project: {}", e))?;
 
     // TODO: Emit event to frontend if UI needs to refresh image list
     // Example: app_handle.emit_all("new_screenshot_added", file_path.to_string_lossy().to_string()).unwrap_or_default();
