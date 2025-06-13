@@ -4,7 +4,9 @@ use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
 use tauri::Manager; // Ensure Manager is used for app.handle()
-use tauri_plugin_global_shortcut::{self, Code, Modifiers, ShortcutState};
+use tauri_plugin_global_shortcut::{
+    self, Shortcut, Code, Modifiers, GlobalShortcutExt, ShortcutState, // Added Shortcut, GlobalShortcutExt
+};
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -61,40 +63,57 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app_mut_ref.set_activation_policy(tauri::ActivationPolicy::Regular);
 
-            // Remove or comment out the previous complex global_shortcut_plugin variable declaration and its usage.
-            // let global_shortcut_plugin = tauri_plugin_global_shortcut::Builder::new()
-            //     .with_shortcuts(["F7", "F8", "F9"])? // Reverted shortcut strings
-            //     .with_handler(|app_handle, shortcut, event| { // app_handle is &AppHandle
-            //         if event.state == ShortcutState::Pressed {
-            //             log::info!("Shortcut pressed (Rust handler): key: {:?}, mods: {:?}, event_state: {:?}", shortcut.key, shortcut.mods, event.state);
+            log::info!("[SETUP] Preparing to set up global shortcuts...");
+            let app_handle_clone = app_mut_ref.handle().clone(); // Clone app handle for the handler
 
-            //             if shortcut.matches(Modifiers::empty(), Code::F7) {
-            //                 log::info!("F7 matched (Rust handler)");
-            //                 app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
-            //             }
-            //             else if shortcut.matches(Modifiers::empty(), Code::F8) {
-            //                 log::info!("F8 matched (Rust handler)");
-            //                 app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
-            //             }
-            //             else if shortcut.matches(Modifiers::empty(), Code::F9) {
-            //                 log::info!("F9 matched (Rust handler)");
-            //                 app_handle.emit("shortcut-event", "forward").unwrap_or_default();
-            //             } else {
-            //                  log::warn!("Received F-key press that did not match F7, F8, or F9 with empty modifiers. Key: {:?}, Mods: {:?}", shortcut.key, shortcut.mods);
-            //             }
-            //         }
-            //     })
-            //     // .inspect(|_| log::info!("Global shortcut plugin builder ready to build.")) // This line is removed
-            //     .build();
+            // Define the shortcuts
+            let f7_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F7);
+            let f8_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F8);
+            let f9_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F9);
+            log::info!("[SETUP] Defined F7, F8, F9 shortcut objects.");
 
-            // log::info!("Attempting to register global shortcut plugin with app handle...");
-            // app_mut_ref.handle().plugin(global_shortcut_plugin)?;
-            // log::info!("Global shortcut plugin registration call completed.");
+            // Build the plugin with a general handler
+            let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::with_handler(
+                move |_app_handle_in_handler, shortcut_event_arg, event_details| {
+                    // _app_handle_in_handler is &AppHandle
+                    // shortcut_event_arg is &Shortcut
+                    // event_details is &tauri_plugin_global_shortcut::ShortcutEvent, which has a `state: ShortcutState` field.
 
-            // Add the new simplified initialization:
-            log::info!("[SETUP] Initializing basic global_shortcut plugin for JS API...");
-            app_mut_ref.handle().plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
-            log::info!("[SETUP] Basic global_shortcut plugin initialized for JS API.");
+                    if event_details.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        log::info!("[HANDLER] Global shortcut pressed: {:?}, state: {:?}", shortcut_event_arg, event_details.state);
+                        if shortcut_event_arg == &f7_shortcut {
+                            log::info!("[HANDLER] F7 shortcut matched.");
+                            app_handle_clone.emit("shortcut-event", "rewind").unwrap_or_else(|e| {
+                                log::error!("[HANDLER] Failed to emit rewind event for F7: {}", e);
+                            });
+                        } else if shortcut_event_arg == &f8_shortcut {
+                            log::info!("[HANDLER] F8 shortcut matched.");
+                            app_handle_clone.emit("shortcut-event", "play-pause").unwrap_or_else(|e| {
+                                log::error!("[HANDLER] Failed to emit play-pause event for F8: {}", e);
+                            });
+                        } else if shortcut_event_arg == &f9_shortcut {
+                            log::info!("[HANDLER] F9 shortcut matched.");
+                            app_handle_clone.emit("shortcut-event", "forward").unwrap_or_else(|e| {
+                                log::error!("[HANDLER] Failed to emit forward event for F9: {}", e);
+                            });
+                        }
+                    }
+                },
+            )
+            .build();
+            log::info!("[SETUP] Global shortcut plugin builder created with handler.");
+
+            // Register the plugin instance with the app
+            app_mut_ref.handle().plugin(global_shortcut_plugin_instance)?;
+            log::info!("[SETUP] Global shortcut plugin registered with app handle.");
+
+            // Explicitly register each shortcut
+            app_mut_ref.global_shortcut().register(f7_shortcut)?;
+            log::info!("[SETUP] F7 shortcut registered.");
+            app_mut_ref.global_shortcut().register(f8_shortcut)?;
+            log::info!("[SETUP] F8 shortcut registered.");
+            app_mut_ref.global_shortcut().register(f9_shortcut)?;
+            log::info!("[SETUP] F9 shortcut registered. All shortcuts registration process completed.");
 
             Ok(())
          })
