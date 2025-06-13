@@ -83,7 +83,7 @@ pub fn run() {
                         }
                     }
                 })
-                .inspect(|_| log::info!("Global shortcut plugin builder ready to build.")) // Added inspect
+                // .inspect(|_| log::info!("Global shortcut plugin builder ready to build.")) // This line is removed
                 .build();
 
             log::info!("Attempting to register global shortcut plugin with app handle...");
