@@ -13,7 +13,7 @@
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke } from '@tauri-apps/api/core'; // Ensure invoke is imported
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { handleTrimMediaConfirm } from '$lib/services/projectService.js'; // Keep for trim confirm logic
+	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js'; // Keep for trim confirm logic
 
 	const dispatch = createEventDispatcher();
 
@@ -205,6 +205,8 @@
 
 			project.update(p => ({ ...p, statusMessage: `Screenshot saved from ${mediaFileName}!`, isLoading: false, error: null }));
 			console.log('Screenshot successfully processed by Tauri.');
+			await refreshProjectFiles();
+			console.log('[MediaPlayer] Project files refreshed after screenshot.');
 			// --- End Tauri Invocation ---
 
 		} catch (err) {
@@ -718,7 +720,7 @@
 
 <div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800">
 	<div
-		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto cursor-pointer"
+		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 cursor-pointer"
 		class:hidden={isVideoMinimized}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
@@ -769,7 +771,7 @@
 	</div>
 
 	<!-- Custom Controls Bar -->
-	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full space-y-1">
+	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full">
 			<input
