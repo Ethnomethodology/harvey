@@ -935,9 +935,12 @@
 	</div>
 
 	<!-- Custom Controls Bar -->
-	<div class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md">
+	<div
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md"
+		style="position: relative; z-index: 30;"
+	>
 		<!-- Timeline with Tooltip -->
-		<div class="relative w-full">
+		<div class="relative w-full" style="z-index: 20;"> <!-- Stacking for timeline within control bar -->
 			<input
 				type="range"
 				bind:this={progressBarElement}
@@ -954,7 +957,7 @@
 			<span
 				bind:this={progressTooltipElement}
 				class="absolute bg-black text-white text-xs p-1 rounded pointer-events-none whitespace-nowrap"
-				style="bottom: 16px; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'}; left: {progressTooltipLeft};"
+				style="bottom: 16px; transform: translateX(-50%); display: {showProgressTooltip ? 'block' : 'none'}; left: {progressTooltipLeft}; z-index: 50;"
 			>
 				{progressTooltipText}
 			</span>
@@ -1008,6 +1011,36 @@
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
 
+			<!-- Loop Button (if showLoopPauseButton is true) -->
+			{#if showLoopPauseButton}
+			<button
+				class="btn-control inline-flex items-center space-x-1 text-sm"
+				on:click={toggleLoop}
+				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
+			>
+				{@html isLooping ? LOOP_ICON : PAUSE_ICON}
+				<span class="ml-1 text-xs hidden sm:inline">
+					{isLooping ? 'Loop' : 'Pause'}
+				</span>
+			</button>
+			{/if}
+
+			<!-- Conditional Notes Transcribe Button -->
+			{#if showNotesTranscribeButton}
+			<button
+				on:click={handleNotesTranscribeClick}
+				class="btn-action text-xs"
+				title="Transcribe this media in main Transcriptions tab"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				Transcribe
+			</button>
+			{/if}
+
+			<!-- Spacer 1: Pushes the middle group -->
+			<div class="flex-grow"></div>
+
+			<!-- Centered Group: Playback Speed, Screenshot, Trim -->
 			<!-- Playback Speed Selector -->
 			<button
 				bind:this={playbackSpeedButtonElement}
@@ -1021,21 +1054,6 @@
 			>
 				{selectedPlaybackRate}x
 			</button>
-			
-			<!-- Loop Button (if showLoopPauseButton is true) -->
-			{#if showLoopPauseButton}
-			<button
-				class="btn-control inline-flex items-center space-x-1 text-sm"
-				on:click={toggleLoop}
-				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
-				aria-label={isLooping ? 'Loop while editing' : 'Pause while editing'}
-			>
-				{@html isLooping ? LOOP_ICON : PAUSE_ICON}
-				<span class="ml-1 text-xs hidden sm:inline">
-					{isLooping ? 'Loop' : 'Pause'}
-				</span>
-			</button>
-			{/if}
 
 			<!-- Screenshot Button -->
 			<button
@@ -1066,12 +1084,7 @@
 					<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
 					<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
 				{:else}
-					<button
-						on:click={enterTrimMode}
-						class="btn-control"
-						title="Trim Media"
-						disabled={isTrimDisabled}
-					>
+					<button on:click={enterTrimMode} class="btn-control" title="Trim Media" disabled={isTrimDisabled}>
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
 							<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
 						</svg>
@@ -1080,19 +1093,7 @@
 				{/if}
 			{/if}
 
-			<!-- Conditional Notes Transcribe Button -->
-			{#if showNotesTranscribeButton}
-			<button
-				on:click={handleNotesTranscribeClick}
-				class="btn-action text-xs"
-				title="Transcribe this media in main Transcriptions tab"
-				disabled={!localMediaUrl || isLoadingMedia}
-			>
-				Transcribe
-			</button>
-			{/if}
-
-			<!-- Spacer to push fullscreen to the right if needed, or rely on flex-wrap and natural spacing -->
+			<!-- Spacer 2: Pushes the right group -->
 			<div class="flex-grow"></div>
 
 			<!-- CC/Subtitle Button (MOVED HERE) -->
