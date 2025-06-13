@@ -80,7 +80,7 @@ pub fn run() {
             log::info!("[SETUP] Defined F7, F8, F9 shortcut objects.");
 
             // Build the plugin with a general handler
-            let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::with_handler(
+            let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::new().with_handler( // Corrected here
                 move |_, // First parameter from handler (likely an AppHandle from plugin) is ignored
                       shortcut_arg: &Shortcut,
                       event_details: &ShortcutEvent| {
