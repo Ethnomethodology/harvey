@@ -480,7 +480,7 @@
     {/if}
 
     {#if showLoadingOverlay}
-        <div class="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+        <div class="absolute inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-sm">
             <div class="flex flex-col items-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
                  <Loader class="w-12 h-12 text-blue-500 animate-spin mb-3" />
                  <p class="text-sm text-gray-700 dark:text-gray-300">{$project.statusMessage || 'Loading...'}</p>
