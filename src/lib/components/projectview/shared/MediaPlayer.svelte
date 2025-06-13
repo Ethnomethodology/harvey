@@ -402,7 +402,7 @@
 			try {
 				console.log('[MediaPlayer] Setting up Tauri event listener for "shortcut-event"...');
 				unlistenShortcutFn = await listen('shortcut-event', (event) => {
-					console.log('[MediaPlayer] Tauri "shortcut-event" received:', event);
+					// console.log('[MediaPlayer] Tauri "shortcut-event" received:', event); // Removed this line
 					if (event.payload === 'rewind') {
 						if (typeof rewind10s === 'function') rewind10s();
 						else console.error('[MediaPlayer] rewind10s function not found!');

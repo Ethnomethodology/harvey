@@ -58,7 +58,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // Global shortcut plugin is now initialized in .setup
         .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
-            log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Very first line
+            // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed
 
             #[cfg(debug_assertions)] {
                  match app_mut_ref.get_webview_window("main") {
@@ -72,23 +72,23 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app_mut_ref.set_activation_policy(tauri::ActivationPolicy::Regular);
 
-            log::info!("[SETUP] Preparing to set up global shortcuts...");
+            // log::info!("[SETUP] Preparing to set up global shortcuts..."); // Removed
             let app_handle_clone = app_mut_ref.handle().clone(); // Clone app handle for the handler
 
             // Define the shortcuts
             let f7_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F7);
             let f8_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F8);
             let f9_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F9);
-            log::info!("[SETUP] Defined F7, F8, F9 shortcut objects.");
+            // log::info!("[SETUP] Defined F7, F8, F9 shortcut objects."); // Removed
 
             // Build the plugin with a general handler
-            let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::new().with_handler( // Corrected here
-                move |_, // First parameter from handler (likely an AppHandle from plugin) is ignored
+            let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::new().with_handler(
+                move |_,
                       shortcut_arg: &Shortcut,
-                      event_details: ShortcutEvent| { // Changed from &ShortcutEvent to ShortcutEvent
+                      event_details: ShortcutEvent| {
 
-                    if event_details.state == ShortcutState::Pressed { // ShortcutState can now be used directly
-                        log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state);
+                    if event_details.state == ShortcutState::Pressed {
+                        // log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state); // Removed
                         if shortcut_arg == &f7_shortcut {
                             log::info!("[HANDLER] F7 shortcut matched.");
                             app_handle_clone.emit("shortcut-event", "rewind").unwrap_or_else(|e| {
@@ -109,19 +109,19 @@ pub fn run() {
                 },
             )
             .build();
-            log::info!("[SETUP] Global shortcut plugin builder created with handler.");
+            // log::info!("[SETUP] Global shortcut plugin builder created with handler."); // Removed
 
             // Register the plugin instance with the app
             app_mut_ref.handle().plugin(global_shortcut_plugin_instance)?;
-            log::info!("[SETUP] Global shortcut plugin registered with app handle.");
+            // log::info!("[SETUP] Global shortcut plugin registered with app handle."); // Removed
 
             // Explicitly register each shortcut
             app_mut_ref.global_shortcut().register(f7_shortcut)?;
-            log::info!("[SETUP] F7 shortcut registered.");
+            // log::info!("[SETUP] F7 shortcut registered."); // Removed
             app_mut_ref.global_shortcut().register(f8_shortcut)?;
-            log::info!("[SETUP] F8 shortcut registered.");
+            // log::info!("[SETUP] F8 shortcut registered."); // Removed
             app_mut_ref.global_shortcut().register(f9_shortcut)?;
-            log::info!("[SETUP] F9 shortcut registered. All shortcuts registration process completed.");
+            log::info!("Global media shortcuts (F7, F8, F9) registration process completed successfully."); // Added concise summary
 
             Ok(())
          })
