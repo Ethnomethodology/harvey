@@ -12,8 +12,10 @@
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
+	// import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut'; // Removed JS API
 
 	const dispatch = createEventDispatcher();
 
@@ -383,8 +385,9 @@
 	let audioContext = null;
 	let webAudioApiSupported = true;
 
+	let unlistenShortcutFn; // Renamed from unlistenShortcut
 
-	onMount(() => {
+	onMount(async () => {
         try {
             if (!audioContext || audioContext.state === 'closed') {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -394,18 +397,46 @@
         }
 		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+
+		const setupShortcutListener = async () => {
+			try {
+				console.log('[MediaPlayer] Setting up Tauri event listener for "shortcut-event"...');
+				unlistenShortcutFn = await listen('shortcut-event', (event) => {
+					// console.log('[MediaPlayer] Tauri "shortcut-event" received:', event); // Removed this line
+					if (event.payload === 'rewind') {
+						if (typeof rewind10s === 'function') rewind10s();
+						else console.error('[MediaPlayer] rewind10s function not found!');
+					} else if (event.payload === 'play-pause') {
+						if (typeof handleTogglePlay === 'function') handleTogglePlay();
+						else console.error('[MediaPlayer] handleTogglePlay function not found!');
+					} else if (event.payload === 'forward') {
+						if (typeof forward10s === 'function') forward10s();
+						else console.error('[MediaPlayer] forward10s function not found!');
+					}
+				});
+				console.log('[MediaPlayer] Tauri event listener for "shortcut-event" set up.');
+			} catch (err) {
+				console.error('[MediaPlayer] Error setting up Tauri "shortcut-event" listener:', err);
+			}
+		};
+		setupShortcutListener();
+
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
 			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+			if (unlistenShortcutFn) { // Use renamed variable
+				console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onMount return.');
+				unlistenShortcutFn();
+			}
         };
     });
-	onDestroy(() => {
+
+	onDestroy(() => { // Made onDestroy synchronous as unregisterAll is removed
         if (audioContext && audioContext.state !== 'closed') {
             audioContext.close().catch(console.error);
-
         }
         if (currentBlobUrl) {
             URL.revokeObjectURL(currentBlobUrl);
@@ -416,6 +447,11 @@
 			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
 		}
 		document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+		if (unlistenShortcutFn) { // Use renamed variable
+			console.log('[MediaPlayer] Cleaning up "shortcut-event" listener in onDestroy.');
+			unlistenShortcutFn();
+		}
+		// Removed try...catch for unregisterAll
     });
 
 	// --- File Handling & Audio Processing ---

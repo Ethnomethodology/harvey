@@ -24,6 +24,7 @@ tauri-plugin-dialog = "2.0.0"
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-fs = "2.0.0" 
 tauri-plugin-opener = "2.0.0"
+tauri-plugin-global-shortcut = "2.0.0"
 
 # --- Serialization / Data Handling ---
 serde = { version = "1.0", features = ["derive"] }

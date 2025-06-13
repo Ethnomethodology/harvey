@@ -47,6 +47,9 @@
     "fs:allow-rename",
     "fs:scope-home",
     "fs:scope-document-recursive",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
     {
       "identifier": "fs:scope",
       "allow": [
