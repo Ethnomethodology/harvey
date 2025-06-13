@@ -1627,20 +1627,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename Table] Updating XML: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml, new_table_filename_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
 
             if let Some(table_entry) = project_data.table_files.files.iter_mut().find(|t| t.relative_path == item_relative_path) {
                 table_entry.name = new_table_filename_str.clone();
-                table_entry.relative_path = new_relative_path_for_xml;
+                table_entry.relative_path = new_relative_path_for_xml.clone();
                 project_data.table_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                updated_xml = true;
                 info!("[Backend Rename Table] XML table entry updated.");
-            } else {
-                error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
-                 return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
-            }
-
-            if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Table] XML saved.");
 
@@ -1655,6 +1647,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
                     warn!("[Backend Rename] Failed to emit item_renamed event for table: {}", e);
                 }
+            } else {
+                error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                 return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
         },
         "image" => {
@@ -1782,20 +1777,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
 
             if let Some(image_entry) = project_data.image_files.files.iter_mut().find(|i| i.relative_path == item_relative_path) {
                 image_entry.name = new_image_filename_with_ext_str.to_string();
-                image_entry.relative_path = new_relative_path_for_image_xml;
+                image_entry.relative_path = new_relative_path_for_image_xml.clone();
                 project_data.image_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                updated_xml = true;
                 info!("[Backend Rename Image] XML image entry updated.");
-            } else {
-                 error!("[Backend Rename Image] CRITICAL: File system operations for image rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
-                 return Err(CommandError::from(format!("Failed to update XML as old image entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
-            }
-
-            if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Image] XML saved for image rename.");
 
@@ -1810,6 +1797,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
                     warn!("[Backend Rename] Failed to emit item_renamed event for image: {}", e);
                 }
+            } else {
+                 error!("[Backend Rename Image] CRITICAL: File system operations for image rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                 return Err(CommandError::from(format!("Failed to update XML as old image entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
         },
         _ => {

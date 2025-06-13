@@ -63,6 +63,11 @@
 	const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 	let selectedPlaybackRate = 1;
 
+	// --- Playback Speed Custom Dropdown State ---
+	let showPlaybackSpeedMenu = false;
+	let playbackSpeedButtonElement = null;
+	let playbackSpeedMenuPosition = { x: 0, y: 0 };
+	let playbackSpeedMenuRef = null;
 	function changePlaybackRate(event) {
 		selectedPlaybackRate = parseFloat(event.target.value);
 		if (videoElement) {
@@ -70,6 +75,26 @@
 		}
 	}
 
+	function togglePlaybackSpeedMenu() {
+		if (showPlaybackSpeedMenu) {
+			showPlaybackSpeedMenu = false;
+		} else {
+			if (playbackSpeedButtonElement) {
+				const rect = playbackSpeedButtonElement.getBoundingClientRect();
+				playbackSpeedMenuPosition = {
+					x: rect.left + window.scrollX,
+					y: rect.bottom + window.scrollY + 2
+				};
+			}
+			showPlaybackSpeedMenu = true;
+		}
+	}
+
+	function selectPlaybackRate(rate) {
+		selectedPlaybackRate = rate;
+		if (videoElement) videoElement.playbackRate = rate;
+		showPlaybackSpeedMenu = false;
+	}
 	// --- Volume Control State ---
 	let currentVolume = 1;
 	let isMuted = false;
@@ -177,10 +202,12 @@
 				}
 				showSubtitleMenu = true;
 			} else {
-				console.log('[MediaPlayer] No subtitles found.');
-				project.update(p => ({ ...p, statusMessage: 'No subtitles found for this media.' }));
-				setTimeout(() => project.update(p => ({ ...p, statusMessage: '' })), 3000);
-				showSubtitleMenu = false;
+				availableSubtitles = [{ name: "No subtitles found", path: null, isInfo: true }];
+				if (ccButtonElement) { // Ensure menu is positioned and shown
+					const rect = ccButtonElement.getBoundingClientRect();
+					subtitleMenuPosition = { x: rect.left, y: rect.bottom + window.scrollY + 2 };
+				}
+				showSubtitleMenu = true; // Show menu to display the message
 			}
 		} catch (error) {
 			console.error('[MediaPlayer] Error fetching subtitle files:', error);
@@ -238,11 +265,19 @@
 		showSubtitleMenu = false;
 	}
 
+
 	function handleClickOutsideSubtitleMenu(event) {
 		if (showSubtitleMenu && subtitleMenuRef && !subtitleMenuRef.contains(event.target) && ccButtonElement && !ccButtonElement.contains(event.target)) {
 			showSubtitleMenu = false;
 		}
 	}
+
+	function handleClickOutsidePlaybackSpeedMenu(event) {
+		if (showPlaybackSpeedMenu && playbackSpeedMenuRef && !playbackSpeedMenuRef.contains(event.target) && playbackSpeedButtonElement && !playbackSpeedButtonElement.contains(event.target)) {
+			showPlaybackSpeedMenu = false;
+		}
+	}
+
 
 	async function handleScreenshot() {
 		console.log('[MediaPlayer] handleScreenshot - projectId received:', projectId);
@@ -358,16 +393,19 @@
             webAudioApiSupported = false;
         }
 		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
+		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
 			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
+			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
         };
     });
 	onDestroy(() => {
         if (audioContext && audioContext.state !== 'closed') {
             audioContext.close().catch(console.error);
+
         }
         if (currentBlobUrl) {
             URL.revokeObjectURL(currentBlobUrl);
@@ -377,6 +415,7 @@
 			URL.revokeObjectURL(activeSubtitleUrl);
 			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
 		}
+		document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
     });
 
 	// --- File Handling & Audio Processing ---
@@ -839,9 +878,9 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800">
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800 h-full">
 	<div
-		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 cursor-pointer"
+		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
@@ -870,7 +909,7 @@
 					preload="metadata"
 					controlslist="nodownload noremoteplayback"
 					tabindex="-1"
-					crossorigin="anonymous" <!-- Required for external <track> elements -->
+					crossorigin="anonymous"
 				>
 					{#if activeSubtitleUrl}
 						<track kind="subtitles" src={activeSubtitleUrl} srclang={activeSubtitleLang} label={activeSubtitleLabel} default />
@@ -896,7 +935,7 @@
 	</div>
 
 	<!-- Custom Controls Bar -->
-	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
+	<div class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md">
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full">
 			<input
@@ -970,19 +1009,19 @@
 			</span>
 
 			<!-- Playback Speed Selector -->
-			<select
-				id="playbackSpeedSelect"
-				class="btn-control text-xs"
-				on:change={changePlaybackRate}
-				bind:value={selectedPlaybackRate}
+			<button
+				bind:this={playbackSpeedButtonElement}
+				on:click={togglePlaybackSpeedMenu}
+				class="btn-control text-xs min-w-[48px]"
 				title="Playback Speed"
+				aria-label="Select playback speed"
+				aria-haspopup="true"
+				aria-expanded={showPlaybackSpeedMenu}
 				disabled={!localMediaUrl || isLoadingMedia}
 			>
-				{#each playbackRates as rate}
-					<option value={rate}>{rate}x</option>
-				{/each}
-			</select>
-
+				{selectedPlaybackRate}x
+			</button>
+			
 			<!-- Loop Button (if showLoopPauseButton is true) -->
 			{#if showLoopPauseButton}
 			<button
@@ -1007,18 +1046,6 @@
 				disabled={!localMediaUrl || isLoadingMedia || !projectId}
 			>
 				{@html ICON_CAMERA}
-			</button>
-
-			<!-- CC/Subtitle Button (NEW) -->
-			<button
-				bind:this={ccButtonElement}
-				on:click={handleSelectSubtitles}
-				class="btn-control"
-				title="Select Subtitles"
-				aria-label="Select Subtitles"
-				disabled={!localMediaUrl || isLoadingMedia}
-			>
-				{@html ICON_CC}
 			</button>
 
 			<!-- Conditional Trim Buttons -->
@@ -1068,6 +1095,19 @@
 			<!-- Spacer to push fullscreen to the right if needed, or rely on flex-wrap and natural spacing -->
 			<div class="flex-grow"></div>
 
+			<!-- CC/Subtitle Button (MOVED HERE) -->
+			<button
+				bind:this={ccButtonElement}
+				on:click={handleSelectSubtitles}
+				class="btn-control"
+				title="Select Subtitles"
+				aria-label="Select Subtitles"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				{@html ICON_CC}
+			</button>
+
+
 			<!-- Mute Button -->
 			<button
 				on:click={toggleMute}
@@ -1095,8 +1135,8 @@
 			<button
 				on:click={toggleMinimizeVideo}
 				class="btn-control"
-				title={isVideoMinimized ? 'Show video' : 'Hide video player'}
-				aria-label={isVideoMinimized ? 'Show video player' : 'Hide video player'}
+				title={isVideoMinimized ? 'Show Media' : 'Hide Media'}
+				aria-label={isVideoMinimized ? 'Show Media' : 'Hide Media'}
 				disabled={!localMediaUrl || isLoadingMedia}
 			>
 				{#if isVideoMinimized}
@@ -1109,26 +1149,31 @@
 	</div>
 </div>
 
-{#if showSubtitleMenu && availableSubtitles.length > 0}
+{#if showSubtitleMenu}
 	<div
 		bind:this={subtitleMenuRef}
 		class="subtitle-menu fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[150px]"
 		style="left: {subtitleMenuPosition.x}px; top: {subtitleMenuPosition.y}px;"
 	>
-        <button
-            on:click={() => selectSubtitleTrack(null)}
-            class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
-            class:bg-blue-100={!activeSubtitleTrackPath}
-            class:dark:bg-blue-800={!activeSubtitleTrackPath}
-        >
-            (Off)
-        </button>
-		{#each availableSubtitles as sub (sub.path)}
+		{#if !(availableSubtitles.length === 1 && availableSubtitles[0].isInfo)}
 			<button
-				on:click={() => selectSubtitleTrack(sub)}
+				on:click={() => selectSubtitleTrack(null)}
 				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
-				class:bg-blue-100={activeSubtitleTrackPath === sub.path}
-				class:dark:bg-blue-800={activeSubtitleTrackPath === sub.path}
+				class:bg-blue-100={!activeSubtitleTrackPath}
+				class:dark:bg-blue-800={!activeSubtitleTrackPath}
+			>
+				(Off)
+			</button>
+		{/if}
+		{#each availableSubtitles as sub (sub.path || sub.name)}
+			<button
+				on:click={() => sub.isInfo ? null : selectSubtitleTrack(sub)}
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class:bg-blue-100={!sub.isInfo && activeSubtitleTrackPath === sub.path}
+				class:dark:bg-blue-800={!sub.isInfo && activeSubtitleTrackPath === sub.path}
+				class:text-gray-500={sub.isInfo} class:dark:text-gray-400={sub.isInfo} class:italic={sub.isInfo}
+				class:cursor-default={sub.isInfo}
+				disabled={sub.isInfo}
 			>
 				{sub.name}
 			</button>
@@ -1136,6 +1181,25 @@
 	</div>
 {/if}
 
+{#if showPlaybackSpeedMenu}
+	<div
+		bind:this={playbackSpeedMenuRef}
+		class="fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[80px]"
+		style="left: {playbackSpeedMenuPosition.x}px; top: {playbackSpeedMenuPosition.y}px;"
+		role="menu"
+	>
+		{#each playbackRates as rate (rate)}
+			<button
+				on:click={() => selectPlaybackRate(rate)}
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class:bg-blue-100={selectedPlaybackRate === rate}
+				class:dark:bg-blue-800={selectedPlaybackRate === rate}
+				role="menuitemradio"
+				aria-checked={selectedPlaybackRate === rate}
+			>{rate}x</button>
+		{/each}
+	</div>
+{/if}
 <style>
 	/*
 	REMOVED: #video-container-wrapper:fullscreen and #video-container-wrapper:fullscreen video styles
@@ -1342,5 +1406,4 @@
 		background: #2563eb;
 		border-color: #374151;
 	}
-
 </style>

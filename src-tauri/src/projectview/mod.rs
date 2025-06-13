@@ -18,5 +18,5 @@ pub mod shared_types;
 pub mod shared_utils;
 pub mod db_handler;
 
-// Re-export specific commands to make them available directly under `projectview::`
-pub use transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
+// Re-export specific commands if needed, for now, direct paths are used in lib.rs
+// Example: pub use core_commands::load_project_data;
