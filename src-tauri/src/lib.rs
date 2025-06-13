@@ -52,7 +52,7 @@ pub fn run() {
             .with_handler(|app, shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     let app_handle = app.app_handle();
-                    match shortcut.key() {
+                    match shortcut.key { // Changed from shortcut.key()
                         Code::F7 => { app_handle.emit("shortcut-event", "rewind").unwrap_or_default(); }
                         Code::F8 => { app_handle.emit("shortcut-event", "play-pause").unwrap_or_default(); }
                         Code::F9 => { app_handle.emit("shortcut-event", "forward").unwrap_or_default(); }
@@ -60,8 +60,7 @@ pub fn run() {
                     }
                 }
             })
-            .build()
-            .expect("Failed to build global shortcut plugin")
+            .build() // Removed .expect() from here
         )
         .setup(|app| {
             #[cfg(debug_assertions)] {
