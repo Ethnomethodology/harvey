@@ -4,7 +4,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
 use tauri::Manager; // Ensure Manager is used for app.handle()
-use tauri_plugin_global_shortcut::{self, Code, ShortcutState};
+use tauri_plugin_global_shortcut::{self, Code, Modifiers, ShortcutState};
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -62,23 +62,21 @@ pub fn run() {
             app_mut_ref.set_activation_policy(tauri::ActivationPolicy::Regular);
 
             let global_shortcut_plugin = tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts(["F7", "F8", "F9"])?
+                .with_shortcuts(["CommandOrControl+Alt+J", "CommandOrControl+Alt+K", "CommandOrControl+Alt+L"])?
                 .with_handler(|app_handle, shortcut, event| { // app_handle is &AppHandle
                     if event.state == ShortcutState::Pressed {
-                        match shortcut.key {
-                            Code::F7 => {
-                                log::info!("F7 shortcut pressed (Rust handler)");
-                                app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
-                            }
-                            Code::F8 => {
-                                log::info!("F8 shortcut pressed (Rust handler)");
-                                app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
-                            }
-                            Code::F9 => {
-                                log::info!("F9 shortcut pressed (Rust handler)");
-                                app_handle.emit("shortcut-event", "forward").unwrap_or_default();
-                            }
-                            _ => {}
+                        let shortcut_id = shortcut.id();
+                        log::info!("Shortcut pressed (Rust handler): id: {}, key: {:?}, modifiers: {:?}, event_state: {:?}", shortcut_id, shortcut.key(), shortcut.modifiers(), event.state);
+
+                        if shortcut_id == "CommandOrControl+Alt+J" {
+                            log::info!("CommandOrControl+Alt+J matched by ID (Rust handler)");
+                            app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
+                        } else if shortcut_id == "CommandOrControl+Alt+K" {
+                            log::info!("CommandOrControl+Alt+K matched by ID (Rust handler)");
+                            app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
+                        } else if shortcut_id == "CommandOrControl+Alt+L" {
+                            log::info!("CommandOrControl+Alt+L matched by ID (Rust handler)");
+                            app_handle.emit("shortcut-event", "forward").unwrap_or_default();
                         }
                     }
                 })
