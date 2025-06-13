@@ -62,29 +62,33 @@ pub fn run() {
             app_mut_ref.set_activation_policy(tauri::ActivationPolicy::Regular);
 
             let global_shortcut_plugin = tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts(["CommandOrControl+Alt+J", "CommandOrControl+Alt+K", "CommandOrControl+Alt+L"])?
+                .with_shortcuts(["F7", "F8", "F9"])? // Reverted shortcut strings
                 .with_handler(|app_handle, shortcut, event| { // app_handle is &AppHandle
                     if event.state == ShortcutState::Pressed {
                         log::info!("Shortcut pressed (Rust handler): key: {:?}, mods: {:?}, event_state: {:?}", shortcut.key, shortcut.mods, event.state);
 
-                        if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyJ) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyJ) {
-                            log::info!("CommandOrControl+Alt+J matched (Rust handler)");
+                        if shortcut.matches(Modifiers::empty(), Code::F7) {
+                            log::info!("F7 matched (Rust handler)");
                             app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
                         }
-                        else if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyK) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyK) {
-                            log::info!("CommandOrControl+Alt+K matched (Rust handler)");
+                        else if shortcut.matches(Modifiers::empty(), Code::F8) {
+                            log::info!("F8 matched (Rust handler)");
                             app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
                         }
-                        else if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyL) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyL) {
-                            log::info!("CommandOrControl+Alt+L matched (Rust handler)");
+                        else if shortcut.matches(Modifiers::empty(), Code::F9) {
+                            log::info!("F9 matched (Rust handler)");
                             app_handle.emit("shortcut-event", "forward").unwrap_or_default();
                         } else {
-                             log::warn!("Received shortcut press that did not match J, K, or L with expected Ctrl/Cmd+Alt modifiers using shortcut.matches(). Key: {:?}, Mods: {:?}", shortcut.key, shortcut.mods);
+                             log::warn!("Received F-key press that did not match F7, F8, or F9 with empty modifiers. Key: {:?}, Mods: {:?}", shortcut.key, shortcut.mods);
                         }
                     }
                 })
+                .inspect(|_| log::info!("Global shortcut plugin builder ready to build.")) // Added inspect
                 .build();
+
+            log::info!("Attempting to register global shortcut plugin with app handle...");
             app_mut_ref.handle().plugin(global_shortcut_plugin)?;
+            log::info!("Global shortcut plugin registration call completed.");
 
             Ok(())
          })
