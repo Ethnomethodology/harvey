@@ -5,8 +5,16 @@ use env_logger;
 use log; // Added log import
 use tauri::Manager; // Ensure Manager is used for app.handle()
 use tauri_plugin_global_shortcut::{
-    self, Shortcut, Code, Modifiers, GlobalShortcutExt, ShortcutState, // Added Shortcut, GlobalShortcutExt
+    self,
+    AppHandle as GlobalShortcutAppHandle, // Alias for clarity
+    Code,
+    GlobalShortcutExt,
+    Modifiers,
+    Shortcut,
+    ShortcutEvent, // Import for type annotation
+    ShortcutState, // Import for direct use
 };
+use tauri::Wry; // Wry is the default runtime
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -74,24 +82,23 @@ pub fn run() {
 
             // Build the plugin with a general handler
             let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::with_handler(
-                move |_app_handle_in_handler, shortcut_event_arg, event_details| {
-                    // _app_handle_in_handler is &AppHandle
-                    // shortcut_event_arg is &Shortcut
-                    // event_details is &tauri_plugin_global_shortcut::ShortcutEvent, which has a `state: ShortcutState` field.
+                move |_app: &GlobalShortcutAppHandle<Wry>, // Explicit type for first param
+                      shortcut_arg: &Shortcut,             // Explicit type for second param
+                      event_details: &ShortcutEvent| {     // Explicit type for third param
 
-                    if event_details.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        log::info!("[HANDLER] Global shortcut pressed: {:?}, state: {:?}", shortcut_event_arg, event_details.state);
-                        if shortcut_event_arg == &f7_shortcut {
+                    if event_details.state == ShortcutState::Pressed { // ShortcutState can now be used directly
+                        log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state);
+                        if shortcut_arg == &f7_shortcut {
                             log::info!("[HANDLER] F7 shortcut matched.");
                             app_handle_clone.emit("shortcut-event", "rewind").unwrap_or_else(|e| {
                                 log::error!("[HANDLER] Failed to emit rewind event for F7: {}", e);
                             });
-                        } else if shortcut_event_arg == &f8_shortcut {
+                        } else if shortcut_arg == &f8_shortcut {
                             log::info!("[HANDLER] F8 shortcut matched.");
                             app_handle_clone.emit("shortcut-event", "play-pause").unwrap_or_else(|e| {
                                 log::error!("[HANDLER] Failed to emit play-pause event for F8: {}", e);
                             });
-                        } else if shortcut_event_arg == &f9_shortcut {
+                        } else if shortcut_arg == &f9_shortcut {
                             log::info!("[HANDLER] F9 shortcut matched.");
                             app_handle_clone.emit("shortcut-event", "forward").unwrap_or_else(|e| {
                                 log::error!("[HANDLER] Failed to emit forward event for F9: {}", e);
