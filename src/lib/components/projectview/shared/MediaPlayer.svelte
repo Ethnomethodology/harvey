@@ -129,6 +129,14 @@
 
 	async function handleScreenshot() {
 		console.log('[MediaPlayer] handleScreenshot - projectId received:', projectId);
+		const currentProjectXmlPath = get(project)?.xmlPath;
+
+		if (!currentProjectXmlPath) {
+			project.update(p => ({ ...p, statusMessage: 'Project XML path not found.', error: 'Screenshot failed.', isLoading: false }));
+			console.error('Project XML path not found for screenshot.');
+			return;
+		}
+
 		if (!videoElement || !localMediaUrl || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
 			project.update(p => ({ ...p, statusMessage: 'Media not loaded or video dimensions unavailable.', error: 'Screenshot failed.' }));
 			console.error('Screenshot attempt failed: No videoElement, localMediaUrl, or video dimensions are zero.');
@@ -168,8 +176,8 @@
 
 			// const currentProjectId = get(project)?.id; // Removed
 			if (!projectId) { // Changed to use prop
-				project.update(p => ({ ...p, statusMessage: 'Project ID not found.', error: 'Screenshot failed.', isLoading: false }));
-				console.error('Project ID not found for screenshot.');
+				project.update(p => ({ ...p, statusMessage: 'Project ID (UUID) not found.', error: 'Screenshot failed.', isLoading: false })); // Clarified error
+				console.error('Project ID (UUID) not found for screenshot. This is needed by backend.');
 				return;
 			}
 
@@ -188,7 +196,8 @@
 
 			// *** Actual Tauri invoke call ***
 			await invoke('save_screenshot', {
-				projectId: projectId, // Changed to use prop
+				projectXmlPathStr: currentProjectXmlPath, // New parameter
+				projectId: projectId, // Existing prop
 				mediaFileName: mediaFileName,
 				timestamp: localCurrentTime,
 				imageDataBase64: base64ImageData

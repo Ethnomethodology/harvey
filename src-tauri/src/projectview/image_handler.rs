@@ -135,17 +135,23 @@ fn register_project_image(
 
 #[tauri::command]
 pub async fn save_screenshot(
-    project_id: String,
+    project_xml_path_str: String, // Added
+    project_id: String, // This is the UUID, used for logging or if needed for specific metadata, but not for base path
     media_file_name: String,
     timestamp: f64,
     image_data_base64: String,
 ) -> Result<(), String> {
-    info!("[save_screenshot] Received screenshot for project_id: {}, media: {}, timestamp: {}", project_id, media_file_name, timestamp);
+    info!("[save_screenshot] Received screenshot for project_id (UUID): {}, project_xml_path: {}, media: {}, timestamp: {}", project_id, project_xml_path_str, media_file_name, timestamp);
 
-    let project_base_dir = get_project_data_path(&project_id)?;
-    let project_xml_path = project_base_dir.join(format!("{}.harvey.xml", project_id));
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = match project_xml_path.parent() {
+        Some(p) => p.to_path_buf(),
+        None => return Err(format!("Could not determine base directory from project XML path: {}", project_xml_path_str)),
+    };
+
+    // Ensure the XML file itself exists, as register_project_image will need to read/write it.
     if !project_xml_path.exists() {
-        return Err(format!("Project XML not found for project_id: {}. Expected at: {}", project_id, project_xml_path.display()));
+        return Err(format!("Project XML file not found at the specified path: {}", project_xml_path_str));
     }
 
     let sanitized_media_name_stem = Path::new(&media_file_name)
