@@ -67,15 +67,15 @@ pub fn run() {
                     if event.state == ShortcutState::Pressed {
                         log::info!("Shortcut pressed (Rust handler): key: {:?}, mods: {:?}, event_state: {:?}", shortcut.key, shortcut.mods, event.state);
 
-                        if shortcut.matches(Some(Modifiers::ALT | Modifiers::CONTROL), Code::KeyJ) || shortcut.matches(Some(Modifiers::ALT | Modifiers::SUPER), Code::KeyJ) {
+                        if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyJ) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyJ) {
                             log::info!("CommandOrControl+Alt+J matched (Rust handler)");
                             app_handle.emit("shortcut-event", "rewind").unwrap_or_default();
                         }
-                        else if shortcut.matches(Some(Modifiers::ALT | Modifiers::CONTROL), Code::KeyK) || shortcut.matches(Some(Modifiers::ALT | Modifiers::SUPER), Code::KeyK) {
+                        else if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyK) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyK) {
                             log::info!("CommandOrControl+Alt+K matched (Rust handler)");
                             app_handle.emit("shortcut-event", "play-pause").unwrap_or_default();
                         }
-                        else if shortcut.matches(Some(Modifiers::ALT | Modifiers::CONTROL), Code::KeyL) || shortcut.matches(Some(Modifiers::ALT | Modifiers::SUPER), Code::KeyL) {
+                        else if shortcut.matches(Modifiers::ALT | Modifiers::CONTROL, Code::KeyL) || shortcut.matches(Modifiers::ALT | Modifiers::SUPER, Code::KeyL) {
                             log::info!("CommandOrControl+Alt+L matched (Rust handler)");
                             app_handle.emit("shortcut-event", "forward").unwrap_or_default();
                         } else {
