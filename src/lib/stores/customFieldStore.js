@@ -17,50 +17,15 @@ export const definitionError = writable(null);
  * @returns {string|null} The project ID or null if not found/error.
  */
 function getCurrentProjectId() {
-    const currentProject = get(project);
+    const currentProject = get(project); // 'project' store should already be imported
 
-    // 1. Try to use currentProject.name directly if available
-    if (currentProject && currentProject.name && currentProject.name.trim() !== '') {
-        console.debug(`[customFieldStore] Determined projectId from currentProject.name: "${currentProject.name}"`);
-        return currentProject.name.trim();
-    }
-    console.warn(`[customFieldStore] currentProject.name is not available or empty, falling back to xmlPath parsing.`);
-
-    // 2. Fallback to xmlPath parsing
-    if (currentProject && currentProject.xmlPath) {
-        const path = currentProject.xmlPath.replace(/\\/g, '/'); // Normalize separators
-        const parts = path.split('/');
-        const fileName = parts[parts.length - 1].toLowerCase();
-
-        // Check if the filename matches expected patterns (e.g., project.xml or *.harvey.xml)
-        const isProjectFile = fileName === 'project.xml' || fileName.endsWith('.harvey.xml');
-
-        if (parts.length >= 2 && isProjectFile) {
-            const projectId = parts[parts.length - 2]; // The directory containing the XML file
-            if (projectId && projectId.trim() !== '') {
-                console.debug(`[customFieldStore] Determined projectId from xmlPath (parent directory of XML): "${projectId}"`);
-                return projectId.trim();
-            }
-        }
-
-        // Secondary fallback for xmlPath: if 'projects' segment exists (less likely given new path structure)
-        const projectsDirIndex = parts.lastIndexOf('projects');
-        if (projectsDirIndex !== -1 &&
-            projectsDirIndex < parts.length - 2 &&
-            isProjectFile) {
-
-            const projectIdFromProjectsDir = parts[projectsDirIndex + 1];
-            if (projectIdFromProjectsDir && projectIdFromProjectsDir.trim() !== '') {
-                console.warn(`[customFieldStore] Determined projectId using 'projects' directory from xmlPath: "${projectIdFromProjectsDir}". This is a secondary fallback.`);
-                return projectIdFromProjectsDir.trim();
-            }
-        }
-
-        console.error(`[customFieldStore] Could not parse projectId from xmlPath: "${currentProject.xmlPath}". Filename "${fileName}" or path structure not recognized as expected.`);
-        return null;
+    if (currentProject && currentProject.id && typeof currentProject.id === 'string' && currentProject.id.trim() !== '') {
+        console.debug(`[customFieldStore] Determined projectId from currentProject.id (UUID): "${currentProject.id}"`);
+        return currentProject.id.trim();
     }
 
-    console.warn('[customFieldStore] No active project name or xmlPath found in project store when trying to get projectId.');
+    // Log if the UUID is missing, as this is now unexpected after prior fixes
+    console.warn(`[customFieldStore] getCurrentProjectId: currentProject.id (UUID) is missing, null, or empty. This might indicate an issue with project loading. Current project state:`, currentProject);
     return null;
 }
 

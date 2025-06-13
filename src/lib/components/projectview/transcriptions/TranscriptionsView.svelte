@@ -28,6 +28,8 @@
 
     const dispatch = createEventDispatcher();
 
+    $: console.log('[TranscriptionsView] $project.id value:', $project.id);
+
     export let mediaPlayerRef = null;
 
     let editableTranscriptRef;
@@ -40,6 +42,8 @@
     let isMediaPlayerTrimming = false;
     let mediaPlayerTrimStart = 0;
     let mediaPlayerTrimEnd = 0;
+
+    let isMediaPlayerHidden = false; // New state variable
 
     let isSegmentEditingActive = false;
     let currentEditSegmentStart = 0;
@@ -254,7 +258,7 @@
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
-            <div class="h-1/2 bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
+            <div class="{isMediaPlayerHidden ? '' : 'h-1/2'} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
                     bind:this={mediaPlayerRef}
                     bind:isTrimming={isMediaPlayerTrimming}
@@ -263,6 +267,8 @@
                     bind:isEditingSegment={isSegmentEditingActive}
                     bind:editSegmentStartTime={currentEditSegmentStart}
                     bind:editSegmentEndTime={currentEditSegmentEnd}
+                    projectId={$project.id}
+                    bind:isVideoMinimized={isMediaPlayerHidden}
                     showLoopPauseButton={true}
                     showNotesTranscribeButton={false}
                     showNotesTrimButton={false}
@@ -271,7 +277,7 @@
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
                 />
             </div>
-            <div class="h-1/2 min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
+            <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
                  <EditableTranscript
                     bind:this={editableTranscriptRef}
                     bind:panelEditMode={panelEditModeActive}

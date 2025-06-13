@@ -26,6 +26,8 @@
 
     const dispatch = createEventDispatcher();
 
+    $: console.log('[MediaEditorPanel] $projectStore.id value:', $projectStore.id);
+
     let showNotesTrimUI = false;
     let currentTrimAudioBuffer = null; // Buffer for the active trim session
     let notesTrimStartTime = 0;
@@ -42,6 +44,7 @@
     let mediaPlayerInNotesRef;
 
     let localEditorJsonState = '';
+    let isNotesPlayerVideoHidden = false; // State for MediaPlayer's video visibility
     let associatedTranscriptPath = null;
     let transcriptName = 'N/A';
 
@@ -298,27 +301,36 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
-    <div class="flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow">
+    <div
+        class="border-b border-gray-200 dark:border-gray-700 flex flex-col
+               {!isNotesPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
+    >
         {#if mediaPath}
             <MediaPlayer
                 bind:this={mediaPlayerInNotesRef}
+                bind:isVideoMinimized={isNotesPlayerVideoHidden}
                 explicitMediaPath={mediaPath}
+                projectId={$projectStore.id}
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}
                 on:requestNotesTranscribe={handleRequestNotesTranscribe}
                 on:requestNotesTrim={handleRequestNotesTrim}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
+                class="{!isNotesPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
         {:else}
-            <div class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-gray-400">
                 <span>Media player requires a path.</span>
             </div>
         {/if}
     </div>
 
-    <div class="flex-grow min-h-0 overflow-hidden">
+    <div
+        class="min-h-0 overflow-hidden {!isNotesPlayerVideoHidden ? 'h-1/2' : ''}"
+        class:flex-grow={isNotesPlayerVideoHidden}
+    >
         {#if showNotesTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">

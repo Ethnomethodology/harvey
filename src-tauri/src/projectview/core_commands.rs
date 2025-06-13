@@ -20,6 +20,7 @@ use serde::Serialize;
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
 use tauri::Emitter;
+use uuid::Uuid; // Added for UUID generation
 
 // --- Table Layout Preferences Commands ---
 #[tauri::command]
@@ -193,9 +194,19 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     ensure_base_asset_dirs(project_base_dir)?;
 
     let project_xml_content = fs::read_to_string(&xml_path).map_err(|e| CommandError::from(format!("Failed to read XML {}: {}", xml_path.display(), e)))?;
-    let project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&project_xml_content).map_err(|e| CommandError::from(format!("Failed to parse XML {}: {}", xml_path.display(), e)))?;
+
+    let mut was_uuid_generated = false;
+    if project_data.project_uuid.is_empty() {
+        let new_uuid = Uuid::new_v4().to_string();
+        info!("[Backend Load XML] Project UUID was missing or empty. Generated new UUID: {}", new_uuid);
+        project_data.project_uuid = new_uuid;
+        was_uuid_generated = true;
+    }
+
     let project_name = project_data.name.clone();
     info!("[Backend Load XML] Project Name: {}", project_name);
+    info!("[Backend Load XML] Project UUID: {}", project_data.project_uuid); // Log the UUID being used
 
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
@@ -330,10 +341,18 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
         project_data.document_metadata_files.files.len() // This list is now only for .harvey_metadata.json from imported "doc" types.
     );
 
+    if was_uuid_generated {
+        match save_project_xml(&xml_path, &project_data) {
+            Ok(_) => info!("[Backend Load XML] Successfully saved updated project XML with new UUID to {}", xml_path.display()),
+            Err(e) => warn!("[Backend Load XML] Failed to save updated project XML with new UUID to {}: {}. The new UUID will be used for this session, but not persisted.", xml_path.display(), e),
+        }
+    }
+
     Ok(ProjectViewData {
         project_name,
         project_xml_path,
         base_directory,
+        project_uuid: project_data.project_uuid.clone(),
         files: file_entries,
         document_files: project_data.document_files.files,
         table_files: project_data.table_files.files,
@@ -1306,22 +1325,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
             info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut _updated_xml = false;
+            // Removed: let mut xml_actually_changed_for_imported_transcript = false;
 
             if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.clone();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
                 project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                _updated_xml = true;
-                info!("[Backend Rename] XML imported transcript entry updated.");
-            } else {
-                // This should ideally not happen if DB update was successful, as it means XML was out of sync.
-                warn!("[Backend Rename] Renamed imported transcript (FS & DB), but could not find matching old relative path '{}' in XML.", old_transcript_relative_path);
-            }
-
-            // Logic for updating project_data.document_metadata_files.files is REMOVED.
-
-            if _updated_xml {
+                // xml_actually_changed_for_imported_transcript = true; // Variable removed
+                info!("[Backend Rename] XML imported transcript entry updated. Saving XML.");
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
 
@@ -1336,7 +1347,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
                     warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
                 }
+            } else {
+                // This should ideally not happen if DB update was successful, as it means XML was out of sync.
+                warn!("[Backend Rename] Renamed imported transcript (FS & DB), but could not find matching old relative path '{}' in XML. XML not saved.", old_transcript_relative_path);
             }
+            // Logic for updating project_data.document_metadata_files.files is REMOVED.
+            // The conditional save based on the flag is removed; save now happens inside the 'if let Some(entry)' block.
         },
         "doc" => {
             let new_filename_with_ext_str = new_name_trimmed;
@@ -1464,12 +1480,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename] Updating XML for document: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_doc, new_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
+            let mut actual_changes_made_to_doc_xml = false;
 
             if let Some(doc_entry) = project_data.document_files.files.iter_mut().find(|d| d.relative_path == item_relative_path) {
                 doc_entry.name = new_filename_with_ext_str.to_string();
                 doc_entry.relative_path = new_relative_path_for_doc.clone();
-                updated_xml = true;
+                actual_changes_made_to_doc_xml = true;
                 info!("[Backend Rename] XML document entry updated.");
             } else {
                 warn!("[Backend Rename] Renamed document, but could not find matching old relative path '{}' in XML for main doc.", item_relative_path);
@@ -1481,14 +1497,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     metadata_entry.name = new_meta_filename;
                     metadata_entry.original_document_relative_path = new_relative_path_for_doc.clone();
                     metadata_entry.relative_path = new_rel_meta_path;
-                    updated_xml = true;
+                    actual_changes_made_to_doc_xml = true;
                     info!("[Backend Rename] XML document app metadata entry updated.");
                 } else {
                      warn!("[Backend Rename] App metadata file renamed/moved, but could not find matching old original_document_relative_path '{}' in XML for metadata.", item_relative_path);
                 }
             }
             
-            if updated_xml {
+            if actual_changes_made_to_doc_xml {
                 project_data.document_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
@@ -1611,20 +1627,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename Table] Updating XML: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml, new_table_filename_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
 
             if let Some(table_entry) = project_data.table_files.files.iter_mut().find(|t| t.relative_path == item_relative_path) {
                 table_entry.name = new_table_filename_str.clone();
-                table_entry.relative_path = new_relative_path_for_xml;
+                table_entry.relative_path = new_relative_path_for_xml.clone();
                 project_data.table_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                updated_xml = true;
                 info!("[Backend Rename Table] XML table entry updated.");
-            } else {
-                error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
-                 return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
-            }
-
-            if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Table] XML saved.");
 
@@ -1639,6 +1647,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
                     warn!("[Backend Rename] Failed to emit item_renamed event for table: {}", e);
                 }
+            } else {
+                error!("[Backend Rename Table] CRITICAL: File system operations for table rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                 return Err(CommandError::from(format!("Failed to update XML as old table entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
         },
         "image" => {
@@ -1766,20 +1777,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
 
             if let Some(image_entry) = project_data.image_files.files.iter_mut().find(|i| i.relative_path == item_relative_path) {
                 image_entry.name = new_image_filename_with_ext_str.to_string();
-                image_entry.relative_path = new_relative_path_for_image_xml;
+                image_entry.relative_path = new_relative_path_for_image_xml.clone();
                 project_data.image_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                updated_xml = true;
                 info!("[Backend Rename Image] XML image entry updated.");
-            } else {
-                 error!("[Backend Rename Image] CRITICAL: File system operations for image rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
-                 return Err(CommandError::from(format!("Failed to update XML as old image entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
-            }
-
-            if updated_xml {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename Image] XML saved for image rename.");
 
@@ -1794,6 +1797,9 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 if let Err(e) = app_handle.emit("item_renamed", payload) {
                     warn!("[Backend Rename] Failed to emit item_renamed event for image: {}", e);
                 }
+            } else {
+                 error!("[Backend Rename Image] CRITICAL: File system operations for image rename succeeded, but could not find matching old relative path '{}' in XML. Project XML might be inconsistent.", item_relative_path);
+                 return Err(CommandError::from(format!("Failed to update XML as old image entry for {} was not found after file operations. Project state may be inconsistent.", item_relative_path)));
             }
         },
         _ => {
@@ -1804,4 +1810,65 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
     info!("[Backend Rename] Success for: {}", item_path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is in scope if needed for direct construction, though here we rely on its deserialization.
+
+    #[tokio::test]
+    async fn test_load_project_data_includes_uuid() {
+        let test_uuid = "test-uuid-123-abc";
+        let project_name_test = "Test Project for UUID";
+
+        let xml_content = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <project>
+                <name>{}</name>
+                <project_uuid>{}</project_uuid>
+                <mediaFiles/>
+                <documentFiles/>
+                <tableFiles/>
+                <imageFiles/>
+                <importedTranscriptFiles/>
+                <documentMetadataFiles/>
+            </project>"#,
+            project_name_test, test_uuid
+        );
+
+        let mut temp_file = NamedTempFile::new().expect("Failed to create temp file");
+        temp_file.write_all(xml_content.as_bytes()).expect("Failed to write to temp file");
+        let temp_file_path_str = temp_file.path().to_str().unwrap().to_string();
+
+        // Create the harvey_files directory structure as ensure_base_asset_dirs expects it
+        let temp_dir = temp_file.path().parent().expect("Temp file has no parent");
+        let harvey_files_dir = temp_dir.join(HARVEY_FILES_DIR);
+        fs::create_dir_all(&harvey_files_dir.join(MEDIA_DIR)).expect("Failed to create test media dir");
+        fs::create_dir_all(&harvey_files_dir.join(DOCS_DIR)).expect("Failed to create test docs dir");
+        fs::create_dir_all(&harvey_files_dir.join(TABLES_DIR)).expect("Failed to create test tables dir");
+        fs::create_dir_all(&harvey_files_dir.join(IMAGES_DIR)).expect("Failed to create test images dir");
+        fs::create_dir_all(&harvey_files_dir.join(TRANSCRIPTS_DIR)).expect("Failed to create test transcripts dir");
+
+
+        match load_project_data(temp_file_path_str.clone()).await {
+            Ok(project_view_data) => {
+                assert_eq!(project_view_data.project_uuid, test_uuid, "ProjectViewData.project_uuid should match the UUID in the XML.");
+                assert_eq!(project_view_data.project_name, project_name_test, "ProjectViewData.project_name should match the name in the XML.");
+                assert_eq!(project_view_data.project_xml_path, temp_file_path_str, "ProjectViewData.project_xml_path should match the temp file path.");
+            }
+            Err(e) => {
+                panic!("load_project_data failed: {:?}", e);
+            }
+        }
+
+        // temp_file is automatically deleted when it goes out of scope.
+        // However, we need to manually clean up directories created for ensure_base_asset_dirs
+        if harvey_files_dir.exists() {
+            fs::remove_dir_all(&harvey_files_dir).expect("Failed to remove test harvey_files dir");
+        }
+    }
 }

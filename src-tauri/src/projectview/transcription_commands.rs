@@ -571,3 +571,53 @@ pub fn map_speaker_ids_to_names(
     }
     info!("[Name Map] Finished speaker name mapping process.");
 }
+
+#[tauri::command]
+pub async fn list_subtitle_files_command(media_path_str: String) -> Result<Vec<SubtitleFileEntry>, CommandError> {
+    info!("[list_subtitle_files_command] Listing subtitles for: {}", media_path_str);
+    let media_path = PathBuf::from(media_path_str);
+
+    // Expecting subtitles in a 'transcripts' subdirectory relative to the media file's stem directory
+    // e.g., if media is .../Media/MyVideo/media/MyVideo.mp4
+    // then subtitles are in .../Media/MyVideo/transcripts/
+    let media_file_parent_dir = media_path.parent().ok_or_else(|| CommandError::from("Could not get media file parent dir"))?;
+    if media_file_parent_dir.file_name().and_then(|n| n.to_str()) != Some(MEDIA_SUBDIR) {
+        return Err(CommandError::from(format!("Media file not in expected '{}' subdirectory.", MEDIA_SUBDIR)));
+    }
+    let media_stem_dir = media_file_parent_dir.parent().ok_or_else(|| CommandError::from("Could not get media stem directory"))?;
+    let transcripts_dir = media_stem_dir.join(TRANSCRIPTS_SUBDIR);
+
+    let mut subtitle_files = Vec::new();
+    if transcripts_dir.exists() && transcripts_dir.is_dir() {
+        for entry in fs::read_dir(transcripts_dir).map_err(|e| CommandError::from(format!("Failed to read transcripts dir: {}", e)))? {
+            let entry = entry.map_err(|e| CommandError::from(format!("Error reading directory entry: {}", e)))?;
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if ext == "srt" || ext == "vtt" {
+                        subtitle_files.push(SubtitleFileEntry {
+                            name: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                            path: path.to_string_lossy().into_owned(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    subtitle_files.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(subtitle_files)
+}
+
+#[tauri::command]
+pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, CommandError> {
+    info!("[convert_srt_to_vtt_command] Converting SRT: {}", srt_path_str);
+    // Placeholder: Implement actual SRT to VTT conversion logic here.
+    // For now, let's assume it just returns the path or an error if not an SRT.
+    let srt_path = PathBuf::from(&srt_path_str);
+    if srt_path.extension().and_then(|e| e.to_str()) != Some("srt") {
+        return Err(CommandError::from("Not an SRT file.".to_string()));
+    }
+    // This should return the content of the VTT file or path to a new VTT file.
+    // For this stub, we'll just return a message.
+    Ok(format!("Successfully processed (stubbed) SRT file: {}", srt_path_str))
+}
