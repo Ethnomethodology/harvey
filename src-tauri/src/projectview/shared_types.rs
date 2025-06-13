@@ -283,6 +283,12 @@ impl Default for DocumentHighlightData {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SubtitleFileEntry {
+    pub name: String, // e.g., "english.vtt"
+    pub path: String, // Full absolute path to the subtitle file
+}
+
 // --- Custom Field Definitions ---
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

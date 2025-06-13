@@ -11,9 +11,9 @@
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
-	import { invoke } from '@tauri-apps/api/core'; // Ensure invoke is imported
+	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js'; // Keep for trim confirm logic
+	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
 
 	const dispatch = createEventDispatcher();
 
@@ -126,6 +126,123 @@
 	const ICON_REWIND = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466"/></svg>`;
 	const ICON_FORWARD = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/></svg>`;
 	const ICON_CAMERA = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-camera" viewBox="0 0 16 16"><path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828-.828A2 2 0 0 1 3.172 4z"/><path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5m0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0"/></svg>`;
+	const ICON_CC = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-badge-cc" viewBox="0 0 16 16"><path d="M3.708 7.755c0-1.111.488-1.753 1.319-1.753.681 0 1.138.47 1.186 1.107H7.36V7c-.052-1.186-1.024-2-2.342-2C3.414 5 2.5 6.05 2.5 7.751v.747c0 1.7.905 2.73 2.518 2.73 1.314 0 2.285-.792 2.342-1.939v-.114H6.213c-.048.615-.496 1.05-1.186 1.05-.84 0-1.319-.62-1.319-1.727zm6.14 0c0-1.111.488-1.753 1.318-1.753.682 0 1.139.47 1.187 1.107H13.5V7c-.053-1.186-1.024-2-2.342-2C9.554 5 8.64 6.05 8.64 7.751v.747c0 1.7.905 2.73 2.518 2.73 1.314 0 2.285-.792 2.342-1.939v-.114h-1.147c-.048.615-.497 1.05-1.187 1.05-.839 0-1.318-.62-1.318-1.727z"/><path d="M14 3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>`;
+
+	// --- Subtitle State ---
+	let availableSubtitles = [];
+	let showSubtitleMenu = false;
+	let subtitleMenuPosition = { x: 0, y: 0 };
+	let ccButtonElement = null;
+	let activeSubtitleTrackPath = null;
+	let subtitleMenuRef = null;
+	let activeSubtitleUrl = null;
+	let activeSubtitleLang = 'en';
+	let activeSubtitleLabel = 'Subtitles';
+
+	function extractLangFromFilename(filename) {
+		if (!filename || typeof filename !== 'string') return null;
+		const namePart = filename.substring(0, filename.lastIndexOf('.')).toLowerCase();
+		if (namePart === 'en' || namePart.includes('english')) return 'en';
+		if (namePart === 'es' || namePart.includes('spanish')) return 'es';
+		if (namePart === 'fr' || namePart.includes('french')) return 'fr';
+		if (namePart === 'de' || namePart.includes('german')) return 'de';
+		if (namePart.length === 2) return namePart;
+		return null;
+	}
+
+	async function handleSelectSubtitles() {
+		if (showSubtitleMenu) {
+			showSubtitleMenu = false;
+			return;
+		}
+
+		if (!explicitMediaPath) {
+			console.warn('[MediaPlayer] Cannot fetch subtitles: explicitMediaPath is not set.');
+			availableSubtitles = [];
+			showSubtitleMenu = false;
+			return;
+		}
+
+		console.log('[MediaPlayer] Fetching subtitles for:', explicitMediaPath);
+		try {
+			const subs = await invoke('list_subtitle_files_command', { mediaPathStr: explicitMediaPath });
+			availableSubtitles = subs || [];
+			if (availableSubtitles.length > 0) {
+				if (ccButtonElement) {
+					const rect = ccButtonElement.getBoundingClientRect();
+					subtitleMenuPosition = {
+						x: rect.left,
+						y: rect.bottom + window.scrollY + 2
+					};
+				}
+				showSubtitleMenu = true;
+			} else {
+				console.log('[MediaPlayer] No subtitles found.');
+				project.update(p => ({ ...p, statusMessage: 'No subtitles found for this media.' }));
+				setTimeout(() => project.update(p => ({ ...p, statusMessage: '' })), 3000);
+				showSubtitleMenu = false;
+			}
+		} catch (error) {
+			console.error('[MediaPlayer] Error fetching subtitle files:', error);
+			project.update(p => ({ ...p, statusMessage: 'Error fetching subtitles.', error: String(error) }));
+			availableSubtitles = [];
+			showSubtitleMenu = false;
+		}
+	}
+
+	async function selectSubtitleTrack(subtitleEntry) {
+		console.log('[MediaPlayer] Attempting to select subtitle track:', subtitleEntry);
+		// Revoke previous object URL if it exists, to prevent memory leaks
+		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(activeSubtitleUrl);
+			console.log('[MediaPlayer] Revoked previous subtitle object URL:', activeSubtitleUrl);
+		}
+
+		if (subtitleEntry && subtitleEntry.path) {
+			activeSubtitleTrackPath = subtitleEntry.path;
+			activeSubtitleLang = extractLangFromFilename(subtitleEntry.name) || 'en';
+			activeSubtitleLabel = subtitleEntry.name.substring(0, subtitleEntry.name.lastIndexOf('.')) || 'Subtitles';
+
+			try {
+				let subtitleDataUrl;
+				if (subtitleEntry.name.toLowerCase().endsWith('.srt')) {
+					console.log('[MediaPlayer] SRT file selected, invoking conversion:', subtitleEntry.path);
+					const vttContent = await invoke('convert_srt_to_vtt_command', { srtPathStr: subtitleEntry.path });
+					if (typeof vttContent === 'string') {
+						const blob = new Blob([vttContent], { type: 'text/vtt' });
+						subtitleDataUrl = URL.createObjectURL(blob);
+						console.log('[MediaPlayer] SRT converted to VTT blob URL:', subtitleDataUrl);
+					} else {
+						throw new Error('SRT to VTT conversion did not return a string.');
+					}
+				} else { // Assume .vtt or other directly supported format
+					subtitleDataUrl = await convertFileSrc(subtitleEntry.path);
+					console.log('[MediaPlayer] VTT/other file, using convertFileSrc URL:', subtitleDataUrl);
+				}
+				activeSubtitleUrl = subtitleDataUrl;
+				console.log(`[MediaPlayer] Set active subtitle: URL=${activeSubtitleUrl}, Lang=${activeSubtitleLang}, Label=${activeSubtitleLabel}`);
+
+			} catch (e) {
+				console.error('[MediaPlayer] Error processing subtitle file:', e);
+				project.update(p => ({ ...p, statusMessage: 'Error loading subtitle track.', error: String(e) }));
+				activeSubtitleTrackPath = null;
+				activeSubtitleUrl = null;
+			}
+		} else {
+			console.log('[MediaPlayer] Disabling subtitles.');
+			activeSubtitleTrackPath = null;
+			activeSubtitleUrl = null; // This will trigger the #key block to remove the <track>
+			activeSubtitleLang = 'en';
+			activeSubtitleLabel = 'Subtitles';
+		}
+		showSubtitleMenu = false;
+	}
+
+	function handleClickOutsideSubtitleMenu(event) {
+		if (showSubtitleMenu && subtitleMenuRef && !subtitleMenuRef.contains(event.target) && ccButtonElement && !ccButtonElement.contains(event.target)) {
+			showSubtitleMenu = false;
+		}
+	}
 
 	async function handleScreenshot() {
 		console.log('[MediaPlayer] handleScreenshot - projectId received:', projectId);
@@ -240,12 +357,12 @@
         } catch (e) {
             webAudioApiSupported = false;
         }
-		// document.addEventListener('fullscreenchange', handleFullscreenChange); // Removed
+		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
-			// document.removeEventListener('fullscreenchange', handleFullscreenChange); // Removed
+			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
         };
     });
 	onDestroy(() => {
@@ -255,7 +372,11 @@
         if (currentBlobUrl) {
             URL.revokeObjectURL(currentBlobUrl);
         }
-		// document.removeEventListener('fullscreenchange', handleFullscreenChange); // Removed
+		document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
+		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
+			URL.revokeObjectURL(activeSubtitleUrl);
+			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
+		}
     });
 
 	// --- File Handling & Audio Processing ---
@@ -749,7 +870,11 @@
 					preload="metadata"
 					controlslist="nodownload noremoteplayback"
 					tabindex="-1"
-					><!-- tabindex -1 to keep it out of tab order as we have custom controls -->
+					crossorigin="anonymous" <!-- Required for external <track> elements -->
+				>
+					{#if activeSubtitleUrl}
+						<track kind="subtitles" src={activeSubtitleUrl} srclang={activeSubtitleLang} label={activeSubtitleLabel} default />
+					{/if}
 				</video>
 			{/key}
 			<!-- Overlay Icon Div -->
@@ -884,6 +1009,18 @@
 				{@html ICON_CAMERA}
 			</button>
 
+			<!-- CC/Subtitle Button (NEW) -->
+			<button
+				bind:this={ccButtonElement}
+				on:click={handleSelectSubtitles}
+				class="btn-control"
+				title="Select Subtitles"
+				aria-label="Select Subtitles"
+				disabled={!localMediaUrl || isLoadingMedia}
+			>
+				{@html ICON_CC}
+			</button>
+
 			<!-- Conditional Trim Buttons -->
 			{#if showNotesTrimButton}
 				<button
@@ -971,6 +1108,33 @@
 		</div>
 	</div>
 </div>
+
+{#if showSubtitleMenu && availableSubtitles.length > 0}
+	<div
+		bind:this={subtitleMenuRef}
+		class="subtitle-menu fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[150px]"
+		style="left: {subtitleMenuPosition.x}px; top: {subtitleMenuPosition.y}px;"
+	>
+        <button
+            on:click={() => selectSubtitleTrack(null)}
+            class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+            class:bg-blue-100={!activeSubtitleTrackPath}
+            class:dark:bg-blue-800={!activeSubtitleTrackPath}
+        >
+            (Off)
+        </button>
+		{#each availableSubtitles as sub (sub.path)}
+			<button
+				on:click={() => selectSubtitleTrack(sub)}
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class:bg-blue-100={activeSubtitleTrackPath === sub.path}
+				class:dark:bg-blue-800={activeSubtitleTrackPath === sub.path}
+			>
+				{sub.name}
+			</button>
+		{/each}
+	</div>
+{/if}
 
 <style>
 	/*

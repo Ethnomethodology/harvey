@@ -102,6 +102,8 @@ pub fn run() {
             projectview::transcription_commands::save_transcript_json,
             projectview::transcription_commands::trim_media,
             projectview::transcription_commands::save_speaker_config,
+            projectview::transcription_commands::list_subtitle_files_command,
+            projectview::transcription_commands::convert_srt_to_vtt_command, // Added
 
             // --- Project view DOCUMENT/NOTES commands ---
             projectview::document_commands::save_note_json,
