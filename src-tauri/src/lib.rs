@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use tauri::Manager; // Ensure Manager is used for app.handle()
-use tauri_plugin_global_shortcut::{self, Code, Modifiers, ShortcutState, GlobalShortcutExt};
+use tauri_plugin_global_shortcut::{self, Code, ShortcutState}; // Removed Modifiers and GlobalShortcutExt
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -47,20 +47,15 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcuts(["F7", "F8", "F9"]) // Register raw strings first
+            .with_shortcuts(["F7", "F8", "F9"])
+            .expect("Failed to register shortcuts with the plugin builder") // Added expect here
             .with_handler(|app, shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    let app_handle = app.app_handle(); // Get AppHandle
+                    let app_handle = app.app_handle();
                     match shortcut.key() {
-                        Code::F7 => {
-                            let _ = app_handle.emit("shortcut-event", "rewind");
-                        }
-                        Code::F8 => {
-                            let _ = app_handle.emit("shortcut-event", "play-pause");
-                        }
-                        Code::F9 => {
-                            let _ = app_handle.emit("shortcut-event", "forward");
-                        }
+                        Code::F7 => { app_handle.emit("shortcut-event", "rewind").unwrap_or_default(); }
+                        Code::F8 => { app_handle.emit("shortcut-event", "play-pause").unwrap_or_default(); }
+                        Code::F9 => { app_handle.emit("shortcut-event", "forward").unwrap_or_default(); }
                         _ => {}
                     }
                 }
