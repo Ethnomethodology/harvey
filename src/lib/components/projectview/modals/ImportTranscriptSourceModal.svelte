@@ -20,7 +20,7 @@
 </script>
 
 {#if showModal}
-    <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" on:click={handleClose} role="dialog" aria-modal="true" aria-labelledby="import-transcript-title">
+    <div class="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" on:click={handleClose} role="dialog" aria-modal="true" aria-labelledby="import-transcript-title">
         <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-200" on:click|stopPropagation>
             <div class="flex justify-between items-center mb-4">
                 <h2 id="import-transcript-title" class="text-lg font-semibold">Import Transcript From...</h2>
