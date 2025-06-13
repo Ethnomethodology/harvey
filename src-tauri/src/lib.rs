@@ -2,8 +2,9 @@
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
-use tauri::Manager;
-use tauri_plugin_global_shortcut::{GlobalShortcutManager, Shortcut};
+use tauri::Manager; // Ensure Manager is used for app.handle()
+use tauri_plugin_global_shortcut::{self, Code, Modifiers, ShortcutState, GlobalShortcutExt};
+use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 
@@ -45,25 +46,29 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_global_shortcut::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new()
+            .with_shortcuts(["F7", "F8", "F9"]) // Register raw strings first
+            .with_handler(|app, shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    let app_handle = app.app_handle(); // Get AppHandle
+                    match shortcut.key() {
+                        Code::F7 => {
+                            let _ = app_handle.emit("shortcut-event", "rewind");
+                        }
+                        Code::F8 => {
+                            let _ = app_handle.emit("shortcut-event", "play-pause");
+                        }
+                        Code::F9 => {
+                            let _ = app_handle.emit("shortcut-event", "forward");
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .build()
+            .expect("Failed to build global shortcut plugin")
+        )
         .setup(|app| {
-            let handle = app.handle().clone();
-            let mut shortcuts = vec![
-                Shortcut::new("F7", move || {
-                    handle.emit("shortcut-event", "rewind").unwrap();
-                }),
-                Shortcut::new("F8", move || {
-                    handle.emit("shortcut-event", "play-pause").unwrap();
-                }),
-                Shortcut::new("F9", move || {
-                    handle.emit("shortcut-event", "forward").unwrap();
-                }),
-            ];
-
-            let mut manager = app.handle().global_shortcut();
-            manager.register_all(shortcuts).unwrap();
-
-
             #[cfg(debug_assertions)] {
                  match app.get_webview_window("main") {
                     Some(window) => {
