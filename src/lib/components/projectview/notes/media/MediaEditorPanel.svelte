@@ -26,6 +26,8 @@
 
     const dispatch = createEventDispatcher();
 
+    $: console.log('[MediaEditorPanel] $projectStore.id value:', $projectStore.id);
+
     let showNotesTrimUI = false;
     let currentTrimAudioBuffer = null; // Buffer for the active trim session
     let notesTrimStartTime = 0;

@@ -28,6 +28,8 @@
 
     const dispatch = createEventDispatcher();
 
+    $: console.log('[TranscriptionsView] $project.id value:', $project.id);
+
     export let mediaPlayerRef = null;
 
     let editableTranscriptRef;

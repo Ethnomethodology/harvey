@@ -198,6 +198,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
     project.update((current) => ({ ...current, isLoading: true, error: null, statusMessage: 'Loading project data...' }));
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
+        console.log('[ProjectService] loadProjectDataAndUpdateStore - loadedData.project_uuid:', loadedData.project_uuid);
         console.debug('[ProjectService] Raw Data received from backend:', loadedData); // DEBUG for potentially large object
 
         // --- Inject transcript paths from XML into media nodes ---
@@ -222,6 +223,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
         }
         // --- End transcript injection ---
 
+        console.log('[ProjectService] loadProjectDataAndUpdateStore - dataToSet will include id:', loadedData.project_uuid);
         const dataToSet = {
             name: loadedData.project_name,
             id: loadedData.project_uuid,
@@ -239,6 +241,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
         project.update((current) => ({ ...current, ...dataToSet }));
+        console.log('[ProjectService] loadProjectDataAndUpdateStore - project.id from get(project).id AFTER update:', get(project).id);
         console.info('[ProjectService] Project store updated with core data.'); // INFO
 
         await emit('project-view-ready', { projectXmlPath: projectXmlPath });
