@@ -304,6 +304,7 @@
             <MediaPlayer
                 bind:this={mediaPlayerInNotesRef}
                 explicitMediaPath={mediaPath}
+                projectId={$projectStore.id}
                 showLoopPauseButton={false}
                 showNotesTranscribeButton={false}
                 showNotesTrimButton={true}

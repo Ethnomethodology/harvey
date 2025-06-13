@@ -263,6 +263,7 @@
                     bind:isEditingSegment={isSegmentEditingActive}
                     bind:editSegmentStartTime={currentEditSegmentStart}
                     bind:editSegmentEndTime={currentEditSegmentEnd}
+                    projectId={$project.id}
                     showLoopPauseButton={true}
                     showNotesTranscribeButton={false}
                     showNotesTrimButton={false}

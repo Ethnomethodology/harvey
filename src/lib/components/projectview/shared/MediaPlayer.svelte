@@ -33,6 +33,7 @@
 	export let isEditingSegment = false; // For main transcriptions player's segment editing loop
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
+    export let projectId = null; // Added for explicit project ID passing
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
 
@@ -162,8 +163,8 @@
 			// --- Begin Tauri Invocation ---
 			console.log('Base64 image data ready. Invoking Tauri command...');
 
-			const currentProjectId = get(project)?.id;
-			if (!currentProjectId) {
+			// const currentProjectId = get(project)?.id; // Removed
+			if (!projectId) { // Changed to use prop
 				project.update(p => ({ ...p, statusMessage: 'Project ID not found.', error: 'Screenshot failed.', isLoading: false }));
 				console.error('Project ID not found for screenshot.');
 				return;
@@ -184,7 +185,7 @@
 
 			// *** Actual Tauri invoke call ***
 			await invoke('save_screenshot', {
-				projectId: currentProjectId,
+				projectId: projectId, // Changed to use prop
 				mediaFileName: mediaFileName,
 				timestamp: localCurrentTime,
 				imageDataBase64: base64ImageData
@@ -864,7 +865,7 @@
 				class="btn-control"
 				title="Take screenshot"
 				aria-label="Take screenshot of current video frame"
-				disabled={!localMediaUrl || isLoadingMedia}
+				disabled={!localMediaUrl || isLoadingMedia || !projectId}
 			>
 				{@html ICON_CAMERA}
 			</button>
