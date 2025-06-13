@@ -301,7 +301,7 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow">
     <div
         class="border-b border-gray-200 dark:border-gray-700 flex flex-col
                {!isNotesPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
