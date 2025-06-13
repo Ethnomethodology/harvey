@@ -4,7 +4,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use tauri::Manager;
 use crate::projectview::db_handler::init_db as init_projectview_db;
-use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command}; // Added
+// Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 
 // --- Declare top-level modules ---
 mod welcome;
@@ -103,8 +103,8 @@ pub fn run() {
             projectview::transcription_commands::save_transcript_json,
             projectview::transcription_commands::trim_media,
             projectview::transcription_commands::save_speaker_config,
-            list_subtitle_files_command, // Changed
-            convert_srt_to_vtt_command, // Changed
+            crate::projectview::list_subtitle_files_command, // Changed to use re-export
+            crate::projectview::convert_srt_to_vtt_command, // Changed to use re-export
 
             // --- Project view DOCUMENT/NOTES commands ---
             projectview::document_commands::save_note_json,
