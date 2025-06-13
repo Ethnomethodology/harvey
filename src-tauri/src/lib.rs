@@ -83,7 +83,7 @@ pub fn run() {
             let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::new().with_handler( // Corrected here
                 move |_, // First parameter from handler (likely an AppHandle from plugin) is ignored
                       shortcut_arg: &Shortcut,
-                      event_details: &ShortcutEvent| {
+                      event_details: ShortcutEvent| { // Changed from &ShortcutEvent to ShortcutEvent
 
                     if event_details.state == ShortcutState::Pressed { // ShortcutState can now be used directly
                         log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state);
