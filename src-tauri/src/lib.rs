@@ -5,16 +5,15 @@ use env_logger;
 use log; // Added log import
 use tauri::Manager; // Ensure Manager is used for app.handle()
 use tauri_plugin_global_shortcut::{
-    self,
-    AppHandle as GlobalShortcutAppHandle, // Alias for clarity
-    Code,
+    self, // Keep or remove 'self' based on preference for qualification
+    Code, // For Shortcut::new(..., Code::F7)
     GlobalShortcutExt,
     Modifiers,
     Shortcut,
-    ShortcutEvent, // Import for type annotation
-    ShortcutState, // Import for direct use
+    ShortcutEvent,
+    ShortcutState,
 };
-use tauri::Wry; // Wry is the default runtime
+// use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
 use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
@@ -75,16 +74,16 @@ pub fn run() {
             let app_handle_clone = app_mut_ref.handle().clone(); // Clone app handle for the handler
 
             // Define the shortcuts
-            let f7_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F7);
-            let f8_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F8);
-            let f9_shortcut = Shortcut::new(Some(Modifiers::empty()), tauri_plugin_global_shortcut::Code::F9);
+            let f7_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F7);
+            let f8_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F8);
+            let f9_shortcut = Shortcut::new(Some(Modifiers::empty()), Code::F9);
             log::info!("[SETUP] Defined F7, F8, F9 shortcut objects.");
 
             // Build the plugin with a general handler
             let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::with_handler(
-                move |_app: &GlobalShortcutAppHandle<Wry>, // Explicit type for first param
-                      shortcut_arg: &Shortcut,             // Explicit type for second param
-                      event_details: &ShortcutEvent| {     // Explicit type for third param
+                move |_, // First parameter from handler (likely an AppHandle from plugin) is ignored
+                      shortcut_arg: &Shortcut,
+                      event_details: &ShortcutEvent| {
 
                     if event_details.state == ShortcutState::Pressed { // ShortcutState can now be used directly
                         log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state);
