@@ -720,7 +720,7 @@
 
 <div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800">
 	<div
-		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto cursor-pointer"
+		class="w-full max-w-[36rem] aspect-video bg-black relative mx-auto mb-1 cursor-pointer"
 		class:hidden={isVideoMinimized}
 		id="video-container-wrapper"
 		on:click={handleTogglePlay}
@@ -771,7 +771,7 @@
 	</div>
 
 	<!-- Custom Controls Bar -->
-	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full space-y-1">
+	<div class="flex flex-col items-center justify-between flex-shrink-0 max-w-[36rem] mx-auto w-full mt-1 space-y-1">
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full">
 			<input
