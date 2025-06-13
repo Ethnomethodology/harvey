@@ -14,7 +14,7 @@ use std::{
 use quick_xml;
     // TODO: Refactor to use base64::engine::general_purpose::STANDARD.decode() or similar
     // as base64::decode is deprecated.
-    use base64::{decode};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     // UserDirs is no longer needed as we use get_config_dir
 
 const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
@@ -63,11 +63,11 @@ fn register_project_image(
     project_base_dir: &Path,
     project_xml_path: &Path,
     image_filename_with_ext: &str,
-    image_folder_name_for_xml: &str, // Renamed parameter
-    original_media_stem_for_metadata: &str, // New parameter
+    image_folder_name_for_xml: &str,
+    original_media_stem_for_metadata: &str,
     timestamp: f64
 ) -> Result<(), CommandError> {
-    info!("[save_screenshot] Registering image '{}' (from media '{}') for project at '{}'", image_filename_with_ext, original_media_stem_for_metadata, project_base_dir.display());
+    info!("[register_project_image] Registering image '{}' (from media '{}', folder name for XML '{}') for project at '{}'", image_filename_with_ext, original_media_stem_for_metadata, image_folder_name_for_xml, project_base_dir.display());
 
     let xml_content = fs::read_to_string(project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
@@ -167,10 +167,10 @@ pub async fn save_screenshot(
     let millis = (timestamp.fract() * 1000.0).round() as u32;
     let timestamp_str = format!("T{}_{:03}", secs, millis);
 
-    // 3. Create screenshot_base_folder_name
+    // 3. Create screenshot_base_folder_name (this will be the folder name)
     let screenshot_base_folder_name = format!("{}_{}", original_media_stem, timestamp_str);
 
-    // 4. Determine image_folder_for_screenshot
+    // 4. Determine image_folder_for_screenshot (this is the actual directory path)
     let images_root_dir = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
     let image_folder_for_screenshot = images_root_dir.join(&screenshot_base_folder_name);
 
@@ -179,11 +179,12 @@ pub async fn save_screenshot(
         .map_err(|e| format!("Failed to create Images sub-directory for screenshot {}: {}", screenshot_base_folder_name, e))?;
 
     // 6. Determine unique final_screenshot_filename_with_ext
+    // The file name will be based on the folder name, with a counter for uniqueness if needed.
     let mut counter = 0;
     let final_screenshot_filename_with_ext: String;
     loop {
         let prospective_file_name = if counter == 0 {
-            format!("{}.png", screenshot_base_folder_name) // File name matches folder name initially
+            format!("{}.png", screenshot_base_folder_name)
         } else {
             format!("{}_{}.png", screenshot_base_folder_name, counter)
         };
@@ -201,8 +202,8 @@ pub async fn save_screenshot(
     // 7. Set file_path
     let file_path = image_folder_for_screenshot.join(&final_screenshot_filename_with_ext);
 
-    // 8. Save the image data (as before)
-    let image_bytes = decode(&image_data_base64)
+    // 8. Save the image data
+    let image_bytes = STANDARD.decode(&image_data_base64) // Updated base64 decode
         .map_err(|e| format!("Failed to decode base64 image data: {}", e))?;
 
     fs::write(&file_path, image_bytes)

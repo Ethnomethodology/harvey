@@ -1325,13 +1325,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
             info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut _updated_xml = false;
+            let mut xml_updated_for_imported_transcript = false; // Renamed for clarity and to avoid conflict if used elsewhere
 
             if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
                 entry.name = new_transcript_filename_with_ext_str.clone();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
                 project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
-                _updated_xml = true;
+                xml_updated_for_imported_transcript = true;
                 info!("[Backend Rename] XML imported transcript entry updated.");
             } else {
                 // This should ideally not happen if DB update was successful, as it means XML was out of sync.
@@ -1340,7 +1340,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             // Logic for updating project_data.document_metadata_files.files is REMOVED.
 
-            if _updated_xml {
+            if xml_updated_for_imported_transcript {
                 save_project_xml(&xml_path_buf, &project_data)?;
                 info!("[Backend Rename] XML saved for imported transcript rename.");
 
@@ -1483,12 +1483,12 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             info!("[Backend Rename] Updating XML for document: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_doc, new_filename_with_ext_str);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
-            let mut updated_xml = false;
+            let mut xml_updated_for_doc = false; // Renamed for clarity
 
             if let Some(doc_entry) = project_data.document_files.files.iter_mut().find(|d| d.relative_path == item_relative_path) {
                 doc_entry.name = new_filename_with_ext_str.to_string();
                 doc_entry.relative_path = new_relative_path_for_doc.clone();
-                updated_xml = true;
+                xml_updated_for_doc = true;
                 info!("[Backend Rename] XML document entry updated.");
             } else {
                 warn!("[Backend Rename] Renamed document, but could not find matching old relative path '{}' in XML for main doc.", item_relative_path);
@@ -1500,14 +1500,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                     metadata_entry.name = new_meta_filename;
                     metadata_entry.original_document_relative_path = new_relative_path_for_doc.clone();
                     metadata_entry.relative_path = new_rel_meta_path;
-                    updated_xml = true;
+                    xml_updated_for_doc = true;
                     info!("[Backend Rename] XML document app metadata entry updated.");
                 } else {
                      warn!("[Backend Rename] App metadata file renamed/moved, but could not find matching old original_document_relative_path '{}' in XML for metadata.", item_relative_path);
                 }
             }
             
-            if updated_xml {
+            if xml_updated_for_doc {
                 project_data.document_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 project_data.document_metadata_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 save_project_xml(&xml_path_buf, &project_data)?;
