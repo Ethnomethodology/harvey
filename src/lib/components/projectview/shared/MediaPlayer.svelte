@@ -12,6 +12,7 @@
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
 
@@ -383,8 +384,9 @@
 	let audioContext = null;
 	let webAudioApiSupported = true;
 
+	let unlistenShortcut = null;
 
-	onMount(() => {
+	onMount(async () => {
         try {
             if (!audioContext || audioContext.state === 'closed') {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -394,12 +396,27 @@
         }
 		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+
+		unlistenShortcut = await listen('shortcut-event', (event) => {
+			console.log('Shortcut event received:', event.payload);
+			if (event.payload === 'rewind') {
+				rewind10s();
+			} else if (event.payload === 'play-pause') {
+				handleTogglePlay();
+			} else if (event.payload === 'forward') {
+				forward10s();
+			}
+		});
+
         return () => {
             if (audioContext && audioContext.state !== 'closed') {
                 audioContext.close().catch(console.error);
             }
 			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+			if (unlistenShortcut) {
+				unlistenShortcut();
+			}
         };
     });
 	onDestroy(() => {
@@ -416,6 +433,9 @@
 			console.log('[MediaPlayer] Revoked active subtitle object URL on destroy:', activeSubtitleUrl);
 		}
 		document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
+		if (unlistenShortcut) {
+			unlistenShortcut();
+		}
     });
 
 	// --- File Handling & Audio Processing ---
