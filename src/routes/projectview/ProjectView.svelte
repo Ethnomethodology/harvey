@@ -16,7 +16,8 @@
         importTableFile,
         importImageFile,
         importTranscriptFile,
-        requestTranscription as requestTranscriptionService
+        requestTranscription as requestTranscriptionService,
+        refreshProjectFiles
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -136,7 +137,26 @@
     }
 
 
-	function handleModalClose() { toggleTranscribeModal(false); }
+	function handleModalClose(event) {
+        // event.detail should be { acknowledged: boolean, finalStatus: string }
+        const { acknowledged, finalStatus } = event.detail || {};
+
+        toggleTranscribeModal(false); // Always hide the modal
+
+        if (acknowledged) {
+            if (finalStatus === 'done') {
+                refreshProjectFiles(); // Refresh files if transcription was 'done' and acknowledged
+            }
+            // Potentially other logic for 'error' or 'cancelled' if needed in the future
+        } else {
+            // Modal was dismissed without acknowledgment (e.g., Esc key, click outside)
+            // If finalStatus was 'running' or 'cancelling', the process continues in the background.
+            // No specific action needed here for now, beyond closing the modal.
+            if (finalStatus === 'running' || finalStatus === 'cancelling') {
+                console.log(`[ProjectView] TranscribeModal closed by user (acknowledged:false) while status was: ${finalStatus}. Background process continues.`);
+            }
+        }
+    }
     function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } }
     function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for conversion action: ${action}`); hideConversionPrompt(); } }
 

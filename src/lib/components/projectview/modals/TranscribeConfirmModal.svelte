@@ -40,17 +40,26 @@
 	}
 
 	function closeModal() {
-		if (status === 'running' || status === 'cancelling') {
-			console.warn('[Modal] Closing modal while status is:', status);
-			// Optionally, could trigger handleCancelRequest here if desired
-		}
-		// Reset internal state ONLY when closing (via X, background, or final Close button)
-		status = 'confirm';
-		errorMessage = '';
-		successMessage = '';
-		cancelledMessage = '';
-		dispatch('close'); // Signal parent/service to update store's showModal
-	}
+    let dispatchPayload = { acknowledged: false, finalStatus: status }; // Default payload
+
+    if (status === 'running' || status === 'cancelling') {
+        console.warn('[Modal] Closing modal while status is:', status);
+        // Optionally, could trigger handleCancelRequest here if desired
+        // For now, just a normal close, user might not want to cancel
+    }
+
+    if (status === 'done' || status === 'error' || status === 'cancelled') {
+        dispatchPayload.acknowledged = true;
+    }
+
+    // Reset internal state ONLY when closing (via X, background, or final Close button)
+    status = 'confirm'; // Always reset to confirm
+    errorMessage = '';
+    successMessage = '';
+    cancelledMessage = '';
+    // transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false })); // Directly control store
+    dispatch('close', dispatchPayload); // Signal parent/service to update store's showModal AND handle post-acknowledgment tasks
+}
 
 	// --- Public methods (callable from parent/service via bind:this) ---
 	// *** ADD 'export' to make this function callable from outside ***

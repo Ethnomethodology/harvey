@@ -743,7 +743,7 @@ export async function handleConfirmStartTranscription() {
     }
     const selectedModelIdentifier = currentTs.selectedModelName;
     const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
-    setTranscriptionStatus(true, jobId, `Preparing ${isCloudModel ? 'cloud' : 'local'} transcription...`); // from transcriptStore
+    setTranscriptionStatus(true, jobId, isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...'); // from transcriptStore
     try {
         let invokePromise;
         const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
@@ -763,17 +763,18 @@ export async function handleConfirmStartTranscription() {
         setTranscriptData(result.transcript_file_path, result.segments, false); // from transcriptStore
         transcribeModalInstance?.setStatusDone('Transcription complete!');
         clearTranscriptionStatus('Transcription complete.'); // from transcriptStore
-        await refreshProjectFiles();
-        setTimeout(() => { toggleTranscribeModal(false); }, 1500); // from transcriptStore
+        // await refreshProjectFiles(); // Removed as per request
+        // setTimeout(() => { toggleTranscribeModal(false); }, 1500); // Removed as per request
     } catch (error) {
         const errorMessage = error?.message || String(error);
         if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
             transcribeModalInstance?.setStatusCancelled('Transcription cancelled.');
             clearTranscriptionStatus('Transcription cancelled.'); // from transcriptStore
-            setTimeout(() => { toggleTranscribeModal(false); }, 1500); // from transcriptStore
+            // setTimeout(() => { toggleTranscribeModal(false); }, 1500); // Removed as per request
         } else {
             transcribeModalInstance?.setStatusError(`Transcription failed: ${errorMessage}`);
             clearTranscriptionStatus('Transcription failed.', errorMessage); // from transcriptStore
+            // setTimeout(() => { toggleTranscribeModal(false); }, 1500); // Removed as per request
         }
     }
 }
