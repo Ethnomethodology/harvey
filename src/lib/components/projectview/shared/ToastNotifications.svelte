@@ -1,4 +1,4 @@
-<!-- src/lib/components/shared/ui/ToastNotifications.svelte -->
+<!-- src/lib/components/projectview/shared/ToastNotifications.svelte -->
 <script>
   import notificationStore from '$lib/stores/notificationStore.js';
   import { fly } from 'svelte/transition';

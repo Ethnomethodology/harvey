@@ -4,7 +4,7 @@
     import { get } from 'svelte/store'; // Ensure 'get' is imported
     import '../app.css';
     import '$lib/styles/tabulator-tailwind-theme.scss';
-    import ToastNotifications from '$lib/components/shared/ui/ToastNotifications.svelte';
+    import ToastNotifications from '$lib/components/projectview/shared/ToastNotifications.svelte';
   
     // --- Import theme store loader ---
     import { loadThemePreferenceFromBackend } from '$lib/stores/themeStore.js';
