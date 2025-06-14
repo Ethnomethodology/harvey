@@ -103,7 +103,6 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
     try {
         await invoke('save_table_layout_prefs', { tablePath, layoutJson });
-        console.info(`[ProjectService] Table layout preferences saved for ${tablePath}`);
     } catch (error) {
         console.error(`[ProjectService] Error saving table layout preferences for ${tablePath}:`, error);
         // Optionally, notify the user via a toast or silent fail
@@ -119,10 +118,8 @@ export async function loadTableLayoutPrefs(tablePath) {
     try {
         const layoutJson = await invoke('load_table_layout_prefs', { tablePath });
         if (layoutJson) {
-            console.info(`[ProjectService] Table layout preferences loaded for ${tablePath}`);
             return JSON.parse(layoutJson); // Parse it before returning
         }
-        console.info(`[ProjectService] No saved table layout preferences found for ${tablePath}`);
         return null;
     } catch (error) {
         console.error(`[ProjectService] Error loading table layout preferences for ${tablePath}:`, error);
@@ -194,12 +191,9 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));
         throw new Error('projectXmlPath is required');
     }
-    console.info('[ProjectService] Calling load_project_data:', projectXmlPath); // INFO
     project.update((current) => ({ ...current, isLoading: true, error: null, statusMessage: 'Loading project data...' }));
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
-        console.log('[ProjectService] loadProjectDataAndUpdateStore - loadedData.project_uuid:', loadedData.project_uuid);
-        console.debug('[ProjectService] Raw Data received from backend:', loadedData); // DEBUG for potentially large object
 
         // --- Inject transcript paths from XML into media nodes ---
         if (Array.isArray(loadedData.files)) {
@@ -223,7 +217,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
         // --- End transcript injection ---
 
-        console.log('[ProjectService] loadProjectDataAndUpdateStore - dataToSet will include id:', loadedData.project_uuid);
         const dataToSet = {
             name: loadedData.project_name,
             id: loadedData.project_uuid,
@@ -241,11 +234,8 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
         project.update((current) => ({ ...current, ...dataToSet }));
-        console.log('[ProjectService] loadProjectDataAndUpdateStore - project.id from get(project).id AFTER update:', get(project).id);
-        console.info('[ProjectService] Project store updated with core data.'); // INFO
 
         await emit('project-view-ready', { projectXmlPath: projectXmlPath });
-        console.info("[ProjectService] 'project-view-ready' emitted."); // INFO
 
         let mediaFileToSelect = null;
 
@@ -277,9 +267,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 
         if (targetPathToSelect) {
             mediaFileToSelect = findMediaByPathRecursive(loadedData.files || [], targetPathToSelect);
-            if (mediaFileToSelect) {
-                console.info(`[ProjectService] Prioritizing selection of target media: ${targetPathToSelect}`);
-            } else {
+            if (!mediaFileToSelect) {
                 console.warn(`[ProjectService] Target media path ${targetPathToSelect} provided but not found. Falling back to first media.`);
                 mediaFileToSelect = findFirstMediaRecursive(loadedData.files || []);
             }
@@ -288,10 +276,8 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
 
         if (mediaFileToSelect) {
-            console.info(`[ProjectService] Selecting media file: ${mediaFileToSelect.name} (Path: ${mediaFileToSelect.path})`);
             selectMedia(mediaFileToSelect);
         } else {
-            console.info('[ProjectService] No media files found or specified to select. Clearing media selection.');
             selectMedia(null);
         }
     } catch (error) {
@@ -302,7 +288,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
 }
 
 export async function importMediaFile(importType = null) {
-    console.info(`[ProjectService] Starting media import... (Type: ${importType || 'generic'})`); // INFO
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -328,7 +313,6 @@ export async function importMediaFile(importType = null) {
         });
 
         if (!selected || typeof selected !== 'string') {
-            console.info('[ProjectService] Media import cancelled by user at file selection.'); // INFO
             project.update(p => ({ ...p, statusMessage: 'Media import cancelled.' }));
             return;
         }
@@ -338,7 +322,6 @@ export async function importMediaFile(importType = null) {
 
         const canProceed = await checkUnsavedChangesThenProceed(null, `importing media: ${filename}`);
         if (!canProceed) {
-            console.info('[ProjectService] Media import cancelled due to unsaved changes check.'); // INFO
             setAssetImportStatus(false, 'Media import cancelled by user.'); // Ensure loading is off
             return;
         }
@@ -366,7 +349,6 @@ export async function importMediaFile(importType = null) {
             const proj = get(project);
             const realPath = findMediaPathByName(proj.files, filename);
             if (realPath) {
-              console.info('[ProjectService] Auto-selecting imported media at real path:', realPath); // INFO
               prepareMediaNoteView(realPath);
             }
             return;
@@ -390,13 +372,11 @@ export async function importMediaFile(importType = null) {
             const proj = get(project);
             const realPath = findMediaPathByName(proj.files, filename);
             if (realPath) {
-              console.info('[ProjectService] Auto-selecting imported media at real path:', realPath); // INFO
               prepareMediaNoteView(realPath);
             }
             return;
         }
 
-        console.info('[ProjectService] Import finished. Received updated file list and new media path:', newMediaPath); // INFO (path is useful)
 
         if (Array.isArray(updatedFiles)) {
             project.update(p => ({
@@ -409,7 +389,6 @@ export async function importMediaFile(importType = null) {
             }));
 
             if (newMediaPath) {
-                console.info(`[ProjectService] Auto-selecting imported media note for path: ${newMediaPath}`); // INFO
                 prepareMediaNoteView(newMediaPath);
             } else {
                 console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path. Cannot auto-select.'); // WARN
@@ -430,7 +409,6 @@ export async function importMediaFile(importType = null) {
 }
 
 export async function importDocumentFile() {
-    console.info('[ProjectService] Starting document import...'); // INFO
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     const projectBaseDir = currentProject.baseDirectory;
@@ -443,7 +421,6 @@ export async function importDocumentFile() {
 
      const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a document");
      if (!canProceedDialog) {
-         console.info('[ProjectService] Document import cancelled due to unsaved changes check before dialog.'); // INFO
          setAssetImportStatus(false, 'Document import cancelled by user.');
          return;
      }
@@ -544,7 +521,6 @@ export async function importDocumentFile() {
 
 // ... (importTableFile, importImageFile, importTranscriptFile remain similar but ensure setAssetImportStatus(false, ...) is called in catch blocks too)
 export async function importTableFile() {
-    console.info('[ProjectService] Starting table import...'); // INFO
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
 
@@ -555,7 +531,6 @@ export async function importTableFile() {
     }
     const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a table");
     if (!canProceedDialog) {
-        console.info('[ProjectService] Table import cancelled by user.'); // INFO
         setAssetImportStatus(false, 'Table import cancelled by user.'); return;
     }
     try {
@@ -579,7 +554,6 @@ export async function importTableFile() {
 }
 
 export async function importImageFile() {
-    console.info('[ProjectService] Starting image import...'); // INFO
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -589,7 +563,6 @@ export async function importImageFile() {
     }
     const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing an image");
     if (!canProceedDialog) {
-        console.info('[ProjectService] Image import cancelled by user.'); // INFO
         setAssetImportStatus(false, 'Image import cancelled by user.'); return;
     }
     try {
@@ -613,7 +586,6 @@ export async function importImageFile() {
 }
 
 export async function importTranscriptFile(sourceType = 'msWord') {
-    console.info(`[ProjectService] Starting transcript import (Source Type: ${sourceType})...`); // INFO
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -623,7 +595,6 @@ export async function importTranscriptFile(sourceType = 'msWord') {
     }
     const canProceedDialog = await checkUnsavedChangesThenProceed(null, `importing a ${sourceType} transcript`);
     if (!canProceedDialog) {
-        console.info('[ProjectService] Transcript import cancelled by user.'); // INFO
         setAssetImportStatus(false, 'Transcript import cancelled by user.'); return;
     }
     try {
@@ -888,7 +859,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
 
     const pathDescForLog = newPathToLoad ? await basename(newPathToLoad) : "NO_PATH_PROVIDED";
     const typeDescForLog = providedActionContextDescription || "unknown action";
-    console.debug(`[checkUnsavedChanges] Called with newPathToLoad: '${pathDescForLog}', actionContext: '${typeDescForLog}'.`); // DEBUG
 
     // Check order: Media Notes -> PDF Annotations -> JSON Documents -> Imported Transcripts -> Main Transcript
     if (projState.selectedMediaNotePath && projState.isMediaNoteTranscriptDirty) {
@@ -960,25 +930,20 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     }
 
     if (itemIsDirty && itemPath === newPathToLoad) {
-        console.debug(`[checkUnsavedChanges] Attempting to load/act on the same item that is dirty ('${itemPath}'). Allowing without prompt.`); // DEBUG
         return true;
     }
 
     if (!itemIsDirty) {
-        const actionContextForLog = newPathToLoad ? `loading item '${await basename(newPathToLoad)}'` : `performing action '${providedActionContextDescription || "unknown action"}'`;
-        console.debug(`[checkUnsavedChanges] No unsaved changes for active items. Proceeding with ${actionContextForLog}.`); // DEBUG
         return true;
     }
 
     itemName = itemPath ? await basename(itemPath) : 'current item';
     const actionContextDisplay = newPathToLoad ? `load '${await basename(newPathToLoad)}'` : (providedActionContextDescription || "perform this action");
 
-    console.info(`[checkUnsavedChanges] Unsaved changes detected for "${itemName}" (${itemTypeForPrompt}) while attempting to ${actionContextDisplay}. Autosave is ${projState.autosaveEnabled ? 'ON' : 'OFF'}.`); // INFO
 
     // If it's a media note that just means "file not found", it's not truly "dirty" in a way that blocks navigation.
     // The user hasn't made changes to an actual loaded note.
     if (itemTypeForPrompt === 'media notes' && projState.mediaNoteTranscriptError === "INFO:FILE_NOT_FOUND") {
-        console.info(`[checkUnsavedChanges] Media note for "${itemName}" is in 'file not found' state. Not considered dirty for navigation blocking. Proceeding.`); // INFO
         return true;
     }
 
@@ -988,10 +953,8 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         // itemName and actionContextDisplay are already defined before this block if itemIsDirty is true.
         if (projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf') && projState.isPdfAnnotationsDirty) {
             // itemName and actionContextDisplay are assumed to be set correctly by this point.
-            console.info(`[checkUnsavedChanges] Autosave ON. Attempting implicit save for PDF annotations on "${itemName}".`); // INFO
             try {
                 await saveCurrentPdfAnnotations();
-                console.info(`[checkUnsavedChanges] Implicit save for PDF annotations successful for "${itemName}". Proceeding.`); // INFO
                 return true; // PDF annotations saved, proceed with the original action
             } catch (error) {
                 console.error('[checkUnsavedChanges] Implicit save for PDF annotations failed:', error); // ERROR
@@ -1000,22 +963,18 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                     { title: 'Autosave Failed', type: 'error', okLabel: 'Discard and Continue', cancelLabel: 'Cancel Action' }
                 );
                 if (proceedAfterFail) {
-                    console.info('[checkUnsavedChanges] User chose to discard PDF annotations after failed autosave.'); // INFO
                     markDocumentChangesDiscarded(); // This should clear PDF dirty state and reset annotations
                     return true; // Proceed with the original action
                 } else {
-                    console.info('[checkUnsavedChanges] User chose to cancel action after failed PDF autosave.'); // INFO
                     return false; // Cancel the original action
                 }
             }
         } // END OF PDF Annotations Autosave Handling
 
         // Generic Autosave for other item types
-        console.info(`[checkUnsavedChanges] Autosave ON. Attempting implicit save for "${itemName}" (${itemTypeForPrompt})...`); // INFO
         if (saveFunction) {
             try {
                 await saveFunction();
-                console.info(`[checkUnsavedChanges] Implicit save successful for "${itemName}". Proceeding.`); // INFO
                 return true;
             } catch (error) {
                 console.error(`[checkUnsavedChanges] Implicit save failed for "${itemName}":`, error); // ERROR
@@ -1024,7 +983,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                     { title: 'Autosave Failed', type: 'error', okLabel: 'Discard and Continue', cancelLabel: 'Cancel Action' }
                 );
                 if (proceedAfterFail) {
-                    console.info(`[checkUnsavedChanges] User chose to discard after failed autosave.`); // INFO
                     if (discardFunction) discardFunction();
                     // Reset editor if applicable for non-PDF items
                     if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null && itemTypeForPrompt !== 'PDF annotations') {
@@ -1032,7 +990,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
                     }
                     return true;
                 } else {
-                    console.info(`[checkUnsavedChanges] User chose to cancel action after failed autosave.`); // INFO
                     return false;
                 }
             }
@@ -1044,26 +1001,22 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
     } else { // Autosave is OFF
         // For PDF annotations with autosave OFF, the generic showUnsavedChangesPrompt will use
         // the saveFunction and discardFunction defined in the PDF annotations `else if` block earlier.
-        console.info(`[checkUnsavedChanges] Autosave OFF. Triggering unsavedChanges modal for "${itemName}" (${itemTypeForPrompt})...`); // INFO
         return new Promise((resolve) => {
             showUnsavedChangesPrompt(itemName, itemTypeForPrompt,
                 async () => { // Save action
-                    console.info("[UnsavedChangesModal callback] User chose Save."); // INFO
                     hideUnsavedChangesPrompt();
                     if (saveFunction) {
-                        try { await saveFunction(); console.info("[UnsavedChangesModal callback] Save successful."); resolve(true); } // INFO
+                        try { await saveFunction(); resolve(true); }
                         catch (error) { console.error("[UnsavedChangesModal callback] Save failed:", error); await message(`Failed to save "${itemName}": ${error.message || error}`, {title: "Save Error", type: "error"}); resolve(false); } // ERROR
                     } else { console.error("[UnsavedChangesModal callback] Save chosen, but save function missing."); await message('Cannot save: Editor reference or save method is missing.', { title: 'Internal Error', type: 'error' }); resolve(false); } // ERROR
                 },
                 () => { // Discard action
-                    console.info("[UnsavedChangesModal callback] User chose Don't Save (Discard)."); // INFO
                     hideUnsavedChangesPrompt();
                     if (discardFunction) discardFunction();
                     if (resetEditorFunction && typeof resetEditorFunction === 'function' && initialContentForReset !== null) resetEditorFunction(initialContentForReset);
                     resolve(true);
                 },
                 () => { // Cancel action
-                    console.info("[UnsavedChangesModal callback] User chose Cancel."); // INFO
                     hideUnsavedChangesPrompt();
                     resolve(false);
                 }

@@ -48,7 +48,6 @@ export function pushToUndoStack(currentSegments) {
 export function undoTranscriptChange() {
     const store = get(transcriptStore);
     if (store.transcriptUndoStack.length === 0) {
-        console.debug('[TranscriptStore] Undo stack empty.'); // DEBUG
         return;
     }
     transcriptStore.update(ts => {
@@ -67,7 +66,6 @@ export function undoTranscriptChange() {
             });
             newIndex = idx;
         }
-        console.info('[TranscriptStore] Undoing transcript change.'); // INFO
         // Update global status message via projectStore for now
         updateProjectStoreState({ statusMessage: 'Undo successful.' });
         return {
@@ -84,7 +82,6 @@ export function undoTranscriptChange() {
 export function redoTranscriptChange() {
     const store = get(transcriptStore);
     if (store.transcriptRedoStack.length === 0) {
-        console.debug('[TranscriptStore] Redo stack empty.'); // DEBUG
         return;
     }
     transcriptStore.update(ts => {
@@ -103,7 +100,6 @@ export function redoTranscriptChange() {
             });
             newIndex = idx;
         }
-        console.info('[TranscriptStore] Redoing transcript change.'); // INFO
         updateProjectStoreState({ statusMessage: 'Redo successful.' });
         return {
             ...ts,
@@ -117,7 +113,6 @@ export function redoTranscriptChange() {
 }
 
 export function markTranscriptAsSaved() {
-    console.info('[TranscriptStore] Marking media transcript as saved, clearing undo/redo stacks.'); // INFO
     transcriptStore.update(ts => ({
         ...ts,
         transcriptDirty: false,
@@ -128,7 +123,6 @@ export function markTranscriptAsSaved() {
 }
 
 export function clearTranscriptState() {
-    console.info('[TranscriptStore] Clearing media transcript state (main TranscriptionsView).'); // INFO
     transcriptStore.update(ts => {
         if (ts.currentTranscriptPath || ts.segments.length > 0 || ts.transcriptDirty || ts.isTranscriptLoading || ts.transcriptUndoStack.length > 0 || ts.transcriptRedoStack.length > 0 || ts.selectedMediaFile) {
             updateProjectStoreState({ statusMessage: 'Media transcript cleared.' });
@@ -152,7 +146,6 @@ export function clearTranscriptState() {
 }
 
 export function selectMedia(fileEntry) {
-    console.debug('[TranscriptStore selectMedia] ACTION START. Received fileEntry:', fileEntry ? `Name: ${fileEntry.name}, Path: ${fileEntry.path}` : 'null'); // DEBUG
     const currentSelectedPath = get(transcriptStore).selectedMediaFile?.path;
     const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path);
 
@@ -167,12 +160,9 @@ export function selectMedia(fileEntry) {
             speakersToLoad.count = speakersToLoad.names.length;
             speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
         }
-        console.debug(`[TranscriptStore selectMedia] Speakers FOUND on FileEntry '${fileEntry.name}':`, JSON.stringify(speakersToLoad)); // DEBUG
     } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
-        console.debug(`[TranscriptStore selectMedia] No valid speaker config on entry '${fileEntry.name}'. Using default.`); // DEBUG
         speakersToLoad = { count: 0, names: [] };
     } else {
-        console.debug('[TranscriptStore selectMedia] No valid media file selected or clearing. Using default speakers.'); // DEBUG
         speakersToLoad = { count: 0, names: [] };
     }
 
@@ -180,7 +170,6 @@ export function selectMedia(fileEntry) {
     const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
 
     if (shouldUpdateSelection || speakersChanged) {
-        console.debug(`[TranscriptStore selectMedia] Updating store. SelectionChanged: ${shouldUpdateSelection}, SpeakersChanged: ${speakersChanged}`); // DEBUG
         const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? fileEntry : null;
         if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
             console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia); // ERROR
@@ -202,20 +191,14 @@ export function selectMedia(fileEntry) {
             transcriptUndoStack: [],
             transcriptRedoStack: [],
         }));
-        // updateProjectStoreState({ statusMessage: newSelectedMedia ? `Selected media: ${newSelectedMedia.name}` : 'Media selection cleared.' });
-        console.debug('[TranscriptStore selectMedia] Store update complete for media selection/resets.'); // DEBUG
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
-        console.debug(`[TranscriptStore selectMedia] Checking associated transcripts for: ${newlySelectedMedia?.name ?? 'null'}`); // DEBUG
-        // console.debug(`[TranscriptStore selectMedia]   -> associated_transcripts object:`, newlySelectedMedia?.associated_transcripts); // DEBUG - potentially verbose
 
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
             const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0];
-            // console.debug(`[TranscriptStore selectMedia]   -> First transcript info object:`, firstTranscriptInfo); // DEBUG - potentially verbose
             const firstTranscriptRelativePath = firstTranscriptInfo?.relativePath;
 
             if (firstTranscriptRelativePath && typeof firstTranscriptRelativePath === 'string') {
-                console.debug(`[TranscriptStore selectMedia] First associated transcript relative path: ${firstTranscriptRelativePath}`); // DEBUG
                 const allFiles = get(projectMainStore).files; // Access files from projectMainStore
                 let transcriptNodeToLoad = null;
 
@@ -235,7 +218,6 @@ export function selectMedia(fileEntry) {
                 transcriptNodeToLoad = findTranscriptNodeByRelativePath(allFiles, firstTranscriptRelativePath);
 
                 if (transcriptNodeToLoad && transcriptNodeToLoad.path) {
-                    console.info(`[TranscriptStore selectMedia] Found first transcript node: ${transcriptNodeToLoad.path}. Auto-loading...`); // INFO
                     transcriptStore.update(ts => ({ ...ts, currentTranscriptPath: transcriptNodeToLoad.path, isTranscriptLoading: true }));
                     // Dynamic import of projectService to avoid circular dependencies at module load time
                     import('../services/projectService.js').then(service => {
@@ -262,13 +244,8 @@ export function selectMedia(fileEntry) {
             } else {
                 console.warn(`[TranscriptStore selectMedia] First associated transcript entry exists but lacks a valid 'relativePath' property. Entry:`, firstTranscriptInfo); // WARN
             }
-        } else {
-            console.info(`[TranscriptStore selectMedia] No associated transcripts found for ${newlySelectedMedia?.name ?? 'selected media'}.`); // INFO
         }
-    } else {
-        console.debug(`[TranscriptStore selectMedia] Selection/speakers unchanged for ${fileEntry?.name ?? 'File'}.`); // DEBUG
     }
-    console.debug('[TranscriptStore selectMedia] ACTION END.'); // DEBUG
 }
 
 export function updatePlayerTime(time) {
@@ -309,11 +286,7 @@ export function updatePlayerCurrentSegmentIndex(index) {
 }
 
 export function setTranscriptData(path, data, inferSpeakers = false) {
-    console.info(`[TranscriptStore] setTranscriptData called with path: ${path}, inferSpeakers: ${inferSpeakers}`); // INFO
     const newSegments = Array.isArray(data) ? data : [];
-    if (newSegments.length > 0 && typeof newSegments[0].text !== 'undefined') { // Added a check for text property
-        console.debug('[TranscriptStore load‑from‑disk]', { firstSegType: typeof newSegments[0].text, firstSegStart: newSegments[0].start_time, first120: typeof newSegments[0].text === 'string' ? newSegments[0].text.slice(0, 120) : String(newSegments[0].text).slice(0, 120) }); // DEBUG
-    }
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
         if (inferSpeakers) {
@@ -330,7 +303,6 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
                 }
             }
             updatedSpeakers = inferredSpeakers;
-            console.debug('[TranscriptStore] Inferred speakers:', updatedSpeakers); // DEBUG
         }
         updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null });
         return {
@@ -368,9 +340,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                 }
             } else if (key === 'text') {
                  if (currentValue !== newValue) {
-                    if (key === 'text') {
-                        console.debug('[TranscriptStore store‑updateSegment text]', { idx: index, typeof: typeof newValue, first120: typeof newValue === 'string' ? newValue.slice(0, 120) : String(newValue).slice(0, 120) }); // DEBUG
-                    }
                     segmentToUpdate[key] = newValue;
                     valueChanged = true;
                 }
@@ -394,7 +363,6 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
         transcriptStore.update((ts) => {
             const newSegments = [...ts.segments];
             newSegments[index] = segmentToUpdate;
-            if (!silent) console.debug('[TranscriptStore] Updated segment', index); // DEBUG
             if (!silent) updateProjectStoreState({ statusMessage: 'Media transcript modified.' });
             return {
                 ...ts,
@@ -403,7 +371,7 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
             };
         });
     } else {
-        if (!silent) console.debug('[TranscriptStore] updateSegment no changes needed index', index); // DEBUG
+        // if (!silent) console.debug('[TranscriptStore] updateSegment no changes needed index', index); // DEBUG
     }
 }
 
@@ -427,7 +395,6 @@ export function deleteTranscriptSegment(index) {
                 newPlayerIndex = oldIndex;
             }
         }
-        console.info(`[TranscriptStore] Deleted segment index ${index}. New player index: ${newPlayerIndex}`); // INFO
         updateProjectStoreState({ statusMessage: 'Segment deleted (undoable).' });
         return {
             ...ts,
@@ -454,7 +421,6 @@ export function insertTranscriptSegment(index, newSegment) {
         const segmentsAfter = ts.segments.slice(index);
         const newSegmentsArray = [...segmentsBefore, newSegment, ...segmentsAfter]; // Renamed to avoid conflict
         const newPlayerIndex = index;
-        console.info(`[TranscriptStore] Inserted new segment at index ${index}. New player index: ${newPlayerIndex}`); // INFO
         updateProjectStoreState({ statusMessage: 'Segment inserted (undoable).' });
         return {
             ...ts,
@@ -466,17 +432,14 @@ export function insertTranscriptSegment(index, newSegment) {
 }
 
 export function setSelectedModel(modelName) {
-    console.info(`[TranscriptStore] Set model: ${modelName}`); // INFO
     transcriptStore.update((ts) => ({ ...ts, selectedModelName: modelName || null }));
 }
 
 export function setSelectedLanguage(languageCode) {
-    console.info(`[TranscriptStore] Set language: ${languageCode}`); // INFO
     transcriptStore.update((ts) => ({ ...ts, selectedLanguage: languageCode || null }));
 }
 
 export function updateSpeakerConfig(newCount, newNames) {
-    console.debug(`[TranscriptStore updateSpeakerConfig] Received: count=${newCount}, names=`, newNames); // DEBUG
     const count = Math.max(0, Math.min(11, Number(newCount) || 0));
     const names = Array.isArray(newNames) ? newNames : [];
     let nameCounter = 1;
@@ -499,7 +462,6 @@ export function updateSpeakerConfig(newCount, newNames) {
         }
         validatedNames.push(finalName);
     }
-    console.debug('[TranscriptStore] Validated speaker names:', validatedNames); // DEBUG
     const newSpeakerConfig = { count: count, names: validatedNames };
 
     const currentTranscriptData = get(transcriptStore);
@@ -524,7 +486,6 @@ export function updateSpeakerConfig(newCount, newNames) {
         return;
     }
 
-    console.info(`[TranscriptStore updateSpeakerConfig] Saving for Media ID: ${mediaIdentifier} in project: ${projectXmlPath}`); // INFO
     const speakerMap = new Map();
     oldSpeakerConfig.names.forEach((oldName, index) => {
         if (index < newSpeakerConfig.names.length) {
@@ -543,7 +504,6 @@ export function updateSpeakerConfig(newCount, newNames) {
             speakerMap.set(newName, newName);
         }
     });
-    console.debug('[TranscriptStore updateSpeakerConfig] Speaker remapping:', speakerMap); // DEBUG
 
     let segmentsChanged = false;
     const newSegments = oldSegments.map(segment => {
@@ -557,7 +517,6 @@ export function updateSpeakerConfig(newCount, newNames) {
     });
 
     if (segmentsChanged) {
-        console.info('[TranscriptStore updateSpeakerConfig] Remapped speaker names. Pushing undo.'); // INFO
         pushToUndoStack(oldSegments); // Assumes pushToUndoStack is defined in this store
     }
 
@@ -568,13 +527,10 @@ export function updateSpeakerConfig(newCount, newNames) {
         transcriptDirty: ts.transcriptDirty || JSON.stringify(oldSpeakerConfig) !== JSON.stringify(newSpeakerConfig) || segmentsChanged,
     }));
     updateProjectStoreState({ statusMessage: 'Updating speaker configuration...' });
-    console.debug('[TranscriptStore updateSpeakerConfig] Updated store speakers/segments.'); // DEBUG
 
     const invokePayload = { projectXmlPath: projectXmlPath, mediaIdentifier: mediaIdentifier, count: newSpeakerConfig.count, names: newSpeakerConfig.names };
-    console.debug('[TranscriptStore updateSpeakerConfig] Calling backend save_speaker_config:', invokePayload); // DEBUG
     invoke('save_speaker_config', invokePayload)
         .then(() => {
-            console.info(`[TranscriptStore updateSpeakerConfig] Persisted config for ${mediaIdentifier}.`); // INFO
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
 
             // Update project.files in projectStore
@@ -591,7 +547,6 @@ export function updateSpeakerConfig(newCount, newNames) {
                      let found = false;
                      for (const node of nodes) {
                          if (node.media_xml_identifier === targetIdentifier && (node.file_type === 'media' || node.file_type === 'directory_media_stem')) {
-                             console.debug(`[TranscriptStore via projectMainStore] Found node (${node.name}, type: ${node.file_type}) for identifier ${targetIdentifier}. Updating speakers.`); // DEBUG
                              node.speakers = { '@count': newSpeakerData.count, name: newSpeakerData.names };
                              found = true;
                          }
@@ -605,7 +560,6 @@ export function updateSpeakerConfig(newCount, newNames) {
                  }
                  const didUpdate = findAndUpdateMediaSpeakers(updatedFiles, mediaIdentifier, newSpeakerConfig);
                  if (didUpdate) {
-                     console.info("[TranscriptStore via projectMainStore] Successfully updated speaker data in project.files tree."); // INFO
                      return { ...p, files: updatedFiles };
                  } else {
                      console.warn("[TranscriptStore via projectMainStore] Could not find media identifier in project.files tree to update speakers."); // WARN
@@ -627,7 +581,6 @@ export function updateSpeakerConfig(newCount, newNames) {
 }
 
 export function setAudioBuffer(buffer) {
-    console.debug('[TranscriptStore] Setting AudioBuffer:', buffer ? `(${buffer.duration.toFixed(2)}s)` : 'null'); // DEBUG
     transcriptStore.update((ts) => ({ ...ts, audioBuffer: buffer }));
 }
 
@@ -707,7 +660,6 @@ import { listen } from '@tauri-apps/api/event';
 
 // Listen for media rename events from the backend
 listen('media_renamed', (event) => {
-    console.info('[TranscriptStore] Received media_renamed event:', event.payload); // INFO
     if (!event.payload) return;
 
     const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
@@ -715,7 +667,6 @@ listen('media_renamed', (event) => {
     transcriptStore.update(ts => {
         if (ts.selectedMediaFile && ts.selectedMediaFile.media_xml_identifier === old_media_stem) {
             const newFileName = new_absolute_path.split(/[\/]/).pop();
-            console.info(`[TranscriptStore] media_renamed: Updating selectedMediaFile from ${ts.selectedMediaFile.name} to ${newFileName}`); // INFO
             return {
                 ...ts,
                 selectedMediaFile: {
@@ -736,7 +687,6 @@ listen('media_renamed', (event) => {
 
 // Listen for item rename events from the backend (specifically for currentTranscriptPath)
 listen('item_renamed', (event) => {
-    console.info('[TranscriptStore] Received item_renamed event:', event.payload); // INFO
     if (!event.payload) return;
 
     const { old_path, new_path, item_type } = event.payload;
@@ -747,7 +697,6 @@ listen('item_renamed', (event) => {
         const normalized_new_path = new_path.replace(/[\\\/]+/g, '/');
 
         if (item_type === 'transcript' && ts.currentTranscriptPath && ts.currentTranscriptPath.replace(/[\\\/]+/g, '/') === normalized_old_path) {
-            console.info(`[TranscriptStore] item_renamed: Updating currentTranscriptPath from ${ts.currentTranscriptPath} to ${normalized_new_path}`); // INFO
             return { ...ts, currentTranscriptPath: normalized_new_path };
         }
         return ts;

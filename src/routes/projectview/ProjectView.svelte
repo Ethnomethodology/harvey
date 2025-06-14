@@ -85,12 +85,10 @@
 
         if (appWindow) {
             removeCloseRequestListener = await appWindow.listen('tauri://close-requested', handleWindowCloseRequest);
-            console.log('[ProjectView] Added tauri://close-requested listener.');
         } else {
             console.error('[ProjectView] Could not get appWindow reference to attach close listener.');
         }
 
-		console.log('[ProjectView] onMount finished.');
 	});
 
 	onDestroy(() => {
@@ -99,10 +97,8 @@
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
         if (removeCloseRequestListener) {
             removeCloseRequestListener();
-            console.log('[ProjectView] Removed tauri://close-requested listener.');
             removeCloseRequestListener = null;
         }
-		console.log('[ProjectView] onDestroy: Cleaned up listeners.');
 	});
 
 	function handleGlobalKeys(event) {
@@ -149,30 +145,25 @@
         if (acknowledged) {
             if (finalStatus === 'done') {
                 const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
-                const currentlySelectedMediaInUI = get(transcriptStore).selectedMediaFile?.path;
+                const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
 
-                if (selectedTab === 'transcriptions') {
-                    if (!currentlySelectedMediaInUI || currentlySelectedMediaInUI === jobFinishedPath) {
-                        // User was viewing the media that just finished, or nothing was selected.
-                        // Load the transcript for the job that finished.
-                        console.log(`[ProjectView | handleModalClose] Transcriptions tab active. Job finished for current/no selection. Refreshing with: ${jobFinishedPath}`);
-                        refreshProjectFiles(jobFinishedPath);
-                    } else {
-                        // User selected a different media item in the Transcriptions tab. Keep it selected.
-                        console.log(`[ProjectView | handleModalClose] Transcriptions tab active. User selected different media. Refreshing with current selection: ${currentlySelectedMediaInUI}`);
-                        refreshProjectFiles(currentlySelectedMediaInUI);
-                    }
+                // New Simplified Logic:
+                if (currentSelectionPathInUI && currentSelectionPathInUI !== jobFinishedPath) {
+                    // User is actively viewing a different media item in the Transcriptions tab (or was viewing it before switching tabs).
+                    // Preserve this selection.
+                    refreshProjectFiles(currentSelectionPathInUI);
                 } else {
-                    // User is on a different tab (e.g., Notes).
-                    // Refresh file list, try to preserve existing selection in transcriptStore, or fall back to null.
-                    // This prevents auto-selecting the newly finished transcript if the user is working elsewhere.
-                    const pathForRefresh = get(transcriptStore).selectedMediaFile?.path; // This could be from a previous interaction with Transcriptions tab
-                    console.log(`[ProjectView | handleModalClose] Different tab active. Refreshing project files, attempting to preserve selection: ${pathForRefresh || 'null (default behavior)'}`);
-                    refreshProjectFiles(pathForRefresh);
+                    // User was viewing the media that just finished, or nothing was specifically selected in the Transcriptions tab.
+                    // Load the transcript for the job that finished.
+                    refreshProjectFiles(jobFinishedPath);
                 }
 
-                // Clear the stored path for the job that finished, regardless of tab.
-                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null, activeMediaDuringTranscriptionStart: null }));
+                // Clear the stored paths from transcriptStore as they've served their purpose.
+                transcriptStore.update(ts => ({
+                    ...ts,
+                    mediaPathForLastJob: null,
+                    activeMediaDuringTranscriptionStart: null
+                }));
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future
             // If error/cancelled also need to clear mediaPathForLastJob, it could be done here too,
@@ -241,7 +232,6 @@
 
         const oldSelectedTab = selectedTab;
         selectedTab = tabName;
-        console.log(`[ProjectView] Switched selectedTab state from ${oldSelectedTab} to: ${selectedTab}`);
 
         project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
 
@@ -375,7 +365,6 @@
     async function handleRequestTranscriptionTabWithMedia(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
-        console.log(`[ProjectView] Handling requestTranscriptionTabWithMedia for: ${mediaName}`);
         project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to transcribe ${mediaName}...` }));
 
         await handleTabClick('transcriptions'); // Should set isLoading:false
@@ -384,13 +373,11 @@
         await tick();
 
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Please select model and language.` }));
-        console.log(`[ProjectView] Switched to Transcriptions tab for ${mediaName}. User to initiate transcription manually.`);
     }
 
     async function handleRequestTrimInTranscriptionTab(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
-        console.log(`[ProjectView] Handling requestTrimInTranscriptionTab for: ${mediaName}`);
         project.update(p => ({ ...p, isLoading: true, statusMessage: `Preparing to trim ${mediaName}...` }));
 
         // Step 1: Switch to the Transcriptions tab
@@ -407,13 +394,11 @@
             await tick(); // Allow media selection and potential transcript load to process
             await tick(); // Extra tick for good measure
         } else {
-            console.log(`[ProjectView] Media ${mediaName} already selected in Transcriptions tab.`);
             project.update(p => ({ ...p, statusMessage: `Media ${mediaName} already selected.`}));
         }
         
         // Step 3: Activate trim mode
         if (transcriptionsViewRef && typeof transcriptionsViewRef.activateTrimModeOnPlayer === 'function') {
-            console.log(`[ProjectView] Activating trim mode on main player for ${mediaName}.`);
             transcriptionsViewRef.activateTrimModeOnPlayer();
             project.update(p => ({ ...p, isLoading: false, statusMessage: `Trim mode activated for ${mediaName}.` }));
         } else {
