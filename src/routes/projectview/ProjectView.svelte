@@ -155,6 +155,8 @@
 
         if (acknowledged) {
             if (finalStatus === 'done') {
+                const initialPendingTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                console.log('[ProjectView HMC top] initialPendingTranscriptPath:', initialPendingTranscriptPath);
                 const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
                 const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
@@ -165,7 +167,7 @@
 
             if (!ranInBackground && jobFinishedPath) {
                 console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
-                const refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
+                let refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
                 refreshPromise.then(() => {
                     // This block runs after refreshProjectFiles has completed and its UI updates have likely propagated
                     const projectFiles = get(project).files;
@@ -182,12 +184,12 @@
                     mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
 
                     if (mediaFileEntry) {
-                        // selectMediaStoreAction(mediaFileEntry); // selectMedia is likely called by refreshProjectFiles if path is passed
-                                                    // or by a file list component reacting to selection change from refresh.
-                                                    // If explicit re-selection is needed, it would go here.
-                                                    // For now, we assume refreshProjectFiles handles selection which triggers transcript load.
+                        console.log('[ProjectView HMC before selectMedia] current pendingTranscriptPathForJobDone:', get(transcriptStore).pendingTranscriptPathForJobDone);
+                        selectMediaStoreAction(mediaFileEntry); // This line should already exist
+                        console.log('[ProjectView HMC after selectMedia] current pendingTranscriptPathForJobDone:', get(transcriptStore).pendingTranscriptPathForJobDone);
 
                         const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                        console.log('[ProjectView HMC] Retrieved newTranscriptPath for explicit load:', newTranscriptPath);
                         if (newTranscriptPath) {
                             console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
                             loadTranscriptFile(newTranscriptPath).catch(err => {

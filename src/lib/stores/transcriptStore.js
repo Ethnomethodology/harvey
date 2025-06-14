@@ -291,6 +291,7 @@ export function updatePlayerCurrentSegmentIndex(index) {
 }
 
 export function setTranscriptData(path, data, inferSpeakers = false) {
+    console.log('[Store setTranscriptData] Received path:', path, 'Num segments in data:', data ? data.length : 'N/A', 'Inferring speakers:', inferSpeakers);
     const newSegments = Array.isArray(data) ? data : [];
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
