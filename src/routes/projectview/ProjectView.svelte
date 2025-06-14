@@ -35,7 +35,8 @@
         toggleTranscribeModal,
         selectMedia as selectMediaStoreAction,
         clearTranscriptState,
-        setRanInBackground // Add this
+        setRanInBackground, // Add this
+        clearPendingTranscriptData // <-- ADD THIS
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -89,6 +90,8 @@
                 } else {
                     console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
                 }
+                console.log('[ProjectView event_listener] Calling clearPendingTranscriptData after "custom_transcription_job_completed" (done).');
+                clearPendingTranscriptData();
             }
         });
 
@@ -155,8 +158,6 @@
 
         if (acknowledged) {
             if (finalStatus === 'done') {
-                const initialPendingTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
-                console.log('[ProjectView HMC top] initialPendingTranscriptPath:', initialPendingTranscriptPath);
                 const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
                 const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
@@ -184,12 +185,9 @@
                     mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
 
                     if (mediaFileEntry) {
-                        console.log('[ProjectView HMC before selectMedia] current pendingTranscriptPathForJobDone:', get(transcriptStore).pendingTranscriptPathForJobDone);
                         selectMediaStoreAction(mediaFileEntry); // This line should already exist
-                        console.log('[ProjectView HMC after selectMedia] current pendingTranscriptPathForJobDone:', get(transcriptStore).pendingTranscriptPathForJobDone);
 
                         const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
-                        console.log('[ProjectView HMC] Retrieved newTranscriptPath for explicit load:', newTranscriptPath);
                         if (newTranscriptPath) {
                             console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
                             loadTranscriptFile(newTranscriptPath).catch(err => {
@@ -219,10 +217,10 @@
                 transcriptStore.update(ts => ({
                     ...ts,
                     mediaPathForLastJob: null,
-                    activeMediaDuringTranscriptionStart: null,
-                    pendingTranscriptPathForJobDone: null,
-                    pendingSegmentsForJobDone: null
+                    activeMediaDuringTranscriptionStart: null
                 }));
+                console.log('[ProjectView HMC] Calling clearPendingTranscriptData after "done" processing.');
+                clearPendingTranscriptData();
             }
         } else {
             if (finalStatus === 'running' || finalStatus === 'cancelling') {

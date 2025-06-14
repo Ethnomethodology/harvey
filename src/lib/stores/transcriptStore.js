@@ -291,7 +291,6 @@ export function updatePlayerCurrentSegmentIndex(index) {
 }
 
 export function setTranscriptData(path, data, inferSpeakers = false) {
-    console.log('[Store setTranscriptData] Received path:', path, 'Num segments in data:', data ? data.length : 'N/A', 'Inferring speakers:', inferSpeakers);
     const newSegments = Array.isArray(data) ? data : [];
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
@@ -647,11 +646,25 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
         activeMediaDuringTranscriptionStart: null, // Reset here
-        pendingTranscriptPathForJobDone: null,
-        pendingSegmentsForJobDone: null,
+        // pendingTranscriptPathForJobDone: null, // REMOVED
+        // pendingSegmentsForJobDone: null,       // REMOVED
         // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
+}
+
+export function clearPendingTranscriptData() {
+    transcriptStore.update(ts => {
+        if (ts.pendingTranscriptPathForJobDone !== null || ts.pendingSegmentsForJobDone !== null) {
+            console.log('[TranscriptStore] Clearing pending transcript data (path and segments).');
+            return {
+                ...ts,
+                pendingTranscriptPathForJobDone: null,
+                pendingSegmentsForJobDone: null
+            };
+        }
+        return ts; // Return current state if no changes needed
+    });
 }
 
 export function setRanInBackground(value) {
