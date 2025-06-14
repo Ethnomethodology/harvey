@@ -106,7 +106,8 @@
 	// --- Keyboard handling ---
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
-			closeModal();
+			// closeModal(); // Escape key functionality will be handled differently or removed based on new requirements
+            // For now, let's disable it to ensure modal stays open unless explicitly closed by new buttons
 		}
 	}
 
@@ -136,12 +137,27 @@
     // Add/remove keyboard listener based on modal visibility
 	$: if (showModal && typeof window !== 'undefined') {
 		window.addEventListener('keydown', handleKeydown);
-		// Sync status when modal opens, in case transcription was already running
-		if (status === 'confirm' && $transcriptStore.isTranscribing) {
-			console.log('[Modal] Syncing on show: Active transcription detected, setting status to running.');
-			status = 'running';
-		}
-	} else if (typeof window !== 'undefined') {
+
+    // If the modal is being shown, is currently in 'confirm' state (e.g., from a previous closeModal() call or initial state),
+    // AND a transcription job is globally active ($transcriptStore.isTranscribing is true),
+    // then transition the modal's internal status to 'running'.
+    if (status === 'confirm' && $transcriptStore.isTranscribing) {
+        console.log('[Modal] Syncing to "running" state: Modal was "confirm" and a global transcription is active.');
+        status = 'running';
+        // Clear any potentially stale messages when transitioning to 'running' for a new/ongoing job.
+        successMessage = '';
+        errorMessage = '';
+        cancelledMessage = '';
+    }
+    // If the modal's status was externally set to 'done', 'error', or 'cancelled' (by projectService for a foreground job),
+    // this block will not alter that status. The modal will correctly display that terminal state.
+    // The user will then interact with the modal's buttons (e.g., "Close"), which will call `closeModal()`,
+    // and `closeModal()` is responsible for resetting the status to 'confirm' at that point.
+    // If the modal is opened for a new transcription (status='confirm', isTranscribing=false), this block also does nothing,
+    // leaving the modal in the 'confirm' state, ready for user input.
+
+	} else if (typeof window !== 'undefined') { // Equivalent to: if (!showModal && ...)
+    // When the modal is not shown, remove the keydown listener.
 		window.removeEventListener('keydown', handleKeydown);
 	}
 
@@ -157,7 +173,6 @@
 {#if showModal}
 	<div
 		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
@@ -202,8 +217,11 @@
 						{currentProgressPercent.toFixed(0)}% - {currentProgressMessage}
 					</p>
 				</div>
-				<div class="flex justify-center mt-auto">
+				<div class="flex justify-center space-x-2 mt-auto"> <!-- MODIFIED: Added space-x-2 for button spacing -->
 					{#if status === 'running'}
+						<button class="btn-secondary" on:click={() => { dispatch('runInBackground'); closeModal(); }}>
+							Run in background
+						</button>
 						<button class="btn-action-cancel" on:click={handleCancelRequest}>
 							Request Cancellation
 						</button>

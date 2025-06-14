@@ -3,6 +3,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
+	import { listen } from '@tauri-apps/api/event';
 	import {
 		loadProjectDataAndUpdateStore,
 		handleConfirmStartTranscription,
@@ -18,7 +19,8 @@
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
         refreshProjectFiles,
-        silentlyRefreshProjectData
+            silentlyRefreshProjectData,
+            loadTranscriptFile // <-- ADD THIS
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -32,7 +34,9 @@
         transcriptStore,
         toggleTranscribeModal,
         selectMedia as selectMediaStoreAction,
-        clearTranscriptState
+        clearTranscriptState,
+        setRanInBackground, // Add this
+        clearPendingTranscriptData // <-- ADD THIS
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -61,6 +65,7 @@
     let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
+    let unlistenTranscriptionComplete = null;
 
 
 	onMount(async () => {
@@ -75,6 +80,27 @@
 			console.error('[ProjectView] Mount error: Project XML path missing in URL parameters.');
 		}
 		initializeProgressListener();
+
+        unlistenTranscriptionComplete = await listen('custom_transcription_job_completed', (event) => {
+            if (event.payload && event.payload.status === 'done') {
+                console.log('[ProjectView] Transcription job completed event received, refreshing files silently.');
+                const currentProjectXmlPath = get(project).xmlPath;
+                if (currentProjectXmlPath) {
+                    silentlyRefreshProjectData(currentProjectXmlPath);
+                } else {
+                    console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
+                }
+
+            const ranInBackground = get(transcriptStore).ranInBackground;
+            if (ranInBackground) {
+                console.log('[ProjectView event_listener] Background job done, calling clearPendingTranscriptData.');
+                clearPendingTranscriptData();
+            } else {
+                console.log('[ProjectView event_listener] Foreground job done, NOT calling clearPendingTranscriptData here (handleModalClose will).');
+            }
+            }
+        });
+
 		await tick();
 		if (transcribeModalRef) { registerTranscribeModal(transcribeModalRef); }
         else { console.warn('[ProjectView] TranscribeConfirmModal reference not available on mount.'); }
@@ -89,6 +115,9 @@
 
 	onDestroy(() => {
 		cleanupProgressListener();
+        if (unlistenTranscriptionComplete) {
+            unlistenTranscriptionComplete();
+        }
 		window.removeEventListener('keydown', handleGlobalKeys);
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
         if (removeCloseRequestListener) {
@@ -139,29 +168,114 @@
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
                 const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
                 const currentProjectXmlPath = get(project).xmlPath;
+            const ranInBackground = get(transcriptStore).ranInBackground;
                 // const pendingPath = get(transcriptStore).pendingTranscriptPathForJobDone;
                 // const pendingSegments = get(transcriptStore).pendingSegmentsForJobDone;
 
-                if ((!currentSelectionPathInUI && !activeMediaWhenJobStarted) || currentSelectionPathInUI === jobFinishedPath) {
-                    refreshProjectFiles(jobFinishedPath);
-                } else {
-                    if (currentProjectXmlPath) {
-                        silentlyRefreshProjectData(currentProjectXmlPath);
-                    } else {
-                        console.error("[ProjectView | handleModalClose] Cannot silently refresh data: Project XML path is missing.");
+            if (!ranInBackground && jobFinishedPath) {
+                console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
+                let refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
+                refreshPromise.then(() => {
+                    console.log('[ProjectView HMC] Entered refreshPromise.then()');
+                    // This block runs after refreshProjectFiles has completed and its UI updates have likely propagated
+                    const projectFiles = get(project).files;
+                    let mediaFileEntry = null;
+                    // Function to find the media file entry (assuming it's similar to what refreshProjectFiles might use or what's available)
+                    function findMediaByPathRecursive(nodes, path) {
+                        if (!Array.isArray(nodes)) return null;
+                        for (const node of nodes) {
+                            if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
+                            if (node.children?.length > 0) { const found = findMediaByPathRecursive(node.children, path); if (found) return found; }
+                        }
+                        return null;
                     }
-                }
+                    if (!get(transcriptStore).ranInBackground && jobFinishedPath) { // Ensure to use the current ranInBackground value
+                        let mediaFileEntry = null; // Defined here
+                        // Function to find the media file entry (assuming it's similar to what refreshProjectFiles might use or what's available)
+                        function findMediaByPathRecursive(nodes, path) { // Definition moved inside or ensured accessible
+                            if (!Array.isArray(nodes)) return null;
+                            for (const node of nodes) {
+                                if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
+                                if (node.children?.length > 0) { const found = findMediaByPathRecursive(node.children, path); if (found) return found; }
+                            }
+                            return null;
+                        }
+                        mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
 
+                        if (mediaFileEntry) {
+                            selectMediaStoreAction(mediaFileEntry); // This line should already exist
+
+                            const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                            if (newTranscriptPath) {
+                                console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
+                                loadTranscriptFile(newTranscriptPath).catch(err => {
+                                    console.error(`[ProjectView] Error explicitly loading new transcript: ${err.message || err}`);
+                                    // Optional: project.update(p => ({...p, error: `Failed to load new transcript: ${err.message || err}`}));
+                                });
+                            }
+                        } else {
+                            console.warn(`[ProjectView] Media file entry not found after refresh for path: ${jobFinishedPath}. Cannot auto-load transcript.`);
+                        }
+                    }
+                // THE CLEANUP CODE SHOULD GO HERE, after the conditional processing,
+                // but still inside .then()
+                console.log('[ProjectView HMC .then()] Foreground processing in .then() complete. Clearing job context and pending data.');
                 transcriptStore.update(ts => ({
                     ...ts,
                     mediaPathForLastJob: null,
-                    activeMediaDuringTranscriptionStart: null,
-                    pendingTranscriptPathForJobDone: null,
-                    pendingSegmentsForJobDone: null
+                    activeMediaDuringTranscriptionStart: null
                 }));
+                clearPendingTranscriptData();
+
+                }).catch(err => {
+                    console.error("[ProjectView] Error during refreshProjectFiles sequence in handleModalClose:", err);
+                    // CRITICAL: Also clear data on error to prevent stale state if refresh fails!
+                    console.log('[ProjectView HMC .catch()] Error in refreshPromise. Clearing job context and pending data to prevent stale state.');
+                    transcriptStore.update(ts => ({
+                        ...ts,
+                        mediaPathForLastJob: null,
+                        activeMediaDuringTranscriptionStart: null
+                    }));
+                    clearPendingTranscriptData();
+                });
+            } else { // This 'else' corresponds to the "if (!ranInBackground && jobFinishedPath)"
+                // This case means it ran in background OR (foreground but !jobFinishedPath).
+                // A silent refresh might have already been done by the event listener if it was a background task.
+                // Or, if it was foreground and no job path, the earlier call to silentlyRefreshProjectData handles it.
+                console.log('[ProjectView HMC else] Modal closed (ranInBackground or no jobFinishedPath for foreground). Clearing modal-specific job context.');
+                if (currentProjectXmlPath && get(transcriptStore).ranInBackground) { // Only if ran in background and refresh needed
+                    // If it truly ran in background, the event listener should have refreshed.
+                    // This silent refresh is more of a fallback if that event was missed or if state is complex.
+                    // However, the primary silent refresh for background is now handled by the event listener.
+                    // For foreground with no job path, silent refresh was done before promise.
+                    // So, this specific call to silentlyRefreshProjectData might be redundant if event listener works.
+                    // Let's keep it for now as a safeguard for the ranInBackground path.
+                    silentlyRefreshProjectData(currentProjectXmlPath);
+                } else if (!get(transcriptStore).ranInBackground && !jobFinishedPath) {
+                    // Foreground, but no job path to refresh. A general silent refresh was already done.
+                    console.log('[ProjectView HMC else] Foreground task with no jobFinishedPath. Silent refresh was done prior to promise.');
+                }
+
+
+                transcriptStore.update(ts => ({ // Clear context related to the job this modal instance was tracking
+                    ...ts,
+                    mediaPathForLastJob: null,
+                    activeMediaDuringTranscriptionStart: null
+                }));
+
+                // If it was a foreground task but jobFinishedPath was null,
+                // then HMC is responsible for clearing pending data because the .then() part of refreshPromise was skipped.
+                if (!get(transcriptStore).ranInBackground && !jobFinishedPath) { // Check current ranInBackground
+                     console.log('[ProjectView HMC else] jobFinishedPath was null for a foreground task. Clearing pending data now.');
+                     clearPendingTranscriptData();
+                }
+                // Note: `silentlyRefreshProjectData` for the case of (foreground && !jobFinishedPath)
+                // was already called before `refreshPromise` was defined.
             }
-        } else {
-            if (finalStatus === 'running' || finalStatus === 'cancelling') {
+            // Synchronous cleanup removed from here
+        }
+    } else { // This 'else' corresponds to "if (acknowledged)"
+        if (finalStatus === 'running' || finalStatus === 'cancelling') {
                 console.log(`[ProjectView] TranscribeModal closed by user (acknowledged:false) while status was: ${finalStatus}. Background process continues.`);
             }
         }
@@ -477,7 +591,8 @@
         jobId={$transcriptStore.transcriptionJobId}
         on:confirmStart={handleConfirmStartTranscription}
         on:cancelRequest={handleCancelTranscriptionRequest}
-        on:close={handleModalClose} />
+            on:close={handleModalClose}
+            on:runInBackground={() => setRanInBackground(true)} />
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>

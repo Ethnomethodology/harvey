@@ -29,6 +29,7 @@ export const initialTranscriptState = {
     transcriptRedoStack: [],
     pendingTranscriptPathForJobDone: null,
     pendingSegmentsForJobDone: null,
+    ranInBackground: false,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -608,6 +609,7 @@ export function setTranscriptionStatus(isTranscribing, jobId = null, options = {
             // Set the initial message for the modal's own progress display.
             // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
             transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
+            ranInBackground: false, // Reset when a new transcription starts
         };
     });
 
@@ -644,11 +646,29 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
         activeMediaDuringTranscriptionStart: null, // Reset here
-        pendingTranscriptPathForJobDone: null,
-        pendingSegmentsForJobDone: null,
+        // pendingTranscriptPathForJobDone: null, // REMOVED
+        // pendingSegmentsForJobDone: null,       // REMOVED
         // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
+}
+
+export function clearPendingTranscriptData() {
+    transcriptStore.update(ts => {
+        if (ts.pendingTranscriptPathForJobDone !== null || ts.pendingSegmentsForJobDone !== null) {
+            console.log('[TranscriptStore] Clearing pending transcript data (path and segments).');
+            return {
+                ...ts,
+                pendingTranscriptPathForJobDone: null,
+                pendingSegmentsForJobDone: null
+            };
+        }
+        return ts; // Return current state if no changes needed
+    });
+}
+
+export function setRanInBackground(value) {
+    transcriptStore.update((ts) => ({ ...ts, ranInBackground: !!value }));
 }
 
 // Helper to update projectStore's status and error, if needed by transcript functions
