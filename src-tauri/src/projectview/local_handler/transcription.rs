@@ -162,21 +162,6 @@ pub async fn run_transcription(
     ).await?;
     info!("[Transcription][Job '{}'] Final transcript saved.", job_id);
 
-    // --- Delete the temporary Whisper JSON output file ---
-    if expected_whisper_output_path.exists() {
-        match fs::remove_file(&expected_whisper_output_path) {
-            Ok(_) => {
-                info!("[Transcription][Job '{}'] Successfully deleted temporary Whisper JSON output: {}", job_id, expected_whisper_output_path.display());
-            }
-            Err(e) => {
-                warn!("[Transcription][Job '{}'] Failed to delete temporary Whisper JSON output {}: {}. Continuing...", job_id, expected_whisper_output_path.display(), e);
-            }
-        }
-    } else {
-        warn!("[Transcription][Job '{}'] Temporary Whisper JSON output file not found for deletion: {}", job_id, expected_whisper_output_path.display());
-    }
-    // --- End Deletion ---
-
     // --- MODIFICATION: Prepare segments for frontend (text field will contain Lexical JSON for the cell's content) ---
     // The `whisper_segments_plain` still holds the segments with plain text, which is what we want
     // to use as the basis for the `text` field of each segment in the result.
