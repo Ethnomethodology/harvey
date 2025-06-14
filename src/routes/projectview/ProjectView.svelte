@@ -176,6 +176,7 @@
                 console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
                 let refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
                 refreshPromise.then(() => {
+                    console.log('[ProjectView HMC] Entered refreshPromise.then()');
                     // This block runs after refreshProjectFiles has completed and its UI updates have likely propagated
                     const projectFiles = get(project).files;
                     let mediaFileEntry = null;
@@ -188,21 +189,40 @@
                         }
                         return null;
                     }
-                    mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
-
-                    if (mediaFileEntry) {
-                        selectMediaStoreAction(mediaFileEntry); // This line should already exist
-
-                        const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
-                        if (newTranscriptPath) {
-                            console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
-                            loadTranscriptFile(newTranscriptPath).catch(err => {
-                                console.error(`[ProjectView] Error explicitly loading new transcript: ${err.message || err}`);
-                                // Optional: project.update(p => ({...p, error: `Failed to load new transcript: ${err.message || err}`}));
-                            });
+                    // Assuming ranInBackground and jobFinishedPath from the outer scope are accessible
+                    // If not, they might need to be re-fetched from stores or passed through promise if necessary.
+                    // For this logging step, we'll assume they are available from the outer scope of handleModalClose.
+                    console.log(`[ProjectView HMC .then()] About to check condition: ranInBackground=${get(transcriptStore).ranInBackground}, jobFinishedPath=${jobFinishedPath}`);
+                    // Note: Using get(transcriptStore).ranInBackground for the most current value. jobFinishedPath is from outer scope.
+                    if (!get(transcriptStore).ranInBackground && jobFinishedPath) { // Ensure to use the current ranInBackground value
+                        let mediaFileEntry = null; // Defined here
+                        // Function to find the media file entry (assuming it's similar to what refreshProjectFiles might use or what's available)
+                        function findMediaByPathRecursive(nodes, path) { // Definition moved inside or ensured accessible
+                            if (!Array.isArray(nodes)) return null;
+                            for (const node of nodes) {
+                                if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
+                                if (node.children?.length > 0) { const found = findMediaByPathRecursive(node.children, path); if (found) return found; }
+                            }
+                            return null;
                         }
-                    } else {
-                        console.warn(`[ProjectView] Media file entry not found after refresh for path: ${jobFinishedPath}. Cannot auto-load transcript.`);
+                        mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
+                        console.log('[ProjectView HMC .then()] mediaFileEntry found:', mediaFileEntry ? mediaFileEntry.name : 'null');
+
+                        if (mediaFileEntry) {
+                            selectMediaStoreAction(mediaFileEntry); // This line should already exist
+
+                            console.log('[ProjectView HMC .then() inside mediaFileEntry] current pendingTranscriptPathForJobDone before getting newTranscriptPath:', get(transcriptStore).pendingTranscriptPathForJobDone);
+                            const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                            if (newTranscriptPath) {
+                                console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
+                                loadTranscriptFile(newTranscriptPath).catch(err => {
+                                    console.error(`[ProjectView] Error explicitly loading new transcript: ${err.message || err}`);
+                                    // Optional: project.update(p => ({...p, error: `Failed to load new transcript: ${err.message || err}`}));
+                                });
+                            }
+                        } else {
+                            console.warn(`[ProjectView] Media file entry not found after refresh for path: ${jobFinishedPath}. Cannot auto-load transcript.`);
+                        }
                     }
                 }).catch(err => {
                     console.error("[ProjectView] Error during refreshProjectFiles sequence in handleModalClose:", err);
