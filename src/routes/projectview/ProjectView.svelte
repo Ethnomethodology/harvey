@@ -167,8 +167,14 @@
                     // User is on a different tab (e.g., Notes). Refresh with default behavior (select first media).
                     refreshProjectFiles();
                 }
+
+                // After all refresh logic for 'done' status, clear the stored path
+                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null }));
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future
+            // If error/cancelled also need to clear mediaPathForLastJob, it could be done here too,
+            // or more generally after the if(acknowledged) block if it applies to all acknowledged closures.
+            // For now, only clearing it on 'done' as per plan.
         } else {
             // Modal was dismissed without acknowledgment (e.g., Esc key, click outside)
             if (finalStatus === 'running' || finalStatus === 'cancelling') {

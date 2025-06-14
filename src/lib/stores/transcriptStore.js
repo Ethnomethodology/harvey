@@ -677,7 +677,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         isTranscribing: false,
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
-        mediaPathForLastJob: null, // Add this line to reset
+        // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
 }
