@@ -145,7 +145,12 @@
 
         if (acknowledged) {
             if (finalStatus === 'done') {
-                refreshProjectFiles(); // Refresh files if transcription was 'done' and acknowledged
+                const pathOfJustTranscribedMedia = get(transcriptStore).selectedMediaFile?.path;
+                if (selectedTab === 'transcriptions' && pathOfJustTranscribedMedia) {
+                    refreshProjectFiles(pathOfJustTranscribedMedia);
+                } else {
+                    refreshProjectFiles(); // Call without specific path if not on transcriptions tab or path is null
+                }
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future
         } else {

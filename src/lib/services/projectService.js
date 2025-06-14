@@ -188,7 +188,7 @@ function createConversionEditor(instanceId) {
     });
 }
 
-export async function loadProjectDataAndUpdateStore(projectXmlPath) {
+export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect = null) {
     if (!projectXmlPath || projectXmlPath.trim() === '') {
         console.error('[ProjectService] loadProjectDataAndUpdateStore called without a valid projectXmlPath');
         project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));
@@ -247,7 +247,22 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
         await emit('project-view-ready', { projectXmlPath: projectXmlPath });
         console.info("[ProjectService] 'project-view-ready' emitted."); // INFO
 
-        let firstMediaFileEntry = null;
+        let mediaFileToSelect = null;
+
+        function findMediaByPathRecursive(nodes, path) {
+            if (!Array.isArray(nodes) || !path) return null;
+            for (const node of nodes) {
+                if (node.file_type === 'media' && !node.is_directory && node.path === path) {
+                    return node;
+                }
+                if (node.children && node.children.length > 0) {
+                    const found = findMediaByPathRecursive(node.children, path);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
         function findFirstMediaRecursive(nodes) {
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
@@ -259,13 +274,25 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath) {
             }
             return null;
         }
-        firstMediaFileEntry = findFirstMediaRecursive(loadedData.files || []);
-        if (firstMediaFileEntry) {
-            console.debug(`[ProjectService] Found first media file in tree: ${firstMediaFileEntry.name}. Selecting...`); // DEBUG
-            selectMedia(firstMediaFileEntry); // For main transcriptions player
+
+        if (targetPathToSelect) {
+            mediaFileToSelect = findMediaByPathRecursive(loadedData.files || [], targetPathToSelect);
+            if (mediaFileToSelect) {
+                console.info(`[ProjectService] Prioritizing selection of target media: ${targetPathToSelect}`);
+            } else {
+                console.warn(`[ProjectService] Target media path ${targetPathToSelect} provided but not found. Falling back to first media.`);
+                mediaFileToSelect = findFirstMediaRecursive(loadedData.files || []);
+            }
         } else {
-            console.info('[ProjectService] No media files found in project tree, clearing selection via selectMedia(null).'); // INFO
-            selectMedia(null); // For main transcriptions player
+            mediaFileToSelect = findFirstMediaRecursive(loadedData.files || []);
+        }
+
+        if (mediaFileToSelect) {
+            console.info(`[ProjectService] Selecting media file: ${mediaFileToSelect.name} (Path: ${mediaFileToSelect.path})`);
+            selectMedia(mediaFileToSelect);
+        } else {
+            console.info('[ProjectService] No media files found or specified to select. Clearing media selection.');
+            selectMedia(null);
         }
     } catch (error) {
         console.error('[ProjectService] Failed to load project data:', error); // ERROR
@@ -691,7 +718,7 @@ export async function saveTranscriptData() {
     }
 }
 
-export async function refreshProjectFiles() { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
+export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try { await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath }); project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}. Refreshing...` })); await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' }); project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false })); throw error; } }
 export async function deleteProjectItem(itemPath) {
     const currentProj = get(project);
