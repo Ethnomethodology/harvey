@@ -17,25 +17,22 @@
         importImageFile,
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
-        refreshProjectFiles
+        refreshProjectFiles,
+        silentlyRefreshProjectData
 	} from '$lib/services/projectService.js';
 	import {
         project,
-        // toggleTranscribeModal, // Moved
-        // selectMedia as selectMediaStoreAction, // Moved
         hideUnsavedChangesPrompt,
         hideConversionPrompt,
-        // clearTranscriptState, // Moved
         prepareDocumentView,
         prepareImportedTranscriptView,
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
     import {
-        transcriptStore, // Import the store itself
+        transcriptStore,
         toggleTranscribeModal,
-        selectMedia as selectMediaStoreAction, // Keep alias if used
+        selectMedia as selectMediaStoreAction,
         clearTranscriptState
-        // Add other functions from transcriptStore if ProjectView.svelte directly uses them
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -85,12 +82,9 @@
 
         if (appWindow) {
             removeCloseRequestListener = await appWindow.listen('tauri://close-requested', handleWindowCloseRequest);
-            console.log('[ProjectView] Added tauri://close-requested listener.');
         } else {
             console.error('[ProjectView] Could not get appWindow reference to attach close listener.');
         }
-
-		console.log('[ProjectView] onMount finished.');
 	});
 
 	onDestroy(() => {
@@ -99,15 +93,13 @@
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
         if (removeCloseRequestListener) {
             removeCloseRequestListener();
-            console.log('[ProjectView] Removed tauri://close-requested listener.');
             removeCloseRequestListener = null;
         }
-		console.log('[ProjectView] onDestroy: Cleaned up listeners.');
 	});
 
 	function handleGlobalKeys(event) {
         const proj = get(project);
-        const ts = get(transcriptStore); // Add this if not already getting transcriptStore state
+        const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const modKey = isMac ? event.metaKey : event.ctrlKey;
         if (modKey && event.key.toLowerCase() === 's') {
@@ -138,58 +130,37 @@
 
 
 	function handleModalClose(event) {
-        // event.detail should be { acknowledged: boolean, finalStatus: string }
         const { acknowledged, finalStatus } = event.detail || {};
-
-        toggleTranscribeModal(false); // Always hide the modal
-
-        // Ensure 'get' from 'svelte/store' and 'transcriptStore' are imported.
-        // These should already be present from previous changes.
+        toggleTranscribeModal(false);
 
         if (acknowledged) {
             if (finalStatus === 'done') {
-                // Retrieve states for logging *before* any decision logic based on them
-                const pathOfTheJobThatFinishedForLog = get(transcriptStore).mediaPathForLastJob;
-                const currentlyDisplayedMediaPathForLog = get(transcriptStore).selectedMediaFile?.path;
-                // selectedTab is already available in the function's scope
+                const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
+                const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
+                const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
+                const currentProjectXmlPath = get(project).xmlPath;
+                // const pendingPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                // const pendingSegments = get(transcriptStore).pendingSegmentsForJobDone;
 
-                console.log('-----------------------------------------------------');
-                console.log('[ProjectView.svelte | handleModalClose] "done" acknowledged.');
-                console.log('[ProjectView.svelte | handleModalClose] Current selectedTab:', selectedTab);
-                console.log('[ProjectView.svelte | handleModalClose] Media path of the job that just finished (mediaPathForLastJob):', pathOfTheJobThatFinishedForLog);
-                console.log('[ProjectView.svelte | handleModalClose] Media path currently selected in UI (selectedMediaFile.path):', currentlyDisplayedMediaPathForLog);
-                console.log('-----------------------------------------------------');
-
-                // Then proceed with the existing logic:
-                const pathOfTheJobThatFinished = pathOfTheJobThatFinishedForLog; // Use the logged value
-                const currentlyDisplayedMediaPath = currentlyDisplayedMediaPathForLog; // Use the logged value
-
-                if (selectedTab === 'transcriptions') {
-                    if (pathOfTheJobThatFinished && pathOfTheJobThatFinished === currentlyDisplayedMediaPath) {
-                        // Still viewing the media that just finished transcribing. Re-select it.
-                        refreshProjectFiles(pathOfTheJobThatFinished);
-                    } else if (currentlyDisplayedMediaPath) {
-                        // User is viewing/interacting with a different media on the transcriptions tab. Preserve this selection.
-                        refreshProjectFiles(currentlyDisplayedMediaPath);
-                    } else {
-                        // No specific media is currently displayed (e.g., empty project after first transcription).
-                        // Select the one that just finished.
-                        refreshProjectFiles(pathOfTheJobThatFinished);
-                    }
+                if ((!currentSelectionPathInUI && !activeMediaWhenJobStarted) || currentSelectionPathInUI === jobFinishedPath) {
+                    refreshProjectFiles(jobFinishedPath);
                 } else {
-                    // User is on a different tab (e.g., Notes). Refresh with default behavior (select first media).
-                    refreshProjectFiles();
+                    if (currentProjectXmlPath) {
+                        silentlyRefreshProjectData(currentProjectXmlPath);
+                    } else {
+                        console.error("[ProjectView | handleModalClose] Cannot silently refresh data: Project XML path is missing.");
+                    }
                 }
 
-                // After all refresh logic for 'done' status, clear the stored path
-                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null }));
+                transcriptStore.update(ts => ({
+                    ...ts,
+                    mediaPathForLastJob: null,
+                    activeMediaDuringTranscriptionStart: null,
+                    pendingTranscriptPathForJobDone: null,
+                    pendingSegmentsForJobDone: null
+                }));
             }
-            // Potentially other logic for 'error' or 'cancelled' if needed in the future
-            // If error/cancelled also need to clear mediaPathForLastJob, it could be done here too,
-            // or more generally after the if(acknowledged) block if it applies to all acknowledged closures.
-            // For now, only clearing it on 'done' as per plan.
         } else {
-            // Modal was dismissed without acknowledgment (e.g., Esc key, click outside)
             if (finalStatus === 'running' || finalStatus === 'cancelling') {
                 console.log(`[ProjectView] TranscribeModal closed by user (acknowledged:false) while status was: ${finalStatus}. Background process continues.`);
             }
@@ -249,9 +220,7 @@
             return;
         }
 
-        const oldSelectedTab = selectedTab;
         selectedTab = tabName;
-        console.log(`[ProjectView] Switched selectedTab state from ${oldSelectedTab} to: ${selectedTab}`);
 
         project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
 
@@ -300,7 +269,7 @@
         }
 
         if (selectedTab !== tabName) {
-            await handleTabClick(tabName); // This should set isLoading: false
+            await handleTabClick(tabName);
             await tick();
         } else {
              project.update(p => ({...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false}));
@@ -349,14 +318,14 @@
         }
 
         if (selectedTab !== 'transcriptions') {
-            await handleTabClick('transcriptions'); // This sets isLoading: false on its completion
+            await handleTabClick('transcriptions');
             await tick();
         } else {
-            if (get(project).selectedMediaFile?.path !== mediaPath && get(project).selectedMediaFile?.path) { // Only clear if different and something was selected
+            if (get(project).selectedMediaFile?.path !== mediaPath && get(project).selectedMediaFile?.path) {
                 clearTranscriptState();
             }
         }
-        project.update(p => ({...p, isLoading: true, statusMessage: `Loading ${mediaName} in Transcriptions...`})); // Set loading true again before selectMedia
+        project.update(p => ({...p, isLoading: true, statusMessage: `Loading ${mediaName} in Transcriptions...`}));
         await tick();
 
         let fileEntry = null;
@@ -371,59 +340,48 @@
         fileEntry = findMediaByPathRecursive(get(project).files || [], mediaPath);
 
         if (fileEntry) {
-            selectMediaStoreAction(fileEntry); // This updates statusMessage
+            selectMediaStoreAction(fileEntry);
         } else {
             await message(`Error: Could not find media file (${mediaName}).`, {title: "Error", type:"error"});
             project.update(p => ({...p, statusMessage: `Error selecting ${mediaName}.`}));
         }
-        // selectMediaStoreAction might have its own loading/status logic.
-        // Ensure isLoading is false after this entire sequence.
-        await tick(); // Allow store to update from selectMediaStoreAction
+        await tick();
         project.update(p => ({...p, isLoading: false }));
     }
 
     async function handleRequestTranscriptionTabWithMedia(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
-        console.log(`[ProjectView] Handling requestTranscriptionTabWithMedia for: ${mediaName}`);
         project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to transcribe ${mediaName}...` }));
 
-        await handleTabClick('transcriptions'); // Should set isLoading:false
+        await handleTabClick('transcriptions');
         await tick();
-        await handleRequestMediaSelection({ detail: { mediaPath } }); // Should also set isLoading:false
+        await handleRequestMediaSelection({ detail: { mediaPath } });
         await tick();
 
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Please select model and language.` }));
-        console.log(`[ProjectView] Switched to Transcriptions tab for ${mediaName}. User to initiate transcription manually.`);
     }
 
     async function handleRequestTrimInTranscriptionTab(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
-        console.log(`[ProjectView] Handling requestTrimInTranscriptionTab for: ${mediaName}`);
         project.update(p => ({ ...p, isLoading: true, statusMessage: `Preparing to trim ${mediaName}...` }));
 
-        // Step 1: Switch to the Transcriptions tab
         if (selectedTab !== 'transcriptions') {
             await handleTabClick('transcriptions');
-            await tick(); // Allow UI to update
+            await tick();
         }
 
-        // Step 2: Select the media in the Transcriptions tab's player
-        // We need to ensure handleRequestMediaSelection completes and the player is ready
         const currentSelectedMedia = get(project).selectedMediaFile?.path;
         if (currentSelectedMedia !== mediaPath) {
             await handleRequestMediaSelection({ detail: { mediaPath } });
-            await tick(); // Allow media selection and potential transcript load to process
-            await tick(); // Extra tick for good measure
+            await tick();
+            await tick();
         } else {
-            console.log(`[ProjectView] Media ${mediaName} already selected in Transcriptions tab.`);
             project.update(p => ({ ...p, statusMessage: `Media ${mediaName} already selected.`}));
         }
         
-        // Step 3: Activate trim mode
         if (transcriptionsViewRef && typeof transcriptionsViewRef.activateTrimModeOnPlayer === 'function') {
-            console.log(`[ProjectView] Activating trim mode on main player for ${mediaName}.`);
             transcriptionsViewRef.activateTrimModeOnPlayer();
             project.update(p => ({ ...p, isLoading: false, statusMessage: `Trim mode activated for ${mediaName}.` }));
         } else {
@@ -449,7 +407,7 @@
         let canProceed = true;
         if (selectedTab === 'notes') canProceed = await checkUnsavedChangesThenProceed(null, `importing ${importType || 'asset'}`);
         else if (selectedTab === 'transcriptions') {
-            if (get(project).transcriptDirty) {
+            if (get(project).transcriptDirty) { // This should probably be get(transcriptStore).transcriptDirty
                 const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${importType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
                 if (!confirmImport) canProceed = false;
                 else { clearTranscriptState(); if (transcriptionsViewRef?.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
@@ -461,7 +419,7 @@
             else if (importType === 'document') await importDocumentFile();
             else if (importType === 'table') await importTableFile();
             else if (importType === 'image') await importImageFile();
-            else if (importType === 'transcript') { showImportTranscriptSourceModal = true; project.update(p => ({...p, isLoading: false})); } // Modal shown, not a long load
+            else if (importType === 'transcript') { showImportTranscriptSourceModal = true; project.update(p => ({...p, isLoading: false})); }
             else { await message(`Import type (${importType}) not recognized.`, {title: "Import Error", type: "error"}); project.update(p => ({...p, isLoading: false}));}
         } catch (e) { project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Import failed.`}));}
         if (importType !== 'transcript' && !get(project).isImportingAsset) project.update(p => ({...p, isLoading: false}));
@@ -476,7 +434,6 @@
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
-	// $: modalProps = { fileName: $transcriptStore.selectedMediaFile?.name ?? 'N/A', modelName: $transcriptStore.selectedModelName ?? 'None Selected', language: $transcriptStore.selectedLanguage ?? 'N/A', speakers: $transcriptStore.speakers, jobId: $transcriptStore.transcriptionJobId };
     $: showLoadingOverlay = ($project.isLoading && !$transcriptStore.isTranscribing) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
