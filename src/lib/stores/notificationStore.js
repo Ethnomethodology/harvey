@@ -38,7 +38,8 @@ function addNotification(message, type, duration = NOTIFICATION_TIMEOUT_MS) {
         return [...currentNotifications, newNotification];
     });
 
-    if (duration && duration > 0) {
+    if (typeof duration === 'number' && duration > 0) {
+        console.log(`[notificationStore] Setting auto-dismiss for notification ID ${id} with duration: ${duration}`);
         setTimeout(() => {
             dismissNotification(id);
         }, duration);
