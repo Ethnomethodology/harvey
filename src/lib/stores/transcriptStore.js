@@ -23,6 +23,7 @@ export const initialTranscriptState = {
     transcriptionProgress: { percent: 0, message: '' },
     transcriptionJobId: null,
     showTranscribeModal: false,
+    mediaPathForLastJob: null, // Add this line
     transcriptUndoStack: [],
     transcriptRedoStack: [],
 };
@@ -632,11 +633,13 @@ export function toggleTranscribeModal(show) {
     transcriptStore.update((ts) => ({ ...ts, showTranscribeModal: !!show }));
 }
 
-export function setTranscriptionStatus(isTranscribing, jobId = null, initialProgressMessage = '') {
+export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
+    const { initialProgressMessage = '', mediaPath = null } = options;
     transcriptStore.update((ts) => ({
         ...ts,
         isTranscribing: !!isTranscribing,
         transcriptionJobId: jobId,
+        mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob, // Store mediaPath when starting
         // Set the initial message for the modal's own progress display.
         // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
         transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
@@ -674,6 +677,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         isTranscribing: false,
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
+        mediaPathForLastJob: null, // Add this line to reset
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
 }

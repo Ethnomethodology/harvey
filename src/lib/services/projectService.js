@@ -770,10 +770,13 @@ export async function handleConfirmStartTranscription() {
     }
     const selectedModelIdentifier = currentTs.selectedModelName;
     const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
-    setTranscriptionStatus(true, jobId, isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...'); // from transcriptStore
+    const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
+    setTranscriptionStatus(true, jobId, {
+        initialProgressMessage: isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...',
+        mediaPath: args.mediaPath
+    }); // from transcriptStore
     try {
         let invokePromise;
-        const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
         if (isCloudModel) {
             let cloudConfig;
             try { cloudConfig = await getCloudConfig(); } catch (e) { throw new Error(`Failed to get cloud configuration: ${e.message}`); }

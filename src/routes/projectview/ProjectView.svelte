@@ -143,20 +143,34 @@
 
         toggleTranscribeModal(false); // Always hide the modal
 
+        // Ensure 'get' from 'svelte/store' and 'transcriptStore' are imported.
+        // These should already be present from previous changes.
+
         if (acknowledged) {
             if (finalStatus === 'done') {
-                const pathOfJustTranscribedMedia = get(transcriptStore).selectedMediaFile?.path;
-                if (selectedTab === 'transcriptions' && pathOfJustTranscribedMedia) {
-                    refreshProjectFiles(pathOfJustTranscribedMedia);
+                const pathOfTheJobThatFinished = get(transcriptStore).mediaPathForLastJob;
+                const currentlyDisplayedMediaPath = get(transcriptStore).selectedMediaFile?.path;
+
+                if (selectedTab === 'transcriptions') {
+                    if (pathOfTheJobThatFinished && pathOfTheJobThatFinished === currentlyDisplayedMediaPath) {
+                        // Still viewing the media that just finished transcribing. Re-select it.
+                        refreshProjectFiles(pathOfTheJobThatFinished);
+                    } else if (currentlyDisplayedMediaPath) {
+                        // User is viewing/interacting with a different media on the transcriptions tab. Preserve this selection.
+                        refreshProjectFiles(currentlyDisplayedMediaPath);
+                    } else {
+                        // No specific media is currently displayed (e.g., empty project after first transcription).
+                        // Select the one that just finished.
+                        refreshProjectFiles(pathOfTheJobThatFinished);
+                    }
                 } else {
-                    refreshProjectFiles(); // Call without specific path if not on transcriptions tab or path is null
+                    // User is on a different tab (e.g., Notes). Refresh with default behavior (select first media).
+                    refreshProjectFiles();
                 }
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future
         } else {
             // Modal was dismissed without acknowledgment (e.g., Esc key, click outside)
-            // If finalStatus was 'running' or 'cancelling', the process continues in the background.
-            // No specific action needed here for now, beyond closing the modal.
             if (finalStatus === 'running' || finalStatus === 'cancelling') {
                 console.log(`[ProjectView] TranscribeModal closed by user (acknowledged:false) while status was: ${finalStatus}. Background process continues.`);
             }
