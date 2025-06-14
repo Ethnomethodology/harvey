@@ -84,6 +84,7 @@ import {
     markTranscriptAsSaved
 } from '$lib/stores/transcriptStore.js';
 
+import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
@@ -780,19 +781,31 @@ export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     const jobId = uuidv4();
+
+    // Ensure args.mediaPath is available for event emission even if initial checks fail
+    const mediaPathForEvent = currentTs.selectedMediaFile?.path;
+
     if (!currentTs.selectedMediaFile?.path || !currentTs.selectedModelName) {
-        transcribeModalInstance?.setStatusError('Error: Missing media file or model selection.');
+        // Use notification store for error
+        notificationStore.add('Error: Missing media file or model selection.', 'error', 0);
         clearTranscriptionStatus('Transcription failed.', 'Missing media file or model selection.');
         toggleTranscribeModal(false);
+        // Emit error event even for early exit due to missing selection
+        if (mediaPathForEvent) { // Only emit if we had a media path to associate with the job
+            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: mediaPathForEvent, errorMessage: 'Missing media file or model selection.' });
+        }
         return;
     }
+
     const selectedModelIdentifier = currentTs.selectedModelName;
     const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
     const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
+
     setTranscriptionStatus(true, jobId, {
         initialProgressMessage: isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...',
         mediaPath: args.mediaPath
     });
+
     try {
         let invokePromise;
         if (isCloudModel) {
@@ -815,17 +828,23 @@ export async function handleConfirmStartTranscription() {
             pendingSegmentsForJobDone: result.segments
         }));
 
-        transcribeModalInstance?.setStatusDone('Transcription complete!');
-        toggleTranscribeModal(true);
+        notificationStore.add('Transcription complete!', 'success');
+        toggleTranscribeModal(false);
         clearTranscriptionStatus('Transcription complete.');
+        await emit('custom_transcription_job_completed', { status: 'done', jobFinishedPath: args.mediaPath, transcriptFilePath: result.transcript_file_path });
     } catch (error) {
         const errorMessage = error?.message || String(error);
+        // args.mediaPath should be accessible here from the outer scope of handleConfirmStartTranscription
         if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
-            transcribeModalInstance?.setStatusCancelled('Transcription cancelled.');
+            notificationStore.add('Transcription cancelled.', 'info');
+            toggleTranscribeModal(false);
             clearTranscriptionStatus('Transcription cancelled.');
+            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: args.mediaPath, errorMessage: null });
         } else {
-            transcribeModalInstance?.setStatusError(`Transcription failed: ${errorMessage}`);
+            notificationStore.add(`Transcription failed: ${errorMessage}`, 'error', 0); // Persistent error
+            toggleTranscribeModal(false);
             clearTranscriptionStatus('Transcription failed.', errorMessage);
+            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: args.mediaPath, errorMessage: errorMessage });
         }
     }
 }
