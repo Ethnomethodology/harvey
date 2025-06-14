@@ -762,6 +762,7 @@ export async function handleConfirmStartTranscription() {
         if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure.");
         setTranscriptData(result.transcript_file_path, result.segments, false); // from transcriptStore
         transcribeModalInstance?.setStatusDone('Transcription complete!');
+        toggleTranscribeModal(true); // Ensure modal is shown for the 'Done' state
         clearTranscriptionStatus('Transcription complete.'); // from transcriptStore
         // await refreshProjectFiles(); // Removed as per request
         // setTimeout(() => { toggleTranscribeModal(false); }, 1500); // Removed as per request

@@ -199,7 +199,7 @@ export function selectMedia(fileEntry) {
             transcriptUndoStack: [],
             transcriptRedoStack: [],
         }));
-        updateProjectStoreState({ statusMessage: newSelectedMedia ? `Selected media: ${newSelectedMedia.name}` : 'Media selection cleared.' });
+        // updateProjectStoreState({ statusMessage: newSelectedMedia ? `Selected media: ${newSelectedMedia.name}` : 'Media selection cleared.' });
         console.debug('[TranscriptStore selectMedia] Store update complete for media selection/resets.'); // DEBUG
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
