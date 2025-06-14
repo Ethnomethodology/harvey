@@ -874,7 +874,14 @@ export async function handleConfirmStartTranscription() {
         }
         const result = await invokePromise;
         if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure.");
-        setTranscriptData(result.transcript_file_path, result.segments, false); // from transcriptStore
+
+        // Store the results in transcriptStore's new pending variables
+        transcriptStore.update(ts => ({
+            ...ts,
+            pendingTranscriptPathForJobDone: result.transcript_file_path,
+            pendingSegmentsForJobDone: result.segments
+        }));
+
         transcribeModalInstance?.setStatusDone('Transcription complete!');
         toggleTranscribeModal(true); // Ensure modal is shown for the 'Done' state
         clearTranscriptionStatus('Transcription complete.'); // from transcriptStore

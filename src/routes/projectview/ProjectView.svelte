@@ -149,13 +149,15 @@
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
                 const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
                 const currentProjectXmlPath = get(project).xmlPath; // Get current project's XML path
+                // const pendingPath = get(transcriptStore).pendingTranscriptPathForJobDone; // Not strictly needed for current logic
+                // const pendingSegments = get(transcriptStore).pendingSegmentsForJobDone; // Not strictly needed for current logic
 
                 // New Decision Logic:
                 if ((!currentSelectionPathInUI && !activeMediaWhenJobStarted) || currentSelectionPathInUI === jobFinishedPath) {
                     // User is idle or was/is viewing the media that just finished.
                     // It's safe to load and select the new transcript.
                     console.log(`[ProjectView | handleModalClose] Condition met to select finished transcript. Refreshing with: ${jobFinishedPath}`);
-                    refreshProjectFiles(jobFinishedPath);
+                    refreshProjectFiles(jobFinishedPath); // This will trigger selectMedia -> loadTranscriptFile for jobFinishedPath
                 } else {
                     // User is active elsewhere or has selected a different media.
                     // Silently refresh the project data in the background without changing selection.
@@ -172,7 +174,9 @@
                 transcriptStore.update(ts => ({
                     ...ts,
                     mediaPathForLastJob: null,
-                    activeMediaDuringTranscriptionStart: null
+                    activeMediaDuringTranscriptionStart: null,
+                    pendingTranscriptPathForJobDone: null, // Clear pending path
+                    pendingSegmentsForJobDone: null      // Clear pending segments
                 }));
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future

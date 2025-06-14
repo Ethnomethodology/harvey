@@ -27,6 +27,8 @@ export const initialTranscriptState = {
     activeMediaDuringTranscriptionStart: null,
     transcriptUndoStack: [],
     transcriptRedoStack: [],
+    pendingTranscriptPathForJobDone: null,
+    pendingSegmentsForJobDone: null,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -139,6 +141,8 @@ export function clearTranscriptState() {
                 transcriptRedoStack: [],
                 speakers: { count: 0, names: [] },
                 activeMediaDuringTranscriptionStart: null, // Reset here as well
+                pendingTranscriptPathForJobDone: null,
+                pendingSegmentsForJobDone: null,
             };
         }
         return ts;
@@ -640,6 +644,8 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
         activeMediaDuringTranscriptionStart: null, // Reset here
+        pendingTranscriptPathForJobDone: null,
+        pendingSegmentsForJobDone: null,
         // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
