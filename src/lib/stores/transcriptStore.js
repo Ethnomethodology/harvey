@@ -29,6 +29,7 @@ export const initialTranscriptState = {
     transcriptRedoStack: [],
     pendingTranscriptPathForJobDone: null,
     pendingSegmentsForJobDone: null,
+    ranInBackground: false,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -608,6 +609,7 @@ export function setTranscriptionStatus(isTranscribing, jobId = null, options = {
             // Set the initial message for the modal's own progress display.
             // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
             transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
+            ranInBackground: false, // Reset when a new transcription starts
         };
     });
 
@@ -649,6 +651,10 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
+}
+
+export function setRanInBackground(value) {
+    transcriptStore.update((ts) => ({ ...ts, ranInBackground: !!value }));
 }
 
 // Helper to update projectStore's status and error, if needed by transcript functions

@@ -828,10 +828,30 @@ export async function handleConfirmStartTranscription() {
             pendingSegmentsForJobDone: result.segments
         }));
 
-        notificationStore.add('Transcription complete!', 'success');
-        toggleTranscribeModal(false);
-        clearTranscriptionStatus('Transcription complete.');
-        await emit('custom_transcription_job_completed', { status: 'done', jobFinishedPath: args.mediaPath, transcriptFilePath: result.transcript_file_path });
+		const tsStore = get(transcriptStore); // ADDED
+        const ranInBackground = tsStore.ranInBackground; // ADDED
+
+        if (ranInBackground) { // ADDED
+            notificationStore.add('Transcription complete!', 'success');
+            // Ensure modal is closed if it somehow wasn't by the runInBackground action
+            if (get(transcriptStore).showTranscribeModal) {
+                 toggleTranscribeModal(false);
+            }
+        } else { // ADDED
+            if (transcribeModalInstance && typeof transcribeModalInstance.setStatusDone === 'function') {
+                transcribeModalInstance.setStatusDone('Transcription complete!');
+                // Do NOT call toggleTranscribeModal(false) here; the user will close it via the modal's button.
+            } else {
+                // Fallback if modal instance isn't available, though it should be
+                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning');
+                if (get(transcriptStore).showTranscribeModal) {
+                    toggleTranscribeModal(false);
+                }
+            }
+        }
+
+		clearTranscriptionStatus('Transcription complete.'); // COMMON - Stays after if/else
+		await emit('custom_transcription_job_completed', { status: 'done', jobFinishedPath: args.mediaPath, transcriptFilePath: result.transcript_file_path }); // COMMON - Stays after if/else
     } catch (error) {
         const errorMessage = error?.message || String(error);
         // args.mediaPath should be accessible here from the outer scope of handleConfirmStartTranscription

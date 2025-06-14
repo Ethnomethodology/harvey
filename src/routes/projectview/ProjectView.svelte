@@ -3,6 +3,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
+	import { listen } from '@tauri-apps/api/event';
 	import {
 		loadProjectDataAndUpdateStore,
 		handleConfirmStartTranscription,
@@ -61,6 +62,7 @@
     let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
+    let unlistenTranscriptionComplete = null;
 
 
 	onMount(async () => {
@@ -75,6 +77,19 @@
 			console.error('[ProjectView] Mount error: Project XML path missing in URL parameters.');
 		}
 		initializeProgressListener();
+
+        unlistenTranscriptionComplete = await listen('custom_transcription_job_completed', (event) => {
+            if (event.payload && event.payload.status === 'done') {
+                console.log('[ProjectView] Transcription job completed event received, refreshing files silently.');
+                const currentProjectXmlPath = get(project).xmlPath;
+                if (currentProjectXmlPath) {
+                    silentlyRefreshProjectData(currentProjectXmlPath);
+                } else {
+                    console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
+                }
+            }
+        });
+
 		await tick();
 		if (transcribeModalRef) { registerTranscribeModal(transcribeModalRef); }
         else { console.warn('[ProjectView] TranscribeConfirmModal reference not available on mount.'); }
@@ -89,6 +104,9 @@
 
 	onDestroy(() => {
 		cleanupProgressListener();
+        if (unlistenTranscriptionComplete) {
+            unlistenTranscriptionComplete();
+        }
 		window.removeEventListener('keydown', handleGlobalKeys);
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
         if (removeCloseRequestListener) {
@@ -139,18 +157,25 @@
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
                 const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
                 const currentProjectXmlPath = get(project).xmlPath;
+            const ranInBackground = get(transcriptStore).ranInBackground;
                 // const pendingPath = get(transcriptStore).pendingTranscriptPathForJobDone;
                 // const pendingSegments = get(transcriptStore).pendingSegmentsForJobDone;
 
-                if ((!currentSelectionPathInUI && !activeMediaWhenJobStarted) || currentSelectionPathInUI === jobFinishedPath) {
-                    refreshProjectFiles(jobFinishedPath);
+            if (!ranInBackground && jobFinishedPath) {
+                console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
+                refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
+            } else {
+                // Ran in background OR jobFinishedPath was null for some reason.
+                // The 'custom_transcription_job_completed' listener already handles silent refresh for background.
+                // However, if jobFinishedPath was null but it didn't run in background, a general silent refresh is safe.
+                // If it did run in background, this silent refresh might be redundant but harmless.
+                console.log('[ProjectView] Modal closed, ranInBackground or no specific job path, ensuring silent refresh.');
+                if (currentProjectXmlPath) {
+                    silentlyRefreshProjectData(currentProjectXmlPath);
                 } else {
-                    if (currentProjectXmlPath) {
-                        silentlyRefreshProjectData(currentProjectXmlPath);
-                    } else {
-                        console.error("[ProjectView | handleModalClose] Cannot silently refresh data: Project XML path is missing.");
-                    }
+                    console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
                 }
+            }
 
                 transcriptStore.update(ts => ({
                     ...ts,

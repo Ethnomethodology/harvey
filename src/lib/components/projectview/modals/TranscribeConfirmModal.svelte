@@ -106,7 +106,8 @@
 	// --- Keyboard handling ---
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
-			closeModal();
+			// closeModal(); // Escape key functionality will be handled differently or removed based on new requirements
+            // For now, let's disable it to ensure modal stays open unless explicitly closed by new buttons
 		}
 	}
 
@@ -157,7 +158,6 @@
 {#if showModal}
 	<div
 		class="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
@@ -202,8 +202,11 @@
 						{currentProgressPercent.toFixed(0)}% - {currentProgressMessage}
 					</p>
 				</div>
-				<div class="flex justify-center mt-auto">
+				<div class="flex justify-center space-x-2 mt-auto"> {# MODIFIED: Added space-x-2 for button spacing #}
 					{#if status === 'running'}
+						<button class="btn-secondary" on:click={() => { dispatch('runInBackground'); closeModal(); }}>
+							Run in background
+						</button>
 						<button class="btn-action-cancel" on:click={handleCancelRequest}>
 							Request Cancellation
 						</button>
