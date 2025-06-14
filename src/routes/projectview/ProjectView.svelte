@@ -90,8 +90,14 @@
                 } else {
                     console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
                 }
-                console.log('[ProjectView event_listener] Calling clearPendingTranscriptData after "custom_transcription_job_completed" (done).');
+
+            const ranInBackground = get(transcriptStore).ranInBackground;
+            if (ranInBackground) {
+                console.log('[ProjectView event_listener] Background job done, calling clearPendingTranscriptData.');
                 clearPendingTranscriptData();
+            } else {
+                console.log('[ProjectView event_listener] Foreground job done, NOT calling clearPendingTranscriptData here (handleModalClose will).');
+            }
             }
         });
 
