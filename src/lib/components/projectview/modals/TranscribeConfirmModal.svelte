@@ -202,7 +202,7 @@
 						{currentProgressPercent.toFixed(0)}% - {currentProgressMessage}
 					</p>
 				</div>
-				<div class="flex justify-center space-x-2 mt-auto"> {# MODIFIED: Added space-x-2 for button spacing #}
+				<div class="flex justify-center space-x-2 mt-auto"> <!-- MODIFIED: Added space-x-2 for button spacing -->
 					{#if status === 'running'}
 						<button class="btn-secondary" on:click={() => { dispatch('runInBackground'); closeModal(); }}>
 							Run in background
