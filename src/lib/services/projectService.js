@@ -334,8 +334,46 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
             error: null,
             statusMessage: 'File list updated.' // Silent-ish message
         };
+        const preRefreshSelectedPath = get(transcriptStore).selectedMediaFile?.path;
+
         project.update((current) => ({ ...current, ...dataToSet }));
-        // NO media selection logic here
+
+        if (preRefreshSelectedPath) {
+            let foundMediaFileObjectFromNewList = null;
+            // Helper function to find the media file by path in the new files list
+            function findMediaByPathRecursive(nodes, path) {
+                if (!Array.isArray(nodes) || !path) return null;
+                for (const node of nodes) {
+                    if (node.file_type === 'media' && !node.is_directory && node.path === path) {
+                        return node;
+                    }
+                    if (node.children && node.children.length > 0) {
+                        const foundChild = findMediaByPathRecursive(node.children, path);
+                        if (foundChild) return foundChild;
+                    }
+                }
+                return null;
+            }
+
+            foundMediaFileObjectFromNewList = findMediaByPathRecursive(loadedData.files || [], preRefreshSelectedPath);
+
+            if (foundMediaFileObjectFromNewList) {
+                transcriptStore.update(ts => {
+                    // Only update if the path still matches, to avoid race conditions if user clicked elsewhere
+                    if (get(transcriptStore).selectedMediaFile?.path === preRefreshSelectedPath || !get(transcriptStore).selectedMediaFile) {
+                        return { ...ts, selectedMediaFile: foundMediaFileObjectFromNewList };
+                    }
+                    return ts; // No change if current selection has already moved on
+                });
+                console.log(`[ProjectService | silentlyRefreshProjectData] Preserved selection for: ${preRefreshSelectedPath}`);
+            } else {
+                // If the previously selected file is no longer in the list (e.g. deleted externally),
+                // selectedMediaFile might naturally become null or this could be a place to explicitly clear it.
+                // For now, if not found, we don't change transcriptStore, assuming other logic handles it or it stays as is.
+                console.log(`[ProjectService | silentlyRefreshProjectData] Previously selected media ${preRefreshSelectedPath} not found in new file list.`);
+            }
+        }
+        // NO media selection logic here (other than preserving previous selection if possible)
         // NO event emission like 'project-view-ready'
 
     } catch (error) {
