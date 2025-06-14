@@ -138,27 +138,27 @@
 	$: if (showModal && typeof window !== 'undefined') {
 		window.addEventListener('keydown', handleKeydown);
 
-            // If modal is being shown, and no transcription job is globally active,
-            // and the modal's current status is not already 'confirm' (e.g., it was 'done' or 'error' from a previous interaction),
-            // then force reset to 'confirm' state. This handles cases where the modal might show stale completion/error messages.
-            if (!$transcriptStore.isTranscribing && status !== 'confirm') {
-                console.log(`[Modal] Forcing status to 'confirm' on show. Was: ${status}. Global isTranscribing: ${$transcriptStore.isTranscribing}`);
-                status = 'confirm';
-                successMessage = '';
-                errorMessage = '';
-                cancelledMessage = '';
-            } else if (status === 'confirm' && $transcriptStore.isTranscribing) {
-                // This is the original sync logic: if modal was 'confirm' and a job is actually running globally, switch to 'running'.
-                console.log('[Modal] Syncing on show: Active transcription detected (global isTranscribing is true), setting modal status to running.');
-                status = 'running';
-            }
-            // If status is already 'running' and $transcriptStore.isTranscribing is true, no change needed here.
-            // If status is 'done'/'error'/'cancelled' and $transcriptStore.isTranscribing is false, the above block would have reset to 'confirm'.
+    // If the modal is being shown, is currently in 'confirm' state (e.g., from a previous closeModal() call or initial state),
+    // AND a transcription job is globally active ($transcriptStore.isTranscribing is true),
+    // then transition the modal's internal status to 'running'.
+    if (status === 'confirm' && $transcriptStore.isTranscribing) {
+        console.log('[Modal] Syncing to "running" state: Modal was "confirm" and a global transcription is active.');
+        status = 'running';
+        // Clear any potentially stale messages when transitioning to 'running' for a new/ongoing job.
+        successMessage = '';
+        errorMessage = '';
+        cancelledMessage = '';
+    }
+    // If the modal's status was externally set to 'done', 'error', or 'cancelled' (by projectService for a foreground job),
+    // this block will not alter that status. The modal will correctly display that terminal state.
+    // The user will then interact with the modal's buttons (e.g., "Close"), which will call `closeModal()`,
+    // and `closeModal()` is responsible for resetting the status to 'confirm' at that point.
+    // If the modal is opened for a new transcription (status='confirm', isTranscribing=false), this block also does nothing,
+    // leaving the modal in the 'confirm' state, ready for user input.
 
-	} else if (typeof window !== 'undefined') { // When !showModal
+	} else if (typeof window !== 'undefined') { // Equivalent to: if (!showModal && ...)
+    // When the modal is not shown, remove the keydown listener.
 		window.removeEventListener('keydown', handleKeydown);
-            // Optional: Further reset logic when modal is hidden can be added here if closeModal() proves insufficient,
-            // but closeModal() already resets status to 'confirm'.
 	}
 
     // Cleanup listener on component destroy
