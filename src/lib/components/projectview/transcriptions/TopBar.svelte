@@ -30,8 +30,8 @@
 	// Variable to hold transcript path for export modal
 	let transcriptPathForExport = '';
 
-	// Optional second language for bilingual transcripts
-	let secondLanguageValue = "";
+	// Boolean to control translation to English
+	let translateToEnglish = false;
 
 	function handleAddBlankTranscript() {
 		console.log('Add Blank Transcript clicked');
@@ -166,6 +166,11 @@
 	$: modelSelectValue = $transcriptStore.selectedModelName ?? "";
 	$: languageSelectValue = $transcriptStore.selectedLanguage ?? "";
 
+	// Ensure translateToEnglish is false if language is switched to English
+	$: if ($transcriptStore.selectedLanguage === 'en' && translateToEnglish) {
+		translateToEnglish = false;
+	}
+
 	// --- Reactive check for Transcribe button disable state ---
 	$: isTranscribeDisabled = (() => {
 		const mediaSelected = !!$transcriptStore.selectedMediaFile?.path;
@@ -278,17 +283,24 @@
 			{/each}
 		</select>
 
-		<!-- Translation Selection -->
-		<select
-			class="ui-select flex-shrink-0 w-28"
-			bind:value="{secondLanguageValue}"
-			title="Translate"
-		>
-			<option value="" disabled>Translate</option>
-			{#each languageOptions.filter(lang => lang.value !== 'auto') as lang (lang.value)}
-				<option value="{lang.value}">{lang.label}</option>
-			{/each}
-		</select>
+		<!-- Translate to English Checkbox -->
+		<div class="flex items-center space-x-1.5 ml-1.5" title={$transcriptStore.selectedLanguage === 'en' ? 'Translation N/A for English audio' : 'Translate transcript to English'}>
+			<input
+				type="checkbox"
+				id="translateToEnglishCheckbox"
+				class="ui-checkbox"
+				bind:checked={translateToEnglish}
+				disabled={$transcriptStore.selectedLanguage === 'en'}
+				on:click={() => { if ($transcriptStore.selectedLanguage === 'en') translateToEnglish = false; }}
+			/>
+			<label
+				for="translateToEnglishCheckbox"
+				class="text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none"
+				class:opacity-50={$transcriptStore.selectedLanguage === 'en'}
+			>
+				Translate to English
+			</label>
+		</div>
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
@@ -379,6 +391,11 @@
 	/* Select style adjustments */
 	.ui-select {
 		@apply block flex-shrink-0 pl-3 pr-8 py-1.5 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed;
+	}
+
+	/* Basic style for the new checkbox */
+	.ui-checkbox {
+		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
 	}
 
 	.ui-select optgroup {

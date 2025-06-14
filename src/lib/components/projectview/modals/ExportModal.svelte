@@ -75,37 +75,20 @@
 		}
 		exportFileName = baseName;
 
-		// Default directory: <project_base>/harvey_files/<media_stem>/exports/
-		const mediaPath = currentProject.selectedMediaFile?.path;
-
-        // --- REFACTORED: Use simpleDirname and manual string concatenation ---
-		if (mediaPath) {
-			 try {
-                 console.log("[ExportModal] Calculating default dir based on media path:", mediaPath);
-				 const mediaDir = simpleDirname(mediaPath); // e.g., .../harvey_files/MediaStem/media
-                 console.log("[ExportModal] Media directory (JS):", mediaDir);
-                 const mediaStemDir = simpleDirname(mediaDir); // e.g., .../harvey_files/MediaStem
-                 console.log("[ExportModal] Media stem directory (JS):", mediaStemDir);
-
-                 if (mediaStemDir) { // Only proceed if we could get the stem dir
-                     // Construct path manually using the chosen separator
-                     const defaultDirPath = mediaStemDir + PATH_SEPARATOR + DEFAULT_EXPORT_FOLDER_NAME;
-                     console.log("[ExportModal] Calculated default export directory path:", defaultDirPath);
-                     exportDirectory = defaultDirPath;
-                 } else {
-                      console.warn('[ExportModal] Could not determine media stem directory using simpleDirname.');
-                      exportDirectory = ''; // Fallback
-                 }
-			 } catch (e) {
-                 // Catch potential errors in string manipulation, though less likely
-				 console.error('[ExportModal] Error calculating default export directory using simpleDirname:', e);
-				 exportDirectory = ''; // Fallback
-			 }
-		} else {
-			 exportDirectory = '';
-			 console.warn('[ExportModal] Cannot calculate default export directory: Media path missing.');
+		// Simplified default directory logic
+		exportDirectory = ''; // Initialize
+		if (currentTranscriptPath) {
+			exportDirectory = simpleDirname(currentTranscriptPath);
+			if (exportDirectory) {
+				console.log('[ExportModal] Default export directory set from transcriptPath:', exportDirectory);
+			}
 		}
-        // --- END REFACTORED ---
+
+		if (!exportDirectory) { // This will be true if transcriptPath was empty or simpleDirname returned empty
+			exportDirectory = ''; // Ensure it's explicitly empty
+			console.warn('[ExportModal] Could not determine directory from transcriptPath. Defaulting to empty.');
+		}
+		// END Simplified default directory logic
 
 		// Reset format to default
 		exportFormat = 'csv';
@@ -209,7 +192,7 @@
 {#if showModal}
 	<div
 		bind:this={modalElement}
-		class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"

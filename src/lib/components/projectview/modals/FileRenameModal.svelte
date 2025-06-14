@@ -140,7 +140,7 @@
 
 {#if showModal}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+		class="fixed inset-0 z-[120] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
 		on:click|stopPropagation={closeModal}
 		transition:fade={{ duration: 150 }}
 	>

@@ -41,7 +41,7 @@
   </script>
   
   {#if showModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" on:click={closeModal} role="dialog" aria-modal="true">
+    <div class="fixed inset-0 z-[120] flex items-center justify-center bg-black bg-opacity-50" on:click={closeModal} role="dialog" aria-modal="true">
       <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm text-gray-900 dark:text-gray-100" on:click|stopPropagation on:keydown={handleKeydown}>
         <h2 class="text-xl font-semibold mb-4">Insert Table</h2>
         
