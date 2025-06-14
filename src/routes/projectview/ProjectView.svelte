@@ -19,7 +19,8 @@
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
         refreshProjectFiles,
-        silentlyRefreshProjectData
+            silentlyRefreshProjectData,
+            loadTranscriptFile // <-- ADD THIS
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -164,7 +165,42 @@
 
             if (!ranInBackground && jobFinishedPath) {
                 console.log('[ProjectView] Modal closed after foreground transcription, refreshing files and selecting media:', jobFinishedPath);
-                refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
+                const refreshPromise = refreshProjectFiles(jobFinishedPath); // This should select the media and trigger transcript load
+                refreshPromise.then(() => {
+                    // This block runs after refreshProjectFiles has completed and its UI updates have likely propagated
+                    const projectFiles = get(project).files;
+                    let mediaFileEntry = null;
+                    // Function to find the media file entry (assuming it's similar to what refreshProjectFiles might use or what's available)
+                    function findMediaByPathRecursive(nodes, path) {
+                        if (!Array.isArray(nodes)) return null;
+                        for (const node of nodes) {
+                            if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
+                            if (node.children?.length > 0) { const found = findMediaByPathRecursive(node.children, path); if (found) return found; }
+                        }
+                        return null;
+                    }
+                    mediaFileEntry = findMediaByPathRecursive(projectFiles, jobFinishedPath);
+
+                    if (mediaFileEntry) {
+                        // selectMediaStoreAction(mediaFileEntry); // selectMedia is likely called by refreshProjectFiles if path is passed
+                                                    // or by a file list component reacting to selection change from refresh.
+                                                    // If explicit re-selection is needed, it would go here.
+                                                    // For now, we assume refreshProjectFiles handles selection which triggers transcript load.
+
+                        const newTranscriptPath = get(transcriptStore).pendingTranscriptPathForJobDone;
+                        if (newTranscriptPath) {
+                            console.log(`[ProjectView] Explicitly loading new transcript: ${newTranscriptPath}`);
+                            loadTranscriptFile(newTranscriptPath).catch(err => {
+                                console.error(`[ProjectView] Error explicitly loading new transcript: ${err.message || err}`);
+                                // Optional: project.update(p => ({...p, error: `Failed to load new transcript: ${err.message || err}`}));
+                            });
+                        }
+                    } else {
+                        console.warn(`[ProjectView] Media file entry not found after refresh for path: ${jobFinishedPath}. Cannot auto-load transcript.`);
+                    }
+                }).catch(err => {
+                    console.error("[ProjectView] Error during refreshProjectFiles sequence in handleModalClose:", err);
+                });
             } else {
                 // Ran in background OR jobFinishedPath was null for some reason.
                 // The 'custom_transcription_job_completed' listener already handles silent refresh for background.
