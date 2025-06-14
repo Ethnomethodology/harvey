@@ -287,6 +287,64 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
     }
 }
 
+export async function silentlyRefreshProjectData(projectXmlPath) {
+    if (!projectXmlPath || projectXmlPath.trim() === '') {
+        console.error('[ProjectService] silentlyRefreshProjectData called without a valid projectXmlPath');
+        project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing for silent refresh.', statusMessage: 'Error: Project path missing.' }));
+        return; // Early return
+    }
+    project.update((current) => ({ ...current, isLoading: true, error: null, statusMessage: 'Refreshing project data silently...' }));
+    try {
+        const loadedData = await invoke('load_project_data', { projectXmlPath });
+
+        // --- Inject transcript paths from XML into media nodes ---
+        if (Array.isArray(loadedData.files)) {
+          const attachTranscripts = (nodes) => {
+            for (const node of nodes) {
+              if (node.file_type === 'media' && node.transcripts) {
+                // Map XML transcripts to full and relative paths
+                node.transcripts = node.transcripts.map(t => ({
+                  path: loadedData.base_directory
+                    ? `${loadedData.base_directory}/${t.relativePath}`
+                    : t.relativePath,
+                  relativePath: t.relativePath
+                }));
+              }
+              if (Array.isArray(node.children)) {
+                attachTranscripts(node.children);
+              }
+            }
+          };
+          attachTranscripts(loadedData.files);
+        }
+        // --- End transcript injection ---
+
+        const dataToSet = {
+            name: loadedData.project_name,
+            id: loadedData.project_uuid,
+            xmlPath: loadedData.project_xml_path,
+            baseDirectory: loadedData.base_directory,
+            files: loadedData.files || [],
+            documentFiles: loadedData.document_files || [],
+            tableFiles: loadedData.table_files || [],
+            imageFiles: loadedData.image_files || [],
+            importedTranscriptFiles: loadedData.imported_transcript_files || [],
+            documentMetadataFiles: loadedData.document_metadata_files || [],
+            isLoading: false,
+            error: null,
+            statusMessage: 'File list updated.' // Silent-ish message
+        };
+        project.update((current) => ({ ...current, ...dataToSet }));
+        // NO media selection logic here
+        // NO event emission like 'project-view-ready'
+
+    } catch (error) {
+        console.error('[ProjectService] Failed to silently refresh project data:', error); // ERROR
+        project.update((current) => ({ ...current, isLoading: false, error: error?.message || 'Unknown error refreshing project data.', statusMessage: 'Error refreshing project data.' }));
+        throw error;
+    }
+}
+
 export async function importMediaFile(importType = null) {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;

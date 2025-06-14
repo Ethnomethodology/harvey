@@ -17,7 +17,8 @@
         importImageFile,
         importTranscriptFile,
         requestTranscription as requestTranscriptionService,
-        refreshProjectFiles
+        refreshProjectFiles,
+        silentlyRefreshProjectData
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -146,16 +147,25 @@
             if (finalStatus === 'done') {
                 const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
                 const currentSelectionPathInUI = get(transcriptStore).selectedMediaFile?.path;
+                const activeMediaWhenJobStarted = get(transcriptStore).activeMediaDuringTranscriptionStart;
+                const currentProjectXmlPath = get(project).xmlPath; // Get current project's XML path
 
-                // New Simplified Logic:
-                if (currentSelectionPathInUI && currentSelectionPathInUI !== jobFinishedPath) {
-                    // User is actively viewing a different media item in the Transcriptions tab (or was viewing it before switching tabs).
-                    // Preserve this selection.
-                    refreshProjectFiles(currentSelectionPathInUI);
-                } else {
-                    // User was viewing the media that just finished, or nothing was specifically selected in the Transcriptions tab.
-                    // Load the transcript for the job that finished.
+                // New Decision Logic:
+                if ((!currentSelectionPathInUI && !activeMediaWhenJobStarted) || currentSelectionPathInUI === jobFinishedPath) {
+                    // User is idle or was/is viewing the media that just finished.
+                    // It's safe to load and select the new transcript.
+                    console.log(`[ProjectView | handleModalClose] Condition met to select finished transcript. Refreshing with: ${jobFinishedPath}`);
                     refreshProjectFiles(jobFinishedPath);
+                } else {
+                    // User is active elsewhere or has selected a different media.
+                    // Silently refresh the project data in the background without changing selection.
+                    console.log(`[ProjectView | handleModalClose] User active elsewhere. Silently refreshing data for project: ${currentProjectXmlPath}`);
+                    if (currentProjectXmlPath) {
+                        silentlyRefreshProjectData(currentProjectXmlPath);
+                    } else {
+                        console.error("[ProjectView | handleModalClose] Cannot silently refresh data: Project XML path is missing.");
+                        // Optionally, provide a fallback or user message, though this state should ideally not occur.
+                    }
                 }
 
                 // Clear the stored paths from transcriptStore as they've served their purpose.
