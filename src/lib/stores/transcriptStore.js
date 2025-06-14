@@ -632,21 +632,27 @@ export function toggleTranscribeModal(show) {
     transcriptStore.update((ts) => ({ ...ts, showTranscribeModal: !!show }));
 }
 
-export function setTranscriptionStatus(isTranscribing, jobId = null, statusMessage = '') {
+export function setTranscriptionStatus(isTranscribing, jobId = null, initialProgressMessage = '') {
     transcriptStore.update((ts) => ({
         ...ts,
         isTranscribing: !!isTranscribing,
         transcriptionJobId: jobId,
-        // Update global status message as well for now
-        // statusMessage: statusMessage || (isTranscribing ? 'Starting transcription...' : 'Ready'),
-        transcriptionProgress: isTranscribing ? { percent: 0, message: '' } : ts.transcriptionProgress,
-        // error: isTranscribing ? null : ts.error // Use global error for now
+        // Set the initial message for the modal's own progress display.
+        // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
+        transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
     }));
-    // Also update global status/error
-     updateProjectStoreState({
-        statusMessage: statusMessage || (isTranscribing ? 'Starting transcription...' : get(projectMainStore).statusMessage),
-        error: isTranscribing ? null : get(projectMainStore).error
-    });
+
+    // Only update projectStore for global error clearing or if a global 'isTranscribing' flag needs to be managed there.
+    // Do NOT set projectStore.statusMessage with the initialProgressMessage.
+    if (isTranscribing) {
+        updateProjectStoreState({
+            error: null // Clear any previous global error
+            // If projectStore has its own global isTranscribing flag, set it here.
+            // For example: isProjectCurrentlyTranscribing: true
+        });
+    }
+    // If !isTranscribing, this function isn't the one to clear global status.
+    // clearTranscriptionStatus handles setting final global status messages.
 }
 
 export function updateTranscriptionProgress(progressPayload) {
