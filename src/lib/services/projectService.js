@@ -832,7 +832,7 @@ export async function handleConfirmStartTranscription() {
         const ranInBackground = tsStore.ranInBackground; // ADDED
 
         if (ranInBackground) { // ADDED
-            notificationStore.add('Transcription complete!', 'success');
+            notificationStore.add('Transcription complete!', 'success', 0); // MODIFIED
             // Ensure modal is closed if it somehow wasn't by the runInBackground action
             if (get(transcriptStore).showTranscribeModal) {
                  toggleTranscribeModal(false);
@@ -843,7 +843,7 @@ export async function handleConfirmStartTranscription() {
                 // Do NOT call toggleTranscribeModal(false) here; the user will close it via the modal's button.
             } else {
                 // Fallback if modal instance isn't available, though it should be
-                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning');
+                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning', 0); // MODIFIED
                 if (get(transcriptStore).showTranscribeModal) {
                     toggleTranscribeModal(false);
                 }
