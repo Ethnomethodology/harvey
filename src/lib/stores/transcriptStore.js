@@ -24,6 +24,7 @@ export const initialTranscriptState = {
     transcriptionJobId: null,
     showTranscribeModal: false,
     mediaPathForLastJob: null, // Add this line
+    activeMediaDuringTranscriptionStart: null,
     transcriptUndoStack: [],
     transcriptRedoStack: [],
 };
@@ -142,7 +143,8 @@ export function clearTranscriptState() {
                 audioBuffer: null,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
-                speakers: { count: 0, names: [] }
+                speakers: { count: 0, names: [] },
+                activeMediaDuringTranscriptionStart: null, // Reset here as well
             };
         }
         return ts;
@@ -635,15 +637,22 @@ export function toggleTranscribeModal(show) {
 
 export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
     const { initialProgressMessage = '', mediaPath = null } = options;
-    transcriptStore.update((ts) => ({
-        ...ts,
-        isTranscribing: !!isTranscribing,
-        transcriptionJobId: jobId,
-        mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob, // Store mediaPath when starting
-        // Set the initial message for the modal's own progress display.
-        // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
-        transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
-    }));
+    transcriptStore.update((ts) => {
+        const newActiveMediaDuringStart = isTranscribing
+            ? ts.selectedMediaFile?.path ?? null
+            : ts.activeMediaDuringTranscriptionStart; // Keep existing if not starting
+
+        return {
+            ...ts,
+            isTranscribing: !!isTranscribing,
+            transcriptionJobId: jobId,
+            mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob, // Store mediaPath when starting
+            activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
+            // Set the initial message for the modal's own progress display.
+            // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
+            transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
+        };
+    });
 
     // Only update projectStore for global error clearing or if a global 'isTranscribing' flag needs to be managed there.
     // Do NOT set projectStore.statusMessage with the initialProgressMessage.
@@ -677,6 +686,7 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
         isTranscribing: false,
         transcriptionProgress: { percent: 0, message: '' },
         transcriptionJobId: null,
+        activeMediaDuringTranscriptionStart: null, // Reset here
         // mediaPathForLastJob is no longer reset here
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });

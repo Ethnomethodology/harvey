@@ -148,41 +148,31 @@
 
         if (acknowledged) {
             if (finalStatus === 'done') {
-                // Retrieve states for logging *before* any decision logic based on them
-                const pathOfTheJobThatFinishedForLog = get(transcriptStore).mediaPathForLastJob;
-                const currentlyDisplayedMediaPathForLog = get(transcriptStore).selectedMediaFile?.path;
-                // selectedTab is already available in the function's scope
-
-                console.log('-----------------------------------------------------');
-                console.log('[ProjectView.svelte | handleModalClose] "done" acknowledged.');
-                console.log('[ProjectView.svelte | handleModalClose] Current selectedTab:', selectedTab);
-                console.log('[ProjectView.svelte | handleModalClose] Media path of the job that just finished (mediaPathForLastJob):', pathOfTheJobThatFinishedForLog);
-                console.log('[ProjectView.svelte | handleModalClose] Media path currently selected in UI (selectedMediaFile.path):', currentlyDisplayedMediaPathForLog);
-                console.log('-----------------------------------------------------');
-
-                // Then proceed with the existing logic:
-                const pathOfTheJobThatFinished = pathOfTheJobThatFinishedForLog; // Use the logged value
-                const currentlyDisplayedMediaPath = currentlyDisplayedMediaPathForLog; // Use the logged value
+                const jobFinishedPath = get(transcriptStore).mediaPathForLastJob;
+                const currentlySelectedMediaInUI = get(transcriptStore).selectedMediaFile?.path;
 
                 if (selectedTab === 'transcriptions') {
-                    if (pathOfTheJobThatFinished && pathOfTheJobThatFinished === currentlyDisplayedMediaPath) {
-                        // Still viewing the media that just finished transcribing. Re-select it.
-                        refreshProjectFiles(pathOfTheJobThatFinished);
-                    } else if (currentlyDisplayedMediaPath) {
-                        // User is viewing/interacting with a different media on the transcriptions tab. Preserve this selection.
-                        refreshProjectFiles(currentlyDisplayedMediaPath);
+                    if (!currentlySelectedMediaInUI || currentlySelectedMediaInUI === jobFinishedPath) {
+                        // User was viewing the media that just finished, or nothing was selected.
+                        // Load the transcript for the job that finished.
+                        console.log(`[ProjectView | handleModalClose] Transcriptions tab active. Job finished for current/no selection. Refreshing with: ${jobFinishedPath}`);
+                        refreshProjectFiles(jobFinishedPath);
                     } else {
-                        // No specific media is currently displayed (e.g., empty project after first transcription).
-                        // Select the one that just finished.
-                        refreshProjectFiles(pathOfTheJobThatFinished);
+                        // User selected a different media item in the Transcriptions tab. Keep it selected.
+                        console.log(`[ProjectView | handleModalClose] Transcriptions tab active. User selected different media. Refreshing with current selection: ${currentlySelectedMediaInUI}`);
+                        refreshProjectFiles(currentlySelectedMediaInUI);
                     }
                 } else {
-                    // User is on a different tab (e.g., Notes). Refresh with default behavior (select first media).
-                    refreshProjectFiles();
+                    // User is on a different tab (e.g., Notes).
+                    // Refresh file list, try to preserve existing selection in transcriptStore, or fall back to null.
+                    // This prevents auto-selecting the newly finished transcript if the user is working elsewhere.
+                    const pathForRefresh = get(transcriptStore).selectedMediaFile?.path; // This could be from a previous interaction with Transcriptions tab
+                    console.log(`[ProjectView | handleModalClose] Different tab active. Refreshing project files, attempting to preserve selection: ${pathForRefresh || 'null (default behavior)'}`);
+                    refreshProjectFiles(pathForRefresh);
                 }
 
-                // After all refresh logic for 'done' status, clear the stored path
-                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null }));
+                // Clear the stored path for the job that finished, regardless of tab.
+                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null, activeMediaDuringTranscriptionStart: null }));
             }
             // Potentially other logic for 'error' or 'cancelled' if needed in the future
             // If error/cancelled also need to clear mediaPathForLastJob, it could be done here too,
