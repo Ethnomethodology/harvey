@@ -439,7 +439,7 @@
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
 	// $: modalProps = { fileName: $transcriptStore.selectedMediaFile?.name ?? 'N/A', modelName: $transcriptStore.selectedModelName ?? 'None Selected', language: $transcriptStore.selectedLanguage ?? 'N/A', speakers: $transcriptStore.speakers, jobId: $transcriptStore.transcriptionJobId };
-    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $transcriptStore.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
+    $: showLoadingOverlay = ($project.isLoading && !$transcriptStore.isTranscribing) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 
