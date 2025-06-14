@@ -148,8 +148,21 @@
 
         if (acknowledged) {
             if (finalStatus === 'done') {
-                const pathOfTheJobThatFinished = get(transcriptStore).mediaPathForLastJob;
-                const currentlyDisplayedMediaPath = get(transcriptStore).selectedMediaFile?.path;
+                // Retrieve states for logging *before* any decision logic based on them
+                const pathOfTheJobThatFinishedForLog = get(transcriptStore).mediaPathForLastJob;
+                const currentlyDisplayedMediaPathForLog = get(transcriptStore).selectedMediaFile?.path;
+                // selectedTab is already available in the function's scope
+
+                console.log('-----------------------------------------------------');
+                console.log('[ProjectView.svelte | handleModalClose] "done" acknowledged.');
+                console.log('[ProjectView.svelte | handleModalClose] Current selectedTab:', selectedTab);
+                console.log('[ProjectView.svelte | handleModalClose] Media path of the job that just finished (mediaPathForLastJob):', pathOfTheJobThatFinishedForLog);
+                console.log('[ProjectView.svelte | handleModalClose] Media path currently selected in UI (selectedMediaFile.path):', currentlyDisplayedMediaPathForLog);
+                console.log('-----------------------------------------------------');
+
+                // Then proceed with the existing logic:
+                const pathOfTheJobThatFinished = pathOfTheJobThatFinishedForLog; // Use the logged value
+                const currentlyDisplayedMediaPath = currentlyDisplayedMediaPathForLog; // Use the logged value
 
                 if (selectedTab === 'transcriptions') {
                     if (pathOfTheJobThatFinished && pathOfTheJobThatFinished === currentlyDisplayedMediaPath) {
