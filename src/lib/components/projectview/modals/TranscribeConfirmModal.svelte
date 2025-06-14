@@ -137,13 +137,28 @@
     // Add/remove keyboard listener based on modal visibility
 	$: if (showModal && typeof window !== 'undefined') {
 		window.addEventListener('keydown', handleKeydown);
-		// Sync status when modal opens, in case transcription was already running
-		if (status === 'confirm' && $transcriptStore.isTranscribing) {
-			console.log('[Modal] Syncing on show: Active transcription detected, setting status to running.');
-			status = 'running';
-		}
-	} else if (typeof window !== 'undefined') {
+
+            // If modal is being shown, and no transcription job is globally active,
+            // and the modal's current status is not already 'confirm' (e.g., it was 'done' or 'error' from a previous interaction),
+            // then force reset to 'confirm' state. This handles cases where the modal might show stale completion/error messages.
+            if (!$transcriptStore.isTranscribing && status !== 'confirm') {
+                console.log(`[Modal] Forcing status to 'confirm' on show. Was: ${status}. Global isTranscribing: ${$transcriptStore.isTranscribing}`);
+                status = 'confirm';
+                successMessage = '';
+                errorMessage = '';
+                cancelledMessage = '';
+            } else if (status === 'confirm' && $transcriptStore.isTranscribing) {
+                // This is the original sync logic: if modal was 'confirm' and a job is actually running globally, switch to 'running'.
+                console.log('[Modal] Syncing on show: Active transcription detected (global isTranscribing is true), setting modal status to running.');
+                status = 'running';
+            }
+            // If status is already 'running' and $transcriptStore.isTranscribing is true, no change needed here.
+            // If status is 'done'/'error'/'cancelled' and $transcriptStore.isTranscribing is false, the above block would have reset to 'confirm'.
+
+	} else if (typeof window !== 'undefined') { // When !showModal
 		window.removeEventListener('keydown', handleKeydown);
+            // Optional: Further reset logic when modal is hidden can be added here if closeModal() proves insufficient,
+            // but closeModal() already resets status to 'confirm'.
 	}
 
     // Cleanup listener on component destroy
