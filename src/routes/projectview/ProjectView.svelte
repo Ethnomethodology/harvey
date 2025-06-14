@@ -504,7 +504,7 @@
         on:confirmStart={handleConfirmStartTranscription}
         on:cancelRequest={handleCancelTranscriptionRequest}
             on:close={handleModalClose}
-            on:runInBackground={() => setRanInBackground(true)} /> {/* ADD THIS LINE */}
+            on:runInBackground={() => setRanInBackground(true)} />
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>
