@@ -16,7 +16,8 @@
         importTableFile,
         importImageFile,
         importTranscriptFile,
-        requestTranscription as requestTranscriptionService
+        requestTranscription as requestTranscriptionService,
+        refreshProjectFiles
 	} from '$lib/services/projectService.js';
 	import {
         project,
@@ -136,7 +137,64 @@
     }
 
 
-	function handleModalClose() { toggleTranscribeModal(false); }
+	function handleModalClose(event) {
+        // event.detail should be { acknowledged: boolean, finalStatus: string }
+        const { acknowledged, finalStatus } = event.detail || {};
+
+        toggleTranscribeModal(false); // Always hide the modal
+
+        // Ensure 'get' from 'svelte/store' and 'transcriptStore' are imported.
+        // These should already be present from previous changes.
+
+        if (acknowledged) {
+            if (finalStatus === 'done') {
+                // Retrieve states for logging *before* any decision logic based on them
+                const pathOfTheJobThatFinishedForLog = get(transcriptStore).mediaPathForLastJob;
+                const currentlyDisplayedMediaPathForLog = get(transcriptStore).selectedMediaFile?.path;
+                // selectedTab is already available in the function's scope
+
+                console.log('-----------------------------------------------------');
+                console.log('[ProjectView.svelte | handleModalClose] "done" acknowledged.');
+                console.log('[ProjectView.svelte | handleModalClose] Current selectedTab:', selectedTab);
+                console.log('[ProjectView.svelte | handleModalClose] Media path of the job that just finished (mediaPathForLastJob):', pathOfTheJobThatFinishedForLog);
+                console.log('[ProjectView.svelte | handleModalClose] Media path currently selected in UI (selectedMediaFile.path):', currentlyDisplayedMediaPathForLog);
+                console.log('-----------------------------------------------------');
+
+                // Then proceed with the existing logic:
+                const pathOfTheJobThatFinished = pathOfTheJobThatFinishedForLog; // Use the logged value
+                const currentlyDisplayedMediaPath = currentlyDisplayedMediaPathForLog; // Use the logged value
+
+                if (selectedTab === 'transcriptions') {
+                    if (pathOfTheJobThatFinished && pathOfTheJobThatFinished === currentlyDisplayedMediaPath) {
+                        // Still viewing the media that just finished transcribing. Re-select it.
+                        refreshProjectFiles(pathOfTheJobThatFinished);
+                    } else if (currentlyDisplayedMediaPath) {
+                        // User is viewing/interacting with a different media on the transcriptions tab. Preserve this selection.
+                        refreshProjectFiles(currentlyDisplayedMediaPath);
+                    } else {
+                        // No specific media is currently displayed (e.g., empty project after first transcription).
+                        // Select the one that just finished.
+                        refreshProjectFiles(pathOfTheJobThatFinished);
+                    }
+                } else {
+                    // User is on a different tab (e.g., Notes). Refresh with default behavior (select first media).
+                    refreshProjectFiles();
+                }
+
+                // After all refresh logic for 'done' status, clear the stored path
+                transcriptStore.update(ts => ({ ...ts, mediaPathForLastJob: null }));
+            }
+            // Potentially other logic for 'error' or 'cancelled' if needed in the future
+            // If error/cancelled also need to clear mediaPathForLastJob, it could be done here too,
+            // or more generally after the if(acknowledged) block if it applies to all acknowledged closures.
+            // For now, only clearing it on 'done' as per plan.
+        } else {
+            // Modal was dismissed without acknowledgment (e.g., Esc key, click outside)
+            if (finalStatus === 'running' || finalStatus === 'cancelling') {
+                console.log(`[ProjectView] TranscribeModal closed by user (acknowledged:false) while status was: ${finalStatus}. Background process continues.`);
+            }
+        }
+    }
     function handleUnsavedResponse(event) { const action = event.type; const callback = get(project)[`onUnsaved${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for unsaved action: ${action}`); hideUnsavedChangesPrompt(); } }
     function handleConversionResponse(event) { const action = event.type; const callback = get(project)[`onConversion${action.charAt(0).toUpperCase() + action.slice(1)}`]; if (typeof callback === 'function') { callback(); } else { console.warn(`[ProjectView] No valid callback for conversion action: ${action}`); hideConversionPrompt(); } }
 
@@ -419,7 +477,7 @@
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
 	// $: modalProps = { fileName: $transcriptStore.selectedMediaFile?.name ?? 'N/A', modelName: $transcriptStore.selectedModelName ?? 'None Selected', language: $transcriptStore.selectedLanguage ?? 'N/A', speakers: $transcriptStore.speakers, jobId: $transcriptStore.transcriptionJobId };
-    $: showLoadingOverlay = $project.isLoading || $project.isImportingAsset || $transcriptStore.isTranscribing || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
+    $: showLoadingOverlay = ($project.isLoading && !$transcriptStore.isTranscribing) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 
