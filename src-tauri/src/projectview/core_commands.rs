@@ -413,7 +413,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let mut bit_rate_overall: Option<i64> = None;
     let mut audio_codec: Option<String> = None;
     let mut video_codec: Option<String> = None;
-    let mut creation_time_tag: Option<String> = None;
+    // let mut creation_time_tag: Option<String> = None; // Removed
 
     let ffprobe_args = vec![
         "-v".to_string(), "quiet".to_string(),
@@ -435,9 +435,9 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
                             .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
 
                         bit_rate_overall = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
-                        if let Some(tags) = parsed_ffprobe_output.format.tags {
-                            creation_time_tag = tags.creation_time;
-                        }
+                        // if let Some(tags) = parsed_ffprobe_output.format.tags { // Removed
+                        //     creation_time_tag = tags.creation_time; // Removed
+                        // } // Removed
 
                         for stream in parsed_ffprobe_output.streams {
                             if duration_seconds.is_none() {
@@ -1081,7 +1081,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 bit_rate: None,
                                 audio_codec: None,
                                 video_codec: None,
-                                creation_time: None,
+                                created_at: None,
                             },
                             highlights: Vec::new(),
                         }

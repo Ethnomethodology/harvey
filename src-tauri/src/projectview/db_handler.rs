@@ -347,7 +347,7 @@ pub fn save_asset_metadata(
             to_sql_optional(metadata.bit_rate),
             to_sql_optional_str(metadata.audio_codec.as_deref()),
             to_sql_optional_str(metadata.video_codec.as_deref()),
-            to_sql_optional_str(metadata.creation_time.as_deref()),
+            to_sql_optional_str(metadata.created_at.as_deref()),
             asset_type,
             to_sql_optional_str(custom_fields_json),
         ],
