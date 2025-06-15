@@ -931,7 +931,79 @@ export async function loadActiveDocumentContent() { const currentProj = get(proj
 export async function saveCurrentPdfAnnotations() { const projState = get(project); if (!projState.selectedDocumentPath || !projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) return; if (!projState.isPdfAnnotationsDirty) return; const projectBaseDir = projState.baseDirectory; if (!projectBaseDir) return; let relativePdfPath = projState.selectedDocumentPath; if (relativePdfPath.startsWith(projectBaseDir + sep) || relativePdfPath.startsWith(projectBaseDir + '/')) relativePdfPath = relativePdfPath.substring(projectBaseDir.length + 1); else if (relativePdfPath.startsWith(projectBaseDir)) { relativePdfPath = relativePdfPath.substring(projectBaseDir.length); if (relativePdfPath.startsWith(sep) || relativePdfPath.startsWith('/') || relativePdfPath.startsWith('\\')) relativePdfPath = relativePdfPath.substring(1); } relativePdfPath = relativePdfPath.replace(/\\/g, '/'); try { const annList = projState.currentPdfAnnotations ?? []; await invoke('save_pdf_annotations', { originalPdfRelativePathStr: relativePdfPath, annotationsJsonContent: JSON.stringify(annList) }); markPdfAnnotationsAsSaved(); } catch (error) {} }
 export async function saveDocumentContent(filePath, jsonContent) { if (filePath && filePath.toLowerCase().endsWith('.pdf')) { project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'})); throw new Error("PDF content saving is not handled by saveDocumentContent."); } if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); } try { const parsed = JSON.parse(jsonContent); if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure."); } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); } const filename = await basename(filePath); project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` })); let mainContentSaveError = null; try { await invoke('save_note_json', { targetPath: filePath, jsonContent: jsonContent }); markDocumentAsSaved(jsonContent); } catch (error) { mainContentSaveError = error; const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` })); } const projState = get(project); let metadataSaveError = null; if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) { try { await saveDocumentMetadata(filePath); } catch (error) { metadataSaveError = error; } } if (mainContentSaveError) { await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' }); throw mainContentSaveError; } if (metadataSaveError) throw metadataSaveError; }
 export async function loadDocumentMetadata(originalDocumentAbsPath) { const proj = get(project); if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null; let relativePath = ""; const base = proj.baseDirectory; const absPath = originalDocumentAbsPath; if (absPath.startsWith(base)) { relativePath = absPath.substring(base.length); if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length); if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1); } else return null; const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/'); try { const fullMetadataJsonString = await invoke('load_document_metadata', { projectXmlPathStr: proj.xmlPath, originalDocumentRelativePathStr: originalDocumentRelativePathStr }); if (fullMetadataJsonString && typeof fullMetadataJsonString === 'string') { const parsedFullMetadata = JSON.parse(fullMetadataJsonString); if (parsedFullMetadata?.metadata && Array.isArray(parsedFullMetadata.highlights)) return parsedFullMetadata; return null; } return null; } catch (error) { return null; } }
-export async function saveDocumentMetadata(originalDocumentAbsPath) { const proj = get(project); if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath ) return; if (!proj.isDocumentMetadataDirty && originalDocumentAbsPath === proj.selectedDocumentPath) return; let relativePath = ""; const base = proj.baseDirectory; const absPath = originalDocumentAbsPath; const docFilename = await basename(absPath); if (absPath.startsWith(base)) { relativePath = absPath.substring(base.length); if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length); if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1); } else { await message(`Internal error: Could not determine relative path for metadata saving.`, { title: 'Save Metadata Error', type: 'error' }); throw new Error("Failed to construct relative path."); } const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/'); const fullMetadataToSave = { metadata: { file_name: docFilename, last_modified: proj.currentDocumentFileLevelMetadata.last_modified || new Date().toISOString(), title: proj.currentDocumentFileLevelMetadata.title || "", description: proj.currentDocumentFileLevelMetadata.description || "", summary: proj.currentDocumentFileLevelMetadata.summary || "", }, highlights: proj.currentDocumentHighlights || [] }; const fullMetadataJsonContent = JSON.stringify(fullMetadataToSave, null, 2); try { await invoke('save_document_metadata', { projectXmlPathStr: proj.xmlPath, originalDocumentRelativePathStr: originalDocumentRelativePathStr, fullMetadataJsonContent: fullMetadataJsonContent }); markDocumentMetadataAsSaved(fullMetadataToSave.metadata); } catch (error) { const errorMsg = error.message || (typeof error === 'string' ? error : "Unknown error saving metadata."); await message(`Error saving document highlights: ${errorMsg}`, { title: 'Save Metadata Error', type: 'error' }); throw new Error(errorMsg); } }
+export async function saveDocumentMetadata(originalDocumentAbsPath) {
+    const proj = get(project);
+    if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) {
+        console.error("[ProjectService saveDocMeta] Pre-condition failed: Missing project data or path.");
+        return;
+    }
+    // If not dirty and it's the currently selected document, no need to save.
+    if (!proj.isDocumentMetadataDirty && originalDocumentAbsPath === proj.selectedDocumentPath) {
+        console.log("[ProjectService saveDocMeta] No metadata changes to save for current document.");
+        return;
+    }
+
+    let relativePath = "";
+    const base = proj.baseDirectory;
+    const absPath = originalDocumentAbsPath;
+    const docFilename = await basename(absPath);
+
+    if (absPath.startsWith(base)) {
+        relativePath = absPath.substring(base.length);
+        if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length);
+        // Normalize path separators for consistency, though backend might do this too
+        if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1);
+    } else {
+        await message(`Internal error: Could not determine relative path for metadata saving. Path ${absPath} not in base ${base}`, { title: 'Save Metadata Error', type: 'error' });
+        throw new Error("Failed to construct relative path for metadata saving.");
+    }
+    const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/');
+
+    // Prepare the metadata fields from the store for the payload
+    // This fullMetadataToSave structure is slightly different from what's directly passed.
+    // We'll use its components to build the metadataPayload.
+    const fullMetadataToSave = {
+        metadata: {
+            file_name: docFilename,
+            last_modified: proj.currentDocumentFileLevelMetadata.last_modified || new Date().toISOString(),
+            title: proj.currentDocumentFileLevelMetadata.title || "",
+            description: proj.currentDocumentFileLevelMetadata.description || "",
+            summary: proj.currentDocumentFileLevelMetadata.summary || "",
+        },
+        highlights: proj.currentDocumentHighlights || [] // This becomes customFieldsPayload
+    };
+
+    try {
+        const metadataPayload = {
+            file_name: docFilename, // Already available from basename(absPath)
+            file_path: originalDocumentAbsPath, // Absolute path
+            last_modified: fullMetadataToSave.metadata.last_modified, // Backend will set its own, but good to pass
+            title: fullMetadataToSave.metadata.title,
+            description: fullMetadataToSave.metadata.description,
+            summary: fullMetadataToSave.metadata.summary,
+            // Optional fields from Rust's FileMetadata struct (duration_seconds, width, height, etc.)
+            // are intentionally omitted. The backend should treat missing fields as None
+            // and not update them, preserving existing technical metadata. `created_at` also not sent.
+        };
+
+        await invoke('update_asset_metadata_command', {
+            projectXmlPathStr: proj.xmlPath,
+            assetRelativePath: originalDocumentRelativePathStr, // Key for DB lookup
+            metadataPayload: metadataPayload,
+            customFieldsPayload: null, // Ensure this is null
+            assetType: "doc" // Explicitly set asset type
+        });
+
+        markDocumentMetadataAsSaved(fullMetadataToSave.metadata); // Update UI state
+        console.log(`[ProjectService saveDocMeta] Document metadata saved for: ${originalDocumentRelativePathStr}`);
+
+    } catch (error) {
+        const errorMsg = error.message || (typeof error === 'string' ? error : "Unknown error saving metadata.");
+        console.error(`[ProjectService saveDocMeta] Error for ${originalDocumentRelativePathStr}:`, errorMsg);
+        await message(`Error saving document metadata: ${errorMsg}`, { title: 'Save Metadata Error', type: 'error' });
+        throw new Error(errorMsg); // Re-throw to indicate failure
+    }
+}
 
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
