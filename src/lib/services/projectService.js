@@ -1198,7 +1198,12 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
     project.update(p => ({ ...p, statusMessage: `Loading annotations for ${filename}...`}));
 
     try {
-        const annotationsJsonString = await invoke('load_pdf_annotations', { originalPdfAbsPathStr: relativePdfPath });
+        if (!currentProj.id) { // project_uuid is stored as 'id' in the projectStore
+            console.error(`[ProjectService] loadPdfAnnotationsFromFile: project_uuid (project.id) is missing. Cannot load annotations for ${relativePdfPath}`);
+            setPdfAnnotationsLoadFailed(pdfAbsPath, "Project identifier is missing.");
+            return;
+        }
+        const annotationsJsonString = await invoke('load_pdf_annotations', { projectId: currentProj.id, originalPdfRelativePathStr: relativePdfPath });
 
         if (annotationsJsonString && typeof annotationsJsonString === 'string') {
             try {
