@@ -12,7 +12,7 @@ use std::{
     process::Command, // To run external commands
 };
 use quick_xml;
-use tauri_plugin_os::api::platform; // For OS detection
+use tauri_plugin_os::platform; // For OS detection
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
