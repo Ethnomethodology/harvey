@@ -574,7 +574,7 @@
             const currentSelectedPathFromStore = selectedItemPathInStore; // Capture for this async operation
             // console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore); // Removed
 
-            if (currentSelectedPathFromStore && $project && $project.baseDirectory && $project.project_uuid) {
+            if (currentSelectedPathFromStore && $project && $project.baseDirectory && typeof $project.project_uuid === 'string' && $project.project_uuid.trim() !== '') {
                 newOriginalAssetDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project); // Assign to declared variable
                 // console.debug('[LeftInfoPanel Reactive] newOriginalAssetDetails determined:', newOriginalAssetDetails); // Removed
 
@@ -665,6 +665,18 @@
                 currentItemType = null;
                 if (isEditing) isEditing = false;
                 previousSelectedItemPath = null;
+            } else {
+                // This case means essential project data (especially project_uuid) is missing or path is missing.
+                // Clear out any existing metadata to prevent stale display.
+                if (previousSelectedItemPath !== null || currentFileMetadata !== null) { // Check if there was data before
+                    console.warn('[LeftInfoPanel Reactive Block] Clearing metadata because project_uuid is invalid or path is missing. Current path:', currentSelectedPathFromStore, 'Project UUID:', $project ? $project.project_uuid : 'N/A');
+                    currentFileMetadata = null;
+                    fullLoadedMetadataObject = null; // If this is still used
+                    currentOriginalAssetDetails = null;
+                    // currentItemType = null; // Already handled if currentOriginalAssetDetails is null
+                    if (isEditing) isEditing = false;
+                    previousSelectedItemPath = null; // Reset to ensure reload if path becomes valid later
+                }
             }
         })();
     } // End of main reactive block
