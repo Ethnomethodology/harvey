@@ -281,7 +281,10 @@
 
         try {
             // console.debug(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`); // Downgraded // Removed
-            const result = await invoke('get_asset_metadata_command', { assetRelativePath: assetRelativePath });
+            const result = await invoke('get_asset_metadata_command', {
+                projectId: $project.project_uuid, // Add this line
+                assetRelativePath: assetRelativePath
+            });
 
             if (result) {
                 // result is FileMetadataWithCustomFieldsFromDb
