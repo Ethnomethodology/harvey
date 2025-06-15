@@ -415,15 +415,8 @@ export async function importMediaFile(importType = null) {
                 ...p,
                 isImportingAsset: false,
                 isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported (no metadata returned).`
+                statusMessage: `${filename} imported. File available in project list.`
             }));
-
-            // Now, attempt to find and prepare the view for the new media
-            const proj = get(project);
-            const realPath = findMediaPathByName(proj.files, filename);
-            if (realPath) {
-              prepareMediaNoteView(realPath); // This will set isLoading true, then note load will set it false
-            }
             return;
         }
 
@@ -434,20 +427,13 @@ export async function importMediaFile(importType = null) {
             console.warn('[ProjectService] import_media returned no updatedFiles. Falling back to refresh.');
             await refreshProjectFiles(); // Single call to refresh
 
-            // Explicitly set isLoading to false after refresh and before finding/preparing media note
+            // Explicitly set isLoading to false after refresh
             project.update(p => ({
                 ...p,
                 isImportingAsset: false,
                 isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported (refresh applied).`
+                statusMessage: `${filename} imported. File available in project list.`
             }));
-
-            // Now, attempt to find and prepare the view for the new media
-            const proj = get(project);
-            const realPath = findMediaPathByName(proj.files, filename);
-            if (realPath) {
-              prepareMediaNoteView(realPath); // This will set isLoading true, then note load will set it false
-            }
             return;
         }
 
@@ -458,16 +444,15 @@ export async function importMediaFile(importType = null) {
                 isImportingAsset: false,
                 isLoading: false,
                 error: null,
-                statusMessage: `${filename} imported.`
+                statusMessage: `${filename} imported successfully.` // Updated message
             }));
-
-            if (newMediaPath) {
-                prepareMediaNoteView(newMediaPath);
-            } else {
-                console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path. Cannot auto-select.');
+            // newMediaPath is available, but we are not calling prepareMediaNoteView anymore.
+            if (!newMediaPath) {
+                 console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path for potential future use.');
             }
-
         } else {
+            // This else block might be unreachable if !Array.isArray(updatedFiles) is handled above,
+            // but kept for structural integrity based on original code.
             console.error('[ProjectService] Backend import_media returned invalid data:', updatedFiles);
             setAssetImportStatus(false, `Error importing ${filename}: Invalid data from backend.`);
             throw new Error("Received invalid data from import process.");
