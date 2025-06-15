@@ -156,6 +156,7 @@ pub fn run() {
             projectview::core_commands::import_media,
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
+            projectview::core_commands::reveal_in_file_explorer,
 
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
