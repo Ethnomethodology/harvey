@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result, params, OptionalExtension, ToSql};
 use std::path::PathBuf;
 use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
-use log::{info, debug, error}; // Added error
+use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
 use crate::projectview::shared_types::FileMetadata; // For function signatures
 
