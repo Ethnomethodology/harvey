@@ -522,6 +522,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let db_key_relative_path = destination_relative_path_for_xml_calc;
 
     // project_id_for_db is project_data_check.project_uuid, parsed earlier
+    info!("[Backend Import] Media FileMetadata before save: created_at={:?}", file_metadata_for_db.created_at);
     match db_handler::save_asset_metadata(
         &project_data_check.project_uuid, // Added: project_id (UUID of the project)
         &file_metadata_for_db,

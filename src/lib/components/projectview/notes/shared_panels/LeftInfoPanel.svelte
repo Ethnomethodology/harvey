@@ -250,13 +250,13 @@
         }
 
         try {
-            if (!$project.project_uuid || typeof $project.project_uuid !== 'string' || $project.project_uuid.trim() === '') {
-                console.error('[LeftInfoPanel loadMetadata] Attempted to call get_asset_metadata_command without a valid project_uuid. Path:', assetRelativePath, 'Project UUID:', $project.project_uuid);
+            if (!$project.id || typeof $project.id !== 'string' || $project.id.trim() === '') {
+                console.error('[LeftInfoPanel loadMetadata] Attempted to call get_asset_metadata_command without a valid project ID (from $project.id). Path:', assetRelativePath, 'Project ID:', $project.id);
                 currentFileMetadata = null;
                 return;
             }
             const result = await invoke('get_asset_metadata_command', {
-                projectId: $project.project_uuid,
+                projectId: $project.id,
                 assetRelativePath: assetRelativePath
             });
 
@@ -465,9 +465,9 @@
             let newCurrentItemType = null;
 
             const currentSelectedPathFromStore = selectedItemPathInStore;
-            console.log('[LIP Reactive] Top: currentSelectedPathFromStore:', currentSelectedPathFromStore, 'Proj UUID:', $project?.project_uuid, 'BaseDir:', $project?.baseDirectory);
+            console.log('[LIP Reactive] Top: currentSelectedPathFromStore:', currentSelectedPathFromStore, 'Proj ID (from $project.id):', $project?.id, 'BaseDir:', $project?.baseDirectory);
 
-            if (currentSelectedPathFromStore && $project && $project.baseDirectory && typeof $project.project_uuid === 'string' && $project.project_uuid.trim() !== '') {
+            if (currentSelectedPathFromStore && $project && $project.baseDirectory && typeof $project.id === 'string' && $project.id.trim() !== '') {
                 console.log('[LIP Reactive] Main IF condition PASSED.');
                 newOriginalAssetDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project);
                 console.log('[LIP Reactive] newOriginalAssetDetails:', newOriginalAssetDetails);
@@ -514,7 +514,7 @@
                         currentItemType = newCurrentItemType;
                     }
 
-                    if (newCurrentRelativePath && newCurrentRelativePath !== previousSelectedItemPath && $project.project_uuid) {
+                    if (newCurrentRelativePath && newCurrentRelativePath !== previousSelectedItemPath && $project.id) {
                         console.log('[LIP Reactive] Conditions MET to call loadMetadata for path:', newCurrentRelativePath);
                         if (isEditing) {
                             isEditing = false;
@@ -531,7 +531,7 @@
                             console.log('[LIP Reactive] Path and details same as previous. No metadata reload.');
                         }
                     } else {
-                        console.warn('[LIP Reactive] Conditions NOT MET to call loadMetadata. newCurrentRelativePath:', newCurrentRelativePath, 'previousSelectedItemPath:', previousSelectedItemPath, 'Project UUID valid?:', !!$project.project_uuid);
+                        console.warn('[LIP Reactive] Conditions NOT MET to call loadMetadata. newCurrentRelativePath:', newCurrentRelativePath, 'previousSelectedItemPath:', previousSelectedItemPath, 'Project ID valid?:', !!$project.id);
                         if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
                              console.log('[LIP Reactive] Path became null, clearing metadata.');
                              currentFileMetadata = null;
@@ -550,7 +550,7 @@
                     previousSelectedItemPath = null;
                 }
             } else {
-                console.warn('[LIP Reactive] Main IF condition FAILED. Clearing metadata. Path:', currentSelectedPathFromStore, 'Proj:', !!$project, 'BaseDir:', !!$project?.baseDirectory, 'UUID:', $project?.project_uuid);
+                console.warn('[LIP Reactive] Main IF condition FAILED. Clearing metadata. Path:', currentSelectedPathFromStore, 'Proj:', !!$project, 'BaseDir:', !!$project?.baseDirectory, 'ID (from $project.id):', $project?.id);
                 if (previousSelectedItemPath !== null || currentFileMetadata !== null) {
                     currentFileMetadata = null;
                     fullLoadedMetadataObject = null;

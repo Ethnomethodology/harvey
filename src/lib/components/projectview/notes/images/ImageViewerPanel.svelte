@@ -64,13 +64,13 @@
         currentAnnotations = [];
 
         const currentProj = get(project);
-        // Ensure $project.project_uuid is valid before proceeding
-        if (!currentProj || !currentProj.project_uuid || typeof currentProj.project_uuid !== 'string' || currentProj.project_uuid.trim() === '') {
-            console.error('[ImageViewerPanel loadAnnotationsForImage] Cannot load image annotations: project_uuid is missing or invalid.', currentProj);
-            // Optionally, display an error to the user or set an error state
+        // Ensure $project.id is valid before proceeding
+        if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
+            console.error('[ImageViewerPanel loadAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
+            // Handle error appropriately, e.g., clear annotations, show message
             return;
         }
-        const projectId = currentProj.project_uuid; // Use the validated project_uuid
+        const projectId = currentProj.id; // Use the validated project.id
 
         const projectBaseDir = currentProj.baseDirectory;
         let relativeImagePath = imgPath; // imgPath is the absolute path to the image
@@ -85,11 +85,11 @@
         }
         relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
 
-        console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for project ${projectId}, image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
+        console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for project ${projectId} (from $project.id), image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
 
         try {
             const annotationsJsonString = await invoke('load_image_annotations', {
-                projectId: projectId,
+                projectId: projectId, // Ensure this uses the projectId from currentProj.id
                 imageRelativePathStr: relativeImagePath
             });
             if (annotationsJsonString && typeof annotationsJsonString === 'string') {
@@ -121,13 +121,13 @@
         //     return;
         // }
         const currentProj = get(project);
-        // Ensure $project.project_uuid is valid before proceeding
-        if (!currentProj || !currentProj.project_uuid || typeof currentProj.project_uuid !== 'string' || currentProj.project_uuid.trim() === '') {
-            console.error('[ImageViewerPanel saveAnnotationsForImage] Cannot save image annotations: project_uuid is missing or invalid.', currentProj);
-            await message('Cannot save annotations: Project identifier is missing or invalid. Please ensure the project is fully loaded.', { title: 'Save Error', type: 'error' });
+        // Ensure $project.id is valid before proceeding
+        if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
+            console.error('[ImageViewerPanel saveAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
+            await message('Cannot save image annotations: Project identifier is missing or invalid.', { title: 'Save Error', type: 'error' });
             return;
         }
-        const projectId = currentProj.project_uuid; // Use the validated project_uuid
+        const projectId = currentProj.id; // Use the validated project.id
 
         const projectBaseDir = currentProj.baseDirectory;
         let relativeImagePath = currentLoadedPath; // currentLoadedPath is the absolute path
@@ -143,17 +143,17 @@
         }
         relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
 
-        console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for project ${projectId}, image relative path: ${relativeImagePath}`);
+        console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for project ${projectId} (from $project.id), image relative path: ${relativeImagePath}`);
 
         try {
             await invoke('save_image_annotations', {
-                projectId: projectId,
+                projectId: projectId, // Ensure this uses the projectId from currentProj.id
                 imageRelativePathStr: relativeImagePath,
                 annotationsJsonString: JSON.stringify(currentAnnotations, null, 2)
             });
-            console.log(`[ImageViewerPanel saveAnnotationsForImage] Annotations saved for project ${projectId}, image ${relativeImagePath}`);
+            console.log(`[ImageViewerPanel saveAnnotationsForImage] Annotations saved for project ${projectId} (from $project.id), image ${relativeImagePath}`);
         } catch (err) {
-            console.error(`[ImageViewerPanel saveAnnotationsForImage] Error saving for project ${projectId}, image ${relativeImagePath}:`, err);
+            console.error(`[ImageViewerPanel saveAnnotationsForImage] Error saving for project ${projectId} (from $project.id), image ${relativeImagePath}:`, err);
         }
     }
 
