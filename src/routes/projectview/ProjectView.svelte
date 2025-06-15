@@ -529,7 +529,19 @@
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            if (importType === 'audio' || importType === 'video') await importMediaFile(importType);
+            let returnedMediaPath = null;
+            if (importType === 'audio' || importType === 'video') {
+                returnedMediaPath = await importMediaFile(importType);
+                if (returnedMediaPath) {
+                    // refreshProjectFiles will select the media and update the file list.
+                    // It also handles its own isLoading states.
+                    await refreshProjectFiles(returnedMediaPath);
+                    // If the 'notes' tab is active, prepare the media note view for the new media.
+                    if (selectedTab === 'notes') {
+                        prepareMediaNoteView(returnedMediaPath);
+                    }
+                }
+            }
             else if (importType === 'document') await importDocumentFile();
             else if (importType === 'table') await importTableFile();
             else if (importType === 'image') await importImageFile();

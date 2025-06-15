@@ -450,6 +450,7 @@ export async function importMediaFile(importType = null) {
             if (!newMediaPath) {
                  console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path for potential future use.');
             }
+            return newMediaPath; // Return the new media path
         } else {
             // This else block might be unreachable if !Array.isArray(updatedFiles) is handled above,
             // but kept for structural integrity based on original code.
