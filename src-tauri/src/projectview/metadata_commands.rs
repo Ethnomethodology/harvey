@@ -1,28 +1,61 @@
 // src-tauri/src/projectview/metadata_commands.rs
 use tauri::AppHandle;
-use log::{debug, error, info}; // Added info
-use std::path::{Path, PathBuf}; // Added PathBuf here
-use std::fs; // Added fs
-use chrono::Utc; // Added for timestamp
-use quick_xml; // Added for parsing XML
-use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is imported at the top
-use crate::projectview::db_handler::{
-    load_asset_metadata, save_asset_metadata, FileMetadataWithCustomFieldsFromDb
-};
-use crate::projectview::shared_types::FileMetadata; // For the payload structure
-// Path and Utc are already imported above
+use log::{debug, error, info, warn}; // Added warn
+use std::path::{Path, PathBuf};
+use std::fs;
+use chrono::Utc;
+use quick_xml;
+use crate::projectview::shared_types::ProjectXml;
+use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb}; // Added db_handler explicitly
+use crate::projectview::shared_types::FileMetadata;
 
 #[tauri::command]
 pub async fn get_asset_metadata_command(
-    _app_handle: AppHandle, // Use _app_handle if not directly used, but good to keep for consistency
+    _app_handle: AppHandle,
+    project_id: String,
     asset_relative_path: String,
 ) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, String> {
-    debug!("[CMD] get_asset_metadata_command for path: {}", asset_relative_path);
-    load_asset_metadata(&asset_relative_path)
-        .map_err(|e| {
-            error!("[CMD] Error in get_asset_metadata_command for {}: {}", asset_relative_path, e);
-            e.to_string()
-        })
+    debug!(
+        "[CMD] get_asset_metadata_command for project_id {} and path: {}",
+        project_id, asset_relative_path
+    );
+
+    match db_handler::load_asset_metadata(&project_id, &asset_relative_path) {
+        Ok(Some(mut base_metadata)) => {
+            // Now try to load the media_transcript_data
+            match db_handler::load_media_transcript_data(&project_id, &asset_relative_path) {
+                Ok(Some(media_data)) => {
+                    base_metadata.original_import_path = media_data.original_import_path;
+                    base_metadata.speaker_names_json = media_data.speaker_names_json;
+                    info!("[CMD] Successfully loaded base and media_transcript_data for {} - {}", project_id, asset_relative_path);
+                }
+                Ok(None) => {
+                    // It's okay if no media_transcript_data exists, base_metadata is still valid.
+                    // Fields in base_metadata for these will remain None by default.
+                    info!("[CMD] Loaded base_metadata, but no media_transcript_data found for {} - {}", project_id, asset_relative_path);
+                }
+                Err(e) => {
+                    // Log error but proceed with base_metadata, or decide if this error is critical
+                    warn!(
+                        "[CMD] Error loading media_transcript_data for {} - {}: {}. Returning base metadata only.",
+                        project_id, asset_relative_path, e
+                    );
+                }
+            }
+            Ok(Some(base_metadata))
+        }
+        Ok(None) => {
+            info!("[CMD] No asset_metadata found for {} - {}", project_id, asset_relative_path);
+            Ok(None)
+        }
+        Err(e) => {
+            error!(
+                "[CMD] Error in get_asset_metadata_command (base metadata) for {} - {}: {}",
+                project_id, asset_relative_path, e
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -74,15 +107,36 @@ pub async fn update_asset_metadata_command(
 
     save_asset_metadata(
         &project_id_for_db,         // Pass project_id
-        &sanitized_metadata_for_db,
+        &sanitized_metadata_for_db, // This is of type FileMetadata from shared_types
         &asset_relative_path,
         &asset_type,
         custom_fields_json_string.as_deref(),
-    )
-    .map_err(|e| {
-        error!("[CMD] Error in update_asset_metadata_command for {}: {}", asset_relative_path, e);
-        e.to_string()
-    })
+    )?; // Changed to use ? for early return on error, then proceed
+
+    // After successfully saving base asset metadata, also save/update media_transcript_data
+    // Note: sanitized_metadata_for_db is the metadata_payload after some fields were adjusted.
+    // We use its original_import_path and speaker_names fields here.
+    if let Err(e) = db_handler::save_media_transcript_data(
+        &project_id_for_db,
+        &asset_relative_path,
+        sanitized_metadata_for_db.original_import_path.as_deref(),
+        sanitized_metadata_for_db.speaker_names.as_ref(),
+    ) {
+        warn!(
+            "[CMD] Failed to save media_transcript_data during metadata update for project_id {}: {}. Error: {}",
+            project_id_for_db, asset_relative_path, e
+        );
+        // Depending on requirements, you might choose to return an error here
+        // return Err(format!("Failed to save associated media transcript data: {}", e));
+        // For now, log a warning and consider the main operation successful if save_asset_metadata was.
+    } else {
+        info!(
+            "[CMD] Successfully saved/updated media_transcript_data during metadata update for project_id {}: {}",
+            project_id_for_db, asset_relative_path
+        );
+    }
+
+    Ok(())
 }
 
 // --- Custom Field Definition Commands ---

@@ -44,6 +44,10 @@ pub struct FileMetadata {
     pub video_codec: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>, // Renamed from creation_time
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_import_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker_names: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -349,6 +353,8 @@ impl Default for FileMetadata {
             audio_codec: None,
             video_codec: None,
             created_at: None, // Renamed from creation_time
+            original_import_path: None, // New field
+            speaker_names: None,        // New field
         }
     }
 }

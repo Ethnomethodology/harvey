@@ -3,7 +3,7 @@ use rusqlite::{Connection, Result, params, OptionalExtension, ToSql};
 use std::path::PathBuf;
 use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
-use log::{info, debug, error}; // Added error
+use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
 use crate::projectview::shared_types::FileMetadata; // For function signatures
 
@@ -27,6 +27,14 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub creation_time: Option<String>,
     pub custom_fields_json: Option<String>,
     pub asset_type: String,
+    pub original_import_path: Option<String>,
+    pub speaker_names_json: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct MediaTranscriptDataValues {
+    pub original_import_path: Option<String>,
+    pub speaker_names_json: Option<String>,
 }
 
 fn get_db_path() -> Result<PathBuf, CommandError> {
@@ -40,26 +48,48 @@ pub fn init_db() -> Result<(), CommandError> {
 
     debug!("[DB] Initializing database at: {}", db_path.display());
 
+    // Updated pdf_annotations table definition
     conn.execute(
         "CREATE TABLE IF NOT EXISTS pdf_annotations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pdf_document_path TEXT NOT NULL UNIQUE, -- Conceptually 'document_path'
+            project_id TEXT NOT NULL,
+            pdf_document_path TEXT NOT NULL,
             annotations_json TEXT NOT NULL,
-            document_type TEXT NOT NULL DEFAULT 'pdf', -- New column
+            document_type TEXT NOT NULL DEFAULT 'pdf',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, pdf_document_path, document_type)
         )",
         [],
     )?;
+    info!("[DB] Initialized pdf_annotations table definition.");
 
-    // Check if document_type column exists
-    let mut stmt = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
-    let column_exists = stmt.query_map([], |row| row.get::<_, String>(1))?
-                            .any(|col_name_result| col_name_result.map_or(false, |name| name == "document_type"));
+    // Check and add document_type column if missing (for older schemas)
+    let mut stmt_check_doc_type = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
+    let doc_type_column_exists = stmt_check_doc_type
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "document_type"));
 
-    if !column_exists {
+    if !doc_type_column_exists {
         info!("[DB] Adding document_type column to pdf_annotations table.");
         conn.execute("ALTER TABLE pdf_annotations ADD COLUMN document_type TEXT NOT NULL DEFAULT 'pdf'", [])?;
+    }
+
+    // Check and add project_id column if missing (for older schemas)
+    // This is a simplified migration: it adds the column but doesn't backfill or add FK for existing rows via ALTER.
+    // New tables get the FK from CREATE TABLE.
+    let mut stmt_check_project_id = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
+    let project_id_column_exists = stmt_check_project_id
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "project_id"));
+
+    if !project_id_column_exists {
+        info!("[DB] Adding project_id column to pdf_annotations table.");
+        conn.execute("ALTER TABLE pdf_annotations ADD COLUMN project_id TEXT", [])?;
+        // For existing rows, project_id will be NULL. This needs to be handled by application logic
+        // or a more comprehensive data migration strategy if strict FK enforcement on old data is required.
+        info!("[DB] Added project_id column to pdf_annotations. Existing rows will have NULL project_id if not manually updated.");
     }
 
     // Create a trigger to update `updated_at` timestamp
@@ -76,8 +106,8 @@ pub fn init_db() -> Result<(), CommandError> {
     // asset_metadata table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS asset_metadata (
-            asset_relative_path TEXT PRIMARY KEY,
-            project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+            asset_relative_path TEXT NOT NULL,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
             file_name TEXT NOT NULL,
             file_path TEXT NOT NULL,
             last_modified TEXT NOT NULL,
@@ -94,42 +124,70 @@ pub fn init_db() -> Result<(), CommandError> {
             creation_time TEXT,
             asset_type TEXT NOT NULL,
             custom_fields_json TEXT,
+            original_import_path TEXT, -- New column
+            speaker_names_json TEXT,   -- New column
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_relative_path)
         )",
         [],
     )?;
-    info!("[DB] Initialized asset_metadata table definition.");
+    info!("[DB] Initialized asset_metadata table definition with composite PK.");
 
-    // Check if project_id column exists in asset_metadata
-    let mut stmt_asset_meta = conn.prepare("PRAGMA table_info(asset_metadata)")?;
-    let asset_meta_project_id_column_exists = stmt_asset_meta
+    // Check and add project_id column to asset_metadata if missing (for older schemas)
+    // This simplified migration adds the column if it doesn't exist. It does not change PK for existing tables.
+    // The PRIMARY KEY change in CREATE TABLE applies to new DBs or if the table is dropped and recreated.
+    // Handling PK change for existing populated tables is a complex migration not covered here.
+    let mut stmt_check_asset_project_id = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let asset_project_id_exists = stmt_check_asset_project_id
         .query_map([], |row| row.get::<_, String>(1))?
-        .any(|col_name_result| col_name_result.map_or(false, |name| name == "project_id"));
+        .any(|name_res| name_res.map_or(false, |name| name == "project_id"));
 
-    if !asset_meta_project_id_column_exists {
-        info!("[DB] Adding project_id column to asset_metadata table.");
-        // Note: Adding FK constraint via ALTER TABLE has limitations in SQLite.
-        // This adds the column, but the FK relationship for existing rows or without `PRAGMA foreign_keys=ON`
-        // might not be enforced by older SQLite versions this way.
-        // For new tables, the CREATE TABLE statement includes the FK.
+    if !asset_project_id_exists {
+        info!("[DB] Adding project_id column to asset_metadata table (for older schema).");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN project_id TEXT", [])?;
-        // We are not adding 'REFERENCES projects(id) ON DELETE CASCADE' here via ALTER TABLE
-        // due to SQLite limitations. New tables get it from CREATE TABLE.
-        // Existing data would have NULL project_id. Application logic must handle this.
-        info!("[DB] Added project_id column. Existing rows will have NULL project_id. Ensure application handles this or provide a migration path.");
+        info!("[DB] Added project_id column to asset_metadata. Existing rows will have NULL. PK not changed for existing tables by this ALTER.");
     }
 
+    // Migration for original_import_path
+    let mut stmt_check_orig_path = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let orig_path_exists = stmt_check_orig_path
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "original_import_path"));
+    if !orig_path_exists {
+        info!("[DB] Adding original_import_path column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN original_import_path TEXT", [])?;
+    }
 
+    // Migration for speaker_names_json
+    let mut stmt_check_speakers = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let speakers_exist = stmt_check_speakers
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "speaker_names_json"));
+    if !speakers_exist {
+        info!("[DB] Adding speaker_names_json column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT", [])?;
+    }
+
+    // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
+    // For simplicity, the trigger is defined for the new composite key structure.
+    // If running against an old DB structure (single PK asset_relative_path), this trigger might need adjustment or conditional creation.
+    // However, SQLite usually allows triggers that might not perfectly match all old schema variations if the columns exist.
+    conn.execute(
+        "DROP TRIGGER IF EXISTS update_asset_metadata_updated_at", // Drop old trigger first
+        [],
+    )?;
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_asset_metadata_updated_at
         AFTER UPDATE ON asset_metadata
         FOR EACH ROW
         BEGIN
-            UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP WHERE asset_relative_path = OLD.asset_relative_path;
+            UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP
+            WHERE project_id = OLD.project_id AND asset_relative_path = OLD.asset_relative_path;
         END;",
         [],
     )?;
+    info!("[DB] Recreated update_asset_metadata_updated_at trigger for new PK.");
 
     // custom_field_definitions table
     conn.execute(
@@ -159,29 +217,49 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized custom_field_definitions table and trigger.");
 
-    // table_layout_preferences table
+    // table_layout_preferences table - Updated for composite PK and FK
     conn.execute(
         "CREATE TABLE IF NOT EXISTS table_layout_preferences (
-            table_asset_relative_path TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            table_asset_relative_path TEXT NOT NULL,
             layout_json TEXT NOT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-            FOREIGN KEY (table_asset_relative_path) REFERENCES asset_metadata(asset_relative_path) ON DELETE CASCADE
+            PRIMARY KEY (project_id, table_asset_relative_path),
+            FOREIGN KEY (project_id, table_asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
         )",
         [],
     )?;
-    info!("[DB] Initialized table_layout_preferences table.");
+    info!("[DB] Initialized table_layout_preferences table with composite PK and FK.");
 
-    // Trigger for table_layout_preferences updated_at
+    // Check and add project_id column to table_layout_preferences if missing
+    let mut stmt_check_layout_project_id = conn.prepare("PRAGMA table_info(table_layout_preferences)")?;
+    let layout_project_id_exists = stmt_check_layout_project_id
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "project_id"));
+
+    if !layout_project_id_exists {
+        info!("[DB] Adding project_id column to table_layout_preferences table (for older schema).");
+        conn.execute("ALTER TABLE table_layout_preferences ADD COLUMN project_id TEXT", [])?;
+        info!("[DB] Added project_id column to table_layout_preferences. Existing rows will have NULL. PK and FK not changed for existing tables by this ALTER.");
+    }
+
+    // Update trigger for table_layout_preferences for new composite PK
+    conn.execute(
+        "DROP TRIGGER IF EXISTS update_table_layout_preferences_updated_at", // Drop old trigger
+        [],
+    )?;
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_table_layout_preferences_updated_at
         AFTER UPDATE ON table_layout_preferences
         FOR EACH ROW
         BEGIN
-            UPDATE table_layout_preferences SET updated_at = CURRENT_TIMESTAMP WHERE table_asset_relative_path = OLD.table_asset_relative_path;
+            UPDATE table_layout_preferences SET updated_at = CURRENT_TIMESTAMP
+            WHERE project_id = OLD.project_id AND table_asset_relative_path = OLD.table_asset_relative_path;
         END;",
         [],
     )?;
-    info!("[DB] Initialized update_table_layout_preferences_updated_at trigger.");
+    info!("[DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.");
 
     // projects table
     conn.execute(
@@ -209,58 +287,168 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_projects_updated_at trigger.");
 
+    // media_transcript_data table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS media_transcript_data (
+            project_id TEXT NOT NULL,
+            asset_relative_path TEXT NOT NULL,
+            original_import_path TEXT,
+            speaker_names_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_relative_path),
+            FOREIGN KEY (project_id, asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized media_transcript_data table.");
+
+    // Trigger for media_transcript_data updated_at
+    conn.execute("DROP TRIGGER IF EXISTS update_media_transcript_data_updated_at", [])?;
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_media_transcript_data_updated_at
+        AFTER UPDATE ON media_transcript_data
+        FOR EACH ROW
+        BEGIN
+            UPDATE media_transcript_data SET updated_at = CURRENT_TIMESTAMP
+            WHERE project_id = OLD.project_id AND asset_relative_path = OLD.asset_relative_path;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_media_transcript_data_updated_at trigger.");
+
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
 
-// --- Table Layout Preferences Functions ---
+// --- Media Transcript Data Functions ---
 
-pub fn save_table_layout_preferences(table_asset_relative_path: &str, layout_json: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving table layout preferences for: {}", table_asset_relative_path);
+pub fn save_media_transcript_data(
+    project_id: &str,
+    asset_relative_path: &str,
+    original_import_path: Option<&str>,
+    speaker_names: Option<&Vec<String>>,
+) -> Result<(), CommandError> {
+    debug!(
+        "[DB] Saving media transcript data for project_id {}: {}",
+        project_id, asset_relative_path
+    );
+
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
-    // Check if asset metadata exists
-    let mut stmt = conn.prepare("SELECT 1 FROM asset_metadata WHERE asset_relative_path = ?1")?;
-    let exists: Option<i32> = stmt.query_row(params![table_asset_relative_path], |row| row.get(0)).optional()?;
+    let speaker_names_json_str: Option<String> = speaker_names
+        .filter(|names| !names.is_empty()) // Only serialize if not empty, otherwise store NULL
+        .and_then(|names| serde_json::to_string(names).ok());
+
+    let sql = "
+        INSERT INTO media_transcript_data (
+            project_id, asset_relative_path, original_import_path, speaker_names_json
+        ) VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
+            original_import_path = excluded.original_import_path,
+            speaker_names_json = excluded.speaker_names_json,
+            updated_at = CURRENT_TIMESTAMP;
+    ";
+
+    conn.execute(
+        sql,
+        params![
+            project_id,
+            asset_relative_path,
+            to_sql_optional_str(original_import_path),
+            to_sql_optional_str(speaker_names_json_str.as_deref()),
+        ],
+    )?;
+
+    info!(
+        "[DB] Media transcript data saved successfully for project_id {}: {}",
+        project_id, asset_relative_path
+    );
+    Ok(())
+}
+
+pub fn load_media_transcript_data(
+    project_id: &str,
+    asset_relative_path: &str,
+) -> Result<Option<MediaTranscriptDataValues>, CommandError> {
+    debug!(
+        "[DB] Loading media transcript data for project_id {}: {}",
+        project_id, asset_relative_path
+    );
+
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("
+        SELECT original_import_path, speaker_names_json
+        FROM media_transcript_data
+        WHERE project_id = ?1 AND asset_relative_path = ?2
+    ")?;
+
+    let result = stmt.query_row(params![project_id, asset_relative_path], |row| {
+        Ok(MediaTranscriptDataValues {
+            original_import_path: row.get(0)?,
+            speaker_names_json: row.get(1)?,
+        })
+    }).optional()?;
+
+    debug!(
+        "[DB] Load media transcript data result for project_id {} - {}: {}",
+        project_id, asset_relative_path, if result.is_some() { "Some(...)" } else { "None" }
+    );
+    Ok(result)
+}
+
+// --- Table Layout Preferences Functions ---
+
+pub fn save_table_layout_preferences(project_id: &str, table_asset_relative_path: &str, layout_json: &str) -> Result<(), CommandError> {
+    debug!("[DB] Saving table layout preferences for project_id {}: {}", project_id, table_asset_relative_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // Check if asset metadata exists for the given project_id and path
+    let mut stmt = conn.prepare("SELECT 1 FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2")?;
+    let exists: Option<i32> = stmt.query_row(params![project_id, table_asset_relative_path], |row| row.get(0)).optional()?;
 
     if exists.is_none() {
-        let error_msg = format!("Asset metadata not found for table: {}", table_asset_relative_path);
+        let error_msg = format!("Asset metadata not found for project_id {} and table: {}", project_id, table_asset_relative_path);
         error!("[DB] {}", error_msg);
         return Err(CommandError::AssetMetadataNotFound(error_msg));
     }
 
     conn.execute(
-        "INSERT INTO table_layout_preferences (table_asset_relative_path, layout_json)
-         VALUES (?1, ?2)
-         ON CONFLICT(table_asset_relative_path) DO UPDATE SET
+        "INSERT INTO table_layout_preferences (project_id, table_asset_relative_path, layout_json)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(project_id, table_asset_relative_path) DO UPDATE SET
              layout_json = excluded.layout_json,
              updated_at = CURRENT_TIMESTAMP",
-        params![table_asset_relative_path, layout_json],
+        params![project_id, table_asset_relative_path, layout_json],
     )?;
-    info!("[DB] Table layout preferences saved successfully for: {}", table_asset_relative_path);
+    info!("[DB] Table layout preferences saved successfully for project_id {}: {}", project_id, table_asset_relative_path);
     Ok(())
 }
 
-pub fn load_table_layout_preferences(table_asset_relative_path: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading table layout preferences for: {}", table_asset_relative_path);
+pub fn load_table_layout_preferences(project_id: &str, table_asset_relative_path: &str) -> Result<Option<String>, CommandError> {
+    debug!("[DB] Loading table layout preferences for project_id {}: {}", project_id, table_asset_relative_path);
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Returning None for table layout: {}", db_path.display(), table_asset_relative_path);
+        debug!("[DB] Database file not found at {}. Returning None for table layout: project_id {}, path {}", db_path.display(), project_id, table_asset_relative_path);
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
     let mut stmt = conn.prepare("
         SELECT layout_json
         FROM table_layout_preferences
-        WHERE table_asset_relative_path = ?1
+        WHERE project_id = ?1 AND table_asset_relative_path = ?2
     ")?;
 
-    let result = stmt.query_row(params![table_asset_relative_path], |row| {
+    let result = stmt.query_row(params![project_id, table_asset_relative_path], |row| {
         row.get(0)
     }).optional()?;
 
-    debug!("[DB] Load table layout prefs result for {}: {}", table_asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    debug!("[DB] Load table layout prefs result for project_id {} - {}: {}", project_id, table_asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
     Ok(result)
 }
 
@@ -302,14 +490,20 @@ pub fn save_asset_metadata(
         }
     }
 
+    let speaker_names_json_str: Option<String> = metadata.speaker_names
+        .as_ref()
+        .and_then(|names| serde_json::to_string(names).ok());
+
     let sql = "
         INSERT INTO asset_metadata (
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
-            bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
-        ON CONFLICT(asset_relative_path) DO UPDATE SET
-            project_id = excluded.project_id,
+            bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
+            original_import_path, speaker_names_json
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+        ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
+            file_name = excluded.file_name,
+            file_path = excluded.file_path,
             last_modified = excluded.last_modified,
             title = excluded.title,
             description = excluded.description,
@@ -322,17 +516,18 @@ pub fn save_asset_metadata(
             audio_codec = excluded.audio_codec,
             video_codec = excluded.video_codec,
             creation_time = excluded.creation_time,
+            asset_type = excluded.asset_type,
             custom_fields_json = excluded.custom_fields_json,
+            original_import_path = excluded.original_import_path,
+            speaker_names_json = excluded.speaker_names_json,
             updated_at = CURRENT_TIMESTAMP
-        -- file_name, file_path, and asset_type are NOT updated from 'excluded' during an update.
-        -- asset_type was already not being updated, which is correct.
         ;
     ";
 
     conn.execute(
         sql,
         params![
-            project_id, // New param
+            project_id,
             asset_relative_path,
             metadata.file_name,
             metadata.file_path,
@@ -350,6 +545,8 @@ pub fn save_asset_metadata(
             to_sql_optional_str(metadata.created_at.as_deref()),
             asset_type,
             to_sql_optional_str(custom_fields_json),
+            to_sql_optional_str(metadata.original_import_path.as_deref()),
+            to_sql_optional_str(speaker_names_json_str.as_deref()),
         ],
     )?;
 
@@ -360,11 +557,11 @@ pub fn save_asset_metadata(
     Ok(())
 }
 
-pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
-    debug!("[DB] Loading asset metadata for: {}", asset_relative_path);
+pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, CommandError> {
+    debug!("[DB] Loading asset metadata for project_id {}: {}", project_id, asset_relative_path);
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Returning None for asset: {}", db_path.display(), asset_relative_path);
+        debug!("[DB] Database file not found at {}. Returning None for project_id {}, asset: {}", db_path.display(), project_id, asset_relative_path);
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
@@ -373,10 +570,10 @@ pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetad
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
                creation_time, custom_fields_json, asset_type
         FROM asset_metadata
-        WHERE asset_relative_path = ?1
+        WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
 
-    let result = stmt.query_row(params![asset_relative_path], |row| {
+    let result = stmt.query_row(params![project_id, asset_relative_path], |row| {
         Ok(FileMetadataWithCustomFieldsFromDb {
             file_name: row.get(0)?,
             file_path: row.get(1)?,
@@ -397,80 +594,94 @@ pub fn load_asset_metadata(asset_relative_path: &str) -> Result<Option<FileMetad
         })
     }).optional()?;
 
-    debug!("[DB] Load asset metadata result for {}: {}", asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
+    debug!("[DB] Load asset metadata result for project_id {} - {}: {}", project_id, asset_relative_path, if result.is_some() { "Some(...)" } else { "None" });
     Ok(result)
 }
 
-pub fn delete_asset_metadata(asset_relative_path: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting asset metadata for: {}", asset_relative_path);
+pub fn delete_asset_metadata(project_id: &str, asset_relative_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting asset metadata for project_id {}: {}", project_id, asset_relative_path);
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to delete for asset: {}", db_path.display(), asset_relative_path);
+        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, asset: {}", db_path.display(), project_id, asset_relative_path);
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    let changes = conn.execute("DELETE FROM asset_metadata WHERE asset_relative_path = ?1", params![asset_relative_path])?;
+    let changes = conn.execute("DELETE FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2", params![project_id, asset_relative_path])?;
 
     if changes > 0 {
-        info!("[DB] Asset metadata deleted successfully for: {} ({} rows affected)", asset_relative_path, changes);
+        info!("[DB] Asset metadata deleted successfully for project_id {}: {} ({} rows affected)", project_id, asset_relative_path, changes);
     } else {
-        debug!("[DB] No asset metadata found to delete for: {}", asset_relative_path);
+        debug!("[DB] No asset metadata found to delete for project_id {}: {}", project_id, asset_relative_path);
     }
     Ok(())
 }
 
 pub fn rename_asset_metadata_key(
+    project_id: &str,
     old_relative_path: &str,
     new_relative_path: &str,
-    new_file_path: &str,
-    new_file_name: &str,
+    new_file_path: &str, // This is the new absolute file path
+    new_file_name: &str, // This is the new file name (e.g., "new_stem.ext")
 ) -> Result<(), CommandError> {
     debug!(
-        "[DB] Renaming asset metadata key from {} to {}, new_path: {}, new_name: {}",
-        old_relative_path, new_relative_path, new_file_path, new_file_name
+        "[DB] Renaming asset metadata key for project_id {}: from {} to {}, new_abs_path: {}, new_name: {}",
+        project_id, old_relative_path, new_relative_path, new_file_path, new_file_name
     );
     let db_path = get_db_path()?;
      if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to rename for asset: {}", db_path.display(), old_relative_path);
+        debug!("[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {}", db_path.display(), project_id, old_relative_path);
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    // Note: last_modified is updated to reflect the change in the metadata record itself (key change),
-    // while updated_at will be handled by the trigger.
+
     let changes = conn.execute(
         "UPDATE asset_metadata
          SET asset_relative_path = ?1, file_path = ?2, file_name = ?3, last_modified = CURRENT_TIMESTAMP
-         WHERE asset_relative_path = ?4",
-        params![new_relative_path, new_file_path, new_file_name, old_relative_path],
+         WHERE project_id = ?4 AND asset_relative_path = ?5",
+        params![new_relative_path, new_file_path, new_file_name, project_id, old_relative_path],
     )?;
 
     if changes > 0 {
         info!(
-            "[DB] Asset metadata key renamed successfully from {} to {} ({} rows affected)",
-            old_relative_path, new_relative_path, changes
+            "[DB] Asset metadata key renamed successfully for project_id {} from {} to {} ({} rows affected)",
+            project_id, old_relative_path, new_relative_path, changes
         );
 
-        // Also attempt to rename in table_layout_preferences if an entry exists
+        // Also attempt to rename in table_layout_preferences if an entry exists for this project
         match conn.execute(
-            "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE table_asset_relative_path = ?2",
-            params![new_relative_path, old_relative_path],
+            "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
+            params![new_relative_path, project_id, old_relative_path],
         ) {
             Ok(layout_changes) if layout_changes > 0 => {
-                info!("[DB] Renamed corresponding table_layout_preferences key from {} to {}", old_relative_path, new_relative_path);
+                info!("[DB] Renamed corresponding table_layout_preferences key for project_id {} from {} to {}", project_id, old_relative_path, new_relative_path);
             }
             Ok(_) => {
-                // No corresponding layout prefs, or no change needed, not an error
-                debug!("[DB] No corresponding table_layout_preferences key found or updated for {}", old_relative_path);
+                debug!("[DB] No corresponding table_layout_preferences key found or updated for project_id {} and old path {}", project_id, old_relative_path);
             }
             Err(e) => {
-                error!("[DB] Error trying to rename table_layout_preferences key from {} to {}: {}", old_relative_path, new_relative_path, e);
-                // Propagate the error if critical, otherwise just log.
-                // For now, let's log and continue, as the primary rename succeeded.
-                // return Err(e); // Uncomment to make this error critical
+                error!("[DB] Error trying to rename table_layout_preferences key for project_id {} from {} to {}: {}", project_id, old_relative_path, new_relative_path, e);
+                // Not returning error here as primary rename succeeded.
+            }
+        }
+
+        // Add new logic for media_transcript_data
+        match conn.execute(
+            "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
+            params![new_relative_path, project_id, old_relative_path],
+        ) {
+            Ok(mtd_changes) if mtd_changes > 0 => {
+                info!("[DB] Renamed corresponding media_transcript_data key for project_id {} from {} to {}", project_id, old_relative_path, new_relative_path);
+            }
+            Ok(_) => {
+                debug!("[DB] No corresponding media_transcript_data key found or updated for project_id {} and old path {}", project_id, old_relative_path);
+            }
+            Err(e) => {
+                error!("[DB] Error trying to rename media_transcript_data key for project_id {} from {} to {}: {}", project_id, old_relative_path, new_relative_path, e);
+                // Consider if this error should be propagated or just logged.
             }
         }
     } else {
-        debug!("[DB] No asset metadata found to rename for old key: {}", old_relative_path);
+        debug!("[DB] No asset metadata found to rename for project_id {} and old key: {}", project_id, old_relative_path);
     }
     Ok(())
 }
@@ -657,24 +868,42 @@ pub fn is_project_in_db(xml_path_str: &str) -> Result<bool, CommandError> {
     }
 }
 
+pub fn delete_project_from_db(project_id: &str) -> Result<(), CommandError> {
+    info!("[DB] Attempting to delete project with id: {}", project_id);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        warn!("[DB] Database file not found at {}. Cannot delete project {}.", db_path.display(), project_id);
+        return Ok(()); // Or an error if project should always exist in DB if config exists
+    }
+    let conn = Connection::open(&db_path)?;
+    let changes = conn.execute("DELETE FROM projects WHERE id = ?1", params![project_id])?;
+
+    if changes > 0 {
+        info!("[DB] Successfully deleted project with id: {} ({} rows affected). Associated data should be removed by CASCADE.", project_id, changes);
+    } else {
+        warn!("[DB] No project found in 'projects' table with id: {} to delete.", project_id);
+    }
+    Ok(())
+}
+
 // --- End Project Table Functions ---
 
-pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<Option<String>, CommandError> {
-    debug!("[DB] Loading annotations for: {} (type: {})", document_path, doc_type);
+pub fn load_annotations_from_db(project_id: &str, document_path: &str, doc_type: &str) -> Result<Option<String>, CommandError> {
+    debug!("[DB] Loading annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
     let db_path = get_db_path()?;
     if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Returning None.", db_path.display());
         return Ok(None);
     }
     let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2")?;
-    let result = stmt.query_row(params![document_path, doc_type], |row| row.get(0)).optional()?;
-    debug!("[DB] Load result for {} (type: {}): {}", document_path, doc_type, if result.is_some() { "Some(...)" } else { "None" });
+    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3")?;
+    let result = stmt.query_row(params![project_id, document_path, doc_type], |row| row.get(0)).optional()?;
+    debug!("[DB] Load result for project_id {} - {} (type: {}): {}", project_id, document_path, doc_type, if result.is_some() { "Some(...)" } else { "None" });
     Ok(result)
 }
 
-pub fn save_annotations_to_db(document_path: &str, annotations_json: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Saving annotations for: {} (type: {})", document_path, doc_type);
+pub fn save_annotations_to_db(project_id: &str, document_path: &str, annotations_json: &str, doc_type: &str) -> Result<(), CommandError> {
+    debug!("[DB] Saving annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
@@ -685,51 +914,55 @@ pub fn save_annotations_to_db(document_path: &str, annotations_json: &str, doc_t
     }
 
     conn.execute(
-        "INSERT INTO pdf_annotations (pdf_document_path, annotations_json, document_type)
-         VALUES (?1, ?2, ?3)
-         ON CONFLICT(pdf_document_path)
+        "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(project_id, pdf_document_path, document_type)
          DO UPDATE SET annotations_json = excluded.annotations_json,
-                       document_type = excluded.document_type,
+                       -- document_type = excluded.document_type, -- document_type is part of the key, should not change on conflict
+                       -- project_id = excluded.project_id, -- project_id is part of the key, should not change on conflict
                        updated_at = CURRENT_TIMESTAMP",
-        params![document_path, annotations_json, doc_type],
+        params![project_id, document_path, annotations_json, doc_type],
     )?;
-    info!("[DB] Annotations saved successfully for: {} (type: {})", document_path, doc_type);
+    info!("[DB] Annotations saved successfully for project_id {}: {} (type: {})", project_id, document_path, doc_type);
     Ok(())
 }
 
-pub fn delete_annotations_from_db(document_path: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Deleting annotations for: {} (type: {})", document_path, doc_type);
+pub fn delete_annotations_from_db(project_id: &str, document_path: &str, doc_type: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting annotations for project_id {}: {} (type: {})", project_id, document_path, doc_type);
     let db_path = get_db_path()?;
      if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to delete for {} (type: {}).", db_path.display(), document_path, doc_type);
+        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {} - {} (type: {}).", db_path.display(), project_id, document_path, doc_type);
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
-    let changes = conn.execute("DELETE FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2", params![document_path, doc_type])?;
+    let changes = conn.execute("DELETE FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3", params![project_id, document_path, doc_type])?;
     if changes > 0 {
-        info!("[DB] Annotations deleted successfully for: {} (type: {}) ({} rows affected)", document_path, doc_type, changes);
+        info!("[DB] Annotations deleted successfully for project_id {}: {} (type: {}) ({} rows affected)", project_id, document_path, doc_type, changes);
     } else {
-        debug!("[DB] No annotations found to delete for: {} (type: {})", document_path, doc_type);
+        debug!("[DB] No annotations found to delete for project_id {}: {} (type: {})", project_id, document_path, doc_type);
     }
     Ok(())
 }
 
-pub fn rename_annotations_in_db(old_document_path: &str, new_document_path: &str, doc_type: &str) -> Result<(), CommandError> {
-    debug!("[DB] Renaming annotations from {} to {} (type: {})", old_document_path, new_document_path, doc_type);
+pub fn rename_annotations_in_db(project_id: &str, old_document_path: &str, new_document_path: &str, doc_type: &str) -> Result<(), CommandError> {
+    debug!("[DB] Renaming annotations for project_id {} from {} to {} (type: {})", project_id, old_document_path, new_document_path, doc_type);
     let db_path = get_db_path()?;
     if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Nothing to rename for {} (type: {}).", db_path.display(), old_document_path, doc_type);
+        debug!("[DB] Database file not found at {}. Nothing to rename for project_id {} - {} (type: {}).", db_path.display(), project_id, old_document_path, doc_type);
         return Ok(());
     }
     let conn = Connection::open(&db_path)?;
+    // Note: document_type is part of the unique key and typically should not change during a "rename" of the path.
+    // If document_type could also change, the operation becomes more complex (delete old, insert new, or more specific UPDATE).
+    // Here, we assume only pdf_document_path changes while project_id and document_type remain constant for the renamed record.
     let changes = conn.execute(
-        "UPDATE pdf_annotations SET pdf_document_path = ?1 WHERE pdf_document_path = ?2 AND document_type = ?3",
-        params![new_document_path, old_document_path, doc_type],
+        "UPDATE pdf_annotations SET pdf_document_path = ?1 WHERE project_id = ?2 AND pdf_document_path = ?3 AND document_type = ?4",
+        params![new_document_path, project_id, old_document_path, doc_type],
     )?;
     if changes > 0 {
-        info!("[DB] Annotations renamed successfully from {} to {} (type: {}) ({} rows affected)", old_document_path, new_document_path, doc_type, changes);
+        info!("[DB] Annotations renamed successfully for project_id {} from {} to {} (type: {}) ({} rows affected)", project_id, old_document_path, new_document_path, doc_type, changes);
     } else {
-        debug!("[DB] No annotations found to rename for old path: {} (type: {})", old_document_path, doc_type);
+        debug!("[DB] No annotations found to rename for project_id {} - old path: {} (type: {})", project_id, old_document_path, doc_type);
     }
     Ok(())
 }
@@ -739,18 +972,38 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    use crate::welcome::config::CONFIG_DIR_NAME;
+    // Ensure CONFIG_DIR_NAME is available if used by get_config_dir, or mock get_config_dir for tests.
+    // For these tests, we'll use a helper that takes the DB path directly.
 
-    fn init_db_at_path_for_test(path: &PathBuf) -> Result<()> {
-        let conn = Connection::open(path)?;
+    // Test helper to initialize a projects table for FK constraints
+    fn init_projects_table_for_test(conn: &Connection) -> Result<()> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                root_path TEXT NOT NULL UNIQUE,
+                xml_path TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    fn init_pdf_annotations_table_for_test(conn: &Connection) -> Result<()> {
+        // Use the new schema for tests
         conn.execute(
             "CREATE TABLE IF NOT EXISTS pdf_annotations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pdf_document_path TEXT NOT NULL UNIQUE,
+                project_id TEXT NOT NULL,
+                pdf_document_path TEXT NOT NULL,
                 annotations_json TEXT NOT NULL,
                 document_type TEXT NOT NULL DEFAULT 'pdf',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE (project_id, pdf_document_path, document_type)
             )",
             [],
         )?;
@@ -764,185 +1017,187 @@ mod tests {
         Ok(())
     }
 
+
+    // Helper function to create a temporary DB with the new schema for isolated testing.
+    // It also creates a dummy project for FK satisfaction.
+    fn setup_test_db() -> (tempfile::TempDir, PathBuf, String) {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test_harvey.sqlite");
+        let conn = Connection::open(&db_path).unwrap();
+
+        init_projects_table_for_test(&conn).unwrap();
+        init_pdf_annotations_table_for_test(&conn).unwrap();
+
+        let test_project_id = "test_project_uuid_123";
+        conn.execute("INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+            params![test_project_id, "Test Project", "/fake/root", "/fake/project.xml"]
+        ).unwrap();
+
+        (temp_dir, db_path, test_project_id.to_string())
+    }
+
+    // Mock of get_db_path for testing purposes. In a real scenario, this would involve more complex mocking or DI.
+    // For these tests, functions will take db_path directly.
+
     #[test]
-    fn test_init_db_adds_column_if_not_exists() {
-        let temp_base = tempdir().unwrap();
-        let config_dir_path = temp_base.path().join(".harvey");
-        fs::create_dir_all(&config_dir_path).unwrap();
-        let test_db_path = config_dir_path.join(DB_FILE_NAME);
+    fn test_init_db_adds_project_id_column_if_not_exists() {
+        let temp_base_dir = tempdir().unwrap();
+        let test_db_path = temp_base_dir.path().join("test_init_project_id.sqlite");
 
         if test_db_path.exists() { fs::remove_file(&test_db_path).unwrap(); }
 
-        // 1. Initialize DB with old schema (without document_type)
+        // 1. Initialize DB with an older schema (with document_type but without project_id)
         {
             let conn = Connection::open(&test_db_path).unwrap();
             conn.execute(
                 "CREATE TABLE pdf_annotations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    pdf_document_path TEXT NOT NULL UNIQUE,
+                    pdf_document_path TEXT NOT NULL,
                     annotations_json TEXT NOT NULL,
+                    document_type TEXT NOT NULL DEFAULT 'pdf',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )",
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (pdf_document_path, document_type)
+                )", // Old unique constraint for test setup
                 [],
             ).unwrap();
-        } // Connection closed here
+             // Also need projects table for the FK that the full init_db will try to create if pdf_annotations is new
+            init_projects_table_for_test(&conn).unwrap();
+        }
 
-        // Mock get_config_dir to point to our temp_base for this test scope
-        // This is a conceptual mock. In a real scenario, you might use a crate like `config_rs`
-        // with environment variable overrides, or feature flags for test-specific config paths.
-        // For this test, we'll assume that `get_db_path` inside `init_db` will somehow resolve to `test_db_path`.
-        // This typically requires `get_config_dir` to be mockable or the test environment
-        // to be set up such that `directories::UserDirs::new()` (if used by get_config_dir)
-        // would point to a controlled location.
-        // For simplicity, we'll assume `init_db` called below will use `test_db_path`
-        // because of how `get_db_path` is constructed (relative to some base dir).
-        // This is the most complex part of testing `init_db` directly without DI for path.
+        // This test relies on the main `init_db` function to correctly use `get_db_path`.
+        // To make it testable in isolation, we would ideally pass the db_path to init_db or mock get_config_dir.
+        // For this example, we'll assume `init_db()` can be tested if `get_db_path()` is correctly mocked or overridden.
+        // Since direct mocking of `get_db_path` as used by `init_db` is tricky here,
+        // we will test the logic portion of adding project_id by calling a helper.
 
-        // To make this test work reliably without actual mocking of `get_config_dir` (which is hard in this setup):
-        // We will call a modified init_db that takes a path.
-        fn init_db_at_specific_path(db_path_param: &PathBuf) -> Result<()> {
-            let conn = Connection::open(db_path_param)?;
-            conn.execute( // Original create table (as if it's an old DB)
-                "CREATE TABLE IF NOT EXISTS pdf_annotations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    pdf_document_path TEXT NOT NULL UNIQUE,
-                    annotations_json TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )",
-                [],
-            )?;
-             // Now, run the ALTER TABLE logic from the main init_db function
-            let mut stmt_check = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
-            let column_exists = stmt_check.query_map([], |row| row.get::<_, String>(1))?
-                                    .any(|col_name_result| col_name_result.map_or(false, |name| name == "document_type"));
-            if !column_exists {
-                conn.execute("ALTER TABLE pdf_annotations ADD COLUMN document_type TEXT NOT NULL DEFAULT 'pdf'", [])?;
+        fn simulate_init_logic_for_pdf_annotations_project_id(conn: &Connection) -> Result<()> {
+            // This simulates the part of init_db that checks and adds project_id to pdf_annotations
+            let mut stmt_check_project_id = conn.prepare("PRAGMA table_info(pdf_annotations)")?;
+            let project_id_column_exists = stmt_check_project_id
+                .query_map([], |row| row.get::<_, String>(1))?
+                .any(|col_name_result| col_name_result.map_or(false, |name| name == "project_id"));
+
+            if !project_id_column_exists {
+                info!("[DB Test] Adding project_id column to pdf_annotations table for test simulation.");
+                conn.execute("ALTER TABLE pdf_annotations ADD COLUMN project_id TEXT", [])?;
             }
-            // Trigger part from main init_db
-            conn.execute(
-                "CREATE TRIGGER IF NOT EXISTS update_pdf_annotations_updated_at
-                AFTER UPDATE ON pdf_annotations FOR EACH ROW BEGIN
-                    UPDATE pdf_annotations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
-                END;",
-                [],
-            )?;
             Ok(())
         }
 
-        assert!(init_db_at_specific_path(&test_db_path).is_ok());
-
-        // Verify column exists
         let conn_check = Connection::open(&test_db_path).unwrap();
+        assert!(simulate_init_logic_for_pdf_annotations_project_id(&conn_check).is_ok());
+
         let mut stmt_verify = conn_check.prepare("PRAGMA table_info(pdf_annotations)").unwrap();
         let columns: Vec<String> = stmt_verify.query_map([], |row| row.get(1)).unwrap().map(|r| r.unwrap()).collect();
-        assert!(columns.contains(&"document_type".to_string()));
+        assert!(columns.contains(&"project_id".to_string()), "project_id column should have been added");
 
+        // Clean up
+        drop(conn_check); // Release connection before removing file
         fs::remove_file(&test_db_path).unwrap();
     }
 
 
     #[test]
-    fn test_save_and_load_annotations() {
-        let temp_base = tempdir().unwrap();
-        let config_dir_path = temp_base.path().join(".harvey");
-        fs::create_dir_all(&config_dir_path).unwrap();
-        let test_db_path = config_dir_path.join(DB_FILE_NAME);
+    fn test_save_and_load_annotations_with_project_id() {
+        let (_temp_dir, db_path, project_id) = setup_test_db();
 
-        init_db_at_path_for_test(&test_db_path).unwrap();
-
-        fn save_annotations_to_db_at_path(db_path: &PathBuf, doc_path: &str, json: &str, doc_type: &str) -> Result<()> {
-            let conn = Connection::open(db_path)?;
+        // Use direct path for test functions
+        fn save_annotations(db_p: &PathBuf, proj_id: &str, doc_path: &str, json: &str, doc_type: &str) -> Result<()> {
+            let conn = Connection::open(db_p)?;
             conn.execute(
-                "INSERT INTO pdf_annotations (pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(pdf_document_path) DO UPDATE SET annotations_json = excluded.annotations_json, document_type = excluded.document_type",
-                params![doc_path, json, doc_type]
+                "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(project_id, pdf_document_path, document_type) DO UPDATE SET annotations_json = excluded.annotations_json",
+                params![proj_id, doc_path, json, doc_type]
             )?;
             Ok(())
         }
-        fn load_annotations_from_db_at_path(db_path: &PathBuf, doc_path: &str, doc_type: &str) -> Result<Option<String>> {
-            let conn = Connection::open(db_path)?;
-            let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2")?;
-            stmt.query_row(params![doc_path, doc_type], |row| row.get(0)).optional()
+        fn load_annotations(db_p: &PathBuf, proj_id: &str, doc_path: &str, doc_type: &str) -> Result<Option<String>> {
+            let conn = Connection::open(db_p)?;
+            let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1 AND pdf_document_path = ?2 AND document_type = ?3")?;
+            stmt.query_row(params![proj_id, doc_path, doc_type], |row| row.get(0)).optional()
         }
 
         let doc_path1 = "test/doc1.pdf";
         let annots1 = "[{\"id\":\"1\"}]";
         let doc_type1 = "pdf";
-        assert!(save_annotations_to_db_at_path(&test_db_path, doc_path1, annots1, doc_type1).is_ok());
+        assert!(save_annotations(&db_path, &project_id, doc_path1, annots1, doc_type1).is_ok());
 
-        let loaded_annots1 = load_annotations_from_db_at_path(&test_db_path, doc_path1, doc_type1).unwrap();
+        let loaded_annots1 = load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
         assert_eq!(loaded_annots1, Some(annots1.to_string()));
 
+        // Update
         let annots1_updated = "[{\"id\":\"1\", \"text\":\"updated\"}]";
-        assert!(save_annotations_to_db_at_path(&test_db_path, doc_path1, annots1_updated, doc_type1).is_ok());
-        let loaded_annots1_updated = load_annotations_from_db_at_path(&test_db_path, doc_path1, doc_type1).unwrap();
+        assert!(save_annotations(&db_path, &project_id, doc_path1, annots1_updated, doc_type1).is_ok());
+        let loaded_annots1_updated = load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
         assert_eq!(loaded_annots1_updated, Some(annots1_updated.to_string()));
 
-        // Test with a different doc_type for the same path - this should fail due to UNIQUE constraint on pdf_document_path
-        // if we were not using ON CONFLICT DO UPDATE. With ON CONFLICT, it will update.
-        let doc_path2_img = "test/doc1.pdf"; // Same path
-        let annots2_img = "[{\"id\":\"img1\"}]";
-        let doc_type2_img = "image";
-        // This will update the existing row for "test/doc1.pdf", changing its type and annotations.
-        assert!(save_annotations_to_db_at_path(&test_db_path, doc_path2_img, annots2_img, doc_type2_img).is_ok());
+        // Different project_id, same doc_path and doc_type - should be a new record
+        let other_project_id = "other_project_uuid_456";
+         Connection::open(&db_path).unwrap().execute("INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+            params![other_project_id, "Other Project", "/other/root", "/other/project.xml"]
+        ).unwrap();
 
-        // Try to load the original "pdf" type - should be None now
-        let loaded_original_pdf_type = load_annotations_from_db_at_path(&test_db_path, doc_path1, doc_type1).unwrap();
-        assert!(loaded_original_pdf_type.is_none());
+        assert!(save_annotations(&db_path, other_project_id, doc_path1, annots1, doc_type1).is_ok());
+        let loaded_other_project_annots = load_annotations(&db_path, other_project_id, doc_path1, doc_type1).unwrap();
+        assert_eq!(loaded_other_project_annots, Some(annots1.to_string()));
 
-        // Load the "image" type - should be Some
-        let loaded_image_type = load_annotations_from_db_at_path(&test_db_path, doc_path2_img, doc_type2_img).unwrap();
-        assert_eq!(loaded_image_type, Some(annots2_img.to_string()));
+        // Ensure original project's annotation is still there and unchanged
+        let original_project_annots_after_other_insert = load_annotations(&db_path, &project_id, doc_path1, doc_type1).unwrap();
+        assert_eq!(original_project_annots_after_other_insert, Some(annots1_updated.to_string()));
 
 
-        let loaded_non_existent = load_annotations_from_db_at_path(&test_db_path, "other.pdf", "pdf").unwrap();
+        let loaded_non_existent = load_annotations(&db_path, &project_id, "other.pdf", "pdf").unwrap();
         assert!(loaded_non_existent.is_none());
-
-        fs::remove_file(&test_db_path).unwrap();
     }
 
     #[test]
-    fn test_delete_annotations() {
-        let temp_base = tempdir().unwrap();
-        let config_dir_path = temp_base.path().join(".harvey");
-        fs::create_dir_all(&config_dir_path).unwrap();
-        let test_db_path = config_dir_path.join(DB_FILE_NAME);
-        init_db_at_path_for_test(&test_db_path).unwrap();
+    fn test_delete_annotations_with_project_id() {
+        let (_temp_dir, db_path, project_id) = setup_test_db();
 
-        fn save_to_db(p: &PathBuf, pp: &str, j: &str, dt: &str) -> Result<()> { Connection::open(p)?.execute("INSERT INTO pdf_annotations (pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3)", params![pp, j, dt])?; Ok(()) }
-        fn delete_from_db(p: &PathBuf, pp: &str, dt: &str) -> Result<()> { Connection::open(p)?.execute("DELETE FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2", params![pp, dt])?; Ok(()) }
-        fn load_from_db(p: &PathBuf, pp: &str, dt: &str) -> Result<Option<String>> { Connection::open(p)?.query_row("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2", params![pp, dt], |r| r.get(0)).optional() }
+        fn save_direct(conn: &Connection, proj_id: &str, doc_p: &str, json: &str, doc_t: &str) {
+            conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1,?2,?3,?4)", params![proj_id, doc_p, json, doc_t]).unwrap();
+        }
+        fn delete_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Result<usize> {
+            conn.execute("DELETE FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t])
+        }
+        fn load_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Option<String> {
+            conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t], |r| r.get(0)).optional().unwrap()
+        }
 
-        save_to_db(&test_db_path, "doc1.pdf", "[]", "pdf").unwrap();
-        assert!(load_from_db(&test_db_path, "doc1.pdf", "pdf").unwrap().is_some());
-        assert!(delete_from_db(&test_db_path, "doc1.pdf", "pdf").is_ok());
-        assert!(load_from_db(&test_db_path, "doc1.pdf", "pdf").unwrap().is_none());
+        let conn = Connection::open(&db_path).unwrap();
+        save_direct(&conn, &project_id, "doc1.pdf", "[]", "pdf");
+        assert!(load_direct(&conn, &project_id, "doc1.pdf", "pdf").is_some());
 
-        assert!(delete_from_db(&test_db_path, "non_existent.pdf", "pdf").is_ok());
-        fs::remove_file(&test_db_path).unwrap();
+        assert!(delete_direct(&conn, &project_id, "doc1.pdf", "pdf").unwrap() > 0);
+        assert!(load_direct(&conn, &project_id, "doc1.pdf", "pdf").is_none());
+
+        // Try deleting non-existent
+        assert_eq!(delete_direct(&conn, &project_id, "non_existent.pdf", "pdf").unwrap(), 0);
     }
 
     #[test]
-    fn test_rename_annotations() {
-        let temp_base = tempdir().unwrap();
-        let config_dir_path = temp_base.path().join(".harvey");
-        fs::create_dir_all(&config_dir_path).unwrap();
-        let test_db_path = config_dir_path.join(DB_FILE_NAME);
-        init_db_at_path_for_test(&test_db_path).unwrap();
+    fn test_rename_annotations_with_project_id() {
+        let (_temp_dir, db_path, project_id) = setup_test_db();
 
-        fn save_to_db(p: &PathBuf, pp: &str, j: &str, dt: &str) -> Result<()> { Connection::open(p)?.execute("INSERT INTO pdf_annotations (pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3)", params![pp, j, dt])?; Ok(()) }
-        fn rename_in_db(p: &PathBuf, old_pp: &str, new_pp: &str, dt: &str) -> Result<()> { Connection::open(p)?.execute("UPDATE pdf_annotations SET pdf_document_path = ?1 WHERE pdf_document_path = ?2 AND document_type = ?3", params![new_pp, old_pp, dt])?; Ok(()) }
-        fn load_from_db(p: &PathBuf, pp: &str, dt: &str) -> Result<Option<String>> { Connection::open(p)?.query_row("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = ?1 AND document_type = ?2", params![pp, dt], |r| r.get(0)).optional() }
+        fn save_direct(conn: &Connection, proj_id: &str, doc_p: &str, json: &str, doc_t: &str) {
+            conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1,?2,?3,?4)", params![proj_id, doc_p, json, doc_t]).unwrap();
+        }
+        fn rename_direct(conn: &Connection, proj_id: &str, old_doc_p: &str, new_doc_p: &str, doc_t: &str) -> Result<usize> {
+            conn.execute("UPDATE pdf_annotations SET pdf_document_path=?1 WHERE project_id=?2 AND pdf_document_path=?3 AND document_type=?4", params![new_doc_p, proj_id, old_doc_p, doc_t])
+        }
+        fn load_direct(conn: &Connection, proj_id: &str, doc_p: &str, doc_t: &str) -> Option<String> {
+            conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE project_id=?1 AND pdf_document_path=?2 AND document_type=?3", params![proj_id, doc_p, doc_t], |r| r.get(0)).optional().unwrap()
+        }
 
-        save_to_db(&test_db_path, "old.pdf", "[old]", "pdf").unwrap();
-        assert!(rename_in_db(&test_db_path, "old.pdf", "new.pdf", "pdf").is_ok());
+        let conn = Connection::open(&db_path).unwrap();
+        save_direct(&conn, &project_id, "old.pdf", "[old]", "pdf");
+        assert!(rename_direct(&conn, &project_id, "old.pdf", "new.pdf", "pdf").unwrap() > 0);
 
-        assert!(load_from_db(&test_db_path, "old.pdf", "pdf").unwrap().is_none());
-        assert_eq!(load_from_db(&test_db_path, "new.pdf", "pdf").unwrap(), Some("[old]".to_string()));
+        assert!(load_direct(&conn, &project_id, "old.pdf", "pdf").is_none());
+        assert_eq!(load_direct(&conn, &project_id, "new.pdf", "pdf"), Some("[old]".to_string()));
 
-        assert!(rename_in_db(&test_db_path, "non_existent.pdf", "another.pdf", "pdf").is_ok());
-        fs::remove_file(&test_db_path).unwrap();
+        // Try renaming non-existent
+        assert_eq!(rename_direct(&conn, &project_id, "non_existent.pdf", "another.pdf", "pdf").unwrap(), 0);
     }
 }

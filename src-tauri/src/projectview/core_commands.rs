@@ -21,24 +21,25 @@ use serde::Serialize;
 // However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
+use rusqlite::Connection;
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
 // --- Table Layout Preferences Commands ---
 #[tauri::command]
-pub async fn save_table_layout_prefs(table_path: String, layout_json: String) -> Result<(), String> {
-    db_handler::save_table_layout_preferences(&table_path, &layout_json)
+pub async fn save_table_layout_prefs(project_id: String, table_path: String, layout_json: String) -> Result<(), String> {
+    db_handler::save_table_layout_preferences(&project_id, &table_path, &layout_json)
         .map_err(|e| {
-            log::error!("Failed to save table layout prefs for {}: {}", table_path, e);
+            log::error!("Failed to save table layout prefs for project_id {} table {}: {}", project_id, table_path, e);
             e.to_string()
         })
 }
 
 #[tauri::command]
-pub async fn load_table_layout_prefs(table_path: String) -> Result<Option<String>, String> {
-    db_handler::load_table_layout_preferences(&table_path)
+pub async fn load_table_layout_prefs(project_id: String, table_path: String) -> Result<Option<String>, String> {
+    db_handler::load_table_layout_preferences(&project_id, &table_path)
         .map_err(|e| {
-            log::error!("Failed to load table layout prefs for {}: {}", table_path, e);
+            log::error!("Failed to load table layout prefs for project_id {} table {}: {}", project_id, table_path, e);
             e.to_string()
         })
 }
@@ -522,6 +523,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let db_key_relative_path = destination_relative_path_for_xml_calc;
 
     // project_id_for_db is project_data_check.project_uuid, parsed earlier
+    info!("[Backend Import] Media FileMetadata before save: created_at={:?}", file_metadata_for_db.created_at);
     match db_handler::save_asset_metadata(
         &project_data_check.project_uuid, // Added: project_id (UUID of the project)
         &file_metadata_for_db,
@@ -533,6 +535,25 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         Err(e) => {
             warn!("[Backend Import] Failed to save media metadata to DB for {} (project_id {}): {}. Proceeding with XML update.", db_key_relative_path, project_data_check.project_uuid, e);
         }
+    }
+
+    // After save_asset_metadata result is handled, save media_transcript_data
+    // project_data_check.project_uuid, db_key_relative_path, and source_file_path_str should be in scope.
+    if let Err(e) = db_handler::save_media_transcript_data(
+        &project_data_check.project_uuid,
+        &db_key_relative_path,
+        Some(&source_file_path_str),
+        None, // No speaker names known at initial import by this function
+    ) {
+        warn!(
+            "[Backend Import] Failed to save media_transcript_data for project_id {}: {}. Error: {}",
+            project_data_check.project_uuid, db_key_relative_path, e
+        );
+    } else {
+        info!(
+            "[Backend Import] Successfully saved media_transcript_data for project_id {}: {}",
+            project_data_check.project_uuid, db_key_relative_path
+        );
     }
 
     let xml_content = fs::read_to_string(&project_xml_path)?;
@@ -566,7 +587,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 
 #[tauri::command]
 pub async fn delete_project_item( item_path: String, project_xml_path: String) -> Result<(), CommandError> {
-    info!("[Backend Delete] Request for: {}", item_path);
+    info!("[Backend Delete] Request for: {} in project_xml: {}", item_path, project_xml_path);
     let item_path_buf = PathBuf::from(&item_path);
     let xml_path_buf = PathBuf::from(&project_xml_path);
 
@@ -575,8 +596,20 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
     }
     let project_base_dir = xml_path_buf.parent().ok_or_else(|| CommandError::from("Could not get project base dir"))?;
 
+    // Get project_id for DB operations
+    let project_xml_content_for_uuid = fs::read_to_string(&xml_path_buf)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[Backend Delete] Project UUID is empty in XML file: {}. Cannot proceed with DB operations.", xml_path_buf.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). DB operations cannot proceed.", xml_path_buf.display())));
+    }
+    info!("[Backend Delete] Operating with project_id: {}", project_id_for_db);
+
     if !item_path_buf.exists() {
-        warn!("[Backend Delete] Item '{}' not found. Assuming already deleted or invalid path. Attempting XML cleanup...", item_path);
+        warn!("[Backend Delete] Item '{}' (project_id: {}) not found. Assuming already deleted or invalid path. Attempting XML cleanup...", item_path, project_id_for_db);
         let (item_type_guess, media_stem_opt_guess, item_relative_path_buf_guess) = match get_item_details(&item_path_buf, project_base_dir) {
             Ok(details) => details,
             Err(_) => {
@@ -633,10 +666,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 }
                 // Metadata is in DB, attempt to delete it as well during cleanup
                 if xml_changed { // Only if the main transcript entry was found and removed from XML
-                    if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
-                        warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for non-existent path {}: {}", item_relative_path_guess, e);
+                    if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path_guess) {
+                        warn!("[Backend Delete] Failed to delete asset metadata from DB (project_id: {}) during cleanup for non-existent path {}: {}", project_id_for_db, item_relative_path_guess, e);
                     } else {
-                        info!("[Backend Delete] Deleted asset metadata from DB during cleanup for non-existent path {}", item_relative_path_guess);
+                        info!("[Backend Delete] Deleted asset metadata from DB (project_id: {}) during cleanup for non-existent path {}", project_id_for_db, item_relative_path_guess);
                     }
                 }
                 // The document_metadata_files list is no longer updated for imported transcript metadata.
@@ -661,10 +694,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if project_data.table_files.files.len() < initial_table_len {
                     info!("[Backend Delete] Cleaned up XML table entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
-                    if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
-                        warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for table {}: {}", item_relative_path_guess, e);
+                    if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path_guess) {
+                        warn!("[Backend Delete] Failed to delete asset metadata from DB (project_id: {}) during cleanup for table {}: {}", project_id_for_db, item_relative_path_guess, e);
                     } else {
-                        info!("[Backend Delete] Deleted asset metadata from DB during cleanup for table {}", item_relative_path_guess);
+                        info!("[Backend Delete] Deleted asset metadata from DB (project_id: {}) during cleanup for table {}", project_id_for_db, item_relative_path_guess);
                     }
                 }
             },
@@ -674,10 +707,10 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if project_data.image_files.files.len() < initial_image_len {
                     info!("[Backend Delete] Cleaned up XML image entry '{}'.", item_relative_path_guess);
                     xml_changed = true;
-                    if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path_guess) {
-                        warn!("[Backend Delete] Failed to delete asset metadata from DB during cleanup for non-existent image {}: {}", item_relative_path_guess, e);
+                    if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path_guess) {
+                        warn!("[Backend Delete] Failed to delete asset metadata from DB (project_id: {}) during cleanup for non-existent image {}: {}", project_id_for_db, item_relative_path_guess, e);
                     } else {
-                        info!("[Backend Delete] Deleted asset metadata from DB during cleanup for non-existent image {}", item_relative_path_guess);
+                        info!("[Backend Delete] Deleted asset metadata from DB (project_id: {}) during cleanup for non-existent image {}", project_id_for_db, item_relative_path_guess);
                     }
                 }
             },
@@ -789,18 +822,17 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 if folder.exists() {
                     match fs::remove_dir(folder) {
                         Ok(_) => (),
-                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (),
-                        Err(err) => return Err(CommandError::from(format!("Failed to delete transcript folder: {}", err))),
+                        Err(err) if err.kind() == std::io::ErrorKind::DirectoryNotEmpty => (), // Ok if not empty (e.g. other files exist)
+                        Err(err) => warn!("[Backend Delete] Failed to delete transcript folder {}: {}. Continuing.", folder.display(), err), // Log and continue
                     }
                 }
             }
 
             // Delete metadata from DB
-            if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
-                warn!("[Backend Delete] Failed to delete asset metadata from DB for {}: {}. Main file was deleted.", item_relative_path, e);
-                // Continue with XML cleanup even if DB deletion fails, as main file is gone.
+            if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete] Failed to delete asset metadata from DB for project_id {}, path {}: {}. Main file was deleted.", project_id_for_db, item_relative_path, e);
             } else {
-                info!("[Backend Delete] Deleted asset metadata from DB for {}", item_relative_path);
+                info!("[Backend Delete] Deleted asset metadata from DB for project_id {}, path {}", project_id_for_db, item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove imported transcript entry '{}'", item_relative_path);
@@ -829,17 +861,17 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                     .map_err(|e| CommandError::from(format!("Failed to delete document folder {}: {}", doc_folder.display(), e)))?;
 
                 if item_relative_path.to_lowercase().ends_with(".pdf") {
-                    if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "pdf") {
-                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for {}: {}", item_relative_path, db_err);
+                    if let Err(db_err) = delete_annotations_from_db(&project_id_for_db, &item_relative_path, "pdf") {
+                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for project_id {}, path {}: {}", project_id_for_db, item_relative_path, db_err);
                     }
                 }
             } else {
-                info!("[Backend Delete] Document folder not found, deleting single file: {}", item_path_buf.display());
+                info!("[Backend Delete] Document folder not found for project_id {}, path {}. Deleting single file: {}", project_id_for_db, doc_folder.display(), item_path_buf.display());
                 fs::remove_file(&item_path_buf)
                     .map_err(|e| CommandError::from(format!("Failed to delete document file {}: {}", item_path_buf.display(), e)))?;
                  if item_relative_path.to_lowercase().ends_with(".pdf") {
-                    if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "pdf") {
-                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for single file {}: {}", item_relative_path, db_err);
+                    if let Err(db_err) = delete_annotations_from_db(&project_id_for_db, &item_relative_path, "pdf") {
+                        warn!("[Backend Delete] Failed to delete PDF annotations from DB for single file (project_id {}), path {}: {}", project_id_for_db, item_relative_path, db_err);
                     }
                 }
             }
@@ -864,13 +896,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete] Deleting table folder: {}", folder_path.display());
                 fs::remove_dir_all(&folder_path).map_err(|e| CommandError::from(format!("Failed to delete table folder {}: {}", folder_path.display(), e)))?;
             } else {
-                warn!("[Backend Delete] Table folder {} not found. Assuming already deleted.", folder_path.display());
+                warn!("[Backend Delete] Table folder {} not found for project_id {}. Assuming already deleted.", folder_path.display(), project_id_for_db);
             }
 
-            if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
-                warn!("[Backend Delete Table] Failed to delete asset metadata from DB for table {}: {}", item_relative_path, e);
+            if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Table] Failed to delete asset metadata from DB for project_id {}, table {}: {}", project_id_for_db, item_relative_path, e);
             } else {
-                info!("[Backend Delete Table] Deleted asset metadata from DB for table {}", item_relative_path);
+                info!("[Backend Delete Table] Deleted asset metadata from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
@@ -909,14 +941,14 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 );
             }
 
-            if let Err(db_err) = delete_annotations_from_db(&item_relative_path, "image") {
-                warn!("[Backend Delete] Failed to delete image annotations from DB for {}: {}. File deletion proceeded.", item_relative_path, db_err);
+            if let Err(db_err) = delete_annotations_from_db(&project_id_for_db, &item_relative_path, "image") {
+                warn!("[Backend Delete] Failed to delete image annotations from DB for project_id {}, image {}: {}. File deletion proceeded.", project_id_for_db, item_relative_path, db_err);
             }
 
-            if let Err(e) = db_handler::delete_asset_metadata(&item_relative_path) {
-                warn!("[Backend Delete Image] Failed to delete asset metadata from DB for image {}: {}", item_relative_path, e);
+            if let Err(e) = db_handler::delete_asset_metadata(&project_id_for_db, &item_relative_path) {
+                warn!("[Backend Delete Image] Failed to delete asset metadata from DB for project_id {}, image {}: {}", project_id_for_db, item_relative_path, e);
             } else {
-                info!("[Backend Delete Image] Deleted asset metadata from DB for image {}", item_relative_path);
+                info!("[Backend Delete Image] Deleted asset metadata from DB for project_id {}, image {}", project_id_for_db, item_relative_path);
             }
 
             info!("[Backend Delete] Updating XML to remove image entry '{}'", item_relative_path);
@@ -959,6 +991,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
         return Err(CommandError::from(format!("Project XML not found: {}", project_xml_path)));
     }
     let project_base_dir = xml_path_buf.parent().ok_or_else(|| CommandError::from("Could not get project base dir"))?;
+
+    // Get project_id for DB operations
+    let project_xml_content_for_uuid = fs::read_to_string(&xml_path_buf)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", xml_path_buf.display(), e)))?;
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[Backend Rename] Project UUID is empty in XML file: {}. Cannot proceed with DB operations.", xml_path_buf.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). DB operations cannot proceed.", xml_path_buf.display())));
+    }
+    info!("[Backend Rename] Operating with project_id: {}", project_id_for_db);
 
     if item_path_buf.is_dir() {
         let (item_type, _, _) = get_item_details(&item_path_buf, project_base_dir)?;
@@ -1302,12 +1346,13 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             // 3. Update database entry
             if let Err(e) = db_handler::rename_asset_metadata_key(
+                &project_id_for_db,
                 old_transcript_relative_path, // old key
                 &new_relative_path_for_xml_and_db, // new key
                 &final_new_transcript_file_abs_path.to_string_lossy(), // new full file_path field value
                 &new_transcript_filename_with_ext_str, // new file_name field value
             ) {
-                warn!("[Backend Rename] Failed to rename/update asset metadata in DB for imported transcript {} -> {}: {}. File system changes were successful. Attempting to revert FS changes.", old_transcript_relative_path, new_relative_path_for_xml_and_db, e);
+                warn!("[Backend Rename] Failed to rename/update asset metadata in DB for project_id {}, imported transcript {} -> {}: {}. File system changes were successful. Attempting to revert FS changes.", project_id_for_db, old_transcript_relative_path, new_relative_path_for_xml_and_db, e);
                 // Attempt to revert FS operations (best effort)
                 if old_transcript_folder_abs_path != &new_transcript_folder_abs_path && new_transcript_folder_abs_path.exists() { // if folder was renamed
                     let _ = fs::rename(&new_transcript_folder_abs_path, old_transcript_folder_abs_path); // revert folder rename
@@ -1439,8 +1484,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if old_ext == "pdf" {
                 let temp_final_new_doc_file_abs_path = new_doc_folder_path.join(&new_filename_pathbuf);
                 let temp_new_relative_path_for_doc = temp_final_new_doc_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-                if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &temp_new_relative_path_for_doc, "pdf") {
-                    warn!("[Backend Rename] Failed to rename PDF annotations in DB from {} to {}: {}. File operations will proceed, but DB might be inconsistent.", item_relative_path, temp_new_relative_path_for_doc, db_err);
+                if let Err(db_err) = rename_annotations_in_db(&project_id_for_db, &item_relative_path, &temp_new_relative_path_for_doc, "pdf") {
+                    warn!("[Backend Rename] Failed to rename PDF annotations in DB for project_id {} from {} to {}: {}. File operations will proceed, but DB might be inconsistent.", project_id_for_db, item_relative_path, temp_new_relative_path_for_doc, db_err);
                 }
             }
 
@@ -1448,14 +1493,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if old_doc_folder_path != &new_doc_folder_path {
                 info!("[Backend Rename] Renaming document folder {} -> {}", old_doc_folder_path.display(), new_doc_folder_path.display());
                 if let Err(e) = fs::rename(old_doc_folder_path, &new_doc_folder_path) {
-                    warn!("[Backend Rename] Failed to rename document folder: {}. Attempting to revert file renames.", e);
+                    warn!("[Backend Rename] Failed to rename document folder for project_id {}: {}. Attempting to revert file renames.", project_id_for_db, e);
                     if old_ext == "pdf" {
                         let temp_final_new_doc_file_abs_path_for_revert = new_doc_folder_path.join(&new_filename_pathbuf);
                         let temp_new_relative_path_for_doc_for_revert = temp_final_new_doc_file_abs_path_for_revert.strip_prefix(project_base_dir).map_err(|_| CommandError::from("Path stripping error during revert calc"))?.to_string_lossy().replace("\\", "/");
-                        if rename_annotations_in_db(&temp_new_relative_path_for_doc_for_revert, &item_relative_path, "pdf").is_ok() {
-                             warn!("[Backend Rename] Successfully reverted PDF annotation rename in DB during folder rename failure.");
+                        if rename_annotations_in_db(&project_id_for_db, &temp_new_relative_path_for_doc_for_revert, &item_relative_path, "pdf").is_ok() {
+                             warn!("[Backend Rename] Successfully reverted PDF annotation rename in DB (project_id {}) during folder rename failure.", project_id_for_db);
                         } else {
-                             warn!("[Backend Rename] Failed to revert PDF annotation rename in DB during folder rename failure. DB might be inconsistent.");
+                             warn!("[Backend Rename] Failed to revert PDF annotation rename in DB (project_id {}) during folder rename failure. DB might be inconsistent.", project_id_for_db);
                         }
                     }
                     if let Ok(old_app_meta_p) = get_document_metadata_path_for_doc(old_doc_file_path) {
@@ -1617,15 +1662,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
             // Update metadata in DB
             if let Err(e) = db_handler::rename_asset_metadata_key(
+                &project_id_for_db,
                 &item_relative_path, // old_relative_path (old DB key)
                 &new_relative_path_for_xml, // new_relative_path (new DB key)
                 &final_new_table_file_abs_path.to_string_lossy(), // new full file_path field value
                 &new_table_filename_str, // new file_name field value
             ) {
-                warn!("[Backend Rename Table] Failed to rename/update asset metadata in DB for table {} -> {}: {}. File system changes were successful and will not be reverted.", item_relative_path, new_relative_path_for_xml, e);
+                warn!("[Backend Rename Table] Failed to rename/update asset metadata in DB for project_id {}, table {} -> {}: {}. File system changes were successful and will not be reverted.", project_id_for_db, item_relative_path, new_relative_path_for_xml, e);
                 // Not attempting to revert FS changes here as it's complex and might fail further.
             } else {
-                info!("[Backend Rename Table] Successfully renamed/updated asset metadata in DB for table {} -> {}", item_relative_path, new_relative_path_for_xml);
+                info!("[Backend Rename Table] Successfully renamed/updated asset metadata in DB for project_id {}, table {} -> {}", project_id_for_db, item_relative_path, new_relative_path_for_xml);
             }
 
             info!("[Backend Rename Table] Updating XML: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml, new_table_filename_str);
@@ -1762,20 +1808,21 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let new_relative_path_for_image_xml = final_new_image_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
 
             // After FS operations for image file and folder, and after PDF annotation DB rename (if applicable for images)
-            if let Err(db_err) = rename_annotations_in_db(&item_relative_path, &new_relative_path_for_image_xml, "image") {
-                 warn!("[Backend Rename Image] Failed to rename image annotations in DB from {} to {}: {}. Main file operations succeeded.", item_relative_path, new_relative_path_for_image_xml, db_err);
+            if let Err(db_err) = rename_annotations_in_db(&project_id_for_db, &item_relative_path, &new_relative_path_for_image_xml, "image") {
+                 warn!("[Backend Rename Image] Failed to rename image annotations in DB for project_id {} from {} to {}: {}. Main file operations succeeded.", project_id_for_db, item_relative_path, new_relative_path_for_image_xml, db_err);
             }
 
             // Update metadata in DB for the image asset itself
             if let Err(e) = db_handler::rename_asset_metadata_key(
+                &project_id_for_db,
                 &item_relative_path, // old_relative_path (old DB key)
                 &new_relative_path_for_image_xml, // new_relative_path (new DB key)
                 &final_new_image_file_abs_path.to_string_lossy(), // new full file_path field value for DB
                 &new_image_filename_with_ext_str, // new file_name field value for DB
             ) {
-                warn!("[Backend Rename Image] Failed to rename/update asset metadata in DB for image {} -> {}: {}. File system and annotation DB changes were successful.", item_relative_path, new_relative_path_for_image_xml, e);
+                warn!("[Backend Rename Image] Failed to rename/update asset metadata in DB for project_id {}, image {} -> {}: {}. File system and annotation DB changes were successful.", project_id_for_db, item_relative_path, new_relative_path_for_image_xml, e);
             } else {
-                info!("[Backend Rename Image] Successfully renamed/updated asset metadata in DB for image {} -> {}", item_relative_path, new_relative_path_for_image_xml);
+                info!("[Backend Rename Image] Successfully renamed/updated asset metadata in DB for project_id {}, image {} -> {}", project_id_for_db, item_relative_path, new_relative_path_for_image_xml);
             }
 
             info!("[Backend Rename Image] Updating XML for image: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_image_xml, new_image_filename_with_ext_str);

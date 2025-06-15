@@ -157,6 +157,7 @@ pub async fn import_document(
             };
 
             // Save metadata to SQLite database
+            info!("[import_document] PDF FileMetadata before save: created_at={:?}", pdf_file_metadata.created_at);
             match db_handler::save_asset_metadata(
                 &project_id_for_db,           // Pass project_id
                 &pdf_file_metadata,
@@ -283,6 +284,7 @@ pub async fn import_document(
                 created_at: Some(Utc::now().to_rfc3339()), // Could also attempt to get from source_path metadata if needed
             };
 
+            info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);
             match db_handler::save_asset_metadata(
                 &project_id_for_db,           // Pass project_id
                 &doc_file_metadata,
