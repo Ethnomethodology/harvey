@@ -255,8 +255,9 @@ export function setActiveImportedTranscriptEditorRef(editorInstance) { project.u
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
 export function prepareMediaNoteView(mediaPath) {
-    console.debug(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}`); // DEBUG
-    const newIsMediaNoteLoading = !!mediaPath;
+    const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
+    console.debug(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}, normalized to: ${normalizedMediaPath}`); // DEBUG
+    const newIsMediaNoteLoading = !!normalizedMediaPath;
     project.update(p => {
         const otherFieldnotesStatesToClear = {
             selectedDocumentPath: null,
@@ -272,18 +273,18 @@ export function prepareMediaNoteView(mediaPath) {
             importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
         };
 
-        if (p.selectedMediaNotePath !== mediaPath || !p.selectedMediaNotePath) {
+        if (p.selectedMediaNotePath !== normalizedMediaPath || !p.selectedMediaNotePath) {
             return {
                 ...p,
                 ...otherFieldnotesStatesToClear,
-                selectedMediaNotePath: mediaPath,
+                selectedMediaNotePath: normalizedMediaPath,
                 isMediaNoteTranscriptLoading: newIsMediaNoteLoading,
                 mediaNoteTranscriptError: null,
                 isMediaNoteTranscriptDirty: false, // Explicitly false when preparing a new/different view
                 currentMediaNoteTranscriptJson: null,
                 initialMediaNoteTranscriptJson: null,
                 activeMediaNoteEditorRef: null,
-                statusMessage: mediaPath ? `Loading notes for media: ${mediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
+                statusMessage: normalizedMediaPath ? `Loading notes for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
                 isLoading: newIsMediaNoteLoading || p.isLoading,
             };
         }
@@ -291,12 +292,12 @@ export function prepareMediaNoteView(mediaPath) {
         return {
             ...p,
             ...otherFieldnotesStatesToClear,
-            selectedMediaNotePath: mediaPath,
-            statusMessage: `Viewing notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
-            isMediaNoteTranscriptLoading: p.selectedMediaNotePath !== mediaPath ? newIsMediaNoteLoading : p.isMediaNoteTranscriptLoading, // Re-trigger loading if path changed
+            selectedMediaNotePath: normalizedMediaPath,
+            statusMessage: `Viewing notes for media: ${normalizedMediaPath.split(/[\\/]/).pop()}`,
+            isMediaNoteTranscriptLoading: p.selectedMediaNotePath !== normalizedMediaPath ? newIsMediaNoteLoading : p.isMediaNoteTranscriptLoading, // Re-trigger loading if path changed
         };
     });
-    if (!mediaPath) {
+    if (!normalizedMediaPath) {
         project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false }));
     }
 }
