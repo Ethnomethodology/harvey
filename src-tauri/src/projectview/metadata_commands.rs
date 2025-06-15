@@ -6,7 +6,7 @@ use std::fs;
 use chrono::Utc;
 use quick_xml;
 use crate::projectview::shared_types::ProjectXml;
-use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb, save_asset_metadata}; // Added save_asset_metadata
+use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb};
 use crate::projectview::shared_types::FileMetadata;
 
 #[tauri::command]
@@ -84,7 +84,7 @@ pub async fn update_asset_metadata_command(
     }
 
     // Create a mutable copy of the metadata from the payload to sanitize it
-    let mut sanitized_metadata_for_db = metadata_payload;
+    let mut sanitized_metadata_for_db = metadata_payload.clone();
 
     // Sanitize file_name: Derive it from asset_relative_path to ensure consistency with the key
     let path_obj = Path::new(&asset_relative_path);
@@ -108,13 +108,13 @@ pub async fn update_asset_metadata_command(
     // The main save_asset_metadata call, which might save some of the fields if they were part of that table.
     // This call uses the `sanitized_metadata_for_db` which is the `metadata_payload` after some internal adjustments.
     // The `save_asset_metadata` function from db_handler.rs should be used here.
-    db_handler::save_asset_metadata( // Corrected: Call db_handler::save_asset_metadata explicitly
+    db_handler::save_asset_metadata(
         &project_id_for_db,
         &sanitized_metadata_for_db,
         &asset_relative_path,
         &asset_type,
         custom_fields_json_string.as_deref(),
-    )?;
+    ).map_err(|e| e.to_string())?;
 
     // After successfully saving base asset metadata, also save/update media_transcript_data
     // The `metadata_payload` is the original payload passed to the command.

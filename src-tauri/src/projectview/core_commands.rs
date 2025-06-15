@@ -1127,6 +1127,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 audio_codec: None,
                                 video_codec: None,
                                 created_at: None,
+                                original_import_path: None, // Added
+                                speaker_names: None,        // Added
                             },
                             highlights: Vec::new(),
                         }
