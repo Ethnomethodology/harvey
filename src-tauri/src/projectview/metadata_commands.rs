@@ -6,7 +6,7 @@ use std::fs;
 use chrono::Utc;
 use quick_xml;
 use crate::projectview::shared_types::ProjectXml;
-use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb}; // Added db_handler explicitly
+use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb, save_asset_metadata}; // Added save_asset_metadata
 use crate::projectview::shared_types::FileMetadata;
 
 #[tauri::command]
@@ -105,30 +105,32 @@ pub async fn update_asset_metadata_command(
     let custom_fields_json_string: Option<String> = custom_fields_payload
         .and_then(|json_val| serde_json::to_string(&json_val).ok());
 
-    save_asset_metadata(
-        &project_id_for_db,         // Pass project_id
-        &sanitized_metadata_for_db, // This is of type FileMetadata from shared_types
+    // The main save_asset_metadata call, which might save some of the fields if they were part of that table.
+    // This call uses the `sanitized_metadata_for_db` which is the `metadata_payload` after some internal adjustments.
+    // The `save_asset_metadata` function from db_handler.rs should be used here.
+    db_handler::save_asset_metadata( // Corrected: Call db_handler::save_asset_metadata explicitly
+        &project_id_for_db,
+        &sanitized_metadata_for_db,
         &asset_relative_path,
         &asset_type,
         custom_fields_json_string.as_deref(),
-    )?; // Changed to use ? for early return on error, then proceed
+    )?;
 
     // After successfully saving base asset metadata, also save/update media_transcript_data
-    // Note: sanitized_metadata_for_db is the metadata_payload after some fields were adjusted.
-    // We use its original_import_path and speaker_names fields here.
+    // The `metadata_payload` is the original payload passed to the command.
+    // We use its original_import_path and speaker_names fields for the dedicated table.
     if let Err(e) = db_handler::save_media_transcript_data(
         &project_id_for_db,
         &asset_relative_path,
-        sanitized_metadata_for_db.original_import_path.as_deref(),
-        sanitized_metadata_for_db.speaker_names.as_ref(),
+        metadata_payload.original_import_path.as_deref(), // Use metadata_payload here
+        metadata_payload.speaker_names.as_ref(),        // Use metadata_payload here
     ) {
         warn!(
             "[CMD] Failed to save media_transcript_data during metadata update for project_id {}: {}. Error: {}",
             project_id_for_db, asset_relative_path, e
         );
-        // Depending on requirements, you might choose to return an error here
-        // return Err(format!("Failed to save associated media transcript data: {}", e));
-        // For now, log a warning and consider the main operation successful if save_asset_metadata was.
+        // Decide if this error should make the whole command fail.
+        // For now, we'll log a warning and the main operation might still be considered successful.
     } else {
         info!(
             "[CMD] Successfully saved/updated media_transcript_data during metadata update for project_id {}: {}",

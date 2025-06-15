@@ -154,6 +154,8 @@ pub async fn import_document(
                 audio_codec: None,
                 video_codec: None,
                 created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
             };
 
             // Save metadata to SQLite database
@@ -282,6 +284,8 @@ pub async fn import_document(
                 audio_codec: None,
                 video_codec: None,
                 created_at: Some(Utc::now().to_rfc3339()), // Could also attempt to get from source_path metadata if needed
+                original_import_path: None,
+                speaker_names: None,
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

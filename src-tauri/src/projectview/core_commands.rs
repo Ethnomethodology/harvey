@@ -21,7 +21,6 @@ use serde::Serialize;
 // However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
-use rusqlite::Connection;
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
@@ -499,6 +498,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         audio_codec: audio_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
         video_codec: video_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
         created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
+        original_import_path: None,
+        speaker_names: None,
     };
 
     let final_asset_type: String;

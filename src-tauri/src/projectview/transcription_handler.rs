@@ -327,6 +327,8 @@ pub async fn import_word_transcript(
         audio_codec: None,
         video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
     };
 
     let asset_relative_path_for_db = final_transcript_path
@@ -471,6 +473,8 @@ mod tests {
             title: String::new(), description: String::new(), summary: String::new(),
             duration_seconds: None, width: None, height: None, frame_rate: None,
             bit_rate: None, audio_codec: None, video_codec: None, creation_time: None,
+            original_import_path: None,
+            speaker_names: None,
         };
 
         let asset_relative_path_for_db_str = final_transcript_path

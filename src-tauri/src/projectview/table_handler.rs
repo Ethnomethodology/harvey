@@ -176,6 +176,8 @@ pub async fn import_table_file(
         audio_codec: None,
         video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
+                original_import_path: None,
+                speaker_names: None,
     };
 
     // relative_path_for_xml is already calculated and is the correct key for the DB
