@@ -281,8 +281,15 @@
 
         try {
             // console.debug(`[LeftInfoPanel] Loading metadata from DB for relative path: ${assetRelativePath}`); // Downgraded // Removed
+            if (!$project.project_uuid || typeof $project.project_uuid !== 'string' || $project.project_uuid.trim() === '') {
+                console.error('[LeftInfoPanel] Attempted to call get_asset_metadata_command without a valid project_uuid. Path:', assetRelativePath, 'Project UUID:', $project.project_uuid);
+                currentFileMetadata = null;
+                // fullLoadedMetadataObject = null; // Consider if this also needs reset
+                // await message('Cannot load metadata: Project identifier is missing.', { title: 'Error', type: 'error' });
+                return;
+            }
             const result = await invoke('get_asset_metadata_command', {
-                projectId: $project.project_uuid, // Add this line
+                projectId: $project.project_uuid,
                 assetRelativePath: assetRelativePath
             });
 
