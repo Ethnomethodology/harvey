@@ -341,7 +341,7 @@ pub async fn import_word_transcript(
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
         .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
     let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
-        .map_err(|e| CommandError::Xml(format!("Failed to parse project XML for UUID: {}", e)))?;
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID: {}", e)))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
     if project_id_for_db.is_empty() {

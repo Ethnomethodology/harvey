@@ -1,12 +1,16 @@
 // src-tauri/src/projectview/metadata_commands.rs
 use tauri::AppHandle;
-use log::{debug, error};
+use log::{debug, error, info}; // Added info
+use std::path::{Path, PathBuf}; // Added PathBuf here
+use std::fs; // Added fs
+use chrono::Utc; // Added for timestamp
+use quick_xml; // Added for parsing XML
+use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is imported at the top
 use crate::projectview::db_handler::{
     load_asset_metadata, save_asset_metadata, FileMetadataWithCustomFieldsFromDb
 };
 use crate::projectview::shared_types::FileMetadata; // For the payload structure
-use std::path::Path; // Added for path manipulation
-use chrono::Utc;     // Added for timestamp
+// Path and Utc are already imported above
 
 #[tauri::command]
 pub async fn get_asset_metadata_command(
@@ -33,11 +37,11 @@ pub async fn update_asset_metadata_command(
     debug!("[CMD] update_asset_metadata_command for project_xml: {}, asset_path: {}, type: {}", project_xml_path_str, asset_relative_path, asset_type);
 
     // Read project_uuid from XML
-    let project_xml_path = PathBuf::from(project_xml_path_str);
-    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+    let project_xml_path = PathBuf::from(project_xml_path_str); // PathBuf is now directly available
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path) // fs is now directly available
         .map_err(|e| format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e))?;
-    let project_data_for_uuid: crate::projectview::shared_types::ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
-        .map_err(|e| format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))?; // Using basic format for now
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid) // ProjectXml is now directly available
+        .map_err(|e| format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))?;
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
     if project_id_for_db.is_empty() {
@@ -83,7 +87,7 @@ pub async fn update_asset_metadata_command(
 
 // --- Custom Field Definition Commands ---
 
-use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope, ProjectXml}; // Added ProjectXml
+use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope}; // ProjectXml already imported at top
 use crate::projectview::db_handler::{
     add_custom_field_definition,
     get_all_custom_field_definitions
@@ -91,8 +95,7 @@ use crate::projectview::db_handler::{
     // update_custom_field_definition, // Import if update command needed later
     // delete_custom_field_definition  // Import if delete command needed later
 };
-use log::info;
-use quick_xml; // Added for parsing XML
+// info and quick_xml already imported at top
 
 
 #[tauri::command]
