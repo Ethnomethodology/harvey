@@ -827,6 +827,12 @@
                     <span class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
                 </div>
 
+                <!-- Created At (read-only) -->
+                <div class="mb-3">
+                    <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Created At:</label>
+                    <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.created_at ? new Date(currentFileMetadata.created_at).toLocaleString() : ''}</span>
+                </div>
+
                 <!-- Last Modified (read-only) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
@@ -910,12 +916,7 @@
                         </div>
                     {/if}
 
-                    {#if currentFileMetadata.creation_time}
-                        <div class="mb-3">
-                            <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Creation Time:</label>
-                            <span class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.creation_time ? new Date(currentFileMetadata.creation_time).toLocaleString() : ''}</span>
-                        </div>
-                    {/if}
+                    <!-- The old creation_time display block under Technical Details is removed -->
                 {/if}
                 <!-- End of Technical Metadata Section -->
 

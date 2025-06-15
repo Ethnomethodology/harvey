@@ -43,7 +43,7 @@ pub struct FileMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_codec: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub creation_time: Option<String>,
+    pub created_at: Option<String>, // Renamed from creation_time
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -348,7 +348,7 @@ impl Default for FileMetadata {
             bit_rate: None,
             audio_codec: None,
             video_codec: None,
-            creation_time: None,
+            created_at: None, // Renamed from creation_time
         }
     }
 }

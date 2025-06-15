@@ -497,7 +497,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         bit_rate: bit_rate_overall, // From ffprobe
         audio_codec: audio_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
         video_codec: video_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
-        creation_time: creation_time_tag.clone(), // From ffprobe (ensure cloned if Option<String>)
+        created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
     };
 
     let final_asset_type: String;

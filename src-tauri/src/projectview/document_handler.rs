@@ -153,7 +153,7 @@ pub async fn import_document(
                 bit_rate: None,
                 audio_codec: None,
                 video_codec: None,
-                creation_time: None,
+                created_at: Some(Utc::now().to_rfc3339())),
             };
 
             // Save metadata to SQLite database
@@ -280,7 +280,7 @@ pub async fn import_document(
                 bit_rate: None,
                 audio_codec: None,
                 video_codec: None,
-                creation_time: None, // Could also attempt to get from source_path metadata if needed
+                created_at: Some(Utc::now().to_rfc3339())), // Could also attempt to get from source_path metadata if needed
             };
 
             match db_handler::save_asset_metadata(

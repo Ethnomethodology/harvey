@@ -112,7 +112,7 @@ fn register_project_image(
         bit_rate: None,
         audio_codec: None,
         video_codec: None,
-        creation_time: None,
+        created_at: Some(Utc::now().to_rfc3339()),
     };
 
     let custom_fields_json: Option<String> = None;
@@ -355,7 +355,7 @@ pub async fn import_image_file(
         bit_rate: None,
         audio_codec: None,
         video_codec: None,
-        creation_time: None,
+        created_at: Some(Utc::now().to_rfc3339()),
     };
 
     // relative_path_for_xml is already calculated and holds the image's relative path

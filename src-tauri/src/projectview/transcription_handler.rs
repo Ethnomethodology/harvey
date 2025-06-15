@@ -326,7 +326,7 @@ pub async fn import_word_transcript(
         bit_rate: None,
         audio_codec: None,
         video_codec: None,
-        creation_time: None,
+        created_at: Some(Utc::now().to_rfc3339())),
     };
 
     let asset_relative_path_for_db = final_transcript_path
