@@ -208,6 +208,48 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     info!("[Backend Load XML] Project Name: {}", project_name);
     info!("[Backend Load XML] Project UUID: {}", project_data.project_uuid); // Log the UUID being used
 
+    // --- Database Check/Addition ---
+    // Canonicalize paths for DB operations
+    let canonical_xml_path_buf = fs::canonicalize(&xml_path)
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize project XML path {}: {}", xml_path.display(), e)))?;
+    let canonical_xml_path_str = canonical_xml_path_buf.to_string_lossy().to_string();
+
+    let canonical_root_path_buf = fs::canonicalize(project_base_dir) // project_base_dir is already a PathBuf
+        .map_err(|e| CommandError::from(format!("Failed to canonicalize project base directory {}: {}", project_base_dir.display(), e)))?;
+    let canonical_root_path_str = canonical_root_path_buf.to_string_lossy().to_string();
+
+    match db_handler::is_project_in_db(&canonical_xml_path_str) {
+        Ok(true) => {
+            info!("[Backend Load XML] Project with XML path '{}' already in DB.", canonical_xml_path_str);
+            // Optionally, here you could add logic to update the DB record if project_name or other details from XML have changed.
+            // For now, just check and add if missing.
+            // Consider updating `updated_at` timestamp even if it exists? Or only on actual changes?
+            // For now, `add_project_to_db` has `ON CONFLICT(id) DO UPDATE`, so calling it would update.
+            // Let's call it to ensure data consistency (name, root_path might change if XML moved)
+            // and to update the 'updated_at' timestamp implicitly via the ON CONFLICT clause.
+            match db_handler::add_project_to_db(&project_data.project_uuid, &project_name, &canonical_root_path_str, &canonical_xml_path_str) {
+                Ok(_) => info!("[Backend Load XML] Updated existing project in DB: {}", project_data.project_uuid),
+                Err(e) => warn!("[Backend Load XML] Failed to update existing project in DB {}: {}", project_data.project_uuid, e),
+            }
+        }
+        Ok(false) => {
+            info!("[Backend Load XML] Project with XML path '{}' not found in DB. Adding now.", canonical_xml_path_str);
+            match db_handler::add_project_to_db(
+                &project_data.project_uuid,
+                &project_name,
+                &canonical_root_path_str,
+                &canonical_xml_path_str,
+            ) {
+                Ok(_) => info!("[Backend Load XML] Successfully added project to DB. UUID: {}", project_data.project_uuid),
+                Err(e) => warn!("[Backend Load XML] Failed to add project to DB during load: {}. Project loading will continue.", e),
+            }
+        }
+        Err(e) => {
+            warn!("[Backend Load XML] Failed to check if project exists in DB: {}. Project loading will continue without DB check/add.", e);
+        }
+    }
+    // --- End Database Check/Addition ---
+
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
 
@@ -519,14 +561,26 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         .replace("\\", "/");
     let db_key_relative_path = destination_relative_path_for_xml_calc;
 
+    // Read project_uuid from XML
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::Xml(format!("Failed to parse project XML for UUID: {}", e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[Backend Import Media] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
+    }
 
     match db_handler::save_asset_metadata(
+        &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
         &db_key_relative_path,
         &final_asset_type,
         None, // custom_fields_json (None for initial import)
     ) {
-        Ok(_) => info!("[Backend Import] Successfully saved media metadata to DB for: {}", db_key_relative_path),
+        Ok(_) => info!("[Backend Import] Successfully saved media metadata to DB for: {} with project_id {}", db_key_relative_path, project_id_for_db),
         Err(e) => {
             warn!("[Backend Import] Failed to save media metadata to DB for {}: {}. Proceeding with XML update.", db_key_relative_path, e);
         }

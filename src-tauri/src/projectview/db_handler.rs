@@ -77,6 +77,7 @@ pub fn init_db() -> Result<(), CommandError> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS asset_metadata (
             asset_relative_path TEXT PRIMARY KEY,
+            project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
             file_name TEXT NOT NULL,
             file_path TEXT NOT NULL,
             last_modified TEXT NOT NULL,
@@ -98,6 +99,27 @@ pub fn init_db() -> Result<(), CommandError> {
         )",
         [],
     )?;
+    info!("[DB] Initialized asset_metadata table definition.");
+
+    // Check if project_id column exists in asset_metadata
+    let mut stmt_asset_meta = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let asset_meta_project_id_column_exists = stmt_asset_meta
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|col_name_result| col_name_result.map_or(false, |name| name == "project_id"));
+
+    if !asset_meta_project_id_column_exists {
+        info!("[DB] Adding project_id column to asset_metadata table.");
+        // Note: Adding FK constraint via ALTER TABLE has limitations in SQLite.
+        // This adds the column, but the FK relationship for existing rows or without `PRAGMA foreign_keys=ON`
+        // might not be enforced by older SQLite versions this way.
+        // For new tables, the CREATE TABLE statement includes the FK.
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN project_id TEXT", [])?;
+        // We are not adding 'REFERENCES projects(id) ON DELETE CASCADE' here via ALTER TABLE
+        // due to SQLite limitations. New tables get it from CREATE TABLE.
+        // Existing data would have NULL project_id. Application logic must handle this.
+        info!("[DB] Added project_id column. Existing rows will have NULL project_id. Ensure application handles this or provide a migration path.");
+    }
+
 
     conn.execute(
         "CREATE TRIGGER IF NOT EXISTS update_asset_metadata_updated_at
@@ -160,6 +182,32 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized update_table_layout_preferences_updated_at trigger.");
+
+    // projects table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root_path TEXT NOT NULL UNIQUE,
+            xml_path TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized projects table.");
+
+    // Trigger for projects updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_projects_updated_at
+        AFTER UPDATE ON projects
+        FOR EACH ROW
+        BEGIN
+            UPDATE projects SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_projects_updated_at trigger.");
 
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
@@ -235,14 +283,15 @@ fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
 
 
 pub fn save_asset_metadata(
+    project_id: &str, // New parameter
     metadata: &FileMetadata,
     asset_relative_path: &str,
     asset_type: &str,
     custom_fields_json: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
-        "[DB] Saving asset metadata for: {} (type: {})",
-        asset_relative_path, asset_type
+        "[DB] Saving asset metadata for project_id {}: {} (type: {})",
+        project_id, asset_relative_path, asset_type
     );
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -255,11 +304,12 @@ pub fn save_asset_metadata(
 
     let sql = "
         INSERT INTO asset_metadata (
-            asset_relative_path, file_name, file_path, last_modified, title,
+            project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
         ON CONFLICT(asset_relative_path) DO UPDATE SET
+            project_id = excluded.project_id,
             last_modified = excluded.last_modified,
             title = excluded.title,
             description = excluded.description,
@@ -282,6 +332,7 @@ pub fn save_asset_metadata(
     conn.execute(
         sql,
         params![
+            project_id, // New param
             asset_relative_path,
             metadata.file_name,
             metadata.file_path,
@@ -303,8 +354,8 @@ pub fn save_asset_metadata(
     )?;
 
     info!(
-        "[DB] Asset metadata saved successfully for: {} (type: {})",
-        asset_relative_path, asset_type
+        "[DB] Asset metadata saved successfully for project_id {}: {} (type: {})",
+        project_id, asset_relative_path, asset_type
     );
     Ok(())
 }
@@ -562,6 +613,51 @@ pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Resu
 
 // --- End Custom Field Definition Functions ---
 
+// --- Project Table Functions ---
+
+pub fn add_project_to_db(id: &str, name: &str, root_path: &str, xml_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Adding project to db: id={}, name={}, root_path={}, xml_path={}", id, name, root_path, xml_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "INSERT INTO projects (id, name, root_path, xml_path)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             root_path = excluded.root_path,
+             xml_path = excluded.xml_path,
+             updated_at = CURRENT_TIMESTAMP",
+        params![id, name, root_path, xml_path],
+    )?;
+    info!("[DB] Project added/updated successfully: id={}", id);
+    Ok(())
+}
+
+pub fn is_project_in_db(xml_path_str: &str) -> Result<bool, CommandError> {
+    debug!("[DB] Checking if project exists with xml_path: {}", xml_path_str);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Project cannot exist.", db_path.display());
+        return Ok(false);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("SELECT 1 FROM projects WHERE xml_path = ?1")?;
+    let exists: Option<i32> = stmt.query_row(params![xml_path_str], |row| row.get(0)).optional()?;
+
+    match exists {
+        Some(_) => {
+            debug!("[DB] Project with xml_path: {} found.", xml_path_str);
+            Ok(true)
+        }
+        None => {
+            debug!("[DB] Project with xml_path: {} not found.", xml_path_str);
+            Ok(false)
+        }
+    }
+}
+
+// --- End Project Table Functions ---
 
 pub fn load_annotations_from_db(document_path: &str, doc_type: &str) -> Result<Option<String>, CommandError> {
     debug!("[DB] Loading annotations for: {} (type: {})", document_path, doc_type);

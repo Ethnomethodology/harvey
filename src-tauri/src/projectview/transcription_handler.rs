@@ -336,13 +336,27 @@ pub async fn import_word_transcript(
 
     let asset_type = "imported_transcript"; // Define asset type
 
+    // Read project_uuid from XML
+    // project_xml_path is already a PathBuf from the function arguments
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID: {}", e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::Xml(format!("Failed to parse project XML for UUID: {}", e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[import_word_transcript] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
+    }
+
     if let Err(e) = db_handler::save_asset_metadata(
+        &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
         &asset_relative_path_for_db,
         asset_type,
         None, // custom_fields_json is None on initial import
     ) {
-        error!("Failed to save transcript metadata to DB for {}: {}", asset_relative_path_for_db, e);
+        error!("Failed to save transcript metadata to DB for {}: {} (project_id: {})", asset_relative_path_for_db, e, project_id_for_db);
         return Err(CommandError::from(format!("Failed to save transcript metadata to DB: {}", e)));
     }
     info!("[import_word_transcript] Saved transcript metadata to DB for: {}", asset_relative_path_for_db);
