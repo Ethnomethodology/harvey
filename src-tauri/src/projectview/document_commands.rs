@@ -321,6 +321,8 @@ pub async fn save_document_metadata(
                 CommandError::from(format!("Invalid JSON structure for metadata: {}", e))
             })?;
 
+    // Ensure the file_path field in the metadata is set to the original document's absolute path
+    parsed_metadata_content.metadata.file_path = original_doc_abs_path.to_string_lossy().into_owned();
     // Update the last_modified timestamp
     parsed_metadata_content.metadata.last_modified = Utc::now().to_rfc3339();
     // Frontend should ensure file_name is correct, backend just updates timestamp here.
