@@ -56,6 +56,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_os::init()) // Added this line
         // Global shortcut plugin is now initialized in .setup
         .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
             // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed

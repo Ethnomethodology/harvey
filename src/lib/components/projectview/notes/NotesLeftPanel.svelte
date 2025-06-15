@@ -10,7 +10,7 @@
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core'; // Added invoke
-    import { type as getOsType } from '@tauri-apps/api/os';
+    import { type as getOsType } from '@tauri-apps/plugin-os'; // Updated import
     import CategoryTooltip from './CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
@@ -69,13 +69,13 @@
 
       // OS-specific label logic
       try {
-        const currentOs = await getOsType(); // Returns 'Linux', 'Darwin', or 'Windows_NT'
-        if (currentOs === 'Windows_NT') {
+        const currentOs = await getOsType(); // e.g., 'windows', 'linux', 'macos'
+        if (currentOs === 'windows') {
           revealButtonLabel = 'Reveal in Explorer';
-        } else if (currentOs === 'Darwin') { // Darwin is macOS
+        } else if (currentOs === 'macos') { // Tauri v2 returns 'macos' for Darwin
           revealButtonLabel = 'Reveal in Finder';
-        } else {
-          revealButtonLabel = 'Open File Location'; // For Linux or others
+        } else { // 'linux' or any other
+          revealButtonLabel = 'Open File Location';
         }
       } catch (e) {
         console.error("Error getting OS type:", e);
