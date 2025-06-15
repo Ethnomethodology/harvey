@@ -7,7 +7,7 @@ use log::{info, debug, error}; // Added error
 use serde::{Serialize, Deserialize}; // Added for the new struct
 use crate::projectview::shared_types::FileMetadata; // For function signatures
 
-const DB_FILE_NAME: &str = "harvey_annotations.sqlite";
+const DB_FILE_NAME: &str = "harvey.sqlite";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileMetadataWithCustomFieldsFromDb {

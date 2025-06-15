@@ -120,16 +120,29 @@ fn register_project_image(
     custom_fields.insert("media_timestamp_seconds".to_string(), serde_json::json!(timestamp));
     let custom_fields_json = Some(serde_json::Value::Object(custom_fields).to_string());
 
+    // Read project_uuid from XML
+    let project_xml_content_for_uuid = fs::read_to_string(project_xml_path) // project_xml_path is already a &Path
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[register_project_image] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
+    }
+
     if let Err(e) = db_handler::save_asset_metadata(
+        &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
         &relative_path_for_xml,
         "image",
-        custom_fields_json.as_deref(), // Corrected line
+        custom_fields_json.as_deref(),
     ) {
-        error!("[save_screenshot] Failed to save screenshot metadata to DB for {}: {}", relative_path_for_xml, e);
+        error!("[register_project_image] Failed to save screenshot metadata to DB for {} (project_id: {}): {}", relative_path_for_xml, project_id_for_db, e);
         return Err(CommandError::from(format!("Failed to save screenshot metadata to DB: {}", e)));
     }
-    info!("[save_screenshot] Saved screenshot metadata to DB for: {}", relative_path_for_xml);
+    info!("[register_project_image] Saved screenshot metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
     Ok(())
 }
 
@@ -349,16 +362,29 @@ pub async fn import_image_file(
     };
 
     // relative_path_for_xml is already calculated and holds the image's relative path
+    // Read project_uuid from XML
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path) // project_xml_path is already a PathBuf
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[import_image_file] Project UUID is empty in XML file: {}. Cannot save asset metadata without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset metadata cannot be saved.", project_xml_path.display())));
+    }
+
     if let Err(e) = db_handler::save_asset_metadata(
+        &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
-        &relative_path_for_xml, // This is the asset_relative_path for DB
-        "image", // asset_type
-        None,    // custom_fields_json is None on initial import
+        &relative_path_for_xml,
+        "image",
+        None,
     ) {
-        error!("[import_image_file] Failed to save image metadata to DB for {}: {}", relative_path_for_xml, e);
+        error!("[import_image_file] Failed to save image metadata to DB for {} (project_id: {}): {}", relative_path_for_xml, project_id_for_db, e);
         return Err(CommandError::from(format!("Failed to save image metadata to DB: {}", e)));
     }
-    info!("[import_image_file] Saved image metadata to DB for: {}", relative_path_for_xml);
+    info!("[import_image_file] Saved image metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
     // Annotation JSO file creation is removed, DB will handle annotations.
 

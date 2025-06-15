@@ -73,6 +73,18 @@ pub async fn import_table_file(
 
     ensure_base_asset_dirs(project_base_dir)?;
 
+    // Read project_uuid from XML
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[import_table_file] Project UUID is empty in XML file: {}. Cannot import table without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table import cannot proceed.", project_xml_path.display())));
+    }
+
     let source_filename_stem = source_path.file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from("Could not get table filename stem"))?;
@@ -168,15 +180,16 @@ pub async fn import_table_file(
 
     // relative_path_for_xml is already calculated and is the correct key for the DB
     if let Err(e) = db_handler::save_asset_metadata(
+        &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
-        &relative_path_for_xml, // This is the asset_relative_path for DB
-        "table", // asset_type
-        None,    // custom_fields_json is None on initial import
+        &relative_path_for_xml,
+        "table",
+        None,
     ) {
-        error!("[import_table_file] Failed to save table metadata to DB for table '{}' (path: {}): {}", final_table_name, relative_path_for_xml, e);
-        return Err(e);
+        error!("[import_table_file] Failed to save table metadata to DB for table '{}' (path: {}, project_id: {}): {}", final_table_name, relative_path_for_xml, project_id_for_db, e);
+        return Err(e); // Propagate the error from save_asset_metadata
     }
-    info!("[import_table_file] Saved table metadata to DB for: {}", relative_path_for_xml);
+    info!("[import_table_file] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
     Ok(final_table_path.to_string_lossy().to_string())
 }

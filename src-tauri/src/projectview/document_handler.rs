@@ -56,6 +56,18 @@ pub async fn import_document(
 
     ensure_base_asset_dirs(project_base_dir)?;
 
+    // Read project_uuid from XML once at the beginning
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+    let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        error!("[import_document] Project UUID is empty in XML file: {}. Cannot proceed with import without project_id.", project_xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Asset import cannot proceed.", project_xml_path.display())));
+    }
+
     let source_filename_stem = source_path.file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| CommandError::from("Could not get filename stem"))?;
@@ -146,14 +158,15 @@ pub async fn import_document(
 
             // Save metadata to SQLite database
             match db_handler::save_asset_metadata(
+                &project_id_for_db,           // Pass project_id
                 &pdf_file_metadata,
-                &relative_path_for_pdf_xml, // This is the relative path of the PDF asset
-                "pdf",                        // asset_type for PDFs
-                None,                         // custom_fields_json (None for initial import)
+                &relative_path_for_pdf_xml,
+                "pdf",
+                None,
             ) {
-                Ok(_) => info!("[import_document] Successfully saved PDF metadata to DB for: {}", relative_path_for_pdf_xml),
+                Ok(_) => info!("[import_document] Successfully saved PDF metadata to DB for: {} with project_id {}", relative_path_for_pdf_xml, project_id_for_db),
                 Err(e) => {
-                    warn!("[import_document] Failed to save PDF metadata to DB for {}: {}. The PDF was imported, but its metadata might be missing from the database.", relative_path_for_pdf_xml, e);
+                    warn!("[import_document] Failed to save PDF metadata to DB for {} (project_id {}): {}. The PDF was imported, but its metadata might be missing from the database.", relative_path_for_pdf_xml, project_id_for_db, e);
                 }
             }
 
@@ -271,14 +284,15 @@ pub async fn import_document(
             };
 
             match db_handler::save_asset_metadata(
+                &project_id_for_db,           // Pass project_id
                 &doc_file_metadata,
                 &asset_relative_path_for_db,
-                &source_extension, // Use specific extension like "docx", "txt" as asset_type
+                &source_extension,
                 None,
             ) {
-                Ok(_) => info!("[import_document] Successfully saved document metadata to DB for: {} (type: {})", asset_relative_path_for_db, source_extension),
+                Ok(_) => info!("[import_document] Successfully saved document metadata to DB for: {} (type: {}, project_id: {})", asset_relative_path_for_db, source_extension, project_id_for_db),
                 Err(e) => {
-                    warn!("[import_document] Failed to save document metadata to DB for {}: {}. Proceeding with import.", asset_relative_path_for_db, e);
+                    warn!("[import_document] Failed to save document metadata to DB for {} (project_id {}): {}. Proceeding with import.", asset_relative_path_for_db, project_id_for_db, e);
                 }
             }
 

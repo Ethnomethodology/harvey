@@ -24,12 +24,27 @@ pub async fn get_asset_metadata_command(
 #[tauri::command]
 pub async fn update_asset_metadata_command(
     _app_handle: AppHandle,
+    project_xml_path_str: String, // Added: Path to the project's XML file
     asset_relative_path: String,
-    metadata_payload: FileMetadata, // This is shared_types::FileMetadata
+    metadata_payload: FileMetadata,
     custom_fields_payload: Option<serde_json::Value>,
-    asset_type: String, // Need to know the asset type
+    asset_type: String,
 ) -> Result<(), String> {
-    debug!("[CMD] update_asset_metadata_command for path: {}, type: {}", asset_relative_path, asset_type);
+    debug!("[CMD] update_asset_metadata_command for project_xml: {}, asset_path: {}, type: {}", project_xml_path_str, asset_relative_path, asset_type);
+
+    // Read project_uuid from XML
+    let project_xml_path = PathBuf::from(project_xml_path_str);
+    let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
+        .map_err(|e| format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e))?;
+    let project_data_for_uuid: crate::projectview::shared_types::ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
+        .map_err(|e| format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))?; // Using basic format for now
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        let err_msg = format!("Project UUID is empty in XML file: {}. Cannot update asset metadata without project_id.", project_xml_path.display());
+        error!("[CMD] {}", err_msg);
+        return Err(err_msg);
+    }
 
     // Create a mutable copy of the metadata from the payload to sanitize it
     let mut sanitized_metadata_for_db = metadata_payload;
@@ -54,8 +69,9 @@ pub async fn update_asset_metadata_command(
         .and_then(|json_val| serde_json::to_string(&json_val).ok());
 
     save_asset_metadata(
-        &sanitized_metadata_for_db, // Use the sanitized version
-        &asset_relative_path,       // This is the key for the DB
+        &project_id_for_db,         // Pass project_id
+        &sanitized_metadata_for_db,
+        &asset_relative_path,
         &asset_type,
         custom_fields_json_string.as_deref(),
     )
@@ -67,7 +83,7 @@ pub async fn update_asset_metadata_command(
 
 // --- Custom Field Definition Commands ---
 
-use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope};
+use crate::projectview::shared_types::{CustomFieldDefinition, CustomFieldScope, ProjectXml}; // Added ProjectXml
 use crate::projectview::db_handler::{
     add_custom_field_definition,
     get_all_custom_field_definitions
@@ -76,6 +92,7 @@ use crate::projectview::db_handler::{
     // delete_custom_field_definition  // Import if delete command needed later
 };
 use log::info;
+use quick_xml; // Added for parsing XML
 
 
 #[tauri::command]
