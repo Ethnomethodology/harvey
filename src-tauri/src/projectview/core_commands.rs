@@ -9,8 +9,10 @@ use tauri_plugin_shell::ShellExt;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
+    process::Command, // To run external commands
 };
 use quick_xml;
+use tauri::api::os::platform; // For OS detection
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
@@ -1870,6 +1872,74 @@ mod tests {
         // However, we need to manually clean up directories created for ensure_base_asset_dirs
         if harvey_files_dir.exists() {
             fs::remove_dir_all(&harvey_files_dir).expect("Failed to remove test harvey_files dir");
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn reveal_in_file_explorer(file_path_str: String) -> Result<(), String> {
+    info!("[CMD] reveal_in_file_explorer for path: {}", file_path_str);
+    let path = PathBuf::from(file_path_str);
+
+    if !path.exists() {
+        let err_msg = format!("File or directory not found: {}", path.display());
+        error!("[CMD] {}", err_msg);
+        return Err(err_msg);
+    }
+
+    let os_type = platform(); // Get OS type from tauri::api::os
+
+    match os_type {
+        "macos" => {
+            let status = Command::new("open")
+                .arg("-R") // Reveals the file in Finder
+                .arg(&path)
+                .status()
+                .map_err(|e| format!("Failed to execute 'open -R': {}", e))?;
+            if status.success() {
+                info!("[CMD] Revealed in Finder: {}", path.display());
+                Ok(())
+            } else {
+                Err(format!("'open -R' command failed for {}: {:?}", path.display(), status.code()))
+            }
+        }
+        "windows" => {
+            // Ensure the path is properly quoted for explorer.exe /select
+            let abs_path_str = path.to_string_lossy().into_owned();
+            let arg_str = format!("/select,\"{}\"", abs_path_str);
+
+            let status = Command::new("explorer.exe")
+                .arg(arg_str)
+                .status()
+                .map_err(|e| format!("Failed to execute 'explorer.exe': {}", e))?;
+            if status.success() {
+                info!("[CMD] Revealed in Explorer: {}", path.display());
+                Ok(())
+            } else {
+                Err(format!("'explorer.exe /select' command failed for {}: {:?}", path.display(), status.code()))
+            }
+        }
+        "linux" | _ => { // Default to xdg-open for Linux and other Unix-like systems
+            // xdg-open typically opens the directory if it's a file path,
+            // or the file itself with its default application.
+            // For revealing in file manager, we need the parent directory.
+            let target_to_open = if path.is_file() {
+                path.parent().unwrap_or(&path).to_path_buf()
+            } else {
+                path.clone()
+            };
+
+            let status = Command::new("xdg-open")
+                .arg(&target_to_open)
+                .status()
+                .map_err(|e| format!("Failed to execute 'xdg-open': {}", e))?;
+
+            if status.success() {
+                info!("[CMD] Opened directory with xdg-open: {}", target_to_open.display());
+                Ok(())
+            } else {
+                Err(format!("'xdg-open' command failed for {}: {:?}", target_to_open.display(), status.code()))
+            }
         }
     }
 }

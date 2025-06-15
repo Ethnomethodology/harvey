@@ -9,7 +9,8 @@
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { convertFileSrc } from '@tauri-apps/api/core';
+    import { invoke, convertFileSrc } from '@tauri-apps/api/core'; // Added invoke
+    import { type as getOsType } from '@tauri-apps/api/os';
     import CategoryTooltip from './CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
@@ -42,6 +43,8 @@
     let categoryContextMenuY = 0;
     let categoryContextMenuType = null;
 
+    let revealButtonLabel = 'Open File Location'; // Default generic label
+
     function handleCategoryContextMenu(event, categoryType) {
       event.preventDefault();
       event.stopPropagation();
@@ -60,9 +63,25 @@
       categoryContextMenuType = null;
     }
 
-    onMount(() => {
+    onMount(async () => {
       console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
       console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
+
+      // OS-specific label logic
+      try {
+        const currentOs = await getOsType(); // Returns 'Linux', 'Darwin', or 'Windows_NT'
+        if (currentOs === 'Windows_NT') {
+          revealButtonLabel = 'Reveal in Explorer';
+        } else if (currentOs === 'Darwin') { // Darwin is macOS
+          revealButtonLabel = 'Reveal in Finder';
+        } else {
+          revealButtonLabel = 'Open File Location'; // For Linux or others
+        }
+      } catch (e) {
+        console.error("Error getting OS type:", e);
+        // Keep default label if error occurs
+      }
+
       const listener = () => {
         if (categoryContextMenuVisible) closeCategoryContextMenu();
       };
@@ -265,6 +284,22 @@
         const itemType = item.file_type; 
         const isPdf = item.name?.toLowerCase().endsWith('.pdf');
         closeContextMenu();
+
+        if (action === 'Reveal') {
+            if (!itemPathForClosure) {
+                console.error("[NotesLeftPanel] Reveal error: Item path is missing.");
+                await message("Cannot reveal item: Path is missing.", { title: 'Error', type: 'error' });
+                return;
+            }
+            try {
+                console.log(`[NotesLeftPanel] Invoking reveal_in_file_explorer for: ${itemPathForClosure}`);
+                await invoke('reveal_in_file_explorer', { filePathStr: itemPathForClosure });
+            } catch (err) {
+                console.error(`[NotesLeftPanel] Error revealing item ${itemPathForClosure}:`, err);
+                await message(`Could not reveal item: ${err}`, { title: 'Error', type: 'error' });
+            }
+            return; // Action handled
+        }
 
         if (itemType === 'media') { 
             switch (action) {
@@ -684,10 +719,13 @@ $: {
     <!-- Metadata Display Section Removed -->
 
 	{#if contextMenuVisible && contextMenuItem && !$panelStateStore.notesLeftPanelCollapsed}
-		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
+		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
+
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
+
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -697,21 +735,33 @@ $: {
                  {:else}
                      <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  {/if}
+
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
+
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
+
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
+
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
+
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
+
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
+
+                <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
+
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
