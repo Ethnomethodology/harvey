@@ -20,6 +20,7 @@ use std::{
 use tauri::{AppHandle, command, Emitter, State};
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
+use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
 use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
@@ -144,7 +145,60 @@ fn remove_project_from_config_internal(project_xml_path: &str) -> Result<(), Com
 #[command] pub async fn open_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- open_project: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(&project_xml_path); if !path_buf.exists() || !path_buf.is_file() { log::error!("open_project: Error - XML file not found: {}", project_xml_path); return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path))); } log::info!("open_project: File exists."); let mut config = read_config()?; log::info!("open_project: Config read."); let project_index = config.projects.iter().position(|p| p.path == project_xml_path); log::info!("open_project: Project index in config: {:?}", project_index); let final_project_info: ProjectInfo; let mut config_needs_write = false; if let Some(index) = project_index { log::info!("open_project: Found project in config ('{}'). Updating timestamp.", config.projects[index].name); let now = Utc::now(); if config.projects[index].last_opened_ts != now { config.projects[index].last_opened_ts = now; config_needs_write = true; log::info!("open_project: Updated last_opened_ts for '{}'.", config.projects[index].name); } else { log::info!("open_project: Timestamp current for '{}'.", config.projects[index].name); } final_project_info = config.projects[index].clone(); } else { log::info!("open_project: Project not in config, importing..."); match import_project_internal(&project_xml_path) { Ok(imported_info) => { log::info!("open_project: Import successful."); final_project_info = imported_info; config_needs_write = true; /* Config was updated by import */ }, Err(e) => { log::error!("open_project: Import failed: {}", e); return Err(e); } } } if config_needs_write { log::info!("open_project: Config needs write. Writing..."); config.projects.sort_by(|a, b| b.last_opened_ts.cmp(&a.last_opened_ts)); write_config(&config)?; log::info!("open_project: Config.xml written."); } else { log::info!("open_project: Config up-to-date."); } log::info!("---- open_project: End Successfully ----"); Ok(final_project_info) }
 fn import_project_internal(project_xml_path: &str) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project_internal: Start. Path='{}' ----", project_xml_path); let path_buf = PathBuf::from(project_xml_path); if !path_buf.exists() || !path_buf.is_file() { return Err(CommandError::from(format!("Import failed: File not found: {}", project_xml_path))); } let canonical_path = fs::canonicalize(&path_buf)?; log::info!("import_project_internal: Canonical path: {:?}", canonical_path); let canonical_path_str = canonical_path.to_str().ok_or("Failed to convert path to string")?.to_string(); let xml_content = fs::read_to_string(&canonical_path)?; log::info!("import_project_internal: Read XML ({} bytes).", xml_content.len()); #[derive(Deserialize, Debug)] struct MinimalProject { name: String } let imported: MinimalProject = from_str(&xml_content).map_err(|e| CommandError::from(format!("XML deserialize error for '{}': {}. Content: '{}'", project_xml_path, e, xml_content.chars().take(100).collect::<String>() )))?; log::info!("import_project_internal: Deserialized name: {}", imported.name); let now = Utc::now(); let created_time = fs::metadata(project_xml_path)?.created().map(DateTime::<Utc>::from).unwrap_or(now); log::info!("import_project_internal: Metadata (created: {:?}).", created_time); let project_info = ProjectInfo { name: imported.name, path: canonical_path_str, created_ts: created_time, last_opened_ts: now }; log::info!("import_project_internal: Created ProjectInfo."); add_or_update_project_in_config(project_info.clone())?; log::info!("import_project_internal: Added/Updated project in config."); log::info!("---- import_project_internal: End ----"); Ok(project_info) }
 #[command] pub async fn import_project(project_xml_path: String) -> Result<ProjectInfo, CommandError> { /* ... */ log::info!("---- import_project: Start Command Wrapper. Path='{}' ----", project_xml_path); let result = import_project_internal(&project_xml_path); log::info!("---- import_project: End Command Wrapper ----"); result }
-#[command] pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError> { /* ... */ log::info!("---- delete_project: Start Command. Path='{}' ----", project_xml_path); let xml_path = PathBuf::from(&project_xml_path); let project_dir = xml_path.parent().ok_or("Could not get parent directory.")?; delete_project_folder_internal(project_dir)?; remove_project_from_config_internal(&project_xml_path)?; log::info!("---- delete_project: End Command ----"); Ok(()) }
+#[command] pub async fn delete_project(project_xml_path: String) -> Result<(), CommandError> {
+    log::info!("---- delete_project: Start Command. Path='{}' ----", project_xml_path);
+    let xml_path = PathBuf::from(&project_xml_path);
+
+    // Read project_uuid BEFORE deleting the folder/file
+    let mut project_uuid_for_db_deletion: Option<String> = None;
+    if xml_path.exists() && xml_path.is_file() {
+        match fs::read_to_string(&xml_path) {
+            Ok(xml_content) => {
+                match quick_xml::de::from_str::<ProjectXml>(&xml_content) {
+                    Ok(project_data) => {
+                        if !project_data.project_uuid.is_empty() {
+                            project_uuid_for_db_deletion = Some(project_data.project_uuid);
+                            log::info!("delete_project: Extracted project_uuid {} for DB deletion.", project_uuid_for_db_deletion.as_ref().unwrap());
+                        } else {
+                            log::warn!("delete_project: project_uuid is empty in XML file {}. Cannot delete from DB by UUID.", project_xml_path);
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("delete_project: Failed to parse ProjectXml from {} to get UUID: {}. DB record might not be deleted by UUID.", project_xml_path, e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("delete_project: Failed to read XML file {} to get UUID: {}. DB record might not be deleted by UUID.", project_xml_path, e);
+            }
+        }
+    } else {
+        log::warn!("delete_project: Project XML file {} not found. Cannot extract UUID for DB deletion.", project_xml_path);
+    }
+
+    // Proceed with file/folder deletion
+    let project_dir = xml_path.parent().ok_or("Could not get parent directory.")?;
+    delete_project_folder_internal(project_dir)?;
+
+    // Attempt DB deletion if UUID was found
+    if let Some(uuid) = project_uuid_for_db_deletion {
+        match db_handler::delete_project_from_db(&uuid) {
+            Ok(_) => log::info!("delete_project: Successfully requested deletion of project_id {} from database.", uuid),
+            Err(e) => log::error!("delete_project: Failed to delete project_id {} from database: {}", uuid, e),
+        }
+    } else {
+        log::warn!("delete_project: No project_uuid available, skipping database record deletion for project defined by {}.", project_xml_path);
+        // As a fallback, if we couldn't get UUID, we might try deleting by XML path if that was a unique key previously.
+        // However, the `projects` table schema uses `id` (which is the UUID) as PRIMARY KEY.
+        // So, without UUID, we cannot reliably delete the specific project entry.
+    }
+
+    // Remove from legacy config.xml
+    remove_project_from_config_internal(&project_xml_path)?;
+
+    log::info!("---- delete_project: End Command ----");
+    Ok(())
+}
 fn delete_project_folder_internal(project_dir_path: &Path) -> Result<(), CommandError> { /* ... */ log::info!("---- delete_project_folder_internal: Start. Path='{:?}' ----", project_dir_path); if project_dir_path.exists() { if project_dir_path.is_dir() { log::info!("delete_project_folder_internal: === Attempting FOLDER delete: {:?} ===", project_dir_path); fs::remove_dir_all(project_dir_path).map_err(|e| { log::error!("delete_project_folder_internal: *** FOLDER delete FAILED: {} ***", e); CommandError::from(format!("Failed delete folder '{:?}': {}", project_dir_path.display(), e)) })?; log::info!("delete_project_folder_internal: Folder deleted successfully."); } else { log::error!("delete_project_folder_internal: Path is not a directory: {:?}", project_dir_path); return Err(CommandError::from(format!("Path '{}' is not a directory.", project_dir_path.display()))); } } else { log::warn!("delete_project_folder_internal: Directory {:?} already missing.", project_dir_path); } log::info!("---- delete_project_folder_internal: End ----"); Ok(()) }
 
 // --- Configuration Commands (Unchanged - Omitted for brevity) ---

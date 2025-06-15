@@ -394,17 +394,41 @@ pub async fn import_image_file(
 // --- NEW ANNOTATION COMMANDS ---
 
 #[tauri::command]
-pub async fn load_image_annotations(image_relative_path_str: String) -> Result<Option<String>, CommandError> {
+pub async fn load_image_annotations(project_id: String, image_relative_path_str: String) -> Result<Option<String>, CommandError> {
     use crate::projectview::db_handler::load_annotations_from_db;
     // log macros info, error, debug are already imported at the top of the file.
 
-    info!("[DB Image Annots] Loading for image: {}", image_relative_path_str);
-    match load_annotations_from_db(&image_relative_path_str, "image") {
+    info!("[DB Image Annots] Loading for project_id {}: image key '{}'", project_id, image_relative_path_str);
+    match load_annotations_from_db(&project_id, &image_relative_path_str, "image") {
         Ok(Some(content)) => Ok(Some(content)),
         Ok(None) => Ok(None),
         Err(e) => {
-            error!("[DB Image Annots] Error loading annotations for {}: {}", image_relative_path_str, e);
+            error!("[DB Image Annots] Error loading annotations for project_id {} - {}: {}", project_id, image_relative_path_str, e);
             Err(CommandError::from(format!("Failed to load image annotations from DB: {}", e)))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn save_image_annotations(project_id: String, image_relative_path_str: String, annotations_json_string: String) -> Result<(), CommandError> {
+    use crate::projectview::db_handler::save_annotations_to_db;
+    // log macros info, error, debug, warn are already imported at the top of the file.
+
+    info!("[DB Image Annots] Saving for project_id {}: image key '{}'", project_id, image_relative_path_str);
+
+    // Basic JSON validation before saving to DB (optional but good practice)
+    if serde_json::from_str::<serde_json::Value>(&annotations_json_string).is_err() {
+        warn!("[DB Image Annots] Annotation JSON content for project_id {} - {} appears invalid. Saving anyway.", project_id, image_relative_path_str);
+    }
+
+    match save_annotations_to_db(&project_id, &image_relative_path_str, &annotations_json_string, "image") {
+        Ok(_) => {
+            info!("[DB Image Annots] Annotations saved successfully for project_id {} - {}.", project_id, image_relative_path_str);
+            Ok(())
+        },
+        Err(e) => {
+            error!("[DB Image Annots] Error saving annotations for project_id {} - {}: {}", project_id, image_relative_path_str, e);
+            Err(CommandError::from(format!("Failed to save image annotations to DB: {}", e)))
         }
     }
 }
@@ -531,29 +555,5 @@ mod tests {
         std::env::remove_var("HARVEY_TEST_CONFIG_DIR");
         // temp_project_dir and temp_config_dir will be cleaned up when they go out of scope.
         Ok(())
-    }
-}
-
-#[tauri::command]
-pub async fn save_image_annotations(image_relative_path_str: String, annotations_json_string: String) -> Result<(), CommandError> {
-    use crate::projectview::db_handler::save_annotations_to_db;
-    // log macros info, error, debug, warn are already imported at the top of the file.
-
-    info!("[DB Image Annots] Saving for image: {}", image_relative_path_str);
-
-    // Basic JSON validation before saving to DB (optional but good practice)
-    if serde_json::from_str::<serde_json::Value>(&annotations_json_string).is_err() {
-        warn!("[DB Image Annots] Annotation JSON content for {} appears invalid. Saving anyway.", image_relative_path_str);
-    }
-
-    match save_annotations_to_db(&image_relative_path_str, &annotations_json_string, "image") {
-        Ok(_) => {
-            info!("[DB Image Annots] Annotations saved successfully for {}.", image_relative_path_str);
-            Ok(())
-        },
-        Err(e) => {
-            error!("[DB Image Annots] Error saving annotations for {}: {}", image_relative_path_str, e);
-            Err(CommandError::from(format!("Failed to save image annotations to DB: {}", e)))
-        }
     }
 }

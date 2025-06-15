@@ -14,13 +14,14 @@ use crate::projectview::shared_types::FileMetadata; // For the payload structure
 
 #[tauri::command]
 pub async fn get_asset_metadata_command(
-    _app_handle: AppHandle, // Use _app_handle if not directly used, but good to keep for consistency
+    _app_handle: AppHandle,
+    project_id: String,
     asset_relative_path: String,
 ) -> Result<Option<FileMetadataWithCustomFieldsFromDb>, String> {
-    debug!("[CMD] get_asset_metadata_command for path: {}", asset_relative_path);
-    load_asset_metadata(&asset_relative_path)
+    info!("[CMD] get_asset_metadata_command for project_id {}: path: {}", project_id, asset_relative_path);
+    load_asset_metadata(&project_id, &asset_relative_path)
         .map_err(|e| {
-            error!("[CMD] Error in get_asset_metadata_command for {}: {}", asset_relative_path, e);
+            error!("[CMD] Error in get_asset_metadata_command for project_id {}, path {}: {}", project_id, asset_relative_path, e);
             e.to_string()
         })
 }
