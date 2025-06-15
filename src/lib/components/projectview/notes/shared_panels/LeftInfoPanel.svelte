@@ -574,7 +574,7 @@
             const currentSelectedPathFromStore = selectedItemPathInStore; // Capture for this async operation
             // console.debug('[LeftInfoPanel Reactive] selectedItemPathInStore is now:', currentSelectedPathFromStore); // Removed
 
-            if (currentSelectedPathFromStore && $project && $project.baseDirectory) {
+            if (currentSelectedPathFromStore && $project && $project.baseDirectory && $project.project_uuid) {
                 newOriginalAssetDetails = await getOriginalAssetDetails(currentSelectedPathFromStore, $project); // Assign to declared variable
                 // console.debug('[LeftInfoPanel Reactive] newOriginalAssetDetails determined:', newOriginalAssetDetails); // Removed
 
