@@ -499,6 +499,7 @@
 
                 try {
                     await invoke('update_asset_metadata_command', {
+                        projectXmlPathStr: $project.xmlPath, // Added this line
                         assetRelativePath: assetKeyForDb,       // Original relative path (key for DB lookup)
                         metadataPayload: metadataPayloadForDb,  // Contains original absolute path in its file_path field
                         customFieldsPayload: customFieldsToSaveForDb,
