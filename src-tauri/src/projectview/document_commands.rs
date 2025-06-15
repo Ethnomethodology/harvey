@@ -9,7 +9,6 @@ use std::{
 };
 use quick_xml;
 use serde_json;
-use chrono::Utc; // Added for timestamps
 
 // --- save_note_json Command ---
 #[tauri::command]

@@ -179,8 +179,6 @@ pub fn run() {
             projectview::document_commands::read_file_content,
             projectview::document_commands::delete_temporary_file,
             projectview::document_commands::get_unique_document_path,
-            projectview::document_commands::save_document_metadata,
-            projectview::document_commands::load_document_metadata,
             
             // --- Project view PDF ANNOTATION commands --- ADDED
             projectview::pdf_annotation_handler::load_pdf_annotations,
