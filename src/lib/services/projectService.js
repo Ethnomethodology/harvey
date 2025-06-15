@@ -408,18 +408,21 @@ export async function importMediaFile(importType = null) {
 
         if (!backendResponse || typeof backendResponse !== 'object') {
             console.warn('[ProjectService] import_media returned invalid response:', backendResponse);
-            await refreshProjectFiles();
+            await refreshProjectFiles(); // Single call to refresh
+
+            // Explicitly set isLoading to false after refresh and before finding/preparing media note
             project.update(p => ({
                 ...p,
                 isImportingAsset: false,
-                isLoading: false,
+                isLoading: false, // Ensure this is false here
                 statusMessage: `${filename} imported (no metadata returned).`
             }));
-            await refreshProjectFiles();
+
+            // Now, attempt to find and prepare the view for the new media
             const proj = get(project);
             const realPath = findMediaPathByName(proj.files, filename);
             if (realPath) {
-              prepareMediaNoteView(realPath);
+              prepareMediaNoteView(realPath); // This will set isLoading true, then note load will set it false
             }
             return;
         }
@@ -429,18 +432,21 @@ export async function importMediaFile(importType = null) {
 
         if (!Array.isArray(updatedFiles)) {
             console.warn('[ProjectService] import_media returned no updatedFiles. Falling back to refresh.');
-            await refreshProjectFiles();
+            await refreshProjectFiles(); // Single call to refresh
+
+            // Explicitly set isLoading to false after refresh and before finding/preparing media note
             project.update(p => ({
                 ...p,
                 isImportingAsset: false,
-                isLoading: false,
+                isLoading: false, // Ensure this is false here
                 statusMessage: `${filename} imported (refresh applied).`
             }));
-            await refreshProjectFiles();
+
+            // Now, attempt to find and prepare the view for the new media
             const proj = get(project);
             const realPath = findMediaPathByName(proj.files, filename);
             if (realPath) {
-              prepareMediaNoteView(realPath);
+              prepareMediaNoteView(realPath); // This will set isLoading true, then note load will set it false
             }
             return;
         }
