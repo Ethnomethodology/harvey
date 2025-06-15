@@ -115,7 +115,9 @@ fn register_project_image(
         created_at: Some(Utc::now().to_rfc3339()),
     };
 
-    let custom_fields_json: Option<String> = None;
+    let mut custom_fields_map = serde_json::Map::new();
+    custom_fields_map.insert("_isScreenshot".to_string(), serde_json::Value::Bool(true));
+    let custom_fields_json = Some(serde_json::Value::Object(custom_fields_map).to_string());
 
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(project_xml_path) // project_xml_path is already a &Path
