@@ -2,7 +2,7 @@
 
 ## Backend Refactoring Summary (October 2023 - January 2024)
 
-The backend of the Harvey application underwent a significant refactoring process between October 2023 and January 2024. The primary goals of this refactoring were to streamline data management, improve consistency, and prepare for future feature enhancements. Key changes involved consolidating metadata storage, standardizing project identification, and refining command structures for frontend interaction.
+The backend of the Harvey application underwent a significant refactoring process recently. The primary goals of this refactoring were to streamline data management, improve consistency, and prepare for future feature enhancements. Key changes involved consolidating metadata storage, standardizing project identification, and refining command structures for frontend interaction.
 
 A major part of this effort was the introduction of a centralized SQLite database (`harvey.sqlite`) to manage metadata that was previously stored in disparate JSON files (e.g., `.harvey_metadata.json` for documents, `.metadata.json` for media, tables, and images). This includes asset-specific details, custom fields, and project information. The `projects` table now serves as a central registry for all projects, using a unique UUID (`id`) for each. This `project_id` is then used as a foreign key in other tables like `asset_metadata` to link assets to their respective projects, ensuring data integrity and simplifying queries.
 
