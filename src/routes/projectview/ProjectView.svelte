@@ -532,7 +532,8 @@
             let returnedMediaPath = null;
             if (importType === 'audio' || importType === 'video') {
                 returnedMediaPath = await importMediaFile(importType);
-                if (returnedMediaPath) {
+                // Check if returnedMediaPath is a truthy string (a valid path)
+                if (returnedMediaPath && typeof returnedMediaPath === 'string') {
                     // refreshProjectFiles will select the media and update the file list.
                     // It also handles its own isLoading states.
                     await refreshProjectFiles(returnedMediaPath);
@@ -540,6 +541,10 @@
                     if (selectedTab === 'notes') {
                         prepareMediaNoteView(returnedMediaPath);
                     }
+                } else {
+                    // Handle cases where newMediaPath is null or undefined (e.g., import cancelled, error in backend, or path not returned)
+                    console.log('[ProjectView] Media import finished, but specific path not returned/invalid. Performing general refresh.');
+                    await refreshProjectFiles(); // Call with no arguments for a general refresh
                 }
             }
             else if (importType === 'document') await importDocumentFile();

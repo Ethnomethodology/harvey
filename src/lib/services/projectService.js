@@ -406,57 +406,61 @@ export async function importMediaFile(importType = null) {
             projectXmlPathStr: projectXmlPath
         });
 
-        if (!backendResponse || typeof backendResponse !== 'object') {
-            console.warn('[ProjectService] import_media returned invalid response:', backendResponse);
-            await refreshProjectFiles(); // Single call to refresh
+        // Initialize newMediaPath and updatedFiles
+        let newMediaPath = null;
+        let updatedFiles = null;
 
-            // Explicitly set isLoading to false after refresh and before finding/preparing media note
+        if (backendResponse && typeof backendResponse === 'object') {
+            newMediaPath = backendResponse.new_media_path || backendResponse.newMediaPath;
+            updatedFiles = backendResponse.files || backendResponse.updatedFiles;
+        } else {
+            // Handle cases where backendResponse itself is null, undefined, or not an object
+            console.warn('[ProjectService] import_media returned invalid response structure:', backendResponse);
+            await refreshProjectFiles();
             project.update(p => ({
                 ...p,
                 isImportingAsset: false,
-                isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported. File available in project list.`
+                isLoading: false,
+                statusMessage: `${filename} import failed: invalid backend response. File list refreshed.`
             }));
-            return;
+            return null; // Return null as newMediaPath could not be determined
         }
 
-        const updatedFiles = backendResponse.files || backendResponse.updatedFiles;
-        const newMediaPath = backendResponse.new_media_path || backendResponse.newMediaPath;
+        // filename is defined earlier in the function from await basename(sourceFilePath)
 
-        if (!Array.isArray(updatedFiles)) {
-            console.warn('[ProjectService] import_media returned no updatedFiles. Falling back to refresh.');
-            await refreshProjectFiles(); // Single call to refresh
-
-            // Explicitly set isLoading to false after refresh
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported. File available in project list.`
-            }));
-            return;
-        }
-
-        if (Array.isArray(updatedFiles)) {
+        if (newMediaPath && Array.isArray(updatedFiles)) {
+            // Scenario 1: Both newMediaPath and updatedFiles are good
             project.update(p => ({
                 ...p,
                 files: updatedFiles,
                 isImportingAsset: false,
                 isLoading: false,
                 error: null,
-                statusMessage: `${filename} imported successfully.` // Updated message
+                statusMessage: `${filename} imported successfully.`
             }));
-            // newMediaPath is available, but we are not calling prepareMediaNoteView anymore.
-            if (!newMediaPath) {
-                 console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path for potential future use.');
-            }
-            return newMediaPath; // Return the new media path
+            return newMediaPath;
+        } else if (newMediaPath) {
+            // Scenario 2: newMediaPath is present, but updatedFiles is missing/invalid
+            console.warn(`[ProjectService] import_media: newMediaPath '${newMediaPath}' was present, but updatedFiles was missing or not an array. Falling back to general refresh.`);
+            await refreshProjectFiles(); // General refresh as fallback
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: `${filename} imported. File list refreshed.`
+            }));
+            return newMediaPath;
         } else {
-            // This else block might be unreachable if !Array.isArray(updatedFiles) is handled above,
-            // but kept for structural integrity based on original code.
-            console.error('[ProjectService] Backend import_media returned invalid data:', updatedFiles);
-            setAssetImportStatus(false, `Error importing ${filename}: Invalid data from backend.`);
-            throw new Error("Received invalid data from import process.");
+            // Scenario 3: newMediaPath is NOT found (regardless of updatedFiles)
+            console.warn('[ProjectService] import_media: newMediaPath was missing from backend response. Cannot select imported item.');
+            await refreshProjectFiles(); // General refresh
+            project.update(p => ({
+                ...p,
+                isImportingAsset: false,
+                isLoading: false,
+                statusMessage: `${filename} imported. Path unknown, list refreshed.`
+            }));
+            return null; // Return null as newMediaPath is missing
         }
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
