@@ -26,6 +26,7 @@
     "@tauri-apps/plugin-fs": "^2.2.1",
     "@tauri-apps/plugin-global-shortcut": "^2.2.1",
     "@tauri-apps/plugin-opener": "^2.0.0",
+    "@tauri-apps/plugin-os": "^2.2.1",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@tiptap/extension-link": "^2.11.7",
     "@tiptap/extension-subscript": "^2.11.7",
