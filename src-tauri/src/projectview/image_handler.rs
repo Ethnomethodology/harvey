@@ -112,13 +112,10 @@ fn register_project_image(
         bit_rate: None,
         audio_codec: None,
         video_codec: None,
-        creation_time: Some(Utc::now().to_rfc3339()),
+        creation_time: None,
     };
 
-    let mut custom_fields = serde_json::Map::new();
-    custom_fields.insert("source_media_filename_stem".to_string(), serde_json::Value::String(original_media_stem_for_metadata.to_string())); // Use new parameter
-    custom_fields.insert("media_timestamp_seconds".to_string(), serde_json::json!(timestamp));
-    let custom_fields_json = Some(serde_json::Value::Object(custom_fields).to_string());
+    let custom_fields_json: Option<String> = None;
 
     // Read project_uuid from XML
     let project_xml_content_for_uuid = fs::read_to_string(project_xml_path) // project_xml_path is already a &Path
