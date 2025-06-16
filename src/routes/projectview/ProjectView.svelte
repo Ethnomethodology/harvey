@@ -126,6 +126,23 @@
         }
 	});
 
+    function getAllMediaFilePaths(projectFiles) {
+        const mediaPaths = new Set();
+        function findPathsRecursive(nodes) {
+            if (!Array.isArray(nodes)) return;
+            for (const node of nodes) {
+                if (node.file_type === 'media' && !node.is_directory && node.path) {
+                    mediaPaths.add(node.path);
+                }
+                if (node.children && node.children.length > 0) {
+                    findPathsRecursive(node.children);
+                }
+            }
+        }
+        findPathsRecursive(projectFiles);
+        return mediaPaths;
+    }
+
 	function handleGlobalKeys(event) {
         const proj = get(project);
         const ts = get(transcriptStore);
@@ -529,22 +546,45 @@
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            let returnedMediaPath = null;
+            // For audio/video, we'll determine the new path by diffing the file list
+            // as importMediaFile no longer returns the direct path.
             if (importType === 'audio' || importType === 'video') {
-                returnedMediaPath = await importMediaFile(importType);
-                // Check if returnedMediaPath is a truthy string (a valid path)
-                if (returnedMediaPath && typeof returnedMediaPath === 'string') {
-                    // refreshProjectFiles will select the media and update the file list.
-                    // It also handles its own isLoading states.
-                    await refreshProjectFiles(returnedMediaPath);
-                    // If the 'notes' tab is active, prepare the media note view for the new media.
+                const mediaPathsBefore = getAllMediaFilePaths(get(project).files);
+
+                await importMediaFile(importType); // This now internally calls refreshProjectFiles()
+
+                // $project.files should be updated by refreshProjectFiles() called within importMediaFile
+                const mediaPathsAfter = getAllMediaFilePaths(get(project).files);
+                const newlyDeterminedMediaPaths = [...mediaPathsAfter].filter(path => !mediaPathsBefore.has(path));
+
+                if (newlyDeterminedMediaPaths.length === 1) {
+                    const newlyImportedPath = newlyDeterminedMediaPaths[0];
+                    const importedFilename = newlyImportedPath.split(/[\\/]/).pop();
+                    console.log(`[ProjectView] Successfully determined newly imported media path by diff: ${newlyImportedPath}`);
+
+                    // Call refreshProjectFiles again with the specific path to ensure it's selected
+                    // in stores (e.g., transcriptStore.selectMedia via loadProjectDataAndUpdateStore)
+                    // and to trigger any UI updates related to selection.
+                    // This also ensures isLoading and statusMessage are correctly updated.
+                    await refreshProjectFiles(newlyImportedPath);
+
                     if (selectedTab === 'notes') {
-                        prepareMediaNoteView(returnedMediaPath);
+                        prepareMediaNoteView(newlyImportedPath);
                     }
+                    // Update status message to reflect successful identification and selection
+                    // This might override the "Project refreshed" from refreshProjectFiles, which is fine.
+                    project.update(p => ({ ...p, statusMessage: `Imported and selected: ${importedFilename}` }));
                 } else {
-                    // Handle cases where newMediaPath is null or undefined (e.g., import cancelled, error in backend, or path not returned)
-                    console.log('[ProjectView] Media import finished, but specific path not returned/invalid. Performing general refresh.');
-                    await refreshProjectFiles(); // Call with no arguments for a general refresh
+                    if (newlyDeterminedMediaPaths.length === 0) {
+                        console.warn('[ProjectView] No new media path found after import and refresh. File might not have imported correctly or could be a duplicate.');
+                        project.update(p => ({ ...p, statusMessage: 'Media import process completed. No new file detected.' }));
+                    } else {
+                        console.warn(`[ProjectView] Could not unambiguously determine the newly imported media path. Found ${newlyDeterminedMediaPaths.length} new paths. No specific item selected.`);
+                        project.update(p => ({ ...p, statusMessage: `Media import completed. ${newlyDeterminedMediaPaths.length} new files detected, none auto-selected.` }));
+                    }
+                    // A general refresh was already done inside importMediaFile.
+                    // The project.update calls above will set the final status message.
+                    // isLoading should be false here due to the refresh inside importMediaFile.
                 }
             }
             else if (importType === 'document') await importDocumentFile();

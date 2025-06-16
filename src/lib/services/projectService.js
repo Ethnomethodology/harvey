@@ -401,67 +401,33 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const backendResponse = await invoke('import_media', {
+        // Invoke the backend import_media command.
+        // We are not using the direct response content anymore, trusting the backend updates the XML.
+        await invoke('import_media', {
             sourceFilePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath
         });
 
-        // Initialize newMediaPath and updatedFiles
-        let newMediaPath = null;
-        let updatedFiles = null;
+        // Always refresh the project files from the XML after an import attempt.
+        // refreshProjectFiles handles its own loading indicators (isLoading: true/false)
+        // and sets a status message like "Project refreshed."
+        await refreshProjectFiles();
 
-        if (backendResponse && typeof backendResponse === 'object') {
-            newMediaPath = backendResponse.new_media_path || backendResponse.newMediaPath;
-            updatedFiles = backendResponse.files || backendResponse.updatedFiles;
-        } else {
-            // Handle cases where backendResponse itself is null, undefined, or not an object
-            console.warn('[ProjectService] import_media returned invalid response structure:', backendResponse);
-            await refreshProjectFiles();
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false,
-                statusMessage: `${filename} import failed: invalid backend response. File list refreshed.`
-            }));
-            return null; // Return null as newMediaPath could not be determined
-        }
+        // Update project store to reflect completion of the import operation from frontend perspective
+        // and ensure isImportingAsset is false.
+        // isLoading should already be false due to refreshProjectFiles.
+        project.update(p => ({
+            ...p,
+            isImportingAsset: false,
+            isLoading: false, // Should be already set by refreshProjectFiles, but good to ensure
+            statusMessage: `${filename} import process completed. File list refreshed.`
+        }));
+        // Explicitly use setAssetImportStatus for consistency.
+        setAssetImportStatus(false, `${filename} import processed and list refreshed.`);
 
-        // filename is defined earlier in the function from await basename(sourceFilePath)
-
-        if (newMediaPath && Array.isArray(updatedFiles)) {
-            // Scenario 1: Both newMediaPath and updatedFiles are good
-            project.update(p => ({
-                ...p,
-                files: updatedFiles,
-                isImportingAsset: false,
-                isLoading: false,
-                error: null,
-                statusMessage: `${filename} imported successfully.`
-            }));
-            return newMediaPath;
-        } else if (newMediaPath) {
-            // Scenario 2: newMediaPath is present, but updatedFiles is missing/invalid
-            console.warn(`[ProjectService] import_media: newMediaPath '${newMediaPath}' was present, but updatedFiles was missing or not an array. Falling back to general refresh.`);
-            await refreshProjectFiles(); // General refresh as fallback
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false,
-                statusMessage: `${filename} imported. File list refreshed.`
-            }));
-            return newMediaPath;
-        } else {
-            // Scenario 3: newMediaPath is NOT found (regardless of updatedFiles)
-            console.warn('[ProjectService] import_media: newMediaPath was missing from backend response. Cannot select imported item.');
-            await refreshProjectFiles(); // General refresh
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false,
-                statusMessage: `${filename} imported. Path unknown, list refreshed.`
-            }));
-            return null; // Return null as newMediaPath is missing
-        }
+        // No explicit return value, function will return undefined.
+        // The caller (ProjectView.svelte) will now need to find the media file if needed,
+        // or rely on the general refresh.
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
         const errorMessage = error.message || String(error);
