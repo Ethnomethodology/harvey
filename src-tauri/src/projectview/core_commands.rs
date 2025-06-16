@@ -91,6 +91,103 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
 }
 
 #[tauri::command]
+pub async fn get_groups_for_file_asset(project_id: String, file_asset_relative_path: String) -> Result<Vec<GroupData>, String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] get_groups_for_file_asset - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot get groups for file asset.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] get_groups_for_file_asset - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot get groups for file asset.".to_string());
+    }
+    info!("[CMD] get_groups_for_file_asset for project_id: {}, file_asset_relative_path: {}", project_id, file_asset_relative_path);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::get_groups_for_file_asset(&conn, &project_id, &file_asset_relative_path) {
+        Ok(groups_from_db) => {
+            info!("[CMD] get_groups_for_file_asset - Found {} groups for project_id: {}, file_asset_relative_path: {}", groups_from_db.len(), project_id, file_asset_relative_path);
+            let groups_for_frontend: Vec<GroupData> = groups_from_db
+                .into_iter()
+                .map(|g_db| GroupData {
+                    id: g_db.id,
+                    project_id: g_db.project_id,
+                    name: g_db.name,
+                    description: g_db.description,
+                })
+                .collect();
+            Ok(groups_for_frontend)
+        }
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed for project_id {}, file_asset_relative_path {}: {}", project_id, file_asset_relative_path, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn remove_file_from_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] remove_file_from_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot remove file from group.".to_string());
+    }
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] remove_file_from_group - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot remove file from group.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] remove_file_from_group - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot remove file from group.".to_string());
+    }
+    info!("[CMD] remove_file_from_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::remove_file_from_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] remove_file_from_group - File {} removed from group {} successfully.", file_asset_relative_path, group_id);
+            } else {
+                info!("[CMD] remove_file_from_group - No association found for file {} in group {}. Nothing removed.", file_asset_relative_path, group_id);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed for project_id {}, group_id {}, file {}: {}", project_id, group_id, file_asset_relative_path, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
     if project_id.is_empty() || project_id == "null" {
         error!("[CMD] get_project_groups - Project ID is missing or invalid.");

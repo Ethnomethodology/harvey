@@ -425,6 +425,50 @@ pub fn add_file_to_group(conn: &Connection, project_id: &str, group_id: &str, fi
     Ok(())
 }
 
+pub fn get_groups_for_file_asset(conn: &Connection, project_id: &str, file_asset_path: &str) -> Result<Vec<GroupDataFromDb>, rusqlite::Error> {
+    debug!("[DB] Loading groups for file_asset_path {} in project_id {}", file_asset_path, project_id);
+    let mut stmt = conn.prepare(
+        "SELECT g.id, g.project_id, g.name, g.description, g.created_at, g.updated_at
+         FROM groups g
+         JOIN file_groups fg ON g.id = fg.group_id
+         WHERE fg.project_id = ?1 AND fg.file_asset_path = ?2
+         ORDER BY g.name ASC"
+    )?;
+
+    let group_iter = stmt.query_map(params![project_id, file_asset_path], |row| {
+        Ok(GroupDataFromDb {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result?);
+    }
+    info!("[DB] Loaded {} groups for file_asset_path {} in project_id {}", groups.len(), file_asset_path, project_id);
+    Ok(groups)
+}
+
+pub fn remove_file_from_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_path: &str) -> Result<usize, rusqlite::Error> {
+    debug!("[DB] Removing file {} from group {} for project_id {}", file_asset_path, group_id, project_id);
+    let rows_affected = conn.execute(
+        "DELETE FROM file_groups
+         WHERE project_id = ?1 AND group_id = ?2 AND file_asset_path = ?3",
+        params![project_id, group_id, file_asset_path],
+    )?;
+    if rows_affected > 0 {
+        info!("[DB] File {} removed from group {} successfully.", file_asset_path, group_id);
+    } else {
+        info!("[DB] No association found for file {} in group {} (project_id {}). Nothing removed.", file_asset_path, group_id, project_id);
+    }
+    Ok(rows_affected)
+}
+
 // --- End Group Functions ---
 
 // --- Media Transcript Data Functions ---

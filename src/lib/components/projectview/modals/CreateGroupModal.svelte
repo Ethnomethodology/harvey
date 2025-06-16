@@ -16,7 +16,6 @@
     const dispatch = createEventDispatcher();
 
     onMount(() => {
-        console.log('[CreateGroupModal] projectUuid onMount:', projectUuid);
     });
 
     function closeModal() {
@@ -39,7 +38,6 @@
 
         isSaving = true;
         try {
-            console.log('[CreateGroupModal] projectUuid at save:', projectUuid); // Debug log
             const newGroup = await invoke('create_new_group', {
                 projectId: projectUuid,
                 name: groupName.trim(),
