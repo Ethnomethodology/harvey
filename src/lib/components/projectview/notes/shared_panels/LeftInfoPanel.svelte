@@ -944,7 +944,7 @@
                                 projectId={$project.id}
                                 allProjectGroups={allProjectGroupsForPanel}
                                 initiallyAssignedGroups={fileAssignedGroups}
-                                isEditable={true} /* Explicitly true, or pass isEditing */
+                                isEditable={isEditing}
                                 on:groupsUpdated={() => fetchFileAssignedGroups($project.id, currentAssetRelativePathForGroups)}
                                 on:createNewGroup={() => {
                                     createGroupModalFileToAssign = currentAssetRelativePathForGroups;
