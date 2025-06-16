@@ -67,7 +67,7 @@
         if ($project && $project.id) { // Changed from project_uuid to id
             try {
                 const groups = await invoke('get_project_groups', { projectId: $project.id }); // Changed from project_uuid to id
-                projectGroups = groups;
+                projectGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
             } catch (error) {
                 console.error('[NotesLeftPanel] Error fetching project groups:', error);
                 projectGroups = [];
