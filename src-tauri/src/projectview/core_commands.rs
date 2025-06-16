@@ -366,7 +366,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
 
 #[tauri::command]
-pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<Vec<FileEntry>, CommandError> {
+pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, project_xml_path_str: String) -> Result<FileEntry, CommandError> {
     info!("[Backend Import] Source: '{}', Project XML: '{}'", source_file_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_file_path_str);
     let project_xml_path = PathBuf::from(&project_xml_path_str);
@@ -405,6 +405,9 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
+
+    let canonical_dest_path = fs::canonicalize(&destination_media_path)
+        .map_err(|e| CommandError::Io(format!("Failed to canonicalize destination media path {}: {}", destination_media_path.display(), e)))?;
 
     let mut duration_seconds: Option<f64> = None;
     let mut width: Option<i32> = None;
@@ -582,7 +585,27 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     save_project_xml(&project_xml_path, &project_data)?;
     info!("[Backend Import] XML updated with entry '{}'.", media_stem_identifier);
 
-    load_project_data(project_xml_path_str).await.map(|data| data.files)
+    // Construct the FileEntry for the newly imported media
+    let final_file_entry = FileEntry {
+        name: source_filename.clone(), // source_filename is the file name with extension
+        path: canonical_dest_path.to_string_lossy().to_string(),
+        relative_path: destination_relative_path_for_xml, // Calculated earlier for XML
+        file_type: "media".to_string(),
+        is_directory: false,
+        parent_relative_path: Path::new(HARVEY_FILES_DIR)
+            .join(MEDIA_DIR)
+            .join(media_stem_identifier) // media_stem_identifier is stem of source_filename
+            .join(MEDIA_SUBDIR)
+            .to_string_lossy()
+            .replace("\\", "/"), // Ensure forward slashes for consistency
+        depth: 5, // Typical depth for a media file inside its structure
+        speakers: Some(SpeakersXml::default()), // Default for new import
+        media_xml_identifier: Some(media_stem_identifier.to_string()),
+        associated_transcripts: Vec::new(), // No transcripts initially
+        children: Vec::new(),
+    };
+
+    Ok(final_file_entry)
 }
 
 

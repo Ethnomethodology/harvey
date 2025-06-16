@@ -79,7 +79,7 @@ import {
     setTranscriptionStatus,
     updateTranscriptionProgress,
     clearTranscriptionStatus,
-    selectMedia,
+    selectMedia, // Ensure selectMedia is imported
     clearTranscriptState,
     markTranscriptAsSaved
 } from '$lib/stores/transcriptStore.js';
@@ -360,7 +360,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
     }
 }
 
-export async function importMediaFile(importType = null) {
+export async function importMediaFile(importType = null, sourceView = 'unknown') {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -401,67 +401,52 @@ export async function importMediaFile(importType = null) {
 
         setAssetImportStatus(true, `Importing ${filename}...`);
 
-        const backendResponse = await invoke('import_media', {
+        const newlyImportedFileEntry = await invoke('import_media', { // backendResponse is now newlyImportedFileEntry
             sourceFilePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath
         });
 
-        if (!backendResponse || typeof backendResponse !== 'object') {
-            console.warn('[ProjectService] import_media returned invalid response:', backendResponse);
-            await refreshProjectFiles(); // Single call to refresh
-
-            // Explicitly set isLoading to false after refresh and before finding/preparing media note
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported. File available in project list.`
-            }));
-            return;
-        }
-
-        const updatedFiles = backendResponse.files || backendResponse.updatedFiles;
-        const newMediaPath = backendResponse.new_media_path || backendResponse.newMediaPath;
-
-        if (!Array.isArray(updatedFiles)) {
-            console.warn('[ProjectService] import_media returned no updatedFiles. Falling back to refresh.');
-            await refreshProjectFiles(); // Single call to refresh
-
-            // Explicitly set isLoading to false after refresh
-            project.update(p => ({
-                ...p,
-                isImportingAsset: false,
-                isLoading: false, // Ensure this is false here
-                statusMessage: `${filename} imported. File available in project list.`
-            }));
-            return;
-        }
-
-        if (Array.isArray(updatedFiles)) {
-            project.update(p => ({
-                ...p,
-                files: updatedFiles,
-                isImportingAsset: false,
-                isLoading: false,
-                error: null,
-                statusMessage: `${filename} imported successfully.` // Updated message
-            }));
-            // newMediaPath is available, but we are not calling prepareMediaNoteView anymore.
-            if (!newMediaPath) {
-                 console.warn('[ProjectService] Successfully imported media, but backend did not return new_media_path for potential future use.');
-            }
-        } else {
-            // This else block might be unreachable if !Array.isArray(updatedFiles) is handled above,
-            // but kept for structural integrity based on original code.
-            console.error('[ProjectService] Backend import_media returned invalid data:', updatedFiles);
+        if (!newlyImportedFileEntry || typeof newlyImportedFileEntry !== 'object' || !newlyImportedFileEntry.path) {
+            console.error('[ProjectService] import_media returned invalid FileEntry:', newlyImportedFileEntry);
             setAssetImportStatus(false, `Error importing ${filename}: Invalid data from backend.`);
-            throw new Error("Received invalid data from import process.");
+            await message(`Error importing ${filename}: Backend returned invalid data.`, { title: 'Import Error', type: 'error' });
+            // Attempt a refresh as a fallback, as the file might exist even if the entry wasn't returned correctly
+            await refreshProjectFiles();
+            return;
         }
+
+        // Refresh the main file list in projectStore so all UI components are aware of the new file.
+        await refreshProjectFiles();
+
+        // Now that the global list is updated, select the item in the appropriate view.
+        if (sourceView === 'notes') {
+            prepareMediaNoteView(newlyImportedFileEntry.path);
+            console.log(`[ProjectService] Media imported for Notes view. Path: ${newlyImportedFileEntry.path}`);
+        } else { // Default to 'transcriptions' or if sourceView is 'unknown'
+            selectMedia(newlyImportedFileEntry); // from transcriptStore
+            console.log(`[ProjectService] Media imported for Transcriptions view. Entry:`, newlyImportedFileEntry);
+        }
+
+        setAssetImportStatus(false, `${filename} imported and selected in ${sourceView} view.`);
+        // Update project store to reflect import is no longer in progress
+        project.update(p => ({
+            ...p,
+            isImportingAsset: false,
+            isLoading: false, // Ensure isLoading is also false
+            error: null
+        }));
+
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
         const errorMessage = error.message || String(error);
         await message(`Error importing media: ${errorMessage}`, { title: 'Import Error', type: 'error' });
         setAssetImportStatus(false, `Error importing media.`);
+        // Ensure loading states are reset on error
+        project.update(p => ({
+            ...p,
+            isImportingAsset: false,
+            isLoading: false
+        }));
     }
 }
 

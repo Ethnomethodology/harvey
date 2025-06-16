@@ -242,7 +242,8 @@
 
         if (categoryType === 'video' || categoryType === 'audio') {
             try { 
-                await importMediaFile(categoryType); 
+                // Pass 'notes' as the sourceView
+                await importMediaFile(categoryType, 'notes');
             } catch (e) { console.error(`[NotesLeftPanel] Error importMediaFile ${categoryType}:`, e); }
         } else if (categoryType === 'document') {
             try { await importDocumentFile(); } catch (e) { console.error(`[NotesLeftPanel] Error importDocumentFile:`, e); }
