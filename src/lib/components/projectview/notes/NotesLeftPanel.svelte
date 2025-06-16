@@ -810,10 +810,8 @@ $: {
                     on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                    <span class="flex items-center">
-                        {@html FOLDER_PLUS_ICON_SVG}Add to Group
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -831,10 +829,8 @@ $: {
                     on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                    <span class="flex items-center">
-                        {@html FOLDER_PLUS_ICON_SVG}Add to Group
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -848,10 +844,8 @@ $: {
                     on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                    <span class="flex items-center">
-                        {@html FOLDER_PLUS_ICON_SVG}Add to Group
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -865,10 +859,8 @@ $: {
                     on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                    <span class="flex items-center">
-                        {@html FOLDER_PLUS_ICON_SVG}Add to Group
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
@@ -882,10 +874,8 @@ $: {
                     on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                    <span class="flex items-center">
-                        {@html FOLDER_PLUS_ICON_SVG}Add to Group
-                    </span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
                 </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
