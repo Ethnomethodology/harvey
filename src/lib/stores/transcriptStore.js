@@ -30,6 +30,12 @@ export const initialTranscriptState = {
     pendingTranscriptPathForJobDone: null,
     pendingSegmentsForJobDone: null,
     ranInBackground: false,
+    // Dual transcript additions
+    activeTranscriptLanguage: 'original', // 'original' or 'english'
+    originalSegments: [],
+    englishSegments: [],
+    originalTranscriptPath: null, // To store the path of the original language transcript
+    englishTranscriptPath: null, // To store the path of the English language transcript
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -144,6 +150,12 @@ export function clearTranscriptState() {
                 activeMediaDuringTranscriptionStart: null, // Reset here as well
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
+                // Reset dual transcript states
+                activeTranscriptLanguage: 'original',
+                originalSegments: [],
+                englishSegments: [],
+                originalTranscriptPath: null,
+                englishTranscriptPath: null,
             };
         }
         return ts;
@@ -670,6 +682,142 @@ export function clearPendingTranscriptData() {
 export function setRanInBackground(value) {
     transcriptStore.update((ts) => ({ ...ts, ranInBackground: !!value }));
 }
+
+// --- Helper for Speaker Name Remapping ---
+function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig) {
+    if (!speakerConfig || !Array.isArray(speakerConfig.names) || speakerConfig.names.length === 0) {
+        // No speaker config to map to, or no names defined, return segments as is (or ensure generic are unknown)
+        return segmentsToRemap.map(seg => ({
+            ...seg,
+            // speaker: seg.speaker // keep original, or force to unknown if desired
+        }));
+    }
+
+    const userNames = speakerConfig.names;
+
+    return segmentsToRemap.map(seg => {
+        const newSegment = { ...seg }; // Work on a copy
+        const originalSpeaker = newSegment.speaker ? String(newSegment.speaker).trim() : "Unknown";
+
+        let userAssignedIndex = -1;
+
+        // Try to parse "SPEAKER_XX" or "speaker_X"
+        if (originalSpeaker.toUpperCase().startsWith("SPEAKER_")) {
+            const numStr = originalSpeaker.substring("SPEAKER_".length);
+            const parsedNum = parseInt(numStr, 10);
+            if (!isNaN(parsedNum)) {
+                userAssignedIndex = parsedNum; // Assumes SPEAKER_00 is index 0, SPEAKER_01 is index 1
+            }
+        } else if (originalSpeaker.toLowerCase().startsWith("speaker_")) {
+            const numStr = originalSpeaker.substring("speaker_".length);
+            const parsedNum = parseInt(numStr, 10);
+            if (!isNaN(parsedNum) && parsedNum > 0) {
+                userAssignedIndex = parsedNum - 1; // Assumes speaker_1 is index 0
+            }
+        }
+
+        if (userAssignedIndex >= 0 && userAssignedIndex < userNames.length) {
+            if (userNames[userAssignedIndex] && userNames[userAssignedIndex].trim() !== "") {
+                newSegment.speaker = userNames[userAssignedIndex].trim();
+            } else {
+                // If the target username is empty, keep original or set to a default like "Speaker X"
+                // For now, let's keep the original generic ID if the target name is empty.
+                // This case should ideally be handled by speaker config validation ensuring no empty names.
+            }
+        } else {
+            // If the speaker ID isn't in the generic format OR the index is out of bounds,
+            // it might be an already user-defined name or a different system's ID.
+            // Check if this name is one of the *current* userNames. If not, it's an old/unknown name.
+            if (!userNames.includes(originalSpeaker) && originalSpeaker !== "Unknown") {
+                // This could be an old name. For now, we don't have a reverse map here.
+                // Simplest is to leave it, or if strict, map to "Unknown".
+                // Let's leave it for now. The main purpose is mapping generic IDs.
+            }
+        }
+        return newSegment;
+    });
+}
+
+
+// --- Dual Transcript Switching Actions ---
+
+export function switchToOriginalTranscript() {
+    transcriptStore.update(ts => {
+        if (ts.activeTranscriptLanguage === 'original' || ts.originalSegments.length === 0) {
+            return ts; // Already original or no original segments to switch to
+        }
+
+        // Preserve undo/redo for the English transcript if needed, or clear
+        // For simplicity, clearing undo/redo on switch.
+        // TODO: Consider preserving undo/redo stacks per language.
+        const newUndoStack = []; // Clear undo/redo for the new active transcript
+        const newRedoStack = [];
+
+        let newIndex = -1;
+        const time = ts.player.currentTime;
+        if (ts.originalSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
+            const idx = ts.originalSegments.findIndex((s, index) => {
+                const isLastSegment = index === ts.originalSegments.length - 1;
+                const startTimeCheck = time >= (s.start_time - 0.001);
+                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
+                return startTimeCheck && endTimeCheck;
+            });
+            newIndex = idx;
+        }
+        updateProjectStoreState({ statusMessage: 'Switched to original transcript.' });
+
+        const remappedSegments = remapSegmentSpeakerNames([...ts.originalSegments], ts.speakers);
+
+        return {
+            ...ts,
+            segments: remappedSegments,
+            activeTranscriptLanguage: 'original',
+            currentTranscriptPath: ts.originalTranscriptPath,
+            transcriptDirty: false, // Assume switching doesn't make it dirty initially
+            transcriptUndoStack: newUndoStack,
+            transcriptRedoStack: newRedoStack,
+            player: { ...ts.player, currentSegmentIndex: newIndex }
+        };
+    });
+}
+
+export function switchToEnglishTranscript() {
+    transcriptStore.update(ts => {
+        if (ts.activeTranscriptLanguage === 'english' || ts.englishSegments.length === 0) {
+            return ts; // Already English or no English segments to switch to
+        }
+
+        const newUndoStack = [];
+        const newRedoStack = [];
+
+        let newIndex = -1;
+        const time = ts.player.currentTime;
+        if (ts.englishSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
+            const idx = ts.englishSegments.findIndex((s, index) => {
+                const isLastSegment = index === ts.englishSegments.length - 1;
+                const startTimeCheck = time >= (s.start_time - 0.001);
+                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
+                return startTimeCheck && endTimeCheck;
+            });
+            newIndex = idx;
+        }
+        updateProjectStoreState({ statusMessage: 'Switched to English transcript.' });
+
+        const remappedSegments = remapSegmentSpeakerNames([...ts.englishSegments], ts.speakers);
+
+        return {
+            ...ts,
+            segments: remappedSegments,
+            activeTranscriptLanguage: 'english',
+            currentTranscriptPath: ts.englishTranscriptPath,
+            transcriptDirty: false,
+            transcriptUndoStack: newUndoStack,
+            transcriptRedoStack: newRedoStack,
+            player: { ...ts.player, currentSegmentIndex: newIndex }
+        };
+    });
+}
+
 
 // Helper to update projectStore's status and error, if needed by transcript functions
 // This is a placeholder for a better way to handle global state updates.

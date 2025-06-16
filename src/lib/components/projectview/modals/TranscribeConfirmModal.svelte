@@ -19,6 +19,7 @@
 	// Internal state for modal appearance/status
 	let status = 'confirm'; // 'confirm', 'running', 'cancelling', 'done', 'error', 'cancelled'
 	let errorMessage = '';
+	let translateToEnglish = false; // New state for the checkbox
 	let successMessage = '';
 	let cancelledMessage = '';
 
@@ -29,7 +30,12 @@
 		errorMessage = '';
 		successMessage = '';
 		cancelledMessage = '';
-		dispatch('confirmStart'); // Tell parent/service to start backend
+		dispatch('confirmStart', {
+			// modelName: modelName, // modelName is a prop, already available to parent
+			// language: language,   // language is a prop, already available to parent
+			// numSpeakers: speakers?.count, // speakers is a prop
+			translateToEnglish: translateToEnglish // Include the new flag
+		}); // Tell parent/service to start backend
 	}
 
 	function handleCancelRequest() {
@@ -191,6 +197,12 @@
 					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
 					<p><strong>Language:</strong> <span class="font-mono">{language || 'N/A'}</span></p>
 					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Diarization Disabled)'}</p>
+				</div>
+				<div class="mb-4 mt-2"> <!-- Added margin top -->
+					<label class="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+						<input type="checkbox" bind:checked={translateToEnglish} class="form-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600 dark:ring-offset-gray-800" />
+						<span>Translate to English</span>
+					</label>
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto">
 					<button class="btn-secondary" on:click={closeModal}>Cancel</button>

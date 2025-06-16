@@ -491,8 +491,22 @@ pub async fn save_transcript_json(
 }
 
 // --- prepare_output_paths Helper Function ---
-pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Result<(String, PathBuf, PathBuf, PathBuf), CommandError> {
-    debug!("[prepare_output_paths][{}] Media path: {}", job_id, media_path_str);
+/// Prepares paths for transcription and translation outputs.
+///
+/// Returns a tuple containing:
+/// - `temp_transcript_output_base_orig_str`: Base path for temporary original transcript files (without extension).
+/// - `expected_whisper_temp_json_path_orig`: Path to the temporary JSON output from Whisper for the original transcript.
+/// - `expected_rttm_temp_path`: Path to the temporary RTTM file for diarization.
+/// - `final_transcript_path_orig`: Final path for the original transcript JSON file.
+/// - `temp_transcript_output_base_en_str`: Base path for temporary translated transcript files (without extension).
+/// - `expected_whisper_temp_json_path_en`: Path to the temporary JSON output from Whisper for the translated transcript.
+/// - `final_transcript_path_en`: Final path for the translated transcript JSON file.
+pub(crate) fn prepare_output_paths(
+    media_path_str: &str,
+    job_id: &str,
+    translate_to_english: bool,
+) -> Result<(String, PathBuf, PathBuf, PathBuf, Option<String>, Option<PathBuf>, Option<PathBuf>), CommandError> {
+    debug!("[prepare_output_paths][{}] Media path: {}, Translate: {}", job_id, media_path_str, translate_to_english);
     let media_path = PathBuf::from(media_path_str);
 
     let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from(format!("Invalid media filename: {}", media_path_str)))?.to_string();
@@ -507,20 +521,42 @@ pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Resul
     fs::create_dir_all(&transcripts_dir)?;
     debug!("[prepare_output_paths][{}] Transcripts dir ensured: {:?}", job_id, transcripts_dir);
 
-    let temp_output_base_in_transcripts = transcripts_dir.join(format!("{}_temp_{}", media_filename_stem, job_id));
-    let temp_output_path_base_str = temp_output_base_in_transcripts.to_string_lossy().to_string();
-
-    // EXPECTED path for Whisper's JSON output, assuming "-of <base>" and "-oj" results in "<base>.json"
-    let expected_whisper_temp_output_path = temp_output_base_in_transcripts.with_extension("json"); // CORRECTED
+    // Paths for original transcript
+    let temp_transcript_output_base_orig = transcripts_dir.join(format!("{}_temp_{}_orig", media_filename_stem, job_id));
+    let temp_transcript_output_base_orig_str = temp_transcript_output_base_orig.to_string_lossy().to_string();
+    let expected_whisper_temp_json_path_orig = temp_transcript_output_base_orig.with_extension("json");
+    let final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
     
-    let expected_rttm_temp_path = temp_output_base_in_transcripts.with_extension("rttm");
-    
-    let final_transcript_path = transcripts_dir.join(format!("{}.json", media_filename_stem));
+    // Path for RTTM (common for original transcript diarization)
+    let expected_rttm_temp_path = temp_transcript_output_base_orig.with_extension("rttm"); // Use original's temp base for RTTM
 
-    debug!("[prepare_output_paths][{}] Temp Base: '{}', Whisper JSON (temp): '{}', RTTM (temp): '{}', Final Transcript JSON: '{}'", 
-        job_id, temp_output_path_base_str, expected_whisper_temp_output_path.display(), expected_rttm_temp_path.display(), final_transcript_path.display());
+    debug!("[prepare_output_paths][{}] Orig Temp Base: '{}', Orig Whisper JSON (temp): '{}', RTTM (temp): '{}', Orig Final JSON: '{}'",
+        job_id, temp_transcript_output_base_orig_str, expected_whisper_temp_json_path_orig.display(), expected_rttm_temp_path.display(), final_transcript_path_orig.display());
 
-    Ok((temp_output_path_base_str, expected_whisper_temp_output_path, expected_rttm_temp_path, final_transcript_path))
+    // Paths for translated transcript (if requested)
+    let mut temp_transcript_output_base_en_str: Option<String> = None;
+    let mut expected_whisper_temp_json_path_en: Option<PathBuf> = None;
+    let mut final_transcript_path_en: Option<PathBuf> = None;
+
+    if translate_to_english {
+        let temp_transcript_output_base_en = transcripts_dir.join(format!("{}_temp_{}_en", media_filename_stem, job_id));
+        temp_transcript_output_base_en_str = Some(temp_transcript_output_base_en.to_string_lossy().to_string());
+        expected_whisper_temp_json_path_en = Some(temp_transcript_output_base_en.with_extension("json"));
+        final_transcript_path_en = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
+
+        debug!("[prepare_output_paths][{}] EN Temp Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
+            job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en);
+    }
+
+    Ok((
+        temp_transcript_output_base_orig_str,
+        expected_whisper_temp_json_path_orig,
+        expected_rttm_temp_path,
+        final_transcript_path_orig,
+        temp_transcript_output_base_en_str,
+        expected_whisper_temp_json_path_en,
+        final_transcript_path_en,
+    ))
 }
 
 
@@ -571,6 +607,71 @@ pub fn map_speaker_ids_to_names(
     }
     info!("[Name Map] Finished speaker name mapping process.");
 }
+
+// --- Main Transcription Command ---
+#[derive(serde::Deserialize, Debug)]
+pub struct TranscribeMediaPayload {
+    project_xml_path: String,
+    media_path_str: String,
+    num_speakers: usize,
+    language_code: Option<String>,
+    model_name: String,
+    translate_to_english: bool,
+    speaker_names: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn transcribe_media_command(
+    app_handle: AppHandle,
+    payload: TranscribeMediaPayload,
+) -> Result<(), CommandError> {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
+
+    // TODO: Implement the full transcription and translation logic here.
+    // This will involve:
+    // 1. Calling prepare_output_paths.
+    // 2. First pass: Original language transcription (pyannote if num_speakers > 0, then whisper).
+    // 3. Parsing original transcript, applying speaker names, saving to file and XML.
+    // 4. Second pass (if translate_to_english): English translation (whisper with --translate).
+    // 5. Parsing translated transcript, aligning segments, saving to file and XML.
+    // 6. Emitting progress events.
+    // 7. Error handling throughout.
+
+    let (
+        _temp_transcript_output_base_orig_str,
+        _expected_whisper_temp_json_path_orig,
+        _expected_rttm_temp_path,
+        _final_transcript_path_orig,
+        _temp_transcript_output_base_en_str,
+        _expected_whisper_temp_json_path_en,
+        _final_transcript_path_en
+    ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
+
+    // Placeholder for actual transcription logic
+    info!("[Transcribe Command][{}] Paths prepared. Placeholder for transcription execution.", job_id);
+    // Simulate some work
+    for i in 1..=5 {
+        app_handle.emit("PROGRESS", ProgressPayload { job_id: job_id.clone(), text: format!("Processing step {}/5...", i), progress: (i as f32 / 5.0) * 100.0 })?;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+
+    // Example of how to save segments (replace with actual segments)
+    // let example_segments = vec![
+    //     TranscriptSegment { start_time: 0.0, end_time: 1.0, text: "Hello".to_string(), speaker: "Speaker 1".to_string() },
+    //     TranscriptSegment { start_time: 1.0, end_time: 2.0, text: "World".to_string(), speaker: "Speaker 2".to_string() },
+    // ];
+    // let lexical_json = create_lexical_table_from_segments(&example_segments);
+    // if let Some(final_path) = final_transcript_path_orig { // Or final_transcript_path_en
+    //     // Need to call save_transcript_json, which itself needs project_xml_path, transcript_path, and the json string.
+    //     // This will also update the project XML.
+    // }
+
+
+    info!("[Transcribe Command][{}] Placeholder processing complete.", job_id);
+    Ok(())
+}
+
 
 #[tauri::command]
 pub async fn list_subtitle_files_command(media_path_str: String) -> Result<Vec<SubtitleFileEntry>, CommandError> {
