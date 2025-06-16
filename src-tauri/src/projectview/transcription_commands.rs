@@ -622,11 +622,17 @@ pub struct TranscribeMediaPayload {
     speaker_names: Vec<String>,
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct TranscriptionResultPayload {
+    original_transcript_path: String,
+    translated_transcript_path: Option<String>,
+}
+
 #[tauri::command]
 pub async fn transcribe_media_command(
     app_handle: AppHandle,
     payload: TranscribeMediaPayload,
-) -> Result<(), CommandError> {
+) -> Result<TranscriptionResultPayload, CommandError> {
     let job_id = uuid::Uuid::new_v4().to_string();
     info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
 
@@ -652,15 +658,16 @@ pub async fn transcribe_media_command(
     emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...")?;
     let mut original_segments = execute_transcription_pass(
         &app_handle_clone,
-        &wav_media_path,
+        &wav_media_path.to_string_lossy(), // Pass as &str
         &whisper_model_path_str,
-        payload.language_code.as_deref().unwrap_or("auto"),
+        &payload.language_code.clone().unwrap_or_else(|| "auto".to_string()),
         &job_id,
         &temp_transcript_output_base_orig_str,
         &expected_whisper_temp_json_path_orig,
         payload.num_speakers,
         &expected_rttm_temp_path,
         false, // is_translation_pass
+        &payload.speaker_names, // Pass as slice
     ).await?;
 
     map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
@@ -682,20 +689,26 @@ pub async fn transcribe_media_command(
         if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
             temp_transcript_output_base_en_str,
             expected_whisper_temp_json_path_en,
-            final_transcript_path_en,
+            final_transcript_path_en, // This is an Option<PathBuf>
         ) {
             emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...")?;
+
+            // Safely get owned strings for paths needed by execute_transcription_pass
+            let base_en_str_owned = base_en_str.clone();
+            let json_path_en_owned = json_path_en.clone();
+
             let mut translated_segments = execute_transcription_pass(
                 &app_handle_clone,
-                &wav_media_path,
+                &wav_media_path.to_string_lossy(), // Pass as &str
                 &whisper_model_path_str,
                 "en", // Target language for translation is English
                 &job_id,
-                &base_en_str,
-                &json_path_en,
-                0, // Typically, diarization is not re-run or is handled differently for translations
-                &PathBuf::new(), // Placeholder for RTTM path, as it might not be used
+                &base_en_str_owned, // Use owned string
+                &json_path_en_owned,  // Use owned PathBuf
+                0, // No diarization for translation pass
+                &PathBuf::new(), // Empty RTTM path
                 true, // is_translation_pass
+                &payload.speaker_names, // Pass as slice
             ).await?;
 
             // Speaker mapping for translated segments can be complex.
@@ -731,10 +744,18 @@ pub async fn transcribe_media_command(
 
     emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.")?;
     info!("[Transcribe Command][{}] Processing complete.", job_id);
-    Ok(())
+
+    Ok(TranscriptionResultPayload {
+        original_transcript_path: final_transcript_path_orig.to_string_lossy().to_string(),
+        translated_transcript_path: if payload.translate_to_english {
+            final_transcript_path_en.map(|p| p.to_string_lossy().into_owned())
+        } else {
+            None
+        },
+    })
 }
 
-// --- Placeholder Helper Functions ---
+// --- Implemented Helper Functions ---
 
 // Adapted from local_handler/transcription.rs
 // Omitting cancel_flag for now
@@ -902,6 +923,32 @@ pub(crate) fn find_model_file_cmd(model_dir: &Path) -> Result<PathBuf, CommandEr
 
 // Adapted from local_handler/transcription.rs
 // Made synchronous as read_config and find_model_file_cmd are sync.
+
+// --- Structs specific to parsing whisper output (can be kept local to where they are used) ---
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonOutput {
+    transcription: Option<Vec<WhisperJsonSegment>>,
+}
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonSegment {
+    timestamps: WhisperJsonTimestamps,
+    text: String,
+}
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonTimestamps {
+    from: String,
+    to: String,
+}
+
+// --- Struct specific to parsing RTTM output (can be kept local) ---
+#[derive(Debug, Clone)]
+struct RttmRecord {
+    start_time: f64,
+    duration: f64,
+    speaker_id: String,
+}
+
+
 pub(crate) fn resolve_whisper_model_path_cmd(
     model_name: &str,
     job_id: &str, // Kept for logging consistency, though not strictly needed by logic
@@ -924,30 +971,301 @@ pub(crate) fn resolve_whisper_model_path_cmd(
     Ok(model_file_path.to_string_lossy().to_string())
 }
 
+// --- START: Adapted Helper Functions for execute_transcription_pass ---
 
-// Placeholder for the core transcription pass
-async fn execute_transcription_pass(
-    _app_handle: &AppHandle,
-    _wav_media_path: &Path,
-    _model_path: &str,
-    _language_code: &str,
-    _job_id: &str,
-    _output_base_path_str: &str,
-    _expected_json_output_path: &Path,
-    _num_speakers: usize,
-    _expected_rttm_path: &Path,
-    _is_translation_pass: bool,
-) -> Result<Vec<TranscriptSegment>, CommandError> {
-    info!("[execute_transcription_pass][{}] STUB CALLED. Lang: {}, Translate: {}, Output: {}", _job_id, _language_code, _is_translation_pass, _output_base_path_str);
-    Ok(vec![
-        TranscriptSegment {
-            start_time: 0.0,
-            end_time: 1.0,
-            text: if _is_translation_pass { "Translated text stub".to_string() } else { "Original text stub".to_string() },
-            speaker: "SPEAKER_00".to_string(),
+// Adapted from local_handler/transcription.rs
+async fn run_whisper_cpp_sidecar_cmd(
+    app_handle: &AppHandle,
+    media_path: &str, // Should be wav_media_path.to_string_lossy().to_string()
+    whisper_model_path_str: &str,
+    language: &str,
+    job_id: &str,
+    output_base_for_whisper: &str,
+    expected_whisper_json_output_path: &Path,
+    is_translation_pass: bool,
+    // cancel_flag: &Arc<AtomicBool>, // Omitted for now
+) -> Result<PathBuf, CommandError> {
+    let sidecar_name = "whisper-cpp";
+    let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
+    debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass);
+
+    let mut args: Vec<String> = vec![
+        "-m".into(), whisper_model_path_str.to_string(),
+        "-f".into(), media_path.to_string(),
+        "-l".into(), lang_arg.to_string(),
+        "-oj".into(), // Output JSON
+        "-of".into(), output_base_for_whisper.to_string(),
+    ];
+
+    if is_translation_pass {
+        args.push("--translate".into());
+    }
+
+    debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+     .map_err(|e| {
+         error!("Failed to spawn whisper-cpp: {}. Check tauri.conf.json, binary paths, and permissions.", e);
+         CommandError::from(format!("Failed to execute whisper-cpp sidecar: {}. Ensure it's bundled and executable.", e))
+     })?;
+    info!("[Whisper CPP CMD][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
+
+    // Simplified event handling (omitting cancellation for now)
+    let mut process_error: Option<String> = None;
+    let mut exit_code: Option<i32> = None;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+            _ => {}
         }
-    ])
+    }
+
+    if process_error.is_some() || exit_code != Some(0) {
+        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
+    }
+    if !expected_whisper_json_output_path.exists() {
+        // Add a small delay and check again, as file system operations might not be instantaneous
+        sleep(Duration::from_millis(300)).await;
+        if !expected_whisper_json_output_path.exists() {
+            return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
+        }
+    }
+    Ok(expected_whisper_json_output_path.to_path_buf())
 }
+
+// Adapted from local_handler/transcription.rs
+fn parse_whisper_json_cmd(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
+    debug!("[JSON Parse CMD] Reading whisper output: {:?}", json_path);
+    let file = File::open(json_path)?;
+    let reader = std::io::BufReader::new(file); // Ensure BufReader is in scope
+    let output: WhisperJsonOutput = serde_json::from_reader(reader)
+        .map_err(|e| CommandError::from(format!("Failed to parse whisper JSON from '{}': {}", json_path.display(), e)))?;
+
+    let mut segments = Vec::new();
+    if let Some(transcription) = output.transcription {
+        for (idx, w_seg) in transcription.iter().enumerate() {
+            // Simplified timestamp parsing for this adaptation, assuming format is always "00:00:00,000" or "00:00:00.000"
+            // A more robust parser like in local_handler might be needed if whisper's output varies.
+            let parse_ts = |ts_str: &str| -> Result<f64, String> {
+                let parts: Vec<&str> = ts_str.split(|c| c == ':' || c == ',' || c == '.').collect();
+                if parts.len() == 4 { // hh:mm:ss:ms
+                    let h: f64 = parts[0].parse().map_err(|_| "h".to_string())?;
+                    let m: f64 = parts[1].parse().map_err(|_| "m".to_string())?;
+                    let s: f64 = parts[2].parse().map_err(|_| "s".to_string())?;
+                    let ms: f64 = parts[3].parse().map_err(|_| "ms".to_string())?;
+                    Ok(h * 3600.0 + m * 60.0 + s + ms / 1000.0)
+                } else if parts.len() == 3 && ts_str.contains(':') { // mm:ss.ms
+                     let m: f64 = parts[0].parse().map_err(|_| "m2".to_string())?;
+                     let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
+                     let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
+                     Ok(m * 60.0 + s + ms / 1000.0)
+                }
+                 else { Err(format!("Invalid timestamp format: {}", ts_str)) }
+            };
+
+            let start_time = parse_ts(&w_seg.timestamps.from)
+                .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid start time '{}': {}", idx, w_seg.timestamps.from, e_msg)))?;
+            let end_time = parse_ts(&w_seg.timestamps.to)
+                 .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid end time '{}': {}", idx, w_seg.timestamps.to, e_msg)))?;
+
+            if end_time < start_time {
+                 warn!("[JSON Parse CMD] Skipping segment {} due to end time < start time.", idx);
+                 continue;
+            }
+            segments.push(TranscriptSegment {
+                start_time,
+                end_time,
+                speaker: "Unknown".to_string(), // Default speaker
+                text: w_seg.text.trim().to_string(),
+            });
+        }
+    }
+    info!("[JSON Parse CMD] Parsed {} segments from {}", segments.len(), json_path.display());
+    Ok(segments)
+}
+
+// Adapted from local_handler/transcription.rs
+async fn run_diarize_cli_sidecar_cmd(
+    app_handle: &AppHandle,
+    media_path: &str, // wav_media_path.to_string_lossy().to_string()
+    num_speakers: usize,
+    output_rttm_path: &Path,
+    job_id: &str,
+    // cancel_flag: &Arc<AtomicBool>, // Omitted
+) -> Result<PathBuf, CommandError> {
+    let sidecar_name = "diarize-cli";
+    info!("[DiarizeCLI CMD][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
+    if let Some(parent_dir) = output_rttm_path.parent() { fs::create_dir_all(parent_dir)?; }
+
+    let mut args = vec![
+        "--audio".into(), media_path.to_string(),
+        "--output".into(), output_rttm_path.to_string_lossy().to_string(),
+    ];
+    if num_speakers > 0 { // diarize-cli might handle num_speakers=0 as auto, but explicit is safer
+        args.push("--num_speakers".into()); args.push(num_speakers.to_string());
+        // Add min/max if your diarize-cli version supports/requires them
+        args.push("--min_speakers".into()); args.push(1.to_string()); // Example
+        args.push("--max_speakers".into()); args.push(num_speakers.max(1).to_string()); // Example
+    }
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+        .map_err(|e| CommandError::from(format!("Failed to execute {} sidecar: {}", sidecar_name, e)))?;
+    info!("[DiarizeCLI CMD][{}] Spawned '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
+
+    let mut process_error: Option<String> = None;
+    let mut exit_code: Option<i32> = None;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+            _ => {}
+        }
+    }
+
+    if process_error.is_some() || exit_code != Some(0) {
+        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
+    }
+    if !output_rttm_path.exists() {
+        sleep(Duration::from_millis(300)).await;
+        if !output_rttm_path.exists() {
+             return Err(CommandError::from(format!("Diarization RTTM output missing: {:?}", output_rttm_path)));
+        }
+    }
+    Ok(output_rttm_path.to_path_buf())
+}
+
+// Adapted from local_handler/transcription.rs
+fn parse_rttm_file_cmd(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
+    debug!("[RTTM Parse CMD] Reading RTTM file: {:?}", rttm_path);
+    let file = File::open(rttm_path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut records = Vec::new();
+
+    for line_result in reader.lines() {
+        let line = line_result?;
+        if line.trim().is_empty() || line.starts_with(';') { continue; }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 8 || parts[0] != "SPEAKER" { continue; }
+        let start_time: f64 = parts[3].parse().map_err(|_| CommandError::from("Invalid RTTM start time"))?;
+        let duration: f64 = parts[4].parse().map_err(|_| CommandError::from("Invalid RTTM duration"))?;
+        if start_time < 0.0 || duration <= 0.0 { continue; } // Basic validation
+        records.push(RttmRecord { start_time, duration, speaker_id: parts[7].to_string() });
+    }
+    info!("[RTTM Parse CMD] Parsed {} records from {}", records.len(), rttm_path.display());
+    Ok(records)
+}
+
+// Adapted from local_handler/transcription.rs
+fn merge_diarization_results_cmd(whisper_segments: &mut Vec<TranscriptSegment>, rttm_records: &[RttmRecord]) {
+    if rttm_records.is_empty() { info!("[Merge CMD] No RTTM records for merging."); return; }
+    if whisper_segments.is_empty() { info!("[Merge CMD] No whisper segments for merging."); return; }
+
+    let mut sorted_rttm = rttm_records.to_vec();
+    sorted_rttm.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap_or(std::cmp::Ordering::Equal));
+
+    for seg in whisper_segments.iter_mut() {
+        let seg_mid_point = seg.start_time + (seg.end_time - seg.start_time) / 2.0;
+        let mut best_speaker = "Unknown".to_string();
+        let mut max_overlap = 0.0f64;
+
+        for rttm_rec in &sorted_rttm {
+            let rttm_start = rttm_rec.start_time;
+            let rttm_end = rttm_rec.start_time + rttm_rec.duration;
+
+            let overlap_start = seg.start_time.max(rttm_start);
+            let overlap_end = seg.end_time.min(rttm_end);
+            let current_overlap = (overlap_end - overlap_start).max(0.0);
+
+            if current_overlap > max_overlap {
+                max_overlap = current_overlap;
+                best_speaker = rttm_rec.speaker_id.clone();
+            } else if current_overlap > 0.0 && current_overlap == max_overlap {
+                // Tie-breaking: prefer speaker whose turn contains the segment's midpoint
+                if seg_mid_point >= rttm_start && seg_mid_point < rttm_end {
+                    best_speaker = rttm_rec.speaker_id.clone();
+                }
+            }
+        }
+        if max_overlap > 0.0 { // Only assign if there was any overlap
+            seg.speaker = best_speaker;
+        }
+    }
+    info!("[Merge CMD] Finished merging diarization results.");
+}
+
+// --- END: Adapted Helper Functions ---
+
+pub(crate) async fn execute_transcription_pass(
+    app_handle: &AppHandle,
+    wav_media_path_str: &str, // Changed to &str to match caller
+    model_path: &str,
+    language_code: &str,
+    job_id: &str,
+    output_base_for_whisper: &str,
+    expected_whisper_json_output_path: &PathBuf,
+    num_speakers: usize,
+    expected_rttm_output_path: &PathBuf,
+    is_translation_pass: bool,
+    speaker_names: &[String],
+) -> Result<Vec<TranscriptSegment>, CommandError> {
+    info!(
+        "[Exec Pass][{}] Start. Lang: {}, Translate: {}, NumSpeakers: {}",
+        job_id, language_code, is_translation_pass, num_speakers
+    );
+
+    let whisper_json_path = run_whisper_cpp_sidecar_cmd(
+        app_handle,
+        wav_media_path_str,
+        model_path,
+        language_code,
+        job_id,
+        output_base_for_whisper,
+        expected_whisper_json_output_path,
+        is_translation_pass,
+    ).await?;
+
+    let mut segments = parse_whisper_json_cmd(&whisper_json_path)?;
+
+    if num_speakers > 0 && !is_translation_pass {
+        emit_progress_cmd(app_handle, job_id,segments.len() as f32 * 0.1 + 20.0, "Running diarization...")?; // Example progress update
+
+        let rttm_path = run_diarize_cli_sidecar_cmd(
+            app_handle,
+            wav_media_path_str,
+            num_speakers,
+            expected_rttm_output_path,
+            job_id,
+        ).await?;
+
+        match parse_rttm_file_cmd(&rttm_path) {
+            Ok(rttm_records) => {
+                if !rttm_records.is_empty() {
+                    merge_diarization_results_cmd(&mut segments, &rttm_records);
+                } else {
+                    warn!("[Exec Pass][{}] Diarization produced no RTTM records.", job_id);
+                }
+            }
+            Err(e) => {
+                warn!("[Exec Pass][{}] Failed to parse RTTM file: {}. Proceeding without merged diarization.", job_id, e);
+            }
+        }
+    } else {
+        info!("[Exec Pass][{}] Skipping diarization.", job_id);
+    }
+
+    map_speaker_ids_to_names(&mut segments, speaker_names);
+
+    info!("[Exec Pass][{}] Pass complete. Segments: {}", job_id, segments.len());
+    Ok(segments)
+}
+
 
 // Helper to emit progress
 pub(crate) fn emit_progress_cmd(
