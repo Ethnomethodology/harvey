@@ -12,6 +12,7 @@
     import { invoke, convertFileSrc } from '@tauri-apps/api/core'; // Added invoke
     import { type as getOsType } from '@tauri-apps/plugin-os'; // Updated import
     import CategoryTooltip from './CategoryTooltip.svelte';
+    import CreateGroupModal from '../modals/CreateGroupModal.svelte'; // Added for Step III.4
 
     const dispatch = createEventDispatcher();
 
@@ -32,12 +33,6 @@
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
 
-    // Metadata related variables removed
-    // let currentFileMetadata = null;
-    // let fullLoadedMetadataObject = null;
-    // let isEditing = false;
-    // let editableMetadata = { ... };
-
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -48,9 +43,9 @@
     function handleCategoryContextMenu(event, categoryType) {
       event.preventDefault();
       event.stopPropagation();
-      if (categoryContextMenuVisible) {
-        closeCategoryContextMenu();
-      }
+      if (categoryContextMenuVisible) closeCategoryContextMenu();
+      if (showGroupSubMenu) closeGroupSubMenu();
+
       categoryContextMenuType = categoryType;
       const rect = event.currentTarget.getBoundingClientRect();
       categoryContextMenuX = rect.right + 4;
@@ -63,30 +58,46 @@
       categoryContextMenuType = null;
     }
 
+    function closeGroupSubMenu() {
+        showGroupSubMenu = false;
+    }
+
     onMount(async () => {
       console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
       console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
 
-      // OS-specific label logic
+      await fetchProjectGroups();
+
       try {
-        const currentOs = await getOsType(); // e.g., 'windows', 'linux', 'macos'
+        const currentOs = await getOsType();
         if (currentOs === 'windows') {
           revealButtonLabel = 'Reveal in Explorer';
-        } else if (currentOs === 'macos') { // Tauri v2 returns 'macos' for Darwin
+        } else if (currentOs === 'macos') {
           revealButtonLabel = 'Reveal in Finder';
-        } else { // 'linux' or any other
+        } else {
           revealButtonLabel = 'Open File Location';
         }
       } catch (e) {
         console.error("Error getting OS type:", e);
-        // Keep default label if error occurs
       }
 
-      const listener = () => {
-        if (categoryContextMenuVisible) closeCategoryContextMenu();
+      const listener = (event) => {
+        const categoryMenuElement = document.getElementById('notes-left-panel-category-context-menu');
+        if (categoryContextMenuVisible && categoryMenuElement && !categoryMenuElement.contains(event.target)) {
+            const categoryButton = document.querySelector(`[aria-controls="category-content-${categoryContextMenuType}"]`);
+            if (!categoryButton || !categoryButton.contains(event.target)) {
+                 closeCategoryContextMenu();
+            }
+        }
+
+        const groupSubMenuElement = document.getElementById('notes-left-panel-group-sub-menu');
+        if (showGroupSubMenu && groupSubMenuElement && !groupSubMenuElement.contains(event.target)) {
+            closeGroupSubMenu();
+        }
       };
-      document.addEventListener('click', listener);
-      return () => document.removeEventListener('click', listener);
+      document.addEventListener('click', listener, { capture: true });
+
+      return () => document.removeEventListener('click', listener, { capture: true });
     });
 
     const CATEGORIES_BASE = [
@@ -108,10 +119,102 @@
 
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_NOTES_PANEL_STATE = 'harveyNotesPanelCategoryState';
+    let showCreateGroupModal = false; // Added for Step III.4
 
-    // SVG Icon constants for metadata edit/cancel removed
-    // const EDIT_ICON_SVG = ...
-    // const CANCEL_ICON_SVG = ...
+    let projectGroups = [];
+    let showGroupSubMenu = false;
+    let groupSubMenuX = 0;
+    let groupSubMenuY = 0;
+    let groupSubMenuItem = null;
+
+    function handleShowAddToGroupSubMenu(event, item) {
+        console.log('[NotesLeftPanel] "Add to Group" clicked for:', item);
+        if (categoryContextMenuVisible) closeCategoryContextMenu();
+
+        groupSubMenuItem = item;
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+
+        const mainContextMenuWidth = document.getElementById('notes-left-panel-context-menu')?.offsetWidth || 150;
+
+        groupSubMenuX = contextMenuX + mainContextMenuWidth - 10;
+        groupSubMenuY = buttonRect.top;
+
+        const menuWidthEstimate = 160;
+        const menuHeightEstimate = 150;
+        if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
+            groupSubMenuX = contextMenuX - menuWidthEstimate + 10;
+        }
+        if (groupSubMenuY + menuHeightEstimate > window.innerHeight) {
+             groupSubMenuY = window.innerHeight - menuHeightEstimate - 5;
+             if (groupSubMenuY < 0) groupSubMenuY = 5;
+        }
+
+        showGroupSubMenu = true;
+        closeContextMenu();
+    }
+
+    function handleNewGroupClick() {
+        if (!groupSubMenuItem) {
+            console.warn("[NotesLeftPanel] Cannot create new group, item context (groupSubMenuItem) missing.");
+            return;
+        }
+        console.log('[NotesLeftPanel] "New group..." clicked for item:', groupSubMenuItem);
+        closeGroupSubMenu(); // Close the sub-menu first
+        showCreateGroupModal = true; // Then open the modal
+    }
+
+    async function handleAddFileToExistingGroup(group) {
+        if (!groupSubMenuItem || !$project || !$project.project_uuid) {
+            console.error('Missing item or project context for adding to group.');
+            await message('Cannot add to group: Missing item or project context.', { title: 'Error', type: 'error' });
+            closeGroupSubMenu();
+            return;
+        }
+
+        const relativePath = groupSubMenuItem.relativePath;
+        if (!relativePath) {
+            console.error('Missing relativePath for the item:', groupSubMenuItem, "Ensure all items in 'displayCategories' that can be added to groups have a 'relativePath' property.");
+            await message('Cannot add to group: Item relative path is missing.', { title: 'Error', type: 'error' });
+            closeGroupSubMenu();
+            return;
+        }
+
+        try {
+            console.log(`[NotesLeftPanel] Adding file "${relativePath}" (item name: ${groupSubMenuItem.name}) to group "${group.name}" (ID: ${group.id}) for project "${$project.project_uuid}"`);
+            await invoke('add_file_to_existing_group', {
+                projectId: $project.project_uuid,
+                groupId: group.id,
+                fileAssetRelativePath: relativePath
+            });
+            await message(`File ${groupSubMenuItem.name} added to group ${group.name}.`, { title: 'Success', type: 'info' });
+        } catch (err) {
+            console.error('Error adding file to group:', err);
+            await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
+        } finally {
+            closeGroupSubMenu();
+        }
+    }
+
+    async function fetchProjectGroups() {
+        if ($project && $project.project_uuid) {
+            try {
+                console.log(`[NotesLeftPanel] Fetching groups for project: ${$project.project_uuid}`);
+                const groups = await invoke('get_project_groups', { projectId: $project.project_uuid });
+                projectGroups = groups;
+                console.log('[NotesLeftPanel] Fetched project groups:', projectGroups);
+            } catch (error) {
+                console.error('[NotesLeftPanel] Error fetching project groups:', error);
+                projectGroups = [];
+            }
+        } else {
+            console.warn('[NotesLeftPanel] Cannot fetch groups, project_uuid not available.');
+            projectGroups = [];
+        }
+    }
+
+    $: if ($project && $project.project_uuid && projectGroups.length === 0) {
+        fetchProjectGroups();
+    }
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_NOTES_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[NotesLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
     function toggleCategory(categoryType) { if (categoryOpenState.hasOwnProperty(categoryType)) { categoryOpenState[categoryType] = !categoryOpenState[categoryType]; categoryOpenState = categoryOpenState; } else { console.warn(`[NotesLeftPanel] Toggle unknown category: ${categoryType}`); } }
@@ -154,7 +257,9 @@
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path) {
                     const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-                    const mediaData = { name: node.name, path: node.path, media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
+                    // Ensure relativePath is added for media items too
+                    const relativePath = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
+                    const mediaData = { name: node.name, path: node.path, relativePath: relativePath.replace(/\\/g, '/'), media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
                     if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); }
                     else if (AUDIO_EXTENSIONS.has(ext)) { audios.push(mediaData); }
                 }
@@ -242,7 +347,6 @@
 
         if (categoryType === 'video' || categoryType === 'audio') {
             try { 
-                // Pass 'notes' as the sourceView
                 await importMediaFile(categoryType, 'notes');
             } catch (e) { console.error(`[NotesLeftPanel] Error importMediaFile ${categoryType}:`, e); }
         } else if (categoryType === 'document') {
@@ -284,7 +388,7 @@
         const itemPathForClosure = item.path;
         const itemType = item.file_type; 
         const isPdf = item.name?.toLowerCase().endsWith('.pdf');
-        closeContextMenu();
+        closeContextMenu(); // Close main context menu before action
 
         if (action === 'Reveal') {
             if (!itemPathForClosure) {
@@ -299,7 +403,7 @@
                 console.error(`[NotesLeftPanel] Error revealing item ${itemPathForClosure}:`, err);
                 await message(`Could not reveal item: ${err}`, { title: 'Error', type: 'error' });
             }
-            return; // Action handled
+            return;
         }
 
         if (itemType === 'media') { 
@@ -355,7 +459,6 @@
                         if (confirmed) {
                             try {
                                 await deleteImportedTranscript(item.path);
-                                // Clear any open transcript view so the panel updates
                                 project.update(p => ({ ...p, currentImportedTranscriptPath: null }));
                             } catch (err) {
                                 console.error('[NotesLeftPanel] Error deleting imported transcript:', err);
@@ -391,48 +494,27 @@
             try { await renameProjectItem(item.path, finalNewStemName, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.media_xml_identifier}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'doc') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".pdf"
-
-            if (!originalExtension) {
-                await message(`Error: Original file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedExts = ['.json', '.pdf', '.md', '.txt'];
             if (!allowedExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original file type '${originalExtension}' cannot be renamed via this interface.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'table') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".csv"
-
-            if (!originalExtension) {
-                await message(`Error: Original table file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original table file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedTableExts = ['.csv', '.xlsx'];
             if (!allowedTableExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original table file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for table ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'image') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".png"
-
-            if (!originalExtension) {
-                await message(`Error: Original image file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original image file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedImageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
             if (!allowedImageExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original image file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
             const nameForBackend = finalNewNameFromModal; 
@@ -525,25 +607,20 @@ $: {
         } else if (VIDEO_EXTENSIONS.has(extension)) {
             determinedItemType = 'video';
         } else {
-            // Check specific project file lists for other types
-            // IMPORTANT: IMAGE_EXTENSIONS is already defined in the file.
-            // Define Table and specific Document extensions for clarity.
             const TABLE_EXTENSIONS = new Set(['csv', 'xlsx']);
-            const DOC_JSON_EXTENSIONS = new Set(['json']); // Specifically for general JSON documents
-            const TRANSCRIPT_EXTENSIONS = new Set(['json']); // Specifically for transcript JSON
+            const DOC_JSON_EXTENSIONS = new Set(['json']);
+            const TRANSCRIPT_EXTENSIONS = new Set(['json']);
 
             const projectFileListsForOthers = [
-                // Order can be important if extensions overlap (e.g., JSON for transcripts vs general docs)
                 { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
                 { files: $project.imageFiles, type: 'image', isRelative: true, exts: IMAGE_EXTENSIONS },
                 { files: $project.tableFiles, type: 'table', isRelative: true, exts: TABLE_EXTENSIONS },
-                { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) } // Add others like pdf, txt, md
+                { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) }
             ];
 
             for (const listInfo of projectFileListsForOthers) {
                 if (listInfo.files?.some(f => {
                     const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
-                    // Check path AND also that the extension matches the list's specified extensions
                     return filePathToCheck === path && (listInfo.exts ? listInfo.exts.has(extension) : true);
                 })) {
                     determinedItemType = listInfo.type;
@@ -551,17 +628,12 @@ $: {
                 }
             }
 
-            // Fallback for general document types if not caught by specific lists AND not already determined
             if (!determinedItemType) {
                 if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
                     determinedItemType = 'document';
                 } else if (DOC_JSON_EXTENSIONS.has(extension)) {
-                    // This ensures any .json not caught as a transcript (checked first) or specific document type
-                    // is treated as a general document.
                     determinedItemType = 'document';
                 }
-                // Note: Fallbacks for table or image extensions are less likely needed here
-                // if they are robustly caught by $project.tableFiles / $project.imageFiles with their exts.
             }
         }
 
@@ -633,59 +705,94 @@ $: {
 	</h2>
 
 {#if !$panelStateStore.notesLeftPanelCollapsed}
-	<div class="flex-grow overflow-y-auto min-h-0 -mr-2 pr-2">
-		<ul class="space-y-2 text-xs">
-            {#each filteredCategories as category (category.type)}
-                <li>
-                    <div
-                        class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
-                        on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
-                        <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
-                            <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
-                            <span class="flex-shrink-0">{@html category.icon}</span>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
+    <div class="flex flex-col flex-grow overflow-hidden">
+        <!-- Top 2/3 for Categories -->
+        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 66.66%;">
+            <ul class="space-y-2 text-xs">
+                {#each filteredCategories as category (category.type)}
+                    <li>
+                        <div
+                            class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                            on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
+                            <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
+                                <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
+                                <span class="flex-shrink-0">{@html category.icon}</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
+                              title="Options"
+                              on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
+                              disabled={!category.importEnabled}
+                            >
+                              {@html CONTEXT_MENU_ICON_SVG}
+                            </button>
                         </div>
-                        <button
-                          type="button"
-                          class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
-                          title="Options"
-                          on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
-                          disabled={!category.importEnabled}
-                        >
-                          {@html CONTEXT_MENU_ICON_SVG}
-                        </button>
-                    </div>
 
-                    {#if categoryOpenState[category.type]}
-                        <div id={`category-content-${category.type}`} role="region">
-                            {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
-                                <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
-                                    {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
-                                        <li class="group">
-                                            <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
-                                                 on:click={() => handleItemClick(fileItem) }
-                                                 on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
-                                                <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
-                                                    <span>{fileItem.name}</span>
-                                                </span>
-                                                <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
-                                            </div>
-                                        </li>
-                                    {/each}
-                                </ul>
-                            {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
-                                <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
-                            {:else}
-                                 <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
-                            {/if}
-                         </div>
-                    {/if}
-                </li>
-                 {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if}
-            {/each}
-        </ul>
-        {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
-	</div>
+                        {#if categoryOpenState[category.type]}
+                            <div id={`category-content-${category.type}`} role="region">
+                                {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
+                                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
+                                        {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
+                                            <li class="group">
+                                                <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                     on:click={() => handleItemClick(fileItem) }
+                                                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
+                                                    <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
+                                                        <span>{fileItem.name}</span>
+                                                    </span>
+                                                    <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
+                                                </div>
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
+                                    <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
+                                {:else}
+                                     <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
+                                {/if}
+                             </div>
+                        {/if}
+                    </li>
+                    {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if}
+                {/each}
+            </ul>
+            {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
+        </div>
+
+        <!-- Separator -->
+        <hr class="border-gray-300 dark:border-gray-600 my-2 mx-1">
+
+        <!-- Bottom 1/3 for Groups -->
+        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 33.33%;">
+            <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">Groups</h3>
+            <ul class="space-y-1 text-xs">
+                {#if projectGroups && projectGroups.length > 0}
+                    {#each projectGroups as group (group.id)}
+                        <li class="group">
+                            <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700">
+                                <span class="flex items-center space-x-1.5 text-gray-800 dark:text-gray-200 truncate">
+                                    <span class="flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-collection" viewBox="0 0 16 16">
+                                          <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
+                                        </svg>
+                                    </span>
+                                    <span>{group.name}</span>
+                                </span>
+                                <!-- Placeholder for future context menu on groups -->
+                                <!-- <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {group.name}">
+                                    {@html CONTEXT_MENU_ICON_SVG}
+                                </button> -->
+                            </div>
+                        </li>
+                    {/each}
+                {:else}
+                    <p class="ml-2.5 text-xs text-gray-400 dark:text-gray-500 italic py-1">No groups created yet.</p>
+                {/if}
+            </ul>
+        </div>
+    </div>
 {:else}
     <!-- Collapsed Content (Vertical Icons) -->
     <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
@@ -724,9 +831,8 @@ $: {
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
-
+                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -736,33 +842,29 @@ $: {
                  {:else}
                      <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  {/if}
-
+                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -771,6 +873,23 @@ $: {
             {/if}
 		</div>
 	{/if}
+
+    {#if showGroupSubMenu && groupSubMenuItem}
+        <div id="notes-left-panel-group-sub-menu" class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;" on:click|stopPropagation>
+            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
+            <hr class="my-1 border-gray-200 dark:border-gray-600" />
+            {#if projectGroups && projectGroups.length > 0}
+                {#each projectGroups as group (group.id)}
+                    <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
+                        {group.name}
+                    </button>
+                {/each}
+            {:else}
+                <span class="block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-500 italic">No existing groups</span>
+            {/if}
+        </div>
+    {/if}
+
     {#if categoryContextMenuVisible && !$panelStateStore.notesLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
@@ -809,7 +928,25 @@ $: {
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
-
+<!-- Added CreateGroupModal for Step III.4 -->
+<CreateGroupModal
+    bind:showModal={showCreateGroupModal}
+    projectUuid={$project?.project_uuid}
+    fileToAdd={groupSubMenuItem}
+    on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
+    on:groupCreatedAndFileAdded={(event) => {
+        console.log('[NotesLeftPanel] Event: groupCreatedAndFileAdded', event.detail);
+        fetchProjectGroups();
+        showCreateGroupModal = false;
+        groupSubMenuItem = null;
+    }}
+    on:groupCreated={(event) => {
+        console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
+        fetchProjectGroups();
+        showCreateGroupModal = false;
+        groupSubMenuItem = null;
+    }}
+/>
 
 <style lang="postcss">
 	.overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }

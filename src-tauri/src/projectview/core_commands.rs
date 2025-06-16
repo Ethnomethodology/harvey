@@ -21,6 +21,8 @@ use serde::Serialize;
 // However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
+use super::shared_types::GroupData; // Added for group commands
+use rusqlite::Connection; // Added for opening DB connection in commands
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
@@ -43,6 +45,96 @@ pub async fn load_table_layout_prefs(project_id: String, table_path: String) -> 
         })
 }
 // --- End Table Layout Preferences Commands ---
+
+// --- Group Commands ---
+#[tauri::command]
+pub async fn create_new_group(project_id: String, name: String, description: Option<String>) -> Result<GroupData, String> {
+    let group_id = Uuid::new_v4().to_string();
+    info!("[CMD] create_new_group: id={}, project_id={}, name={}", group_id, project_id, name);
+
+    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    match db_handler::create_group(&conn, &project_id, &group_id, &name, description.as_deref()) {
+        Ok(_) => {
+            info!("[CMD] create_new_group - Group created successfully: {}", group_id);
+            Ok(GroupData {
+                id: group_id,
+                project_id,
+                name,
+                description,
+            })
+        }
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
+    info!("[CMD] get_project_groups for project_id: {}", project_id);
+
+    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    match db_handler::get_groups_for_project(&conn, &project_id) {
+        Ok(groups_from_db) => {
+            info!("[CMD] get_project_groups - Found {} groups for project_id: {}", groups_from_db.len(), project_id);
+            let groups_for_frontend: Vec<GroupData> = groups_from_db
+                .into_iter()
+                .map(|g_db| GroupData {
+                    id: g_db.id,
+                    project_id: g_db.project_id,
+                    name: g_db.name,
+                    description: g_db.description,
+                    // created_at and updated_at from GroupDataFromDb are not included in GroupData for now
+                })
+                .collect();
+            Ok(groups_for_frontend)
+        }
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed for project_id {}: {}", project_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn add_file_to_existing_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    info!("[CMD] add_file_to_existing_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
+
+    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    match db_handler::add_file_to_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(_) => {
+            info!("[CMD] add_file_to_existing_group - File added successfully to group {}", group_id);
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed for group_id {}: {}", group_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+// --- End Group Commands ---
 
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {

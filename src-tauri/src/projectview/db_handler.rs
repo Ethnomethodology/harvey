@@ -31,6 +31,16 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub speaker_names_json: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GroupDataFromDb {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
@@ -289,6 +299,48 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_projects_updated_at trigger.");
 
+    // groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized groups table.");
+
+    // Trigger for groups updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_groups_updated_at
+        AFTER UPDATE ON groups
+        FOR EACH ROW
+        BEGIN
+            UPDATE groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_groups_updated_at trigger.");
+
+    // file_groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS file_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_asset_path TEXT NOT NULL,
+            group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE,
+            UNIQUE (project_id, file_asset_path, group_id)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized file_groups table.");
+
     // media_transcript_data table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS media_transcript_data (
@@ -323,6 +375,57 @@ pub fn init_db() -> Result<(), CommandError> {
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
+
+// --- Group Functions ---
+
+pub fn create_group(conn: &Connection, project_id: &str, group_id: &str, name: &str, description: Option<&str>) -> Result<(), CommandError> {
+    debug!("[DB] Creating group for project_id {}: id={}, name={}", project_id, group_id, name);
+    conn.execute(
+        "INSERT INTO groups (id, project_id, name, description) VALUES (?1, ?2, ?3, ?4)",
+        params![group_id, project_id, name, to_sql_optional_str(description)],
+    )
+    .map_err(|e| CommandError::Message(format!("Failed to create group {}: {}", name, e)))?;
+    info!("[DB] Group created successfully: id={}, name={}", group_id, name);
+    Ok(())
+}
+
+pub fn get_groups_for_project(conn: &Connection, project_id: &str) -> Result<Vec<GroupDataFromDb>, CommandError> {
+    debug!("[DB] Loading groups for project_id {}", project_id);
+    let mut stmt = conn.prepare("SELECT id, project_id, name, description, created_at, updated_at FROM groups WHERE project_id = ?1 ORDER BY name ASC")
+        .map_err(|e| CommandError::Message(format!("Failed to prepare statement for getting groups: {}", e)))?;
+
+    let group_iter = stmt.query_map(params![project_id], |row| {
+        Ok(GroupDataFromDb {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })
+    .map_err(|e| CommandError::Message(format!("Failed to query groups for project {}: {}", project_id, e)))?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result.map_err(|e| CommandError::Message(format!("Failed to map group row: {}", e)))?);
+    }
+    info!("[DB] Loaded {} groups for project_id {}", groups.len(), project_id);
+    Ok(groups)
+}
+
+pub fn add_file_to_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_relative_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Adding file {} to group {} for project_id {}", file_asset_relative_path, group_id, project_id);
+    conn.execute(
+        "INSERT INTO file_groups (project_id, group_id, file_asset_path) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+        params![project_id, group_id, file_asset_relative_path],
+    )
+    .map_err(|e| CommandError::Message(format!("Failed to add file {} to group {}: {}", file_asset_relative_path, group_id, e)))?;
+    info!("[DB] File {} added to group {} successfully (if not already present).", file_asset_relative_path, group_id);
+    Ok(())
+}
+
+// --- End Group Functions ---
 
 // --- Media Transcript Data Functions ---
 

@@ -195,6 +195,13 @@ pub struct ProjectXml {
     pub document_metadata_files: DocumentMetadataFiles,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GroupData {
+    pub id: String, // UUID
+    pub project_id: String, // UUID of the project it belongs to
+    pub name: String,
+    pub description: Option<String>,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FileEntry {
