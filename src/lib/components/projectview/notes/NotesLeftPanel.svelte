@@ -64,9 +64,9 @@
     }
 
     async function fetchProjectGroups() {
-        if ($project && $project.project_uuid) {
+        if ($project && $project.id) { // Changed from project_uuid to id
             try {
-                const groups = await invoke('get_project_groups', { projectId: $project.project_uuid });
+                const groups = await invoke('get_project_groups', { projectId: $project.id }); // Changed from project_uuid to id
                 projectGroups = groups;
             } catch (error) {
                 console.error('[NotesLeftPanel] Error fetching project groups:', error);
@@ -77,7 +77,7 @@
         }
     }
 
-    $: if ($project && $project.project_uuid) { // Reactive fetch if project_uuid changes or becomes available
+    $: if ($project && $project.id) { // Changed from project_uuid to id
         fetchProjectGroups();
     }
 
@@ -164,8 +164,8 @@
         // The CreateGroupModal's fileToAdd prop will use groupSubMenuItem.
         // If groupSubMenuItem were null, fileToAdd would be null, which is acceptable for creating an empty group.
 
-        if (!$project || !$project.project_uuid || $project.project_uuid.trim() === "" || $project.project_uuid === "null") {
-            message('Project UUID is not available. Cannot create a new group at this moment. Please ensure the project is fully loaded.', { title: 'Error', type: 'error' });
+        if (!$project || !$project.id || String($project.id).trim() === "" || String($project.id) === "null") { // Changed to $project.id
+            message('Project ID is not available from $project.id. Cannot create a new group. Please ensure the project is fully loaded.', { title: 'Error', type: 'error' }); // Updated message
             closeGroupSubMenu(); // Ensure submenu is closed
             return;
         }
@@ -174,8 +174,8 @@
     }
 
     async function handleAddFileToExistingGroup(group) {
-        if (!groupSubMenuItem || !$project || !$project.project_uuid) {
-            await message('Cannot add to group: Missing item or project context.', { title: 'Error', type: 'error' });
+        if (!groupSubMenuItem || !$project || !$project.id) { // Changed from project_uuid to id
+            await message('Cannot add to group: Missing item or project context (project ID).', { title: 'Error', type: 'error' }); // Updated message
             closeGroupSubMenu();
             return;
         }
@@ -187,7 +187,7 @@
         }
         try {
             await invoke('add_file_to_existing_group', {
-                projectId: $project.project_uuid,
+                projectId: $project.id, // Changed from project_uuid to id
                 groupId: group.id,
                 fileAssetRelativePath: relativePath
             });
@@ -895,9 +895,7 @@ $: {
             on:mouseenter={handleEnterGroupSubMenu}
             on:mouseleave={handleLeaveGroupSubMenu}
             on:click|stopPropagation>
-            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-                {@html FOLDER_PLUS_ICON_SVG}New group...
-            </button>
+            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
             <hr class="my-1 border-gray-200 dark:border-gray-600" />
             {#if projectGroups && projectGroups.length > 0}
                 {#each projectGroups as group (group.id)}
@@ -952,7 +950,7 @@ $: {
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
 <CreateGroupModal
     bind:showModal={showCreateGroupModal}
-    projectUuid={$project?.project_uuid}
+    projectUuid={$project?.id}
     fileToAdd={groupSubMenuItem}
     on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
     on:groupCreatedAndFileAdded={(event) => {
