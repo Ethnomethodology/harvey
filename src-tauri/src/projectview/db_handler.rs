@@ -47,7 +47,7 @@ pub struct MediaTranscriptDataValues {
     pub speaker_names_json: Option<String>,
 }
 
-fn get_db_path() -> Result<PathBuf, CommandError> {
+pub fn get_db_path() -> Result<PathBuf, CommandError> {
     let config_dir = get_config_dir().map_err(|e| CommandError::Message(format!("Failed to get config dir from welcome/config: {}", e)))?;
     Ok(config_dir.join(DB_FILE_NAME))
 }

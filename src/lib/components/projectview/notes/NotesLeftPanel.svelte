@@ -1,18 +1,18 @@
 <!-- src/lib/components/projectview/notes/NotesLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
+    import CreateGroupModal from '../modals/CreateGroupModal.svelte'; // III.4
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { invoke, convertFileSrc } from '@tauri-apps/api/core'; // Added invoke
-    import { type as getOsType } from '@tauri-apps/plugin-os'; // Updated import
+    import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+    import { type as getOsType } from '@tauri-apps/plugin-os';
     import CategoryTooltip from './CategoryTooltip.svelte';
-    import CreateGroupModal from '../modals/CreateGroupModal.svelte'; // Added for Step III.4
 
     const dispatch = createEventDispatcher();
 
@@ -20,25 +20,24 @@
 
     function handleToggleNotesLeftPanel() {
         tooltipVisible = false;
-        console.log('[NotesLeftPanel] handleToggleNotesLeftPanel called');
         panelStateStore.toggleNotesLeftPanel();
-    }
-
-    $: {
-        if ($panelStateStore && typeof $panelStateStore.notesLeftPanelCollapsed !== 'undefined') {
-            console.log('[NotesLeftPanel] Detected change in $panelStateStore.notesLeftPanelCollapsed:', $panelStateStore.notesLeftPanelCollapsed);
-        }
     }
 
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
-
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
     let categoryContextMenuType = null;
+    let revealButtonLabel = 'Open File Location';
 
-    let revealButtonLabel = 'Open File Location'; // Default generic label
+    // --- Group Sub-Menu State & Handlers (Step III.3 & III.4) ---
+    let projectGroups = [];
+    let showGroupSubMenu = false;
+    let groupSubMenuX = 0;
+    let groupSubMenuY = 0;
+    let groupSubMenuItem = null;
+    let showCreateGroupModal = false; // For Step III.4
 
     function handleCategoryContextMenu(event, categoryType) {
       event.preventDefault();
@@ -62,24 +61,33 @@
         showGroupSubMenu = false;
     }
 
-    onMount(async () => {
-      console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
-      console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
+    async function fetchProjectGroups() {
+        if ($project && $project.project_uuid) {
+            try {
+                const groups = await invoke('get_project_groups', { projectId: $project.project_uuid });
+                projectGroups = groups;
+            } catch (error) {
+                console.error('[NotesLeftPanel] Error fetching project groups:', error);
+                projectGroups = [];
+            }
+        } else {
+            projectGroups = [];
+        }
+    }
 
+    $: if ($project && $project.project_uuid) { // Reactive fetch if project_uuid changes or becomes available
+        fetchProjectGroups();
+    }
+
+    onMount(async () => {
       await fetchProjectGroups();
 
       try {
         const currentOs = await getOsType();
-        if (currentOs === 'windows') {
-          revealButtonLabel = 'Reveal in Explorer';
-        } else if (currentOs === 'macos') {
-          revealButtonLabel = 'Reveal in Finder';
-        } else {
-          revealButtonLabel = 'Open File Location';
-        }
-      } catch (e) {
-        console.error("Error getting OS type:", e);
-      }
+        if (currentOs === 'windows') revealButtonLabel = 'Reveal in Explorer';
+        else if (currentOs === 'macos') revealButtonLabel = 'Reveal in Finder';
+        else revealButtonLabel = 'Open File Location';
+      } catch (e) { console.error("Error getting OS type:", e); }
 
       const listener = (event) => {
         const categoryMenuElement = document.getElementById('notes-left-panel-category-context-menu');
@@ -100,12 +108,67 @@
       return () => document.removeEventListener('click', listener, { capture: true });
     });
 
+    function handleShowAddToGroupSubMenu(event, item) {
+        if (categoryContextMenuVisible) closeCategoryContextMenu();
+        groupSubMenuItem = item;
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const mainContextMenuEl = document.getElementById('notes-left-panel-context-menu');
+        const mainContextMenuWidth = mainContextMenuEl ? mainContextMenuEl.offsetWidth : 150;
+
+        groupSubMenuX = contextMenuX + mainContextMenuWidth - 10;
+        groupSubMenuY = buttonRect.top;
+
+        const menuWidthEstimate = 160;
+        const menuHeightEstimate = 150;
+        if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
+            groupSubMenuX = contextMenuX - menuWidthEstimate + 10;
+        }
+        if (groupSubMenuY + menuHeightEstimate > window.innerHeight) {
+             groupSubMenuY = Math.max(5, window.innerHeight - menuHeightEstimate - 5);
+        }
+
+        showGroupSubMenu = true;
+        closeContextMenu();
+    }
+
+    function handleNewGroupClick() { // For Step III.4
+        if (!groupSubMenuItem) return;
+        closeGroupSubMenu();
+        showCreateGroupModal = true;
+    }
+
+    async function handleAddFileToExistingGroup(group) {
+        if (!groupSubMenuItem || !$project || !$project.project_uuid) {
+            await message('Cannot add to group: Missing item or project context.', { title: 'Error', type: 'error' });
+            closeGroupSubMenu();
+            return;
+        }
+        const relativePath = groupSubMenuItem.relativePath;
+        if (!relativePath) {
+            await message('Cannot add to group: Item relative path is missing.', { title: 'Error', type: 'error' });
+            closeGroupSubMenu();
+            return;
+        }
+        try {
+            await invoke('add_file_to_existing_group', {
+                projectId: $project.project_uuid,
+                groupId: group.id,
+                fileAssetRelativePath: relativePath
+            });
+            await message(`File ${groupSubMenuItem.name} added to group ${group.name}.`, { title: 'Success', type: 'info' });
+        } catch (err) {
+            await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
+        } finally {
+            closeGroupSubMenu();
+        }
+    }
+
     const CATEGORIES_BASE = [
         { name: 'Audios', type: 'audio', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`, importEnabled: true },
         { name: 'Documents', type: 'document', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files w-4 h-4" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2m0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1M3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>`, importEnabled: true },
         { name: 'Images', type: 'image', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-images w-4 h-4" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2M14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1M2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>`, importEnabled: true },
         { name: 'Tables', type: 'table', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-table w-4 h-4" viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/></svg>`, importEnabled: true },
-        { name: 'Transcripts', type: 'imported_transcript', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`, importEnabled: true }, 
+        { name: 'Transcripts', type: 'imported_transcript', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`, importEnabled: true },
         { name: 'Videos', type: 'video', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-film w-4 h-4" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`, importEnabled: true },
     ];
     const IMPORT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"><path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/></svg>`;
@@ -119,102 +182,6 @@
 
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_NOTES_PANEL_STATE = 'harveyNotesPanelCategoryState';
-    let showCreateGroupModal = false; // Added for Step III.4
-
-    let projectGroups = [];
-    let showGroupSubMenu = false;
-    let groupSubMenuX = 0;
-    let groupSubMenuY = 0;
-    let groupSubMenuItem = null;
-
-    function handleShowAddToGroupSubMenu(event, item) {
-        console.log('[NotesLeftPanel] "Add to Group" clicked for:', item);
-        if (categoryContextMenuVisible) closeCategoryContextMenu();
-
-        groupSubMenuItem = item;
-        const buttonRect = event.currentTarget.getBoundingClientRect();
-
-        const mainContextMenuWidth = document.getElementById('notes-left-panel-context-menu')?.offsetWidth || 150;
-
-        groupSubMenuX = contextMenuX + mainContextMenuWidth - 10;
-        groupSubMenuY = buttonRect.top;
-
-        const menuWidthEstimate = 160;
-        const menuHeightEstimate = 150;
-        if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
-            groupSubMenuX = contextMenuX - menuWidthEstimate + 10;
-        }
-        if (groupSubMenuY + menuHeightEstimate > window.innerHeight) {
-             groupSubMenuY = window.innerHeight - menuHeightEstimate - 5;
-             if (groupSubMenuY < 0) groupSubMenuY = 5;
-        }
-
-        showGroupSubMenu = true;
-        closeContextMenu();
-    }
-
-    function handleNewGroupClick() {
-        if (!groupSubMenuItem) {
-            console.warn("[NotesLeftPanel] Cannot create new group, item context (groupSubMenuItem) missing.");
-            return;
-        }
-        console.log('[NotesLeftPanel] "New group..." clicked for item:', groupSubMenuItem);
-        closeGroupSubMenu(); // Close the sub-menu first
-        showCreateGroupModal = true; // Then open the modal
-    }
-
-    async function handleAddFileToExistingGroup(group) {
-        if (!groupSubMenuItem || !$project || !$project.project_uuid) {
-            console.error('Missing item or project context for adding to group.');
-            await message('Cannot add to group: Missing item or project context.', { title: 'Error', type: 'error' });
-            closeGroupSubMenu();
-            return;
-        }
-
-        const relativePath = groupSubMenuItem.relativePath;
-        if (!relativePath) {
-            console.error('Missing relativePath for the item:', groupSubMenuItem, "Ensure all items in 'displayCategories' that can be added to groups have a 'relativePath' property.");
-            await message('Cannot add to group: Item relative path is missing.', { title: 'Error', type: 'error' });
-            closeGroupSubMenu();
-            return;
-        }
-
-        try {
-            console.log(`[NotesLeftPanel] Adding file "${relativePath}" (item name: ${groupSubMenuItem.name}) to group "${group.name}" (ID: ${group.id}) for project "${$project.project_uuid}"`);
-            await invoke('add_file_to_existing_group', {
-                projectId: $project.project_uuid,
-                groupId: group.id,
-                fileAssetRelativePath: relativePath
-            });
-            await message(`File ${groupSubMenuItem.name} added to group ${group.name}.`, { title: 'Success', type: 'info' });
-        } catch (err) {
-            console.error('Error adding file to group:', err);
-            await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
-        } finally {
-            closeGroupSubMenu();
-        }
-    }
-
-    async function fetchProjectGroups() {
-        if ($project && $project.project_uuid) {
-            try {
-                console.log(`[NotesLeftPanel] Fetching groups for project: ${$project.project_uuid}`);
-                const groups = await invoke('get_project_groups', { projectId: $project.project_uuid });
-                projectGroups = groups;
-                console.log('[NotesLeftPanel] Fetched project groups:', projectGroups);
-            } catch (error) {
-                console.error('[NotesLeftPanel] Error fetching project groups:', error);
-                projectGroups = [];
-            }
-        } else {
-            console.warn('[NotesLeftPanel] Cannot fetch groups, project_uuid not available.');
-            projectGroups = [];
-        }
-    }
-
-    $: if ($project && $project.project_uuid && projectGroups.length === 0) {
-        fetchProjectGroups();
-    }
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_NOTES_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[NotesLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
     function toggleCategory(categoryType) { if (categoryOpenState.hasOwnProperty(categoryType)) { categoryOpenState[categoryType] = !categoryOpenState[categoryType]; categoryOpenState = categoryOpenState; } else { console.warn(`[NotesLeftPanel] Toggle unknown category: ${categoryType}`); } }
@@ -257,7 +224,6 @@
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path) {
                     const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-                    // Ensure relativePath is added for media items too
                     const relativePath = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
                     const mediaData = { name: node.name, path: node.path, relativePath: relativePath.replace(/\\/g, '/'), media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
                     if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); }
@@ -388,7 +354,11 @@
         const itemPathForClosure = item.path;
         const itemType = item.file_type; 
         const isPdf = item.name?.toLowerCase().endsWith('.pdf');
-        closeContextMenu(); // Close main context menu before action
+        // Do not close main context menu here if "Add to Group" is clicked, as it will be handled by handleShowAddToGroupSubMenu
+        if (action !== 'AddToGroup') { // Assuming 'AddToGroup' would be a specific action string if passed here
+            closeContextMenu();
+        }
+
 
         if (action === 'Reveal') {
             if (!itemPathForClosure) {
@@ -409,45 +379,41 @@
         if (itemType === 'media') { 
             switch (action) {
                 case 'Open': 
-                    console.log(`[NotesLeftPanel] 'Open' action for media: ${item.name}`);
                     dispatch('requestviewchange', { viewType: 'media_note', itemPath: item.path });
                     break;
                 case 'Rename': itemToRename = { path: item.path, name: item.media_xml_identifier, file_type: 'media', media_xml_identifier: item.media_xml_identifier }; showRenameModal = true; break;
                 case 'Delete': const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name); const confirmMsg = `Delete media "${stemName}"? This deletes the entire folder (media, transcripts, notes). Cannot be undone.`; const options = { title: 'Confirm Media Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmMsg, options); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${stemName}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${stemName}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error confirm/delete:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
-                case 'Transcribe': if (!item.path) { console.error("[NotesLeftPanel] Cannot transcribe: Media path missing."); await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for media: ${action}`); await message(`Action '${action}' not yet implemented for media.`, { title: 'Not Implemented', type: 'info' });
+                case 'Transcribe': if (!item.path) { await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for media: ${action}`);
             }
         } else if (itemType === 'doc') {
             switch (action) {
-                case 'Open': if (isPdf) { console.log(`[NotesLeftPanel] 'Open Externally' action for PDF: ${item.name}`); try { await openerPlugin.open(item.path); } catch (e) { console.error(`[NotesLeftPanel] Failed to open PDF externally: ${e}`); await message(`Could not open PDF externally: ${e}`, { title: 'Open Error', type: 'error'}); } } else { console.log(`[NotesLeftPanel] 'Open' action for JSON document: ${item.name}`); dispatch('requestviewchange', { viewType: 'documents', itemPath: item.path }); } break;
+                case 'Open': if (isPdf) { try { await openerPlugin.open(item.path); } catch (e) { await message(`Could not open PDF externally: ${e}`, { title: 'Open Error', type: 'error'}); } } else { dispatch('requestviewchange', { viewType: 'documents', itemPath: item.path }); } break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'doc', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmDocMsg = `Delete document "${item.name}"? Cannot be undone.`; const docOptions = { title: 'Confirm Document Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmDocMsg, docOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting document: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${item.name}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error confirm/delete doc:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for document: ${action}`); await message(`Action '${action}' not implemented for documents.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmDocMsg = `Delete document "${item.name}"? Cannot be undone.`; const docOptions = { title: 'Confirm Document Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmDocMsg, docOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${item.name}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for document: ${action}`);
             }
         } else if (itemType === 'table') {
              switch (action) {
-                case 'Open': console.log(`[NotesLeftPanel] 'Open' action for table: ${item.name}`); dispatch('requestviewchange', { viewType: 'tables', itemPath: item.path }); break;
+                case 'Open': dispatch('requestviewchange', { viewType: 'tables', itemPath: item.path }); break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'table', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmTableMsg = `Delete table "${item.name}"? This cannot be undone.`; const tableOptions = { title: 'Confirm Table Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmTableMsg, tableOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting table: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for table ${item.name}:`, err); await message(`Error deleting table: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Table deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error during confirm/delete table:", e); await message(`Error deleting table: ${e}`, { title: "Delete Error", type: "error" }); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for table: ${action}`); await message(`Action '${action}' not implemented for tables.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmTableMsg = `Delete table "${item.name}"? This cannot be undone.`; const tableOptions = { title: 'Confirm Table Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmTableMsg, tableOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { await message(`Error deleting table: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Table deletion cancelled.' })); } } catch (e) { await message(`Error deleting table: ${e}`, { title: "Delete Error", type: "error" }); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for table: ${action}`);
             }
         } else if (itemType === 'image') {
              switch (action) {
-                case 'Open': console.log(`[NotesLeftPanel] 'Open' action for image: ${item.name}`); dispatch('requestviewchange', { viewType: 'images', itemPath: item.path }); break;
+                case 'Open': dispatch('requestviewchange', { viewType: 'images', itemPath: item.path }); break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'image', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmImageMsg = `Delete image "${item.name}"? This cannot be undone.`; const imageOptions = { title: 'Confirm Image Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmImageMsg, imageOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting image: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for image ${item.name}:`, err); await message(`Error deleting image: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Image deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error during confirm/delete image:", e); await message(`Error deleting image: ${e}`, { title: "Delete Error", type: "error" }); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for image: ${action}`); await message(`Action '${action}' not implemented for images.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmImageMsg = `Delete image "${item.name}"? This cannot be undone.`; const imageOptions = { title: 'Confirm Image Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmImageMsg, imageOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { await message(`Error deleting image: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Image deletion cancelled.' })); } } catch (e) { await message(`Error deleting image: ${e}`, { title: "Delete Error", type: "error" }); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for image: ${action}`);
             }
         } else if (itemType === 'imported_transcript') { 
             switch (action) {
                 case 'Open': 
-                    console.log(`[NotesLeftPanel] 'Open' action for imported transcript: ${item.name}`);
                     dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
                     break;
                 case 'Rename': 
-                    const nameWithoutExt = item.name.toLowerCase().endsWith('.json') 
-                                            ? item.name.slice(0, -5) 
-                                            : item.name;
+                    const nameWithoutExt = item.name.toLowerCase().endsWith('.json') ? item.name.slice(0, -5) : item.name;
                     itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
                     showRenameModal = true; 
                     break;
@@ -457,24 +423,12 @@
                     try {
                         const confirmed = await confirm(confirmTranscriptMsg, transcriptOptions);
                         if (confirmed) {
-                            try {
-                                await deleteImportedTranscript(item.path);
-                                project.update(p => ({ ...p, currentImportedTranscriptPath: null }));
-                            } catch (err) {
-                                console.error('[NotesLeftPanel] Error deleting imported transcript:', err);
-                                await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' });
-                            }
-                        } else {
-                            project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' }));
-                        }
-                    } catch (e) {
-                        console.error('[NotesLeftPanel] Error during confirm/delete imported transcript:', e);
-                        await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });
-                    }
+                            try { await deleteImportedTranscript(item.path); project.update(p => ({ ...p, currentImportedTranscriptPath: null })); }
+                            catch (err) { await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' }); }
+                        } else { project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' })); }
+                    } catch (e) { await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });}
                     break;
-                default: 
-                    console.warn(`[NotesLeftPanel] Unknown action for imported transcript: ${action}`); 
-                    await message(`Action '${action}' not implemented for imported transcripts.`, { title: 'Not Implemented', type: 'info' });
+                default: console.warn(`[NotesLeftPanel] Unknown action for imported transcript: ${action}`);
             }
         }
     }
@@ -483,14 +437,12 @@
         const { newName } = event.detail; 
         const item = itemToRename;
         if (!item || !newName || newName.trim() === '') { console.error("[NotesLeftPanel] Rename failed: Invalid input."); showRenameModal = false; itemToRename = null; return; }
-
         const finalNewNameFromModal = newName.trim(); 
         showRenameModal = false;
-
         if (item.file_type === 'media') {
             const finalNewStemName = finalNewNameFromModal;
             const confirmRename = await confirm(`Rename media '${item.media_xml_identifier}' to '${finalNewStemName}'? Renames folder & primary transcript.`, { title: 'Confirm Media Rename', type: 'warning', okLabel: 'Rename', cancelLabel: 'Cancel' });
-            if (!confirmRename) { console.log("[NotesLeftPanel] Media rename cancelled."); itemToRename = null; return; }
+            if (!confirmRename) { itemToRename = null; return; }
             try { await renameProjectItem(item.path, finalNewStemName, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.media_xml_identifier}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'doc') {
             const stemNameFromModal = finalNewNameFromModal;
@@ -518,9 +470,7 @@
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
             const nameForBackend = finalNewNameFromModal; 
-            try { 
-                await renameProjectItem(item.path, nameForBackend, item.file_type); 
-            } 
+            try { await renameProjectItem(item.path, nameForBackend, item.file_type); }
             catch (err) { console.error(`[NotesLeftPanel] Rename failed for imported transcript ${item.name}:`, err); } 
             finally { itemToRename = null; }
         } else {
@@ -532,13 +482,11 @@
 
     async function handleItemClick(item) {
         if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript' || item.file_type === 'media') { 
-            console.log(`[NotesLeftPanel] Clicked ${item.file_type}: ${item.name}. Requesting view change.`);
             let viewType = item.file_type; 
             if (item.file_type === 'doc') viewType = 'documents';
             else if (item.file_type === 'table') viewType = 'tables';
             else if (item.file_type === 'image') viewType = 'images';
             else if (item.file_type === 'media') viewType = 'media_note'; 
-
             dispatch('requestviewchange', { viewType, itemPath: item.path });
         }
     }
@@ -582,7 +530,6 @@
     function showTooltip(event, category) {
         const buttonRect = event.currentTarget.getBoundingClientRect();
         const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
-
         tooltipCategoryName = category.name;
         tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
         tooltipX = buttonRect.right + 8;
@@ -602,22 +549,18 @@ $: {
         const extension = path.split('.').pop()?.toLowerCase() || '';
         let determinedItemType = null;
 
-        if (AUDIO_EXTENSIONS.has(extension)) {
-            determinedItemType = 'audio';
-        } else if (VIDEO_EXTENSIONS.has(extension)) {
-            determinedItemType = 'video';
-        } else {
+        if (AUDIO_EXTENSIONS.has(extension)) determinedItemType = 'audio';
+        else if (VIDEO_EXTENSIONS.has(extension)) determinedItemType = 'video';
+        else {
             const TABLE_EXTENSIONS = new Set(['csv', 'xlsx']);
             const DOC_JSON_EXTENSIONS = new Set(['json']);
             const TRANSCRIPT_EXTENSIONS = new Set(['json']);
-
             const projectFileListsForOthers = [
                 { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
                 { files: $project.imageFiles, type: 'image', isRelative: true, exts: IMAGE_EXTENSIONS },
                 { files: $project.tableFiles, type: 'table', isRelative: true, exts: TABLE_EXTENSIONS },
                 { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) }
             ];
-
             for (const listInfo of projectFileListsForOthers) {
                 if (listInfo.files?.some(f => {
                     const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
@@ -627,18 +570,12 @@ $: {
                     break;
                 }
             }
-
             if (!determinedItemType) {
-                if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
-                    determinedItemType = 'document';
-                } else if (DOC_JSON_EXTENSIONS.has(extension)) {
-                    determinedItemType = 'document';
-                }
+                if (extension === 'pdf' || extension === 'txt' || extension === 'md') determinedItemType = 'document';
+                else if (DOC_JSON_EXTENSIONS.has(extension)) determinedItemType = 'document';
             }
         }
-
         activeCollapsedCategoryType = determinedItemType;
-        console.log('[NotesLeftPanel] Active Category Type for Highlighting:', activeCollapsedCategoryType);
     } else {
         activeCollapsedCategoryType = null;
     }
@@ -780,10 +717,7 @@ $: {
                                     </span>
                                     <span>{group.name}</span>
                                 </span>
-                                <!-- Placeholder for future context menu on groups -->
-                                <!-- <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {group.name}">
-                                    {@html CONTEXT_MENU_ICON_SVG}
-                                </button> -->
+                                <!-- <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {group.name}"> {@html CONTEXT_MENU_ICON_SVG} </button> -->
                             </div>
                         </li>
                     {/each}
@@ -823,8 +757,6 @@ $: {
         {/each}
     </div>
 {/if}
-
-    <!-- Metadata Display Section Removed -->
 
 	{#if contextMenuVisible && contextMenuItem && !$panelStateStore.notesLeftPanelCollapsed}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
@@ -928,7 +860,6 @@ $: {
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
-<!-- Added CreateGroupModal for Step III.4 -->
 <CreateGroupModal
     bind:showModal={showCreateGroupModal}
     projectUuid={$project?.project_uuid}

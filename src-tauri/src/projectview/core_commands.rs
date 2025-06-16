@@ -52,11 +52,19 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
     let group_id = Uuid::new_v4().to_string();
     info!("[CMD] create_new_group: id={}, project_id={}, name={}", group_id, project_id, name);
 
-    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] create_new_group - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e));
+            return Err(format!("Failed to open database: {}", e.to_string()));
         }
     };
 
@@ -81,11 +89,19 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
 pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
     info!("[CMD] get_project_groups for project_id: {}", project_id);
 
-    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] get_project_groups - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e));
+            return Err(format!("Failed to open database: {}", e.to_string()));
         }
     };
 
@@ -115,11 +131,19 @@ pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, St
 pub async fn add_file_to_existing_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
     info!("[CMD] add_file_to_existing_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
 
-    let conn = match db_handler::get_db_path().and_then(Connection::open) {
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] add_file_to_existing_group - Failed to open DB: {}", e);
-            return Err(format!("Failed to open database: {}", e));
+            return Err(format!("Failed to open database: {}", e.to_string()));
         }
     };
 
