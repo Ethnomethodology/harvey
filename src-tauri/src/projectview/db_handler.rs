@@ -124,8 +124,8 @@ pub fn init_db() -> Result<(), CommandError> {
             creation_time TEXT,
             asset_type TEXT NOT NULL,
             custom_fields_json TEXT,
-            -- original_import_path TEXT, -- REMOVED
-            -- speaker_names_json TEXT,   -- REMOVED
+            original_import_path TEXT,
+            speaker_names_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -149,8 +149,27 @@ pub fn init_db() -> Result<(), CommandError> {
         info!("[DB] Added project_id column to asset_metadata. Existing rows will have NULL. PK not changed for existing tables by this ALTER.");
     }
 
-    // Migration for original_import_path (REMOVED)
-    // Migration for speaker_names_json (REMOVED)
+    // Migration for original_import_path
+    let mut stmt_check_orig_import_path = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let orig_import_path_exists = stmt_check_orig_import_path
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "original_import_path"));
+
+    if !orig_import_path_exists {
+        info!("[DB] Adding original_import_path column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN original_import_path TEXT", [])?;
+    }
+
+    // Migration for speaker_names_json
+    let mut stmt_check_speaker_json = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let speaker_json_exists = stmt_check_speaker_json
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "speaker_names_json"));
+
+    if !speaker_json_exists {
+        info!("[DB] Adding speaker_names_json column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT", [])?;
+    }
 
     // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
     // For simplicity, the trigger is defined for the new composite key structure.
@@ -551,7 +570,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
     let mut stmt = conn.prepare("
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-               creation_time, custom_fields_json, asset_type
+               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -574,8 +593,8 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             creation_time: row.get(13)?,
             custom_fields_json: row.get(14)?,
             asset_type: row.get(15)?,
-            original_import_path: None, // Added this line
-            speaker_names_json: None,   // Added this line
+            original_import_path: row.get(16)?,
+            speaker_names_json: row.get(17)?,
         })
     }).optional()?;
 

@@ -529,7 +529,7 @@
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            if (importType === 'audio' || importType === 'video') await importMediaFile(importType);
+            if (importType === 'audio' || importType === 'video') await importMediaFile(importType, selectedTab);
             else if (importType === 'document') await importDocumentFile();
             else if (importType === 'table') await importTableFile();
             else if (importType === 'image') await importImageFile();

@@ -176,7 +176,7 @@ pub async fn import_table_file(
         audio_codec: None,
         video_codec: None,
         created_at: Some(Utc::now().to_rfc3339()),
-                original_import_path: None,
+                original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
     };
 
