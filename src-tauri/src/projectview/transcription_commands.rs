@@ -642,14 +642,14 @@ pub async fn transcribe_media_command(
         final_transcript_path_en,
     ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...").await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...")?;
     let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
-    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.").await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
 
-    let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id).await?;
+    let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id)?;
 
     // --- First Pass: Original Language Transcription ---
-    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...").await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...")?;
     let mut original_segments = execute_transcription_pass(
         &app_handle_clone,
         &wav_media_path,
@@ -665,7 +665,7 @@ pub async fn transcribe_media_command(
 
     map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 45.0, "Saving original transcript...").await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 45.0, "Saving original transcript...")?;
     let lexical_json_orig = create_lexical_table_from_segments(&original_segments);
     let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
         .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
@@ -684,7 +684,7 @@ pub async fn transcribe_media_command(
             expected_whisper_temp_json_path_en,
             final_transcript_path_en,
         ) {
-            emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...").await?;
+            emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...")?;
             let mut translated_segments = execute_transcription_pass(
                 &app_handle_clone,
                 &wav_media_path,
@@ -713,7 +713,7 @@ pub async fn transcribe_media_command(
             }
 
 
-            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...").await?;
+            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...")?;
             let lexical_json_en = create_lexical_table_from_segments(&translated_segments);
             let lexical_json_en_str = serde_json::to_string_pretty(&lexical_json_en)
                 .map_err(|e| CommandError::from(format!("Failed to serialize translated Lexical Table JSON: {}", e)))?;
@@ -729,7 +729,7 @@ pub async fn transcribe_media_command(
         }
     }
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.").await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.")?;
     info!("[Transcribe Command][{}] Processing complete.", job_id);
     Ok(())
 }
@@ -769,7 +769,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
 
     info!("[FFmpeg CMD][{}] Starting FFmpeg conversion...", job_id);
     // Using emit_progress_cmd from this file
-    let _ = emit_progress_cmd(app_handle, job_id, 2.0, "Converting audio to WAV...").await;
+    let _ = emit_progress_cmd(app_handle, job_id, 2.0, "Converting audio to WAV...")?;
 
     let args: Vec<String> = vec![
         "-i".into(), input_path_str.to_string(),
