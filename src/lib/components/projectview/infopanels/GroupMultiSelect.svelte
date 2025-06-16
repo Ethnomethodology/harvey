@@ -9,6 +9,7 @@
 	export let projectId: string;
 	export let allProjectGroups: GroupData[] = [];
 	export let initiallyAssignedGroups: GroupData[] = [];
+	export let isEditable = true; // New prop
 
 	let assignedGroups: GroupData[] = [];
 	let availableGroupsToAssign: GroupData[] = [];
@@ -29,6 +30,7 @@
 	}
 
 	async function removeGroup(group: GroupData) {
+		if (!isEditable) return;
 		if (!projectId || !fileAssetRelativePath || !group.id) {
 			console.error("Missing data for removing group from file", { projectId, fileAssetRelativePath, groupId: group.id });
 			dispatch('error', 'Failed to remove group: Missing critical data.');
@@ -50,6 +52,7 @@
 	}
 
 	async function addGroup(group: GroupData) {
+		if (!isEditable) return;
 		if (!projectId || !fileAssetRelativePath || !group.id) {
 			console.error("Missing data for adding group to file", { projectId, fileAssetRelativePath, groupId: group.id });
 			dispatch('error', 'Failed to add group: Missing critical data.');
@@ -73,6 +76,7 @@
 	}
 
 	function handleCreateNewGroup() {
+		if (!isEditable) return;
 		showDropdown = false;
 		dispatch('createNewGroup');
 	}
@@ -103,8 +107,9 @@
 				class="flex items-center bg-blue-100 dark:bg-blue-700 text-blue-800 dark:text-blue-200 text-xs font-medium px-2 py-0.5 rounded-full"
 			>
 				{group.name}
+                {#if isEditable}
 				<button
-					on:click={() => removeGroup(group)}
+					on:click|stopPropagation={() => removeGroup(group)}
 					class="ml-1.5 text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
 					aria-label="Remove {group.name}"
 				>
@@ -112,19 +117,32 @@
 						<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
 					</svg>
 				</button>
+                {/if}
 			</span>
 		{/each}
         <!-- Dropdown Toggle Area (rest of the clickable space if no groups) -->
-         <div class="flex-grow min-w-[50px]" on:click={toggleDropdown}>
-            {#if assignedGroups.length > 0}
+         <div
+            class="flex-grow min-w-[50px]"
+            on:click={() => isEditable && toggleDropdown()}
+            class:cursor-not-allowed={!isEditable}
+            class:opacity-75={!isEditable}
+            role={isEditable ? "button" : "presentation"}
+            tabindex={isEditable ? 0 : -1}
+            on:keydown={(e) => { if (isEditable && (e.key === 'Enter' || e.key === ' ')) toggleDropdown()}}
+         >
+            {#if assignedGroups.length > 0 && isEditable}
             <button
                 type="button"
                 class="w-full text-left px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none"
                 aria-haspopup="true"
                 aria-expanded={showDropdown}
+                disabled={!isEditable}
             >
                 Add to group...
             </button>
+            {:else if assignedGroups.length === 0 && isEditable}
+             <!-- If no groups assigned but editable, clicking the empty space should still toggle dropdown -->
+             <div class="w-full h-full" />
             {/if}
         </div>
 	</div>
@@ -156,12 +174,14 @@
 					<!-- Show create new if search term does not exactly match an existing available group -->
                     <!-- This part might be too simplistic, a dedicated "Create Group" button is better -->
 				{/if}
+                {#if isEditable}
                 <li
                     on:click={handleCreateNewGroup}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-t border-gray-200 dark:border-gray-600"
                 >
-                    + Create new group "{searchTerm ? searchTerm : '...'}"
+                    + Create new group {searchTerm ? `"${searchTerm}"` : ''}
                 </li>
+                {/if}
 			</ul>
 		</div>
 	{/if}

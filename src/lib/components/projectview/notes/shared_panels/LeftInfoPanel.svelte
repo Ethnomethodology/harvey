@@ -933,17 +933,18 @@
                 <!-- End of custom fields rendering -->
 
                 <!-- Groups Section -->
-                {#if currentAssetRelativePathForGroups && $project.id && !isEditing}
+                {#if currentAssetRelativePathForGroups && $project.id}
                     <div class="mt-3">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Groups</h3>
                         {#if isLoadingFileGroups}
                             <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
-                        {:else}
+                        {:else if isEditing}
                             <GroupMultiSelect
                                 fileAssetRelativePath={currentAssetRelativePathForGroups}
                                 projectId={$project.id}
                                 allProjectGroups={allProjectGroupsForPanel}
                                 initiallyAssignedGroups={fileAssignedGroups}
+                                isEditable={true} /* Explicitly true, or pass isEditing */
                                 on:groupsUpdated={() => fetchFileAssignedGroups($project.id, currentAssetRelativePathForGroups)}
                                 on:createNewGroup={() => {
                                     createGroupModalFileToAssign = currentAssetRelativePathForGroups;
@@ -951,6 +952,19 @@
                                 }}
                                 on:error={(e) => message(e.detail, { title: 'Group Error', type: 'error' })}
                             />
+                        {:else}
+                            <!-- Read-only display -->
+                            {#if fileAssignedGroups && fileAssignedGroups.length > 0}
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    {#each fileAssignedGroups as group (group.id)}
+                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
+                                            {group.name}
+                                        </span>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <p class="text-xs text-gray-400 dark:text-gray-500 italic mt-1">No groups assigned.</p>
+                            {/if}
                         {/if}
                     </div>
                 {/if}
