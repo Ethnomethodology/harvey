@@ -31,6 +31,7 @@ export const initialTranscriptState = {
     pendingSegmentsForJobDone: null,
     ranInBackground: false,
     // Dual transcript additions
+    translateToEnglish: false,
     activeTranscriptLanguage: 'original', // 'original' or 'english'
     originalSegments: [],
     englishSegments: [],
@@ -858,6 +859,15 @@ listen('media_renamed', (event) => {
         return ts;
     });
 });
+
+export function setTranslateToEnglish(value) {
+    transcriptStore.update(ts => {
+        if (ts.translateToEnglish !== !!value) {
+            return { ...ts, translateToEnglish: !!value };
+        }
+        return ts;
+    });
+}
 
 // Listen for item rename events from the backend (specifically for currentTranscriptPath)
 listen('item_renamed', (event) => {

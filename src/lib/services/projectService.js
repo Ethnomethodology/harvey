@@ -757,6 +757,7 @@ export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     const jobId = uuidv4();
+    const translateToEnglish = currentTs.translateToEnglish; // Add this line
 
     // Ensure args.mediaPath is available for event emission even if initial checks fail
     const mediaPathForEvent = currentTs.selectedMediaFile?.path;
@@ -775,7 +776,7 @@ export async function handleConfirmStartTranscription() {
 
     const selectedModelIdentifier = currentTs.selectedModelName;
     const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
-    const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], jobId: jobId };
+    const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], translateToEnglish: translateToEnglish, jobId: jobId };
 
     setTranscriptionStatus(true, jobId, {
         initialProgressMessage: isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...',

@@ -2,7 +2,7 @@
 
 use super::shared_types::*;
 use super::shared_utils::*;
-use crate::welcome::config::CommandError;
+use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
 use tauri::Emitter; // Added Emitter
@@ -14,7 +14,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use tauri::{AppHandle};
-use tauri_plugin_shell::ShellExt; 
+use tauri_plugin_shell::{ShellExt, process::CommandEvent};
+use tokio::time::{sleep, Duration};
 use quick_xml;
 
 
@@ -629,48 +630,339 @@ pub async fn transcribe_media_command(
     let job_id = uuid::Uuid::new_v4().to_string();
     info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
 
-    // TODO: Implement the full transcription and translation logic here.
-    // This will involve:
-    // 1. Calling prepare_output_paths.
-    // 2. First pass: Original language transcription (pyannote if num_speakers > 0, then whisper).
-    // 3. Parsing original transcript, applying speaker names, saving to file and XML.
-    // 4. Second pass (if translate_to_english): English translation (whisper with --translate).
-    // 5. Parsing translated transcript, aligning segments, saving to file and XML.
-    // 6. Emitting progress events.
-    // 7. Error handling throughout.
+    let app_handle_clone = app_handle.clone();
 
     let (
-        _temp_transcript_output_base_orig_str,
-        _expected_whisper_temp_json_path_orig,
-        _expected_rttm_temp_path,
-        _final_transcript_path_orig,
-        _temp_transcript_output_base_en_str,
-        _expected_whisper_temp_json_path_en,
-        _final_transcript_path_en
+        temp_transcript_output_base_orig_str,
+        expected_whisper_temp_json_path_orig,
+        expected_rttm_temp_path,
+        final_transcript_path_orig,
+        temp_transcript_output_base_en_str,
+        expected_whisper_temp_json_path_en,
+        final_transcript_path_en,
     ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
 
-    // Placeholder for actual transcription logic
-    info!("[Transcribe Command][{}] Paths prepared. Placeholder for transcription execution.", job_id);
-    // Simulate some work
-    for i in 1..=5 {
-        app_handle.emit("PROGRESS", ProgressPayload { job_id: job_id.clone(), message: format!("Processing step {}/5...", i), percent: (i as f32 / 5.0) * 100.0 })?;
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...").await?;
+    let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.").await?;
+
+    let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id).await?;
+
+    // --- First Pass: Original Language Transcription ---
+    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...").await?;
+    let mut original_segments = execute_transcription_pass(
+        &app_handle_clone,
+        &wav_media_path,
+        &whisper_model_path_str,
+        payload.language_code.as_deref().unwrap_or("auto"),
+        &job_id,
+        &temp_transcript_output_base_orig_str,
+        &expected_whisper_temp_json_path_orig,
+        payload.num_speakers,
+        &expected_rttm_temp_path,
+        false, // is_translation_pass
+    ).await?;
+
+    map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
+
+    emit_progress_cmd(&app_handle_clone, &job_id, 45.0, "Saving original transcript...").await?;
+    let lexical_json_orig = create_lexical_table_from_segments(&original_segments);
+    let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
+        .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
+
+    save_transcript_json(
+        payload.project_xml_path.clone(),
+        final_transcript_path_orig.to_string_lossy().to_string(),
+        lexical_json_orig_str,
+    ).await?;
+    info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
+
+    // --- Second Pass: English Translation (if requested) ---
+    if payload.translate_to_english {
+        if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
+            temp_transcript_output_base_en_str,
+            expected_whisper_temp_json_path_en,
+            final_transcript_path_en,
+        ) {
+            emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...").await?;
+            let mut translated_segments = execute_transcription_pass(
+                &app_handle_clone,
+                &wav_media_path,
+                &whisper_model_path_str,
+                "en", // Target language for translation is English
+                &job_id,
+                &base_en_str,
+                &json_path_en,
+                0, // Typically, diarization is not re-run or is handled differently for translations
+                &PathBuf::new(), // Placeholder for RTTM path, as it might not be used
+                true, // is_translation_pass
+            ).await?;
+
+            // Speaker mapping for translated segments can be complex.
+            // A simple approach: if segment counts are similar, try to reuse original speakers.
+            // This might need refinement based on actual whisper output for translations.
+            // For now, let's apply the same mapping, or default if counts differ significantly.
+            // A more robust solution might involve aligning segments by time.
+            if translated_segments.len() == original_segments.len() {
+                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            } else {
+                warn!("[Transcribe Command][{}] Segment count mismatch after translation (orig: {}, trans: {}). Speaker names might be less accurate for translated version.", job_id, original_segments.len(), translated_segments.len());
+                // Optionally, apply a default "SPEAKER_XX" or clear speakers for translated version
+                // For now, try mapping anyway or let map_speaker_ids_to_names handle it based on its logic.
+                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            }
+
+
+            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...").await?;
+            let lexical_json_en = create_lexical_table_from_segments(&translated_segments);
+            let lexical_json_en_str = serde_json::to_string_pretty(&lexical_json_en)
+                .map_err(|e| CommandError::from(format!("Failed to serialize translated Lexical Table JSON: {}", e)))?;
+
+            save_transcript_json(
+                payload.project_xml_path.clone(),
+                final_path_en_pb.to_string_lossy().to_string(),
+                lexical_json_en_str,
+            ).await?;
+            info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
+        } else {
+            warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available. Skipping translation.", job_id);
+        }
     }
 
-    // Example of how to save segments (replace with actual segments)
-    // let example_segments = vec![
-    //     TranscriptSegment { start_time: 0.0, end_time: 1.0, text: "Hello".to_string(), speaker: "Speaker 1".to_string() },
-    //     TranscriptSegment { start_time: 1.0, end_time: 2.0, text: "World".to_string(), speaker: "Speaker 2".to_string() },
-    // ];
-    // let lexical_json = create_lexical_table_from_segments(&example_segments);
-    // if let Some(final_path) = final_transcript_path_orig { // Or final_transcript_path_en
-    //     // Need to call save_transcript_json, which itself needs project_xml_path, transcript_path, and the json string.
-    //     // This will also update the project XML.
-    // }
-
-
-    info!("[Transcribe Command][{}] Placeholder processing complete.", job_id);
+    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.").await?;
+    info!("[Transcribe Command][{}] Processing complete.", job_id);
     Ok(())
+}
+
+// --- Placeholder Helper Functions ---
+
+// Adapted from local_handler/transcription.rs
+// Omitting cancel_flag for now
+pub(crate) async fn convert_to_wav_if_needed_cmd(
+    app_handle: &AppHandle,
+    input_path_str: &str,
+    job_id: &str,
+) -> Result<PathBuf, CommandError> {
+    info!("[FFmpeg CMD][{}] Checking audio file: {}", job_id, input_path_str);
+    let input_path = PathBuf::from(input_path_str);
+    let extension = input_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+    if extension == "wav" {
+        info!("[FFmpeg CMD][{}] Input is already WAV. Skipping conversion.", job_id);
+        return Ok(input_path);
+    }
+
+    let output_wav_path = input_path.with_extension("wav");
+    info!("[FFmpeg CMD][{}] Target WAV path: {}", job_id, output_wav_path.display());
+
+    if output_wav_path.exists() {
+        match output_wav_path.metadata() {
+            Ok(m) if m.len() > 0 => {
+                info!("[FFmpeg CMD][{}] Target WAV file already exists and is not empty. Reusing.", job_id);
+                return Ok(output_wav_path);
+            },
+            _ => {
+                warn!("[FFmpeg CMD][{}] Target WAV file exists but is empty or metadata error. Overwriting.", job_id);
+            }
+        }
+    }
+
+    info!("[FFmpeg CMD][{}] Starting FFmpeg conversion...", job_id);
+    // Using emit_progress_cmd from this file
+    let _ = emit_progress_cmd(app_handle, job_id, 2.0, "Converting audio to WAV...").await;
+
+    let args: Vec<String> = vec![
+        "-i".into(), input_path_str.to_string(),
+        "-vn".into(),
+        "-acodec".into(), "pcm_s16le".into(),
+        "-ar".into(), "16000".into(),
+        "-ac".into(), "1".into(),
+        "-y".into(),
+        output_wav_path.to_string_lossy().to_string(),
+    ];
+    debug!("[FFmpeg CMD][{}] Command arguments: {:?}", job_id, args);
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope
+        .sidecar("ffmpeg")?
+        .args(args)
+        .spawn()?;
+    debug!("[FFmpeg CMD][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
+
+    let mut ffmpeg_stderr: Vec<String> = Vec::new();
+    let mut ffmpeg_exit_code: Option<i32> = None;
+    let mut ffmpeg_error: Option<String> = None;
+
+    loop {
+        // Cancellation logic omitted for this adaptation
+        // if cancel_flag.load(Ordering::Relaxed) {
+        //     warn!("[FFmpeg CMD][{}] Cancellation requested. Killing FFmpeg process...", job_id);
+        //     let _ = child.kill();
+        //     if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
+        //     return Err(CommandError::from("Audio conversion cancelled."));
+        // }
+
+        tokio::select! {
+            biased; // Ensure cancellation check (if added later) is prioritized
+            maybe_event = rx.recv() => {
+                match maybe_event {
+                    Some(event) => match event {
+                        CommandEvent::Stdout(line) => { debug!("[FFmpeg CMD][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Stderr(line) => { let l = String::from_utf8_lossy(&line).to_string(); debug!("[FFmpeg CMD][stderr][{}] {}", job_id, l.trim_end()); ffmpeg_stderr.push(l); },
+                        CommandEvent::Error(msg) => { error!("[FFmpeg CMD][error][{}] {}", job_id, msg); ffmpeg_error = Some(msg); break; },
+                        CommandEvent::Terminated(payload) => { info!("[FFmpeg CMD][term][{}] Process terminated. Code: {:?}, Signal: {:?}", job_id, payload.code, payload.signal); ffmpeg_exit_code = payload.code; if payload.signal.is_some() && ffmpeg_exit_code.is_none() { ffmpeg_exit_code = Some(-1); } break; }
+                        _ => {}
+                    },
+                    None => {
+                        if ffmpeg_exit_code.is_none() && ffmpeg_error.is_none() {
+                            warn!("[FFmpeg CMD][{}] Event channel closed unexpectedly before termination signal.", job_id);
+                            ffmpeg_exit_code = Some(-1); // Treat as an error
+                        }
+                        break;
+                    }
+                }
+            }
+            // Minimal sleep if cancellation is omitted, otherwise select! might behave unexpectedly without multiple branches.
+            // If cancellation was present:
+            // _ = sleep(Duration::from_millis(50)) => { continue; }
+            // Since it's omitted, we might not need this sleep, but keeping it for safety during select! usage.
+            // If recv() is the only branch, select! is not really needed.
+            // For now, let's assume recv() might not always be ready immediately.
+             _ = sleep(Duration::from_millis(10)) => {
+                 // This branch is mainly to ensure select! doesn't block indefinitely if recv() is slow
+                 // and to allow future re-integration of cancellation checks.
+                 // If there are no other branches, this sleep isn't strictly necessary
+                 // but also doesn't harm significantly for a short duration.
+                 // If this were the only branch, a simple loop with rx.recv().await would suffice.
+             }
+        }
+    }
+
+    let stderr_output = ffmpeg_stderr.join("\n");
+    if ffmpeg_error.is_some() || ffmpeg_exit_code != Some(0) {
+        error!("[FFmpeg CMD][{}] FFmpeg process failed. Code: {:?}, Error: {:?}\nStderr:\n{}", job_id, ffmpeg_exit_code, ffmpeg_error, stderr_output);
+        if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
+        return Err(CommandError::from(format!("FFmpeg conversion failed. Code: {:?}. Error: {}", ffmpeg_exit_code, ffmpeg_error.unwrap_or_default())));
+    }
+
+    if !output_wav_path.exists() {
+        error!("[FFmpeg CMD][{}] FFmpeg reported success, but output file is missing: {}", job_id, output_wav_path.display());
+        return Err(CommandError::from(format!("FFmpeg conversion failed: output file missing ({})", output_wav_path.display())));
+    }
+    match output_wav_path.metadata() {
+        Ok(m) if m.len() == 0 => {
+            error!("[FFmpeg CMD][{}] FFmpeg reported success, but output file is empty: {}", job_id, output_wav_path.display());
+            let _ = fs::remove_file(&output_wav_path);
+            return Err(CommandError::from(format!("FFmpeg conversion failed: output file is empty ({})", output_wav_path.display())));
+        },
+        Err(e) => {
+            error!("[FFmpeg CMD][{}] FFmpeg reported success, but failed to get metadata for {}: {}", job_id, output_wav_path.display(), e);
+            let _ = fs::remove_file(&output_wav_path);
+            return Err(CommandError::from(format!("FFmpeg conversion failed: output metadata error ({})", e)));
+        },
+        Ok(_) => {}
+    }
+
+    info!("[FFmpeg CMD][{}] Successfully converted '{}' to WAV: {}", job_id, input_path_str, output_wav_path.display());
+    Ok(output_wav_path)
+}
+
+// Adapted from local_handler/transcription.rs
+// Renamed to avoid conflict and made pub(crate)
+pub(crate) fn find_model_file_cmd(model_dir: &Path) -> Result<PathBuf, CommandError> {
+    debug!("[Helper CMD] Searching for model file in directory: {:?}", model_dir);
+    if !model_dir.exists() || !model_dir.is_dir() {
+        return Err(CommandError::from(format!("Model directory not found or is not a directory: {}", model_dir.display())));
+    }
+
+    for entry_result in fs::read_dir(model_dir)? {
+        match entry_result {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                        let lower_ext = ext.to_lowercase();
+                        // Common model file extensions
+                        if lower_ext == "bin" || lower_ext == "gguf" || lower_ext == "pt" {
+                            info!("[Helper CMD] Found potential model file: {:?}", path);
+                            return Ok(path);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("[Helper CMD] Failed to read directory entry in '{}': {}", model_dir.display(), e);
+            }
+        }
+    }
+
+    Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
+}
+
+
+// Adapted from local_handler/transcription.rs
+// Made synchronous as read_config and find_model_file_cmd are sync.
+pub(crate) fn resolve_whisper_model_path_cmd(
+    model_name: &str,
+    job_id: &str, // Kept for logging consistency, though not strictly needed by logic
+) -> Result<String, CommandError> {
+    let config = read_config()?; // This is synchronous
+    let base_model_dir_str = if !config.download_location.trim().is_empty() {
+        config.download_location
+    } else {
+        get_default_download_location()? // This is synchronous
+    };
+    let model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
+
+    if !model_dir_path.exists() || !model_dir_path.is_dir() {
+        let e_msg = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());
+        error!("[Transcription CMD][{}] Error resolving model path: {}", job_id, e_msg);
+        return Err(CommandError::from(e_msg));
+    }
+    // Call the adapted find_model_file_cmd
+    let model_file_path = find_model_file_cmd(&model_dir_path)?;
+    Ok(model_file_path.to_string_lossy().to_string())
+}
+
+
+// Placeholder for the core transcription pass
+async fn execute_transcription_pass(
+    _app_handle: &AppHandle,
+    _wav_media_path: &Path,
+    _model_path: &str,
+    _language_code: &str,
+    _job_id: &str,
+    _output_base_path_str: &str,
+    _expected_json_output_path: &Path,
+    _num_speakers: usize,
+    _expected_rttm_path: &Path,
+    _is_translation_pass: bool,
+) -> Result<Vec<TranscriptSegment>, CommandError> {
+    info!("[execute_transcription_pass][{}] STUB CALLED. Lang: {}, Translate: {}, Output: {}", _job_id, _language_code, _is_translation_pass, _output_base_path_str);
+    Ok(vec![
+        TranscriptSegment {
+            start_time: 0.0,
+            end_time: 1.0,
+            text: if _is_translation_pass { "Translated text stub".to_string() } else { "Original text stub".to_string() },
+            speaker: "SPEAKER_00".to_string(),
+        }
+    ])
+}
+
+// Helper to emit progress
+pub(crate) fn emit_progress_cmd(
+    app_handle: &AppHandle,
+    job_id: &str,
+    percent: f32,
+    message: &str,
+) -> Result<(), CommandError> {
+    let clamped_percent = percent.max(0.0).min(100.0);
+    debug!("[Progress Emit CMD][{}] {:.1}% - {}", job_id, clamped_percent, message);
+    app_handle.emit("PROGRESS", ProgressPayload {
+        job_id: job_id.to_string(),
+        percent: clamped_percent,
+        message: message.to_string(),
+    }).map_err(|e| CommandError::from(format!("Failed to emit progress: {}", e)))
 }
 
 
