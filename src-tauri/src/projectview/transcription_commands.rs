@@ -653,7 +653,7 @@ pub async fn transcribe_media_command(
     info!("[Transcribe Command][{}] Paths prepared. Placeholder for transcription execution.", job_id);
     // Simulate some work
     for i in 1..=5 {
-        app_handle.emit("PROGRESS", ProgressPayload { job_id: job_id.clone(), text: format!("Processing step {}/5...", i), progress: (i as f32 / 5.0) * 100.0 })?;
+        app_handle.emit("PROGRESS", ProgressPayload { job_id: job_id.clone(), message: format!("Processing step {}/5...", i), percent: (i as f32 / 5.0) * 100.0 })?;
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 

@@ -68,8 +68,8 @@ pub async fn run_transcription(
     let whisper_model_path_str = resolve_whisper_model_path(&model_name, &job_id).await?;
     debug!("[Transcription][Job '{}'] Whisper model path: '{}'", job_id, whisper_model_path_str);
 
-    let (output_path_base_str, expected_whisper_output_path, expected_rttm_path, final_transcript_path) =
-        prepare_output_paths(&wav_media_path.to_string_lossy(), &job_id)?; 
+    let (output_path_base_str, expected_whisper_output_path, expected_rttm_path, final_transcript_path, _, _, _) =
+        prepare_output_paths(&wav_media_path.to_string_lossy(), &job_id, false)?;
     debug!("[Transcription][Job '{}'] Paths - Base:'{}', Whisper:'{}', RTTM:'{}', Final:'{}'", job_id, output_path_base_str, expected_whisper_output_path.display(), expected_rttm_path.display(), final_transcript_path.display());
 
     let _ = emit_progress(&app_handle, &job_id, 5.0, "Running transcription...").await;
