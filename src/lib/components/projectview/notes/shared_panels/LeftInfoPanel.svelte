@@ -234,12 +234,15 @@
     let displayableCustomFields = [];
 
     // State for groups
-    let fileAssignedGroups: GroupData[] = [];
-    let allProjectGroupsForPanel: GroupData[] = [];
-    let isLoadingFileGroups: boolean = false;
+    let fileAssignedGroups = [];
+    let allProjectGroupsForPanel = [];
+    let isLoadingFileGroups = false;
     let isCreateGroupModalOpen = false;
-    let createGroupModalFileToAssign: string | null = null;
-    let currentAssetRelativePathForGroups: string | null = null; // To track for group loading
+    // createGroupModalFileToAssign: string | null = null; // Type annotation removed by previous block for JS
+    let createGroupModalFileToAssign = null;
+    // currentAssetRelativePathForGroups: string | null = null; // Type annotation removed by previous block for JS
+    let currentAssetRelativePathForGroups = null;
+
 
     async function fetchAllProjectGroups() {
         if ($project.id) {
