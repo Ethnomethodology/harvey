@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/notes/shared_panels/LeftInfoPanel.svelte -->
-<script lang="ts">
+<script>
     import { onMount, onDestroy } from 'svelte';
+    import { get } from 'svelte/store'; // Added
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     // fsRename might still be used by projectService.js, direct fs calls for metadata are removed.
@@ -10,7 +11,7 @@
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte'; // Added
     import GroupMultiSelect from '$lib/components/projectview/infopanels/GroupMultiSelect.svelte'; // Added
-    import type { GroupData } from '$lib/types'; // Added
+    // import type { GroupData } from '$lib/types'; // Removed for JS compatibility
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
@@ -27,7 +28,7 @@
     let documentClickHandler = null;
 
     function showLabelTooltip(event, title, textContent) {
-        if (!$panelStateStore.leftCollapsed) return; // Ensure panel is actually collapsed
+        if (!get(panelStateStore).leftCollapsed) return; // Ensure panel is actually collapsed
 
         const GITHUB_ISSUE_MAX_TOOLTIP_WIDTH = 280; // Max width in px, adjust as needed
         const GITHUB_ISSUE_TOOLTIP_OFFSET_X = 4; // Offset from the right edge of the label
