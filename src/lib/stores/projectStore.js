@@ -90,14 +90,62 @@ const initialState = {
     conversionFileName: '',
     onConversionConfirm: () => {},
     onConversionCancel: () => {},
+
+    selectedGroupId: null,
+    selectedGroupData: null, // Will store GroupData { id, project_id, name, description }
 };
 
 export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 
+// Action to clear selected group state
+export function clearSelectedGroup() {
+    project.update(p => ({
+        ...p,
+        selectedGroupId: null,
+        selectedGroupData: null,
+    }));
+}
+
+// Action to set the selected group and clear other selections
+export function setSelectedGroup(groupId, groupData) {
+    project.update(p => ({
+        ...p,
+        selectedGroupId: groupId,
+        selectedGroupData: groupData,
+        // Clear other potentially selected items
+        selectedDocumentPath: null,
+        currentDocumentJson: null,
+        initialDocumentJson: null,
+        isDocumentDirty: false,
+        isDocumentLoading: false,
+        documentError: null,
+        activeDocumentEditorRef: null,
+        currentImportedTranscriptPath: null,
+        currentImportedTranscriptLexicalJson: null,
+        initialImportedTranscriptLexicalJson: null,
+        isImportedTranscriptDirty: false,
+        isImportedTranscriptLoading: false,
+        importedTranscriptError: null,
+        activeImportedTranscriptEditorRef: null,
+        selectedMediaNotePath: null,
+        currentMediaNoteTranscriptJson: null,
+        initialMediaNoteTranscriptJson: null,
+        isMediaNoteTranscriptDirty: false,
+        isMediaNoteTranscriptLoading: false,
+        mediaNoteTranscriptError: null,
+        activeMediaNoteEditorRef: null,
+        // TODO: Consider if transcriptStore's active media/transcript also needs clearing here
+        // For now, focusing on projectStore's direct "selected item" fields
+        statusMessage: groupData ? `Viewing group: ${groupData.name}` : 'Group selection cleared.',
+    }));
+}
+
+
 export function prepareDocumentView(filePath, itemType = 'document') {
     console.debug(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`); // DEBUG
+    clearSelectedGroup(); // Clear group selection
     const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables';
     const isImage = itemType === 'images';
@@ -184,6 +232,7 @@ export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(
 export function prepareImportedTranscriptView(filePath) {
     console.debug(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`); // DEBUG
     project.update(p => {
+        clearSelectedGroup(); // Clear group selection when preparing imported transcript view
         // Determine if the exact same path is being re-selected and if its data is already loaded.
         const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath &&
                                            !!filePath && // Ensures filePath is not null/empty
@@ -257,6 +306,7 @@ export function clearActiveImportedTranscriptEditorRef() { project.update(p => (
 export function prepareMediaNoteView(mediaPath) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
     console.debug(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}, normalized to: ${normalizedMediaPath}`); // DEBUG
+    clearSelectedGroup(); // Clear group selection
     const newIsMediaNoteLoading = !!normalizedMediaPath;
     project.update(p => {
         const otherFieldnotesStatesToClear = {

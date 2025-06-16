@@ -5,7 +5,7 @@ use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
 use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
-use crate::projectview::shared_types::FileMetadata; // For function signatures
+use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb}; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
@@ -31,13 +31,23 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub speaker_names_json: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GroupDataFromDb {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
 }
 
-fn get_db_path() -> Result<PathBuf, CommandError> {
+pub fn get_db_path() -> Result<PathBuf, CommandError> {
     let config_dir = get_config_dir().map_err(|e| CommandError::Message(format!("Failed to get config dir from welcome/config: {}", e)))?;
     Ok(config_dir.join(DB_FILE_NAME))
 }
@@ -289,6 +299,48 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_projects_updated_at trigger.");
 
+    // groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized groups table.");
+
+    // Trigger for groups updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_groups_updated_at
+        AFTER UPDATE ON groups
+        FOR EACH ROW
+        BEGIN
+            UPDATE groups SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_groups_updated_at trigger.");
+
+    // file_groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS file_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_asset_path TEXT NOT NULL,
+            group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE,
+            UNIQUE (project_id, file_asset_path, group_id)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized file_groups table.");
+
     // media_transcript_data table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS media_transcript_data (
@@ -323,6 +375,142 @@ pub fn init_db() -> Result<(), CommandError> {
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
+
+// --- Group Functions ---
+
+pub fn create_group(conn: &Connection, project_id: &str, group_id: &str, name: &str, description: Option<&str>) -> Result<(), CommandError> {
+    debug!("[DB] Creating group for project_id {}: id={}, name={}", project_id, group_id, name);
+    conn.execute(
+        "INSERT INTO groups (id, project_id, name, description) VALUES (?1, ?2, ?3, ?4)",
+        params![group_id, project_id, name, to_sql_optional_str(description)],
+    )
+    .map_err(|e| CommandError::Message(format!("Failed to create group {}: {}", name, e)))?;
+    info!("[DB] Group created successfully: id={}, name={}", group_id, name);
+    Ok(())
+}
+
+pub fn get_groups_for_project(conn: &Connection, project_id: &str) -> Result<Vec<GroupDataFromDb>, CommandError> {
+    debug!("[DB] Loading groups for project_id {}", project_id);
+    let mut stmt = conn.prepare("SELECT id, project_id, name, description, created_at, updated_at FROM groups WHERE project_id = ?1 ORDER BY name ASC")
+        .map_err(|e| CommandError::Message(format!("Failed to prepare statement for getting groups: {}", e)))?;
+
+    let group_iter = stmt.query_map(params![project_id], |row| {
+        Ok(GroupDataFromDb {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })
+    .map_err(|e| CommandError::Message(format!("Failed to query groups for project {}: {}", project_id, e)))?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result.map_err(|e| CommandError::Message(format!("Failed to map group row: {}", e)))?);
+    }
+    info!("[DB] Loaded {} groups for project_id {}", groups.len(), project_id);
+    Ok(groups)
+}
+
+pub fn add_file_to_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_relative_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Adding file {} to group {} for project_id {}", file_asset_relative_path, group_id, project_id);
+    conn.execute(
+        "INSERT INTO file_groups (project_id, group_id, file_asset_path) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+        params![project_id, group_id, file_asset_relative_path],
+    )
+    .map_err(|e| CommandError::Message(format!("Failed to add file {} to group {}: {}", file_asset_relative_path, group_id, e)))?;
+    info!("[DB] File {} added to group {} successfully (if not already present).", file_asset_relative_path, group_id);
+    Ok(())
+}
+
+pub fn get_groups_for_file_asset(conn: &Connection, project_id: &str, file_asset_path: &str) -> Result<Vec<GroupDataFromDb>, rusqlite::Error> {
+    debug!("[DB] Loading groups for file_asset_path {} in project_id {}", file_asset_path, project_id);
+    let mut stmt = conn.prepare(
+        "SELECT g.id, g.project_id, g.name, g.description, g.created_at, g.updated_at
+         FROM groups g
+         JOIN file_groups fg ON g.id = fg.group_id
+         WHERE fg.project_id = ?1 AND fg.file_asset_path = ?2
+         ORDER BY g.name ASC"
+    )?;
+
+    let group_iter = stmt.query_map(params![project_id, file_asset_path], |row| {
+        Ok(GroupDataFromDb {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })?;
+
+    let mut groups = Vec::new();
+    for group_result in group_iter {
+        groups.push(group_result?);
+    }
+    info!("[DB] Loaded {} groups for file_asset_path {} in project_id {}", groups.len(), file_asset_path, project_id);
+    Ok(groups)
+}
+
+pub fn remove_file_from_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_path: &str) -> Result<usize, rusqlite::Error> {
+    debug!("[DB] Removing file {} from group {} for project_id {}", file_asset_path, group_id, project_id);
+    let rows_affected = conn.execute(
+        "DELETE FROM file_groups
+         WHERE project_id = ?1 AND group_id = ?2 AND file_asset_path = ?3",
+        params![project_id, group_id, file_asset_path],
+    )?;
+    if rows_affected > 0 {
+        info!("[DB] File {} removed from group {} successfully.", file_asset_path, group_id);
+    } else {
+        info!("[DB] No association found for file {} in group {} (project_id {}). Nothing removed.", file_asset_path, group_id, project_id);
+    }
+    Ok(rows_affected)
+}
+
+pub fn get_files_for_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<Vec<FileGroupAssociationFromDb>, rusqlite::Error> {
+    debug!("[DB] Loading files for group_id {} in project_id {}", group_id, project_id);
+    let mut stmt = conn.prepare(
+        "SELECT fg.file_asset_path FROM file_groups fg
+         WHERE fg.project_id = ?1 AND fg.group_id = ?2
+         ORDER BY fg.file_asset_path ASC" // Added ORDER BY for consistency
+    )?;
+
+    let rows = stmt.query_map(params![project_id, group_id], |row| {
+        Ok(FileGroupAssociationFromDb {
+            file_asset_path: row.get(0)?,
+        })
+    })?;
+
+    let mut files = Vec::new();
+    for file_result in rows {
+        files.push(file_result?);
+    }
+    info!("[DB] Loaded {} files for group_id {} in project_id {}", files.len(), group_id, project_id);
+    Ok(files)
+}
+
+pub fn update_group_details(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    new_name: &str,
+    new_description: Option<&str>
+) -> Result<usize, rusqlite::Error> {
+    // chrono::Utc should be in scope from the top of shared_types.rs or directly here if needed.
+    // For db_handler.rs, we might need to add `use chrono::Utc;` if it's not already implicitly available.
+    // Assuming Utc is available for now as per its usage in FileMetadata default.
+    // If not, the compiler will tell us, and we can add `use chrono::Utc;`
+    let current_timestamp = chrono::Utc::now().to_rfc3339();
+    debug!("[DB] Updating group details for group_id {} in project_id {}: name={}, desc_is_some={}", group_id, project_id, new_name, new_description.is_some());
+    conn.execute(
+        "UPDATE groups SET name = ?1, description = ?2, updated_at = ?3 WHERE project_id = ?4 AND id = ?5",
+        params![new_name, new_description, current_timestamp, project_id, group_id],
+    )
+}
+
+// --- End Group Functions ---
 
 // --- Media Transcript Data Functions ---
 

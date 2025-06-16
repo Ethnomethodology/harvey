@@ -21,6 +21,8 @@ use serde::Serialize;
 // However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
 // The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
 use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
+use super::shared_types::GroupData; // Added for group commands
+use rusqlite::Connection; // Added for opening DB connection in commands
 use tauri::Emitter;
 use uuid::Uuid; // Added for UUID generation
 
@@ -43,6 +45,388 @@ pub async fn load_table_layout_prefs(project_id: String, table_path: String) -> 
         })
 }
 // --- End Table Layout Preferences Commands ---
+
+// --- Group Commands ---
+#[tauri::command]
+pub async fn create_new_group(project_id: String, name: String, description: Option<String>) -> Result<GroupData, String> {
+    if project_id.is_empty() || project_id == "null" { // Explicitly check for "null" as well, just in case
+        error!("[CMD] create_new_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot create group.".to_string());
+    }
+
+    let group_id = Uuid::new_v4().to_string();
+    info!("[CMD] create_new_group: id={}, project_id={}, name={}", group_id, project_id, name);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::create_group(&conn, &project_id, &group_id, &name, description.as_deref()) {
+        Ok(_) => {
+            info!("[CMD] create_new_group - Group created successfully: {}", group_id);
+            Ok(GroupData {
+                id: group_id,
+                project_id,
+                name,
+                description,
+            })
+        }
+        Err(e) => {
+            error!("[CMD] create_new_group - Failed: {}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn update_group_details(
+    project_id: String,
+    group_id: String,
+    name: String,
+    description: Option<String> // Option<String> from frontend
+) -> Result<GroupData, String> {
+    info!("[CMD] update_group_details for group_id: {} in project_id: {}", group_id, project_id);
+
+    if name.trim().is_empty() {
+        error!("[CMD] update_group_details - Group name cannot be empty.");
+        return Err("Group name cannot be empty.".to_string());
+    }
+    if group_id.trim().is_empty() {
+        error!("[CMD] update_group_details - Group ID cannot be empty.");
+        return Err("Group ID cannot be empty.".to_string());
+    }
+    if project_id.trim().is_empty() {
+        error!("[CMD] update_group_details - Project ID cannot be empty.");
+        return Err("Project ID cannot be empty.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e));
+        }
+    };
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    // Convert Option<String> to Option<&str> for db_handler
+    let description_ref = description.as_deref();
+
+    match db_handler::update_group_details(&conn, &project_id, &group_id, &name.trim(), description_ref) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] update_group_details - Group {} updated successfully.", group_id);
+                Ok(GroupData {
+                    id: group_id,
+                    project_id,
+                    name: name.trim().to_string(), // Use trimmed name
+                    description, // This is Option<String>
+                })
+            } else {
+                error!("[CMD] update_group_details - Group with ID {} not found or not updated.", group_id);
+                Err(format!("Group with ID {} not found or no changes made.", group_id))
+            }
+        }
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed for group {}: {}", group_id, e);
+            // Check for unique constraint violation (name already exists for this project_id)
+            if e.to_string().contains("UNIQUE constraint failed: groups.project_id, groups.name") {
+                 error!("[CMD] update_group_details - Unique constraint violation for group name '{}' in project '{}'.", name.trim(), project_id);
+                 return Err(format!("A group with the name \"{}\" already exists in this project.", name.trim()));
+            }
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_groups_for_file_asset(project_id: String, file_asset_relative_path: String) -> Result<Vec<GroupData>, String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] get_groups_for_file_asset - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot get groups for file asset.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] get_groups_for_file_asset - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot get groups for file asset.".to_string());
+    }
+    info!("[CMD] get_groups_for_file_asset for project_id: {}, file_asset_relative_path: {}", project_id, file_asset_relative_path);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::get_groups_for_file_asset(&conn, &project_id, &file_asset_relative_path) {
+        Ok(groups_from_db) => {
+            info!("[CMD] get_groups_for_file_asset - Found {} groups for project_id: {}, file_asset_relative_path: {}", groups_from_db.len(), project_id, file_asset_relative_path);
+            let groups_for_frontend: Vec<GroupData> = groups_from_db
+                .into_iter()
+                .map(|g_db| GroupData {
+                    id: g_db.id,
+                    project_id: g_db.project_id,
+                    name: g_db.name,
+                    description: g_db.description,
+                })
+                .collect();
+            Ok(groups_for_frontend)
+        }
+        Err(e) => {
+            error!("[CMD] get_groups_for_file_asset - Failed for project_id {}, file_asset_relative_path {}: {}", project_id, file_asset_relative_path, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn remove_file_from_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] remove_file_from_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot remove file from group.".to_string());
+    }
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] remove_file_from_group - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot remove file from group.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] remove_file_from_group - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot remove file from group.".to_string());
+    }
+    info!("[CMD] remove_file_from_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::remove_file_from_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] remove_file_from_group - File {} removed from group {} successfully.", file_asset_relative_path, group_id);
+            } else {
+                info!("[CMD] remove_file_from_group - No association found for file {} in group {}. Nothing removed.", file_asset_relative_path, group_id);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] remove_file_from_group - Failed for project_id {}, group_id {}, file {}: {}", project_id, group_id, file_asset_relative_path, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_group_contents(project_xml_path_str: String, group_id: String) -> Result<Vec<AssociatedFile>, String> {
+    info!("[CMD] get_group_contents for group_id: {}", group_id);
+
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = project_xml_path.parent().ok_or_else(|| "Could not get project base directory.".to_string())?;
+
+    let project_data_for_uuid: ProjectXml = match fs::read_to_string(&project_xml_path){
+        Ok(content) => match quick_xml::de::from_str(&content) {
+            Ok(data) => data,
+            Err(e) => return Err(format!("Failed to parse project XML for UUID: {}", e)),
+        },
+        Err(e) => return Err(format!("Failed to read project XML for UUID: {}", e)),
+    };
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        return Err("Project ID (UUID) is missing in the project file.".to_string());
+    }
+
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] get_group_contents - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot get group contents.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => return Err(format!("Failed to get database path: {}", e)),
+    };
+    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let file_associations_from_db = db_handler::get_files_for_group(&conn, &project_id_for_db, &group_id)
+        .map_err(|e| format!("Failed to get files for group from DB: {}", e))?;
+
+    let mut associated_files: Vec<AssociatedFile> = Vec::new();
+
+    for assoc in file_associations_from_db {
+        let relative_path_str = assoc.file_asset_path.clone();
+        let full_path = project_base_dir.join(&relative_path_str);
+        let file_name = full_path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+
+        let mut file_type = "other".to_string();
+        let mut media_xml_identifier: Option<String> = None;
+
+        if relative_path_str.contains(&format!("{}/", MEDIA_DIR)) {
+            let path_parts: Vec<&str> = relative_path_str.split('/').collect();
+            if path_parts.len() >= 4 && path_parts[0] == HARVEY_FILES_DIR && path_parts[1] == MEDIA_DIR {
+                // Example: harvey_files/Media/STEM_NAME/media/file.mp4 -> STEM_NAME
+                media_xml_identifier = Some(path_parts[2].to_string());
+                let ext = PathBuf::from(&file_name).extension().unwrap_or_default().to_string_lossy().to_lowercase();
+                // Check against known extensions from shared_types if they are comprehensive
+                // For now, using simple string matching as per the provided snippet
+                if ["mp4", "mov", "avi", "mkv", "webm"].contains(&ext.as_str()) {
+                    file_type = "video".to_string();
+                } else if ["mp3", "wav", "m4a", "ogg", "aac", "flac"].contains(&ext.as_str()) {
+                    file_type = "audio".to_string();
+                } else {
+                    file_type = "media_other".to_string(); // Or just "media"
+                }
+            }
+        } else if relative_path_str.contains(&format!("{}/", DOCS_DIR)) {
+            file_type = "document".to_string();
+        } else if relative_path_str.contains(&format!("{}/", IMAGES_DIR)) {
+            file_type = "image".to_string();
+        } else if relative_path_str.contains(&format!("{}/", TABLES_DIR)) {
+            file_type = "table".to_string();
+        } else if relative_path_str.contains(&format!("{}/", TRANSCRIPTS_DIR)) {
+            // This might need refinement if TRANSCRIPTS_DIR is for media-associated transcripts vs imported ones
+            // Assuming TRANSCRIPTS_DIR implies it's an imported transcript if not under a media stem.
+            // The logic in load_project_data for FileEntry might be more robust here.
+            // For now, following the provided snippet's logic.
+            file_type = "imported_transcript".to_string();
+        }
+        // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
+        // or use/enhance shared_utils::determine_asset_type if applicable.
+
+        associated_files.push(AssociatedFile {
+            name: file_name,
+            relative_path: relative_path_str,
+            full_path: full_path.to_string_lossy().into_owned(),
+            file_type,
+            media_xml_identifier,
+        });
+    }
+    Ok(associated_files)
+}
+
+#[tauri::command]
+pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] get_project_groups - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot get groups.".to_string());
+    }
+    info!("[CMD] get_project_groups for project_id: {}", project_id);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::get_groups_for_project(&conn, &project_id) {
+        Ok(groups_from_db) => {
+            info!("[CMD] get_project_groups - Found {} groups for project_id: {}", groups_from_db.len(), project_id);
+            let groups_for_frontend: Vec<GroupData> = groups_from_db
+                .into_iter()
+                .map(|g_db| GroupData {
+                    id: g_db.id,
+                    project_id: g_db.project_id,
+                    name: g_db.name,
+                    description: g_db.description,
+                    // created_at and updated_at from GroupDataFromDb are not included in GroupData for now
+                })
+                .collect();
+            Ok(groups_for_frontend)
+        }
+        Err(e) => {
+            error!("[CMD] get_project_groups - Failed for project_id {}: {}", project_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn add_file_to_existing_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] add_file_to_existing_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot add file to group.".to_string());
+    }
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] add_file_to_existing_group - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot add file to group.".to_string());
+    }
+    info!("[CMD] add_file_to_existing_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e.to_string()));
+        }
+    };
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e.to_string()));
+        }
+    };
+
+    match db_handler::add_file_to_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(_) => {
+            info!("[CMD] add_file_to_existing_group - File added successfully to group {}", group_id);
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] add_file_to_existing_group - Failed for group_id {}: {}", group_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+// --- End Group Commands ---
 
 #[derive(Clone, serde::Serialize)]
 struct MediaRenamedPayload {

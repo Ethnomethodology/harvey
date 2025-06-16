@@ -9,6 +9,7 @@
     import ImageView from './images/ImageView.svelte';
     import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte';
     import MediaView from './media/MediaView.svelte';
+    import GroupDetailView from './groups/GroupDetailView.svelte'; // Added
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
     import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
@@ -59,9 +60,13 @@
                 typeFromStore = 'images';
             } else {
                 console.warn(`[NotesView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
-                typeFromStore = 'placeholder';
+                typeFromStore = 'placeholder'; // Default if no other type matches
             }
+        } else if (value.selectedGroupId && value.selectedGroupData) {
+            pathFromStore = value.selectedGroupId; // Using groupId as the "path" for keying the view
+            typeFromStore = 'group_detail';
         }
+
 
         if (activeItemPath !== pathFromStore || activeViewType !== typeFromStore) {
             activeItemPath = pathFromStore;
@@ -156,9 +161,11 @@
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Video View Placeholder (NotesView)</span></div>
                  {:else if activeViewType === 'transcripts'}
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Media Transcript View Placeholder (NotesView - this shouldn't normally be active here)</span></div>
+                {:else if activeViewType === 'group_detail' && $project.selectedGroupData}
+                    <GroupDetailView groupData={$project.selectedGroupData} />
                 {:else}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
-                        <span>Selected view type '{activeViewType}' not recognized or item path invalid.</span>
+                        <span>Selected view type '{activeViewType}' not recognized, item path invalid, or required data missing.</span>
                     </div>
                 {/if}
             {/key}

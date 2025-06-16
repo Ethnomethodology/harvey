@@ -1,16 +1,17 @@
 <!-- src/lib/components/projectview/notes/NotesLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js'; // Added prepareMediaNoteView
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup } from '$lib/stores/projectStore.js'; // Added setSelectedGroup
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
+    import CreateGroupModal from '../modals/CreateGroupModal.svelte'; // III.4
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
-    import { invoke, convertFileSrc } from '@tauri-apps/api/core'; // Added invoke
-    import { type as getOsType } from '@tauri-apps/plugin-os'; // Updated import
+    import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+    import { type as getOsType } from '@tauri-apps/plugin-os';
     import CategoryTooltip from './CategoryTooltip.svelte';
 
     const dispatch = createEventDispatcher();
@@ -19,38 +20,33 @@
 
     function handleToggleNotesLeftPanel() {
         tooltipVisible = false;
-        console.log('[NotesLeftPanel] handleToggleNotesLeftPanel called');
         panelStateStore.toggleNotesLeftPanel();
-    }
-
-    $: {
-        if ($panelStateStore && typeof $panelStateStore.notesLeftPanelCollapsed !== 'undefined') {
-            console.log('[NotesLeftPanel] Detected change in $panelStateStore.notesLeftPanelCollapsed:', $panelStateStore.notesLeftPanelCollapsed);
-        }
     }
 
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
-
-    // Metadata related variables removed
-    // let currentFileMetadata = null;
-    // let fullLoadedMetadataObject = null;
-    // let isEditing = false;
-    // let editableMetadata = { ... };
-
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
     let categoryContextMenuType = null;
+    let revealButtonLabel = 'Open File Location';
 
-    let revealButtonLabel = 'Open File Location'; // Default generic label
+    // --- Group Sub-Menu State & Handlers (Step III.3 & III.4) ---
+    let projectGroups = [];
+    let showGroupSubMenu = false;
+    let groupSubMenuX = 0;
+    let groupSubMenuY = 0;
+    let groupSubMenuItem = null;
+    let showCreateGroupModal = false; // For Step III.4
+    let addToGroupHoverTimer = null; // For hover effect
+    const FOLDER_PLUS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder-plus mr-2" viewBox="0 0 16 16"><path d="m.5 3 .04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2m5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98A1 1 0 0 1 2.5 2h3.672z"/><path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5"/></svg>`;
 
     function handleCategoryContextMenu(event, categoryType) {
       event.preventDefault();
       event.stopPropagation();
-      if (categoryContextMenuVisible) {
-        closeCategoryContextMenu();
-      }
+      if (categoryContextMenuVisible) closeCategoryContextMenu();
+      if (showGroupSubMenu) closeGroupSubMenu();
+
       categoryContextMenuType = categoryType;
       const rect = event.currentTarget.getBoundingClientRect();
       categoryContextMenuX = rect.right + 4;
@@ -63,38 +59,152 @@
       categoryContextMenuType = null;
     }
 
-    onMount(async () => {
-      console.log('[NotesLeftPanel] Initial AUDIO_EXTENSIONS:', Array.from(AUDIO_EXTENSIONS));
-      console.log('[NotesLeftPanel] Initial VIDEO_EXTENSIONS:', Array.from(VIDEO_EXTENSIONS));
+    function closeGroupSubMenu() {
+        showGroupSubMenu = false;
+    }
 
-      // OS-specific label logic
-      try {
-        const currentOs = await getOsType(); // e.g., 'windows', 'linux', 'macos'
-        if (currentOs === 'windows') {
-          revealButtonLabel = 'Reveal in Explorer';
-        } else if (currentOs === 'macos') { // Tauri v2 returns 'macos' for Darwin
-          revealButtonLabel = 'Reveal in Finder';
-        } else { // 'linux' or any other
-          revealButtonLabel = 'Open File Location';
+    async function fetchProjectGroups() {
+        if ($project && $project.id) { // Changed from project_uuid to id
+            try {
+                const groups = await invoke('get_project_groups', { projectId: $project.id }); // Changed from project_uuid to id
+                projectGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
+            } catch (error) {
+                console.error('[NotesLeftPanel] Error fetching project groups:', error);
+                projectGroups = [];
+            }
+        } else {
+            projectGroups = [];
         }
-      } catch (e) {
-        console.error("Error getting OS type:", e);
-        // Keep default label if error occurs
-      }
+    }
 
-      const listener = () => {
-        if (categoryContextMenuVisible) closeCategoryContextMenu();
+    $: if ($project && $project.id) { // Changed from project_uuid to id
+        fetchProjectGroups();
+    }
+
+    onMount(async () => {
+      await fetchProjectGroups();
+
+      try {
+        const currentOs = await getOsType();
+        if (currentOs === 'windows') revealButtonLabel = 'Reveal in Explorer';
+        else if (currentOs === 'macos') revealButtonLabel = 'Reveal in Finder';
+        else revealButtonLabel = 'Open File Location';
+      } catch (e) { console.error("Error getting OS type:", e); }
+
+      const listener = (event) => {
+        const categoryMenuElement = document.getElementById('notes-left-panel-category-context-menu');
+        if (categoryContextMenuVisible && categoryMenuElement && !categoryMenuElement.contains(event.target)) {
+            const categoryButton = document.querySelector(`[aria-controls="category-content-${categoryContextMenuType}"]`);
+            if (!categoryButton || !categoryButton.contains(event.target)) {
+                 closeCategoryContextMenu();
+            }
+        }
+
+        const groupSubMenuElement = document.getElementById('notes-left-panel-group-sub-menu');
+        if (showGroupSubMenu && groupSubMenuElement && !groupSubMenuElement.contains(event.target)) {
+            closeGroupSubMenu();
+        }
       };
-      document.addEventListener('click', listener);
-      return () => document.removeEventListener('click', listener);
+      document.addEventListener('click', listener, { capture: true });
+
+      return () => document.removeEventListener('click', listener, { capture: true });
     });
+
+    function handleShowAddToGroupSubMenu(event, item) {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
+        if (categoryContextMenuVisible) closeCategoryContextMenu();
+
+        groupSubMenuItem = item;
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+
+        // Position submenu to the right of the "Add to Group" button
+        groupSubMenuX = buttonRect.right + 2;
+        groupSubMenuY = buttonRect.top;
+
+        const menuWidthEstimate = 160; // Approx width of the submenu
+        const menuHeightEstimate = (projectGroups.length * 28) + 40 + 10; // Estimate height based on items
+
+        // Adjust if submenu goes off-screen
+        if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
+            groupSubMenuX = buttonRect.left - menuWidthEstimate -2; // Position to the left
+        }
+        if (groupSubMenuY + menuHeightEstimate > window.innerHeight) {
+             groupSubMenuY = Math.max(5, window.innerHeight - menuHeightEstimate - 5); // Adjust vertically
+        }
+
+        showGroupSubMenu = true;
+        // Do not close main context menu immediately, allow mouse to travel
+        // closeContextMenu();
+    }
+
+    function handleLeaveAddToGroupButton() {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
+        addToGroupHoverTimer = setTimeout(() => {
+            if (showGroupSubMenu) { // Check if mouse is not over submenu
+                 const subMenuEl = document.getElementById('notes-left-panel-group-sub-menu');
+                 if (subMenuEl && !subMenuEl.matches(':hover')) {
+                    closeGroupSubMenu();
+                 }
+            }
+        }, 200); // Adjust delay as needed
+    }
+
+    function handleEnterGroupSubMenu() {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
+    }
+
+    function handleLeaveGroupSubMenu() {
+        closeGroupSubMenu();
+    }
+
+    function handleNewGroupClick() { // For Step III.4
+        // groupSubMenuItem is set when the "Add to Group" submenu is opened,
+        // and this "New group..." button is inside that submenu.
+        // Thus, groupSubMenuItem should typically be set here.
+        // The CreateGroupModal's fileToAdd prop will use groupSubMenuItem.
+        // If groupSubMenuItem were null, fileToAdd would be null, which is acceptable for creating an empty group.
+
+        if (!$project || !$project.id || String($project.id).trim() === "" || String($project.id) === "null") { // Changed to $project.id
+            message('Project ID is not available from $project.id. Cannot create a new group. Please ensure the project is fully loaded.', { title: 'Error', type: 'error' }); // Updated message
+            closeGroupSubMenu(); // Ensure submenu is closed
+            return;
+        }
+        closeGroupSubMenu();
+        showCreateGroupModal = true;
+    }
+
+    async function handleAddFileToExistingGroup(group) {
+        if (!groupSubMenuItem || !$project || !$project.id) { // Changed from project_uuid to id
+            await message('Cannot add to group: Missing item or project context (project ID).', { title: 'Error', type: 'error' }); // Updated message
+            closeGroupSubMenu();
+            return;
+        }
+        const relativePath = groupSubMenuItem.relativePath;
+        if (!relativePath) {
+            await message('Cannot add to group: Item relative path is missing.', { title: 'Error', type: 'error' });
+            closeGroupSubMenu();
+            return;
+        }
+        try {
+            await invoke('add_file_to_existing_group', {
+                projectId: $project.id, // Changed from project_uuid to id
+                groupId: group.id,
+                fileAssetRelativePath: relativePath
+            });
+            await message(`File ${groupSubMenuItem.name} added to group ${group.name}.`, { title: 'Success', type: 'info' });
+        } catch (err) {
+            await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
+        } finally {
+            closeGroupSubMenu();
+        }
+    }
 
     const CATEGORIES_BASE = [
         { name: 'Audios', type: 'audio', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`, importEnabled: true },
         { name: 'Documents', type: 'document', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-files w-4 h-4" viewBox="0 0 16 16"><path d="M13 0H6a2 2 0 0 0-2 2 2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2 2 2 0 0 0 2-2V2a2 2 0 0 0-2-2m0 13V4a2 2 0 0 0-2-2H5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1M3 4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>`, importEnabled: true },
         { name: 'Images', type: 'image', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-images w-4 h-4" viewBox="0 0 16 16"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2M14 2H4a1 1 0 0 0-1 1h9.002a2 2 0 0 1 2 2v7A1 1 0 0 0 15 11V3a1 1 0 0 0-1-1M2.002 4a1 1 0 0 0-1 1v8l2.646-2.354a.5.5 0 0 1 .63-.062l2.66 1.773 3.71-3.71a.5.5 0 0 1 .577-.094l1.777 1.947V5a1 1 0 0 0-1-1z"/></svg>`, importEnabled: true },
         { name: 'Tables', type: 'table', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-table w-4 h-4" viewBox="0 0 16 16"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm15 2h-4v3h4zm0 4h-4v3h4zm0 4h-4v3h3a1 1 0 0 0 1-1zm-5 3v-3H6v3zm-5 0v-3H1v2a1 1 0 0 0 1 1zm-4-4h4V8H1zm0-4h4V4H1zm5-3v3h4V4zm4 4H6v3h4z"/></svg>`, importEnabled: true },
-        { name: 'Transcripts', type: 'imported_transcript', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`, importEnabled: true }, 
+        { name: 'Transcripts', type: 'imported_transcript', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`, importEnabled: true },
         { name: 'Videos', type: 'video', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-film w-4 h-4" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`, importEnabled: true },
     ];
     const IMPORT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"><path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/></svg>`;
@@ -108,10 +218,6 @@
 
 	let showRenameModal = false; let itemToRename = null; let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null; let closeContextMenuListener = null;
     let categoryOpenState = {}; const LS_KEY_NOTES_PANEL_STATE = 'harveyNotesPanelCategoryState';
-
-    // SVG Icon constants for metadata edit/cancel removed
-    // const EDIT_ICON_SVG = ...
-    // const CANCEL_ICON_SVG = ...
 
     onMount(() => { const defaultState = {}; CATEGORIES_BASE.forEach(cat => { defaultState[cat.type] = true; }); try { const savedState = localStorage.getItem(LS_KEY_NOTES_PANEL_STATE); if (savedState) { const parsedState = JSON.parse(savedState); categoryOpenState = { ...defaultState, ...parsedState }; } else { categoryOpenState = defaultState; } } catch (e) { console.error("[NotesLeftPanel] Failed load category state:", e); categoryOpenState = defaultState; } });
     function toggleCategory(categoryType) { if (categoryOpenState.hasOwnProperty(categoryType)) { categoryOpenState[categoryType] = !categoryOpenState[categoryType]; categoryOpenState = categoryOpenState; } else { console.warn(`[NotesLeftPanel] Toggle unknown category: ${categoryType}`); } }
@@ -154,7 +260,8 @@
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path) {
                     const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
-                    const mediaData = { name: node.name, path: node.path, media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
+                    const relativePath = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
+                    const mediaData = { name: node.name, path: node.path, relativePath: relativePath.replace(/\\/g, '/'), media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
                     if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); }
                     else if (AUDIO_EXTENSIONS.has(ext)) { audios.push(mediaData); }
                 }
@@ -242,7 +349,6 @@
 
         if (categoryType === 'video' || categoryType === 'audio') {
             try { 
-                // Pass 'notes' as the sourceView
                 await importMediaFile(categoryType, 'notes');
             } catch (e) { console.error(`[NotesLeftPanel] Error importMediaFile ${categoryType}:`, e); }
         } else if (categoryType === 'document') {
@@ -284,7 +390,11 @@
         const itemPathForClosure = item.path;
         const itemType = item.file_type; 
         const isPdf = item.name?.toLowerCase().endsWith('.pdf');
-        closeContextMenu();
+        // Do not close main context menu here if "Add to Group" is clicked, as it will be handled by handleShowAddToGroupSubMenu
+        if (action !== 'AddToGroup') { // Assuming 'AddToGroup' would be a specific action string if passed here
+            closeContextMenu();
+        }
+
 
         if (action === 'Reveal') {
             if (!itemPathForClosure) {
@@ -299,51 +409,47 @@
                 console.error(`[NotesLeftPanel] Error revealing item ${itemPathForClosure}:`, err);
                 await message(`Could not reveal item: ${err}`, { title: 'Error', type: 'error' });
             }
-            return; // Action handled
+            return;
         }
 
         if (itemType === 'media') { 
             switch (action) {
                 case 'Open': 
-                    console.log(`[NotesLeftPanel] 'Open' action for media: ${item.name}`);
                     dispatch('requestviewchange', { viewType: 'media_note', itemPath: item.path });
                     break;
                 case 'Rename': itemToRename = { path: item.path, name: item.media_xml_identifier, file_type: 'media', media_xml_identifier: item.media_xml_identifier }; showRenameModal = true; break;
                 case 'Delete': const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name); const confirmMsg = `Delete media "${stemName}"? This deletes the entire folder (media, transcripts, notes). Cannot be undone.`; const options = { title: 'Confirm Media Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmMsg, options); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${stemName}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${stemName}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error confirm/delete:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
-                case 'Transcribe': if (!item.path) { console.error("[NotesLeftPanel] Cannot transcribe: Media path missing."); await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for media: ${action}`); await message(`Action '${action}' not yet implemented for media.`, { title: 'Not Implemented', type: 'info' });
+                case 'Transcribe': if (!item.path) { await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for media: ${action}`);
             }
         } else if (itemType === 'doc') {
             switch (action) {
-                case 'Open': if (isPdf) { console.log(`[NotesLeftPanel] 'Open Externally' action for PDF: ${item.name}`); try { await openerPlugin.open(item.path); } catch (e) { console.error(`[NotesLeftPanel] Failed to open PDF externally: ${e}`); await message(`Could not open PDF externally: ${e}`, { title: 'Open Error', type: 'error'}); } } else { console.log(`[NotesLeftPanel] 'Open' action for JSON document: ${item.name}`); dispatch('requestviewchange', { viewType: 'documents', itemPath: item.path }); } break;
+                case 'Open': if (isPdf) { try { await openerPlugin.open(item.path); } catch (e) { await message(`Could not open PDF externally: ${e}`, { title: 'Open Error', type: 'error'}); } } else { dispatch('requestviewchange', { viewType: 'documents', itemPath: item.path }); } break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'doc', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmDocMsg = `Delete document "${item.name}"? Cannot be undone.`; const docOptions = { title: 'Confirm Document Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmDocMsg, docOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting document: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${item.name}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error confirm/delete doc:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for document: ${action}`); await message(`Action '${action}' not implemented for documents.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmDocMsg = `Delete document "${item.name}"? Cannot be undone.`; const docOptions = { title: 'Confirm Document Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmDocMsg, docOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for ${item.name}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for document: ${action}`);
             }
         } else if (itemType === 'table') {
              switch (action) {
-                case 'Open': console.log(`[NotesLeftPanel] 'Open' action for table: ${item.name}`); dispatch('requestviewchange', { viewType: 'tables', itemPath: item.path }); break;
+                case 'Open': dispatch('requestviewchange', { viewType: 'tables', itemPath: item.path }); break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'table', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmTableMsg = `Delete table "${item.name}"? This cannot be undone.`; const tableOptions = { title: 'Confirm Table Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmTableMsg, tableOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting table: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for table ${item.name}:`, err); await message(`Error deleting table: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Table deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error during confirm/delete table:", e); await message(`Error deleting table: ${e}`, { title: "Delete Error", type: "error" }); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for table: ${action}`); await message(`Action '${action}' not implemented for tables.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmTableMsg = `Delete table "${item.name}"? This cannot be undone.`; const tableOptions = { title: 'Confirm Table Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmTableMsg, tableOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { await message(`Error deleting table: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Table deletion cancelled.' })); } } catch (e) { await message(`Error deleting table: ${e}`, { title: "Delete Error", type: "error" }); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for table: ${action}`);
             }
         } else if (itemType === 'image') {
              switch (action) {
-                case 'Open': console.log(`[NotesLeftPanel] 'Open' action for image: ${item.name}`); dispatch('requestviewchange', { viewType: 'images', itemPath: item.path }); break;
+                case 'Open': dispatch('requestviewchange', { viewType: 'images', itemPath: item.path }); break;
                 case 'Rename': itemToRename = { path: item.path, name: item.name, file_type: 'image', media_xml_identifier: null }; showRenameModal = true; break;
-                case 'Delete': const confirmImageMsg = `Delete image "${item.name}"? This cannot be undone.`; const imageOptions = { title: 'Confirm Image Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmImageMsg, imageOptions); if (confirmed) { console.log(`[NotesLeftPanel] Deleting image: ${itemPathForClosure}`); project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[NotesLeftPanel] Delete failed for image ${item.name}:`, err); await message(`Error deleting image: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Image deletion cancelled.' })); } } catch (e) { console.error("[NotesLeftPanel] Error during confirm/delete image:", e); await message(`Error deleting image: ${e}`, { title: "Delete Error", type: "error" }); } break;
-                default: console.warn(`[NotesLeftPanel] Unknown action for image: ${action}`); await message(`Action '${action}' not implemented for images.`, { title: 'Not Implemented', type: 'info' });
+                case 'Delete': const confirmImageMsg = `Delete image "${item.name}"? This cannot be undone.`; const imageOptions = { title: 'Confirm Image Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmImageMsg, imageOptions); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { await message(`Error deleting image: ${err}`, { title: "Delete Error", type: "error" }); } } else { project.update(p => ({ ...p, statusMessage: 'Image deletion cancelled.' })); } } catch (e) { await message(`Error deleting image: ${e}`, { title: "Delete Error", type: "error" }); } break;
+                default: console.warn(`[NotesLeftPanel] Unknown action for image: ${action}`);
             }
         } else if (itemType === 'imported_transcript') { 
             switch (action) {
                 case 'Open': 
-                    console.log(`[NotesLeftPanel] 'Open' action for imported transcript: ${item.name}`);
                     dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
                     break;
                 case 'Rename': 
-                    const nameWithoutExt = item.name.toLowerCase().endsWith('.json') 
-                                            ? item.name.slice(0, -5) 
-                                            : item.name;
+                    const nameWithoutExt = item.name.toLowerCase().endsWith('.json') ? item.name.slice(0, -5) : item.name;
                     itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
                     showRenameModal = true; 
                     break;
@@ -353,25 +459,12 @@
                     try {
                         const confirmed = await confirm(confirmTranscriptMsg, transcriptOptions);
                         if (confirmed) {
-                            try {
-                                await deleteImportedTranscript(item.path);
-                                // Clear any open transcript view so the panel updates
-                                project.update(p => ({ ...p, currentImportedTranscriptPath: null }));
-                            } catch (err) {
-                                console.error('[NotesLeftPanel] Error deleting imported transcript:', err);
-                                await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' });
-                            }
-                        } else {
-                            project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' }));
-                        }
-                    } catch (e) {
-                        console.error('[NotesLeftPanel] Error during confirm/delete imported transcript:', e);
-                        await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });
-                    }
+                            try { await deleteImportedTranscript(item.path); project.update(p => ({ ...p, currentImportedTranscriptPath: null })); }
+                            catch (err) { await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' }); }
+                        } else { project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' })); }
+                    } catch (e) { await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });}
                     break;
-                default: 
-                    console.warn(`[NotesLeftPanel] Unknown action for imported transcript: ${action}`); 
-                    await message(`Action '${action}' not implemented for imported transcripts.`, { title: 'Not Implemented', type: 'info' });
+                default: console.warn(`[NotesLeftPanel] Unknown action for imported transcript: ${action}`);
             }
         }
     }
@@ -380,65 +473,40 @@
         const { newName } = event.detail; 
         const item = itemToRename;
         if (!item || !newName || newName.trim() === '') { console.error("[NotesLeftPanel] Rename failed: Invalid input."); showRenameModal = false; itemToRename = null; return; }
-
         const finalNewNameFromModal = newName.trim(); 
         showRenameModal = false;
-
         if (item.file_type === 'media') {
             const finalNewStemName = finalNewNameFromModal;
             const confirmRename = await confirm(`Rename media '${item.media_xml_identifier}' to '${finalNewStemName}'? Renames folder & primary transcript.`, { title: 'Confirm Media Rename', type: 'warning', okLabel: 'Rename', cancelLabel: 'Cancel' });
-            if (!confirmRename) { console.log("[NotesLeftPanel] Media rename cancelled."); itemToRename = null; return; }
+            if (!confirmRename) { itemToRename = null; return; }
             try { await renameProjectItem(item.path, finalNewStemName, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.media_xml_identifier}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'doc') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".pdf"
-
-            if (!originalExtension) {
-                await message(`Error: Original file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedExts = ['.json', '.pdf', '.md', '.txt'];
             if (!allowedExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original file type '${originalExtension}' cannot be renamed via this interface.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'table') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".csv"
-
-            if (!originalExtension) {
-                await message(`Error: Original table file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original table file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedTableExts = ['.csv', '.xlsx'];
             if (!allowedTableExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original table file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for table ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'image') {
             const stemNameFromModal = finalNewNameFromModal;
-            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : ''; // e.g. ".png"
-
-            if (!originalExtension) {
-                await message(`Error: Original image file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' });
-                itemToRename = null; return;
-            }
-
+            const originalExtension = item.name.includes('.') ? item.name.substring(item.name.lastIndexOf('.')) : '';
+            if (!originalExtension) { await message(`Error: Original image file '${item.name}' appears to have no extension. Cannot rename.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
             const allowedImageExts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'];
             if (!allowedImageExts.includes(originalExtension.toLowerCase())) { await message(`Error: Original image file type '${originalExtension}' cannot be renamed like this.`, { title: 'Rename Error', type: 'error' }); itemToRename = null; return; }
-            
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
-
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[NotesLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
             const nameForBackend = finalNewNameFromModal; 
-            try { 
-                await renameProjectItem(item.path, nameForBackend, item.file_type); 
-            } 
+            try { await renameProjectItem(item.path, nameForBackend, item.file_type); }
             catch (err) { console.error(`[NotesLeftPanel] Rename failed for imported transcript ${item.name}:`, err); } 
             finally { itemToRename = null; }
         } else {
@@ -450,13 +518,11 @@
 
     async function handleItemClick(item) {
         if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript' || item.file_type === 'media') { 
-            console.log(`[NotesLeftPanel] Clicked ${item.file_type}: ${item.name}. Requesting view change.`);
             let viewType = item.file_type; 
             if (item.file_type === 'doc') viewType = 'documents';
             else if (item.file_type === 'table') viewType = 'tables';
             else if (item.file_type === 'image') viewType = 'images';
             else if (item.file_type === 'media') viewType = 'media_note'; 
-
             dispatch('requestviewchange', { viewType, itemPath: item.path });
         }
     }
@@ -491,6 +557,17 @@
   
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
+    function handleGroupSelected(group) {
+        if (group && group.id) {
+            console.log(`[NotesLeftPanel] Group selected: ${group.name} (ID: ${group.id})`);
+            // setSelectedGroup action will clear other selections (docs, media)
+            // and set selectedGroupId and selectedGroupData in the store.
+            setSelectedGroup(group.id, group);
+        } else {
+            console.warn("[NotesLeftPanel] Attempted to select an invalid group:", group);
+        }
+    }
+
     let tooltipVisible = false;
     let tooltipCategoryName = '';
     let tooltipFiles = [];
@@ -500,7 +577,6 @@
     function showTooltip(event, category) {
         const buttonRect = event.currentTarget.getBoundingClientRect();
         const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
-
         tooltipCategoryName = category.name;
         tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
         tooltipX = buttonRect.right + 8;
@@ -520,53 +596,33 @@ $: {
         const extension = path.split('.').pop()?.toLowerCase() || '';
         let determinedItemType = null;
 
-        if (AUDIO_EXTENSIONS.has(extension)) {
-            determinedItemType = 'audio';
-        } else if (VIDEO_EXTENSIONS.has(extension)) {
-            determinedItemType = 'video';
-        } else {
-            // Check specific project file lists for other types
-            // IMPORTANT: IMAGE_EXTENSIONS is already defined in the file.
-            // Define Table and specific Document extensions for clarity.
+        if (AUDIO_EXTENSIONS.has(extension)) determinedItemType = 'audio';
+        else if (VIDEO_EXTENSIONS.has(extension)) determinedItemType = 'video';
+        else {
             const TABLE_EXTENSIONS = new Set(['csv', 'xlsx']);
-            const DOC_JSON_EXTENSIONS = new Set(['json']); // Specifically for general JSON documents
-            const TRANSCRIPT_EXTENSIONS = new Set(['json']); // Specifically for transcript JSON
-
+            const DOC_JSON_EXTENSIONS = new Set(['json']);
+            const TRANSCRIPT_EXTENSIONS = new Set(['json']);
             const projectFileListsForOthers = [
-                // Order can be important if extensions overlap (e.g., JSON for transcripts vs general docs)
                 { files: $project.importedTranscriptFiles, type: 'imported_transcript', isRelative: true, exts: TRANSCRIPT_EXTENSIONS },
                 { files: $project.imageFiles, type: 'image', isRelative: true, exts: IMAGE_EXTENSIONS },
                 { files: $project.tableFiles, type: 'table', isRelative: true, exts: TABLE_EXTENSIONS },
-                { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) } // Add others like pdf, txt, md
+                { files: $project.documentFiles, type: 'document', isRelative: true, exts: new Set(['pdf', 'txt', 'md', ...DOC_JSON_EXTENSIONS]) }
             ];
-
             for (const listInfo of projectFileListsForOthers) {
                 if (listInfo.files?.some(f => {
                     const filePathToCheck = listInfo.isRelative ? `${$project.baseDirectory}/${f.relativePath}` : f.path;
-                    // Check path AND also that the extension matches the list's specified extensions
                     return filePathToCheck === path && (listInfo.exts ? listInfo.exts.has(extension) : true);
                 })) {
                     determinedItemType = listInfo.type;
                     break;
                 }
             }
-
-            // Fallback for general document types if not caught by specific lists AND not already determined
             if (!determinedItemType) {
-                if (extension === 'pdf' || extension === 'txt' || extension === 'md') {
-                    determinedItemType = 'document';
-                } else if (DOC_JSON_EXTENSIONS.has(extension)) {
-                    // This ensures any .json not caught as a transcript (checked first) or specific document type
-                    // is treated as a general document.
-                    determinedItemType = 'document';
-                }
-                // Note: Fallbacks for table or image extensions are less likely needed here
-                // if they are robustly caught by $project.tableFiles / $project.imageFiles with their exts.
+                if (extension === 'pdf' || extension === 'txt' || extension === 'md') determinedItemType = 'document';
+                else if (DOC_JSON_EXTENSIONS.has(extension)) determinedItemType = 'document';
             }
         }
-
         activeCollapsedCategoryType = determinedItemType;
-        console.log('[NotesLeftPanel] Active Category Type for Highlighting:', activeCollapsedCategoryType);
     } else {
         activeCollapsedCategoryType = null;
     }
@@ -633,59 +689,108 @@ $: {
 	</h2>
 
 {#if !$panelStateStore.notesLeftPanelCollapsed}
-	<div class="flex-grow overflow-y-auto min-h-0 -mr-2 pr-2">
-		<ul class="space-y-2 text-xs">
-            {#each filteredCategories as category (category.type)}
-                <li>
-                    <div
-                        class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
-                        on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
-                        <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
-                            <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
-                            <span class="flex-shrink-0">{@html category.icon}</span>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
+    <div class="flex flex-col flex-grow overflow-hidden">
+        <!-- Top 2/3 for Categories -->
+        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 66.66%;">
+            <ul class="space-y-2 text-xs">
+                {#each filteredCategories as category (category.type)}
+                    <li>
+                        <div
+                            class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                            on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
+                            <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
+                                <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
+                                <span class="flex-shrink-0">{@html category.icon}</span>
+                                <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
+                              title="Options"
+                              on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
+                              disabled={!category.importEnabled}
+                            >
+                              {@html CONTEXT_MENU_ICON_SVG}
+                            </button>
                         </div>
-                        <button
-                          type="button"
-                          class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
-                          title="Options"
-                          on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
-                          disabled={!category.importEnabled}
-                        >
-                          {@html CONTEXT_MENU_ICON_SVG}
-                        </button>
-                    </div>
 
-                    {#if categoryOpenState[category.type]}
-                        <div id={`category-content-${category.type}`} role="region">
-                            {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
-                                <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
-                                    {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
-                                        <li class="group">
-                                            <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
-                                                 on:click={() => handleItemClick(fileItem) }
-                                                 on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
-                                                <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
-                                                    <span>{fileItem.name}</span>
-                                                </span>
-                                                <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
-                                            </div>
-                                        </li>
-                                    {/each}
-                                </ul>
-                            {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
-                                <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
-                            {:else}
-                                 <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
-                            {/if}
-                         </div>
-                    {/if}
-                </li>
-                 {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if}
-            {/each}
-        </ul>
-        {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
-	</div>
+                        {#if categoryOpenState[category.type]}
+                            <div id={`category-content-${category.type}`} role="region">
+                                {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
+                                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
+                                        {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
+                                            <li class="group">
+                                                <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                     on:click={() => handleItemClick(fileItem) }
+                                                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
+                                                    <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
+                                                        <span>{fileItem.name}</span>
+                                                    </span>
+                                                    <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
+                                                </div>
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
+                                    <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
+                                {:else}
+                                     <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
+                                {/if}
+                             </div>
+                        {/if}
+                    </li>
+                    {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if}
+                {/each}
+            </ul>
+            {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
+        </div>
+
+        <!-- Separator -->
+        <hr class="border-gray-300 dark:border-gray-600 my-2 mx-1">
+
+        <!-- Bottom 1/3 for Groups -->
+        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 33.33%;">
+            <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
+                <span class="mr-1.5 flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection-fill w-3.5 h-3.5" viewBox="0 0 16 16"><path d="M0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zM2 3a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 0-1h-11A.5.5 0 0 0 2 3m2-2a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 0-1h-7A.5.5 0 0 0 4 1"/></svg>
+                </span>
+                Groups
+            </h3>
+            <ul class="space-y-1 text-xs">
+                {#if projectGroups && projectGroups.length > 0}
+                    {#each projectGroups as group (group.id)}
+                        <li class="group">
+                            <div
+                                class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                class:bg-blue-100={$project.selectedGroupId === group.id}
+                                class:dark:bg-blue-800={$project.selectedGroupId === group.id}
+                                on:click={() => handleGroupSelected(group)}
+                                role="button"
+                                tabindex="0"
+                                on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
+                                title={group.name}
+                            >
+                                <span class="flex items-center space-x-1.5 text-gray-800 dark:text-gray-200 truncate"
+                                    class:!text-blue-700={$project.selectedGroupId === group.id}
+                                    class:dark:!text-blue-200={$project.selectedGroupId === group.id}
+                                >
+                                    <span class="flex-shrink-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-collection" viewBox="0 0 16 16">
+                                          <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
+                                        </svg>
+                                    </span>
+                                    <span>{group.name}</span>
+                                </span>
+                                <!-- <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {group.name}"> {@html CONTEXT_MENU_ICON_SVG} </button> -->
+                            </div>
+                        </li>
+                    {/each}
+                {:else}
+                    <p class="ml-2.5 text-xs text-gray-400 dark:text-gray-500 italic py-1">No groups created yet.</p>
+                {/if}
+            </ul>
+        </div>
+    </div>
 {:else}
     <!-- Collapsed Content (Vertical Icons) -->
     <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
@@ -717,16 +822,21 @@ $: {
     </div>
 {/if}
 
-    <!-- Metadata Display Section Removed -->
-
 	{#if contextMenuVisible && contextMenuItem && !$panelStateStore.notesLeftPanelCollapsed}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
-
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -736,33 +846,61 @@ $: {
                  {:else}
                      <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  {/if}
-
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center justify-between w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    Add to Group
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right w-3 h-3" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
-
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
@@ -771,6 +909,30 @@ $: {
             {/if}
 		</div>
 	{/if}
+
+    {#if showGroupSubMenu && groupSubMenuItem}
+        <div
+            id="notes-left-panel-group-sub-menu"
+            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]"
+            style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
+            on:mouseenter={handleEnterGroupSubMenu}
+            on:mouseleave={handleLeaveGroupSubMenu}
+            on:click|stopPropagation>
+            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
+            <hr class="my-1 border-gray-200 dark:border-gray-600" />
+            {#if projectGroups && projectGroups.length > 0}
+                {#each projectGroups as group (group.id)}
+                    <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
+                        <!-- Removed folder icon from here -->
+                        <span class="ml-1">{group.name}</span> <!-- Added ml-1 for slight indent if needed, or adjust as per design -->
+                    </button>
+                {/each}
+            {:else}
+                <span class="block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-500 italic">No existing groups</span>
+            {/if}
+        </div>
+    {/if}
+
     {#if categoryContextMenuVisible && !$panelStateStore.notesLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
@@ -809,7 +971,24 @@ $: {
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={handleImportTranscriptConfirm} on:close={() => showImportTranscriptModal = false} />
-
+<CreateGroupModal
+    bind:showModal={showCreateGroupModal}
+    projectUuid={$project?.id}
+    fileToAdd={groupSubMenuItem}
+    on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
+    on:groupCreatedAndFileAdded={(event) => {
+        console.log('[NotesLeftPanel] Event: groupCreatedAndFileAdded', event.detail);
+        fetchProjectGroups();
+        showCreateGroupModal = false;
+        groupSubMenuItem = null;
+    }}
+    on:groupCreated={(event) => {
+        console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
+        fetchProjectGroups();
+        showCreateGroupModal = false;
+        groupSubMenuItem = null;
+    }}
+/>
 
 <style lang="postcss">
 	.overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }

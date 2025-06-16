@@ -1,6 +1,7 @@
 <!-- src/lib/components/projectview/notes/shared_panels/LeftInfoPanel.svelte -->
 <script>
     import { onMount, onDestroy } from 'svelte';
+    import { get } from 'svelte/store'; // Added
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     // fsRename might still be used by projectService.js, direct fs calls for metadata are removed.
@@ -8,6 +9,9 @@
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
+    import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte'; // Added
+    import GroupMultiSelect from '$lib/components/projectview/infopanels/GroupMultiSelect.svelte'; // Added
+    // import type { GroupData } from '$lib/types'; // Removed for JS compatibility
     import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
@@ -24,7 +28,7 @@
     let documentClickHandler = null;
 
     function showLabelTooltip(event, title, textContent) {
-        if (!$panelStateStore.leftCollapsed) return; // Ensure panel is actually collapsed
+        if (!get(panelStateStore).leftCollapsed) return; // Ensure panel is actually collapsed
 
         const GITHUB_ISSUE_MAX_TOOLTIP_WIDTH = 280; // Max width in px, adjust as needed
         const GITHUB_ISSUE_TOOLTIP_OFFSET_X = 4; // Offset from the right edge of the label
@@ -229,14 +233,62 @@
     let previousSelectedItemPath = null;
     let displayableCustomFields = [];
 
+    // State for groups
+    let fileAssignedGroups = [];
+    let allProjectGroupsForPanel = [];
+    let isLoadingFileGroups = false;
+    let isCreateGroupModalOpen = false;
+    // createGroupModalFileToAssign: string | null = null; // Type annotation removed by previous block for JS
+    let createGroupModalFileToAssign = null;
+    // currentAssetRelativePathForGroups: string | null = null; // Type annotation removed by previous block for JS
+    let currentAssetRelativePathForGroups = null;
+
+
+    async function fetchAllProjectGroups() {
+        if ($project.id) {
+            try {
+                allProjectGroupsForPanel = await invoke('get_project_groups', { projectId: $project.id });
+            } catch (error) {
+                console.error("Failed to fetch all project groups for panel:", error);
+                allProjectGroupsForPanel = [];
+            }
+        }
+    }
+
+    async function fetchFileAssignedGroups(projectId, assetRelativePath) {
+        if (!projectId || !assetRelativePath) {
+            fileAssignedGroups = [];
+            return;
+        }
+        isLoadingFileGroups = true;
+        try {
+            fileAssignedGroups = await invoke('get_groups_for_file_asset', {
+                projectId: projectId,
+                fileAssetRelativePath: assetRelativePath
+            });
+        } catch (error) {
+            console.error(`Failed to fetch groups for asset ${assetRelativePath}:`, error);
+            fileAssignedGroups = [];
+            // Optionally show a toast error to the user
+        } finally {
+            isLoadingFileGroups = false;
+        }
+    }
+
     onMount(async () => {
         previousSelectedItemPath = null;
         try {
             await loadAllDefinitions();
+            await fetchAllProjectGroups(); // Fetch all groups when component mounts and project.id is available
         } catch (error) {
-            message(`Error loading custom field definitions: ${error.message || error}`, { title: 'Error', type: 'error' });
+            message(`Error loading initial data: ${error.message || error}`, { title: 'Error', type: 'error' });
         }
     });
+
+    // Refetch all project groups if project ID changes
+    $: if ($project.id) {
+        fetchAllProjectGroups();
+    }
 
     async function loadMetadata(assetRelativePath) {
         currentFileMetadata = null;
@@ -520,11 +572,14 @@
                             isEditing = false;
                         }
                         currentOriginalAssetDetails = newOriginalAssetDetails;
+                        currentAssetRelativePathForGroups = newCurrentRelativePath; // Update for group loading
                         await loadMetadata(newCurrentRelativePath);
+                        await fetchFileAssignedGroups($project.id, newCurrentRelativePath); // Fetch groups for the new file
                         previousSelectedItemPath = newCurrentRelativePath;
                     } else if (newCurrentRelativePath && newCurrentRelativePath === previousSelectedItemPath) {
-                        console.log('[LIP Reactive] Path same as previous, but checking if original details changed.');
-                        if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newOriginalAssetDetails)) {
+                        // Path is the same, but check if original details or project ID changed, which might warrant a reload of groups if project ID was previously missing.
+                        const prevProjectId = $project.id; // Assuming $project.id might have been null before
+                        if (JSON.stringify(currentOriginalAssetDetails) !== JSON.stringify(newOriginalAssetDetails) || ($project.id && !prevProjectId)) {
                             currentOriginalAssetDetails = newOriginalAssetDetails;
                             console.log('[LIP Reactive] Updated currentOriginalAssetDetails (content changed, path same).');
                         } else {
@@ -533,28 +588,34 @@
                     } else {
                         console.warn('[LIP Reactive] Conditions NOT MET to call loadMetadata. newCurrentRelativePath:', newCurrentRelativePath, 'previousSelectedItemPath:', previousSelectedItemPath, 'Project ID valid?:', !!$project.id);
                         if (!newCurrentRelativePath && previousSelectedItemPath !== null) {
-                             console.log('[LIP Reactive] Path became null, clearing metadata.');
+                             console.log('[LIP Reactive] Path became null, clearing metadata and groups.');
                              currentFileMetadata = null;
                              fullLoadedMetadataObject = null;
                              currentOriginalAssetDetails = null;
+                             fileAssignedGroups = []; // Clear groups
+                             currentAssetRelativePathForGroups = null;
                              if (isEditing) isEditing = false;
                              previousSelectedItemPath = null;
                         }
                     }
                 } else {
-                    console.warn('[LIP Reactive] newOriginalAssetDetails is NULL. Clearing metadata. Selected path:', currentSelectedPathFromStore);
+                    console.warn('[LIP Reactive] newOriginalAssetDetails is NULL. Clearing metadata and groups. Selected path:', currentSelectedPathFromStore);
                     currentFileMetadata = null;
                     fullLoadedMetadataObject = null;
                     currentOriginalAssetDetails = null;
+                    fileAssignedGroups = []; // Clear groups
+                    currentAssetRelativePathForGroups = null;
                     if (isEditing) isEditing = false;
                     previousSelectedItemPath = null;
                 }
             } else {
-                console.warn('[LIP Reactive] Main IF condition FAILED. Clearing metadata. Path:', currentSelectedPathFromStore, 'Proj:', !!$project, 'BaseDir:', !!$project?.baseDirectory, 'ID (from $project.id):', $project?.id);
+                console.warn('[LIP Reactive] Main IF condition FAILED. Clearing metadata and groups. Path:', currentSelectedPathFromStore, 'Proj:', !!$project, 'BaseDir:', !!$project?.baseDirectory, 'ID (from $project.id):', $project?.id);
                 if (previousSelectedItemPath !== null || currentFileMetadata !== null) {
                     currentFileMetadata = null;
                     fullLoadedMetadataObject = null;
                     currentOriginalAssetDetails = null;
+                    fileAssignedGroups = []; // Clear groups
+                    currentAssetRelativePathForGroups = null;
                     if (isEditing) isEditing = false;
                     previousSelectedItemPath = null;
                 }
@@ -871,6 +932,45 @@
                 {/if}
                 <!-- End of custom fields rendering -->
 
+                <!-- Groups Section -->
+                {#if currentAssetRelativePathForGroups && $project.id}
+                    <div class="mt-3">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Groups</h3>
+                        {#if isLoadingFileGroups}
+                            <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
+                        {:else if isEditing}
+                            <GroupMultiSelect
+                                fileAssetRelativePath={currentAssetRelativePathForGroups}
+                                projectId={$project.id}
+                                allProjectGroups={allProjectGroupsForPanel}
+                                initiallyAssignedGroups={fileAssignedGroups}
+                                isEditable={isEditing}
+                                on:groupsUpdated={() => fetchFileAssignedGroups($project.id, currentAssetRelativePathForGroups)}
+                                on:createNewGroup={() => {
+                                    createGroupModalFileToAssign = currentAssetRelativePathForGroups;
+                                    isCreateGroupModalOpen = true;
+                                }}
+                                on:error={(e) => message(e.detail, { title: 'Group Error', type: 'error' })}
+                            />
+                        {:else}
+                            <!-- Read-only display -->
+                            {#if fileAssignedGroups && fileAssignedGroups.length > 0}
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    {#each fileAssignedGroups as group (group.id)}
+                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
+                                            {group.name}
+                                        </span>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <p class="text-xs text-gray-400 dark:text-gray-500 italic mt-1">No groups assigned.</p>
+                            {/if}
+                        {/if}
+                    </div>
+                {/if}
+                <!-- End of Groups Section -->
+
+
                 {#if isEditing}
                     <div class="mt-4 flex justify-end items-center">
                         <button
@@ -953,3 +1053,39 @@
 />
 
 <AddFieldModal bind:showModal={showAddFieldModal} currentItemType={currentItemType} on:close={() => showAddFieldModal = false} />
+
+{#if isCreateGroupModalOpen && $project.id}
+    <CreateGroupModal
+        bind:showModal={isCreateGroupModalOpen}
+        projectUuid={$project.id}
+        fileToAdd={createGroupModalFileToAssign ? { relativePath: createGroupModalFileToAssign, name: '' } : null}
+        on:groupCreated={async (event) => {
+            isCreateGroupModalOpen = false;
+            await fetchAllProjectGroups(); // Refresh all project groups
+            if (event.detail.group && createGroupModalFileToAssign) {
+                 // If fileToAssignOnCreate was used by modal, or if we need to ensure it's assigned
+                 // For now, rely on GroupMultiSelect's on:groupsUpdated or an explicit fetch after adding
+                 await fetchFileAssignedGroups($project.id, createGroupModalFileToAssign);
+            } else if (event.detail.group && !createGroupModalFileToAssign) {
+                // Just a group was created, no specific file to assign from here,
+                // but still refresh assigned groups for current file in case it was auto-assigned by modal, or for consistency
+                 if (currentAssetRelativePathForGroups) {
+                    await fetchFileAssignedGroups($project.id, currentAssetRelativePathForGroups);
+                 }
+            }
+            createGroupModalFileToAssign = null;
+        }}
+        on:groupCreatedAndFileAdded={async (event) => {
+            isCreateGroupModalOpen = false;
+            await fetchAllProjectGroups();
+            if (event.detail.file && event.detail.file.relativePath === currentAssetRelativePathForGroups) {
+                await fetchFileAssignedGroups($project.id, currentAssetRelativePathForGroups);
+            }
+             createGroupModalFileToAssign = null;
+        }}
+        on:close={() => {
+            isCreateGroupModalOpen = false;
+            createGroupModalFileToAssign = null;
+        }}
+    />
+{/if}

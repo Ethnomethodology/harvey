@@ -157,6 +157,14 @@ pub fn run() {
             projectview::core_commands::rename_project_item,
             projectview::core_commands::delete_project_item,
             projectview::core_commands::reveal_in_file_explorer,
+            // --- Project view GROUP commands (added) ---
+            projectview::core_commands::create_new_group,
+            projectview::core_commands::get_project_groups,
+            projectview::core_commands::add_file_to_existing_group,
+            projectview::core_commands::get_groups_for_file_asset,
+            projectview::core_commands::remove_file_from_group,
+            projectview::core_commands::get_group_contents,
+            projectview::core_commands::update_group_details,
 
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
