@@ -1,5 +1,5 @@
 <!-- src/lib/components/projectview/notes/shared_panels/LeftInfoPanel.svelte -->
-<script>
+<script lang="ts">
     import { onMount, onDestroy } from 'svelte';
     import { project } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
