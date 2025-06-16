@@ -188,6 +188,93 @@ pub async fn remove_file_from_group(project_id: String, group_id: String, file_a
 }
 
 #[tauri::command]
+pub async fn get_group_contents(project_xml_path_str: String, group_id: String) -> Result<Vec<AssociatedFile>, String> {
+    info!("[CMD] get_group_contents for group_id: {}", group_id);
+
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = project_xml_path.parent().ok_or_else(|| "Could not get project base directory.".to_string())?;
+
+    let project_data_for_uuid: ProjectXml = match fs::read_to_string(&project_xml_path){
+        Ok(content) => match quick_xml::de::from_str(&content) {
+            Ok(data) => data,
+            Err(e) => return Err(format!("Failed to parse project XML for UUID: {}", e)),
+        },
+        Err(e) => return Err(format!("Failed to read project XML for UUID: {}", e)),
+    };
+
+    let project_id_for_db = project_data_for_uuid.project_uuid;
+    if project_id_for_db.is_empty() {
+        return Err("Project ID (UUID) is missing in the project file.".to_string());
+    }
+
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] get_group_contents - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot get group contents.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => return Err(format!("Failed to get database path: {}", e)),
+    };
+    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
+    let file_associations_from_db = db_handler::get_files_for_group(&conn, &project_id_for_db, &group_id)
+        .map_err(|e| format!("Failed to get files for group from DB: {}", e))?;
+
+    let mut associated_files: Vec<AssociatedFile> = Vec::new();
+
+    for assoc in file_associations_from_db {
+        let relative_path_str = assoc.file_asset_path.clone();
+        let full_path = project_base_dir.join(&relative_path_str);
+        let file_name = full_path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+
+        let mut file_type = "other".to_string();
+        let mut media_xml_identifier: Option<String> = None;
+
+        if relative_path_str.contains(&format!("{}/", MEDIA_DIR)) {
+            let path_parts: Vec<&str> = relative_path_str.split('/').collect();
+            if path_parts.len() >= 4 && path_parts[0] == HARVEY_FILES_DIR && path_parts[1] == MEDIA_DIR {
+                // Example: harvey_files/Media/STEM_NAME/media/file.mp4 -> STEM_NAME
+                media_xml_identifier = Some(path_parts[2].to_string());
+                let ext = PathBuf::from(&file_name).extension().unwrap_or_default().to_string_lossy().to_lowercase();
+                // Check against known extensions from shared_types if they are comprehensive
+                // For now, using simple string matching as per the provided snippet
+                if ["mp4", "mov", "avi", "mkv", "webm"].contains(&ext.as_str()) {
+                    file_type = "video".to_string();
+                } else if ["mp3", "wav", "m4a", "ogg", "aac", "flac"].contains(&ext.as_str()) {
+                    file_type = "audio".to_string();
+                } else {
+                    file_type = "media_other".to_string(); // Or just "media"
+                }
+            }
+        } else if relative_path_str.contains(&format!("{}/", DOCS_DIR)) {
+            file_type = "document".to_string();
+        } else if relative_path_str.contains(&format!("{}/", IMAGES_DIR)) {
+            file_type = "image".to_string();
+        } else if relative_path_str.contains(&format!("{}/", TABLES_DIR)) {
+            file_type = "table".to_string();
+        } else if relative_path_str.contains(&format!("{}/", TRANSCRIPTS_DIR)) {
+            // This might need refinement if TRANSCRIPTS_DIR is for media-associated transcripts vs imported ones
+            // Assuming TRANSCRIPTS_DIR implies it's an imported transcript if not under a media stem.
+            // The logic in load_project_data for FileEntry might be more robust here.
+            // For now, following the provided snippet's logic.
+            file_type = "imported_transcript".to_string();
+        }
+        // TODO: Consider using a JOIN with asset_metadata to get the definitive asset_type
+        // or use/enhance shared_utils::determine_asset_type if applicable.
+
+        associated_files.push(AssociatedFile {
+            name: file_name,
+            relative_path: relative_path_str,
+            full_path: full_path.to_string_lossy().into_owned(),
+            file_type,
+            media_xml_identifier,
+        });
+    }
+    Ok(associated_files)
+}
+
+#[tauri::command]
 pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
     if project_id.is_empty() || project_id == "null" {
         error!("[CMD] get_project_groups - Project ID is missing or invalid.");

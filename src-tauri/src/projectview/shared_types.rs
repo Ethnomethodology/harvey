@@ -366,6 +366,26 @@ impl Default for FileMetadata {
     }
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+pub struct AssociatedFile {
+    pub name: String,
+    pub relative_path: String, // Relative to project base_directory
+    pub full_path: String,     // Absolute path
+    pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "imported_transcript", "other"
+    pub media_xml_identifier: Option<String>, // For media files, to link to notes, etc.
+}
+
+// This struct is primarily for backend use when fetching from DB,
+// before enriching with more details for the `AssociatedFile` struct.
+#[derive(Debug)]
+pub struct FileGroupAssociationFromDb {
+    pub file_asset_path: String, // This is the key (relative_path)
+    // Potentially add other direct fields from asset_metadata if a JOIN is simple enough
+    // pub original_filename: String,
+    // pub asset_type_from_db: String,
+}
+
+
 // Default implementation for StandardAssetMetadata
 impl Default for StandardAssetMetadata {
     fn default() -> Self {

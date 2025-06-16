@@ -163,6 +163,7 @@ pub fn run() {
             projectview::core_commands::add_file_to_existing_group,
             projectview::core_commands::get_groups_for_file_asset,
             projectview::core_commands::remove_file_from_group,
+            projectview::core_commands::get_group_contents,
 
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,

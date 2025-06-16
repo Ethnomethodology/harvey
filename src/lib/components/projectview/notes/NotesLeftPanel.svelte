@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/NotesLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup } from '$lib/stores/projectStore.js'; // Added setSelectedGroup
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
@@ -557,6 +557,17 @@
   
     $: selectedItemPathInStore = $project.selectedDocumentPath || $project.currentImportedTranscriptPath || $project.selectedMediaNotePath;
 
+    function handleGroupSelected(group) {
+        if (group && group.id) {
+            console.log(`[NotesLeftPanel] Group selected: ${group.name} (ID: ${group.id})`);
+            // setSelectedGroup action will clear other selections (docs, media)
+            // and set selectedGroupId and selectedGroupData in the store.
+            setSelectedGroup(group.id, group);
+        } else {
+            console.warn("[NotesLeftPanel] Attempted to select an invalid group:", group);
+        }
+    }
+
     let tooltipVisible = false;
     let tooltipCategoryName = '';
     let tooltipFiles = [];
@@ -749,8 +760,20 @@ $: {
                 {#if projectGroups && projectGroups.length > 0}
                     {#each projectGroups as group (group.id)}
                         <li class="group">
-                            <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <span class="flex items-center space-x-1.5 text-gray-800 dark:text-gray-200 truncate">
+                            <div
+                                class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                class:bg-blue-100={$project.selectedGroupId === group.id}
+                                class:dark:bg-blue-800={$project.selectedGroupId === group.id}
+                                on:click={() => handleGroupSelected(group)}
+                                role="button"
+                                tabindex="0"
+                                on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
+                                title={group.name}
+                            >
+                                <span class="flex items-center space-x-1.5 text-gray-800 dark:text-gray-200 truncate"
+                                    class:!text-blue-700={$project.selectedGroupId === group.id}
+                                    class:dark:!text-blue-200={$project.selectedGroupId === group.id}
+                                >
                                     <span class="flex-shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-collection" viewBox="0 0 16 16">
                                           <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>

@@ -5,7 +5,7 @@ use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
 use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
-use crate::projectview::shared_types::FileMetadata; // For function signatures
+use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb}; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
@@ -467,6 +467,28 @@ pub fn remove_file_from_group(conn: &Connection, project_id: &str, group_id: &st
         info!("[DB] No association found for file {} in group {} (project_id {}). Nothing removed.", file_asset_path, group_id, project_id);
     }
     Ok(rows_affected)
+}
+
+pub fn get_files_for_group(conn: &Connection, project_id: &str, group_id: &str) -> Result<Vec<FileGroupAssociationFromDb>, rusqlite::Error> {
+    debug!("[DB] Loading files for group_id {} in project_id {}", group_id, project_id);
+    let mut stmt = conn.prepare(
+        "SELECT fg.file_asset_path FROM file_groups fg
+         WHERE fg.project_id = ?1 AND fg.group_id = ?2
+         ORDER BY fg.file_asset_path ASC" // Added ORDER BY for consistency
+    )?;
+
+    let rows = stmt.query_map(params![project_id, group_id], |row| {
+        Ok(FileGroupAssociationFromDb {
+            file_asset_path: row.get(0)?,
+        })
+    })?;
+
+    let mut files = Vec::new();
+    for file_result in rows {
+        files.push(file_result?);
+    }
+    info!("[DB] Loaded {} files for group_id {} in project_id {}", files.len(), group_id, project_id);
+    Ok(files)
 }
 
 // --- End Group Functions ---
