@@ -91,6 +91,73 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
 }
 
 #[tauri::command]
+pub async fn update_group_details(
+    project_id: String,
+    group_id: String,
+    name: String,
+    description: Option<String> // Option<String> from frontend
+) -> Result<GroupData, String> {
+    info!("[CMD] update_group_details for group_id: {} in project_id: {}", group_id, project_id);
+
+    if name.trim().is_empty() {
+        error!("[CMD] update_group_details - Group name cannot be empty.");
+        return Err("Group name cannot be empty.".to_string());
+    }
+    if group_id.trim().is_empty() {
+        error!("[CMD] update_group_details - Group ID cannot be empty.");
+        return Err("Group ID cannot be empty.".to_string());
+    }
+    if project_id.trim().is_empty() {
+        error!("[CMD] update_group_details - Project ID cannot be empty.");
+        return Err("Project ID cannot be empty.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e));
+        }
+    };
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    // Convert Option<String> to Option<&str> for db_handler
+    let description_ref = description.as_deref();
+
+    match db_handler::update_group_details(&conn, &project_id, &group_id, &name.trim(), description_ref) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] update_group_details - Group {} updated successfully.", group_id);
+                Ok(GroupData {
+                    id: group_id,
+                    project_id,
+                    name: name.trim().to_string(), // Use trimmed name
+                    description, // This is Option<String>
+                })
+            } else {
+                error!("[CMD] update_group_details - Group with ID {} not found or not updated.", group_id);
+                Err(format!("Group with ID {} not found or no changes made.", group_id))
+            }
+        }
+        Err(e) => {
+            error!("[CMD] update_group_details - Failed for group {}: {}", group_id, e);
+            // Check for unique constraint violation (name already exists for this project_id)
+            if e.to_string().contains("UNIQUE constraint failed: groups.project_id, groups.name") {
+                 error!("[CMD] update_group_details - Unique constraint violation for group name '{}' in project '{}'.", name.trim(), project_id);
+                 return Err(format!("A group with the name \"{}\" already exists in this project.", name.trim()));
+            }
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn get_groups_for_file_asset(project_id: String, file_asset_relative_path: String) -> Result<Vec<GroupData>, String> {
     if project_id.is_empty() || project_id == "null" {
         error!("[CMD] get_groups_for_file_asset - Project ID is missing or invalid.");

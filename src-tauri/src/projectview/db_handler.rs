@@ -491,6 +491,25 @@ pub fn get_files_for_group(conn: &Connection, project_id: &str, group_id: &str) 
     Ok(files)
 }
 
+pub fn update_group_details(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    new_name: &str,
+    new_description: Option<&str>
+) -> Result<usize, rusqlite::Error> {
+    // chrono::Utc should be in scope from the top of shared_types.rs or directly here if needed.
+    // For db_handler.rs, we might need to add `use chrono::Utc;` if it's not already implicitly available.
+    // Assuming Utc is available for now as per its usage in FileMetadata default.
+    // If not, the compiler will tell us, and we can add `use chrono::Utc;`
+    let current_timestamp = chrono::Utc::now().to_rfc3339();
+    debug!("[DB] Updating group details for group_id {} in project_id {}: name={}, desc_is_some={}", group_id, project_id, new_name, new_description.is_some());
+    conn.execute(
+        "UPDATE groups SET name = ?1, description = ?2, updated_at = ?3 WHERE project_id = ?4 AND id = ?5",
+        params![new_name, new_description, current_timestamp, project_id, group_id],
+    )
+}
+
 // --- End Group Functions ---
 
 // --- Media Transcript Data Functions ---

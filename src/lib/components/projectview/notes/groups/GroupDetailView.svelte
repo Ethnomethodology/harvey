@@ -2,7 +2,8 @@
     import { onMount, onDestroy } from 'svelte';
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-    import { get } from 'svelte/store'; // If needed for $project access in non-reactive blocks
+    import { get } from 'svelte/store';
+    import EditGroupModal from '$lib/components/projectview/modals/EditGroupModal.svelte';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
@@ -19,6 +20,7 @@
     };
     let isLoading = false;
     let errorMessage = null;
+    let isEditGroupModalOpen = false;
 
     // Define category order and display names
     const CATEGORY_ORDER = [
@@ -109,15 +111,45 @@
         isLoading = false;
         errorMessage = null;
     }
+
+    function handleGroupDetailsUpdated(event) {
+        const updatedGroup = event.detail;
+        groupData = { ...groupData, ...updatedGroup }; // Update local prop
+        isEditGroupModalOpen = false;
+
+        // Update project store
+        project.update(p => {
+            if (p.selectedGroupData && p.selectedGroupData.id === updatedGroup.id) {
+                return { ...p, selectedGroupData: { ...p.selectedGroupData, ...updatedGroup } };
+            }
+            return p;
+        });
+        // Potentially dispatch global event for NotesLeftPanel to refresh all groups if name changed
+        // For now, this view and the central selectedGroupData are updated.
+    }
 </script>
 
 <div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800 rounded-md shadow">
     {#if groupData}
         <!-- Header -->
         <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
-            {#if groupData.description}
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
+                <button
+                    on:click={() => isEditGroupModalOpen = true}
+                    title="Edit group details"
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square w-4 h-4" viewBox="0 0 16 16">
+                        <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                        <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
+                    </svg>
+                </button>
+            </div>
+            {#if groupData.description && groupData.description.trim() !== ''}
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{groupData.description}</p>
+            {:else}
+                <p class="text-sm text-gray-400 dark:text-gray-500 mt-1 italic h-5">No description provided.</p>
             {/if}
         </div>
 
@@ -130,9 +162,9 @@
             {:else}
                 {#each CATEGORY_ORDER as category}
                     {@const filesInCategory = categorizedFiles[category.key]}
-                    {#if filesInCategory && filesInCategory.length > 0}
-                        <div class="mb-6">
-                            <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
+                        {#if filesInCategory && filesInCategory.length > 0}
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
@@ -154,8 +186,10 @@
                                     </div>
                                 {/each}
                             </div>
-                        </div>
-                    {/if}
+                        {:else if !isLoading} <!-- Only show "No files" if not loading -->
+                            <p class="text-sm text-gray-400 dark:text-gray-500 italic">No {category.name.toLowerCase()} in this group.</p>
+                        {/if}
+                    </div>
                 {/each}
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
@@ -168,6 +202,13 @@
             <p class="text-gray-500 dark:text-gray-400 text-center py-8">No group selected.</p>
     {/if}
 </div>
+
+<EditGroupModal
+    bind:showModal={isEditGroupModalOpen}
+    groupData={groupData}
+    on:groupUpdated={handleGroupDetailsUpdated}
+    on:close={() => isEditGroupModalOpen = false}
+/>
 
 <style>
     /* Ensure grid items don't overflow their container excessively if names are too long */
