@@ -38,6 +38,8 @@
     let groupSubMenuY = 0;
     let groupSubMenuItem = null;
     let showCreateGroupModal = false; // For Step III.4
+    let addToGroupHoverTimer = null; // For hover effect
+    const FOLDER_PLUS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder-plus mr-2" viewBox="0 0 16 16"><path d="m.5 3 .04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H9v-1H2.826a1 1 0 0 1-.995-.91l-.637-7A1 1 0 0 1 2.19 4h11.62a1 1 0 0 1 .996 1.09L14.54 8h1.005l.256-2.819A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2m5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98A1 1 0 0 1 2.5 2h3.672z"/><path d="M13.5 10a.5.5 0 0 1 .5.5V12h1.5a.5.5 0 0 1 0 1H14v1.5a.5.5 0 0 1-1 0V13h-1.5a.5.5 0 0 1 0-1H13v-1.5a.5.5 0 0 1 .5-.5"/></svg>`;
 
     function handleCategoryContextMenu(event, categoryType) {
       event.preventDefault();
@@ -109,26 +111,50 @@
     });
 
     function handleShowAddToGroupSubMenu(event, item) {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
         if (categoryContextMenuVisible) closeCategoryContextMenu();
+
         groupSubMenuItem = item;
         const buttonRect = event.currentTarget.getBoundingClientRect();
-        const mainContextMenuEl = document.getElementById('notes-left-panel-context-menu');
-        const mainContextMenuWidth = mainContextMenuEl ? mainContextMenuEl.offsetWidth : 150;
 
-        groupSubMenuX = contextMenuX + mainContextMenuWidth - 10;
+        // Position submenu to the right of the "Add to Group" button
+        groupSubMenuX = buttonRect.right + 2;
         groupSubMenuY = buttonRect.top;
 
-        const menuWidthEstimate = 160;
-        const menuHeightEstimate = 150;
+        const menuWidthEstimate = 160; // Approx width of the submenu
+        const menuHeightEstimate = (projectGroups.length * 28) + 40 + 10; // Estimate height based on items
+
+        // Adjust if submenu goes off-screen
         if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
-            groupSubMenuX = contextMenuX - menuWidthEstimate + 10;
+            groupSubMenuX = buttonRect.left - menuWidthEstimate -2; // Position to the left
         }
         if (groupSubMenuY + menuHeightEstimate > window.innerHeight) {
-             groupSubMenuY = Math.max(5, window.innerHeight - menuHeightEstimate - 5);
+             groupSubMenuY = Math.max(5, window.innerHeight - menuHeightEstimate - 5); // Adjust vertically
         }
 
         showGroupSubMenu = true;
-        closeContextMenu();
+        // Do not close main context menu immediately, allow mouse to travel
+        // closeContextMenu();
+    }
+
+    function handleLeaveAddToGroupButton() {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
+        addToGroupHoverTimer = setTimeout(() => {
+            if (showGroupSubMenu) { // Check if mouse is not over submenu
+                 const subMenuEl = document.getElementById('notes-left-panel-group-sub-menu');
+                 if (subMenuEl && !subMenuEl.matches(':hover')) {
+                    closeGroupSubMenu();
+                 }
+            }
+        }, 200); // Adjust delay as needed
+    }
+
+    function handleEnterGroupSubMenu() {
+        if (addToGroupHoverTimer) clearTimeout(addToGroupHoverTimer);
+    }
+
+    function handleLeaveGroupSubMenu() {
+        closeGroupSubMenu();
     }
 
     function handleNewGroupClick() { // For Step III.4
@@ -703,7 +729,12 @@ $: {
 
         <!-- Bottom 1/3 for Groups -->
         <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 33.33%;">
-            <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">Groups</h3>
+            <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
+                <span class="mr-1.5 flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection-fill w-3.5 h-3.5" viewBox="0 0 16 16"><path d="M0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zM2 3a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 0-1h-11A.5.5 0 0 0 2 3m2-2a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 0-1h-7A.5.5 0 0 0 4 1"/></svg>
+                </span>
+                Groups
+            </h3>
             <ul class="space-y-1 text-xs">
                 {#if projectGroups && projectGroups.length > 0}
                     {#each projectGroups as group (group.id)}
@@ -763,7 +794,14 @@ $: {
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Transcribe'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcribe</button>
-                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} /* For keyboard nav */
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} /* Keep click for touch and explicit click */
+                    class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    {@html FOLDER_PLUS_ICON_SVG}Add to Group
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                 <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
@@ -774,28 +812,56 @@ $: {
                  {:else}
                      <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                  {/if}
-                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    {@html FOLDER_PLUS_ICON_SVG}Add to Group
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'table'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    {@html FOLDER_PLUS_ICON_SVG}Add to Group
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'image'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    {@html FOLDER_PLUS_ICON_SVG}Add to Group
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-                <button on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Add to Group...</button>
+                <button
+                    on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:mouseleave={handleLeaveAddToGroupButton}
+                    on:focus={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    on:click|stopPropagation={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
+                    class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    {@html FOLDER_PLUS_ICON_SVG}Add to Group
+                </button>
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Reveal'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealButtonLabel}</button>
                  <hr class="my-1 border-gray-200 dark:border-gray-600" />
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Rename'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename</button>
@@ -807,12 +873,23 @@ $: {
 	{/if}
 
     {#if showGroupSubMenu && groupSubMenuItem}
-        <div id="notes-left-panel-group-sub-menu" class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;" on:click|stopPropagation>
-            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
+        <div
+            id="notes-left-panel-group-sub-menu"
+            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]"
+            style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
+            on:mouseenter={handleEnterGroupSubMenu}
+            on:mouseleave={handleLeaveGroupSubMenu}
+            on:click|stopPropagation>
+            <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
+                {@html FOLDER_PLUS_ICON_SVG}New group...
+            </button>
             <hr class="my-1 border-gray-200 dark:border-gray-600" />
             {#if projectGroups && projectGroups.length > 0}
                 {#each projectGroups as group (group.id)}
-                    <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
+                    <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
+                        <span class="mr-2 w-4 h-4 flex-shrink-0"> <!-- Placeholder for icon or indent -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-folder" viewBox="0 0 16 16"><path d="M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31zM2.19 4a1 1 0 0 0-.996 1.09l.637 7a1 1 0 0 0 .995.91h10.348a1 1 0 0 0 .995-.91l.637-7A1 1 0 0 0 13.81 4H2.19zm4.69-1.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707z"/></svg>
+                        </span>
                         {group.name}
                     </button>
                 {/each}

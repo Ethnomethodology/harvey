@@ -49,6 +49,11 @@ pub async fn load_table_layout_prefs(project_id: String, table_path: String) -> 
 // --- Group Commands ---
 #[tauri::command]
 pub async fn create_new_group(project_id: String, name: String, description: Option<String>) -> Result<GroupData, String> {
+    if project_id.is_empty() || project_id == "null" { // Explicitly check for "null" as well, just in case
+        error!("[CMD] create_new_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot create group.".to_string());
+    }
+
     let group_id = Uuid::new_v4().to_string();
     info!("[CMD] create_new_group: id={}, project_id={}, name={}", group_id, project_id, name);
 
@@ -87,6 +92,10 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
 
 #[tauri::command]
 pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] get_project_groups - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot get groups.".to_string());
+    }
     info!("[CMD] get_project_groups for project_id: {}", project_id);
 
     let db_path = match db_handler::get_db_path() {
@@ -129,6 +138,14 @@ pub async fn get_project_groups(project_id: String) -> Result<Vec<GroupData>, St
 
 #[tauri::command]
 pub async fn add_file_to_existing_group(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" {
+        error!("[CMD] add_file_to_existing_group - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot add file to group.".to_string());
+    }
+    if group_id.is_empty() || group_id == "null" {
+        error!("[CMD] add_file_to_existing_group - Group ID is missing or invalid.");
+        return Err("Group ID is missing. Cannot add file to group.".to_string());
+    }
     info!("[CMD] add_file_to_existing_group: project_id={}, group_id={}, file_path={}", project_id, group_id, file_asset_relative_path);
 
     let db_path = match db_handler::get_db_path() {
