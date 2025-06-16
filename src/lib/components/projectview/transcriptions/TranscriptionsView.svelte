@@ -270,7 +270,7 @@
                         on:click={() => transcriptStore.update(switchToOriginalTranscript)}
                     >
                         Original Language
-                    </DATE_FORMAT>
+                    </button>
                     <button
                         class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
                         class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
