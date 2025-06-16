@@ -574,7 +574,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let new_media_entry = MediaFileEntryXml {
         name: media_stem_identifier.to_string(),
         original_path: Some(source_file_path_str.clone()),
-        relative_path: destination_relative_path_for_xml,
+        relative_path: destination_relative_path_for_xml.clone(),
         speakers: Some(SpeakersXml::default()),
         transcripts: Vec::new(),
     };
