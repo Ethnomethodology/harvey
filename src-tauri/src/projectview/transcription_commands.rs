@@ -10,7 +10,7 @@ use serde_json::Value as JsonValue;
 
 use std::{
     fs::{self, File},
-    io::{BufWriter, Write}, 
+    io::{BufWriter, Write, BufRead},
     path::{Path, PathBuf},
 };
 use tauri::{AppHandle};
@@ -648,6 +648,8 @@ pub async fn transcribe_media_command(
         final_transcript_path_en,
     ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
 
+    let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
+
     emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...")?;
     let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
     emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
@@ -748,7 +750,7 @@ pub async fn transcribe_media_command(
     Ok(TranscriptionResultPayload {
         original_transcript_path: final_transcript_path_orig.to_string_lossy().to_string(),
         translated_transcript_path: if payload.translate_to_english {
-            final_transcript_path_en.map(|p| p.to_string_lossy().into_owned())
+            final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned())
         } else {
             None
         },
