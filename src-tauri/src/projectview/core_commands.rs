@@ -501,7 +501,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         audio_codec: audio_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
         video_codec: video_codec.clone(), // From ffprobe (ensure cloned if Option<String>)
         created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
-        original_import_path: None,
+        original_import_path: Some(source_file_path_str.clone()),
         speaker_names: None,
     };
 
@@ -546,7 +546,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     if let Err(e) = db_handler::save_media_transcript_data(
         &project_data_check.project_uuid,
         &db_key_relative_path,
-        Some(&source_file_path_str),
+        Some(source_file_path_str.as_str()), // Pass as &str
         None, // No speaker names known at initial import by this function
     ) {
         warn!(

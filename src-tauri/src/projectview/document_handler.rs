@@ -154,7 +154,7 @@ pub async fn import_document(
                 audio_codec: None,
                 video_codec: None,
                 created_at: Some(Utc::now().to_rfc3339()),
-                original_import_path: None,
+                original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
             };
 
@@ -284,7 +284,7 @@ pub async fn import_document(
                 audio_codec: None,
                 video_codec: None,
                 created_at: Some(Utc::now().to_rfc3339()), // Could also attempt to get from source_path metadata if needed
-                original_import_path: None,
+                original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
             };
 
