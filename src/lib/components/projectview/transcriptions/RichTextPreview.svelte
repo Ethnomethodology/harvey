@@ -365,7 +365,7 @@
 					</div>
                         <div
                           class="min-w-0 preview-content-area px-[5.75pt]"
-                          style="flex: 0 0 65%; max-width: 65%; white-space: normal; overflow-wrap: anywhere; word-break: break-all;"
+                          style="flex: 0 0 65%; max-width: 65%; white-space: normal; overflow-wrap: break-word; word-break: normal;"
                         >
                             {#if seg.isJsonContent}
                               <div class="speech-rich-text">{@html seg.html}</div>
@@ -404,10 +404,25 @@
     .preview-editor-wrapper :global(.lexical-content[contenteditable="false"]) { caret-color: transparent !important; }
 	.preview-editor-wrapper :global(.lexical-content p) { @apply mt-0 mb-0; overflow-wrap: break-word; word-break: break-word; }
 	.segment-active .preview-editor-wrapper :global(.lexical-editor-root), .segment-active .preview-editor-wrapper :global(.lexical-content) { background-color: transparent !important; }
-	.speech-plain-text { @apply leading-normal whitespace-normal break-all text-gray-900 dark:text-gray-100 pt-px; padding: 0; margin: 0; overflow-wrap: anywhere; word-break: break-all; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
+	.speech-plain-text {
+        @apply leading-normal whitespace-normal text-gray-900 dark:text-gray-100 pt-px; /* Removed break-all */
+        padding: 0; margin: 0;
+        overflow-wrap: break-word; /* Changed from anywhere */
+        word-break: normal;       /* Changed from break-all */
+        font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
+    }
 	.speech-plain-text .italic { @apply not-italic; }
-	.speech-rich-text { @apply leading-normal whitespace-normal break-all text-gray-900 dark:text-gray-100 pt-px; padding: 0; margin: 0; overflow-wrap: anywhere; word-break: break-all; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
-    .preview-content-area { overflow-wrap: anywhere; word-break: break-all; }
+	.speech-rich-text {
+        @apply leading-normal whitespace-normal text-gray-900 dark:text-gray-100 pt-px; /* Removed break-all */
+        padding: 0; margin: 0;
+        overflow-wrap: break-word; /* Changed from anywhere */
+        word-break: normal;       /* Changed from break-all */
+        font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
+    }
+    .preview-content-area {
+        overflow-wrap: break-word; /* Changed from anywhere */
+        word-break: normal;       /* Changed from break-all */
+    }
 	.insert-button-wrapper { position: relative; height: 0px; top: -0.75rem; z-index: 10; opacity: 0.3; transition: opacity 0.15s ease-in-out; }
     .insert-button-wrapper:first-of-type { margin-top: 0.75rem; }
     .insert-button-wrapper:last-of-type { margin-bottom: 0.75rem; }
