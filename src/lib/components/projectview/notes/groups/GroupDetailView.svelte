@@ -23,15 +23,6 @@
     let isEditGroupModalOpen = false;
 
     // Define category order and display names
-    const CATEGORY_ORDER = [
-        { key: 'audios', name: 'Audios', icon: 'path_to_audio_icon.svg' }, // Replace with actual icons/placeholders
-        { key: 'videos', name: 'Videos', icon: 'path_to_video_icon.svg' },
-        { key: 'documents', name: 'Documents', icon: 'path_to_doc_icon.svg' },
-        { key: 'images', name: 'Images', icon: 'path_to_image_icon.svg' },
-        { key: 'tables', name: 'Tables', icon: 'path_to_table_icon.svg' },
-        { key: 'imported_transcripts', name: 'Transcripts', icon: 'path_to_transcript_icon.svg' },
-        { key: 'others', name: 'Others', icon: 'path_to_other_icon.svg' }
-    ];
     // Placeholder generic icons (SVGs can be inlined or imported as components if they exist)
     const GENERIC_ICONS = {
         audios: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-music-note-beamed" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`,
@@ -42,6 +33,16 @@
         imported_transcripts: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-chat-square-text" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`,
         others: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-file-earmark" viewBox="0 0 16 16"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zM13.5 4H9V.5A1.5 1.5 0 0 0 7.5 2v1A1.5 1.5 0 0 0 9 4.5h2z"/></svg>`,
     };
+
+    const CATEGORY_ORDER = [
+        { key: 'audios', name: 'Audios', icon: GENERIC_ICONS.audios },
+        { key: 'documents', name: 'Documents', icon: GENERIC_ICONS.documents },
+        { key: 'images', name: 'Images', icon: GENERIC_ICONS.images },
+        { key: 'tables', name: 'Tables', icon: GENERIC_ICONS.tables },
+        { key: 'imported_transcripts', name: 'Transcripts', icon: GENERIC_ICONS.imported_transcripts },
+        { key: 'videos', name: 'Videos', icon: GENERIC_ICONS.videos },
+        { key: 'others', name: 'Others', icon: GENERIC_ICONS.others }
+    ];
 
     async function fetchGroupContents() {
         // Use get(project) to access store values if outside reactive context or component markup
@@ -168,21 +169,21 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="flex flex-col items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        class="flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
                                         role="button"
                                         tabindex="0"
                                         title={file.name}
                                     >
-                                        <div class="w-16 h-16 mb-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                        <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
                                             {#if file.file_type === 'image' && file.full_path}
                                                 <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain rounded"/>
                                             {:else}
                                                 {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
                                             {/if}
                                         </div>
-                                        <p class="text-xs text-center text-gray-600 dark:text-gray-300 truncate w-full">{file.name}</p>
+                                        <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
                                     </div>
                                 {/each}
                             </div>
