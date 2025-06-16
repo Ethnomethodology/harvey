@@ -5,6 +5,7 @@ use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use serde_json::json;
+use tauri::Emitter; // Added Emitter
 use serde_json::Value as JsonValue;
 
 use std::{
