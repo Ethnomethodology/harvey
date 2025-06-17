@@ -893,68 +893,6 @@ export async function handleCancelTranscriptionRequest() {
     if (!jobId || !currentProj.isTranscribing) return;
     const modelUsedForJob = currentTs.selectedModelName;
     const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
-
-        // Store the path(s) for potential later loading by the frontend.
-        // We are not storing segments directly here anymore as they are not returned.
-        transcriptStore.update(ts => ({
-            ...ts,
-            // Update paths if needed, or perhaps this is handled by the event listener for 'custom_transcription_job_completed'
-            // For now, let's assume the main path to update might be currentTranscriptPath if not translating,
-            // or if the UI logic handles switching.
-            // This part might need further review based on how UI consumes these paths.
-            pendingTranscriptPathForJobDone: result.original_transcript_path,
-            // pendingSegmentsForJobDone: null, // Segments are not returned
-        }));
-
-		const tsStore = get(transcriptStore);
-        const ranInBackground = tsStore.ranInBackground;
-
-        if (ranInBackground) {
-            notificationStore.add('Transcription complete!', 'success', 0);
-            if (get(transcriptStore).showTranscribeModal) {
-                 toggleTranscribeModal(false);
-            }
-        } else {
-            if (transcribeModalInstance && typeof transcribeModalInstance.setStatusDone === 'function') {
-                transcribeModalInstance.setStatusDone('Transcription complete!');
-            } else {
-                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning', 0);
-                if (get(transcriptStore).showTranscribeModal) {
-                    toggleTranscribeModal(false);
-                }
-            }
-        }
-
-		clearTranscriptionStatus('Transcription complete.');
-        // Emit event with original path. If translated path exists, UI might need to know separately or via store update.
-		await emit('custom_transcription_job_completed', {
-            status: 'done',
-            jobFinishedPath: payload.mediaPathStr, // Path of the media that was processed
-            transcriptFilePath: result.original_transcript_path, // Path to the main (original) transcript
-            translatedTranscriptFilePath: result.translated_transcript_path // Optional path to translated
-        });
-    } catch (error) {
-        const errorMessage = error?.message || String(error);
-        if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
-            notificationStore.add('Transcription cancelled.', 'info');
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription cancelled.');
-            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: payload.mediaPathStr, errorMessage: null });
-        } else {
-            notificationStore.add(`Transcription failed: ${errorMessage}`, 'error', 0); // Persistent error
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription failed.', errorMessage);
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: payload.mediaPathStr, errorMessage: errorMessage });
-        }
-    }
-}
-export async function handleCancelTranscriptionRequest() {
-    const currentProj = get(project);
-    const currentTs = get(transcriptStore);
-    const jobId = currentProj.transcriptionJobId;
-    if (!jobId || !currentProj.isTranscribing) return;
-    const modelUsedForJob = currentTs.selectedModelName;
-    const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
     const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
     transcribeModalInstance?.setStatusCancelling('Requesting cancellation...');
     try {
