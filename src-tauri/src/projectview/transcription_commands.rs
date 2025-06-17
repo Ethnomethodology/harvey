@@ -636,6 +636,13 @@ pub async fn transcribe_media_command(
     let job_id = uuid::Uuid::new_v4().to_string();
     info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
 
+    let media_path_for_filename = std::path::PathBuf::from(&payload.media_path_str);
+    let media_filename_for_progress = media_path_for_filename.file_name()
+        .map_or_else(
+            || payload.media_path_str.clone(), // Fallback to full path if filename extraction fails
+            |os_str| os_str.to_string_lossy().into_owned()
+        );
+
     let app_handle_clone = app_handle.clone();
 
     let (
@@ -650,15 +657,14 @@ pub async fn transcribe_media_command(
 
     let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
 
-    let model_display_name = if payload.model_name.is_empty() { "selected model".to_string() } else { payload.model_name.clone() };
-    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, &format!("Transcription starting with model {}...", model_display_name))?;
-    let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
-    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 0.0, &format!("Processing {}...", media_filename_for_progress))?;
+    let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id, &media_filename_for_progress).await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, &format!("Audio for {} prepared.", media_filename_for_progress))?;
 
     let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id)?;
 
     // --- First Pass: Original Language Transcription ---
-    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...")?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, &format!("Transcribing {}...", media_filename_for_progress))?;
     let mut original_segments = execute_transcription_pass(
         &app_handle_clone,
         &wav_media_path.to_string_lossy(), // Pass as &str
@@ -671,11 +677,12 @@ pub async fn transcribe_media_command(
         &expected_rttm_temp_path,
         false, // is_translation_pass
         &payload.speaker_names, // Pass as slice
+        &media_filename_for_progress,
     ).await?;
 
     map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 45.0, "Saving original transcript...")?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 50.0, &format!("Saving transcript for {}...", media_filename_for_progress))?;
     let lexical_json_orig = create_lexical_table_from_segments(&original_segments);
     let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
         .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
@@ -686,6 +693,7 @@ pub async fn transcribe_media_command(
         lexical_json_orig_str,
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
+    emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
 
     info!("[Transcribe Command][{}] Attempting to clean up temporary files for original pass...", job_id);
     info!("[Transcribe Command][{}] Targeting temp original whisper JSON for deletion: {:?}", job_id, expected_whisper_temp_json_path_orig);
@@ -723,7 +731,7 @@ pub async fn transcribe_media_command(
             expected_whisper_temp_json_path_en,
             final_transcript_path_en, // This is an Option<PathBuf>, will be moved here
         ) {
-            emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...")?;
+            emit_progress_cmd(&app_handle_clone, &job_id, 60.0, &format!("Translating {}...", media_filename_for_progress))?;
 
             info!("[Transcribe Command][{}] DEBUG: Preparing for English translation pass call.", job_id);
             info!("[Transcribe Command][{}]   WAV Path: {:?}", job_id, wav_media_path.to_string_lossy());
@@ -755,6 +763,7 @@ pub async fn transcribe_media_command(
                 &PathBuf::new(), // Empty RTTM path
                 true, // is_translation_pass
                 &payload.speaker_names,
+                &media_filename_for_progress,
             ).await;
 
             let mut translated_segments = match translation_result {
@@ -785,7 +794,7 @@ pub async fn transcribe_media_command(
             info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization...", job_id);
             align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &job_id);
 
-            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...")?;
+            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, &format!("Saving translation for {}...", media_filename_for_progress))?;
             info!("[Transcribe Command][{}] DEBUG: Attempting to save translated transcript to: {:?}", job_id, final_path_en_pb);
             let lexical_json_en = create_lexical_table_from_segments(&translated_segments);
             let lexical_json_en_str = serde_json::to_string_pretty(&lexical_json_en)
@@ -797,6 +806,7 @@ pub async fn transcribe_media_command(
                 lexical_json_en_str,
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
+            emit_progress_cmd(&app_handle_clone, &job_id, 95.0, &format!("Translation for {} saved.", media_filename_for_progress))?;
 
             info!("[Transcribe Command][{}] Attempting to clean up temporary files for translation pass...", job_id);
             info!("[Transcribe Command][{}] Targeting temp translated whisper JSON for deletion: {:?}", job_id, json_path_en_owned);
@@ -809,12 +819,15 @@ pub async fn transcribe_media_command(
             } else {
                 warn!("[Transcribe Command][{}] Temp translated whisper JSON not found for deletion: {:?}", job_id, json_path_en_owned);
             }
-        } else {
+            } else { // This 'else' corresponds to if let (Some(base_en_str)...
             warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available from prepare_output_paths. Skipping translation.", job_id);
         }
+        } else { // This 'else' corresponds to if payload.translate_to_english
+            // If no translation, add a "Finalizing" step before 100%
+            emit_progress_cmd(&app_handle_clone, &job_id, 95.0, &format!("Finalizing {}...", media_filename_for_progress))?;
     }
-
-    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.")?;
+        // Final message
+    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, &format!("Successfully processed {}.", media_filename_for_progress))?;
     info!("[Transcribe Command][{}] Processing complete.", job_id);
 
     Ok(TranscriptionResultPayload {
@@ -942,6 +955,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
     app_handle: &AppHandle,
     input_path_str: &str,
     job_id: &str,
+    media_filename_for_progress: &str,
 ) -> Result<PathBuf, CommandError> {
     info!("[FFmpeg CMD][{}] Checking audio file: {}", job_id, input_path_str);
     let input_path = PathBuf::from(input_path_str);
@@ -969,7 +983,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
 
     info!("[FFmpeg CMD][{}] Starting FFmpeg conversion...", job_id);
     // Using emit_progress_cmd from this file
-    let _ = emit_progress_cmd(app_handle, job_id, 2.0, "Converting audio to WAV...")?;
+    let _ = emit_progress_cmd(app_handle, job_id, 2.0, &format!("Converting {} to WAV...", media_filename_for_progress))?;
 
     let args: Vec<String> = vec![
         "-i".into(), input_path_str.to_string(),
@@ -1397,6 +1411,7 @@ pub(crate) async fn execute_transcription_pass(
     expected_rttm_output_path: &PathBuf,
     is_translation_pass: bool,
     speaker_names: &[String],
+    media_filename_for_progress: &str,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
         job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
@@ -1421,7 +1436,7 @@ pub(crate) async fn execute_transcription_pass(
     let mut segments = parse_whisper_json_cmd(&whisper_json_path)?;
 
     if num_speakers > 0 && !is_translation_pass {
-        emit_progress_cmd(app_handle, job_id,segments.len() as f32 * 0.1 + 20.0, "Running diarization...")?; // Example progress update
+        emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?; // Example progress update
 
         let rttm_path = run_diarize_cli_sidecar_cmd(
             app_handle,
