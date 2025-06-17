@@ -308,7 +308,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
         if (inferSpeakers) {
-            console.warn('[TranscriptStore] Speaker inference requested. Overwriting current.'); // WARN
+            console.warn('[TranscriptStore] Speaker inference requested. Overwriting current.');
             let inferredSpeakers = { count: 0, names: [] };
             if (newSegments.length > 0) {
                 const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))];
@@ -331,9 +331,52 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 }, // Reset segment index
-            transcriptUndoStack: [], // Clear undo/redo on new load
+            transcriptUndoStack: [],
             transcriptRedoStack: [],
         };
+
+        // START: MODIFIED to update original/english specific stores
+        let updatedOriginalSegments = ts.originalSegments;
+        let updatedEnglishSegments = ts.englishSegments;
+        let updatedOriginalTranscriptPath = ts.originalTranscriptPath;
+        let updatedEnglishTranscriptPath = ts.englishTranscriptPath;
+        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage;
+
+        // Determine if loading original or English based on path suffix,
+        // or if the path explicitly matches one of the stored specific paths.
+        if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
+            updatedOriginalSegments = newSegments;
+            updatedOriginalTranscriptPath = path;
+            // If this is the one being actively loaded, set active language
+            if (ts.currentTranscriptPath === path) {
+                newActiveTranscriptLanguage = 'original';
+            }
+        } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
+            updatedEnglishSegments = newSegments;
+            updatedEnglishTranscriptPath = path;
+            // If this is the one being actively loaded, set active language
+            if (ts.currentTranscriptPath === path) {
+                newActiveTranscriptLanguage = 'english';
+            }
+        }
+
+        return {
+            ...ts,
+            currentTranscriptPath: path, // This is the actively displayed transcript path
+            segments: newSegments,       // These are the actively displayed segments
+            originalSegments: updatedOriginalSegments,
+            englishSegments: updatedEnglishSegments,
+            originalTranscriptPath: updatedOriginalTranscriptPath,
+            englishTranscriptPath: updatedEnglishTranscriptPath,
+            activeTranscriptLanguage: newActiveTranscriptLanguage, // Update based on what was loaded
+            transcriptDirty: false,
+            isTranscriptLoading: false,
+            speakers: updatedSpeakers,
+            player: { ...ts.player, currentSegmentIndex: -1 },
+            transcriptUndoStack: [],
+            transcriptRedoStack: [],
+        };
+        // END: MODIFIED
     });
 }
 
@@ -858,6 +901,86 @@ listen('media_renamed', (event) => {
         }
         return ts;
     });
+});
+
+listen('custom_transcription_job_completed', async (event) => {
+    if (!event.payload) return;
+    const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
+    const currentStore = get(transcriptStore);
+
+    // Only process if the completed job was for the currently selected media
+    if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
+        if (status === 'done') {
+            console.log('[TranscriptStore] Received custom_transcription_job_completed:', event.payload);
+            let activePathToLoad = null;
+            let newOriginalPath = currentStore.originalTranscriptPath;
+            let newEnglishPath = currentStore.englishTranscriptPath;
+
+            // Update store with new paths first, so they are available for loadTranscriptFile
+            const updates = {};
+            if (transcriptFilePath) {
+                updates.originalTranscriptPath = transcriptFilePath;
+                newOriginalPath = transcriptFilePath; // for local var use
+                // If current active lang is original, or if it's original and no translation will exist, this is the one to load.
+                if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
+                    activePathToLoad = transcriptFilePath;
+                }
+            }
+            if (translatedTranscriptFilePath) {
+                updates.englishTranscriptPath = translatedTranscriptFilePath;
+                newEnglishPath = translatedTranscriptFilePath; // for local var use
+                // If current active lang is English, this is the one to load.
+                if (currentStore.activeTranscriptLanguage === 'english') {
+                    activePathToLoad = translatedTranscriptFilePath;
+                }
+            }
+            // If no specific active path was determined (e.g. active lang was english, but only original came back),
+            // default to loading the original if it exists.
+            if (!activePathToLoad && newOriginalPath) {
+                activePathToLoad = newOriginalPath;
+            }
+
+            transcriptStore.update(ts => ({ ...ts, ...updates }));
+
+            if (activePathToLoad) {
+                try {
+                    const service = await import('../services/projectService.js');
+                    if (service.loadTranscriptFile) {
+                        console.log(`[TranscriptStore] Loading transcript after job completion: ${activePathToLoad}`);
+                        await service.loadTranscriptFile(activePathToLoad);
+                        // setTranscriptData called by loadTranscriptFile should now correctly populate
+                        // originalSegments/englishSegments based on the path.
+                    } else {
+                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
+                        updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
+                    }
+                } catch (e) {
+                    console.error(`[TranscriptStore] Error auto-loading transcript ${activePathToLoad}:`, e);
+                    updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}`});
+                }
+            }
+
+            // Refresh project files to update UI elements like LeftPanel about new transcript files
+            try {
+                const service = await import('../services/projectService.js');
+                if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
+                   console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
+                   await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                }
+            } catch (e) {
+                console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
+            }
+
+        } else if (status === 'error') {
+            console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
+            updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
+        } else if (status === 'cancelled') {
+            console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
+            updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
+        }
+    } else {
+         console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
+    }
 });
 
 export function setTranslateToEnglish(value) {

@@ -775,63 +775,76 @@ export async function handleConfirmStartTranscription() {
     }
 
     const selectedModelIdentifier = currentTs.selectedModelName;
-    const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
-    const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], translateToEnglish: translateToEnglish, jobId: jobId };
+    // const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-'); // Cloud model logic will be handled by Rust or removed if not supported by transcribe_media_command
+
+    // Consolidate arguments for the unified 'transcribe_media_command'
+    const payload = {
+        projectXmlPath: currentProj.xmlPath,
+        mediaPathStr: currentTs.selectedMediaFile.path,
+        numSpeakers: currentTs.speakers.count,
+        languageCode: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
+        modelName: selectedModelIdentifier,
+        translateToEnglish: currentTs.translateToEnglish,
+        speakerNames: currentTs.speakers.names || [],
+    };
 
     setTranscriptionStatus(true, jobId, {
-        initialProgressMessage: isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...',
-        mediaPath: args.mediaPath
+        // Determine message based on whether it's a known local model or potentially other types if transcribe_media_command evolves
+        initialProgressMessage: `Transcription starting with model ${payload.modelName}...`,
+        mediaPath: payload.mediaPathStr
     });
 
     try {
-        let invokePromise;
-        if (isCloudModel) {
-            let cloudConfig;
-            try { cloudConfig = await getCloudConfig(); } catch (e) { throw new Error(`Failed to get cloud configuration: ${e.message}`); }
-            if (!cloudConfig?.consent) throw new Error("Cloud transcription consent not given.");
-            if (!cloudConfig?.api_key) throw new Error("Cloud API Key is missing.");
-            const cloudArgs = { ...args, cloudModelId: selectedModelIdentifier, apiKey: cloudConfig.api_key };
-            invokePromise = invoke('run_cloud_transcription', cloudArgs);
-        } else {
-            const localArgs = { ...args, modelName: selectedModelIdentifier };
-            invokePromise = invoke('run_transcription', localArgs);
-        }
-        const result = await invokePromise;
-        if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure.");
+        // Always call the unified command
+        const result = await invoke('transcribe_media_command', payload);
 
+        // The 'result' from 'transcribe_media_command' is TranscriptionResultPayload { original_transcript_path, translated_transcript_path }
+        // It does NOT contain segments directly. The frontend will need to load the transcript using the path.
+        if (!result || typeof result.original_transcript_path !== 'string') {
+            throw new Error("Invalid transcription result structure from transcribe_media_command.");
+        }
+
+        // Store the path(s) for potential later loading by the frontend.
+        // We are not storing segments directly here anymore as they are not returned.
         transcriptStore.update(ts => ({
             ...ts,
-            pendingTranscriptPathForJobDone: result.transcript_file_path,
-            pendingSegmentsForJobDone: result.segments
+            // Update paths if needed, or perhaps this is handled by the event listener for 'custom_transcription_job_completed'
+            // For now, let's assume the main path to update might be currentTranscriptPath if not translating,
+            // or if the UI logic handles switching.
+            // This part might need further review based on how UI consumes these paths.
+            pendingTranscriptPathForJobDone: result.original_transcript_path,
+            // pendingSegmentsForJobDone: null, // Segments are not returned
         }));
 
-		const tsStore = get(transcriptStore); // ADDED
-        const ranInBackground = tsStore.ranInBackground; // ADDED
+		const tsStore = get(transcriptStore);
+        const ranInBackground = tsStore.ranInBackground;
 
-        if (ranInBackground) { // ADDED
-            notificationStore.add('Transcription complete!', 'success', 0); // MODIFIED
-            // Ensure modal is closed if it somehow wasn't by the runInBackground action
+        if (ranInBackground) {
+            notificationStore.add('Transcription complete!', 'success', 0);
             if (get(transcriptStore).showTranscribeModal) {
                  toggleTranscribeModal(false);
             }
-        } else { // ADDED
+        } else {
             if (transcribeModalInstance && typeof transcribeModalInstance.setStatusDone === 'function') {
                 transcribeModalInstance.setStatusDone('Transcription complete!');
-                // Do NOT call toggleTranscribeModal(false) here; the user will close it via the modal's button.
             } else {
-                // Fallback if modal instance isn't available, though it should be
-                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning', 0); // MODIFIED
+                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning', 0);
                 if (get(transcriptStore).showTranscribeModal) {
                     toggleTranscribeModal(false);
                 }
             }
         }
 
-		clearTranscriptionStatus('Transcription complete.'); // COMMON - Stays after if/else
-		await emit('custom_transcription_job_completed', { status: 'done', jobFinishedPath: args.mediaPath, transcriptFilePath: result.transcript_file_path }); // COMMON - Stays after if/else
+		clearTranscriptionStatus('Transcription complete.');
+        // Emit event with original path. If translated path exists, UI might need to know separately or via store update.
+		await emit('custom_transcription_job_completed', {
+            status: 'done',
+            jobFinishedPath: payload.mediaPathStr, // Path of the media that was processed
+            transcriptFilePath: result.original_transcript_path, // Path to the main (original) transcript
+            translatedTranscriptFilePath: result.translated_transcript_path // Optional path to translated
+        });
     } catch (error) {
         const errorMessage = error?.message || String(error);
-        // args.mediaPath should be accessible here from the outer scope of handleConfirmStartTranscription
         if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
             notificationStore.add('Transcription cancelled.', 'info');
             toggleTranscribeModal(false);
