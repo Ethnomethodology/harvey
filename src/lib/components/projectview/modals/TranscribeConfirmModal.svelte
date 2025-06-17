@@ -122,6 +122,12 @@
 								? $transcriptStore.transcriptionProgress.percent
 								: (status === 'done' ? 100 : 0);
 
+	// Add a console log before currentProgressMessage is derived
+	$: {
+		if (status === 'running' || status === 'cancelling') {
+			console.log(`[JULES-DEBUG] TranscribeConfirmModal: status = ${status}, $transcriptStore.transcriptionProgress.message = ${$transcriptStore.transcriptionProgress.message}`); // <--- ADD THIS LINE
+		}
+	}
 	$: currentProgressMessage = status === 'running' ? ($transcriptStore.transcriptionProgress.message || 'Processing...')
 							   : status === 'cancelling' ? ($transcriptStore.transcriptionProgress.message || 'Cancelling...')
 							   : ''; // No message needed in other states displayed here
