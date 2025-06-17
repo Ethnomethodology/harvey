@@ -650,36 +650,40 @@ export function toggleTranscribeModal(show) {
 }
 
 export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
+    // Log the entire options object received
+    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Received options object:', options); // <--- ADD THIS LINE
+
     const { initialProgressMessage = '', mediaPath = null } = options;
+
+    // Log initialProgressMessage after destructuring
+    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: initialProgressMessage after destructuring:', initialProgressMessage); // <--- ADD THIS LINE
+
     transcriptStore.update((ts) => {
         const newActiveMediaDuringStart = isTranscribing
             ? ts.selectedMediaFile?.path ?? null
-            : ts.activeMediaDuringTranscriptionStart; // Keep existing if not starting
+            : ts.activeMediaDuringTranscriptionStart;
+
+        // Log the message that will be set to the store
+        if (isTranscribing) {
+            console.log(`[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Message being set to store: ${initialProgressMessage}`); // <--- ADD THIS LINE
+        }
 
         return {
             ...ts,
             isTranscribing: !!isTranscribing,
             transcriptionJobId: jobId,
-            mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob, // Store mediaPath when starting
+            mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob,
             activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
-            // Set the initial message for the modal's own progress display.
-            // This message comes from handleConfirmStartTranscription (e.g., "Local transcription starting...")
             transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
-            ranInBackground: false, // Reset when a new transcription starts
+            ranInBackground: false,
         };
     });
 
-    // Only update projectStore for global error clearing or if a global 'isTranscribing' flag needs to be managed there.
-    // Do NOT set projectStore.statusMessage with the initialProgressMessage.
     if (isTranscribing) {
         updateProjectStoreState({
-            error: null // Clear any previous global error
-            // If projectStore has its own global isTranscribing flag, set it here.
-            // For example: isProjectCurrentlyTranscribing: true
+            error: null
         });
     }
-    // If !isTranscribing, this function isn't the one to clear global status.
-    // clearTranscriptionStatus handles setting final global status messages.
 }
 
 export function updateTranscriptionProgress(progressPayload) {
