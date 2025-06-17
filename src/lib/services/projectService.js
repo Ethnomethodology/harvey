@@ -796,7 +796,7 @@ export async function handleConfirmStartTranscription() {
 
     try {
         // Always call the unified command
-        const result = await invoke('transcribe_media_command', payload);
+        const result = await invoke('transcribe_media_command', { payload: payload });
 
         // The 'result' from 'transcribe_media_command' is TranscriptionResultPayload { original_transcript_path, translated_transcript_path }
         // It does NOT contain segments directly. The frontend will need to load the transcript using the path.
