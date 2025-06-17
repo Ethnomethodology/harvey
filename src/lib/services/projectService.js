@@ -849,12 +849,12 @@ export async function handleConfirmStartTranscription() {
             notificationStore.add('Transcription cancelled.', 'info');
             toggleTranscribeModal(false);
             clearTranscriptionStatus('Transcription cancelled.');
-            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: args.mediaPath, errorMessage: null });
+            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: payload.mediaPathStr, errorMessage: null });
         } else {
             notificationStore.add(`Transcription failed: ${errorMessage}`, 'error', 0); // Persistent error
             toggleTranscribeModal(false);
             clearTranscriptionStatus('Transcription failed.', errorMessage);
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: args.mediaPath, errorMessage: errorMessage });
+            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: payload.mediaPathStr, errorMessage: errorMessage });
         }
     }
 }
