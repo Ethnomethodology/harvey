@@ -746,12 +746,15 @@ export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTi
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
 export async function requestTranscription() {
+    const storeState = get(transcriptStore);
+    console.log(`[JULES-DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (currentProj.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
-    toggleTranscribeModal(true);
+    // toggleTranscribeModal(true); // Replaced by prepareForNewTranscription
+    transcriptStore.prepareForNewTranscription(); // Ensures modal is shown and state is reset
 }
 export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
@@ -810,97 +813,69 @@ export async function handleConfirmStartTranscription() {
         const backendJobId = initiatedPayload.job_id;
 
         // Now call setTranscriptionStatus with the backendJobId
+        // This sets isTranscribing = true, transcriptionJobStatus = 'running', etc.
         setTranscriptionStatus(true, backendJobId, {
             initialProgressMessage: `Transcription starting with model ${payload.model_name}... (Job ID: ${backendJobId})`,
             mediaPath: payload.mediaPathStr
         });
 
-
-        // The original 'result' which contained transcript paths is now implicitly handled by event listeners
-        // or separate calls based on the job_id. The command now only returns the job_id.
-        // For the purpose of this function, we've initiated the job.
-        // The rest of the logic concerning `custom_transcription_job_completed` will be triggered by backend events.
-
-        // Simulating the original structure for where 'result' was used, if necessary for event emission,
-        // but the actual paths will come from the event payload of 'custom_transcription_job_completed'.
-        // This part needs to align with how 'custom_transcription_job_completed' is handled.
-        // For now, we assume that the `jobFinishedPath` (mediaPathStr) is sufficient for that event.
-        // The `transcriptFilePath` and `translatedTranscriptFilePath` will be part of the 'done' event payload.
-
-        // The original success path that processed 'result' is now effectively split.
-        // This function confirms initiation. The 'custom_transcription_job_completed' listener handles completion.
-        // We might not need to do much more here other than logging or a very basic UI update if needed.
-        // The modal closing and notifications will largely be driven by the event listener for job completion/failure.
-
-        // The original logic for handling `ranInBackground` and modal status update
-        // should ideally be moved to the event listener for `custom_transcription_job_completed`
-        // because the job's actual completion is now an async event.
-
-        // However, to minimize changes to the existing flow for now, we'll keep the structure,
-        // understanding that 'clearTranscriptionStatus' and 'emit' are for the *initiation* part.
-        // The actual *completion* part is handled by the event listener.
-
-        // This function's primary role is now to *start* the job and get the ID.
-        // The subsequent `if (ranInBackground)` block might be less relevant here,
-        // or its meaning changes to "if the *initiation* was meant to be backgrounded".
-
-		// const tsStore = get(transcriptStore);
-        // const ranInBackground = tsStore.ranInBackground;
-
-        // if (ranInBackground) {
-        //     notificationStore.add('Transcription initiated.', 'success'); // Changed message
-        //     if (get(transcriptStore).showTranscribeModal) {
-        //          toggleTranscribeModal(false); // Close modal after initiation if backgrounded
-        //     }
-        // } else {
-        //     // If not backgrounded, the modal might show progress based on the job_id
-        //     // and will be closed by the event listener upon completion.
-        //     // No immediate status change in the modal here, other than what setTranscriptionStatus did.
-        // }
-
-		// clearTranscriptionStatus('Transcription initiated.'); // Changed message
-        // // Emit event with original path. If translated path exists, UI might need to know separately or via store update.
-		// await emit('custom_transcription_job_initiated', { // Changed event name for clarity
-        //     jobId: backendJobId,
-        //     status: 'initiated',
-        //     jobInitiatedPath: payload.mediaPathStr, // Path of the media that was processed
-        // });
-
-        // The old 'result' processing is removed as 'transcribe_media_command' no longer returns paths directly.
-        // The success handling (loading transcript, etc.) should be triggered by the 'custom_transcription_job_completed' event.
-        // For now, this function successfully initiated the job. The modal remains open (if it was open)
-        // to show progress via the TRANSCRIPTION_PROGRESS listener.
+        // Modal remains open due to showTranscribeModal: true from prepareForNewTranscription
+        // and isTranscribing: true from setTranscriptionStatus.
+        // Progress will be shown, and completion/error will be handled by store listener.
 
     } catch (error) {
-        const errorMessage = error?.message || String(error);
-        if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
-            notificationStore.add('Transcription request cancelled by user or system.', 'info'); // Clarified message
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription request cancelled.'); // Clarified message
-            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: payload.mediaPathStr, errorMessage: null });
-        } else {
-            notificationStore.add(`Transcription initiation failed: ${errorMessage}`, 'error', 0); // Persistent error, clarified message
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription initiation failed.', errorMessage); // Clarified message
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: payload.mediaPathStr, errorMessage: errorMessage });
-        }
+        const extractedErrorMessage = error?.message || String(error);
+        // Keep modal open to show the error message.
+        transcriptStore.update(ts => ({
+            ...ts,
+            isTranscribing: false,
+            transcriptionJobStatus: 'error',
+            transcriptionErrorMessage: extractedErrorMessage,
+            showTranscribeModal: true // Explicitly keep/set true
+        }));
+        // notificationStore.add(`Transcription initiation failed: ${extractedErrorMessage}`, 'error', 0); // This might be redundant if modal shows error
+        // No longer emitting 'custom_transcription_job_completed' from here for errors,
+        // as the store listener for backend events should be the source of truth for job completion status.
+        // If invoke itself fails, an event won't be emitted by backend. This case handles that.
     }
 }
 export async function handleCancelTranscriptionRequest() {
     const currentProj = get(project);
     const currentTs = get(transcriptStore);
-    const jobId = currentProj.transcriptionJobId; // This should be the backendJobId stored in projectStore or transcriptStore
-    if (!jobId || !currentProj.isTranscribing) return;
-    const modelUsedForJob = currentTs.selectedModelName;
-    const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
-    const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
-    transcribeModalInstance?.setStatusCancelling('Requesting cancellation...');
+    const jobId = currentTs.transcriptionJobId; // Reading from transcriptStore where it's set
+
+    if (!jobId || !currentTs.isTranscribing) {
+        console.warn("[ProjectService handleCancel] No active job ID or not transcribing. JobID:", jobId, "IsTranscribing:", currentTs.isTranscribing);
+        return;
+    }
+
+    // Update UI to "cancelling" state immediately
+    transcriptStore.update(ts => ({ ...ts, transcriptionJobStatus: 'cancelling' }));
+
+    // const modelUsedForJob = currentTs.selectedModelName; // selectedModelName might not be the one used for the *current* job if UI changed
+    // Rely on backend to know which type of job it is, if necessary.
+    // For now, assuming a single 'cancel_transcription' command.
+    // const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
+    // const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
+    const cancelCommand = 'cancel_transcription'; // Assuming one command for now
+
+    // transcribeModalInstance?.setStatusCancelling('Requesting cancellation...'); // Modal now reacts to store
+
     try {
         await invoke(cancelCommand, { jobId });
+        // Backend will emit TRANSCRIPTION_PROGRESS with a cancellation message,
+        // then custom_transcription_job_completed with status 'cancelled'.
+        // Store listener will update transcriptionJobStatus again based on that event.
     } catch (error) {
         const errorMessage = error?.message || String(error);
-        transcribeModalInstance?.setStatusError(`Failed to send cancel request: ${errorMessage}`);
-        project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` }));
+        // If cancel invoke fails, revert status from 'cancelling' to 'error' or 'running'
+        transcriptStore.update(ts => ({
+            ...ts,
+            transcriptionJobStatus: 'error', // Or back to 'running' if cancel failed meaning job might still be running
+            transcriptionErrorMessage: `Failed to send cancel request: ${errorMessage}`
+        }));
+        // project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` })); // Project store error might be too broad
+        notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
 }
 export let progressListenerInitialized = false; export let progressUnlistenFn = null; export async function initializeProgressListener() { console.log('[JULES-DEBUG] initializeProgressListener called'); if (progressListenerInitialized) return; try { progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => { console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event); const payload = event.payload; if (!payload || typeof payload !== 'object') { console.log('[JULES-DEBUG] projectService: Payload empty or not an object'); return; } const eventJobId = payload.jobId ?? payload.job_id; const currentJobId = get(transcriptStore).transcriptionJobId; console.log(`[JULES-DEBUG] projectService: Event Job ID: ${eventJobId}, Store Job ID: ${currentJobId}`); if (currentJobId && eventJobId === currentJobId) { updateTranscriptionProgress({ jobId: currentJobId, percent: payload.percent ?? 0, message: payload.message ?? '' }); } else { console.log('[JULES-DEBUG] projectService: Job ID mismatch or no current job ID in store. Event payload:', payload); } }); progressListenerInitialized = true; } catch (e) { project.update(p => ({ ...p, error: "Failed to initialize progress listener." })); } }

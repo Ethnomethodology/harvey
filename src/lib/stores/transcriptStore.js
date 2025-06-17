@@ -30,6 +30,8 @@ export const initialTranscriptState = {
     pendingTranscriptPathForJobDone: null,
     pendingSegmentsForJobDone: null,
     ranInBackground: false,
+    transcriptionJobStatus: null, // Possible values: 'running', 'done', 'error', 'cancelled', null
+    transcriptionErrorMessage: null, // Stores error message if any
     // Dual transcript additions
     translateToEnglish: false,
     activeTranscriptLanguage: 'original', // 'original' or 'english'
@@ -650,47 +652,43 @@ export function toggleTranscribeModal(show) {
 }
 
 export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
-    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Setting job_id to:', jobId);
+    console.log(`[JULES-DEBUG TS setStatus] Called with: isTranscribing=${isTranscribing}, jobId=${jobId}, options=`, options);
     // Log the entire options object received
-    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Received options object:', options); // <--- ADD THIS LINE
+    // console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Received options object:', options); // Commented out as redundant with above
 
-    const { initialProgressMessage = '', mediaPath = null } = options;
+    // const { initialProgressMessage = '', mediaPath = null } = options; // Options might not be used if isTranscribing is false
 
     // Log initialProgressMessage after destructuring
-    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: initialProgressMessage after destructuring:', initialProgressMessage); // <--- ADD THIS LINE
-
-    transcriptStore.update((ts) => {
-        const newActiveMediaDuringStart = isTranscribing
-            ? ts.selectedMediaFile?.path ?? null
-            : ts.activeMediaDuringTranscriptionStart;
-
-        // Log the message that will be set to the store
-        if (isTranscribing) {
-            console.log(`[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Message being set to store: ${initialProgressMessage}`); // <--- ADD THIS LINE
-        }
-
-        return {
-            ...ts,
-            isTranscribing: !!isTranscribing,
-            transcriptionJobId: jobId,
-            mediaPathForLastJob: isTranscribing ? mediaPath : ts.mediaPathForLastJob,
-            activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
-            transcriptionProgress: isTranscribing ? { percent: 0, message: initialProgressMessage } : ts.transcriptionProgress,
-            ranInBackground: false,
-        };
-    });
+    // console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: initialProgressMessage after destructuring:', initialProgressMessage); // <--- ADD THIS LINE
 
     if (isTranscribing) {
-        updateProjectStoreState({
-            error: null
+        transcriptStore.update((ts) => {
+            const newActiveMediaDuringStart = ts.selectedMediaFile?.path ?? null;
+            const messageToSet = options.initialProgressMessage || 'Processing...';
+            // console.log(`[JULES-DEBUG] transcriptStore.setTranscriptionStatus (isTranscribing=true): Message being set to store: ${messageToSet}`); // Covered by general update log
+            return {
+                ...ts,
+                isTranscribing: true,
+                transcriptionJobId: jobId,
+                mediaPathForLastJob: options.mediaPath || ts.mediaPathForLastJob, // Use options.mediaPath
+                activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
+                transcriptionProgress: { percent: 0, message: messageToSet },
+                transcriptionJobStatus: 'running',
+                transcriptionErrorMessage: null,
+                ranInBackground: false, // Reset this flag when starting a new job
+            };
+            console.log(`[JULES-DEBUG TS setStatus Updated] Store updated to: isTranscribing=${updatedState.isTranscribing}, jobId=${updatedState.transcriptionJobId}, jobStatus=${updatedState.transcriptionJobStatus}, progressMsg='${updatedState.transcriptionProgress.message}'`);
+            return updatedState;
         });
+        updateProjectStoreState({ error: null }); // Clear any previous project-level errors
     }
+    // No 'else' part; clearing/setting other statuses is handled by clearTranscriptionStatus or event handlers
 }
 
 export function updateTranscriptionProgress(progressPayload) {
-    console.log('[JULES-DEBUG] transcriptStore: updateTranscriptionProgress called with payload:', progressPayload); // <--- ADD THIS
+    // console.log('[JULES-DEBUG] transcriptStore: updateTranscriptionProgress called with payload:', progressPayload); // Covered by internal log
     transcriptStore.update((ts) => {
-        console.log('[JULES-DEBUG] transcriptStore.updateTranscriptionProgress: Current store job_id:', ts.transcriptionJobId, 'Event payload:', progressPayload);
+        console.log('[JULES-DEBUG TS updateTranscriptionProgress] Current store job_id:', ts.transcriptionJobId, 'Event payload:', progressPayload);
         // ...
         if (ts.isTranscribing && ts.transcriptionJobId && progressPayload?.jobId === ts.transcriptionJobId) {
             console.log('[JULES-DEBUG] transcriptStore: Store WILL BE updated with progress. Old progress:', ts.transcriptionProgress); // <--- MODIFIED TO SHOW OLD VAL
@@ -700,6 +698,7 @@ export function updateTranscriptionProgress(progressPayload) {
             return {
                 ...ts,
                 transcriptionProgress: newProgress,
+                transcriptionJobStatus: 'running', // Ensure status remains 'running' during progress
             };
         } else {
             console.log('[JULES-DEBUG] transcriptStore: Store NOT updated. Conditions: isTranscribing:', ts.isTranscribing, 'storeJobId:', ts.transcriptionJobId, 'eventJobId:', progressPayload?.jobId); // <--- MODIFIED FOR CLARITY
@@ -713,14 +712,36 @@ export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = n
     transcriptStore.update((ts) => ({
         ...ts,
         isTranscribing: false,
-        transcriptionProgress: { percent: 0, message: '' },
-        transcriptionJobId: null,
-        activeMediaDuringTranscriptionStart: null, // Reset here
-        // pendingTranscriptPathForJobDone: null, // REMOVED
-        // pendingSegmentsForJobDone: null,       // REMOVED
-        // mediaPathForLastJob is no longer reset here
+        // transcriptionProgress: { percent: 0, message: '' }, // Do not change progress here
+        // transcriptionJobId: null, // Handled by event handlers or prepareForNewTranscription
+        activeMediaDuringTranscriptionStart: null,
+    };
+    console.log(`[JULES-DEBUG TS clearStatus] Called. Current store before clear: isTranscribing=${ts.isTranscribing}, jobId=${ts.transcriptionJobId}, jobStatus=${ts.transcriptionJobStatus}`);
+    return updatedState;
     }));
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
+}
+
+export function prepareForNewTranscription() {
+    transcriptStore.update(ts => {
+        console.log('[JULES-DEBUG TS prepareNew] Called. Resetting transcription states and showing modal.');
+        return {
+            ...ts,
+            isTranscribing: false,
+            transcriptionJobId: null,
+            transcriptionProgress: { percent: 0, message: '' },
+            transcriptionJobStatus: null,
+            transcriptionErrorMessage: null,
+            showTranscribeModal: true // Ensure modal is shown
+        };
+    });
+}
+        transcriptionJobId: null,
+        transcriptionProgress: { percent: 0, message: '' },
+        transcriptionJobStatus: null,
+        transcriptionErrorMessage: null,
+        showTranscribeModal: true // Ensure modal is shown
+    }));
 }
 
 export function clearPendingTranscriptData() {
@@ -889,7 +910,12 @@ export function switchToEnglishTranscript() {
 // This updateProjectStoreState would need to be added to projectStore.js
 
 import { listen } from '@tauri-apps/api/event';
-
+export function toggleTranscribeModal(show) { // Added this function as it was missing but referenced
+    transcriptStore.update((ts) => {
+        console.log(`[JULES-DEBUG TS toggleModal] showTranscribeModal will be set to: ${show}`);
+        return { ...ts, showTranscribeModal: !!show };
+    });
+}
 // Listen for media rename events from the backend
 listen('media_renamed', (event) => {
     if (!event.payload) return;
@@ -984,19 +1010,25 @@ listen('custom_transcription_job_completed', async (event) => {
             } catch (e) {
                 console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
             }
-            clearTranscriptionStatus('Transcription complete.');
-            toggleTranscribeModal(false);
+            // clearTranscriptionStatus('Transcription complete.'); // Removed
+            // toggleTranscribeModal(false); // Removed
+            console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
+            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'done', transcriptionErrorMessage: null }));
 
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
             updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
-            clearTranscriptionStatus(`Transcription failed: ${errorMessage}`, errorMessage);
-            toggleTranscribeModal(false);
+            // clearTranscriptionStatus(`Transcription failed: ${errorMessage}`, errorMessage); // Removed
+            // toggleTranscribeModal(false); // Removed
+            console.log(`[JULES-DEBUG TS eventComplete] Status: 'error'. Payload:`, event.payload);
+            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'error', transcriptionErrorMessage: errorMessage }));
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
             updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
-            clearTranscriptionStatus('Transcription cancelled.');
-            toggleTranscribeModal(false);
+            // clearTranscriptionStatus('Transcription cancelled.'); // Removed
+            // toggleTranscribeModal(false); // Removed
+            console.log(`[JULES-DEBUG TS eventComplete] Status: 'cancelled'. Payload:`, event.payload);
+            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'cancelled', transcriptionErrorMessage: null }));
         }
     } else {
          console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);

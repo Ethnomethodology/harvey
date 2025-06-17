@@ -1,177 +1,83 @@
 <!-- src/lib/components/projectview/modals/TranscribeConfirmModal.svelte -->
 <script>
-	import { createEventDispatcher, onDestroy } from 'svelte'; // Removed onMount
+	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
-	// Import project store to read progress data
-	import { project } from '$lib/stores/projectStore.js';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 
 	// Props
-	export let showModal = false;
-	export let fileName = '';
-	export let modelName = '';
-	export let language = '';
-	export let speakers = { count: 0 };
-	export let jobId = null; // Kept for potential display
+	export let fileName = ''; // Still needed for confirm view
+	export let modelName = ''; // Still needed for confirm view
+	export let language = ''; // Still needed for confirm view
+	export let speakers = { count: 0, names: [] }; // Still needed for confirm view
 
 	const dispatch = createEventDispatcher();
 
-	// Internal state for modal appearance/status
-	let status = 'confirm'; // 'confirm', 'running', 'cancelling', 'done', 'error', 'cancelled'
-	let errorMessage = '';
-	let successMessage = '';
-	let cancelledMessage = '';
-
-	// --- Event Handlers ---
+	// Event Handlers
 	function handleConfirm() {
-		console.log('[Modal] Confirming transcription start...');
-		status = 'running'; // Switch UI state immediately
-		errorMessage = '';
-		successMessage = '';
-		cancelledMessage = '';
-		dispatch('confirmStart', {
-			// modelName: modelName, // modelName is a prop, already available to parent
-			// language: language,   // language is a prop, already available to parent
-			// numSpeakers: speakers?.count, // speakers is a prop
-		}); // Tell parent/service to start backend
+		dispatch('confirmStart');
 	}
 
 	function handleCancelRequest() {
-		if (status !== 'running') return; // Only cancel if running
-		console.log('[Modal] Requesting transcription cancellation...');
-		status = 'cancelling'; // Update UI state
-		dispatch('cancelRequest'); // Tell parent/service to request cancellation
+		dispatch('cancelRequest');
 	}
 
-	function closeModal() {
-    let dispatchPayload = { acknowledged: false, finalStatus: status }; // Default payload
-
-    if (status === 'running' || status === 'cancelling') {
-        console.warn('[Modal] Closing modal while status is:', status);
-        // Optionally, could trigger handleCancelRequest here if desired
-        // For now, just a normal close, user might not want to cancel
-    }
-
-    if (status === 'done' || status === 'error' || status === 'cancelled') {
-        dispatchPayload.acknowledged = true;
-    }
-
-    // Reset internal state ONLY when closing (via X, background, or final Close button)
-    status = 'confirm'; // Always reset to confirm
-    errorMessage = '';
-    successMessage = '';
-    cancelledMessage = '';
-    // transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false })); // Directly control store
-    dispatch('close', dispatchPayload); // Signal parent/service to update store's showModal AND handle post-acknowledgment tasks
-}
-
-	// --- Public methods (callable from parent/service via bind:this) ---
-	// *** ADD 'export' to make this function callable from outside ***
-	export function updateProgress(newProgress, newMessage) {
-        // This function is NO LONGER NEEDED here as progress is read directly from the store.
-        // Kept as placeholder in case it's called, but ideally remove calls from service.
-		// console.warn('[Modal updateProgress] This function is deprecated. Progress read from store.');
-		// if (status === 'running' || status === 'cancelling') {
-			// No local state to update
-		// }
+	function handleCloseAndReset() {
+		dispatch('closeAndReset');
 	}
 
-	export function setStatusDone(message = 'Transcription complete.') {
-		console.log(`[Modal] Setting status to 'done'`);
-		status = 'done';
-		successMessage = message;
-		errorMessage = '';
+	function handleRunInBackgroundAndClose() {
+		dispatch('runInBackgroundAndClose');
 	}
 
-	export function setStatusError(errorMsg = 'An unknown error occurred.') {
-		console.log(`[Modal] Setting status to 'error': ${errorMsg}`);
-		status = 'error';
-		errorMessage = errorMsg;
-		successMessage = '';
-		cancelledMessage = '';
-	}
+	// --- Reactive Derivations from Store for UI ---
+	// $: console.log('[ModalDebug] Store State:', $transcriptStore); // Uncomment for deep debugging
 
-	export function setStatusCancelled(message = 'Transcription cancelled.') {
-		console.log(`[Modal] Setting status to 'cancelled'`);
-		status = 'cancelled';
-		cancelledMessage = message;
-		errorMessage = '';
-		successMessage = '';
-	}
-
-	// Can still be called by service if needed, updates UI state
-	export function setStatusCancelling(message = 'Requesting cancellation...') {
-        if (status === 'running') { // Only switch if currently processing
-             status = 'cancelling';
-             // Note: progressMessage is now derived from the store below
-        }
-    }
-
-	// --- Keyboard handling ---
-	function handleKeydown(event) {
-		if (showModal && event.key === 'Escape') {
-			// closeModal(); // Escape key functionality will be handled differently or removed based on new requirements
-            // For now, let's disable it to ensure modal stays open unless explicitly closed by new buttons
-		}
-	}
-
-	// --- Reactive Derivations from Store ---
-	// Get progress directly from the global store when the modal is potentially running/cancelling
-	// Use internal status to gate reading from store, otherwise show defaults
-	$: currentProgressPercent = (status === 'running' || status === 'cancelling') && $transcriptStore.isTranscribing
-								? $transcriptStore.transcriptionProgress.percent
-								: (status === 'done' ? 100 : 0);
-
-	// Add a console log before currentProgressMessage is derived
 	$: {
-		if (status === 'running' || status === 'cancelling') {
-			console.log(`[JULES-DEBUG] TranscribeConfirmModal: status = ${status}, $transcriptStore.transcriptionProgress.message = ${$transcriptStore.transcriptionProgress.message}`); // <--- ADD THIS LINE
+		console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
+	}
+
+	$: {
+		if ($transcriptStore.showTranscribeModal) {
+			console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
 		}
 	}
-	$: currentProgressMessage = status === 'running' ? ($transcriptStore.transcriptionProgress.message || 'Processing...')
-							   : status === 'cancelling' ? ($transcriptStore.transcriptionProgress.message || 'Cancelling...')
-							   : ''; // No message needed in other states displayed here
 
-	$: currentJobId = $transcriptStore.transcriptionJobId; // Get current Job ID from store
+	$: showModal = $transcriptStore.showTranscribeModal;
+	$: isTranscribing = $transcriptStore.isTranscribing;
+	$: jobStatus = $transcriptStore.transcriptionJobStatus;
+	$: progressPercent = $transcriptStore.transcriptionProgress.percent;
+	$: progressMessage = $transcriptStore.transcriptionProgress.message;
+	$: currentErrorMessage = $transcriptStore.transcriptionErrorMessage;
+	$: currentJobId = $transcriptStore.transcriptionJobId;
+
 
 	// --- Title Logic ---
-	$: modalTitle = status === 'confirm' ? 'Confirm Transcription Settings' :
-					 status === 'running' ? `Transcription Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
-					 status === 'cancelling' ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` :
-					 status === 'done' ? 'Transcription Complete' :
-					 status === 'error' ? 'Transcription Error' :
-					 status === 'cancelled' ? 'Transcription Cancelled' :
+	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Confirm Transcription Settings' :
+					 (isTranscribing && jobStatus === 'running') ? `Transcription Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
+					 (jobStatus === 'cancelling') ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` : // Added 'cancelling'
+					 (!isTranscribing && jobStatus === 'done') ? 'Transcription Complete' :
+					 (!isTranscribing && jobStatus === 'error') ? 'Transcription Error' :
+					 (!isTranscribing && jobStatus === 'cancelled') ? 'Transcription Cancelled' :
 					 'Transcription Status';
 
+    // Keyboard handling (optional, can be simplified or removed if not strictly needed by new design)
+	function handleKeydown(event) {
+		if (showModal && event.key === 'Escape') {
+			// Decide if Escape should trigger 'closeAndReset' or 'runInBackgroundAndClose' depending on state
+            if (isTranscribing && jobStatus === 'running') {
+                // Maybe do nothing, or dispatch runInBackgroundAndClose
+            } else if (!isTranscribing && (jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)) {
+                 handleCloseAndReset();
+            }
+		}
+	}
 
-    // Add/remove keyboard listener based on modal visibility
 	$: if (showModal && typeof window !== 'undefined') {
 		window.addEventListener('keydown', handleKeydown);
-
-    // If the modal is being shown, is currently in 'confirm' state (e.g., from a previous closeModal() call or initial state),
-    // AND a transcription job is globally active ($transcriptStore.isTranscribing is true),
-    // then transition the modal's internal status to 'running'.
-    if (status === 'confirm' && $transcriptStore.isTranscribing) {
-        console.log('[Modal] Syncing to "running" state: Modal was "confirm" and a global transcription is active.');
-        status = 'running';
-        // Clear any potentially stale messages when transitioning to 'running' for a new/ongoing job.
-        successMessage = '';
-        errorMessage = '';
-        cancelledMessage = '';
-    }
-    // If the modal's status was externally set to 'done', 'error', or 'cancelled' (by projectService for a foreground job),
-    // this block will not alter that status. The modal will correctly display that terminal state.
-    // The user will then interact with the modal's buttons (e.g., "Close"), which will call `closeModal()`,
-    // and `closeModal()` is responsible for resetting the status to 'confirm' at that point.
-    // If the modal is opened for a new transcription (status='confirm', isTranscribing=false), this block also does nothing,
-    // leaving the modal in the 'confirm' state, ready for user input.
-
-	} else if (typeof window !== 'undefined') { // Equivalent to: if (!showModal && ...)
-    // When the modal is not shown, remove the keydown listener.
+	} else if (typeof window !== 'undefined') {
 		window.removeEventListener('keydown', handleKeydown);
 	}
 
-    // Cleanup listener on component destroy
     onDestroy(() => {
         if (typeof window !== 'undefined') {
              window.removeEventListener('keydown', handleKeydown);
@@ -186,6 +92,7 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
+		on:click={handleCloseAndReset} <!-- Allow closing by clicking backdrop if appropriate, or remove -->
 	>
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
@@ -194,8 +101,8 @@
 		>
 			<h2 id="transcribe-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
 
-			{#if status === 'confirm'}
-				<!-- Confirmation View -->
+			{#if !isTranscribing && jobStatus === null}
+				<!-- CONFIRM VIEW -->
 				<div class="space-y-2 text-sm mb-5 text-gray-700 dark:text-gray-300">
 					<p><strong>File:</strong> <span class="font-mono break-all">{fileName || 'N/A'}</span></p>
 					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
@@ -204,74 +111,86 @@
 					<p><strong>Translate to English:</strong> <span class="font-mono">{$transcriptStore.translateToEnglish ? 'Yes' : 'No'}</span></p>
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto">
-					<button class="btn-secondary" on:click={closeModal}>Cancel</button>
+					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button class="btn-primary" on:click={handleConfirm}>Start Transcription</button>
 				</div>
 
-			{:else if status === 'running' || status === 'cancelling'}
-				<!-- Processing/Cancelling View -->
+			{:else if isTranscribing && jobStatus === 'running'}
+				<!-- RUNNING VIEW -->
 				<div class="flex flex-col items-center space-y-4 mb-6">
                     <div class="w-16 h-16">
-                        {#if status === 'running'}
-                            <Loader class="w-full h-full text-blue-500 animate-spin" />
-                        {:else} <!-- cancelling -->
-                            <Clock class="w-full h-full text-orange-500" />
-                        {/if}
+                        <Loader class="w-full h-full text-blue-500 animate-spin" />
                     </div>
 					<div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
 						<div
 							class="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out"
-							style="width: {currentProgressPercent}%"
+							style="width: {progressPercent}%"
 						></div>
 					</div>
 					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{currentProgressPercent.toFixed(0)}% - {currentProgressMessage}
+						{progressPercent.toFixed(0)}% - {progressMessage || 'Processing...'}
 					</p>
 				</div>
-				<div class="flex justify-center space-x-2 mt-auto"> <!-- MODIFIED: Added space-x-2 for button spacing -->
-					{#if status === 'running'}
-						<button class="btn-secondary" on:click={() => { dispatch('runInBackground'); closeModal(); }}>
-							Run in background
-						</button>
-						<button class="btn-action-cancel" on:click={handleCancelRequest}>
-							Request Cancellation
-						</button>
-					{:else} <!-- cancelling -->
-						<button class="btn-secondary" disabled>Cancelling...</button>
-					{/if}
+				<div class="flex justify-center space-x-2 mt-auto">
+					<button class="btn-secondary" on:click={handleRunInBackgroundAndClose}>
+						Run in background
+					</button>
+					<button class="btn-action-cancel" on:click={handleCancelRequest}>
+						Request Cancellation
+					</button>
 				</div>
 
-			{:else if status === 'done'}
-				<!-- Done View -->
+			{:else if jobStatus === 'cancelling'}
+				<!-- CANCELLING VIEW (Added this state based on logic) -->
+				<div class="flex flex-col items-center space-y-4 mb-6">
+                    <div class="w-16 h-16">
+                        <Clock class="w-full h-full text-orange-500" />
+                    </div>
+					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
+						{progressMessage || 'Attempting to cancel...'}
+					</p>
+				</div>
+				<div class="flex justify-center space-x-2 mt-auto">
+					<button class="btn-secondary" disabled>Cancelling...</button>
+				</div>
+
+			{:else if !isTranscribing && jobStatus === 'done'}
+				<!-- DONE VIEW -->
 				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
 					<CheckCircle class="w-16 h-16 text-green-500" />
-					<p class="text-sm font-medium">{successMessage || 'Transcription Complete!'}</p>
+					<p class="text-sm font-medium">{progressMessage || 'Transcription Complete!'}</p>
 				</div>
 				<div class="flex justify-center mt-auto">
-					<button class="btn-primary" on:click={closeModal}>Close</button>
+					<button class="btn-primary" on:click={handleCloseAndReset}>Close</button>
 				</div>
 
-			{:else if status === 'cancelled'}
-                <!-- Cancelled View -->
+			{:else if !isTranscribing && jobStatus === 'cancelled'}
+                <!-- CANCELLED VIEW -->
 				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
 					<XCircle class="w-16 h-16 text-orange-500" />
-					<p class="text-sm font-medium">{cancelledMessage || 'Transcription Cancelled'}</p>
+					<p class="text-sm font-medium">{progressMessage || 'Transcription Cancelled'}</p>
 				</div>
 				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={closeModal}>Close</button>
+					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
 				</div>
 
-			{:else if status === 'error'}
-				<!-- Error View -->
+			{:else if !isTranscribing && jobStatus === 'error'}
+				<!-- ERROR VIEW -->
 				<div class="flex flex-col items-center space-y-3 mb-6 text-center">
 					<XCircle class="w-16 h-16 text-red-500" />
 					<p class="text-sm font-medium">An Error Occurred</p>
 					<p class="text-xs bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 p-2 rounded w-full text-left overflow-x-auto max-h-32">
-						{errorMessage || 'Unknown error during transcription.'}
+						{currentErrorMessage || 'Unknown error during transcription.'}
 					</p>
 				</div>
 				<div class="flex justify-center mt-auto">
-					<button class="btn-secondary" on:click={closeModal}>Close</button>
+					<button class="btn-secondary" on:click={handleCloseAndReset}>Close</button>
+				</div>
+			{:else}
+				<!-- Fallback or initial brief loading state if necessary -->
+				<div class="flex flex-col items-center space-y-4 py-8">
+					<Loader class="w-12 h-12 text-gray-400 animate-spin" />
+					<p class="text-sm text-gray-500">Loading status...</p>
 				</div>
 			{/if}
 		</div>
