@@ -683,15 +683,23 @@ export function setTranscriptionStatus(isTranscribing, jobId = null, options = {
 }
 
 export function updateTranscriptionProgress(progressPayload) {
+    console.log('[JULES-DEBUG] transcriptStore: updateTranscriptionProgress called with payload:', progressPayload); // <--- ADD THIS
     transcriptStore.update((ts) => {
+        // ...
         if (ts.isTranscribing && ts.transcriptionJobId && progressPayload?.jobId === ts.transcriptionJobId) {
-            const newMessage = progressPayload?.message ?? ts.transcriptionProgress.message;
+            console.log('[JULES-DEBUG] transcriptStore: Store WILL BE updated with progress. Old progress:', ts.transcriptionProgress); // <--- MODIFIED TO SHOW OLD VAL
+            // ... rest of the update logic for success
+            // For example, ensure the return includes the updated transcriptionProgress
+            const newProgress = { percent: progressPayload?.percent ?? 0, message: progressPayload?.message ?? '' };
             return {
                 ...ts,
-                transcriptionProgress: { percent: progressPayload?.percent ?? 0, message: newMessage },
+                transcriptionProgress: newProgress,
             };
+        } else {
+            console.log('[JULES-DEBUG] transcriptStore: Store NOT updated. Conditions: isTranscribing:', ts.isTranscribing, 'storeJobId:', ts.transcriptionJobId, 'eventJobId:', progressPayload?.jobId); // <--- MODIFIED FOR CLARITY
+             return ts; // Ensure state is returned
         }
-        return ts;
+        // REMOVED: return ts; // This was potentially problematic if not all paths returned explicitly
     });
 }
 
