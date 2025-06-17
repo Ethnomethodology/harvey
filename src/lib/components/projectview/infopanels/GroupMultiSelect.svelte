@@ -1,9 +1,14 @@
 <script lang="ts">
-	import type { GroupData } from '$lib/types'; // Assuming GroupData type is defined elsewhere
 	import { createEventDispatcher } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
-    import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/svelte/20/solid';
 
+	// Define GroupData directly in this file
+	interface GroupData {
+		id: string;
+		project_id: string;
+		name: string;
+		description?: string | null; // Optional description
+	}
 
 	export let fileAssetRelativePath: string;
 	export let projectId: string;
