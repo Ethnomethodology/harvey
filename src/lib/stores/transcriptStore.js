@@ -709,16 +709,14 @@ export function updateTranscriptionProgress(progressPayload) {
 }
 
 export function clearTranscriptionStatus(finalStatusMessage = 'Ready', error = null) {
-    transcriptStore.update((ts) => ({
-        ...ts,
-        isTranscribing: false,
-        // transcriptionProgress: { percent: 0, message: '' }, // Do not change progress here
-        // transcriptionJobId: null, // Handled by event handlers or prepareForNewTranscription
-        activeMediaDuringTranscriptionStart: null,
-    };
-    console.log(`[JULES-DEBUG TS clearStatus] Called. Current store before clear: isTranscribing=${ts.isTranscribing}, jobId=${ts.transcriptionJobId}, jobStatus=${ts.transcriptionJobStatus}`);
-    return updatedState;
-    }));
+    transcriptStore.update(ts => {
+        console.log(`[JULES-DEBUG TS clearStatus] Called. Current store before clear: isTranscribing=${ts.isTranscribing}, jobId=${ts.transcriptionJobId}, jobStatus=${ts.transcriptionJobStatus}`);
+        return {
+            ...ts,
+            isTranscribing: false,
+            activeMediaDuringTranscriptionStart: null,
+        };
+    });
     updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
 }
 
