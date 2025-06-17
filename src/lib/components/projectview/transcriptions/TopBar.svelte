@@ -164,8 +164,8 @@
 	$: languageSelectValue = $transcriptStore.selectedLanguage ?? "";
 
 	// Ensure translateToEnglish is false if language is switched to English
-	$: if ($transcriptStore.selectedLanguage === 'en' && translateToEnglish) {
-		translateToEnglish = false;
+	$: if ($transcriptStore.selectedLanguage === 'en' && $transcriptStore.translateToEnglish) {
+		setTranslateToEnglish(false);
 	}
 
 	// --- Reactive check for Transcribe button disable state ---
