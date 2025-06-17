@@ -650,7 +650,7 @@ pub async fn transcribe_media_command(
 
     let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...")?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, &format!("Transcription starting with model {}...", payload.model_name))?;
     let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
     emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
 
