@@ -1478,7 +1478,7 @@ pub(crate) fn emit_progress_cmd(
 ) -> Result<(), CommandError> {
     let clamped_percent = percent.max(0.0).min(100.0);
     debug!("[Progress Emit CMD][{}] {:.1}% - {}", job_id, clamped_percent, message);
-    app_handle.emit("PROGRESS", ProgressPayload {
+    app_handle.emit("TRANSCRIPTION_PROGRESS", ProgressPayload {
         job_id: job_id.to_string(),
         percent: clamped_percent,
         message: message.to_string(),
