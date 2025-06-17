@@ -81,7 +81,8 @@ import {
     clearTranscriptionStatus,
     selectMedia, // Ensure selectMedia is imported
     clearTranscriptState,
-    markTranscriptAsSaved
+    markTranscriptAsSaved,
+    prepareForNewTranscription // Import the function
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -746,123 +747,152 @@ export async function handleTrimMediaConfirm(originalMediaPath, startTime, endTi
 
 export let transcribeModalInstance = null; export function registerTranscribeModal(instance) { transcribeModalInstance = instance; }
 export async function requestTranscription() {
+    const storeState = get(transcriptStore);
+    console.log(`[JULES-DEBUG PS requestTranscription] Called. Current store state: isTranscribing=${storeState.isTranscribing}, showModal=${storeState.showTranscribeModal}, jobStatus=${storeState.transcriptionJobStatus}`);
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
-    if (currentProj.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
-    toggleTranscribeModal(true);
+    if (storeState.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
+    prepareForNewTranscription(); // Call the imported function directly
 }
 export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
-    const jobId = uuidv4();
+    // const jobId = uuidv4(); // Removed: Will use backend-generated job_id
     const translateToEnglish = currentTs.translateToEnglish; // Add this line
+    
+    const mediaPathForJob = currentTs.selectedMediaFile?.path;
+    const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
 
-    // Ensure args.mediaPath is available for event emission even if initial checks fail
-    const mediaPathForEvent = currentTs.selectedMediaFile?.path;
+    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
 
-    if (!currentTs.selectedMediaFile?.path || !currentTs.selectedModelName) {
+    if (!mediaPathForJob || !modelNameForJob) {
         // Use notification store for error
         notificationStore.add('Error: Missing media file or model selection.', 'error', 0);
-        clearTranscriptionStatus('Transcription failed.', 'Missing media file or model selection.');
-        toggleTranscribeModal(false);
-        // Emit error event even for early exit due to missing selection
-        if (mediaPathForEvent) { // Only emit if we had a media path to associate with the job
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: mediaPathForEvent, errorMessage: 'Missing media file or model selection.' });
-        }
+        // Call setTranscriptionStatus to reflect the error state in the modal and keep it open
+        setTranscriptionStatus(false, null, { // isTranscribing is false
+            status: 'error',
+            errorMessage: 'Missing media file or model selection.'
+        });
         return;
     }
 
     const selectedModelIdentifier = currentTs.selectedModelName;
-    const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-');
-    const args = { mediaPath: currentTs.selectedMediaFile.path, language: currentTs.selectedLanguage || '', numSpeakers: currentTs.speakers.count, speakerNames: currentTs.speakers.names || [], translateToEnglish: translateToEnglish, jobId: jobId };
+    // const isCloudModel = selectedModelIdentifier.startsWith('google-') || selectedModelIdentifier.startsWith('gemini-'); // Cloud model logic will be handled by Rust or removed if not supported by transcribe_media_command
 
-    setTranscriptionStatus(true, jobId, {
-        initialProgressMessage: isCloudModel ? 'Cloud transcription starting...' : 'Local transcription starting...',
-        mediaPath: args.mediaPath
+    // Consolidate arguments for the unified 'transcribe_media_command'
+    const payload = {
+        project_xml_path: currentProj.xmlPath,
+        media_path_str: mediaPathForJob,
+        num_speakers: currentTs.speakers.count,
+        language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
+        model_name: modelNameForJob,
+        translate_to_english: currentTs.translateToEnglish,
+        speaker_names: currentTs.speakers.names || [],
+    };
+
+    // Step 1: Set status to 'initiating'. JobId is null at this point.
+    // This makes isTranscribing=true, and the modal should show an "Initiating..." state.
+    setTranscriptionStatus(true, null, { // jobIdToSet is null
+        status: 'initiating',
+        initialProgressMessage: `Initiating with ${modelNameForJob}...`,
+        mediaPath: mediaPathForJob
     });
 
     try {
-        let invokePromise;
-        if (isCloudModel) {
-            let cloudConfig;
-            try { cloudConfig = await getCloudConfig(); } catch (e) { throw new Error(`Failed to get cloud configuration: ${e.message}`); }
-            if (!cloudConfig?.consent) throw new Error("Cloud transcription consent not given.");
-            if (!cloudConfig?.api_key) throw new Error("Cloud API Key is missing.");
-            const cloudArgs = { ...args, cloudModelId: selectedModelIdentifier, apiKey: cloudConfig.api_key };
-            invokePromise = invoke('run_cloud_transcription', cloudArgs);
-        } else {
-            const localArgs = { ...args, modelName: selectedModelIdentifier };
-            invokePromise = invoke('run_transcription', localArgs);
+        // Always call the unified command
+        const initiatedPayload = await invoke('transcribe_media_command', { payload: payload });
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id.");
         }
-        const result = await invokePromise;
-        if (!result || typeof result.transcript_file_path !== 'string' || !Array.isArray(result.segments)) throw new Error("Invalid transcription result structure.");
+        const backendJobId = initiatedPayload.job_id;
 
-        transcriptStore.update(ts => ({
-            ...ts,
-            pendingTranscriptPathForJobDone: result.transcript_file_path,
-            pendingSegmentsForJobDone: result.segments
-        }));
+        // Step 2: Update status to 'running' with the actual job ID from the backend.
+        setTranscriptionStatus(true, backendJobId, { // Pass the backendJobId
+            status: 'running',
+            // The progress message might be quickly updated by the first actual progress event.
+            initialProgressMessage: `Transcription started (Job: ${backendJobId.substring(0,8)})...`,
+            mediaPath: mediaPathForJob // Can be redundant if already set in step 1, but harmless
+        });
+        // The progress listener should now be able to match events to backendJobId.
 
-		const tsStore = get(transcriptStore); // ADDED
-        const ranInBackground = tsStore.ranInBackground; // ADDED
-
-        if (ranInBackground) { // ADDED
-            notificationStore.add('Transcription complete!', 'success', 0); // MODIFIED
-            // Ensure modal is closed if it somehow wasn't by the runInBackground action
-            if (get(transcriptStore).showTranscribeModal) {
-                 toggleTranscribeModal(false);
-            }
-        } else { // ADDED
-            if (transcribeModalInstance && typeof transcribeModalInstance.setStatusDone === 'function') {
-                transcribeModalInstance.setStatusDone('Transcription complete!');
-                // Do NOT call toggleTranscribeModal(false) here; the user will close it via the modal's button.
-            } else {
-                // Fallback if modal instance isn't available, though it should be
-                notificationStore.add('Transcription complete! (Modal instance not found)', 'warning', 0); // MODIFIED
-                if (get(transcriptStore).showTranscribeModal) {
-                    toggleTranscribeModal(false);
-                }
-            }
-        }
-
-		clearTranscriptionStatus('Transcription complete.'); // COMMON - Stays after if/else
-		await emit('custom_transcription_job_completed', { status: 'done', jobFinishedPath: args.mediaPath, transcriptFilePath: result.transcript_file_path }); // COMMON - Stays after if/else
     } catch (error) {
-        const errorMessage = error?.message || String(error);
-        // args.mediaPath should be accessible here from the outer scope of handleConfirmStartTranscription
-        if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
-            notificationStore.add('Transcription cancelled.', 'info');
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription cancelled.');
-            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: args.mediaPath, errorMessage: null });
-        } else {
-            notificationStore.add(`Transcription failed: ${errorMessage}`, 'error', 0); // Persistent error
-            toggleTranscribeModal(false);
-            clearTranscriptionStatus('Transcription failed.', errorMessage);
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: args.mediaPath, errorMessage: errorMessage });
-        }
+        const extractedErrorMessage = error?.message || String(error);
+        // Set error status in the store; the modal will show this error.
+        setTranscriptionStatus(false, get(transcriptStore).transcriptionJobId, { // isTranscribing is false, pass current jobId (might be null if invoke failed early)
+            status: 'error',
+            errorMessage: extractedErrorMessage
+        });
     }
 }
 export async function handleCancelTranscriptionRequest() {
     const currentProj = get(project);
     const currentTs = get(transcriptStore);
-    const jobId = currentProj.transcriptionJobId;
-    if (!jobId || !currentProj.isTranscribing) return;
-    const modelUsedForJob = currentTs.selectedModelName;
-    const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
-    const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
-    transcribeModalInstance?.setStatusCancelling('Requesting cancellation...');
+    const jobId = currentTs.transcriptionJobId; // Reading from transcriptStore where it's set
+
+    if (!jobId || !currentTs.isTranscribing) {
+        console.warn("[ProjectService handleCancel] No active job ID or not transcribing. JobID:", jobId, "IsTranscribing:", currentTs.isTranscribing);
+        return;
+    }
+
+    // Update UI to "cancelling" state immediately
+    transcriptStore.update(ts => ({ ...ts, transcriptionJobStatus: 'cancelling' }));
+
+    // const modelUsedForJob = currentTs.selectedModelName; // selectedModelName might not be the one used for the *current* job if UI changed
+    // Rely on backend to know which type of job it is, if necessary.
+    // For now, assuming a single 'cancel_transcription' command.
+    // const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
+    // const cancelCommand = isCloudJob ? 'cancel_cloud_transcription' : 'cancel_transcription';
+    const cancelCommand = 'cancel_transcription'; // Assuming one command for now
+
+    // transcribeModalInstance?.setStatusCancelling('Requesting cancellation...'); // Modal now reacts to store
+
     try {
         await invoke(cancelCommand, { jobId });
+        // Backend will emit TRANSCRIPTION_PROGRESS with a cancellation message,
+        // then custom_transcription_job_completed with status 'cancelled'.
+        // Store listener will update transcriptionJobStatus again based on that event.
     } catch (error) {
         const errorMessage = error?.message || String(error);
-        transcribeModalInstance?.setStatusError(`Failed to send cancel request: ${errorMessage}`);
-        project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` }));
+        // If cancel invoke fails, revert status from 'cancelling' to 'error' or 'running'
+        transcriptStore.update(ts => ({
+            ...ts,
+            transcriptionJobStatus: 'error', // Or back to 'running' if cancel failed meaning job might still be running
+            transcriptionErrorMessage: `Failed to send cancel request: ${errorMessage}`
+        }));
+        // project.update(p => ({ ...p, error: `Cancellation request failed: ${errorMessage}` })); // Project store error might be too broad
+        notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
 }
-export let progressListenerInitialized = false; export let progressUnlistenFn = null; export async function initializeProgressListener() { if (progressListenerInitialized) return; try { progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => { const payload = event.payload; if (!payload || typeof payload !== 'object') return; const eventJobId = payload.jobId ?? payload.job_id; const currentJobId = get(transcriptStore).transcriptionJobId; if (currentJobId && eventJobId === currentJobId) updateTranscriptionProgress({ jobId: currentJobId, percent: payload.percent ?? 0, message: payload.message ?? '' }); }); progressListenerInitialized = true; } catch (e) { project.update(p => ({ ...p, error: "Failed to initialize progress listener." })); } }
+export let progressListenerInitialized = false;
+export let progressUnlistenFn = null;
+export async function initializeProgressListener() {
+    // console.log('[JULES-DEBUG] initializeProgressListener called');
+    if (progressListenerInitialized) return;
+    try {
+        progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => {
+            // console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
+            const payload = event.payload;
+            if (!payload || typeof payload !== 'object') {
+                // console.log('[JULES-DEBUG] projectService: Payload empty or not an object');
+                return;
+            }
+            const eventJobId = payload.jobId ?? payload.job_id; // Prefer 'jobId', fallback to 'job_id'
+            // Directly call updateTranscriptionProgress. It will handle matching and state transitions.
+            updateTranscriptionProgress({
+                jobId: eventJobId, // Pass the event's job ID
+                percent: payload.percent ?? 0,
+                message: payload.message ?? ''
+            });
+        });
+        progressListenerInitialized = true;
+    } catch (e) {
+        console.error("[ProjectService] Failed to initialize progress listener:", e);
+        project.update(p => ({ ...p, error: "Failed to initialize progress listener." }));
+    }
+}
 export function cleanupProgressListener() { if (progressUnlistenFn) { progressUnlistenFn(); progressUnlistenFn = null; } progressListenerInitialized = false; }
 
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }

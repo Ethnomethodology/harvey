@@ -591,8 +591,19 @@
         jobId={$transcriptStore.transcriptionJobId}
         on:confirmStart={handleConfirmStartTranscription}
         on:cancelRequest={handleCancelTranscriptionRequest}
-            on:close={handleModalClose}
-            on:runInBackground={() => setRanInBackground(true)} />
+        on:closeAndReset={() => {
+            transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false, transcriptionJobStatus: null, transcriptionErrorMessage: null, transcriptionJobId: null, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' } }));
+            // Also clear any pending data related to a job that was just acknowledged as done/error/cancelled
+            clearPendingTranscriptData();
+             const ranInBackground = get(transcriptStore).ranInBackground;
+             if (ranInBackground) { // If it ran in background, ensure this is reset for next time.
+                 setRanInBackground(false);
+             }
+        }}
+        on:runInBackgroundAndClose={() => {
+            setRanInBackground(true);
+            transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false }));
+        }} />
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>
