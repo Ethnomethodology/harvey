@@ -759,6 +759,9 @@ export async function handleConfirmStartTranscription() {
     const jobId = uuidv4();
     const translateToEnglish = currentTs.translateToEnglish; // Add this line
 
+    // Log the value of selectedModelName
+    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: currentTs.selectedModelName = ${currentTs.selectedModelName}`); // <--- ADD THIS LINE
+
     // Ensure args.mediaPath is available for event emission even if initial checks fail
     const mediaPathForEvent = currentTs.selectedMediaFile?.path;
 
