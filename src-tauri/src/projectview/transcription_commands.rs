@@ -686,41 +686,60 @@ pub async fn transcribe_media_command(
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
 
-    info!("[Transcribe Command][{}] Cleaning up temporary files for original pass...", job_id);
-    if expected_whisper_temp_json_path_orig.exists() { // Check existence before deleting
+    info!("[Transcribe Command][{}] Attempting to clean up temporary files for original pass...", job_id);
+    info!("[Transcribe Command][{}] Targeting temp original whisper JSON for deletion: {:?}", job_id, expected_whisper_temp_json_path_orig);
+    if expected_whisper_temp_json_path_orig.exists() {
         if let Err(e) = fs::remove_file(&expected_whisper_temp_json_path_orig) {
             warn!("[Transcribe Command][{}] Failed to delete temp original whisper JSON {:?}: {}", job_id, expected_whisper_temp_json_path_orig, e);
+        } else {
+            info!("[Transcribe Command][{}] Successfully deleted temp original whisper JSON: {:?}", job_id, expected_whisper_temp_json_path_orig);
         }
     } else {
-        debug!("[Transcribe Command][{}] Temp original whisper JSON {:?} not found, skipping deletion.", job_id, expected_whisper_temp_json_path_orig);
+        warn!("[Transcribe Command][{}] Temp original whisper JSON not found for deletion: {:?}", job_id, expected_whisper_temp_json_path_orig);
     }
 
     if payload.num_speakers > 0 {
+        info!("[Transcribe Command][{}] Targeting temp RTTM file for deletion: {:?}", job_id, expected_rttm_temp_path);
         if expected_rttm_temp_path.exists() {
             if let Err(e) = fs::remove_file(&expected_rttm_temp_path) {
                 warn!("[Transcribe Command][{}] Failed to delete temp RTTM file {:?}: {}", job_id, expected_rttm_temp_path, e);
+            } else {
+                info!("[Transcribe Command][{}] Successfully deleted temp RTTM file: {:?}", job_id, expected_rttm_temp_path);
             }
         } else {
-            debug!("[Transcribe Command][{}] Temp RTTM file {:?} not found, skipping deletion (it might have been skipped if diarization failed or was not run).", job_id, expected_rttm_temp_path);
+            // This case is fine, as RTTM might not be created if diarization fails or num_speakers is 0.
+            debug!("[Transcribe Command][{}] Temp RTTM file not found (or num_speakers was 0), skipping deletion: {:?}", job_id, expected_rttm_temp_path);
         }
     }
 
     // --- Second Pass: English Translation (if requested) ---
     if payload.translate_to_english {
+        info!("[Transcribe Command][{}] DEBUG: Entered 'translate_to_english' block. translate_to_english flag is true.", job_id);
+        info!("[Transcribe Command][{}] DEBUG: Pre-translation pass paths: temp_base_en: {:?}, temp_json_en: {:?}, final_en: {:?}", job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en_for_payload); // Use the cloned one for logging if original is moved
+
         if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
             temp_transcript_output_base_en_str,
             expected_whisper_temp_json_path_en,
-            final_transcript_path_en, // This is an Option<PathBuf>
+            final_transcript_path_en, // This is an Option<PathBuf>, will be moved here
         ) {
             emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...")?;
 
-            // Safely get owned strings for paths needed by execute_transcription_pass
-            let base_en_str_owned = base_en_str.clone();
-            let json_path_en_owned = json_path_en.clone();
+            info!("[Transcribe Command][{}] DEBUG: Preparing for English translation pass call.", job_id);
+            info!("[Transcribe Command][{}]   WAV Path: {:?}", job_id, wav_media_path.to_string_lossy());
+            info!("[Transcribe Command][{}]   Model Path: {}", job_id, whisper_model_path_str);
+            info!("[Transcribe Command][{}]   Lang Code for EN pass: en", job_id);
+            info!("[Transcribe Command][{}]   Output Base for EN Whisper: {}", job_id, base_en_str);
+            info!("[Transcribe Command][{}]   Expected EN Whisper JSON: {:?}", job_id, json_path_en);
+            info!("[Transcribe Command][{}]   Is Translation Pass: true", job_id);
+            info!("[Transcribe Command][{}]   Num Speakers for EN pass: 0", job_id);
 
-            let mut translated_segments = execute_transcription_pass(
+            // Safely get owned strings for paths needed by execute_transcription_pass
+            let base_en_str_owned = base_en_str.clone(); // already a String from Option<String>
+            let json_path_en_owned = json_path_en.clone(); // already a PathBuf from Option<PathBuf>
+
+            let translation_result = execute_transcription_pass(
                 &app_handle_clone,
-                &wav_media_path.to_string_lossy(), // Pass as &str
+                &wav_media_path.to_string_lossy(),
                 &whisper_model_path_str,
                 "en", // Target language for translation is English
                 &job_id,
@@ -729,25 +748,39 @@ pub async fn transcribe_media_command(
                 0, // No diarization for translation pass
                 &PathBuf::new(), // Empty RTTM path
                 true, // is_translation_pass
-                &payload.speaker_names, // Pass as slice
-            ).await?;
+                &payload.speaker_names,
+            ).await;
+
+            let mut translated_segments = match translation_result {
+                Ok(segments) => {
+                    info!("[Transcribe Command][{}] DEBUG: English translation pass call completed. Number of segments: {}", job_id, segments.len());
+                    segments
+                }
+                Err(e) => {
+                    error!("[Transcribe Command][{}] English translation pass failed: {:?}", job_id, e);
+                    // Depending on desired behavior, you might want to return e or handle differently
+                    return Err(e);
+                }
+            };
 
             // Speaker mapping for translated segments can be complex.
             // A simple approach: if segment counts are similar, try to reuse original speakers.
             // This might need refinement based on actual whisper output for translations.
             // For now, let's apply the same mapping, or default if counts differ significantly.
             // A more robust solution might involve aligning segments by time.
-            if translated_segments.len() == original_segments.len() {
-                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
-            } else {
-                warn!("[Transcribe Command][{}] Segment count mismatch after translation (orig: {}, trans: {}). Speaker names might be less accurate for translated version.", job_id, original_segments.len(), translated_segments.len());
-                // Optionally, apply a default "SPEAKER_XX" or clear speakers for translated version
-                // For now, try mapping anyway or let map_speaker_ids_to_names handle it based on its logic.
-                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
-            }
-
+            // if translated_segments.len() == original_segments.len() {
+            //      map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            // } else {
+            //     warn!("[Transcribe Command][{}] Segment count mismatch after translation (orig: {}, trans: {}). Speaker names might be less accurate for translated version.", job_id, original_segments.len(), translated_segments.len());
+            //     // Optionally, apply a default "SPEAKER_XX" or clear speakers for translated version
+            //     // For now, try mapping anyway or let map_speaker_ids_to_names handle it based on its logic.
+            //      map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            // }
+            info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization...", job_id);
+            align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &job_id);
 
             emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...")?;
+            info!("[Transcribe Command][{}] DEBUG: Attempting to save translated transcript to: {:?}", job_id, final_path_en_pb);
             let lexical_json_en = create_lexical_table_from_segments(&translated_segments);
             let lexical_json_en_str = serde_json::to_string_pretty(&lexical_json_en)
                 .map_err(|e| CommandError::from(format!("Failed to serialize translated Lexical Table JSON: {}", e)))?;
@@ -759,16 +792,19 @@ pub async fn transcribe_media_command(
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
 
-            info!("[Transcribe Command][{}] Cleaning up temporary files for translation pass...", job_id);
-            if json_path_en_owned.exists() { // Check existence before deleting
+            info!("[Transcribe Command][{}] Attempting to clean up temporary files for translation pass...", job_id);
+            info!("[Transcribe Command][{}] Targeting temp translated whisper JSON for deletion: {:?}", job_id, json_path_en_owned);
+            if json_path_en_owned.exists() {
                 if let Err(e) = fs::remove_file(&json_path_en_owned) {
                     warn!("[Transcribe Command][{}] Failed to delete temp translated whisper JSON {:?}: {}", job_id, json_path_en_owned, e);
+                } else {
+                    info!("[Transcribe Command][{}] Successfully deleted temp translated whisper JSON: {:?}", job_id, json_path_en_owned);
                 }
             } else {
-                debug!("[Transcribe Command][{}] Temp translated whisper JSON {:?} not found, skipping deletion.", job_id, json_path_en_owned);
+                warn!("[Transcribe Command][{}] Temp translated whisper JSON not found for deletion: {:?}", job_id, json_path_en_owned);
             }
         } else {
-            warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available. Skipping translation.", job_id);
+            warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available from prepare_output_paths. Skipping translation.", job_id);
         }
     }
 
@@ -786,6 +822,113 @@ pub async fn transcribe_media_command(
 }
 
 // --- Implemented Helper Functions ---
+
+fn align_speakers_to_translated_segments(
+    original_segments: &[TranscriptSegment], // These should have correct speaker info from diarization
+    translated_segments: &mut Vec<TranscriptSegment>, // These have speakers from Whisper, likely "Unknown"
+    job_id: &str, // For logging
+) {
+    if original_segments.is_empty() {
+        warn!("[Align Speakers][{}] Original segments list is empty. Cannot align speakers for translation.", job_id);
+        return;
+    }
+    if translated_segments.is_empty() {
+        info!("[Align Speakers][{}] Translated segments list is empty. No speakers to align.", job_id);
+        return;
+    }
+
+    info!("[Align Speakers][{}] Aligning speakers for {} translated segments based on {} original segments.", job_id, translated_segments.len(), original_segments.len());
+
+    for t_seg in translated_segments.iter_mut() {
+        let t_start = t_seg.start_time;
+        let t_end = t_seg.end_time;
+        // Ensure t_start is not greater than t_end to prevent panic in midpoint calculation or negative overlap.
+        if t_start > t_end {
+            warn!("[Align Speakers][{}] Skipping translated segment with invalid times: start {:.3} > end {:.3}", job_id, t_start, t_end);
+            continue;
+        }
+        let t_mid = t_start + (t_end - t_start) / 2.0;
+
+        let mut best_match_speaker = "Unknown".to_string();
+        let mut max_overlap = 0.0f64;
+        let mut best_overlap_tiebreak_priority = -1.0f64; // Lower is better (e.g., distance from midpoint)
+
+        for o_seg in original_segments {
+            let o_start = o_seg.start_time;
+            let o_end = o_seg.end_time;
+            if o_start > o_end { // Skip invalid original segments
+                continue;
+            }
+
+            // Calculate overlap
+            let overlap_start = t_start.max(o_start);
+            let overlap_end = t_end.min(o_end);
+            let current_overlap = (overlap_end - overlap_start).max(0.0);
+
+            if current_overlap > 0.0 {
+                if current_overlap > max_overlap {
+                    max_overlap = current_overlap;
+                    best_match_speaker = o_seg.speaker.clone();
+                    // Prioritize segments containing the translated segment's midpoint
+                    if t_mid >= o_start && t_mid < o_end {
+                        best_overlap_tiebreak_priority = 0.0; // Highest priority
+                    } else {
+                        // Secondary tie-break: smallest distance between midpoints
+                        let o_mid = o_start + (o_end - o_start) / 2.0;
+                        best_overlap_tiebreak_priority = (t_mid - o_mid).abs();
+                    }
+                } else if current_overlap == max_overlap {
+                    // Tie-breaking logic
+                    let current_priority;
+                    if t_mid >= o_start && t_mid < o_end {
+                        current_priority = 0.0;
+                    } else {
+                        let o_mid = o_start + (o_end - o_start) / 2.0;
+                        current_priority = (t_mid - o_mid).abs();
+                    }
+
+                    if current_priority < best_overlap_tiebreak_priority {
+                        best_overlap_tiebreak_priority = current_priority;
+                        best_match_speaker = o_seg.speaker.clone();
+                    }
+                }
+            }
+        }
+
+        if max_overlap > 0.0 { // Only assign if there was any overlap
+            debug!("[Align Speakers][{}] Assigning speaker '{}' to translated segment {:.3}-{:.3} (Max Overlap: {:.3})",
+                job_id, best_match_speaker, t_start, t_end, max_overlap);
+            t_seg.speaker = best_match_speaker;
+        } else {
+            // If no overlap, try to find the closest original segment's speaker based on midpoint proximity
+            // This is a fallback if there's absolutely no overlap.
+            let mut min_dist = f64::MAX;
+            let mut closest_speaker = "Unknown".to_string();
+            let mut found_closest = false;
+            for o_seg in original_segments {
+                 let o_start = o_seg.start_time;
+                 let o_end = o_seg.end_time;
+                 if o_start > o_end { continue; }
+                 let o_mid = o_start + (o_end - o_start) / 2.0;
+                 let dist = (t_mid - o_mid).abs();
+                 if dist < min_dist {
+                     min_dist = dist;
+                     closest_speaker = o_seg.speaker.clone();
+                     found_closest = true;
+                 }
+            }
+            if found_closest {
+                warn!("[Align Speakers][{}] No overlap for translated segment {:.3}-{:.3}. Assigning speaker '{}' from closest original segment (dist: {:.3}).",
+                    job_id, t_start, t_end, closest_speaker, min_dist);
+                t_seg.speaker = closest_speaker;
+            } else {
+                warn!("[Align Speakers][{}] No overlapping or closest original segment found for translated segment {:.3}-{:.3}. Speaker remains '{}'.",
+                    job_id, t_start, t_end, t_seg.speaker);
+            }
+        }
+    }
+    info!("[Align Speakers][{}] Finished aligning speakers for translated segments.", job_id);
+}
 
 // Adapted from local_handler/transcription.rs
 // Omitting cancel_flag for now
@@ -1017,7 +1160,7 @@ async fn run_whisper_cpp_sidecar_cmd(
 ) -> Result<PathBuf, CommandError> {
     let sidecar_name = "whisper-cpp";
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
-    debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass);
+    // debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass); // Original debug
 
     let mut args: Vec<String> = vec![
         "-m".into(), whisper_model_path_str.to_string(),
@@ -1031,7 +1174,8 @@ async fn run_whisper_cpp_sidecar_cmd(
         args.push("--translate".into());
     }
 
-    debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+    info!("[Whisper CPP CMD][{}] DEBUG: Executing whisper-cpp. Language: '{}', Translate: {}. Full Args: {:?}", job_id, lang_arg, is_translation_pass, args);
+    // debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args); // Original debug
 
     let shell_scope = app_handle.shell();
     let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
@@ -1061,8 +1205,11 @@ async fn run_whisper_cpp_sidecar_cmd(
         // Add a small delay and check again, as file system operations might not be instantaneous
         sleep(Duration::from_millis(300)).await;
         if !expected_whisper_json_output_path.exists() {
+            error!("[Whisper CPP CMD][{}] DEBUG: Output JSON file NOT found after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
             return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
         }
+    } else {
+        info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
     }
     Ok(expected_whisper_json_output_path.to_path_buf())
 }
@@ -1245,11 +1392,15 @@ pub(crate) async fn execute_transcription_pass(
     is_translation_pass: bool,
     speaker_names: &[String],
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
-    info!(
-        "[Exec Pass][{}] Start. Lang: {}, Translate: {}, NumSpeakers: {}",
-        job_id, language_code, is_translation_pass, num_speakers
-    );
+    info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
+        job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
+    // Original info log:
+    // info!(
+    //     "[Exec Pass][{}] Start. Lang: {}, Translate: {}, NumSpeakers: {}",
+    //     job_id, language_code, is_translation_pass, num_speakers
+    // );
 
+    info!("[Exec Pass][{}] DEBUG: About to call run_whisper_cpp_sidecar_cmd. is_translation_pass: {}", job_id, is_translation_pass);
     let whisper_json_path = run_whisper_cpp_sidecar_cmd(
         app_handle,
         wav_media_path_str,
