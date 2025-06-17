@@ -686,6 +686,25 @@ pub async fn transcribe_media_command(
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
 
+    info!("[Transcribe Command][{}] Cleaning up temporary files for original pass...", job_id);
+    if expected_whisper_temp_json_path_orig.exists() { // Check existence before deleting
+        if let Err(e) = fs::remove_file(&expected_whisper_temp_json_path_orig) {
+            warn!("[Transcribe Command][{}] Failed to delete temp original whisper JSON {:?}: {}", job_id, expected_whisper_temp_json_path_orig, e);
+        }
+    } else {
+        debug!("[Transcribe Command][{}] Temp original whisper JSON {:?} not found, skipping deletion.", job_id, expected_whisper_temp_json_path_orig);
+    }
+
+    if payload.num_speakers > 0 {
+        if expected_rttm_temp_path.exists() {
+            if let Err(e) = fs::remove_file(&expected_rttm_temp_path) {
+                warn!("[Transcribe Command][{}] Failed to delete temp RTTM file {:?}: {}", job_id, expected_rttm_temp_path, e);
+            }
+        } else {
+            debug!("[Transcribe Command][{}] Temp RTTM file {:?} not found, skipping deletion (it might have been skipped if diarization failed or was not run).", job_id, expected_rttm_temp_path);
+        }
+    }
+
     // --- Second Pass: English Translation (if requested) ---
     if payload.translate_to_english {
         if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
@@ -739,6 +758,15 @@ pub async fn transcribe_media_command(
                 lexical_json_en_str,
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
+
+            info!("[Transcribe Command][{}] Cleaning up temporary files for translation pass...", job_id);
+            if json_path_en_owned.exists() { // Check existence before deleting
+                if let Err(e) = fs::remove_file(&json_path_en_owned) {
+                    warn!("[Transcribe Command][{}] Failed to delete temp translated whisper JSON {:?}: {}", job_id, json_path_en_owned, e);
+                }
+            } else {
+                debug!("[Transcribe Command][{}] Temp translated whisper JSON {:?} not found, skipping deletion.", job_id, json_path_en_owned);
+            }
         } else {
             warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available. Skipping translation.", job_id);
         }
