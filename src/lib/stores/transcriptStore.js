@@ -650,6 +650,7 @@ export function toggleTranscribeModal(show) {
 }
 
 export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
+    console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Setting job_id to:', jobId);
     // Log the entire options object received
     console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Received options object:', options); // <--- ADD THIS LINE
 
@@ -689,6 +690,7 @@ export function setTranscriptionStatus(isTranscribing, jobId = null, options = {
 export function updateTranscriptionProgress(progressPayload) {
     console.log('[JULES-DEBUG] transcriptStore: updateTranscriptionProgress called with payload:', progressPayload); // <--- ADD THIS
     transcriptStore.update((ts) => {
+        console.log('[JULES-DEBUG] transcriptStore.updateTranscriptionProgress: Current store job_id:', ts.transcriptionJobId, 'Event payload:', progressPayload);
         // ...
         if (ts.isTranscribing && ts.transcriptionJobId && progressPayload?.jobId === ts.transcriptionJobId) {
             console.log('[JULES-DEBUG] transcriptStore: Store WILL BE updated with progress. Old progress:', ts.transcriptionProgress); // <--- MODIFIED TO SHOW OLD VAL
@@ -982,13 +984,19 @@ listen('custom_transcription_job_completed', async (event) => {
             } catch (e) {
                 console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
             }
+            clearTranscriptionStatus('Transcription complete.');
+            toggleTranscribeModal(false);
 
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
             updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
+            clearTranscriptionStatus(`Transcription failed: ${errorMessage}`, errorMessage);
+            toggleTranscribeModal(false);
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
             updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
+            clearTranscriptionStatus('Transcription cancelled.');
+            toggleTranscribeModal(false);
         }
     } else {
          console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
