@@ -783,7 +783,7 @@ export async function handleConfirmStartTranscription() {
         media_path_str: currentTs.selectedMediaFile.path,
         num_speakers: currentTs.speakers.count,
         language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
-        model_name: selectedModelIdentifier,
+        model_name: currentTs.selectedModelName,
         translate_to_english: currentTs.translateToEnglish,
         speaker_names: currentTs.speakers.names || [],
     };
