@@ -81,7 +81,8 @@ import {
     clearTranscriptionStatus,
     selectMedia, // Ensure selectMedia is imported
     clearTranscriptState,
-    markTranscriptAsSaved
+    markTranscriptAsSaved,
+    prepareForNewTranscription // Import the function
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -752,31 +753,28 @@ export async function requestTranscription() {
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
-    if (currentProj.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
-    // toggleTranscribeModal(true); // Replaced by prepareForNewTranscription
-    transcriptStore.prepareForNewTranscription(); // Ensures modal is shown and state is reset
+    if (storeState.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
+    prepareForNewTranscription(); // Call the imported function directly
 }
 export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     // const jobId = uuidv4(); // Removed: Will use backend-generated job_id
     const translateToEnglish = currentTs.translateToEnglish; // Add this line
+    
+    const mediaPathForJob = currentTs.selectedMediaFile?.path;
+    const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
 
-    // Log the value of selectedModelName
-    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: currentTs.selectedModelName = ${currentTs.selectedModelName}`); // <--- ADD THIS LINE
+    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: modelNameForJob = ${modelNameForJob}`);
 
-    // Ensure args.mediaPath is available for event emission even if initial checks fail
-    const mediaPathForEvent = currentTs.selectedMediaFile?.path;
-
-    if (!currentTs.selectedMediaFile?.path || !currentTs.selectedModelName) {
+    if (!mediaPathForJob || !modelNameForJob) {
         // Use notification store for error
         notificationStore.add('Error: Missing media file or model selection.', 'error', 0);
-        clearTranscriptionStatus('Transcription failed.', 'Missing media file or model selection.');
-        toggleTranscribeModal(false);
-        // Emit error event even for early exit due to missing selection
-        if (mediaPathForEvent) { // Only emit if we had a media path to associate with the job
-            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: mediaPathForEvent, errorMessage: 'Missing media file or model selection.' });
-        }
+        // Call setTranscriptionStatus to reflect the error state in the modal and keep it open
+        setTranscriptionStatus(false, null, { // isTranscribing is false
+            status: 'error',
+            errorMessage: 'Missing media file or model selection.'
+        });
         return;
     }
 
@@ -786,57 +784,47 @@ export async function handleConfirmStartTranscription() {
     // Consolidate arguments for the unified 'transcribe_media_command'
     const payload = {
         project_xml_path: currentProj.xmlPath,
-        media_path_str: currentTs.selectedMediaFile.path,
+        media_path_str: mediaPathForJob,
         num_speakers: currentTs.speakers.count,
         language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
-        model_name: currentTs.selectedModelName,
+        model_name: modelNameForJob,
         translate_to_english: currentTs.translateToEnglish,
         speaker_names: currentTs.speakers.names || [],
     };
 
-    // Log payload.model_name right before usage in setTranscriptionStatus options
-    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: payload.model_name just before setTranscriptionStatus = ${payload.model_name}`); // <--- ADD THIS LINE
-
-    // setTranscriptionStatus will be called after backendJobId is retrieved
-    // setTranscriptionStatus(true, jobId, {
-    //     initialProgressMessage: `Transcription starting with model ${payload.model_name}...`,
-    //     mediaPath: payload.mediaPathStr
-    // });
+    // Step 1: Set status to 'initiating'. JobId is null at this point.
+    // This makes isTranscribing=true, and the modal should show an "Initiating..." state.
+    setTranscriptionStatus(true, null, { // jobIdToSet is null
+        status: 'initiating',
+        initialProgressMessage: `Initiating with ${modelNameForJob}...`,
+        mediaPath: mediaPathForJob
+    });
 
     try {
         // Always call the unified command
         const initiatedPayload = await invoke('transcribe_media_command', { payload: payload });
 
         if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
-            throw new Error("Invalid response from transcribe_media_command: job_id missing or invalid.");
+            throw new Error("Backend did not return a valid job_id.");
         }
         const backendJobId = initiatedPayload.job_id;
 
-        // Now call setTranscriptionStatus with the backendJobId
-        // This sets isTranscribing = true, transcriptionJobStatus = 'running', etc.
-        setTranscriptionStatus(true, backendJobId, {
-            initialProgressMessage: `Transcription starting with model ${payload.model_name}... (Job ID: ${backendJobId})`,
-            mediaPath: payload.mediaPathStr
+        // Step 2: Update status to 'running' with the actual job ID from the backend.
+        setTranscriptionStatus(true, backendJobId, { // Pass the backendJobId
+            status: 'running',
+            // The progress message might be quickly updated by the first actual progress event.
+            initialProgressMessage: `Transcription started (Job: ${backendJobId.substring(0,8)})...`,
+            mediaPath: mediaPathForJob // Can be redundant if already set in step 1, but harmless
         });
-
-        // Modal remains open due to showTranscribeModal: true from prepareForNewTranscription
-        // and isTranscribing: true from setTranscriptionStatus.
-        // Progress will be shown, and completion/error will be handled by store listener.
+        // The progress listener should now be able to match events to backendJobId.
 
     } catch (error) {
         const extractedErrorMessage = error?.message || String(error);
-        // Keep modal open to show the error message.
-        transcriptStore.update(ts => ({
-            ...ts,
-            isTranscribing: false,
-            transcriptionJobStatus: 'error',
-            transcriptionErrorMessage: extractedErrorMessage,
-            showTranscribeModal: true // Explicitly keep/set true
-        }));
-        // notificationStore.add(`Transcription initiation failed: ${extractedErrorMessage}`, 'error', 0); // This might be redundant if modal shows error
-        // No longer emitting 'custom_transcription_job_completed' from here for errors,
-        // as the store listener for backend events should be the source of truth for job completion status.
-        // If invoke itself fails, an event won't be emitted by backend. This case handles that.
+        // Set error status in the store; the modal will show this error.
+        setTranscriptionStatus(false, get(transcriptStore).transcriptionJobId, { // isTranscribing is false, pass current jobId (might be null if invoke failed early)
+            status: 'error',
+            errorMessage: extractedErrorMessage
+        });
     }
 }
 export async function handleCancelTranscriptionRequest() {
@@ -878,7 +866,33 @@ export async function handleCancelTranscriptionRequest() {
         notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
 }
-export let progressListenerInitialized = false; export let progressUnlistenFn = null; export async function initializeProgressListener() { console.log('[JULES-DEBUG] initializeProgressListener called'); if (progressListenerInitialized) return; try { progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => { console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event); const payload = event.payload; if (!payload || typeof payload !== 'object') { console.log('[JULES-DEBUG] projectService: Payload empty or not an object'); return; } const eventJobId = payload.jobId ?? payload.job_id; const currentJobId = get(transcriptStore).transcriptionJobId; console.log(`[JULES-DEBUG] projectService: Event Job ID: ${eventJobId}, Store Job ID: ${currentJobId}`); if (currentJobId && eventJobId === currentJobId) { updateTranscriptionProgress({ jobId: currentJobId, percent: payload.percent ?? 0, message: payload.message ?? '' }); } else { console.log('[JULES-DEBUG] projectService: Job ID mismatch or no current job ID in store. Event payload:', payload); } }); progressListenerInitialized = true; } catch (e) { project.update(p => ({ ...p, error: "Failed to initialize progress listener." })); } }
+export let progressListenerInitialized = false;
+export let progressUnlistenFn = null;
+export async function initializeProgressListener() {
+    // console.log('[JULES-DEBUG] initializeProgressListener called');
+    if (progressListenerInitialized) return;
+    try {
+        progressUnlistenFn = await listen('TRANSCRIPTION_PROGRESS', (event) => {
+            // console.log('[JULES-DEBUG] projectService: TRANSCRIPTION_PROGRESS event received:', event);
+            const payload = event.payload;
+            if (!payload || typeof payload !== 'object') {
+                // console.log('[JULES-DEBUG] projectService: Payload empty or not an object');
+                return;
+            }
+            const eventJobId = payload.jobId ?? payload.job_id; // Prefer 'jobId', fallback to 'job_id'
+            // Directly call updateTranscriptionProgress. It will handle matching and state transitions.
+            updateTranscriptionProgress({
+                jobId: eventJobId, // Pass the event's job ID
+                percent: payload.percent ?? 0,
+                message: payload.message ?? ''
+            });
+        });
+        progressListenerInitialized = true;
+    } catch (e) {
+        console.error("[ProjectService] Failed to initialize progress listener:", e);
+        project.update(p => ({ ...p, error: "Failed to initialize progress listener." }));
+    }
+}
 export function cleanupProgressListener() { if (progressUnlistenFn) { progressUnlistenFn(); progressUnlistenFn = null; } progressListenerInitialized = false; }
 
 export function formatTimestampHtml(seconds) { if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) return '00:00.000'; const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0'); return `${min}:${sec}.${ms}`; }

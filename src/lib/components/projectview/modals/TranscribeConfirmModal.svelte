@@ -53,6 +53,7 @@
 
 	// --- Title Logic ---
 	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Confirm Transcription Settings' :
+					 (isTranscribing && jobStatus === 'initiating') ? 'Initiating Transcription...' :
 					 (isTranscribing && jobStatus === 'running') ? `Transcription Status${currentJobId ? ` (Job: ${currentJobId.substring(0, 8)})` : ''}` :
 					 (jobStatus === 'cancelling') ? `Cancelling Job${currentJobId ? ` (${currentJobId.substring(0, 8)})` : ''}` : // Added 'cancelling'
 					 (!isTranscribing && jobStatus === 'done') ? 'Transcription Complete' :
@@ -92,8 +93,8 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
-		on:click={handleCloseAndReset} <!-- Allow closing by clicking backdrop if appropriate, or remove -->
-	>
+		on:click={handleCloseAndReset}
+	> <!-- Allow closing by clicking backdrop if appropriate, or remove -->
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
 			on:click|stopPropagation
@@ -115,27 +116,29 @@
 					<button class="btn-primary" on:click={handleConfirm}>Start Transcription</button>
 				</div>
 
-			{:else if isTranscribing && jobStatus === 'running'}
-				<!-- RUNNING VIEW -->
+			{:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
+				<!-- RUNNING OR INITIATING VIEW -->
 				<div class="flex flex-col items-center space-y-4 mb-6">
                     <div class="w-16 h-16">
                         <Loader class="w-full h-full text-blue-500 animate-spin" />
                     </div>
-					<div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
-						<div
-							class="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out"
-							style="width: {progressPercent}%"
-						></div>
-					</div>
+					{#if jobStatus === 'running'}
+						<div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
+							<div
+								class="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out"
+								style="width: {progressPercent}%"
+							></div>
+						</div>
+					{/if}
 					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{progressPercent.toFixed(0)}% - {progressMessage || 'Processing...'}
+						{#if jobStatus === 'running'}{progressPercent.toFixed(0)}% - {/if}{progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : 'Processing...')}
 					</p>
 				</div>
 				<div class="flex justify-center space-x-2 mt-auto">
-					<button class="btn-secondary" on:click={handleRunInBackgroundAndClose}>
+					<button class="btn-secondary" on:click={handleRunInBackgroundAndClose} disabled={jobStatus === 'initiating'}>
 						Run in background
 					</button>
-					<button class="btn-action-cancel" on:click={handleCancelRequest}>
+					<button class="btn-action-cancel" on:click={handleCancelRequest} disabled={jobStatus === 'initiating'}>
 						Request Cancellation
 					</button>
 				</div>

@@ -2,6 +2,7 @@
 import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { message } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event'; // Added missing import for listen
 // Import projectStore to access project-level details.
 // This creates a partial cyclic dependency that we might want to resolve later
 // by passing necessary values as arguments or through a service.
@@ -651,60 +652,100 @@ export function toggleTranscribeModal(show) {
     transcriptStore.update((ts) => ({ ...ts, showTranscribeModal: !!show }));
 }
 
-export function setTranscriptionStatus(isTranscribing, jobId = null, options = {}) {
-    console.log(`[JULES-DEBUG TS setStatus] Called with: isTranscribing=${isTranscribing}, jobId=${jobId}, options=`, options);
-    // Log the entire options object received
-    // console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: Received options object:', options); // Commented out as redundant with above
+export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, options = {}) {
+    console.log(`[JULES-DEBUG TS setStatus] Called with: isTranscribing=${isTranscribing}, jobIdToSet=${jobIdToSet}, options=`, options);
+    const {
+        initialProgressMessage = '',
+        mediaPath = null,
+        status = null, // Explicit status like 'initiating', 'running', 'error', 'done', 'cancelled'
+        errorMessage = null
+    } = options;
 
-    // const { initialProgressMessage = '', mediaPath = null } = options; // Options might not be used if isTranscribing is false
+    transcriptStore.update((ts) => {
+        let updatedState = { ...ts };
 
-    // Log initialProgressMessage after destructuring
-    // console.log('[JULES-DEBUG] transcriptStore.setTranscriptionStatus: initialProgressMessage after destructuring:', initialProgressMessage); // <--- ADD THIS LINE
+        if (isTranscribing) {
+            const newActiveMediaDuringStart = mediaPath || ts.selectedMediaFile?.path || ts.activeMediaDuringTranscriptionStart;
+            // Determine job status: if explicit status is passed, use it.
+            // Otherwise, if a jobId is being set, it's 'running'. If no jobId yet, it's 'initiating'.
+            const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
+            const messageToSet = initialProgressMessage || (jobStatusToSet === 'initiating' ? `Initiating...` : `Processing...`);
 
-    if (isTranscribing) {
-        transcriptStore.update((ts) => {
-            const newActiveMediaDuringStart = ts.selectedMediaFile?.path ?? null;
-            const messageToSet = options.initialProgressMessage || 'Processing...';
-            // console.log(`[JULES-DEBUG] transcriptStore.setTranscriptionStatus (isTranscribing=true): Message being set to store: ${messageToSet}`); // Covered by general update log
-            return {
+            updatedState = {
                 ...ts,
                 isTranscribing: true,
-                transcriptionJobId: jobId,
-                mediaPathForLastJob: options.mediaPath || ts.mediaPathForLastJob, // Use options.mediaPath
+                transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId, // Update if new jobId is provided, else keep existing
+                mediaPathForLastJob: mediaPath || ts.mediaPathForLastJob,
                 activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
-                transcriptionProgress: { percent: 0, message: messageToSet },
-                transcriptionJobStatus: 'running',
-                transcriptionErrorMessage: null,
-                ranInBackground: false, // Reset this flag when starting a new job
+                transcriptionProgress: {
+                    // Preserve percent if status is 'running' and jobId matches, otherwise reset to 0
+                    percent: (jobStatusToSet === 'running' && ts.transcriptionJobId === jobIdToSet && ts.transcriptionJobId !== null) ? ts.transcriptionProgress.percent : 0,
+                    message: messageToSet
+                },
+                transcriptionJobStatus: jobStatusToSet,
+                transcriptionErrorMessage: null, // Clear previous errors when starting/initiating
+                ranInBackground: false, // Reset this flag
+                showTranscribeModal: true, // Ensure modal remains open while transcribing or initiating
             };
-            console.log(`[JULES-DEBUG TS setStatus Updated] Store updated to: isTranscribing=${updatedState.isTranscribing}, jobId=${updatedState.transcriptionJobId}, jobStatus=${updatedState.transcriptionJobStatus}, progressMsg='${updatedState.transcriptionProgress.message}'`);
-            return updatedState;
-        });
-        updateProjectStoreState({ error: null }); // Clear any previous project-level errors
+        } else {
+            // This branch is for when isTranscribing is explicitly false (e.g. job finished, error, cancelled by event)
+            updatedState = {
+                ...ts,
+                isTranscribing: false,
+                transcriptionJobStatus: status || ts.transcriptionJobStatus, // e.g. 'done', 'error', 'cancelled'
+                transcriptionErrorMessage: errorMessage || ts.transcriptionErrorMessage,
+                showTranscribeModal: true, // Keep modal open to show final status/error
+            };
+        }
+        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}'`);
+        return updatedState;
+    });
+
+    if (isTranscribing) {
+        updateProjectStoreState({ error: null }); // Clear project-level errors when starting a new job
     }
-    // No 'else' part; clearing/setting other statuses is handled by clearTranscriptionStatus or event handlers
 }
 
 export function updateTranscriptionProgress(progressPayload) {
-    // console.log('[JULES-DEBUG] transcriptStore: updateTranscriptionProgress called with payload:', progressPayload); // Covered by internal log
     transcriptStore.update((ts) => {
-        console.log('[JULES-DEBUG TS updateTranscriptionProgress] Current store job_id:', ts.transcriptionJobId, 'Event payload:', progressPayload);
-        // ...
-        if (ts.isTranscribing && ts.transcriptionJobId && progressPayload?.jobId === ts.transcriptionJobId) {
-            console.log('[JULES-DEBUG] transcriptStore: Store WILL BE updated with progress. Old progress:', ts.transcriptionProgress); // <--- MODIFIED TO SHOW OLD VAL
-            // ... rest of the update logic for success
-            // For example, ensure the return includes the updated transcriptionProgress
-            const newProgress = { percent: progressPayload?.percent ?? 0, message: progressPayload?.message ?? '' };
+        // console.log('[JULES-DEBUG TS updateTranscriptionProgress] Store state before update:',
+        //     `isTranscribing: ${ts.isTranscribing}, storeJobId: ${ts.transcriptionJobId}, storeStatus: ${ts.transcriptionJobStatus}. Event payload:`, progressPayload);
+
+        const eventJobId = progressPayload?.jobId;
+
+        if (!eventJobId) {
+            // console.log('[JULES-DEBUG TS updateProgress] No eventJobId in payload, skipping update.');
+            return ts;
+        }
+
+        // Case 1: Store is 'initiating' and has no job ID yet.
+        // The first progress event for the new job arrives. Adopt its ID and status.
+        if (ts.isTranscribing && ts.transcriptionJobStatus === 'initiating' && ts.transcriptionJobId === null) {
+            // console.log('[JULES-DEBUG TS updateProgress] Status is "initiating", adopting eventJobId:', eventJobId);
             return {
                 ...ts,
-                transcriptionProgress: newProgress,
-                transcriptionJobStatus: 'running', // Ensure status remains 'running' during progress
+                transcriptionJobId: eventJobId, // Adopt the job ID from the event
+                transcriptionJobStatus: 'running', // Transition to 'running'
+                transcriptionProgress: {
+                    percent: progressPayload?.percent ?? 0,
+                    message: progressPayload?.message ?? ''
+                },
+            };
+        }
+        // Case 2: Store is 'running' and the event's job ID matches the store's job ID.
+        else if (ts.isTranscribing && ts.transcriptionJobStatus === 'running' && ts.transcriptionJobId === eventJobId) {
+            // console.log('[JULES-DEBUG TS updateProgress] Status is "running" and job IDs match, updating progress.');
+            return {
+                ...ts,
+                transcriptionProgress: {
+                    percent: progressPayload?.percent ?? 0,
+                    message: progressPayload?.message ?? ''
+                },
             };
         } else {
-            console.log('[JULES-DEBUG] transcriptStore: Store NOT updated. Conditions: isTranscribing:', ts.isTranscribing, 'storeJobId:', ts.transcriptionJobId, 'eventJobId:', progressPayload?.jobId); // <--- MODIFIED FOR CLARITY
-             return ts; // Ensure state is returned
+            // console.log('[JULES-DEBUG TS updateProgress] No update. Conditions did not match.');
+            return ts;
         }
-        // REMOVED: return ts; // This was potentially problematic if not all paths returned explicitly
     });
 }
 
@@ -732,14 +773,7 @@ export function prepareForNewTranscription() {
             transcriptionErrorMessage: null,
             showTranscribeModal: true // Ensure modal is shown
         };
-    }); // Corrected line ending
-}
-        transcriptionJobId: null,
-        transcriptionProgress: { percent: 0, message: '' },
-        transcriptionJobStatus: null,
-        transcriptionErrorMessage: null,
-        showTranscribeModal: true // Ensure modal is shown
-    }));
+    });
 }
 
 export function clearPendingTranscriptData() {
@@ -907,13 +941,6 @@ export function switchToEnglishTranscript() {
 // export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
 // This updateProjectStoreState would need to be added to projectStore.js
 
-import { listen } from '@tauri-apps/api/event';
-export function toggleTranscribeModal(show) { // Added this function as it was missing but referenced
-    transcriptStore.update((ts) => {
-        console.log(`[JULES-DEBUG TS toggleModal] showTranscribeModal will be set to: ${show}`);
-        return { ...ts, showTranscribeModal: !!show };
-    });
-}
 // Listen for media rename events from the backend
 listen('media_renamed', (event) => {
     if (!event.payload) return;
