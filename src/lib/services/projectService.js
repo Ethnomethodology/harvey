@@ -791,9 +791,12 @@ export async function handleConfirmStartTranscription() {
         speaker_names: currentTs.speakers.names || [],
     };
 
+    // Log payload.model_name right before usage in setTranscriptionStatus options
+    console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: payload.model_name just before setTranscriptionStatus = ${payload.model_name}`); // <--- ADD THIS LINE
+
     setTranscriptionStatus(true, jobId, {
         // Determine message based on whether it's a known local model or potentially other types if transcribe_media_command evolves
-        initialProgressMessage: `Transcription starting with model ${payload.modelName}...`,
+        initialProgressMessage: `Transcription starting with model ${payload.model_name}...`,
         mediaPath: payload.mediaPathStr
     });
 
