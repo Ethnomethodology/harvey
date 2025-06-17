@@ -779,13 +779,13 @@ export async function handleConfirmStartTranscription() {
 
     // Consolidate arguments for the unified 'transcribe_media_command'
     const payload = {
-        projectXmlPath: currentProj.xmlPath,
-        mediaPathStr: currentTs.selectedMediaFile.path,
-        numSpeakers: currentTs.speakers.count,
-        languageCode: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
-        modelName: selectedModelIdentifier,
-        translateToEnglish: currentTs.translateToEnglish,
-        speakerNames: currentTs.speakers.names || [],
+        project_xml_path: currentProj.xmlPath,
+        media_path_str: currentTs.selectedMediaFile.path,
+        num_speakers: currentTs.speakers.count,
+        language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
+        model_name: selectedModelIdentifier,
+        translate_to_english: currentTs.translateToEnglish,
+        speaker_names: currentTs.speakers.names || [],
     };
 
     setTranscriptionStatus(true, jobId, {
