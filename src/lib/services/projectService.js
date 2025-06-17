@@ -756,7 +756,7 @@ export async function requestTranscription() {
 export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
-    const jobId = uuidv4();
+    // const jobId = uuidv4(); // Removed: Will use backend-generated job_id
     const translateToEnglish = currentTs.translateToEnglish; // Add this line
 
     // Log the value of selectedModelName
@@ -794,21 +794,105 @@ export async function handleConfirmStartTranscription() {
     // Log payload.model_name right before usage in setTranscriptionStatus options
     console.log(`[JULES-DEBUG] projectService.handleConfirmStartTranscription: payload.model_name just before setTranscriptionStatus = ${payload.model_name}`); // <--- ADD THIS LINE
 
-    setTranscriptionStatus(true, jobId, {
-        // Determine message based on whether it's a known local model or potentially other types if transcribe_media_command evolves
-        initialProgressMessage: `Transcription starting with model ${payload.model_name}...`,
-        mediaPath: payload.mediaPathStr
-    });
+    // setTranscriptionStatus will be called after backendJobId is retrieved
+    // setTranscriptionStatus(true, jobId, {
+    //     initialProgressMessage: `Transcription starting with model ${payload.model_name}...`,
+    //     mediaPath: payload.mediaPathStr
+    // });
 
     try {
         // Always call the unified command
-        const result = await invoke('transcribe_media_command', { payload: payload });
+        const initiatedPayload = await invoke('transcribe_media_command', { payload: payload });
 
-        // The 'result' from 'transcribe_media_command' is TranscriptionResultPayload { original_transcript_path, translated_transcript_path }
-        // It does NOT contain segments directly. The frontend will need to load the transcript using the path.
-        if (!result || typeof result.original_transcript_path !== 'string') {
-            throw new Error("Invalid transcription result structure from transcribe_media_command.");
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Invalid response from transcribe_media_command: job_id missing or invalid.");
         }
+        const backendJobId = initiatedPayload.job_id;
+
+        // Now call setTranscriptionStatus with the backendJobId
+        setTranscriptionStatus(true, backendJobId, {
+            initialProgressMessage: `Transcription starting with model ${payload.model_name}... (Job ID: ${backendJobId})`,
+            mediaPath: payload.mediaPathStr
+        });
+
+
+        // The original 'result' which contained transcript paths is now implicitly handled by event listeners
+        // or separate calls based on the job_id. The command now only returns the job_id.
+        // For the purpose of this function, we've initiated the job.
+        // The rest of the logic concerning `custom_transcription_job_completed` will be triggered by backend events.
+
+        // Simulating the original structure for where 'result' was used, if necessary for event emission,
+        // but the actual paths will come from the event payload of 'custom_transcription_job_completed'.
+        // This part needs to align with how 'custom_transcription_job_completed' is handled.
+        // For now, we assume that the `jobFinishedPath` (mediaPathStr) is sufficient for that event.
+        // The `transcriptFilePath` and `translatedTranscriptFilePath` will be part of the 'done' event payload.
+
+        // The original success path that processed 'result' is now effectively split.
+        // This function confirms initiation. The 'custom_transcription_job_completed' listener handles completion.
+        // We might not need to do much more here other than logging or a very basic UI update if needed.
+        // The modal closing and notifications will largely be driven by the event listener for job completion/failure.
+
+        // The original logic for handling `ranInBackground` and modal status update
+        // should ideally be moved to the event listener for `custom_transcription_job_completed`
+        // because the job's actual completion is now an async event.
+
+        // However, to minimize changes to the existing flow for now, we'll keep the structure,
+        // understanding that 'clearTranscriptionStatus' and 'emit' are for the *initiation* part.
+        // The actual *completion* part is handled by the event listener.
+
+        // This function's primary role is now to *start* the job and get the ID.
+        // The subsequent `if (ranInBackground)` block might be less relevant here,
+        // or its meaning changes to "if the *initiation* was meant to be backgrounded".
+
+		// const tsStore = get(transcriptStore);
+        // const ranInBackground = tsStore.ranInBackground;
+
+        // if (ranInBackground) {
+        //     notificationStore.add('Transcription initiated.', 'success'); // Changed message
+        //     if (get(transcriptStore).showTranscribeModal) {
+        //          toggleTranscribeModal(false); // Close modal after initiation if backgrounded
+        //     }
+        // } else {
+        //     // If not backgrounded, the modal might show progress based on the job_id
+        //     // and will be closed by the event listener upon completion.
+        //     // No immediate status change in the modal here, other than what setTranscriptionStatus did.
+        // }
+
+		// clearTranscriptionStatus('Transcription initiated.'); // Changed message
+        // // Emit event with original path. If translated path exists, UI might need to know separately or via store update.
+		// await emit('custom_transcription_job_initiated', { // Changed event name for clarity
+        //     jobId: backendJobId,
+        //     status: 'initiated',
+        //     jobInitiatedPath: payload.mediaPathStr, // Path of the media that was processed
+        // });
+
+        // The old 'result' processing is removed as 'transcribe_media_command' no longer returns paths directly.
+        // The success handling (loading transcript, etc.) should be triggered by the 'custom_transcription_job_completed' event.
+        // For now, this function successfully initiated the job. The modal remains open (if it was open)
+        // to show progress via the TRANSCRIPTION_PROGRESS listener.
+
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('canceled')) {
+            notificationStore.add('Transcription request cancelled by user or system.', 'info'); // Clarified message
+            toggleTranscribeModal(false);
+            clearTranscriptionStatus('Transcription request cancelled.'); // Clarified message
+            await emit('custom_transcription_job_completed', { status: 'cancelled', jobFinishedPath: payload.mediaPathStr, errorMessage: null });
+        } else {
+            notificationStore.add(`Transcription initiation failed: ${errorMessage}`, 'error', 0); // Persistent error, clarified message
+            toggleTranscribeModal(false);
+            clearTranscriptionStatus('Transcription initiation failed.', errorMessage); // Clarified message
+            await emit('custom_transcription_job_completed', { status: 'error', jobFinishedPath: payload.mediaPathStr, errorMessage: errorMessage });
+        }
+    }
+}
+export async function handleCancelTranscriptionRequest() {
+    const currentProj = get(project);
+    const currentTs = get(transcriptStore);
+    const jobId = currentProj.transcriptionJobId; // This should be the backendJobId stored in projectStore or transcriptStore
+    if (!jobId || !currentProj.isTranscribing) return;
+    const modelUsedForJob = currentTs.selectedModelName;
+    const isCloudJob = modelUsedForJob && (modelUsedForJob.startsWith('google-') || modelUsedForJob.startsWith('gemini-'));
 
         // Store the path(s) for potential later loading by the frontend.
         // We are not storing segments directly here anymore as they are not returned.

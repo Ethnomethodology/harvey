@@ -628,11 +628,26 @@ pub struct TranscriptionResultPayload {
     translated_transcript_path: Option<String>,
 }
 
+#[derive(serde::Serialize, Clone)]
+pub struct TranscriptionInitiatedPayload {
+    job_id: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct TranscriptionJobCompletedPayload {
+    job_id: String,
+    status: String,
+    jobFinishedPath: String, // Path of the media that was processed
+    transcriptFilePath: String, // Path to the main (original) transcript
+    translatedTranscriptFilePath: Option<String>, // Optional path to translated
+    errorMessage: Option<String>,
+}
+
 #[tauri::command]
 pub async fn transcribe_media_command(
     app_handle: AppHandle,
     payload: TranscribeMediaPayload,
-) -> Result<TranscriptionResultPayload, CommandError> {
+) -> Result<TranscriptionInitiatedPayload, CommandError> {
     let job_id = uuid::Uuid::new_v4().to_string();
     info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
 
@@ -830,14 +845,24 @@ pub async fn transcribe_media_command(
     emit_progress_cmd(&app_handle_clone, &job_id, 100.0, &format!("Successfully processed {}.", media_filename_for_progress))?;
     info!("[Transcribe Command][{}] Processing complete.", job_id);
 
-    Ok(TranscriptionResultPayload {
-        original_transcript_path: final_transcript_path_orig.to_string_lossy().to_string(),
-        translated_transcript_path: if payload.translate_to_english {
+    let completion_payload = TranscriptionJobCompletedPayload {
+        job_id: job_id.clone(),
+        status: "done".to_string(),
+        jobFinishedPath: payload.media_path_str.clone(),
+        transcriptFilePath: final_transcript_path_orig.to_string_lossy().into_owned(),
+        translatedTranscriptFilePath: if payload.translate_to_english {
             final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned())
         } else {
             None
         },
-    })
+        errorMessage: None,
+    };
+
+    if let Err(e) = app_handle.emit("custom_transcription_job_completed", completion_payload) {
+        error!("[Transcribe Command][{}] Failed to emit custom_transcription_job_completed event: {}", job_id, e);
+    }
+
+    Ok(TranscriptionInitiatedPayload { job_id })
 }
 
 // --- Implemented Helper Functions ---
