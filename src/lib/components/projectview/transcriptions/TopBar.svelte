@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -29,9 +29,6 @@
 	let transcriptionMode = 'automatic';
 	// Variable to hold transcript path for export modal
 	let transcriptPathForExport = '';
-
-	// Boolean to control translation to English
-	let translateToEnglish = false;
 
 	function handleAddBlankTranscript() {
 		console.log('Add Blank Transcript clicked');
@@ -167,8 +164,8 @@
 	$: languageSelectValue = $transcriptStore.selectedLanguage ?? "";
 
 	// Ensure translateToEnglish is false if language is switched to English
-	$: if ($transcriptStore.selectedLanguage === 'en' && translateToEnglish) {
-		translateToEnglish = false;
+	$: if ($transcriptStore.selectedLanguage === 'en' && $transcriptStore.translateToEnglish) {
+		setTranslateToEnglish(false);
 	}
 
 	// --- Reactive check for Transcribe button disable state ---
@@ -289,9 +286,9 @@
 				type="checkbox"
 				id="translateToEnglishCheckbox"
 				class="ui-checkbox"
-				bind:checked={translateToEnglish}
+				checked={$transcriptStore.translateToEnglish}
 				disabled={$transcriptStore.selectedLanguage === 'en'}
-				on:click={() => { if ($transcriptStore.selectedLanguage === 'en') translateToEnglish = false; }}
+				on:click={() => { setTranslateToEnglish(!$transcriptStore.translateToEnglish); if ($transcriptStore.selectedLanguage === 'en') setTranslateToEnglish(false); }}
 			/>
 			<label
 				for="translateToEnglishCheckbox"

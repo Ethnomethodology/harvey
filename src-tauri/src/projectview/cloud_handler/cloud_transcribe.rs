@@ -203,7 +203,7 @@ pub async fn run_cloud_transcription(
     let response_text = response.text().await.map_err(|e| CommandError::from(format!("Failed to read Gemini response body: {}", e)))?;
     debug!("[Gemini Transcribe][Job '{}'] API Response Body snippet:\n{}", job_id, response_text.chars().take(1000).collect::<String>());
 
-    let (_, _, _, final_transcript_path) = prepare_output_paths(&media_path, &job_id)?; 
+    let (_, _, _, final_transcript_path, _, _, _) = prepare_output_paths(&media_path, &job_id, false)?;
     let raw_json_path = final_transcript_path.with_file_name(format!(
         "{}_gemini_raw.json",
         final_transcript_path.file_stem().unwrap_or_default().to_string_lossy()

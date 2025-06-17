@@ -8,9 +8,11 @@
         deleteTranscriptSegment,
         undoTranscriptChange,
         redoTranscriptChange,
-        markTranscriptAsSaved, // This is now in transcriptStore, but saveTranscriptData service calls it.
+        // markTranscriptAsSaved, // Not directly used, saveTranscriptData handles it
         insertTranscriptSegment,
-        updatePlayerCurrentSegmentIndex
+        // updatePlayerCurrentSegmentIndex, // Not directly used
+        switchToOriginalTranscript, // New action
+        switchToEnglishTranscript, // New action
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -258,7 +260,29 @@
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
-            <div class="{isMediaPlayerHidden ? '' : 'h-1/2'} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
+            <!-- Transcript Switcher UI -->
+            {#if $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
+                <div class="flex items-center justify-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
+                    <button
+                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original'}
+                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'original'}
+                        on:click={() => transcriptStore.update(switchToOriginalTranscript)}
+                    >
+                        Original Language
+                    </button>
+                    <button
+                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
+                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
+                        on:click={() => transcriptStore.update(switchToEnglishTranscript)}
+                    >
+                        English
+                    </button>
+                </div>
+            {/if}
+
+            <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
                     bind:this={mediaPlayerRef}
                     bind:isTrimming={isMediaPlayerTrimming}
@@ -344,4 +368,14 @@
 
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
+
+    .btn-switch-active {
+        @apply bg-blue-500 text-white shadow-sm;
+    }
+    .dark .btn-switch-active {
+        @apply bg-blue-600 text-white;
+    }
+    .btn-switch-inactive {
+        @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+    }
 </style>

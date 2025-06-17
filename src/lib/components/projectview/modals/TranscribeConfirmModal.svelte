@@ -29,7 +29,11 @@
 		errorMessage = '';
 		successMessage = '';
 		cancelledMessage = '';
-		dispatch('confirmStart'); // Tell parent/service to start backend
+		dispatch('confirmStart', {
+			// modelName: modelName, // modelName is a prop, already available to parent
+			// language: language,   // language is a prop, already available to parent
+			// numSpeakers: speakers?.count, // speakers is a prop
+		}); // Tell parent/service to start backend
 	}
 
 	function handleCancelRequest() {
@@ -191,6 +195,7 @@
 					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
 					<p><strong>Language:</strong> <span class="font-mono">{language || 'N/A'}</span></p>
 					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Diarization Disabled)'}</p>
+					<p><strong>Translate to English:</strong> <span class="font-mono">{$transcriptStore.translateToEnglish ? 'Yes' : 'No'}</span></p>
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto">
 					<button class="btn-secondary" on:click={closeModal}>Cancel</button>

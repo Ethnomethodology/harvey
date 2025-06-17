@@ -2,18 +2,20 @@
 
 use super::shared_types::*;
 use super::shared_utils::*;
-use crate::welcome::config::CommandError;
+use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
+use tauri::Emitter; // Added Emitter
 use serde_json::Value as JsonValue;
 
 use std::{
     fs::{self, File},
-    io::{BufWriter, Write}, 
+    io::{BufWriter, Write, BufRead},
     path::{Path, PathBuf},
 };
 use tauri::{AppHandle};
-use tauri_plugin_shell::ShellExt; 
+use tauri_plugin_shell::{ShellExt, process::CommandEvent};
+use tokio::time::{sleep, Duration};
 use quick_xml;
 
 
@@ -491,8 +493,22 @@ pub async fn save_transcript_json(
 }
 
 // --- prepare_output_paths Helper Function ---
-pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Result<(String, PathBuf, PathBuf, PathBuf), CommandError> {
-    debug!("[prepare_output_paths][{}] Media path: {}", job_id, media_path_str);
+/// Prepares paths for transcription and translation outputs.
+///
+/// Returns a tuple containing:
+/// - `temp_transcript_output_base_orig_str`: Base path for temporary original transcript files (without extension).
+/// - `expected_whisper_temp_json_path_orig`: Path to the temporary JSON output from Whisper for the original transcript.
+/// - `expected_rttm_temp_path`: Path to the temporary RTTM file for diarization.
+/// - `final_transcript_path_orig`: Final path for the original transcript JSON file.
+/// - `temp_transcript_output_base_en_str`: Base path for temporary translated transcript files (without extension).
+/// - `expected_whisper_temp_json_path_en`: Path to the temporary JSON output from Whisper for the translated transcript.
+/// - `final_transcript_path_en`: Final path for the translated transcript JSON file.
+pub(crate) fn prepare_output_paths(
+    media_path_str: &str,
+    job_id: &str,
+    translate_to_english: bool,
+) -> Result<(String, PathBuf, PathBuf, PathBuf, Option<String>, Option<PathBuf>, Option<PathBuf>), CommandError> {
+    debug!("[prepare_output_paths][{}] Media path: {}, Translate: {}", job_id, media_path_str, translate_to_english);
     let media_path = PathBuf::from(media_path_str);
 
     let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from(format!("Invalid media filename: {}", media_path_str)))?.to_string();
@@ -507,20 +523,42 @@ pub(crate) fn prepare_output_paths( media_path_str: &str, job_id: &str) -> Resul
     fs::create_dir_all(&transcripts_dir)?;
     debug!("[prepare_output_paths][{}] Transcripts dir ensured: {:?}", job_id, transcripts_dir);
 
-    let temp_output_base_in_transcripts = transcripts_dir.join(format!("{}_temp_{}", media_filename_stem, job_id));
-    let temp_output_path_base_str = temp_output_base_in_transcripts.to_string_lossy().to_string();
-
-    // EXPECTED path for Whisper's JSON output, assuming "-of <base>" and "-oj" results in "<base>.json"
-    let expected_whisper_temp_output_path = temp_output_base_in_transcripts.with_extension("json"); // CORRECTED
+    // Paths for original transcript
+    let temp_transcript_output_base_orig = transcripts_dir.join(format!("{}_temp_{}_orig", media_filename_stem, job_id));
+    let temp_transcript_output_base_orig_str = temp_transcript_output_base_orig.to_string_lossy().to_string();
+    let expected_whisper_temp_json_path_orig = temp_transcript_output_base_orig.with_extension("json");
+    let final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
     
-    let expected_rttm_temp_path = temp_output_base_in_transcripts.with_extension("rttm");
-    
-    let final_transcript_path = transcripts_dir.join(format!("{}.json", media_filename_stem));
+    // Path for RTTM (common for original transcript diarization)
+    let expected_rttm_temp_path = temp_transcript_output_base_orig.with_extension("rttm"); // Use original's temp base for RTTM
 
-    debug!("[prepare_output_paths][{}] Temp Base: '{}', Whisper JSON (temp): '{}', RTTM (temp): '{}', Final Transcript JSON: '{}'", 
-        job_id, temp_output_path_base_str, expected_whisper_temp_output_path.display(), expected_rttm_temp_path.display(), final_transcript_path.display());
+    debug!("[prepare_output_paths][{}] Orig Temp Base: '{}', Orig Whisper JSON (temp): '{}', RTTM (temp): '{}', Orig Final JSON: '{}'",
+        job_id, temp_transcript_output_base_orig_str, expected_whisper_temp_json_path_orig.display(), expected_rttm_temp_path.display(), final_transcript_path_orig.display());
 
-    Ok((temp_output_path_base_str, expected_whisper_temp_output_path, expected_rttm_temp_path, final_transcript_path))
+    // Paths for translated transcript (if requested)
+    let mut temp_transcript_output_base_en_str: Option<String> = None;
+    let mut expected_whisper_temp_json_path_en: Option<PathBuf> = None;
+    let mut final_transcript_path_en: Option<PathBuf> = None;
+
+    if translate_to_english {
+        let temp_transcript_output_base_en = transcripts_dir.join(format!("{}_temp_{}_en", media_filename_stem, job_id));
+        temp_transcript_output_base_en_str = Some(temp_transcript_output_base_en.to_string_lossy().to_string());
+        expected_whisper_temp_json_path_en = Some(temp_transcript_output_base_en.with_extension("json"));
+        final_transcript_path_en = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
+
+        debug!("[prepare_output_paths][{}] EN Temp Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
+            job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en);
+    }
+
+    Ok((
+        temp_transcript_output_base_orig_str,
+        expected_whisper_temp_json_path_orig,
+        expected_rttm_temp_path,
+        final_transcript_path_orig,
+        temp_transcript_output_base_en_str,
+        expected_whisper_temp_json_path_en,
+        final_transcript_path_en,
+    ))
 }
 
 
@@ -571,6 +609,682 @@ pub fn map_speaker_ids_to_names(
     }
     info!("[Name Map] Finished speaker name mapping process.");
 }
+
+// --- Main Transcription Command ---
+#[derive(serde::Deserialize, Debug)]
+pub struct TranscribeMediaPayload {
+    project_xml_path: String,
+    media_path_str: String,
+    num_speakers: usize,
+    language_code: Option<String>,
+    model_name: String,
+    translate_to_english: bool,
+    speaker_names: Vec<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct TranscriptionResultPayload {
+    original_transcript_path: String,
+    translated_transcript_path: Option<String>,
+}
+
+#[tauri::command]
+pub async fn transcribe_media_command(
+    app_handle: AppHandle,
+    payload: TranscribeMediaPayload,
+) -> Result<TranscriptionResultPayload, CommandError> {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
+
+    let app_handle_clone = app_handle.clone();
+
+    let (
+        temp_transcript_output_base_orig_str,
+        expected_whisper_temp_json_path_orig,
+        expected_rttm_temp_path,
+        final_transcript_path_orig,
+        temp_transcript_output_base_en_str,
+        expected_whisper_temp_json_path_en,
+        final_transcript_path_en,
+    ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
+
+    let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
+
+    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, "Preparing audio...")?;
+    let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
+    emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
+
+    let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id)?;
+
+    // --- First Pass: Original Language Transcription ---
+    emit_progress_cmd(&app_handle_clone, &job_id, 10.0, "Transcribing original language...")?;
+    let mut original_segments = execute_transcription_pass(
+        &app_handle_clone,
+        &wav_media_path.to_string_lossy(), // Pass as &str
+        &whisper_model_path_str,
+        &payload.language_code.clone().unwrap_or_else(|| "auto".to_string()),
+        &job_id,
+        &temp_transcript_output_base_orig_str,
+        &expected_whisper_temp_json_path_orig,
+        payload.num_speakers,
+        &expected_rttm_temp_path,
+        false, // is_translation_pass
+        &payload.speaker_names, // Pass as slice
+    ).await?;
+
+    map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
+
+    emit_progress_cmd(&app_handle_clone, &job_id, 45.0, "Saving original transcript...")?;
+    let lexical_json_orig = create_lexical_table_from_segments(&original_segments);
+    let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
+        .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
+
+    save_transcript_json(
+        payload.project_xml_path.clone(),
+        final_transcript_path_orig.to_string_lossy().to_string(),
+        lexical_json_orig_str,
+    ).await?;
+    info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
+
+    // --- Second Pass: English Translation (if requested) ---
+    if payload.translate_to_english {
+        if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
+            temp_transcript_output_base_en_str,
+            expected_whisper_temp_json_path_en,
+            final_transcript_path_en, // This is an Option<PathBuf>
+        ) {
+            emit_progress_cmd(&app_handle_clone, &job_id, 55.0, "Translating to English...")?;
+
+            // Safely get owned strings for paths needed by execute_transcription_pass
+            let base_en_str_owned = base_en_str.clone();
+            let json_path_en_owned = json_path_en.clone();
+
+            let mut translated_segments = execute_transcription_pass(
+                &app_handle_clone,
+                &wav_media_path.to_string_lossy(), // Pass as &str
+                &whisper_model_path_str,
+                "en", // Target language for translation is English
+                &job_id,
+                &base_en_str_owned, // Use owned string
+                &json_path_en_owned,  // Use owned PathBuf
+                0, // No diarization for translation pass
+                &PathBuf::new(), // Empty RTTM path
+                true, // is_translation_pass
+                &payload.speaker_names, // Pass as slice
+            ).await?;
+
+            // Speaker mapping for translated segments can be complex.
+            // A simple approach: if segment counts are similar, try to reuse original speakers.
+            // This might need refinement based on actual whisper output for translations.
+            // For now, let's apply the same mapping, or default if counts differ significantly.
+            // A more robust solution might involve aligning segments by time.
+            if translated_segments.len() == original_segments.len() {
+                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            } else {
+                warn!("[Transcribe Command][{}] Segment count mismatch after translation (orig: {}, trans: {}). Speaker names might be less accurate for translated version.", job_id, original_segments.len(), translated_segments.len());
+                // Optionally, apply a default "SPEAKER_XX" or clear speakers for translated version
+                // For now, try mapping anyway or let map_speaker_ids_to_names handle it based on its logic.
+                 map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
+            }
+
+
+            emit_progress_cmd(&app_handle_clone, &job_id, 90.0, "Saving translated transcript...")?;
+            let lexical_json_en = create_lexical_table_from_segments(&translated_segments);
+            let lexical_json_en_str = serde_json::to_string_pretty(&lexical_json_en)
+                .map_err(|e| CommandError::from(format!("Failed to serialize translated Lexical Table JSON: {}", e)))?;
+
+            save_transcript_json(
+                payload.project_xml_path.clone(),
+                final_path_en_pb.to_string_lossy().to_string(),
+                lexical_json_en_str,
+            ).await?;
+            info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
+        } else {
+            warn!("[Transcribe Command][{}] Translation requested, but English output paths are not available. Skipping translation.", job_id);
+        }
+    }
+
+    emit_progress_cmd(&app_handle_clone, &job_id, 100.0, "Transcription complete.")?;
+    info!("[Transcribe Command][{}] Processing complete.", job_id);
+
+    Ok(TranscriptionResultPayload {
+        original_transcript_path: final_transcript_path_orig.to_string_lossy().to_string(),
+        translated_transcript_path: if payload.translate_to_english {
+            final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned())
+        } else {
+            None
+        },
+    })
+}
+
+// --- Implemented Helper Functions ---
+
+// Adapted from local_handler/transcription.rs
+// Omitting cancel_flag for now
+pub(crate) async fn convert_to_wav_if_needed_cmd(
+    app_handle: &AppHandle,
+    input_path_str: &str,
+    job_id: &str,
+) -> Result<PathBuf, CommandError> {
+    info!("[FFmpeg CMD][{}] Checking audio file: {}", job_id, input_path_str);
+    let input_path = PathBuf::from(input_path_str);
+    let extension = input_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+    if extension == "wav" {
+        info!("[FFmpeg CMD][{}] Input is already WAV. Skipping conversion.", job_id);
+        return Ok(input_path);
+    }
+
+    let output_wav_path = input_path.with_extension("wav");
+    info!("[FFmpeg CMD][{}] Target WAV path: {}", job_id, output_wav_path.display());
+
+    if output_wav_path.exists() {
+        match output_wav_path.metadata() {
+            Ok(m) if m.len() > 0 => {
+                info!("[FFmpeg CMD][{}] Target WAV file already exists and is not empty. Reusing.", job_id);
+                return Ok(output_wav_path);
+            },
+            _ => {
+                warn!("[FFmpeg CMD][{}] Target WAV file exists but is empty or metadata error. Overwriting.", job_id);
+            }
+        }
+    }
+
+    info!("[FFmpeg CMD][{}] Starting FFmpeg conversion...", job_id);
+    // Using emit_progress_cmd from this file
+    let _ = emit_progress_cmd(app_handle, job_id, 2.0, "Converting audio to WAV...")?;
+
+    let args: Vec<String> = vec![
+        "-i".into(), input_path_str.to_string(),
+        "-vn".into(),
+        "-acodec".into(), "pcm_s16le".into(),
+        "-ar".into(), "16000".into(),
+        "-ac".into(), "1".into(),
+        "-y".into(),
+        output_wav_path.to_string_lossy().to_string(),
+    ];
+    debug!("[FFmpeg CMD][{}] Command arguments: {:?}", job_id, args);
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope
+        .sidecar("ffmpeg")?
+        .args(args)
+        .spawn()?;
+    debug!("[FFmpeg CMD][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
+
+    let mut ffmpeg_stderr: Vec<String> = Vec::new();
+    let mut ffmpeg_exit_code: Option<i32> = None;
+    let mut ffmpeg_error: Option<String> = None;
+
+    loop {
+        // Cancellation logic omitted for this adaptation
+        // if cancel_flag.load(Ordering::Relaxed) {
+        //     warn!("[FFmpeg CMD][{}] Cancellation requested. Killing FFmpeg process...", job_id);
+        //     let _ = child.kill();
+        //     if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
+        //     return Err(CommandError::from("Audio conversion cancelled."));
+        // }
+
+        tokio::select! {
+            biased; // Ensure cancellation check (if added later) is prioritized
+            maybe_event = rx.recv() => {
+                match maybe_event {
+                    Some(event) => match event {
+                        CommandEvent::Stdout(line) => { debug!("[FFmpeg CMD][stdout][{}] {}", job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Stderr(line) => { let l = String::from_utf8_lossy(&line).to_string(); debug!("[FFmpeg CMD][stderr][{}] {}", job_id, l.trim_end()); ffmpeg_stderr.push(l); },
+                        CommandEvent::Error(msg) => { error!("[FFmpeg CMD][error][{}] {}", job_id, msg); ffmpeg_error = Some(msg); break; },
+                        CommandEvent::Terminated(payload) => { info!("[FFmpeg CMD][term][{}] Process terminated. Code: {:?}, Signal: {:?}", job_id, payload.code, payload.signal); ffmpeg_exit_code = payload.code; if payload.signal.is_some() && ffmpeg_exit_code.is_none() { ffmpeg_exit_code = Some(-1); } break; }
+                        _ => {}
+                    },
+                    None => {
+                        if ffmpeg_exit_code.is_none() && ffmpeg_error.is_none() {
+                            warn!("[FFmpeg CMD][{}] Event channel closed unexpectedly before termination signal.", job_id);
+                            ffmpeg_exit_code = Some(-1); // Treat as an error
+                        }
+                        break;
+                    }
+                }
+            }
+            // Minimal sleep if cancellation is omitted, otherwise select! might behave unexpectedly without multiple branches.
+            // If cancellation was present:
+            // _ = sleep(Duration::from_millis(50)) => { continue; }
+            // Since it's omitted, we might not need this sleep, but keeping it for safety during select! usage.
+            // If recv() is the only branch, select! is not really needed.
+            // For now, let's assume recv() might not always be ready immediately.
+             _ = sleep(Duration::from_millis(10)) => {
+                 // This branch is mainly to ensure select! doesn't block indefinitely if recv() is slow
+                 // and to allow future re-integration of cancellation checks.
+                 // If there are no other branches, this sleep isn't strictly necessary
+                 // but also doesn't harm significantly for a short duration.
+                 // If this were the only branch, a simple loop with rx.recv().await would suffice.
+             }
+        }
+    }
+
+    let stderr_output = ffmpeg_stderr.join("\n");
+    if ffmpeg_error.is_some() || ffmpeg_exit_code != Some(0) {
+        error!("[FFmpeg CMD][{}] FFmpeg process failed. Code: {:?}, Error: {:?}\nStderr:\n{}", job_id, ffmpeg_exit_code, ffmpeg_error, stderr_output);
+        if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
+        return Err(CommandError::from(format!("FFmpeg conversion failed. Code: {:?}. Error: {}", ffmpeg_exit_code, ffmpeg_error.unwrap_or_default())));
+    }
+
+    if !output_wav_path.exists() {
+        error!("[FFmpeg CMD][{}] FFmpeg reported success, but output file is missing: {}", job_id, output_wav_path.display());
+        return Err(CommandError::from(format!("FFmpeg conversion failed: output file missing ({})", output_wav_path.display())));
+    }
+    match output_wav_path.metadata() {
+        Ok(m) if m.len() == 0 => {
+            error!("[FFmpeg CMD][{}] FFmpeg reported success, but output file is empty: {}", job_id, output_wav_path.display());
+            let _ = fs::remove_file(&output_wav_path);
+            return Err(CommandError::from(format!("FFmpeg conversion failed: output file is empty ({})", output_wav_path.display())));
+        },
+        Err(e) => {
+            error!("[FFmpeg CMD][{}] FFmpeg reported success, but failed to get metadata for {}: {}", job_id, output_wav_path.display(), e);
+            let _ = fs::remove_file(&output_wav_path);
+            return Err(CommandError::from(format!("FFmpeg conversion failed: output metadata error ({})", e)));
+        },
+        Ok(_) => {}
+    }
+
+    info!("[FFmpeg CMD][{}] Successfully converted '{}' to WAV: {}", job_id, input_path_str, output_wav_path.display());
+    Ok(output_wav_path)
+}
+
+// Adapted from local_handler/transcription.rs
+// Renamed to avoid conflict and made pub(crate)
+pub(crate) fn find_model_file_cmd(model_dir: &Path) -> Result<PathBuf, CommandError> {
+    debug!("[Helper CMD] Searching for model file in directory: {:?}", model_dir);
+    if !model_dir.exists() || !model_dir.is_dir() {
+        return Err(CommandError::from(format!("Model directory not found or is not a directory: {}", model_dir.display())));
+    }
+
+    for entry_result in fs::read_dir(model_dir)? {
+        match entry_result {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                        let lower_ext = ext.to_lowercase();
+                        // Common model file extensions
+                        if lower_ext == "bin" || lower_ext == "gguf" || lower_ext == "pt" {
+                            info!("[Helper CMD] Found potential model file: {:?}", path);
+                            return Ok(path);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("[Helper CMD] Failed to read directory entry in '{}': {}", model_dir.display(), e);
+            }
+        }
+    }
+
+    Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
+}
+
+
+// Adapted from local_handler/transcription.rs
+// Made synchronous as read_config and find_model_file_cmd are sync.
+
+// --- Structs specific to parsing whisper output (can be kept local to where they are used) ---
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonOutput {
+    transcription: Option<Vec<WhisperJsonSegment>>,
+}
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonSegment {
+    timestamps: WhisperJsonTimestamps,
+    text: String,
+}
+#[derive(serde::Deserialize, Debug)]
+struct WhisperJsonTimestamps {
+    from: String,
+    to: String,
+}
+
+// --- Struct specific to parsing RTTM output (can be kept local) ---
+#[derive(Debug, Clone)]
+struct RttmRecord {
+    start_time: f64,
+    duration: f64,
+    speaker_id: String,
+}
+
+
+pub(crate) fn resolve_whisper_model_path_cmd(
+    model_name: &str,
+    job_id: &str, // Kept for logging consistency, though not strictly needed by logic
+) -> Result<String, CommandError> {
+    let config = read_config()?; // This is synchronous
+    let base_model_dir_str = if !config.download_location.trim().is_empty() {
+        config.download_location
+    } else {
+        get_default_download_location()? // This is synchronous
+    };
+    let model_dir_path = PathBuf::from(&base_model_dir_str).join(model_name);
+
+    if !model_dir_path.exists() || !model_dir_path.is_dir() {
+        let e_msg = format!("Model directory not found: '{}'. Please download the model first.", model_dir_path.display());
+        error!("[Transcription CMD][{}] Error resolving model path: {}", job_id, e_msg);
+        return Err(CommandError::from(e_msg));
+    }
+    // Call the adapted find_model_file_cmd
+    let model_file_path = find_model_file_cmd(&model_dir_path)?;
+    Ok(model_file_path.to_string_lossy().to_string())
+}
+
+// --- START: Adapted Helper Functions for execute_transcription_pass ---
+
+// Adapted from local_handler/transcription.rs
+async fn run_whisper_cpp_sidecar_cmd(
+    app_handle: &AppHandle,
+    media_path: &str, // Should be wav_media_path.to_string_lossy().to_string()
+    whisper_model_path_str: &str,
+    language: &str,
+    job_id: &str,
+    output_base_for_whisper: &str,
+    expected_whisper_json_output_path: &Path,
+    is_translation_pass: bool,
+    // cancel_flag: &Arc<AtomicBool>, // Omitted for now
+) -> Result<PathBuf, CommandError> {
+    let sidecar_name = "whisper-cpp";
+    let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
+    debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass);
+
+    let mut args: Vec<String> = vec![
+        "-m".into(), whisper_model_path_str.to_string(),
+        "-f".into(), media_path.to_string(),
+        "-l".into(), lang_arg.to_string(),
+        "-oj".into(), // Output JSON
+        "-of".into(), output_base_for_whisper.to_string(),
+    ];
+
+    if is_translation_pass {
+        args.push("--translate".into());
+    }
+
+    debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+     .map_err(|e| {
+         error!("Failed to spawn whisper-cpp: {}. Check tauri.conf.json, binary paths, and permissions.", e);
+         CommandError::from(format!("Failed to execute whisper-cpp sidecar: {}. Ensure it's bundled and executable.", e))
+     })?;
+    info!("[Whisper CPP CMD][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
+
+    // Simplified event handling (omitting cancellation for now)
+    let mut process_error: Option<String> = None;
+    let mut exit_code: Option<i32> = None;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+            _ => {}
+        }
+    }
+
+    if process_error.is_some() || exit_code != Some(0) {
+        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
+    }
+    if !expected_whisper_json_output_path.exists() {
+        // Add a small delay and check again, as file system operations might not be instantaneous
+        sleep(Duration::from_millis(300)).await;
+        if !expected_whisper_json_output_path.exists() {
+            return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
+        }
+    }
+    Ok(expected_whisper_json_output_path.to_path_buf())
+}
+
+// Adapted from local_handler/transcription.rs
+fn parse_whisper_json_cmd(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
+    debug!("[JSON Parse CMD] Reading whisper output: {:?}", json_path);
+    let file = File::open(json_path)?;
+    let reader = std::io::BufReader::new(file); // Ensure BufReader is in scope
+    let output: WhisperJsonOutput = serde_json::from_reader(reader)
+        .map_err(|e| CommandError::from(format!("Failed to parse whisper JSON from '{}': {}", json_path.display(), e)))?;
+
+    let mut segments = Vec::new();
+    if let Some(transcription) = output.transcription {
+        for (idx, w_seg) in transcription.iter().enumerate() {
+            // Simplified timestamp parsing for this adaptation, assuming format is always "00:00:00,000" or "00:00:00.000"
+            // A more robust parser like in local_handler might be needed if whisper's output varies.
+            let parse_ts = |ts_str: &str| -> Result<f64, String> {
+                let parts: Vec<&str> = ts_str.split(|c| c == ':' || c == ',' || c == '.').collect();
+                if parts.len() == 4 { // hh:mm:ss:ms
+                    let h: f64 = parts[0].parse().map_err(|_| "h".to_string())?;
+                    let m: f64 = parts[1].parse().map_err(|_| "m".to_string())?;
+                    let s: f64 = parts[2].parse().map_err(|_| "s".to_string())?;
+                    let ms: f64 = parts[3].parse().map_err(|_| "ms".to_string())?;
+                    Ok(h * 3600.0 + m * 60.0 + s + ms / 1000.0)
+                } else if parts.len() == 3 && ts_str.contains(':') { // mm:ss.ms
+                     let m: f64 = parts[0].parse().map_err(|_| "m2".to_string())?;
+                     let s: f64 = parts[1].parse().map_err(|_| "s2".to_string())?;
+                     let ms: f64 = parts[2].parse().map_err(|_| "ms2".to_string())?;
+                     Ok(m * 60.0 + s + ms / 1000.0)
+                }
+                 else { Err(format!("Invalid timestamp format: {}", ts_str)) }
+            };
+
+            let start_time = parse_ts(&w_seg.timestamps.from)
+                .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid start time '{}': {}", idx, w_seg.timestamps.from, e_msg)))?;
+            let end_time = parse_ts(&w_seg.timestamps.to)
+                 .map_err(|e_msg| CommandError::from(format!("Segment {}: Invalid end time '{}': {}", idx, w_seg.timestamps.to, e_msg)))?;
+
+            if end_time < start_time {
+                 warn!("[JSON Parse CMD] Skipping segment {} due to end time < start time.", idx);
+                 continue;
+            }
+            segments.push(TranscriptSegment {
+                start_time,
+                end_time,
+                speaker: "Unknown".to_string(), // Default speaker
+                text: w_seg.text.trim().to_string(),
+            });
+        }
+    }
+    info!("[JSON Parse CMD] Parsed {} segments from {}", segments.len(), json_path.display());
+    Ok(segments)
+}
+
+// Adapted from local_handler/transcription.rs
+async fn run_diarize_cli_sidecar_cmd(
+    app_handle: &AppHandle,
+    media_path: &str, // wav_media_path.to_string_lossy().to_string()
+    num_speakers: usize,
+    output_rttm_path: &Path,
+    job_id: &str,
+    // cancel_flag: &Arc<AtomicBool>, // Omitted
+) -> Result<PathBuf, CommandError> {
+    let sidecar_name = "diarize-cli";
+    info!("[DiarizeCLI CMD][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
+    if let Some(parent_dir) = output_rttm_path.parent() { fs::create_dir_all(parent_dir)?; }
+
+    let mut args = vec![
+        "--audio".into(), media_path.to_string(),
+        "--output".into(), output_rttm_path.to_string_lossy().to_string(),
+    ];
+    if num_speakers > 0 { // diarize-cli might handle num_speakers=0 as auto, but explicit is safer
+        args.push("--num_speakers".into()); args.push(num_speakers.to_string());
+        // Add min/max if your diarize-cli version supports/requires them
+        args.push("--min_speakers".into()); args.push(1.to_string()); // Example
+        args.push("--max_speakers".into()); args.push(num_speakers.max(1).to_string()); // Example
+    }
+
+    let shell_scope = app_handle.shell();
+    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+        .map_err(|e| CommandError::from(format!("Failed to execute {} sidecar: {}", sidecar_name, e)))?;
+    info!("[DiarizeCLI CMD][{}] Spawned '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
+
+    let mut process_error: Option<String> = None;
+    let mut exit_code: Option<i32> = None;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+            _ => {}
+        }
+    }
+
+    if process_error.is_some() || exit_code != Some(0) {
+        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
+    }
+    if !output_rttm_path.exists() {
+        sleep(Duration::from_millis(300)).await;
+        if !output_rttm_path.exists() {
+             return Err(CommandError::from(format!("Diarization RTTM output missing: {:?}", output_rttm_path)));
+        }
+    }
+    Ok(output_rttm_path.to_path_buf())
+}
+
+// Adapted from local_handler/transcription.rs
+fn parse_rttm_file_cmd(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
+    debug!("[RTTM Parse CMD] Reading RTTM file: {:?}", rttm_path);
+    let file = File::open(rttm_path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut records = Vec::new();
+
+    for line_result in reader.lines() {
+        let line = line_result?;
+        if line.trim().is_empty() || line.starts_with(';') { continue; }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 8 || parts[0] != "SPEAKER" { continue; }
+        let start_time: f64 = parts[3].parse().map_err(|_| CommandError::from("Invalid RTTM start time"))?;
+        let duration: f64 = parts[4].parse().map_err(|_| CommandError::from("Invalid RTTM duration"))?;
+        if start_time < 0.0 || duration <= 0.0 { continue; } // Basic validation
+        records.push(RttmRecord { start_time, duration, speaker_id: parts[7].to_string() });
+    }
+    info!("[RTTM Parse CMD] Parsed {} records from {}", records.len(), rttm_path.display());
+    Ok(records)
+}
+
+// Adapted from local_handler/transcription.rs
+fn merge_diarization_results_cmd(whisper_segments: &mut Vec<TranscriptSegment>, rttm_records: &[RttmRecord]) {
+    if rttm_records.is_empty() { info!("[Merge CMD] No RTTM records for merging."); return; }
+    if whisper_segments.is_empty() { info!("[Merge CMD] No whisper segments for merging."); return; }
+
+    let mut sorted_rttm = rttm_records.to_vec();
+    sorted_rttm.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap_or(std::cmp::Ordering::Equal));
+
+    for seg in whisper_segments.iter_mut() {
+        let seg_mid_point = seg.start_time + (seg.end_time - seg.start_time) / 2.0;
+        let mut best_speaker = "Unknown".to_string();
+        let mut max_overlap = 0.0f64;
+
+        for rttm_rec in &sorted_rttm {
+            let rttm_start = rttm_rec.start_time;
+            let rttm_end = rttm_rec.start_time + rttm_rec.duration;
+
+            let overlap_start = seg.start_time.max(rttm_start);
+            let overlap_end = seg.end_time.min(rttm_end);
+            let current_overlap = (overlap_end - overlap_start).max(0.0);
+
+            if current_overlap > max_overlap {
+                max_overlap = current_overlap;
+                best_speaker = rttm_rec.speaker_id.clone();
+            } else if current_overlap > 0.0 && current_overlap == max_overlap {
+                // Tie-breaking: prefer speaker whose turn contains the segment's midpoint
+                if seg_mid_point >= rttm_start && seg_mid_point < rttm_end {
+                    best_speaker = rttm_rec.speaker_id.clone();
+                }
+            }
+        }
+        if max_overlap > 0.0 { // Only assign if there was any overlap
+            seg.speaker = best_speaker;
+        }
+    }
+    info!("[Merge CMD] Finished merging diarization results.");
+}
+
+// --- END: Adapted Helper Functions ---
+
+pub(crate) async fn execute_transcription_pass(
+    app_handle: &AppHandle,
+    wav_media_path_str: &str, // Changed to &str to match caller
+    model_path: &str,
+    language_code: &str,
+    job_id: &str,
+    output_base_for_whisper: &str,
+    expected_whisper_json_output_path: &PathBuf,
+    num_speakers: usize,
+    expected_rttm_output_path: &PathBuf,
+    is_translation_pass: bool,
+    speaker_names: &[String],
+) -> Result<Vec<TranscriptSegment>, CommandError> {
+    info!(
+        "[Exec Pass][{}] Start. Lang: {}, Translate: {}, NumSpeakers: {}",
+        job_id, language_code, is_translation_pass, num_speakers
+    );
+
+    let whisper_json_path = run_whisper_cpp_sidecar_cmd(
+        app_handle,
+        wav_media_path_str,
+        model_path,
+        language_code,
+        job_id,
+        output_base_for_whisper,
+        expected_whisper_json_output_path,
+        is_translation_pass,
+    ).await?;
+
+    let mut segments = parse_whisper_json_cmd(&whisper_json_path)?;
+
+    if num_speakers > 0 && !is_translation_pass {
+        emit_progress_cmd(app_handle, job_id,segments.len() as f32 * 0.1 + 20.0, "Running diarization...")?; // Example progress update
+
+        let rttm_path = run_diarize_cli_sidecar_cmd(
+            app_handle,
+            wav_media_path_str,
+            num_speakers,
+            expected_rttm_output_path,
+            job_id,
+        ).await?;
+
+        match parse_rttm_file_cmd(&rttm_path) {
+            Ok(rttm_records) => {
+                if !rttm_records.is_empty() {
+                    merge_diarization_results_cmd(&mut segments, &rttm_records);
+                } else {
+                    warn!("[Exec Pass][{}] Diarization produced no RTTM records.", job_id);
+                }
+            }
+            Err(e) => {
+                warn!("[Exec Pass][{}] Failed to parse RTTM file: {}. Proceeding without merged diarization.", job_id, e);
+            }
+        }
+    } else {
+        info!("[Exec Pass][{}] Skipping diarization.", job_id);
+    }
+
+    map_speaker_ids_to_names(&mut segments, speaker_names);
+
+    info!("[Exec Pass][{}] Pass complete. Segments: {}", job_id, segments.len());
+    Ok(segments)
+}
+
+
+// Helper to emit progress
+pub(crate) fn emit_progress_cmd(
+    app_handle: &AppHandle,
+    job_id: &str,
+    percent: f32,
+    message: &str,
+) -> Result<(), CommandError> {
+    let clamped_percent = percent.max(0.0).min(100.0);
+    debug!("[Progress Emit CMD][{}] {:.1}% - {}", job_id, clamped_percent, message);
+    app_handle.emit("PROGRESS", ProgressPayload {
+        job_id: job_id.to_string(),
+        percent: clamped_percent,
+        message: message.to_string(),
+    }).map_err(|e| CommandError::from(format!("Failed to emit progress: {}", e)))
+}
+
 
 #[tauri::command]
 pub async fn list_subtitle_files_command(media_path_str: String) -> Result<Vec<SubtitleFileEntry>, CommandError> {
