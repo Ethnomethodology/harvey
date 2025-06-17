@@ -650,7 +650,8 @@ pub async fn transcribe_media_command(
 
     let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
 
-    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, &format!("Transcription starting with model {}...", payload.model_name))?;
+    let model_display_name = if payload.model_name.is_empty() { "selected model".to_string() } else { payload.model_name.clone() };
+    emit_progress_cmd(&app_handle_clone, &job_id, 1.0, &format!("Transcription starting with model {}...", model_display_name))?;
     let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id).await?;
     emit_progress_cmd(&app_handle_clone, &job_id, 5.0, "Audio ready.")?;
 
@@ -737,11 +738,16 @@ pub async fn transcribe_media_command(
             let base_en_str_owned = base_en_str.clone(); // already a String from Option<String>
             let json_path_en_owned = json_path_en.clone(); // already a PathBuf from Option<PathBuf>
 
+            // Determine the source language for the translation process
+            let source_language_for_translation = payload.language_code.clone().unwrap_or_else(|| "auto".to_string());
+            info!("[Transcribe Command][{}]   Source Lang for Translation: {}", job_id, source_language_for_translation);
+
+
             let translation_result = execute_transcription_pass(
                 &app_handle_clone,
                 &wav_media_path.to_string_lossy(),
                 &whisper_model_path_str,
-                "en", // Target language for translation is English
+                &source_language_for_translation, // Use determined source language
                 &job_id,
                 &base_en_str_owned, // Use owned string
                 &json_path_en_owned,  // Use owned PathBuf
