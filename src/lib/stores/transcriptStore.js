@@ -732,7 +732,7 @@ export function prepareForNewTranscription() {
             transcriptionErrorMessage: null,
             showTranscribeModal: true // Ensure modal is shown
         };
-    });
+    }); // Corrected line ending
 }
         transcriptionJobId: null,
         transcriptionProgress: { percent: 0, message: '' },
