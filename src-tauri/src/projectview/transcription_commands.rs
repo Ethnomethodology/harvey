@@ -29,9 +29,9 @@ struct CancelGuard {
 impl Drop for CancelGuard {
     fn drop(&mut self) {
         if self.state.remove(&self.job_id).is_some() {
-            debug!("[CancelGuard][{}] Removed cancel flag on drop.", self.job_id);
+            debug!("[CancelGuard] Removed cancel flag for job '{}' on drop.", self.job_id);
         } else {
-            warn!("[CancelGuard][{}] Attempted to remove flag for job '{}' on drop, but it was already gone.", self.job_id);
+            warn!("[CancelGuard] Attempted to remove flag for job '{}' on drop, but it was already gone.", self.job_id);
         }
     }
 }
