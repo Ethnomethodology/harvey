@@ -340,24 +340,34 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
 }
 
 
-#[tauri::command]
-pub async fn save_speaker_config( project_xml_path: String, media_identifier: String, count: usize, names: Vec<String>) -> Result<(), CommandError> {
-    info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}", project_xml_path, media_identifier, count, names);
+#[derive(serde::Deserialize, Debug)]
+pub struct SaveSpeakerConfigPayload {
+    project_xml_path: String,
+    media_identifier: String,
+    count: usize,
+    names: Vec<String>,
+    translated_names: Option<Vec<String>>,
+}
 
-    let xml_path = PathBuf::from(&project_xml_path);
+#[tauri::command]
+pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<(), CommandError> {
+    info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}, TranslatedNames={:?}",
+        payload.project_xml_path, payload.media_identifier, payload.count, payload.names, payload.translated_names);
+
+    let xml_path = PathBuf::from(&payload.project_xml_path);
     if !xml_path.exists() || !xml_path.is_file() {
-        return Err(CommandError::from(format!("Project file not found: {}", project_xml_path)));
+        return Err(CommandError::from(format!("Project file not found: {}", payload.project_xml_path)));
     }
 
     let xml_content = fs::read_to_string(&xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_and_updated = false;
 
-    if let Some(media_file) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
-        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", media_identifier);
+    if let Some(media_file) = project_data.media_files.files.iter_mut().find(|f| f.name == payload.media_identifier) {
+        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", payload.media_identifier);
 
-        let mut validated_count = count;
-        let mut validated_names = names.clone();
+        let mut validated_count = payload.count;
+        let mut validated_names = payload.names.clone();
         if validated_names.len() != validated_count {
              warn!("Speaker count ({}) and number of names ({}) mismatch. Adjusting count to match names.", validated_count, validated_names.len());
              validated_count = validated_names.len();
@@ -373,18 +383,27 @@ pub async fn save_speaker_config( project_xml_path: String, media_identifier: St
              }
          }
 
-        let speakers_data = SpeakersXml { count: validated_count, names: validated_names };
+        // Handle translated_names, defaulting to Some(Vec::new()) if None is provided from payload
+        let validated_translated_names = payload.translated_names.clone().unwrap_or_else(Vec::new);
+        // Further validation for translated_names (e.g., trimming, ensuring uniqueness if needed) can be added here
+        // For now, directly use the provided or defaulted Vec.
+
+        let speakers_data = SpeakersXml {
+            count: validated_count,
+            names: validated_names,
+            translated_names: Some(validated_translated_names), // Store as Some(Vec)
+        };
         info!("[Backend SaveSpeakers] Saving validated config: {:?}", speakers_data);
         media_file.speakers = Some(speakers_data);
         found_and_updated = true;
     }
 
     if !found_and_updated {
-        return Err(CommandError::from(format!("Media ID '{}' not found in XML.", media_identifier)));
+        return Err(CommandError::from(format!("Media ID '{}' not found in XML.", payload.media_identifier)));
     }
 
     save_project_xml(&xml_path, &project_data)?;
-    info!("[Backend SaveSpeakers] Success for '{}'.", media_identifier);
+    info!("[Backend SaveSpeakers] Success for '{}'.", payload.media_identifier);
     Ok(())
 }
 
@@ -989,8 +1008,8 @@ pub async fn transcribe_media_command(
             //     // For now, try mapping anyway or let map_speaker_ids_to_names handle it based on its logic.
             //      map_speaker_ids_to_names(&mut translated_segments, &payload.speaker_names);
             // }
-            info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization...", job_id);
-            align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &job_id);
+            info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization and original speaker names list...", job_id);
+            align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &payload.speaker_names, &job_id);
 
             // Apply translated_speaker_names if provided
             if let Some(ref translated_names) = payload.translated_speaker_names {
@@ -1074,6 +1093,7 @@ pub async fn transcribe_media_command(
 fn align_speakers_to_translated_segments(
     original_segments: &[TranscriptSegment], // These should have correct speaker info from diarization
     translated_segments: &mut Vec<TranscriptSegment>, // These have speakers from Whisper, likely "Unknown"
+    original_speaker_names: &[String], // New parameter: list of original speaker names
     job_id: &str, // For logging
 ) {
     if original_segments.is_empty() {
@@ -1146,36 +1166,28 @@ fn align_speakers_to_translated_segments(
         if max_overlap > 0.0 { // Only assign if there was any overlap
             debug!("[Align Speakers][{}] Assigning speaker '{}' to translated segment {:.3}-{:.3} (Max Overlap: {:.3})",
                 job_id, best_match_speaker, t_start, t_end, max_overlap);
-            t_seg.speaker = best_match_speaker;
-        } else {
-            // If no overlap, try to find the closest original segment's speaker based on midpoint proximity
-            // This is a fallback if there's absolutely no overlap.
-            let mut min_dist = f64::MAX;
-            let mut closest_speaker = "Unknown".to_string();
-            let mut found_closest = false;
-            for o_seg in original_segments {
-                 let o_start = o_seg.start_time;
-                 let o_end = o_seg.end_time;
-                 if o_start > o_end { continue; }
-                 let o_mid = o_start + (o_end - o_start) / 2.0;
-                 let dist = (t_mid - o_mid).abs();
-                 if dist < min_dist {
-                     min_dist = dist;
-                     closest_speaker = o_seg.speaker.clone();
-                     found_closest = true;
-                 }
-            }
-            if found_closest {
-                warn!("[Align Speakers][{}] No overlap for translated segment {:.3}-{:.3}. Assigning speaker '{}' from closest original segment (dist: {:.3}).",
-                    job_id, t_start, t_end, closest_speaker, min_dist);
-                t_seg.speaker = closest_speaker;
+            // Found the speaker name from the original segment. Now find its index in original_speaker_names.
+            if let Some(index) = original_speaker_names.iter().position(|name| name == &best_match_speaker) {
+                t_seg.speaker = format!("SPEAKER_{:02}", index);
+                debug!("[Align Speakers][{}] Mapped original speaker '{}' to generic ID 'SPEAKER_{:02}' for translated segment {:.3}-{:.3}",
+                    job_id, best_match_speaker, index, t_start, t_end);
             } else {
-                warn!("[Align Speakers][{}] No overlapping or closest original segment found for translated segment {:.3}-{:.3}. Speaker remains '{}'.",
-                    job_id, t_start, t_end, t_seg.speaker);
+                // If best_match_speaker is not in original_speaker_names (e.g., it's "Unknown" or an unmapped RTTM ID)
+                warn!("[Align Speakers][{}] Speaker '{}' from original segment not found in original_speaker_names. Setting translated speaker to 'Unknown' for segment {:.3}-{:.3}.",
+                    job_id, best_match_speaker, t_start, t_end);
+                t_seg.speaker = "Unknown".to_string();
             }
+        } else {
+            // No overlap found.
+            // The previous logic tried to find the *closest* original segment's speaker.
+            // For this new logic, if there's no overlap, we should probably assign "Unknown".
+            // Replicating a closest-match might lead to incorrect indexing if that closest speaker isn't truly related.
+            warn!("[Align Speakers][{}] No overlapping original segment found for translated segment {:.3}-{:.3}. Speaker set to 'Unknown'.",
+                job_id, t_start, t_end);
+            t_seg.speaker = "Unknown".to_string();
         }
     }
-    info!("[Align Speakers][{}] Finished aligning speakers for translated segments.", job_id);
+    info!("[Align Speakers][{}] Finished aligning speakers for translated segments, mapping to generic IDs.", job_id);
 }
 
 // Adapted from local_handler/transcription.rs

@@ -44,7 +44,7 @@
 			updateLocalNames(renderedCount, Array.isArray(currentSpeakers.names) ? [...currentSpeakers.names] : []);
 
 			// Initialize second-language names if present
-			updateLocalSecondNames(renderedCount, currentSpeakers.secondNames);
+			updateLocalSecondNames(renderedCount, currentSpeakers.translatedNames);
 
 			// NEW: Enable confirm immediately ONLY if opening with a valid, non-zero count
 			listGenerated = initialCount > 0 && initialCount === localCount;

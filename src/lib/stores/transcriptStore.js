@@ -176,10 +176,34 @@ export function selectMedia(fileEntry) {
         const loadedNamesRaw = fileEntry.speakers.name;
         const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
 
+        // --- START MODIFICATION ---
+        let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
+        let loadedTranslatedNames = [];
+
+        if (Array.isArray(loadedTranslatedNamesRaw)) {
+            loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
+        } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
+            // Handle case where it might be a single string for a single speaker
+            loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+        } else {
+            // Default to empty strings if not found or not in expected format
+            loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+        }
+
+        // Ensure the array has the correct length
+        if (loadedTranslatedNames.length > loadedCount) {
+            loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
+        } else {
+            while (loadedTranslatedNames.length < loadedCount) {
+                loadedTranslatedNames.push('');
+            }
+        }
+        // --- END MODIFICATION ---
+
         speakersToLoad = {
             count: loadedCount,
-            names: [...loadedNames],
-            translatedNames: Array(loadedCount > 0 ? loadedCount : 0).fill('')
+            names: [...loadedNames], // Primary names are already handled
+            translatedNames: loadedTranslatedNames // Assign the processed translated names
         };
 
         if (speakersToLoad.count !== speakersToLoad.names.length) {
@@ -320,67 +344,118 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
         if (inferSpeakers) {
-            console.warn('[TranscriptStore] Speaker inference requested. Overwriting current.');
-            let inferredSpeakers = { count: 0, names: [] };
+            console.warn('[TranscriptStore] Speaker inference requested. Overwriting current primary names and count.'); // Updated log message
+            let inferredPrimarySpeakers = { count: 0, names: [] }; // Renamed for clarity
             if (newSegments.length > 0) {
                 const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))];
                 const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown');
                 if (knownSpeakers.length > 0) {
                     knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
-                    inferredSpeakers = { count: knownSpeakers.length, names: knownSpeakers };
+                    inferredPrimarySpeakers = { count: knownSpeakers.length, names: knownSpeakers };
                 } else {
-                    inferredSpeakers = { count: 0, names: [] };
+                    // If only "Unknown" speakers, or no speakers, count is 0, names empty
+                    inferredPrimarySpeakers = { count: 0, names: [] };
                 }
+            } else {
+                // No segments, so no speakers to infer
+                inferredPrimarySpeakers = { count: 0, names: [] };
             }
-            updatedSpeakers = inferredSpeakers;
+
+            // Merge with existing translatedNames:
+            updatedSpeakers = {
+                count: inferredPrimarySpeakers.count, // Get count from inference
+                names: inferredPrimarySpeakers.names,   // Get primary names from inference
+                translatedNames: ts.speakers.translatedNames || [] // Preserve existing translatedNames from the store
+            };
         }
         updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null });
-        return {
+
+        // Determine active language and paths based on the loaded 'path'
+        // This logic is crucial for deciding which set of segments and speaker names to use.
+        let activeLanguageForRemapping = ts.activeTranscriptLanguage; // Default to current active
+        let rawSegmentsForRemapping = [...newSegments]; // Default to newSegments (which are from 'path')
+
+        if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
+            activeLanguageForRemapping = 'original';
+            // ts.originalSegments should be updated with newSegments if this path matches original
+            // This part of the logic seems to be handled by the // START: MODIFIED block below,
+            // which might need to be integrated or reconciled.
+            // For now, assume newSegments are the correct raw segments for the current 'path'.
+        } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
+            activeLanguageForRemapping = 'english';
+            // Similarly, ts.englishSegments should be updated if this path matches English.
+        }
+
+        // Perform remapping based on the determined active language for the newly loaded transcript
+        let finalSegmentsForDisplay = [...newSegments]; // Start with a copy of the raw newSegments
+
+        if (activeLanguageForRemapping === 'english' && newSegments.length > 0) {
+            console.log('[TranscriptStore setTranscriptData] Remapping for ENGLISH display using translatedNames.');
+            finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, updatedSpeakers.translatedNames);
+        } else if (activeLanguageForRemapping === 'original' && newSegments.length > 0) {
+            console.log('[TranscriptStore setTranscriptData] Remapping for ORIGINAL display using primary names.');
+            finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, updatedSpeakers.names);
+        }
+
+
+        // The main return statement that updates the store:
+        let returnState = {
             ...ts,
-            currentTranscriptPath: path,
-            segments: newSegments,
+            currentTranscriptPath: path, // Path of the transcript just loaded
+            segments: finalSegmentsForDisplay, // Segments for UI display, now remapped
             transcriptDirty: false,
             isTranscriptLoading: false,
-            speakers: updatedSpeakers,
-            player: { ...ts.player, currentSegmentIndex: -1 }, // Reset segment index
+            speakers: updatedSpeakers, // This contains both .names and .translatedNames
+            player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            // activeTranscriptLanguage might also need an update here based on 'path'
+            // This is handled by the subsequent block, which is a bit confusing.
+            // Let's ensure newActiveTranscriptLanguage is determined correctly before this return.
         };
 
-        // START: MODIFIED to update original/english specific stores
+        // START: MODIFIED to update original/english specific stores (This block seems to handle storage of raw segments)
+        // This block should correctly determine which backing store (originalSegments or englishSegments) gets `newSegments` (the raw data).
+        // And it should also set the definitive `newActiveTranscriptLanguage`.
         let updatedOriginalSegments = ts.originalSegments;
         let updatedEnglishSegments = ts.englishSegments;
         let updatedOriginalTranscriptPath = ts.originalTranscriptPath;
         let updatedEnglishTranscriptPath = ts.englishTranscriptPath;
-        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage;
+        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage; // Start with current
 
-        // Determine if loading original or English based on path suffix,
-        // or if the path explicitly matches one of the stored specific paths.
         if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
-            updatedOriginalSegments = newSegments;
+            updatedOriginalSegments = newSegments; // Store raw newSegments here
             updatedOriginalTranscriptPath = path;
-            // If this is the one being actively loaded, set active language
-            if (ts.currentTranscriptPath === path) {
-                newActiveTranscriptLanguage = 'original';
-            }
+            newActiveTranscriptLanguage = 'original'; // Set active language based on loaded path
         } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
-            updatedEnglishSegments = newSegments;
+            updatedEnglishSegments = newSegments; // Store raw newSegments here
             updatedEnglishTranscriptPath = path;
-            // If this is the one being actively loaded, set active language
-            if (ts.currentTranscriptPath === path) {
-                newActiveTranscriptLanguage = 'english';
-            }
+            newActiveTranscriptLanguage = 'english'; // Set active language based on loaded path
+        }
+
+        // Now, reintegrate the remapping logic based on the *just determined* newActiveTranscriptLanguage
+        // This re-evaluates finalSegmentsForDisplay based on the definitive active language.
+        if (newActiveTranscriptLanguage === 'english' && updatedEnglishSegments.length > 0) {
+            // Ensure we are remapping the correct set of raw segments if they were just updated.
+            finalSegmentsForDisplay = remapSegmentSpeakerNames([...updatedEnglishSegments], updatedSpeakers, updatedSpeakers.translatedNames);
+        } else if (newActiveTranscriptLanguage === 'original' && updatedOriginalSegments.length > 0) {
+            finalSegmentsForDisplay = remapSegmentSpeakerNames([...updatedOriginalSegments], updatedSpeakers, updatedSpeakers.names);
+        } else {
+            // If neither condition met (e.g., both updatedXSegments are empty, or path is null),
+            // finalSegmentsForDisplay remains as initially set (which would be from newSegments, potentially empty).
+            // If path was null, newSegments is empty, so finalSegmentsForDisplay is empty.
+            if (!path) finalSegmentsForDisplay = []; // Explicitly clear if path is null
         }
 
         return {
-            ...ts,
-            currentTranscriptPath: path, // This is the actively displayed transcript path
-            segments: newSegments,       // These are the actively displayed segments
-            originalSegments: updatedOriginalSegments,
-            englishSegments: updatedEnglishSegments,
+            ...ts, // Spread the initial state of ts for this update cycle
+            currentTranscriptPath: path,
+            segments: finalSegmentsForDisplay, // Correctly remapped segments for display
+            originalSegments: updatedOriginalSegments, // Raw original segments
+            englishSegments: updatedEnglishSegments,   // Raw English segments
             originalTranscriptPath: updatedOriginalTranscriptPath,
             englishTranscriptPath: updatedEnglishTranscriptPath,
-            activeTranscriptLanguage: newActiveTranscriptLanguage, // Update based on what was loaded
+            activeTranscriptLanguage: newActiveTranscriptLanguage, // Definitive active language
             transcriptDirty: false,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
@@ -629,8 +704,17 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     }));
     updateProjectStoreState({ statusMessage: 'Updating speaker configuration...' });
 
-    const invokePayload = { projectXmlPath: projectXmlPath, mediaIdentifier: mediaIdentifier, count: newSpeakerConfig.count, names: newSpeakerConfig.names };
-    invoke('save_speaker_config', invokePayload)
+    // Construct the inner payload object
+    const innerPayload = {
+        project_xml_path: projectXmlPath,
+        media_identifier: mediaIdentifier,
+        count: newSpeakerConfig.count,
+        names: newSpeakerConfig.names,
+        translated_names: newSpeakerConfig.translatedNames
+    };
+
+    // Wrap the innerPayload inside an object with the key "payload"
+    invoke('save_speaker_config', { payload: innerPayload })
         .then(() => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
 
@@ -648,7 +732,19 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
                      let found = false;
                      for (const node of nodes) {
                          if (node.media_xml_identifier === targetIdentifier && (node.file_type === 'media' || node.file_type === 'directory_media_stem')) {
-                             node.speakers = { '@count': newSpeakerData.count, name: newSpeakerData.names };
+                             // Ensure the structure being saved into project.files also includes translated_names
+                             // if other parts of the UI expect it directly from here.
+                             // The backend saves it to XML, this is about in-memory store consistency.
+                             node.speakers = {
+                                 '@count': newSpeakerData.count,
+                                 name: newSpeakerData.names,
+                                 // Assuming the backend will be the source of truth on next load,
+                                 // but for immediate UI consistency after save, we can add it here too.
+                                 // The key here should match what selectMedia expects (e.g., translated_names or translatedNames)
+                                 // Based on selectMedia, it checks for translatedNames then translated_names.
+                                 // To be safe and align with backend, using translated_names.
+                                 translated_names: newSpeakerData.translatedNames
+                             };
                              found = true;
                          }
                          if (node.children && node.children.length > 0) {
@@ -659,6 +755,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
                      }
                      return found;
                  }
+                 // Pass the full newSpeakerConfig (which includes translatedNames)
                  const didUpdate = findAndUpdateMediaSpeakers(updatedFiles, mediaIdentifier, newSpeakerConfig);
                  if (didUpdate) {
                      return { ...p, files: updatedFiles };
