@@ -1,10 +1,10 @@
-# Project Harvey 1.0
+# Harvey
 
 ## Overview/Core Purpose
 
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Harvey is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
 
-Harvey 1.0 is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
+Harvey is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
 
 It's an application built by researchers, for researchers.
 
@@ -53,7 +53,6 @@ To get started, please refer to our documentation:
 *   For guidance on making contributions, especially using AI-assisted coding tools like Google Jules, check out our: [Developer's Contribution Guide (Docs/DEVELOPERS_GUIDE.md)](Docs/DEVELOPERS_GUIDE.md)
 
 ## Technology Stack
-
 *   **Core Framework**: [Tauri](https://tauri.app/) (v2.0, Rust backend, webview frontend)
 *   **Backend Language**: [Rust](https://www.rust-lang.org/)
 *   **Frontend Framework**: [SvelteKit](https://kit.svelte.dev/)
@@ -81,3 +80,24 @@ Project Harvey is built using Tauri, with a Rust backend and a SvelteKit fronten
 ## Documentation
 
 For more detailed information, please refer to the guides in the `Docs/` folder, including the Developer's Guide, Setup Guide, and the full Project Description.
+
+## Installation Guide
+
+### macOS
+1. Download the `.dmg` file from [GitHub Releases](https://github.com/Ethnomethodology/harvey/releases).
+    * For Intel Macs, download the file with `x64` in the name.
+    * For Apple Silicon (M1, M2, etc.) Macs, download the file with `aarch64` in the name.
+2. Open the downloaded `.dmg` file.
+3. Drag and drop `harvey.app` to your `/Applications` folder.
+4. Close the `.dmg` file window.
+5. Open the Terminal application and run the following commands:
+   ```bash
+   cd /Applications
+   sudo xattr -dr com.apple.quarantine harvey.app
+   ```
+
+### Windows
+1. Download the `.msi` installer file from [GitHub Releases](https://github.com/Ethnomethodology/harvey/releases).
+2. Run the downloaded `.msi` file.
+3. Ensure you have administrative privileges to complete the installation.
+

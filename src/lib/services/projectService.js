@@ -790,6 +790,8 @@ export async function handleConfirmStartTranscription() {
         model_name: modelNameForJob,
         translate_to_english: currentTs.translateToEnglish,
         speaker_names: currentTs.speakers.names || [],
+        // Add translated_speaker_names if translation is enabled
+        translated_speaker_names: currentTs.translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.
@@ -819,12 +821,40 @@ export async function handleConfirmStartTranscription() {
         // The progress listener should now be able to match events to backendJobId.
 
     } catch (error) {
-        const extractedErrorMessage = error?.message || String(error);
-        // Set error status in the store; the modal will show this error.
-        setTranscriptionStatus(false, get(transcriptStore).transcriptionJobId, { // isTranscribing is false, pass current jobId (might be null if invoke failed early)
-            status: 'error',
-            errorMessage: extractedErrorMessage
+        let displayMessage = 'An unknown error occurred during transcription initiation.';
+        let finalStatus = 'error';
+
+        if (typeof error === 'string') {
+            displayMessage = error;
+        } else if (error && typeof error.message === 'string') {
+            displayMessage = error.message;
+        } else {
+            // Fallback if error is an object without a message property
+            displayMessage = 'The operation failed, and the error details could not be displayed.';
+            try {
+                // Attempt to stringify, but this can be verbose or circular
+                const stringifiedError = JSON.stringify(error);
+                if (stringifiedError !== '{}') { // Avoid empty object stringification
+                     displayMessage = `Operation failed: ${stringifiedError}`;
+                }
+            } catch (stringifyError) {
+                // Ignore if stringify fails
+            }
+        }
+
+        // Check if the error message indicates cancellation
+        const lowerCaseMessage = displayMessage.toLowerCase();
+        if (lowerCaseMessage.includes("cancel") || lowerCaseMessage.includes("cancelled") || lowerCaseMessage.includes("canceled")) {
+            finalStatus = 'cancelled';
+            // Override display message for a cleaner UI if it's a cancellation
+            displayMessage = 'Transcription Cancelled';
+        }
+
+        setTranscriptionStatus(false, get(transcriptStore).transcriptionJobId, {
+            status: finalStatus,
+            errorMessage: displayMessage
         });
+        console.error(`[ProjectService] Error during transcribe_media_command invocation:`, error); // Keep original error for console
     }
 }
 export async function handleCancelTranscriptionRequest() {

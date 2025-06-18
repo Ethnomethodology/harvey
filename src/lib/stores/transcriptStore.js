@@ -16,7 +16,7 @@ export const initialTranscriptState = {
     selectedMediaFile: null,
     selectedModelName: null,
     selectedLanguage: null,
-    speakers: { count: 0, names: [] },
+    speakers: { count: 0, names: [], translatedNames: [] },
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
     audioBuffer: null,
     isTranscriptLoading: false,
@@ -150,7 +150,7 @@ export function clearTranscriptState() {
                 audioBuffer: null,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
-                speakers: { count: 0, names: [] },
+                speakers: { count: 0, names: [], translatedNames: [] },
                 activeMediaDuringTranscriptionStart: null, // Reset here as well
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
@@ -170,21 +170,30 @@ export function selectMedia(fileEntry) {
     const currentSelectedPath = get(transcriptStore).selectedMediaFile?.path;
     const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path);
 
-    let speakersToLoad = { count: 0, names: [] };
+    let speakersToLoad = { count: 0, names: [], translatedNames: [] };
     if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
         const loadedCount = Number(fileEntry.speakers['@count']) || 0;
         const loadedNamesRaw = fileEntry.speakers.name;
         const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
-        speakersToLoad = { count: loadedCount, names: [...loadedNames] };
+
+        speakersToLoad = {
+            count: loadedCount,
+            names: [...loadedNames],
+            translatedNames: Array(loadedCount > 0 ? loadedCount : 0).fill('')
+        };
+
         if (speakersToLoad.count !== speakersToLoad.names.length) {
             console.warn(`[TranscriptStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`); // WARN
             speakersToLoad.count = speakersToLoad.names.length;
+            // translatedNames should also be sliced if names were sliced, though this scenario implies data inconsistency.
+            // For simplicity, if names.length is now the source of truth for count, translatedNames should match.
             speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
+            speakersToLoad.translatedNames = Array(speakersToLoad.count).fill('');
         }
     } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
-        speakersToLoad = { count: 0, names: [] };
-    } else {
-        speakersToLoad = { count: 0, names: [] };
+        speakersToLoad = { count: 0, names: [], translatedNames: [] }; // Reset with translatedNames
+    } else { // Handles null or non-media fileEntry
+        speakersToLoad = { count: 0, names: [], translatedNames: [] }; // Reset with translatedNames
     }
 
     const currentStoreSpeakers = get(transcriptStore).speakers;
@@ -503,21 +512,21 @@ export function setSelectedLanguage(languageCode) {
     transcriptStore.update((ts) => ({ ...ts, selectedLanguage: languageCode || null }));
 }
 
-export function updateSpeakerConfig(newCount, newNames) {
+export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = null) {
     const count = Math.max(0, Math.min(11, Number(newCount) || 0));
     const names = Array.isArray(newNames) ? newNames : [];
     let nameCounter = 1;
     const validatedNames = [];
     for (let i = 0; i < count; i++) {
-        let proposedName = names[i] && names[i].trim() !== '' ? names[i].trim() : null;
+        let proposedName = names[i] && typeof names[i] === 'string' && names[i].trim() !== '' ? names[i].trim() : null;
         let finalName;
         if (proposedName && validatedNames.includes(proposedName)) {
-            console.warn(`[TranscriptStore updateSpeakerConfig] Duplicate name: '${proposedName}'. Using default.`); // WARN
+            console.warn(`[TranscriptStore updateSpeakerConfig] Duplicate primary name: '${proposedName}'. Using default.`); // WARN
             proposedName = null;
         }
         if (!proposedName) {
-            let defaultName = `Speaker-${nameCounter++}`;
-            while (validatedNames.includes(defaultName) || (names.length > validatedNames.length && names.slice(validatedNames.length).includes(defaultName))) {
+            let defaultName = `Speaker ${nameCounter++}`; // Ensure space for uniqueness
+            while (validatedNames.includes(defaultName) || (names.slice(0, i).includes(defaultName))) { // Check against already validated and remaining input names
                 defaultName = `Speaker ${nameCounter++}`;
             }
             finalName = defaultName;
@@ -526,7 +535,35 @@ export function updateSpeakerConfig(newCount, newNames) {
         }
         validatedNames.push(finalName);
     }
-    const newSpeakerConfig = { count: count, names: validatedNames };
+
+    const validatedTranslatedNames = [];
+    if (Array.isArray(newTranslatedNames)) {
+        for (let i = 0; i < count; i++) { // Use validated 'count'
+            // For translated names, allow duplicates and preserve empty strings if provided that way,
+            // but default to empty string if not provided or not a string.
+            const proposedTranslatedName = (newTranslatedNames[i] && typeof newTranslatedNames[i] === 'string') ? newTranslatedNames[i].trim() : '';
+            validatedTranslatedNames.push(proposedTranslatedName);
+        }
+    } else {
+        for (let i = 0; i < count; i++) {
+            validatedTranslatedNames.push(''); // Default to empty strings if newTranslatedNames is not an array
+        }
+    }
+
+    // Ensure translatedNames array has the same length as names array, padding with empty strings if necessary.
+    while(validatedTranslatedNames.length < count) {
+        validatedTranslatedNames.push('');
+    }
+    if(validatedTranslatedNames.length > count) {
+        validatedTranslatedNames.splice(count); // Truncate if too long
+    }
+
+
+    const newSpeakerConfig = {
+        count: count,
+        names: validatedNames,
+        translatedNames: validatedTranslatedNames
+    };
 
     const currentTranscriptData = get(transcriptStore);
     const projectData = get(projectMainStore); // Get project data
@@ -795,16 +832,18 @@ export function setRanInBackground(value) {
 }
 
 // --- Helper for Speaker Name Remapping ---
-function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig) {
-    if (!speakerConfig || !Array.isArray(speakerConfig.names) || speakerConfig.names.length === 0) {
-        // No speaker config to map to, or no names defined, return segments as is (or ensure generic are unknown)
-        return segmentsToRemap.map(seg => ({
-            ...seg,
-            // speaker: seg.speaker // keep original, or force to unknown if desired
-        }));
-    }
+function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerNames = null) {
+    const userNames = targetSpeakerNames && targetSpeakerNames.length > 0
+                      ? targetSpeakerNames
+                      : (speakerConfig && Array.isArray(speakerConfig.names) ? speakerConfig.names : []);
 
-    const userNames = speakerConfig.names;
+    if (userNames.length === 0) {
+        // If no specific target names are provided and primary names are also empty,
+        // or if speakerConfig itself is minimal/empty.
+        // Return segments as is, assuming diarization might have put SPEAKER_XX.
+        // Or, if preferred, map all to "Unknown". For now, returning as-is.
+        return segmentsToRemap.map(seg => ({ ...seg }));
+    }
 
     return segmentsToRemap.map(seg => {
         const newSegment = { ...seg }; // Work on a copy
@@ -877,7 +916,7 @@ export function switchToOriginalTranscript() {
         }
         updateProjectStoreState({ statusMessage: 'Switched to original transcript.' });
 
-        const remappedSegments = remapSegmentSpeakerNames([...ts.originalSegments], ts.speakers);
+        const remappedSegments = remapSegmentSpeakerNames([...ts.originalSegments], ts.speakers, ts.speakers.names);
 
         return {
             ...ts,
@@ -914,7 +953,7 @@ export function switchToEnglishTranscript() {
         }
         updateProjectStoreState({ statusMessage: 'Switched to English transcript.' });
 
-        const remappedSegments = remapSegmentSpeakerNames([...ts.englishSegments], ts.speakers);
+        const remappedSegments = remapSegmentSpeakerNames([...ts.englishSegments], ts.speakers, ts.speakers.translatedNames);
 
         return {
             ...ts,

@@ -3,20 +3,38 @@
 use super::shared_types::*;
 use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, warn}; // info and warn are used by CancelGuard and throughout
 use serde_json::json;
-use tauri::Emitter; // Added Emitter
+use tauri::{AppHandle, Emitter, State}; // Added AppHandle, State for transcribe_media_command
 use serde_json::Value as JsonValue;
 
 use std::{
     fs::{self, File},
     io::{BufWriter, Write, BufRead},
     path::{Path, PathBuf},
+    sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}}, // For CancelGuard
 };
-use tauri::{AppHandle};
+use dashmap::DashMap; // For CancelGuard
+use crate::TranscriptionCancellationState; // For CancelGuard and command signature
 use tauri_plugin_shell::{ShellExt, process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
+
+// --- CancelGuard for managing transcription cancellation ---
+struct CancelGuard {
+    job_id: String,
+    state: Arc<DashMap<String, Arc<AtomicBool>>>,
+}
+
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        if self.state.remove(&self.job_id).is_some() {
+            debug!("[CancelGuard] Removed cancel flag for job '{}' on drop.", self.job_id);
+        } else {
+            warn!("[CancelGuard] Attempted to remove flag for job '{}' on drop, but it was already gone.", self.job_id);
+        }
+    }
+}
 
 
 /// Creates a Lexical JSON structure for a single paragraph containing the given text.
@@ -619,7 +637,8 @@ pub struct TranscribeMediaPayload {
     language_code: Option<String>,
     model_name: String,
     translate_to_english: bool,
-    speaker_names: Vec<String>,
+    speaker_names: Vec<String>, // For original transcript
+    translated_speaker_names: Option<Vec<String>>, // For translated transcript
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -633,13 +652,16 @@ pub struct TranscriptionInitiatedPayload {
     job_id: String,
 }
 
+// --- Payload for transcription job completion event (redefined for this context) ---
+// This version is simplified for the events emitted directly by transcribe_media_command
+// in case of early errors or successful initiation that then hands over to another process.
+// The local_handler/transcription.rs will use its own more detailed version for its specific events.
 #[derive(serde::Serialize, Clone)]
-struct TranscriptionJobCompletedPayload {
+pub struct TranscriptionJobCompletedPayload { // Made pub
     job_id: String,
-    status: String,
-    jobFinishedPath: String, // Path of the media that was processed
-    transcriptFilePath: String, // Path to the main (original) transcript
-    translatedTranscriptFilePath: Option<String>, // Optional path to translated
+    status: String, // "done" (by local_handler), "cancelled" (by local_handler), "error" (by local_handler), "failed_initiation" (by this command)
+    jobFinishedPath: String, // Path of the media that was processed or attempted
+    transcriptFilePath: Option<String>, // Path to the main (original) transcript (None if error before creation)
     errorMessage: Option<String>,
 }
 
@@ -647,18 +669,43 @@ struct TranscriptionJobCompletedPayload {
 pub async fn transcribe_media_command(
     app_handle: AppHandle,
     payload: TranscribeMediaPayload,
+    cancel_state: tauri::State<'_, crate::TranscriptionCancellationState>, // Added
 ) -> Result<TranscriptionInitiatedPayload, CommandError> {
     let job_id = uuid::Uuid::new_v4().to_string();
     info!("[Transcribe Command][{}] Received request: {:?}", job_id, payload);
 
+    // Create and register the cancellation flag
+    let cancel_flag = Arc::new(AtomicBool::new(false)); // cancel_flag is not used in this command directly but passed to run_transcription
+    cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
+    info!("[Transcribe Command][{}] Registered with cancellation state.", job_id);
+
+    // Setup the guard to ensure cleanup from the DashMap
+    let _cancel_guard = CancelGuard {
+        job_id: job_id.clone(),
+        state: Arc::clone(&cancel_state.0),
+    };
+
+    // 1. Initial Cancellation Check
+    if cancel_flag.load(AtomicOrdering::Relaxed) {
+        warn!("[Transcribe Command][{}] Cancelled immediately after job registration.", job_id);
+        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+            job_id: job_id.clone(),
+            status: "cancelled".to_string(),
+            jobFinishedPath: payload.media_path_str.clone(),
+            transcriptFilePath: None,
+            errorMessage: Some("Transcription cancelled by user immediately.".to_string()),
+        });
+        return Err(CommandError::from("Transcription cancelled by user immediately."));
+    }
+
     let media_path_for_filename = std::path::PathBuf::from(&payload.media_path_str);
     let media_filename_for_progress = media_path_for_filename.file_name()
         .map_or_else(
-            || payload.media_path_str.clone(), // Fallback to full path if filename extraction fails
+            || payload.media_path_str.clone(),
             |os_str| os_str.to_string_lossy().into_owned()
         );
 
-    let app_handle_clone = app_handle.clone();
+    let app_handle_clone = app_handle.clone(); // app_handle is used later for final emit, so clone for helpers
 
     let (
         temp_transcript_output_base_orig_str,
@@ -673,16 +720,68 @@ pub async fn transcribe_media_command(
     let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
 
     emit_progress_cmd(&app_handle_clone, &job_id, 0.0, &format!("Processing {}...", media_filename_for_progress))?;
-    let wav_media_path = convert_to_wav_if_needed_cmd(&app_handle_clone, &payload.media_path_str, &job_id, &media_filename_for_progress).await?;
+
+    let wav_media_path = match convert_to_wav_if_needed_cmd(
+        &app_handle_clone,
+        &payload.media_path_str,
+        &job_id,
+        &media_filename_for_progress,
+        cancel_flag.clone(),
+    )
+    .await
+    {
+        Ok(path) => path,
+        Err(e) => {
+            let error_message = e.to_string();
+            if error_message.to_lowercase().contains("cancel") {
+                warn!("[Transcribe Command][{}] WAV conversion cancelled by helper. Emitting event.", job_id);
+                let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                    job_id: job_id.clone(),
+                    status: "cancelled".to_string(),
+                    jobFinishedPath: payload.media_path_str.clone(),
+                    transcriptFilePath: None,
+                    errorMessage: Some(error_message.clone()), // Use error message from helper
+                });
+            } else {
+                error!("[Transcribe Command][{}] WAV conversion failed: {}. Emitting error event.", job_id, error_message);
+                let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                    job_id: job_id.clone(),
+                    status: "error".to_string(),
+                    jobFinishedPath: payload.media_path_str.clone(),
+                    transcriptFilePath: None,
+                    errorMessage: Some(format!("WAV conversion failed: {}", error_message)),
+                });
+            }
+            return Err(e); // Propagate the original error from the helper
+        }
+    };
+
     emit_progress_cmd(&app_handle_clone, &job_id, 5.0, &format!("Audio for {} prepared.", media_filename_for_progress))?;
 
     let whisper_model_path_str = resolve_whisper_model_path_cmd(&payload.model_name, &job_id)?;
 
+    // Pre-execute_transcription_pass (Original Language) Cancellation Check
+    if cancel_flag.load(AtomicOrdering::Relaxed) {
+        warn!("[Transcribe Command][{}] Cancelled before main processing pass.", job_id);
+        if wav_media_path.to_string_lossy() != payload.media_path_str {
+            let _ = fs::remove_file(&wav_media_path).map_err(|e| warn!("[Transcribe Command][{}] Failed to clean up temp WAV during pre-original cancel: {:?}", job_id, e));
+        }
+        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+            job_id: job_id.clone(),
+            status: "cancelled".to_string(),
+            jobFinishedPath: payload.media_path_str.clone(),
+            transcriptFilePath: None,
+            errorMessage: Some("Transcription cancelled by user before main processing pass.".to_string()),
+        });
+        return Err(CommandError::from("Transcription cancelled before main processing pass."));
+    }
+
     // --- First Pass: Original Language Transcription ---
     emit_progress_cmd(&app_handle_clone, &job_id, 10.0, &format!("Transcribing {}...", media_filename_for_progress))?;
-    let mut original_segments = execute_transcription_pass(
+
+    let mut original_segments = match execute_transcription_pass(
         &app_handle_clone,
-        &wav_media_path.to_string_lossy(), // Pass as &str
+        &wav_media_path.to_string_lossy(),
         &whisper_model_path_str,
         &payload.language_code.clone().unwrap_or_else(|| "auto".to_string()),
         &job_id,
@@ -693,7 +792,41 @@ pub async fn transcribe_media_command(
         false, // is_translation_pass
         &payload.speaker_names, // Pass as slice
         &media_filename_for_progress,
-    ).await?;
+        cancel_flag.clone(),
+    ).await {
+        Ok(segments) => segments,
+        Err(e) => {
+            let error_message = e.to_string();
+            warn!("[Transcribe Command][{}] Original transcription pass failed: {}", job_id, error_message);
+            // Cleanup temporary files from this pass
+            if wav_media_path.to_string_lossy() != payload.media_path_str { // Check if WAV was temporary
+                let _ = fs::remove_file(&wav_media_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp WAV file during original pass error: {:?}", job_id, e_del));
+            }
+            let _ = fs::remove_file(&expected_whisper_temp_json_path_orig).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp Whisper JSON during original pass error: {:?}", job_id, e_del));
+            if payload.num_speakers > 0 {
+                let _ = fs::remove_file(&expected_rttm_temp_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp RTTM file during original pass error: {:?}", job_id, e_del));
+            }
+
+            if error_message.to_lowercase().contains("cancel") {
+                let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                    job_id: job_id.clone(),
+                    status: "cancelled".to_string(),
+                    jobFinishedPath: payload.media_path_str.clone(),
+                    transcriptFilePath: None,
+                    errorMessage: Some(error_message.clone()),
+                });
+            } else {
+                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                    job_id: job_id.clone(),
+                    status: "error".to_string(),
+                    jobFinishedPath: payload.media_path_str.clone(),
+                    transcriptFilePath: None,
+                    errorMessage: Some(format!("Original transcription pass failed: {}", error_message)),
+                });
+            }
+            return Err(CommandError::from(format!("Original transcription pass failed: {}", error_message)));
+        }
+    };
 
     map_speaker_ids_to_names(&mut original_segments, &payload.speaker_names);
 
@@ -738,13 +871,35 @@ pub async fn transcribe_media_command(
 
     // --- Second Pass: English Translation (if requested) ---
     if payload.translate_to_english {
+        // Pre-execute_transcription_pass (Translation) Cancellation Check
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[Transcribe Command][{}] Cancelled before translation pass.", job_id);
+            if wav_media_path.to_string_lossy() != payload.media_path_str {
+                let _ = fs::remove_file(&wav_media_path).map_err(|e| warn!("[Transcribe Command][{}] Failed to clean up temp WAV during pre-translation cancel: {:?}", job_id, e));
+            }
+            // Original transcript might have been saved, attempt to remove it if cancellation occurs here.
+            // Or, decide if it should be kept. For now, let's assume it might be partial or unwanted.
+            // However, `final_transcript_path_orig` is typically a final destination, not temporary.
+            // Let's reconsider removing `final_transcript_path_orig`. Usually, we only remove temp files.
+            // The `expected_whisper_temp_json_path_orig` and `expected_rttm_temp_path` should have been cleaned up by successful original pass, or its error handling.
+
+            let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                job_id: job_id.clone(),
+                status: "cancelled".to_string(),
+                jobFinishedPath: payload.media_path_str.clone(),
+                transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+                errorMessage: Some("Transcription cancelled by user before translation pass.".to_string()),
+            });
+            return Err(CommandError::from("Transcription cancelled before translation pass."));
+        }
+
         info!("[Transcribe Command][{}] DEBUG: Entered 'translate_to_english' block. translate_to_english flag is true.", job_id);
-        info!("[Transcribe Command][{}] DEBUG: Pre-translation pass paths: temp_base_en: {:?}, temp_json_en: {:?}, final_en: {:?}", job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en_for_payload); // Use the cloned one for logging if original is moved
+        info!("[Transcribe Command][{}] DEBUG: Pre-translation pass paths: temp_base_en: {:?}, temp_json_en: {:?}, final_en: {:?}", job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en_for_payload);
 
         if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
             temp_transcript_output_base_en_str,
             expected_whisper_temp_json_path_en,
-            final_transcript_path_en, // This is an Option<PathBuf>, will be moved here
+            final_transcript_path_en,
         ) {
             emit_progress_cmd(&app_handle_clone, &job_id, 60.0, &format!("Translating {}...", media_filename_for_progress))?;
 
@@ -766,6 +921,7 @@ pub async fn transcribe_media_command(
             info!("[Transcribe Command][{}]   Source Lang for Translation: {}", job_id, source_language_for_translation);
 
 
+            // 6. Handle execute_transcription_pass (Translation) Result
             let translation_result = execute_transcription_pass(
                 &app_handle_clone,
                 &wav_media_path.to_string_lossy(),
@@ -779,6 +935,7 @@ pub async fn transcribe_media_command(
                 true, // is_translation_pass
                 &payload.speaker_names,
                 &media_filename_for_progress,
+                cancel_flag.clone(),
             ).await;
 
             let mut translated_segments = match translation_result {
@@ -787,9 +944,35 @@ pub async fn transcribe_media_command(
                     segments
                 }
                 Err(e) => {
-                    error!("[Transcribe Command][{}] English translation pass failed: {:?}", job_id, e);
-                    // Depending on desired behavior, you might want to return e or handle differently
-                    return Err(e);
+                    let error_message = e.to_string();
+                    warn!("[Transcribe Command][{}] Translation pass failed: {}", job_id, error_message);
+                    // Cleanup temporary files from this pass
+                    if wav_media_path.to_string_lossy() != payload.media_path_str {
+                        let _ = fs::remove_file(&wav_media_path).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp WAV file during translation pass error: {:?}", job_id, e_del));
+                    }
+                    // expected_whisper_temp_json_path_orig and expected_rttm_temp_path should have been cleaned by original pass.
+                    // Only clean up translation-specific temp files here.
+                    let _ = fs::remove_file(&json_path_en).map_err(|e_del| warn!("[Transcribe Command][{}] Failed to delete temp EN Whisper JSON during translation pass error: {:?}", job_id, e_del));
+
+
+                    if error_message.to_lowercase().contains("cancel") {
+                        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                            job_id: job_id.clone(),
+                            status: "cancelled".to_string(),
+                            jobFinishedPath: payload.media_path_str.clone(),
+                            transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                            errorMessage: Some(error_message.clone()),
+                        });
+                    } else {
+                        let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
+                            job_id: job_id.clone(),
+                            status: "error".to_string(),
+                            jobFinishedPath: payload.media_path_str.clone(),
+                           transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                            errorMessage: Some(format!("Translation pass failed: {}", error_message)),
+                        });
+                    }
+                    return Err(CommandError::from(format!("Translation pass failed: {}", error_message)));
                 }
             };
 
@@ -808,6 +991,21 @@ pub async fn transcribe_media_command(
             // }
             info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization...", job_id);
             align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &job_id);
+
+            // Apply translated_speaker_names if provided
+            if let Some(ref translated_names) = payload.translated_speaker_names {
+                let contains_actual_names = translated_names.iter().any(|name| !name.trim().is_empty());
+                if !translated_names.is_empty() && contains_actual_names {
+                    info!("[Transcribe Command][{}] Applying user-defined translated speaker names to translated segments.", job_id);
+                    map_speaker_ids_to_names(&mut translated_segments, translated_names);
+                } else if !translated_names.is_empty() && !contains_actual_names {
+                    info!("[Transcribe Command][{}] Translated speaker names list provided, but all names are empty. Using aligned speaker IDs for translated segments.", job_id);
+                } else {
+                    info!("[Transcribe Command][{}] Translated speaker names list is empty. Using aligned speaker IDs for translated segments.", job_id);
+                }
+            } else {
+                info!("[Transcribe Command][{}] No translated speaker names list provided (Option is None). Using aligned speaker IDs for translated segments.", job_id);
+            }
 
             emit_progress_cmd(&app_handle_clone, &job_id, 90.0, &format!("Saving translation for {}...", media_filename_for_progress))?;
             info!("[Transcribe Command][{}] DEBUG: Attempting to save translated transcript to: {:?}", job_id, final_path_en_pb);
@@ -845,16 +1043,22 @@ pub async fn transcribe_media_command(
     emit_progress_cmd(&app_handle_clone, &job_id, 100.0, &format!("Successfully processed {}.", media_filename_for_progress))?;
     info!("[Transcribe Command][{}] Processing complete.", job_id);
 
+    let final_status_message = if payload.translate_to_english && final_transcript_path_en_for_payload.is_some() {
+        "Transcription and translation complete."
+    } else if payload.translate_to_english && final_transcript_path_en_for_payload.is_none() {
+        "Transcription complete; translation was skipped or failed to produce a final path."
+    } else {
+        "Transcription complete."
+    };
+    info!("[Transcribe Command][{}] {}", job_id, final_status_message);
+
     let completion_payload = TranscriptionJobCompletedPayload {
         job_id: job_id.clone(),
         status: "done".to_string(),
         jobFinishedPath: payload.media_path_str.clone(),
-        transcriptFilePath: final_transcript_path_orig.to_string_lossy().into_owned(),
-        translatedTranscriptFilePath: if payload.translate_to_english {
-            final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned())
-        } else {
-            None
-        },
+        transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+        // translatedTranscriptFilePath is not part of this specific payload struct in this file.
+        // If needed, it would be communicated differently or this struct would be the more detailed one.
         errorMessage: None,
     };
 
@@ -981,6 +1185,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
     input_path_str: &str,
     job_id: &str,
     media_filename_for_progress: &str,
+    cancel_flag: Arc<AtomicBool>, // New argument
 ) -> Result<PathBuf, CommandError> {
     info!("[FFmpeg CMD][{}] Checking audio file: {}", job_id, input_path_str);
     let input_path = PathBuf::from(input_path_str);
@@ -1033,16 +1238,21 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
     let mut ffmpeg_error: Option<String> = None;
 
     loop {
-        // Cancellation logic omitted for this adaptation
-        // if cancel_flag.load(Ordering::Relaxed) {
-        //     warn!("[FFmpeg CMD][{}] Cancellation requested. Killing FFmpeg process...", job_id);
-        //     let _ = child.kill();
-        //     if output_wav_path.exists() { let _ = fs::remove_file(&output_wav_path); }
-        //     return Err(CommandError::from("Audio conversion cancelled."));
-        // }
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[FFmpeg CMD][{}] Cancellation requested. Killing FFmpeg process...", job_id);
+            let _ = child.kill();
+            if output_wav_path.exists() {
+                if let Err(e) = fs::remove_file(&output_wav_path) {
+                    warn!("[FFmpeg CMD][{}] Failed to remove partial WAV file {:?}: {}", job_id, output_wav_path, e);
+                } else {
+                    info!("[FFmpeg CMD][{}] Removed partial WAV file {:?}", job_id, output_wav_path);
+                }
+            }
+            return Err(CommandError::from(format!("Audio conversion cancelled for job {}.", job_id)));
+        }
 
         tokio::select! {
-            biased; // Ensure cancellation check (if added later) is prioritized
+            biased;
             maybe_event = rx.recv() => {
                 match maybe_event {
                     Some(event) => match event {
@@ -1055,25 +1265,16 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
                     None => {
                         if ffmpeg_exit_code.is_none() && ffmpeg_error.is_none() {
                             warn!("[FFmpeg CMD][{}] Event channel closed unexpectedly before termination signal.", job_id);
-                            ffmpeg_exit_code = Some(-1); // Treat as an error
+                            ffmpeg_exit_code = Some(-1);
                         }
                         break;
                     }
                 }
             }
-            // Minimal sleep if cancellation is omitted, otherwise select! might behave unexpectedly without multiple branches.
-            // If cancellation was present:
-            // _ = sleep(Duration::from_millis(50)) => { continue; }
-            // Since it's omitted, we might not need this sleep, but keeping it for safety during select! usage.
-            // If recv() is the only branch, select! is not really needed.
-            // For now, let's assume recv() might not always be ready immediately.
-             _ = sleep(Duration::from_millis(10)) => {
-                 // This branch is mainly to ensure select! doesn't block indefinitely if recv() is slow
-                 // and to allow future re-integration of cancellation checks.
-                 // If there are no other branches, this sleep isn't strictly necessary
-                 // but also doesn't harm significantly for a short duration.
-                 // If this were the only branch, a simple loop with rx.recv().await would suffice.
-             }
+            _ = tokio::time::sleep(Duration::from_millis(50)) => { // Check flag periodically
+                // This branch exists to ensure the loop continues and periodically checks the cancel_flag
+                // if no CommandEvent is immediately available.
+            }
         }
     }
 
@@ -1201,7 +1402,7 @@ async fn run_whisper_cpp_sidecar_cmd(
     output_base_for_whisper: &str,
     expected_whisper_json_output_path: &Path,
     is_translation_pass: bool,
-    // cancel_flag: &Arc<AtomicBool>, // Omitted for now
+    cancel_flag: Arc<AtomicBool>, // New argument
 ) -> Result<PathBuf, CommandError> {
     let sidecar_name = "whisper-cpp";
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
@@ -1233,29 +1434,85 @@ async fn run_whisper_cpp_sidecar_cmd(
     // Simplified event handling (omitting cancellation for now)
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
-            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
-            _ => {}
+
+    loop {
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process...", job_id);
+            let _ = child.kill();
+            if expected_whisper_json_output_path.exists() {
+                if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
+                    warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
+                } else {
+                    info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
+                }
+            }
+            return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
+        }
+
+        tokio::select! {
+            biased;
+            maybe_event = rx.recv() => {
+                match maybe_event {
+                    Some(event) => match event {
+                        CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+                        CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+                        _ => {}
+                    },
+                    None => {
+                        if exit_code.is_none() && process_error.is_none() {
+                             warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id);
+                             exit_code = Some(-1); // Treat as error
+                        }
+                        break;
+                    }
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                // Continue to check cancel_flag
+            }
         }
     }
 
     if process_error.is_some() || exit_code != Some(0) {
+        // Cleanup even on non-cancellation error, as Whisper might leave partial files.
+        if expected_whisper_json_output_path.exists() { let _ = fs::remove_file(expected_whisper_json_output_path); }
         return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
     }
-    if !expected_whisper_json_output_path.exists() {
-        // Add a small delay and check again, as file system operations might not be instantaneous
-        sleep(Duration::from_millis(300)).await;
-        if !expected_whisper_json_output_path.exists() {
-            error!("[Whisper CPP CMD][{}] DEBUG: Output JSON file NOT found after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
-            return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
+
+    // Wait for file to appear, with cancellation check
+    let mut attempts = 0;
+    while !expected_whisper_json_output_path.exists() && attempts < 10 { // Increased attempts slightly
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[Whisper CPP CMD][{}] Cancelled while waiting for output file.", job_id);
+            // No need to remove expected_whisper_json_output_path as it doesn't exist yet
+            return Err(CommandError::from(format!("Whisper C++ process cancelled (waiting for file) for job {}.", job_id)));
         }
-    } else {
-        info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
+        sleep(Duration::from_millis(300)).await;
+        attempts += 1;
     }
+
+    if !expected_whisper_json_output_path.exists() {
+        error!("[Whisper CPP CMD][{}] Output JSON file NOT found after whisper-cpp execution and wait: {:?}", job_id, expected_whisper_json_output_path);
+        return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
+    }
+
+    // Validate file size (optional, but good practice)
+    match expected_whisper_json_output_path.metadata() {
+        Ok(meta) if meta.len() == 0 => {
+            warn!("[Whisper CPP CMD][{}] Output JSON file is empty: {:?}", job_id, expected_whisper_json_output_path);
+            let _ = fs::remove_file(expected_whisper_json_output_path); // Clean up empty file
+            return Err(CommandError::from(format!("Whisper output JSON is empty: {:?}", expected_whisper_json_output_path)));
+        }
+        Err(e) => {
+             warn!("[Whisper CPP CMD][{}] Could not get metadata for output file {:?}: {}", job_id, expected_whisper_json_output_path, e);
+             // Potentially return error or proceed if metadata check is not critical
+        }
+        _ => {} // File exists and is not empty
+    }
+
+    info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
     Ok(expected_whisper_json_output_path.to_path_buf())
 }
 
@@ -1317,7 +1574,7 @@ async fn run_diarize_cli_sidecar_cmd(
     num_speakers: usize,
     output_rttm_path: &Path,
     job_id: &str,
-    // cancel_flag: &Arc<AtomicBool>, // Omitted
+    cancel_flag: Arc<AtomicBool>, // New argument
 ) -> Result<PathBuf, CommandError> {
     let sidecar_name = "diarize-cli";
     info!("[DiarizeCLI CMD][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
@@ -1341,25 +1598,70 @@ async fn run_diarize_cli_sidecar_cmd(
 
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-            CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-            CommandEvent::Error(msg) => { process_error = Some(msg); break; },
-            CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
-            _ => {}
+
+    loop {
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[DiarizeCLI CMD][{}] Cancellation requested. Killing process...", job_id);
+            let _ = child.kill();
+            if output_rttm_path.exists() {
+                if let Err(e) = fs::remove_file(output_rttm_path) {
+                    warn!("[DiarizeCLI CMD][{}] Failed to remove partial RTTM output {:?}: {}", job_id, output_rttm_path, e);
+                } else {
+                    info!("[DiarizeCLI CMD][{}] Removed partial RTTM output {:?}", job_id, output_rttm_path);
+                }
+            }
+            return Err(CommandError::from(format!("Diarization process cancelled for job {}.", job_id)));
+        }
+
+        tokio::select! {
+            biased;
+            maybe_event = rx.recv() => {
+                match maybe_event {
+                    Some(event) => match event {
+                        CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Error(msg) => { process_error = Some(msg); break; },
+                        CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
+                        _ => {}
+                    },
+                    None => {
+                        if exit_code.is_none() && process_error.is_none() {
+                            warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id);
+                            exit_code = Some(-1); // Treat as error
+                        }
+                        break;
+                    }
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                // Continue to check cancel_flag
+            }
         }
     }
 
     if process_error.is_some() || exit_code != Some(0) {
+        // Cleanup even on non-cancellation error
+        if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
         return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
     }
-    if !output_rttm_path.exists() {
-        sleep(Duration::from_millis(300)).await;
-        if !output_rttm_path.exists() {
-             return Err(CommandError::from(format!("Diarization RTTM output missing: {:?}", output_rttm_path)));
+
+    // Wait for file to appear, with cancellation check
+    let mut attempts = 0;
+    while !output_rttm_path.exists() && attempts < 10 {
+        if cancel_flag.load(AtomicOrdering::Relaxed) {
+            warn!("[DiarizeCLI CMD][{}] Cancelled while waiting for RTTM file.", job_id);
+            return Err(CommandError::from(format!("Diarization process cancelled (waiting for file) for job {}.", job_id)));
         }
+        sleep(Duration::from_millis(200)).await; // RTTM files are usually small
+        attempts += 1;
     }
+
+    if !output_rttm_path.exists() {
+         error!("[DiarizeCLI CMD][{}] RTTM output missing after wait: {:?}", job_id, output_rttm_path);
+         return Err(CommandError::from(format!("Diarization RTTM output missing: {:?}", output_rttm_path)));
+    }
+    // An empty RTTM file can be valid if no speech is detected or no speaker turns.
+    // So, no specific check for empty file here, unlike whisper output.
     Ok(output_rttm_path.to_path_buf())
 }
 
@@ -1437,6 +1739,7 @@ pub(crate) async fn execute_transcription_pass(
     is_translation_pass: bool,
     speaker_names: &[String],
     media_filename_for_progress: &str,
+    cancel_flag: Arc<AtomicBool>, // New argument
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
         job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
@@ -1456,6 +1759,7 @@ pub(crate) async fn execute_transcription_pass(
         output_base_for_whisper,
         expected_whisper_json_output_path,
         is_translation_pass,
+        cancel_flag.clone(), // Pass the flag
     ).await?;
 
     let mut segments = parse_whisper_json_cmd(&whisper_json_path)?;
@@ -1469,6 +1773,7 @@ pub(crate) async fn execute_transcription_pass(
             num_speakers,
             expected_rttm_output_path,
             job_id,
+            cancel_flag.clone(), // Pass the flag
         ).await?;
 
         match parse_rttm_file_cmd(&rttm_path) {
@@ -1559,4 +1864,24 @@ pub async fn convert_srt_to_vtt_command(srt_path_str: String) -> Result<String, 
     // This should return the content of the VTT file or path to a new VTT file.
     // For this stub, we'll just return a message.
     Ok(format!("Successfully processed (stubbed) SRT file: {}", srt_path_str))
+}
+
+// --- cancel_transcription Command (moved from local_handler/transcription.rs) ---
+#[tauri::command]
+pub async fn cancel_transcription(
+    job_id: String,
+    cancel_state: tauri::State<'_, crate::TranscriptionCancellationState> // Ensure crate::TranscriptionCancellationState is in use
+) -> Result<(), CommandError> { // Ensure CommandError is in use
+    info!("[Transcribe Command][Cancel] Received cancellation request for job: {}", job_id);
+    if let Some(flag_entry) = cancel_state.0.get(&job_id) {
+        let cancel_flag = flag_entry.value();
+        // Use AtomicOrdering alias if std::sync::atomic::Ordering is aliased, otherwise direct path.
+        match cancel_flag.compare_exchange(false, true, AtomicOrdering::SeqCst, AtomicOrdering::SeqCst) {
+             Ok(_) => { info!("[Transcribe Command][Cancel] Cancellation flag successfully SET for job: {}", job_id); }
+             Err(_) => { info!("[Transcribe Command][Cancel] Cancellation flag was already SET for job: {}", job_id); }
+        }
+    } else {
+        warn!("[Transcribe Command][Cancel] Cancellation request for unknown or already completed job ID: {}", job_id);
+    }
+    Ok(())
 }
