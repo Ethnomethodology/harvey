@@ -1,10 +1,10 @@
-# Project Harvey 1.0
+# Harvey
 
 ## Overview/Core Purpose
 
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Harvey is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
 
-Harvey 1.0 is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
+Harvey is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
 
 It's an application built by researchers, for researchers.
 
