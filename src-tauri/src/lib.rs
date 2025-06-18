@@ -202,7 +202,8 @@ pub fn run() {
 
             // --- Project view transcription PROCESS commands ---
             projectview::local_handler::transcription::run_transcription,
-            projectview::local_handler::transcription::cancel_transcription,
+            // projectview::local_handler::transcription::cancel_transcription, // Moved
+            projectview::transcription_commands::cancel_transcription, // New location
             projectview::cloud_handler::cloud_transcribe::run_cloud_transcription,
             projectview::cloud_handler::cloud_transcribe::cancel_cloud_transcription,
 
