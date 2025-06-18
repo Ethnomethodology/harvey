@@ -176,10 +176,34 @@ export function selectMedia(fileEntry) {
         const loadedNamesRaw = fileEntry.speakers.name;
         const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
 
+        // --- START MODIFICATION ---
+        let loadedTranslatedNamesRaw = fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
+        let loadedTranslatedNames = [];
+
+        if (Array.isArray(loadedTranslatedNamesRaw)) {
+            loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
+        } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
+            // Handle case where it might be a single string for a single speaker
+            loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+        } else {
+            // Default to empty strings if not found or not in expected format
+            loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+        }
+
+        // Ensure the array has the correct length
+        if (loadedTranslatedNames.length > loadedCount) {
+            loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
+        } else {
+            while (loadedTranslatedNames.length < loadedCount) {
+                loadedTranslatedNames.push('');
+            }
+        }
+        // --- END MODIFICATION ---
+
         speakersToLoad = {
             count: loadedCount,
-            names: [...loadedNames],
-            translatedNames: Array(loadedCount > 0 ? loadedCount : 0).fill('')
+            names: [...loadedNames], // Primary names are already handled
+            translatedNames: loadedTranslatedNames // Assign the processed translated names
         };
 
         if (speakersToLoad.count !== speakersToLoad.names.length) {
@@ -629,7 +653,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     }));
     updateProjectStoreState({ statusMessage: 'Updating speaker configuration...' });
 
-    const invokePayload = { projectXmlPath: projectXmlPath, mediaIdentifier: mediaIdentifier, count: newSpeakerConfig.count, names: newSpeakerConfig.names };
+    const invokePayload = { projectXmlPath: projectXmlPath, mediaIdentifier: mediaIdentifier, count: newSpeakerConfig.count, names: newSpeakerConfig.names, translatedNames: newSpeakerConfig.translatedNames };
     invoke('save_speaker_config', invokePayload)
         .then(() => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
