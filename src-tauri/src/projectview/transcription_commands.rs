@@ -340,24 +340,34 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
 }
 
 
-#[tauri::command]
-pub async fn save_speaker_config( project_xml_path: String, media_identifier: String, count: usize, names: Vec<String>) -> Result<(), CommandError> {
-    info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}", project_xml_path, media_identifier, count, names);
+#[derive(serde::Deserialize, Debug)]
+pub struct SaveSpeakerConfigPayload {
+    project_xml_path: String,
+    media_identifier: String,
+    count: usize,
+    names: Vec<String>,
+    translated_names: Option<Vec<String>>,
+}
 
-    let xml_path = PathBuf::from(&project_xml_path);
+#[tauri::command]
+pub async fn save_speaker_config(payload: SaveSpeakerConfigPayload) -> Result<(), CommandError> {
+    info!("[Backend SaveSpeakers] Request: Project='{}', MediaID='{}', Count={}, Names={:?}, TranslatedNames={:?}",
+        payload.project_xml_path, payload.media_identifier, payload.count, payload.names, payload.translated_names);
+
+    let xml_path = PathBuf::from(&payload.project_xml_path);
     if !xml_path.exists() || !xml_path.is_file() {
-        return Err(CommandError::from(format!("Project file not found: {}", project_xml_path)));
+        return Err(CommandError::from(format!("Project file not found: {}", payload.project_xml_path)));
     }
 
     let xml_content = fs::read_to_string(&xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_and_updated = false;
 
-    if let Some(media_file) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
-        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", media_identifier);
+    if let Some(media_file) = project_data.media_files.files.iter_mut().find(|f| f.name == payload.media_identifier) {
+        info!("[Backend SaveSpeakers] Found entry '{}'. Updating speakers.", payload.media_identifier);
 
-        let mut validated_count = count;
-        let mut validated_names = names.clone();
+        let mut validated_count = payload.count;
+        let mut validated_names = payload.names.clone();
         if validated_names.len() != validated_count {
              warn!("Speaker count ({}) and number of names ({}) mismatch. Adjusting count to match names.", validated_count, validated_names.len());
              validated_count = validated_names.len();
@@ -373,18 +383,27 @@ pub async fn save_speaker_config( project_xml_path: String, media_identifier: St
              }
          }
 
-        let speakers_data = SpeakersXml { count: validated_count, names: validated_names };
+        // Handle translated_names, defaulting to Some(Vec::new()) if None is provided from payload
+        let validated_translated_names = payload.translated_names.clone().unwrap_or_else(Vec::new);
+        // Further validation for translated_names (e.g., trimming, ensuring uniqueness if needed) can be added here
+        // For now, directly use the provided or defaulted Vec.
+
+        let speakers_data = SpeakersXml {
+            count: validated_count,
+            names: validated_names,
+            translated_names: Some(validated_translated_names), // Store as Some(Vec)
+        };
         info!("[Backend SaveSpeakers] Saving validated config: {:?}", speakers_data);
         media_file.speakers = Some(speakers_data);
         found_and_updated = true;
     }
 
     if !found_and_updated {
-        return Err(CommandError::from(format!("Media ID '{}' not found in XML.", media_identifier)));
+        return Err(CommandError::from(format!("Media ID '{}' not found in XML.", payload.media_identifier)));
     }
 
     save_project_xml(&xml_path, &project_data)?;
-    info!("[Backend SaveSpeakers] Success for '{}'.", media_identifier);
+    info!("[Backend SaveSpeakers] Success for '{}'.", payload.media_identifier);
     Ok(())
 }
 

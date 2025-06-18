@@ -58,12 +58,218 @@ pub struct StandardAssetMetadata {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SpeakersXml {
     #[serde(rename = "@count", default)]
     pub count: usize,
     #[serde(default, rename = "name")]
     pub names: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translated_names: Option<Vec<String>>,
+}
+
+impl Default for SpeakersXml {
+    fn default() -> Self {
+        SpeakersXml {
+            count: 0,
+            names: Vec::new(),
+            translated_names: Some(Vec::new()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quick_xml::de::from_str;
+    use quick_xml::se::to_string;
+
+    // Helper function to wrap SpeakersXml for top-level element serialization/deserialization
+    // quick_xml requires a root element.
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct SpeakersWrapper {
+        #[serde(rename = "speakers")]
+        speakers: SpeakersXml,
+    }
+
+    #[test]
+    fn test_speakers_xml_serialize_with_translated_names() {
+        let speakers = SpeakersXml {
+            count: 2,
+            names: vec!["Speaker 1".to_string(), "Speaker 2".to_string()],
+            translated_names: Some(vec!["Trad1".to_string(), "Trad2".to_string()]),
+        };
+        let wrapper = SpeakersWrapper { speakers };
+        let xml_output = to_string(&wrapper).unwrap();
+        // quick_xml might not produce pretty output, so exact string match is tricky.
+        // Check for essential parts.
+        assert!(xml_output.contains("<speakers count=\"2\">"));
+        assert!(xml_output.contains("<name>Speaker 1</name>"));
+        assert!(xml_output.contains("<name>Speaker 2</name>"));
+        assert!(xml_output.contains("<translated_names>"));
+        assert!(xml_output.contains("<name>Trad1</name>"));
+        assert!(xml_output.contains("<name>Trad2</name>"));
+        assert!(xml_output.contains("</translated_names>"));
+        assert!(xml_output.contains("</speakers>"));
+    }
+
+    #[test]
+    fn test_speakers_xml_serialize_with_empty_translated_names() {
+        let speakers = SpeakersXml {
+            count: 1,
+            names: vec!["Speaker 1".to_string()],
+            translated_names: Some(Vec::new()),
+        };
+        let wrapper = SpeakersWrapper { speakers };
+        let xml_output = to_string(&wrapper).unwrap();
+        assert!(xml_output.contains("<speakers count=\"1\">"));
+        assert!(xml_output.contains("<name>Speaker 1</name>"));
+        // Depending on quick_xml's behavior for an empty Vec inside Option wrapped in a tag:
+        // It might be <translated_names/> or <translated_names></translated_names>
+        // The key is that the translated_names tag IS present because it's Some(Vec::new())
+        assert!(xml_output.contains("<translated_names>"));
+        assert!(xml_output.contains("</translated_names>"));
+        // Ensure no <name> inside <translated_names>
+        assert!(!xml_output.contains("<translated_names><name>"));
+    }
+
+    #[test]
+    fn test_speakers_xml_serialize_with_none_translated_names() {
+        let speakers = SpeakersXml {
+            count: 1,
+            names: vec!["Speaker 1".to_string()],
+            translated_names: None,
+        };
+        let wrapper = SpeakersWrapper { speakers };
+        let xml_output = to_string(&wrapper).unwrap();
+        assert!(xml_output.contains("<speakers count=\"1\">"));
+        assert!(xml_output.contains("<name>Speaker 1</name>"));
+        // translated_names field should be omitted due to skip_serializing_if = "Option::is_none"
+        assert!(!xml_output.contains("<translated_names>"));
+    }
+
+    #[test]
+    fn test_speakers_xml_deserialize_with_translated_names() {
+        let xml_input = r#"
+            <speakers count="2">
+                <name>Speaker 1</name>
+                <name>Speaker 2</name>
+                <translated_names>
+                    <name>Trad1</name>
+                    <name>Trad2</name>
+                </translated_names>
+            </speakers>
+        "#;
+        // quick_xml deserializes fields based on their own tags, not a wrapper object unless specified.
+        // For SpeakersXml, the fields 'name' and 'translated_names' are direct children.
+        // So we deserialize SpeakersXml directly if it's not the root of the document.
+        // If SpeakersXml is the root, then we need a wrapper or to deserialize from a specific event.
+        // Let's assume it's part of a larger XML, so we test SpeakersXml directly.
+        // However, from_str usually expects the type to be the root.
+        // So, using the wrapper for consistency in tests.
+        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 2,
+            names: vec!["Speaker 1".to_string(), "Speaker 2".to_string()],
+            translated_names: Some(vec!["Trad1".to_string(), "Trad2".to_string()]),
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
+
+    #[test]
+    fn test_speakers_xml_deserialize_with_empty_translated_names_tag() {
+        let xml_input = r#"
+            <speakers count="1">
+                <name>Speaker 1</name>
+                <translated_names/>
+            </speakers>
+        "#;
+        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 1,
+            names: vec!["Speaker 1".to_string()],
+            translated_names: Some(Vec::new()), // Empty tag should deserialize to Some(Vec::new())
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
+
+    #[test]
+    fn test_speakers_xml_deserialize_with_empty_translated_names_tags() {
+        let xml_input = r#"
+            <speakers count="1">
+                <name>Speaker 1</name>
+                <translated_names></translated_names>
+            </speakers>
+        "#;
+        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 1,
+            names: vec!["Speaker 1".to_string()],
+            translated_names: Some(Vec::new()), // Empty tags should deserialize to Some(Vec::new())
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
+
+    #[test]
+    fn test_speakers_xml_deserialize_missing_translated_names_tag() {
+        let xml_input = r#"
+            <speakers count="1">
+                <name>Speaker 1</name>
+            </speakers>
+        "#;
+        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 1,
+            names: vec!["Speaker 1".to_string()],
+            translated_names: None, // Missing tag should deserialize to None due to #[serde(default)] on Option field
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
+
+    // Test for the Default trait implementation
+    #[test]
+    fn test_speakers_xml_default() {
+        let default_speakers = SpeakersXml::default();
+        let expected_speakers = SpeakersXml {
+            count: 0,
+            names: Vec::new(),
+            translated_names: Some(Vec::new()), // Default impl sets it to Some(Vec::new())
+        };
+        assert_eq!(default_speakers, expected_speakers);
+    }
+
+    // Test deserialization when count attribute is missing, should default
+    #[test]
+    fn test_speakers_xml_deserialize_missing_count_attribute() {
+        let xml_input = r#"
+            <speakers>
+                <name>Speaker 1</name>
+            </speakers>
+        "#;
+        let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 0, // Defaults to 0 because of #[serde(default)] on count field
+            names: vec!["Speaker 1".to_string()],
+            translated_names: None,
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
+
+    // Test deserialization when names are missing
+    #[test]
+    fn test_speakers_xml_deserialize_missing_names() {
+        let xml_input = r#"
+            <speakers count="0">
+            </speakers>
+        "#;
+         let wrapper: SpeakersWrapper = from_str(&format!("<wrapper>{}</wrapper>", xml_input.replace("<speakers", "<speakers xmlns=\"\""))).unwrap();
+        let expected_speakers = SpeakersXml {
+            count: 0,
+            names: Vec::new(), // Defaults to empty vec
+            translated_names: None,
+        };
+        assert_eq!(wrapper.speakers, expected_speakers);
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

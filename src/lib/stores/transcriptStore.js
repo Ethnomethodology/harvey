@@ -663,7 +663,14 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     }));
     updateProjectStoreState({ statusMessage: 'Updating speaker configuration...' });
 
-    const invokePayload = { projectXmlPath: projectXmlPath, mediaIdentifier: mediaIdentifier, count: newSpeakerConfig.count, names: newSpeakerConfig.names, translatedNames: newSpeakerConfig.translatedNames };
+    // Ensure payload keys match Rust struct fields (snake_case for translated_names)
+    const invokePayload = {
+        project_xml_path: projectXmlPath,
+        media_identifier: mediaIdentifier,
+        count: newSpeakerConfig.count,
+        names: newSpeakerConfig.names,
+        translated_names: newSpeakerConfig.translatedNames // Changed from translatedNames
+    };
     invoke('save_speaker_config', invokePayload)
         .then(() => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
@@ -682,7 +689,19 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
                      let found = false;
                      for (const node of nodes) {
                          if (node.media_xml_identifier === targetIdentifier && (node.file_type === 'media' || node.file_type === 'directory_media_stem')) {
-                             node.speakers = { '@count': newSpeakerData.count, name: newSpeakerData.names };
+                             // Ensure the structure being saved into project.files also includes translated_names
+                             // if other parts of the UI expect it directly from here.
+                             // The backend saves it to XML, this is about in-memory store consistency.
+                             node.speakers = {
+                                 '@count': newSpeakerData.count,
+                                 name: newSpeakerData.names,
+                                 // Assuming the backend will be the source of truth on next load,
+                                 // but for immediate UI consistency after save, we can add it here too.
+                                 // The key here should match what selectMedia expects (e.g., translated_names or translatedNames)
+                                 // Based on selectMedia, it checks for translatedNames then translated_names.
+                                 // To be safe and align with backend, using translated_names.
+                                 translated_names: newSpeakerData.translatedNames
+                             };
                              found = true;
                          }
                          if (node.children && node.children.length > 0) {
@@ -693,6 +712,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
                      }
                      return found;
                  }
+                 // Pass the full newSpeakerConfig (which includes translatedNames)
                  const didUpdate = findAndUpdateMediaSpeakers(updatedFiles, mediaIdentifier, newSpeakerConfig);
                  if (didUpdate) {
                      return { ...p, files: updatedFiles };
