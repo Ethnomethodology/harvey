@@ -122,16 +122,9 @@
                     <div class="w-16 h-16">
                         <Loader class="w-full h-full text-blue-500 animate-spin" />
                     </div>
-					{#if jobStatus === 'running'}
-						<div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
-							<div
-								class="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-out"
-								style="width: {progressPercent}%"
-							></div>
-						</div>
-					{/if}
+					<!-- Progress bar removed -->
 					<p class="text-xs text-center text-gray-600 dark:text-gray-400 h-4">
-						{#if jobStatus === 'running'}{progressPercent.toFixed(0)}% - {/if}{progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : 'Processing...')}
+                        {progressMessage || (jobStatus === 'initiating' ? 'Preparing...' : (jobStatus === 'running' ? 'Processing...' : 'Please wait...'))}
 					</p>
 				</div>
 				<div class="flex justify-center space-x-2 mt-auto">
