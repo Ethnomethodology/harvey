@@ -177,7 +177,7 @@ export function selectMedia(fileEntry) {
         const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
 
         // --- START MODIFICATION ---
-        let loadedTranslatedNamesRaw = fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
+        let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
         let loadedTranslatedNames = [];
 
         if (Array.isArray(loadedTranslatedNamesRaw)) {
