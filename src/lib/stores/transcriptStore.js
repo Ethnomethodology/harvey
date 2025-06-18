@@ -663,15 +663,17 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     }));
     updateProjectStoreState({ statusMessage: 'Updating speaker configuration...' });
 
-    // Ensure payload keys match Rust struct fields (snake_case for translated_names)
-    const invokePayload = {
+    // Construct the inner payload object
+    const innerPayload = {
         project_xml_path: projectXmlPath,
         media_identifier: mediaIdentifier,
         count: newSpeakerConfig.count,
         names: newSpeakerConfig.names,
-        translated_names: newSpeakerConfig.translatedNames // Changed from translatedNames
+        translated_names: newSpeakerConfig.translatedNames
     };
-    invoke('save_speaker_config', invokePayload)
+
+    // Wrap the innerPayload inside an object with the key "payload"
+    invoke('save_speaker_config', { payload: innerPayload })
         .then(() => {
             updateProjectStoreState({ statusMessage: 'Speaker configuration saved.', error: null });
 
