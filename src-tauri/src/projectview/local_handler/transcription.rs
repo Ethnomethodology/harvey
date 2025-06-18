@@ -9,7 +9,6 @@ use crate::projectview::transcription_commands::{
 };
 use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
-// Removed: use crate::TranscriptionCancellationState; // No longer used here
 
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -20,38 +19,32 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering}, // Ordering is used by cancel_flag.load
+        atomic::{AtomicBool, Ordering},
         Arc,
     },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter}; // Removed State
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 use tokio::time::sleep;
-use uuid::Uuid; // Added for Uuid::new_v4
+use uuid::Uuid;
 
 // Structs specific to parsing whisper output
 #[derive(Deserialize, Debug)] struct WhisperJsonOutput { transcription: Option<Vec<WhisperJsonSegment>> }
 #[derive(Deserialize, Debug)] struct WhisperJsonSegment { timestamps: WhisperJsonTimestamps, text: String }
 #[derive(Deserialize, Debug)] struct WhisperJsonTimestamps { from: String, to: String }
 
-// --- Payload for transcription job completion event ---
-// This is specific to local_handler::run_transcription if it emits its own events.
-// The main command `transcribe_media_command` uses a potentially different payload from transcription_commands.rs
 #[derive(serde::Serialize, Clone)]
 struct TranscriptionJobCompletedPayload {
-    job_id: String, // This will be the internal_job_id
+    job_id: String,
     status: String,
     jobFinishedPath: String,
     transcriptFilePath: Option<String>,
     errorMessage: Option<String>,
 }
 
-// Struct specific to parsing RTTM output
 #[derive(Debug, Clone)] struct RttmRecord { start_time: f64, duration: f64, speaker_id: String }
 
-
-// --- Main Transcription Command ---
 #[tauri::command]
 pub async fn run_transcription(
     app_handle: AppHandle,
@@ -60,8 +53,6 @@ pub async fn run_transcription(
     language: String,
     num_speakers: usize,
     speaker_names: Vec<String>
-    // job_id: String, // Removed
-    // cancel_state: State<'_, TranscriptionCancellationState> // Removed
 ) -> Result<TranscriptionResult, CommandError> {
     let internal_job_id = Uuid::new_v4().to_string();
     info!( "[Transcription][LocalRun][{}] Start: Media='{}', Model='{}', Lang='{}', Speakers={}", internal_job_id, media_path, model_name, language, num_speakers);
@@ -472,8 +463,8 @@ async fn run_whisper_cpp_sidecar(
      })?;
     info!("[Transcription][LocalRun][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
 
-    let mut stderr_lines = Vec<new();
-    let mut _stdout_lines = Vec::new();
+    let mut stderr_lines: Vec<String> = Vec::new(); // Corrected
+    let mut _stdout_lines: Vec<String> = Vec::new(); // Corrected
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
 
@@ -564,9 +555,8 @@ async fn run_whisper_cpp_sidecar(
     Ok(expected_output_path.to_path_buf())
 }
 
-
-// --- Helper: Parse Whisper JSON ---
-// (No job_id used here, no changes needed)
+// (The rest of the file: parse_whisper_json, parse_whisper_timestamp, run_diarize_cli_sidecar, parse_rttm_file, merge_diarization_results, find_model_file, emit_progress remain unchanged from the previous version as they were correctly using internal_job_id or not using job_id at all in a way that needed changes for this specific refactor pass)
+// ... (rest of the file as per previous correct version)
 fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
     debug!("[JSON Parse] Reading whisper output: {:?}", json_path);
     let file = File::open(json_path)?;
@@ -600,8 +590,6 @@ fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, Comman
     Ok(segments)
 }
 
-// --- Helper: Parse Whisper Timestamp (hh:mm:ss,ms) ---
-// (No job_id used here, no changes needed)
 fn parse_whisper_timestamp(timestamp_str: &str) -> Result<f64, String> {
     let parts: Vec<&str> = timestamp_str.split(':').collect();
     if parts.len() != 3 {
@@ -627,14 +615,13 @@ fn parse_whisper_timestamp(timestamp_str: &str) -> Result<f64, String> {
     }
 }
 
-// --- Helper: Run Diarization CLI Sidecar ---
 async fn run_diarize_cli_sidecar(
     app_handle: &AppHandle,
     sidecar_name: &str,
     media_path: &str,
     num_speakers: usize,
     output_rttm_path: &Path,
-    job_id: &str, // Now internal_job_id
+    job_id: &str,
     cancel_flag: &Arc<AtomicBool>
 ) -> Result<PathBuf, CommandError> {
     info!("[DiarizeCLI][{}] Starting diarization for: {}", job_id, media_path);
@@ -666,8 +653,8 @@ async fn run_diarize_cli_sidecar(
       })?;
     debug!("[DiarizeCLI][{}] Spawned '{}' process (PID: {:?})", job_id, sidecar_name, child.pid());
 
-    let mut stderr_lines = Vec::new();
-    let mut stdout_lines = Vec::new();
+    let mut stderr_lines: Vec<String> = Vec::new();
+    let mut stdout_lines: Vec<String> = Vec::new();
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
 
@@ -746,8 +733,6 @@ async fn run_diarize_cli_sidecar(
     Ok(output_rttm_path.to_path_buf())
 }
 
-// --- Helper: Parse RTTM File ---
-// (No job_id used here, no changes needed)
 fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
     debug!("[RTTM Parse] Reading RTTM file: {:?}", rttm_path);
     let file = File::open(rttm_path)?;
@@ -799,8 +784,6 @@ fn parse_rttm_file(rttm_path: &Path) -> Result<Vec<RttmRecord>, CommandError> {
     Ok(records)
 }
 
-// --- Helper: Merge Diarization Results ---
-// (No job_id used here, no changes needed)
 fn merge_diarization_results(
     whisper_segments: &mut Vec<TranscriptSegment>,
     rttm_records: &[RttmRecord])
@@ -879,8 +862,6 @@ fn merge_diarization_results(
     info!("[Merge] Finished merging diarization results.");
 }
 
-// --- Helper: Find Model File ---
-// (No job_id used here, no changes needed)
 fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
     debug!("[Helper] Searching for model file in directory: {:?}", model_dir);
     if !model_dir.exists() || !model_dir.is_dir() {
@@ -910,11 +891,9 @@ fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
     Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
 }
 
-// --- Helper: Emit Progress ---
-// (No job_id used here in a way that needs changing for this refactor, it's passed as a parameter)
 pub(crate) async fn emit_progress(
     app_handle: &AppHandle,
-    job_id: &str, // This will be internal_job_id from the caller
+    job_id: &str,
     percent: f32,
     message: &str)
 -> Result<(), tauri::Error> {
