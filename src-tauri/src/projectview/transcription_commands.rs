@@ -637,7 +637,8 @@ pub struct TranscribeMediaPayload {
     language_code: Option<String>,
     model_name: String,
     translate_to_english: bool,
-    speaker_names: Vec<String>,
+    speaker_names: Vec<String>, // For original transcript
+    translated_speaker_names: Option<Vec<String>>, // For translated transcript
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -990,6 +991,21 @@ pub async fn transcribe_media_command(
             // }
             info!("[Transcribe Command][{}] Aligning speakers for translated segments based on original diarization...", job_id);
             align_speakers_to_translated_segments(&original_segments, &mut translated_segments, &job_id);
+
+            // Apply translated_speaker_names if provided
+            if let Some(ref translated_names) = payload.translated_speaker_names {
+                let contains_actual_names = translated_names.iter().any(|name| !name.trim().is_empty());
+                if !translated_names.is_empty() && contains_actual_names {
+                    info!("[Transcribe Command][{}] Applying user-defined translated speaker names to translated segments.", job_id);
+                    map_speaker_ids_to_names(&mut translated_segments, translated_names);
+                } else if !translated_names.is_empty() && !contains_actual_names {
+                    info!("[Transcribe Command][{}] Translated speaker names list provided, but all names are empty. Using aligned speaker IDs for translated segments.", job_id);
+                } else {
+                    info!("[Transcribe Command][{}] Translated speaker names list is empty. Using aligned speaker IDs for translated segments.", job_id);
+                }
+            } else {
+                info!("[Transcribe Command][{}] No translated speaker names list provided (Option is None). Using aligned speaker IDs for translated segments.", job_id);
+            }
 
             emit_progress_cmd(&app_handle_clone, &job_id, 90.0, &format!("Saving translation for {}...", media_filename_for_progress))?;
             info!("[Transcribe Command][{}] DEBUG: Attempting to save translated transcript to: {:?}", job_id, final_path_en_pb);
