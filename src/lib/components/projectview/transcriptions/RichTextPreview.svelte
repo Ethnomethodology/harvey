@@ -43,16 +43,35 @@
         { value: 'vi', label: 'Vietnamese' }, { value: 'cy', label: 'Welsh' },
     ];
 
-    let originalLanguageName = 'Original'; // Default
+    // let originalLanguageName = 'Original'; // Default // REMOVED
+    // $: {
+    //     const selectedLangCode = $transcriptStore.selectedLanguage;
+    //     const langOption = languageOptions.find(option => option.value === selectedLangCode);
+    //     if (langOption) {
+    //         originalLanguageName = langOption.label;
+    //     } else if (selectedLangCode === 'auto') {
+    //         originalLanguageName = 'Auto Detected'; // Or 'Original Language'
+    //     } else {
+    //         originalLanguageName = selectedLangCode ? selectedLangCode.toUpperCase() : 'Original';
+    //     }
+    // }
+
+    let actualOriginalLanguageLabel = 'Original'; // Default
     $: {
-        const selectedLangCode = $transcriptStore.selectedLanguage;
-        const langOption = languageOptions.find(option => option.value === selectedLangCode);
-        if (langOption) {
-            originalLanguageName = langOption.label;
-        } else if (selectedLangCode === 'auto') {
-            originalLanguageName = 'Auto Detected'; // Or 'Original Language'
+        const langCode = $transcriptStore.transcribedOriginalLanguageCode;
+        if (langCode) {
+            const langOption = languageOptions.find(option => option.value === langCode);
+            if (langOption) {
+                actualOriginalLanguageLabel = langOption.label;
+            } else if (langCode.toLowerCase() === 'auto') {
+                actualOriginalLanguageLabel = 'Auto Detected';
+            } else {
+                // If the code is not in languageOptions (e.g., a specific code like 'ja-JP' not in the list)
+                // try to show the code itself, or a generic label.
+                actualOriginalLanguageLabel = langCode.toUpperCase();
+            }
         } else {
-            originalLanguageName = selectedLangCode ? selectedLangCode.toUpperCase() : 'Original';
+            actualOriginalLanguageLabel = 'Original Language'; // Fallback if no code stored
         }
     }
 
@@ -343,16 +362,19 @@
         <div class="flex items-center"> <!-- This div will be for language toggles -->
             {#if $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
                 <div class="flex items-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
+                    <!-- Original Language Button -->
                     <button
                         class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original' || !($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0)}
-                        class:btn-switch-inactive={($transcriptStore.activeTranscriptLanguage !== 'original' && ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0))}
+                        class:btn-switch-active={($transcriptStore.activeTranscriptLanguage === 'original') || !$transcriptStore.wasTranslatedToEnglish}
+                        class:btn-switch-inactive={($transcriptStore.activeTranscriptLanguage !== 'original' && $transcriptStore.wasTranslatedToEnglish)}
                         on:click={switchToOriginalTranscript}
-                        disabled={!($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0) && $transcriptStore.activeTranscriptLanguage === 'original'}
+                        disabled={!$transcriptStore.wasTranslatedToEnglish && $transcriptStore.activeTranscriptLanguage === 'original'}
                     >
-                        {originalLanguageName}
+                        {actualOriginalLanguageLabel}
                     </button>
-                    {#if $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0}
+
+                    <!-- English Button -->
+                    {#if $transcriptStore.wasTranslatedToEnglish && $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0}
                         <button
                             class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
                             class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}

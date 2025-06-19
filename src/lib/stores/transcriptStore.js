@@ -40,6 +40,9 @@ export const initialTranscriptState = {
     englishSegments: [],
     originalTranscriptPath: null, // To store the path of the original language transcript
     englishTranscriptPath: null, // To store the path of the English language transcript
+    transcribedOriginalLanguageCode: null, // To store the actual language code of the original transcript
+    wasTranslatedToEnglish: false,       // True if English translation was produced and is available
+    languageUsedForJob: null, // To store the language selected when the job started
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -160,6 +163,9 @@ export function clearTranscriptState() {
                 englishSegments: [],
                 originalTranscriptPath: null,
                 englishTranscriptPath: null,
+                transcribedOriginalLanguageCode: null,
+                wasTranslatedToEnglish: false,
+                languageUsedForJob: null,
             };
         }
         return ts;
@@ -244,6 +250,9 @@ export function selectMedia(fileEntry) {
             isTranscriptLoading: false,
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            transcribedOriginalLanguageCode: null,
+            wasTranslatedToEnglish: false,
+            languageUsedForJob: null,
         }));
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
@@ -820,9 +829,11 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
                 transcriptionErrorMessage: null, // Clear previous errors when starting/initiating
                 ranInBackground: false, // Reset this flag
                 showTranscribeModal: true, // Ensure modal remains open while transcribing or initiating
+                languageUsedForJob: ts.selectedLanguage, // Capture language used for this job
             };
         } else {
             // This branch is for when isTranscribing is explicitly false (e.g. job finished, error, cancelled by event)
+            // languageUsedForJob is reset by the custom_transcription_job_completed listener for terminal states
             updatedState = {
                 ...ts,
                 isTranscribing: false,
@@ -1174,7 +1185,22 @@ listen('custom_transcription_job_completed', async (event) => {
             // clearTranscriptionStatus('Transcription complete.'); // Removed
             // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'done', transcriptionErrorMessage: null }));
+
+            const langCodeForOriginal = event.payload.language_code_used || currentStore.languageUsedForJob || 'auto';
+            const translationHappened = !!(event.payload.translatedTranscriptFilePath); // Check based on path presence from payload
+
+            updates.transcribedOriginalLanguageCode = langCodeForOriginal;
+            updates.wasTranslatedToEnglish = translationHappened;
+
+            // The ...updates object should be applied in the final store update for 'done'
+            transcriptStore.update(ts => ({
+                ...ts,
+                ...updates, // Apply path updates and new language/translation flags
+                isTranscribing: false,
+                transcriptionJobStatus: 'done',
+                transcriptionErrorMessage: null,
+                languageUsedForJob: null, // Reset languageUsedForJob
+            }));
 
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
@@ -1182,14 +1208,26 @@ listen('custom_transcription_job_completed', async (event) => {
             // clearTranscriptionStatus(`Transcription failed: ${errorMessage}`, errorMessage); // Removed
             // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'error'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'error', transcriptionErrorMessage: errorMessage }));
+            transcriptStore.update(ts => ({
+                ...ts,
+                isTranscribing: false,
+                transcriptionJobStatus: 'error',
+                transcriptionErrorMessage: errorMessage,
+                languageUsedForJob: null, // Reset languageUsedForJob
+            }));
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
             updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
             // clearTranscriptionStatus('Transcription cancelled.'); // Removed
             // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'cancelled'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'cancelled', transcriptionErrorMessage: null }));
+            transcriptStore.update(ts => ({
+                ...ts,
+                isTranscribing: false,
+                transcriptionJobStatus: 'cancelled',
+                transcriptionErrorMessage: null,
+                languageUsedForJob: null, // Reset languageUsedForJob
+            }));
         }
     } else {
          console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
