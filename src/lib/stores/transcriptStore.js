@@ -3,7 +3,7 @@ import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { message } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event'; // Added missing import for listen
-import { notificationStore } from '$lib/stores/notificationStore.js';
+import notificationManager from '$lib/stores/notificationStore.js';
 // Import projectStore to access project-level details.
 // This creates a partial cyclic dependency that we might want to resolve later
 // by passing necessary values as arguments or through a service.
@@ -1192,7 +1192,7 @@ listen('custom_transcription_job_completed', async (event) => {
         if (status === 'done') {
             console.log('[TranscriptStore] Received custom_transcription_job_completed (done):', event.payload);
             if (showToast) {
-                notificationStore.add("Transcription successful", "success", 0);
+                notificationManager.add("Transcription successful", "success", 0);
             }
 
             let activePathToLoad = null;
@@ -1259,7 +1259,7 @@ listen('custom_transcription_job_completed', async (event) => {
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
             if (showToast) {
-                notificationStore.add(`Transcription failed: ${errorMessage}`, "error", 0);
+                notificationManager.add(`Transcription failed: ${errorMessage}`, "error", 0);
             }
             // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
             if (!showToast) updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
@@ -1275,7 +1275,7 @@ listen('custom_transcription_job_completed', async (event) => {
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
             if (showToast) {
-                notificationStore.add("Transcription cancelled", "info", 0);
+                notificationManager.add("Transcription cancelled", "info", 0);
             }
             // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
             if (!showToast) updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
