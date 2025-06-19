@@ -11,13 +11,12 @@
         // markTranscriptAsSaved, // Not directly used, saveTranscriptData handles it
         insertTranscriptSegment,
         // updatePlayerCurrentSegmentIndex, // Not directly used
-        switchToOriginalTranscript, // New action
-        switchToEnglishTranscript, // New action
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
         requestTranscription as requestTranscriptionService, // Renamed to avoid conflict
-        convertAndSaveTranscriptAsDoc
+        convertAndSaveTranscriptAsDoc,
+        loadTranscriptFile
     } from '$lib/services/projectService.js';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -245,6 +244,30 @@
     onMount(() => { console.log('[TranscriptionsView] Mounted.'); });
     onDestroy(() => { console.log('[TranscriptionsView] Destroyed.'); });
 
+    async function handleLoadSelectedTranscript(event) {
+        const transcriptPath = event.detail;
+        if (!transcriptPath) {
+            console.warn('[TranscriptionsView] handleLoadSelectedTranscript called without a path.');
+            return;
+        }
+
+        const currentLoadedPath = get(transcriptStore).currentTranscriptPath;
+        if (transcriptPath === currentLoadedPath) {
+            console.log('[TranscriptionsView] Selected transcript is already loaded:', transcriptPath);
+            return;
+        }
+
+        try {
+            // project.update(p => ({ ...p, isLoading: true, statusMessage: `Loading transcript: ${transcriptPath.split(/[\/]/).pop()}` }));
+            // The isLoading and statusMessage updates will be handled by loadTranscriptFile or setTranscriptData now.
+            await loadTranscriptFile(transcriptPath);
+            // Optionally, update a local status or rely on global status from the store.
+        } catch (error) {
+            console.error(`[TranscriptionsView] Error loading selected transcript ${transcriptPath}:`, error);
+            await message(`Failed to load transcript: ${error.message || error}`, { title: 'Error', type: 'error' });
+            // project.update(p => ({ ...p, isLoading: false, error: `Failed to load transcript: ${error.message || error}` }));
+        }
+    }
 </script>
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
@@ -260,27 +283,6 @@
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
-            <!-- Transcript Switcher UI -->
-            {#if $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
-                <div class="flex items-center justify-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
-                    <button
-                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original'}
-                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'original'}
-                        on:click={() => transcriptStore.update(switchToOriginalTranscript)}
-                    >
-                        Original Language
-                    </button>
-                    <button
-                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
-                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
-                        on:click={() => transcriptStore.update(switchToEnglishTranscript)}
-                    >
-                        English
-                    </button>
-                </div>
-            {/if}
 
             <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
@@ -324,6 +326,7 @@
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
+                on:transcriptselected={handleLoadSelectedTranscript}
              />
         </div>
     </div>

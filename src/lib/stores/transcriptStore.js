@@ -40,6 +40,9 @@ export const initialTranscriptState = {
     englishSegments: [],
     originalTranscriptPath: null, // To store the path of the original language transcript
     englishTranscriptPath: null, // To store the path of the English language transcript
+    // transcribedOriginalLanguageCode: null, // REMOVED
+    // wasTranslatedToEnglish: false,       // REMOVED
+    // languageUsedForJob: null, // REMOVED
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -160,6 +163,9 @@ export function clearTranscriptState() {
                 englishSegments: [],
                 originalTranscriptPath: null,
                 englishTranscriptPath: null,
+                // transcribedOriginalLanguageCode: null, // REMOVED
+                // wasTranslatedToEnglish: false, // REMOVED
+                // languageUsedForJob: null, // REMOVED
             };
         }
         return ts;
@@ -244,59 +250,88 @@ export function selectMedia(fileEntry) {
             isTranscriptLoading: false,
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            // transcribedOriginalLanguageCode: null, // REMOVED
+            // wasTranslatedToEnglish: false, // REMOVED
+            // languageUsedForJob: null, // REMOVED
         }));
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
-            const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0];
-            const firstTranscriptRelativePath = firstTranscriptInfo?.relativePath;
+            let transcriptPathToLoad = null;
+            const mediaName = newlySelectedMedia.name; // e.g., "my_audio.wav"
+            const mediaNameStem = mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; // e.g., "my_audio"
 
-            if (firstTranscriptRelativePath && typeof firstTranscriptRelativePath === 'string') {
-                const allFiles = get(projectMainStore).files; // Access files from projectMainStore
-                let transcriptNodeToLoad = null;
+            // Look for a conventionally named transcript (e.g., media_name_stem.json)
+            const conventionalTranscriptName = `${mediaNameStem}.json`;
+            const conventionalTranscript = newlySelectedMedia.associated_transcripts.find(t => {
+                const tName = t.path ? t.path.split(/[\/]/).pop() : '';
+                return tName.toLowerCase() === conventionalTranscriptName.toLowerCase();
+            });
 
-                function findTranscriptNodeByRelativePath(nodes, relPath) {
-                    if (!Array.isArray(nodes)) return null;
-                    for (const node of nodes) {
-                        if (node.file_type === 'transcript' && node.relative_path === relPath) {
-                            return node;
-                        }
-                        if (node.children && node.children.length > 0) {
-                            const found = findTranscriptNodeByRelativePath(node.children, relPath);
-                            if (found) return found;
-                        }
-                    }
-                    return null;
+            if (conventionalTranscript && conventionalTranscript.path) {
+                transcriptPathToLoad = conventionalTranscript.path;
+                console.log(`[TranscriptStore selectMedia] Found conventional transcript: ${transcriptPathToLoad}`);
+            } else {
+                // Fallback: load the first transcript in the list
+                const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0];
+                if (firstTranscriptInfo && firstTranscriptInfo.path) {
+                    transcriptPathToLoad = firstTranscriptInfo.path;
+                    console.log(`[TranscriptStore selectMedia] No conventional transcript found. Loading first available: ${transcriptPathToLoad}`);
                 }
-                transcriptNodeToLoad = findTranscriptNodeByRelativePath(allFiles, firstTranscriptRelativePath);
+            }
 
-                if (transcriptNodeToLoad && transcriptNodeToLoad.path) {
-                    transcriptStore.update(ts => ({ ...ts, currentTranscriptPath: transcriptNodeToLoad.path, isTranscriptLoading: true }));
-                    // Dynamic import of projectService to avoid circular dependencies at module load time
-                    import('../services/projectService.js').then(service => {
-                        if (typeof service.loadTranscriptFile === 'function') {
-                            service.loadTranscriptFile(transcriptNodeToLoad.path) // This function will call setTranscriptData
-                                .catch(error => {
-                                    console.error(`[TranscriptStore] Auto-load first transcript failed:`, error); // ERROR
-                                    transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
-                                    updateProjectStoreState({ error: `Failed to load transcript: ${error.message || error}`});
-                                });
-                        } else {
-                            console.error("[TranscriptStore] loadTranscriptFile function not found in service."); // ERROR
-                            transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
-                            updateProjectStoreState({ error: "Internal error: Transcript loading service unavailable."});
+            if (transcriptPathToLoad) {
+                const transcriptInfoToLoad = newlySelectedMedia.associated_transcripts.find(t => t.path === transcriptPathToLoad);
+                const relativePathToLoad = transcriptInfoToLoad?.relativePath;
+
+                if (relativePathToLoad) {
+                    const allFiles = get(projectMainStore).files;
+                    let transcriptNodeToLoad = null;
+
+                    function findTranscriptNodeByRelativePath(nodes, relPath) {
+                         if (!Array.isArray(nodes)) return null;
+                        for (const node of nodes) {
+                            if (node.file_type === 'transcript' && node.relative_path === relPath) {
+                                return node;
+                            }
+                            if (node.children && node.children.length > 0) {
+                                const found = findTranscriptNodeByRelativePath(node.children, relPath);
+                                if (found) return found;
+                            }
                         }
-                    }).catch(err => {
-                        console.error("[TranscriptStore] Failed import projectService for transcript load:", err); // ERROR
-                        transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
-                        updateProjectStoreState({ error: "Internal error: Failed to import project service."});
-                    });
+                        return null;
+                    }
+                    transcriptNodeToLoad = findTranscriptNodeByRelativePath(allFiles, relativePathToLoad);
+
+                    if (transcriptNodeToLoad && transcriptNodeToLoad.path) {
+                        transcriptStore.update(ts => ({ ...ts, currentTranscriptPath: transcriptNodeToLoad.path, isTranscriptLoading: true }));
+                        import('../services/projectService.js').then(service => {
+                            if (typeof service.loadTranscriptFile === 'function') {
+                                service.loadTranscriptFile(transcriptNodeToLoad.path)
+                                    .catch(error => {
+                                        console.error(`[TranscriptStore] Auto-load default transcript failed:`, error);
+                                        transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
+                                        updateProjectStoreState({ error: `Failed to load default transcript: ${error.message || error}`});
+                                    });
+                            } else {
+                                console.error("[TranscriptStore] loadTranscriptFile function not found in service.");
+                                transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
+                                updateProjectStoreState({ error: "Internal error: Transcript loading service unavailable."});
+                            }
+                        }).catch(err => {
+                            console.error("[TranscriptStore] Failed import projectService for transcript load:", err);
+                            transcriptStore.update(ts => ({...ts, isTranscriptLoading: false}));
+                            updateProjectStoreState({ error: "Internal error: Failed to import project service."});
+                        });
+                    } else {
+                        console.warn(`[TranscriptStore selectMedia] Could not find FileEntry node for default transcript relative path: ${relativePathToLoad}`);
+                    }
                 } else {
-                    console.warn(`[TranscriptStore selectMedia] Could not find FileEntry node for first transcript relative path: ${firstTranscriptRelativePath}`); // WARN
+                     console.warn(`[TranscriptStore selectMedia] Default transcript to load (${transcriptPathToLoad}) does not have a relativePath or was not found in associated_transcripts.`);
                 }
             } else {
-                console.warn(`[TranscriptStore selectMedia] First associated transcript entry exists but lacks a valid 'relativePath' property. Entry:`, firstTranscriptInfo); // WARN
+                console.log('[TranscriptStore selectMedia] No associated transcripts found or no path to load for the selected media.');
             }
         }
     }
@@ -447,6 +482,42 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             if (!path) finalSegmentsForDisplay = []; // Explicitly clear if path is null
         }
 
+        let newTranscribedOriginalLangCode = ts.transcribedOriginalLanguageCode; // Default to existing
+        let newWasTranslated = ts.wasTranslatedToEnglish; // Default to existing
+
+        if (path && (path === updatedOriginalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) { // Logic for identifying original transcript
+            if (ts.languageUsedForJob) { // If it's immediately after a job
+                newTranscribedOriginalLangCode = ts.languageUsedForJob;
+            } else if (!ts.transcribedOriginalLanguageCode && path) {
+                // Only default to 'auto' if no code is currently set and we are loading an original transcript.
+                // This prevents overwriting a good code with 'auto' on subsequent loads.
+                newTranscribedOriginalLangCode = 'auto';
+            }
+            // If ts.languageUsedForJob is null AND ts.transcribedOriginalLanguageCode already has a specific value,
+            // we keep the existing ts.transcribedOriginalLanguageCode (already handled by initialization).
+
+            // If we are explicitly loading/re-loading the original, and there's no English path set at all,
+            // then it means no translation exists for this.
+            if (!ts.englishTranscriptPath) {
+                newWasTranslated = false;
+            }
+            // Otherwise, if an englishTranscriptPath *does* exist, retain the current newWasTranslated status
+            // (which would have been set when the English transcript itself was loaded or by initialization).
+
+        } else if (path && (path === updatedEnglishTranscriptPath || path.endsWith('.en.json'))) { // Logic for identifying English transcript
+            if (newSegments && newSegments.length > 0) {
+                newWasTranslated = true;
+            } else {
+                // If loading an empty English transcript, wasTranslated might be true, but effectively no english content.
+                // Or, it could mean the English path exists but content is empty.
+                // For button logic, englishSegments.length > 0 is also checked, so this is okay.
+                newWasTranslated = true; // Path exists, so translation was attempted/exists.
+            }
+        } else if (!path) { // Clearing data
+            newTranscribedOriginalLangCode = null;
+            newWasTranslated = false;
+        }
+
         return {
             ...ts, // Spread the initial state of ts for this update cycle
             currentTranscriptPath: path,
@@ -462,6 +533,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            // transcribedOriginalLanguageCode: newTranscribedOriginalLangCode, // REMOVED
+            // wasTranslatedToEnglish: newWasTranslated, // REMOVED
         };
         // END: MODIFIED
     });
@@ -820,9 +893,11 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
                 transcriptionErrorMessage: null, // Clear previous errors when starting/initiating
                 ranInBackground: false, // Reset this flag
                 showTranscribeModal: true, // Ensure modal remains open while transcribing or initiating
+                // languageUsedForJob: ts.selectedLanguage, // REMOVED
             };
         } else {
             // This branch is for when isTranscribing is explicitly false (e.g. job finished, error, cancelled by event)
+            // languageUsedForJob was reset by the custom_transcription_job_completed listener for terminal states
             updatedState = {
                 ...ts,
                 isTranscribing: false,
@@ -1174,22 +1249,40 @@ listen('custom_transcription_job_completed', async (event) => {
             // clearTranscriptionStatus('Transcription complete.'); // Removed
             // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'done', transcriptionErrorMessage: null }));
+
+            // The ...updates object should be applied in the final store update for 'done'
+            // setTranscriptData handles transcribedOriginalLanguageCode and wasTranslatedToEnglish
+            transcriptStore.update(ts => ({
+                ...ts,
+                ...updates, // Apply path updates
+                isTranscribing: false,
+                transcriptionJobStatus: 'done',
+                transcriptionErrorMessage: null,
+                // languageUsedForJob: null, // REMOVED - Field is being removed
+            }));
 
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
             updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
-            // clearTranscriptionStatus(`Transcription failed: ${errorMessage}`, errorMessage); // Removed
-            // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'error'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'error', transcriptionErrorMessage: errorMessage }));
+            transcriptStore.update(ts => ({
+                ...ts,
+                isTranscribing: false,
+                transcriptionJobStatus: 'error',
+                transcriptionErrorMessage: errorMessage,
+                // languageUsedForJob: null, // REMOVED
+            }));
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
             updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
-            // clearTranscriptionStatus('Transcription cancelled.'); // Removed
-            // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'cancelled'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({ ...ts, isTranscribing: false, transcriptionJobStatus: 'cancelled', transcriptionErrorMessage: null }));
+            transcriptStore.update(ts => ({
+                ...ts,
+                isTranscribing: false,
+                transcriptionJobStatus: 'cancelled',
+                transcriptionErrorMessage: null,
+                // languageUsedForJob: null, // REMOVED
+            }));
         }
     } else {
          console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
