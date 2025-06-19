@@ -188,12 +188,28 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
               if (node.file_type === 'media' && node.transcripts) {
-                node.transcripts = node.transcripts.map(t => ({
-                  path: loadedData.base_directory
-                    ? `${loadedData.base_directory}/${t.relativePath}`
-                    : t.relativePath,
-                  relativePath: t.relativePath
-                }));
+                node.transcripts = node.transcripts.map(t => {
+                    let absolutePath = null;
+                    if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
+                        t.relativePath && typeof t.relativePath === 'string') {
+                        // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
+                        const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
+                                   ? loadedData.base_directory.slice(0, -1)
+                                   : loadedData.base_directory;
+                        const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
+                                    ? t.relativePath.substring(1)
+                                    : t.relativePath;
+                        absolutePath = `${base}/${rel}`;
+                    } else {
+                        // If base_directory or relativePath is missing, we can't form a full path.
+                        // Log this, as it indicates an issue with the data from the backend or project structure.
+                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                    }
+                    return {
+                        path: absolutePath, // This will be null if construction failed
+                        relativePath: t.relativePath // Always preserve the original relativePath
+                    };
+                });
               }
               if (Array.isArray(node.children)) {
                 attachTranscripts(node.children);
@@ -286,12 +302,28 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
               if (node.file_type === 'media' && node.transcripts) {
-                node.transcripts = node.transcripts.map(t => ({
-                  path: loadedData.base_directory
-                    ? `${loadedData.base_directory}/${t.relativePath}`
-                    : t.relativePath,
-                  relativePath: t.relativePath
-                }));
+                 node.transcripts = node.transcripts.map(t => {
+                    let absolutePath = null;
+                    if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
+                        t.relativePath && typeof t.relativePath === 'string') {
+                        // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
+                        const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
+                                   ? loadedData.base_directory.slice(0, -1)
+                                   : loadedData.base_directory;
+                        const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
+                                    ? t.relativePath.substring(1)
+                                    : t.relativePath;
+                        absolutePath = `${base}/${rel}`;
+                    } else {
+                        // If base_directory or relativePath is missing, we can't form a full path.
+                        // Log this, as it indicates an issue with the data from the backend or project structure.
+                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                    }
+                    return {
+                        path: absolutePath, // This will be null if construction failed
+                        relativePath: t.relativePath // Always preserve the original relativePath
+                    };
+                });
               }
               if (Array.isArray(node.children)) {
                 attachTranscripts(node.children);
