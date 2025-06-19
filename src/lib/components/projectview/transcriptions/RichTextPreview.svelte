@@ -58,17 +58,20 @@
     $: {
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
             // Create promises to get basenames for all associated transcripts
-            const basenamePromises = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(async t => ({
+            const basenamePromises = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(async (t, index) => ({
                 path: t.path,
-                name: t.path ? await basename(t.path) : "Unknown Transcript"
+                name: t.path ? await basename(t.path) : "Unknown Transcript",
+                unique_render_key: t.path || `transcript-index-${index}` // Ensure unique key
             }));
             Promise.all(basenamePromises).then(results => {
                 associatedTranscriptsForDropdown = results;
             }).catch(error => {
                 console.error("Error getting basenames for dropdown:", error);
-                associatedTranscriptsForDropdown = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(t => ({
+                // Fallback if basename promise fails, still ensuring unique_render_key
+                associatedTranscriptsForDropdown = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map((t, index) => ({
                     path: t.path,
-                    name: t.path ? t.path.split(/[\/]/).pop() : "Unknown Transcript" // Fallback if basename promise fails
+                    name: t.path ? t.path.split(/[\/]/).pop() : "Unknown Transcript",
+                    unique_render_key: t.path || `transcript-index-${index}` // Ensure unique key
                 }));
             });
         } else {
@@ -375,10 +378,10 @@
                 {#if showTranscriptDropdown}
                     <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
                         <div class="py-1" role="none">
-                            {#each associatedTranscriptsForDropdown as transcript (transcript.path)}
+                            {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
                                 <button
                                     on:click={() => {
-                                        dispatch('transcriptselected', transcript.path); // Will be handled in next step
+                                        dispatch('transcriptselected', transcript.path);
                                         showTranscriptDropdown = false;
                                     }}
                                     class="block w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
