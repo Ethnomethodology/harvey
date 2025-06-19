@@ -57,22 +57,57 @@
     let associatedTranscriptsForDropdown = [];
     $: {
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
-            // Create promises to get basenames for all associated transcripts
-            const basenamePromises = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(async (t, index) => ({
-                path: t.path,
-                name: t.path ? await basename(t.path) : "Unknown Transcript",
-                unique_render_key: t.path || `transcript-index-${index}` // Ensure unique key
-            }));
+            const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
+            console.log('[RichTextPreview] Associated transcripts for dropdown:', JSON.stringify(associated.slice(0, 2))); // Log first few items
+
+            const basenamePromises = associated.map(async (t, index) => {
+                let name = "Unknown Transcript";
+                let uniqueKeyPath = t.path; // Prefer path for key if available
+
+                if (t.path) {
+                    try {
+                        name = await basename(t.path);
+                    } catch (e) {
+                        console.warn(`Basename failed for path ${t.path}, trying relativePath:`, e);
+                        if (t.relativePath) {
+                            name = t.relativePath.split(/[\/]/).pop(); // Extract filename from relativePath
+                        }
+                    }
+                } else if (t.relativePath) {
+                    console.warn(`Path missing for transcript, using relativePath for name: ${t.relativePath}`);
+                    name = t.relativePath.split(/[\/]/).pop();
+                    uniqueKeyPath = t.relativePath; // Use relativePath for key if path is missing
+                } else {
+                    console.warn('Transcript item has no path or relativePath:', t);
+                }
+
+                return {
+                    path: t.path, // Keep original path for selection logic
+                    name: name,
+                    unique_render_key: uniqueKeyPath || `transcript-index-${index}` // Ensure unique key
+                };
+            });
+
             Promise.all(basenamePromises).then(results => {
                 associatedTranscriptsForDropdown = results;
             }).catch(error => {
-                console.error("Error getting basenames for dropdown:", error);
-                // Fallback if basename promise fails, still ensuring unique_render_key
-                associatedTranscriptsForDropdown = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map((t, index) => ({
-                    path: t.path,
-                    name: t.path ? t.path.split(/[\/]/).pop() : "Unknown Transcript",
-                    unique_render_key: t.path || `transcript-index-${index}` // Ensure unique key
-                }));
+                console.error("Error processing basenames for dropdown:", error);
+                // Fallback if Promise.all itself fails (e.g., unexpected error in map)
+                associatedTranscriptsForDropdown = associated.map((t, index) => {
+                    let fallbackName = "Unknown Transcript";
+                    let keyPath = t.path;
+                    if (t.path) {
+                        fallbackName = t.path.split(/[\/]/).pop();
+                    } else if (t.relativePath) {
+                        fallbackName = t.relativePath.split(/[\/]/).pop();
+                        keyPath = t.relativePath;
+                    }
+                    return {
+                        path: t.path,
+                        name: fallbackName,
+                        unique_render_key: keyPath || `transcript-index-${index}`
+                    };
+                });
             });
         } else {
             associatedTranscriptsForDropdown = [];
