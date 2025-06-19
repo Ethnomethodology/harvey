@@ -116,6 +116,26 @@
         }
     }
 
+    let filteredAssociatedTranscripts = [];
+    $: {
+        if (associatedTranscriptsForDropdown && associatedTranscriptsForDropdown.length > 0 && $transcriptStore.currentTranscriptPath) {
+            const currentPath = $transcriptStore.currentTranscriptPath;
+            const baseDir = get(project).baseDirectory;
+            filteredAssociatedTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
+                let itemPath = transcript.path;
+                if (!itemPath && transcript.relativePath && baseDir) {
+                    itemPath = `${baseDir}/${transcript.relativePath}`;
+                }
+                return itemPath !== currentPath;
+            });
+        } else {
+            // If no current path or no associated transcripts, the list is either empty or all items are shown (if nothing is "current")
+            // However, the #each loop implies we always want to filter against a potentially current path.
+            // If currentTranscriptPath is null, nothing should be filtered out based on it.
+             filteredAssociatedTranscripts = associatedTranscriptsForDropdown || [];
+        }
+    }
+
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
 
@@ -415,12 +435,7 @@
                 {#if showTranscriptDropdown}
                     <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
                         <div class="py-1" role="none">
-                            {@const filteredTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
-                                const itemPath = transcript.path || (get(project).baseDirectory ? `${get(project).baseDirectory}/${transcript.relativePath}` : null);
-                                return itemPath !== $transcriptStore.currentTranscriptPath;
-                            })}
-
-                            {#each filteredTranscripts as transcript (transcript.unique_render_key)}
+                            {#each filteredAssociatedTranscripts as transcript (transcript.unique_render_key)}
                                 <button
                                     on:click={() => {
                                         let pathForDispatch = transcript.path;
@@ -444,12 +459,7 @@
                                     <span class="truncate">{transcript.name}</span>
                                 </button>
                             {:else}
-                                {#if associatedTranscriptsForDropdown.length > 0}
-                                     <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No other transcripts to select.</span>
-                                {:else}
-                                     <!-- This case should ideally be caught by the outer #if that checks associatedTranscriptsForDropdown.length -->
-                                     <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No transcripts found.</span>
-                                {/if}
+                                <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No other transcripts to select.</span>
                             {/each}
                         </div>
                     </div>
