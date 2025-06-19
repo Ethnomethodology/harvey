@@ -58,11 +58,12 @@
     $: {
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
             const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
-            console.log('[RichTextPreview] Associated transcripts for dropdown:', JSON.stringify(associated.slice(0, 2))); // Log first few items
+            // console.log('[RichTextPreview] Associated transcripts for dropdown:', JSON.stringify(associated.slice(0, 2))); // Keep for debugging if needed
 
             const basenamePromises = associated.map(async (t, index) => {
                 let name = "Unknown Transcript";
-                let uniqueKeyPath = t.path; // Prefer path for key if available
+                let displayPath = t.path; // Path used for display name generation, prefer absolute
+                let relativePathValue = t.relativePath; // Store relativePath
 
                 if (t.path) {
                     try {
@@ -71,20 +72,22 @@
                         console.warn(`Basename failed for path ${t.path}, trying relativePath:`, e);
                         if (t.relativePath) {
                             name = t.relativePath.split(/[\/]/).pop(); // Extract filename from relativePath
+                            displayPath = t.relativePath; // Use relative for display name if absolute failed
                         }
                     }
                 } else if (t.relativePath) {
                     console.warn(`Path missing for transcript, using relativePath for name: ${t.relativePath}`);
                     name = t.relativePath.split(/[\/]/).pop();
-                    uniqueKeyPath = t.relativePath; // Use relativePath for key if path is missing
+                    displayPath = t.relativePath; // Use relative for display name
                 } else {
                     console.warn('Transcript item has no path or relativePath:', t);
                 }
 
                 return {
-                    path: t.path, // Keep original path for selection logic
+                    path: t.path, // Keep original absolute path (might be null)
+                    relativePath: relativePathValue, // Store relative path
                     name: name,
-                    unique_render_key: uniqueKeyPath || `transcript-index-${index}` // Ensure unique key
+                    unique_render_key: t.path || t.relativePath || `transcript-index-${index}` // Ensure unique key
                 };
             });
 
@@ -92,18 +95,17 @@
                 associatedTranscriptsForDropdown = results;
             }).catch(error => {
                 console.error("Error processing basenames for dropdown:", error);
-                // Fallback if Promise.all itself fails (e.g., unexpected error in map)
                 associatedTranscriptsForDropdown = associated.map((t, index) => {
                     let fallbackName = "Unknown Transcript";
-                    let keyPath = t.path;
+                    let keyPath = t.path || t.relativePath;
                     if (t.path) {
                         fallbackName = t.path.split(/[\/]/).pop();
                     } else if (t.relativePath) {
                         fallbackName = t.relativePath.split(/[\/]/).pop();
-                        keyPath = t.relativePath;
                     }
                     return {
                         path: t.path,
+                        relativePath: t.relativePath,
                         name: fallbackName,
                         unique_render_key: keyPath || `transcript-index-${index}`
                     };
@@ -413,22 +415,41 @@
                 {#if showTranscriptDropdown}
                     <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
                         <div class="py-1" role="none">
-                            {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
+                            {@const filteredTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
+                                const itemPath = transcript.path || (get(project).baseDirectory ? `${get(project).baseDirectory}/${transcript.relativePath}` : null);
+                                return itemPath !== $transcriptStore.currentTranscriptPath;
+                            })}
+
+                            {#each filteredTranscripts as transcript (transcript.unique_render_key)}
                                 <button
                                     on:click={() => {
-                                        dispatch('transcriptselected', transcript.path);
+                                        let pathForDispatch = transcript.path;
+                                        if (!pathForDispatch && transcript.relativePath) {
+                                            const baseDir = get(project).baseDirectory;
+                                            if (baseDir) {
+                                                pathForDispatch = `${baseDir}/${transcript.relativePath}`;
+                                            }
+                                        }
+                                        if (pathForDispatch) {
+                                            dispatch('transcriptselected', pathForDispatch);
+                                        } else {
+                                            console.error('[RichTextPreview] No valid path to dispatch for transcript:', transcript);
+                                        }
                                         showTranscriptDropdown = false;
                                     }}
                                     class="block w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                                    class:bg-indigo-100={$transcriptStore.currentTranscriptPath === transcript.path}
-                                    class:dark:bg-indigo-700={$transcriptStore.currentTranscriptPath === transcript.path}
                                     role="menuitem"
-                                    title={transcript.path}
+                                    title={transcript.path || transcript.relativePath}
                                 >
                                     <span class="truncate">{transcript.name}</span>
                                 </button>
                             {:else}
-                                <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No transcripts found.</span>
+                                {#if associatedTranscriptsForDropdown.length > 0}
+                                     <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No other transcripts to select.</span>
+                                {:else}
+                                     <!-- This case should ideally be caught by the outer #if that checks associatedTranscriptsForDropdown.length -->
+                                     <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No transcripts found.</span>
+                                {/if}
                             {/each}
                         </div>
                     </div>
