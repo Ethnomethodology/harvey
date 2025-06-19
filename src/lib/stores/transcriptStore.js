@@ -456,6 +456,42 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             if (!path) finalSegmentsForDisplay = []; // Explicitly clear if path is null
         }
 
+        let newTranscribedOriginalLangCode = ts.transcribedOriginalLanguageCode; // Default to existing
+        let newWasTranslated = ts.wasTranslatedToEnglish; // Default to existing
+
+        if (path && (path === updatedOriginalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) { // Logic for identifying original transcript
+            if (ts.languageUsedForJob) { // If it's immediately after a job
+                newTranscribedOriginalLangCode = ts.languageUsedForJob;
+            } else if (!ts.transcribedOriginalLanguageCode && path) {
+                // Only default to 'auto' if no code is currently set and we are loading an original transcript.
+                // This prevents overwriting a good code with 'auto' on subsequent loads.
+                newTranscribedOriginalLangCode = 'auto';
+            }
+            // If ts.languageUsedForJob is null AND ts.transcribedOriginalLanguageCode already has a specific value,
+            // we keep the existing ts.transcribedOriginalLanguageCode (already handled by initialization).
+
+            // If we are explicitly loading/re-loading the original, and there's no English path set at all,
+            // then it means no translation exists for this.
+            if (!ts.englishTranscriptPath) {
+                newWasTranslated = false;
+            }
+            // Otherwise, if an englishTranscriptPath *does* exist, retain the current newWasTranslated status
+            // (which would have been set when the English transcript itself was loaded or by initialization).
+
+        } else if (path && (path === updatedEnglishTranscriptPath || path.endsWith('.en.json'))) { // Logic for identifying English transcript
+            if (newSegments && newSegments.length > 0) {
+                newWasTranslated = true;
+            } else {
+                // If loading an empty English transcript, wasTranslated might be true, but effectively no english content.
+                // Or, it could mean the English path exists but content is empty.
+                // For button logic, englishSegments.length > 0 is also checked, so this is okay.
+                newWasTranslated = true; // Path exists, so translation was attempted/exists.
+            }
+        } else if (!path) { // Clearing data
+            newTranscribedOriginalLangCode = null;
+            newWasTranslated = false;
+        }
+
         return {
             ...ts, // Spread the initial state of ts for this update cycle
             currentTranscriptPath: path,
@@ -471,6 +507,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
+            transcribedOriginalLanguageCode: newTranscribedOriginalLangCode,
+            wasTranslatedToEnglish: newWasTranslated,
         };
         // END: MODIFIED
     });
@@ -1186,16 +1224,17 @@ listen('custom_transcription_job_completed', async (event) => {
             // toggleTranscribeModal(false); // Removed
             console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
 
-            const langCodeForOriginal = event.payload.language_code_used || currentStore.languageUsedForJob || 'auto';
-            const translationHappened = !!(event.payload.translatedTranscriptFilePath); // Check based on path presence from payload
+            // const langCodeForOriginal = event.payload.language_code_used || currentStore.languageUsedForJob || 'auto'; // Handled by setTranscriptData
+            // const translationHappened = !!(event.payload.translatedTranscriptFilePath); // Handled by setTranscriptData
 
-            updates.transcribedOriginalLanguageCode = langCodeForOriginal;
-            updates.wasTranslatedToEnglish = translationHappened;
+            // updates.transcribedOriginalLanguageCode = langCodeForOriginal; // Handled by setTranscriptData
+            // updates.wasTranslatedToEnglish = translationHappened; // Handled by setTranscriptData
 
             // The ...updates object should be applied in the final store update for 'done'
+            // setTranscriptData will handle transcribedOriginalLanguageCode and wasTranslatedToEnglish
             transcriptStore.update(ts => ({
                 ...ts,
-                ...updates, // Apply path updates and new language/translation flags
+                ...updates, // Apply path updates
                 isTranscribing: false,
                 transcriptionJobStatus: 'done',
                 transcriptionErrorMessage: null,
