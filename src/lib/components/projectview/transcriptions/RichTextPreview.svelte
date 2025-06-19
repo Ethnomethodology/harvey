@@ -347,7 +347,7 @@
                         class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
                         class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original' || !($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0)}
                         class:btn-switch-inactive={($transcriptStore.activeTranscriptLanguage !== 'original' && ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0))}
-                        on:click={() => transcriptStore.update(switchToOriginalTranscript)}
+                        on:click={switchToOriginalTranscript}
                         disabled={!($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0) && $transcriptStore.activeTranscriptLanguage === 'original'}
                     >
                         {originalLanguageName}
@@ -357,7 +357,7 @@
                             class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
                             class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
                             class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
-                            on:click={() => transcriptStore.update(switchToEnglishTranscript)}
+                            on:click={switchToEnglishTranscript}
                         >
                             English
                         </button>
