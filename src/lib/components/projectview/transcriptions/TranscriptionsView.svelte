@@ -11,8 +11,6 @@
         // markTranscriptAsSaved, // Not directly used, saveTranscriptData handles it
         insertTranscriptSegment,
         // updatePlayerCurrentSegmentIndex, // Not directly used
-        switchToOriginalTranscript, // New action
-        switchToEnglishTranscript, // New action
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -260,27 +258,6 @@
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
-            <!-- Transcript Switcher UI -->
-            {#if $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
-                <div class="flex items-center justify-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
-                    <button
-                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original'}
-                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'original'}
-                        on:click={() => transcriptStore.update(switchToOriginalTranscript)}
-                    >
-                        Original Language
-                    </button>
-                    <button
-                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
-                        class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
-                        on:click={() => transcriptStore.update(switchToEnglishTranscript)}
-                    >
-                        English
-                    </button>
-                </div>
-            {/if}
 
             <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer

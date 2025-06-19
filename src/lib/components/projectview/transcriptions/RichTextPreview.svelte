@@ -1,13 +1,27 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
-	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchToOriginalTranscript, switchToEnglishTranscript } from '$lib/stores/transcriptStore.js';
+	import { languageOptions } from './TopBar.svelte';
 	import { createEventDispatcher, tick } from 'svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
     import { onMount } from 'svelte';
+
+    let originalLanguageName = 'Original'; // Default
+    $: {
+        const selectedLangCode = $transcriptStore.selectedLanguage;
+        const langOption = languageOptions.find(option => option.value === selectedLangCode);
+        if (langOption) {
+            originalLanguageName = langOption.label;
+        } else if (selectedLangCode === 'auto') {
+            originalLanguageName = 'Auto Detected'; // Or 'Original Language'
+        } else {
+            originalLanguageName = selectedLangCode ? selectedLangCode.toUpperCase() : 'Original';
+        }
+    }
 
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
@@ -293,8 +307,32 @@
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
-        <div class="flex items-center">
-            <span>Preview</span>
+        <div class="flex items-center"> <!-- This div will be for language toggles -->
+            {#if $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
+                <div class="flex items-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
+                    <button
+                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'original' || !($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0)}
+                        class:btn-switch-inactive={($transcriptStore.activeTranscriptLanguage !== 'original' && ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0))}
+                        on:click={() => transcriptStore.update(switchToOriginalTranscript)}
+                        disabled={!($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0) && $transcriptStore.activeTranscriptLanguage === 'original'}
+                    >
+                        {originalLanguageName}
+                    </button>
+                    {#if $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0}
+                        <button
+                            class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
+                            class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
+                            on:click={() => transcriptStore.update(switchToEnglishTranscript)}
+                        >
+                            English
+                        </button>
+                    {/if}
+                </div>
+            {/if}
+        </div>
+        <div class="flex items-center"> <!-- This new div groups Edit/Undo/Redo and More options -->
             {#if processedSegments.length || previewEditMode}
                 <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" title={previewEditMode ? 'Save Transcript (Ctrl+S)' : 'Edit Transcript (Ctrl+E)'} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
@@ -302,30 +340,30 @@
                   <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-gray-500={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-400={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title="Redo (Ctrl+Y)" aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>
                 {/if}
             {/if}
+            {#if processedSegments.length}
+              <div class="relative inline-block ml-2"> <!-- Added ml-2 for spacing from edit buttons -->
+                <button
+                  on:click={() => showExportMenu = !showExportMenu}
+                  class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                  title="More options"
+                  aria-label="More options"
+                >
+                  {@html MENU_ICON}
+                </button>
+                {#if showExportMenu}
+                  <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
+                  <div class="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
+                    <button
+                      on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
+                      class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                    >
+                      Export to Documents
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
         </div>
-         {#if processedSegments.length}
-           <div class="relative inline-block">
-             <button
-               on:click={() => showExportMenu = !showExportMenu}
-               class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-               title="More options"
-               aria-label="More options"
-             >
-               {@html MENU_ICON}
-             </button>
-             {#if showExportMenu}
-               <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
-               <div class="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
-                 <button
-                   on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
-                   class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
-                 >
-                   Export to Documents
-                 </button>
-               </div>
-             {/if}
-           </div>
-         {/if}
     </h3>
 
     {#if !processedSegments.length}
@@ -428,4 +466,14 @@
     .insert-button-wrapper:last-of-type { margin-bottom: 0.75rem; }
     .overflow-y-auto:hover .insert-button-wrapper, .segment-block:hover + .insert-button-wrapper { opacity: 1; }
     .insert-button-wrapper button > :global(svg) { width: 1rem; height: 1rem; }
+
+    .btn-switch-active {
+        @apply bg-blue-500 text-white shadow-sm;
+    }
+    .dark .btn-switch-active {
+        @apply bg-blue-600 text-white;
+    }
+    .btn-switch-inactive {
+        @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+    }
 </style>
