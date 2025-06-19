@@ -1,24 +1,13 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
-	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js'; // Removed switchToOriginalTranscript, switchToEnglishTranscript
-	// import { languageOptions } from './TopBar.svelte'; // Removed import
-	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte'; // Added onMount, onDestroy
+	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
+	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
-    // import { onMount } from 'svelte'; // Already imported via named import
-
-    // Copied languageOptions array // REMOVED
-    // const languageOptions = [ ... ]; // REMOVED
-
-    // let originalLanguageName = 'Original'; // Default // REMOVED
-    // $: { ... } // REMOVED
-
-    // let actualOriginalLanguageLabel = 'Original'; // Default // REMOVED
-    // $: { ... } // REMOVED
 
     let showTranscriptDropdown = false;
     let transcriptDropdownButtonRef;
@@ -58,12 +47,10 @@
     $: {
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
             const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
-            // console.log('[RichTextPreview] Associated transcripts for dropdown:', JSON.stringify(associated.slice(0, 2))); // Keep for debugging if needed
 
             const basenamePromises = associated.map(async (t, index) => {
                 let name = "Unknown Transcript";
-                let displayPath = t.path; // Path used for display name generation, prefer absolute
-                let relativePathValue = t.relativePath; // Store relativePath
+                let relativePathValue = t.relativePath;
 
                 if (t.path) {
                     try {
@@ -71,23 +58,21 @@
                     } catch (e) {
                         console.warn(`Basename failed for path ${t.path}, trying relativePath:`, e);
                         if (t.relativePath) {
-                            name = t.relativePath.split(/[\/]/).pop(); // Extract filename from relativePath
-                            displayPath = t.relativePath; // Use relative for display name if absolute failed
+                            name = t.relativePath.split(/[\/]/).pop();
                         }
                     }
                 } else if (t.relativePath) {
                     console.warn(`Path missing for transcript, using relativePath for name: ${t.relativePath}`);
                     name = t.relativePath.split(/[\/]/).pop();
-                    displayPath = t.relativePath; // Use relative for display name
                 } else {
                     console.warn('Transcript item has no path or relativePath:', t);
                 }
 
                 return {
-                    path: t.path, // Keep original absolute path (might be null)
-                    relativePath: relativePathValue, // Store relative path
+                    path: t.path,
+                    relativePath: relativePathValue,
                     name: name,
-                    unique_render_key: t.path || t.relativePath || `transcript-index-${index}` // Ensure unique key
+                    unique_render_key: t.path || t.relativePath || `transcript-index-${index}`
                 };
             });
 
@@ -129,9 +114,6 @@
                 return itemPath !== currentPath;
             });
         } else {
-            // If no current path or no associated transcripts, the list is either empty or all items are shown (if nothing is "current")
-            // However, the #each loop implies we always want to filter against a potentially current path.
-            // If currentTranscriptPath is null, nothing should be filtered out based on it.
              filteredAssociatedTranscripts = associatedTranscriptsForDropdown || [];
         }
     }
@@ -246,8 +228,6 @@
                     console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.');
                 } catch (defaultNodeErr) {
                     console.error('[RichTextPreview] Error creating default paragraph node:', defaultNodeErr);
-                    // If even creating a default node fails, the HTML might end up empty or malformed.
-                    // This situation should be rare if lexicalParseSerializedNode and basic paragraph structure are sound.
                 }
             }
 
@@ -255,13 +235,12 @@
             html = generateHtmlFromNodes(htmlEditor, null);
           }, { discrete: true });
         } else {
-          // Fallback for invalid structure, though isLexicalJson should catch most.
           console.warn('[RichTextPreview] lexicalJsonToHtml: parsedJson or parsedJson.root.children is invalid. Rendering empty.', parsedJson);
-          html = ''; // Or some default error HTML
+          html = '';
         }
       } catch (e) {
         console.error('[RichTextPreview] lexicalJsonToHtml: Error processing JSON string. jsonStr:', jsonStr.substring(0, 500), 'Error:', e);
-        html = '<!-- error rendering segment content -->'; // Fallback HTML
+        html = '<!-- error rendering segment content -->';
       }
       return html;
     }
@@ -282,7 +261,7 @@
 		const totalMs = Math.round(seconds * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalS = Math.floor(totalMs / 1000); const sec = String(totalS % 60).padStart(2, '0'); const min = String(Math.floor(totalS / 60)).padStart(2, '0');
 		return `${min}:${sec}.${ms}`;
 	}
-	// isLexicalJson replaced above
+
 	function extractPlainTextForPreview(inputString) { if (!inputString || typeof inputString !== 'string') return '[empty]'; if (isLexicalJson(inputString)) { console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string, rendering placeholder."); return '[Error: Invalid data format - Expected plain text or HTML]'; } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) { return doc.body.textContent || '[empty]'; } return doc.body.textContent || inputString || '[empty]'; } catch (e) { console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e); return inputString || '[empty]'; } }
 
 	/* ---------------- build segment data for rendering ---------------- */
@@ -295,11 +274,9 @@
 	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
 	  processedSegments = segs.map((seg, segIdx) => {
 	    const rawContent = seg.text;
-	    // --- Begin: detect and wrap bare node JSON if needed ---
 	    let contentForParsing = rawContent;
 	    try {
 	      const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-	      // If the JSON is a single node with children but no root, wrap it
 	      if (parsed && !parsed.root && Array.isArray(parsed.children)) {
 	        contentForParsing = JSON.stringify({
 	          root: {
@@ -313,14 +290,12 @@
 	        });
 	      }
 	    } catch (e) {
-	      // Not valid JSON or other error: leave contentForParsing as rawContent
+	      // Not valid JSON
 	    }
-	    // --- End: detect and wrap bare node JSON if needed ---
 	    const isJson = isLexicalJson(contentForParsing);
 	    let plainTextForDisplay = '';
 	    let contentJsonForEditor = defaultEmptyJson;
 	    if (isJson) {
-	      // ensure we always pass a string to the editor
 	      contentJsonForEditor =
 	        typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
 	    } else {
@@ -352,7 +327,6 @@
 	function handleSegmentClick(idx) { if (!previewEditMode) { dispatch('segmentclick', idx); } else { console.log(`[RichTextPreview] Click on segment ${idx} ignored (preview edit mode active).`); } }
 	function handleToggleEdit() { dispatch('toggleedit'); }
 
-    // --- MODIFIED ---
 	async function handleAddToDocumentsClick() {
 		const confirmationMessage = `This will create a copy of the current transcript as a new document.\n\nThis document will not sync with the media player.`;
 		const userConfirmed = await confirm(confirmationMessage, {
@@ -365,18 +339,11 @@
 		if (userConfirmed) {
 			console.log("[RichTextPreview] User confirmed adding to Documents. Converting and saving...");
 			try {
-                // Call service function
 				const newDocPath = await convertAndSaveTranscriptAsDoc();
 				if (newDocPath) {
 					console.log(`[RichTextPreview] Document saved successfully: ${newDocPath}.`);
 					await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
-
-                    // --- MODIFICATION: Remove direct call to prepareDocumentView ---
-					// prepareDocumentView(newDocPath); // REMOVED
-
-					// --- MODIFICATION: Dispatch event with the new path ---
-					dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath }); // ADDED loadNotePath
-
+					dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
 				} else {
 					 console.error("[RichTextPreview] Document saving process did not return a path.");
                      await message("Failed to create document file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
@@ -390,7 +357,6 @@
 			console.log("[RichTextPreview] User cancelled adding to Documents.");
 		}
 	}
-    // --- END MODIFIED ---
 
     async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = processedSegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
@@ -420,7 +386,8 @@
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
-        <div class="flex items-center"> <!-- Existing placeholder div -->
+        <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
+            <!-- Transcript Dropdown HTML -->
             {#if $transcriptStore.selectedMediaFile && associatedTranscriptsForDropdown.length > 0}
             <div class="relative inline-block text-left">
                 <div>
@@ -435,6 +402,10 @@
                 {#if showTranscriptDropdown}
                     <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
                         <div class="py-1" role="none">
+                            <!-- {@const filteredTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
+                                const itemPath = transcript.path || (get(project).baseDirectory ? `${get(project).baseDirectory}/${transcript.relativePath}` : null);
+                                return itemPath !== $transcriptStore.currentTranscriptPath;
+                            })} -->
                             {#each filteredAssociatedTranscripts as transcript (transcript.unique_render_key)}
                                 <button
                                     on:click={() => {
@@ -470,8 +441,8 @@
         {:else}
             <!-- Optionally, show nothing or "No Media Selected" if no media is selected -->
         {/if}
-        </div>
-        <div class="flex items-center"> <!-- This new div groups Edit/Undo/Redo and More options -->
+
+            <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
             {#if processedSegments.length || previewEditMode}
                 <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" title={previewEditMode ? 'Save Transcript (Ctrl+S)' : 'Edit Transcript (Ctrl+E)'} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
@@ -479,8 +450,12 @@
                   <button class="btn-icon ml-2" class:text-gray-400={!canRedo} class:dark:text-gray-500={!canRedo} class:text-gray-600={canRedo} class:hover:text-gray-800={canRedo} class:dark:text-gray-400={canRedo} class:dark:hover:text-gray-200={canRedo} on:click={handleRedo} title="Redo (Ctrl+Y)" aria-label="Redo Transcript Change" disabled={!canRedo}> {@html REDO_ICON} </button>
                 {/if}
             {/if}
+            <!-- Edit/Save/Undo/Redo buttons HTML block ends here -->
+        </div>
+
+        <div class="flex items-center"> <!-- This div now only effectively holds the "More options" menu -->
             {#if processedSegments.length}
-              <div class="relative inline-block ml-2"> <!-- Added ml-2 for spacing from edit buttons -->
+              <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
                   class="btn-icon text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
