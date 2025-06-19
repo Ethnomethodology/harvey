@@ -3,6 +3,7 @@ import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { message } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event'; // Added missing import for listen
+import { notificationStore } from '$lib/stores/notificationStore.js';
 // Import projectStore to access project-level details.
 // This creates a partial cyclic dependency that we might want to resolve later
 // by passing necessary values as arguments or through a service.
@@ -1182,52 +1183,53 @@ listen('media_renamed', (event) => {
 listen('custom_transcription_job_completed', async (event) => {
     if (!event.payload) return;
     const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
-    const currentStore = get(transcriptStore);
+    const currentStore = get(transcriptStore); // Get store state *before* updates
 
     // Only process if the completed job was for the currently selected media
     if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
+        const showToast = currentStore.ranInBackground || !currentStore.showTranscribeModal;
+
         if (status === 'done') {
-            console.log('[TranscriptStore] Received custom_transcription_job_completed:', event.payload);
+            console.log('[TranscriptStore] Received custom_transcription_job_completed (done):', event.payload);
+            if (showToast) {
+                notificationStore.add("Transcription successful", "success", 0);
+            }
+
             let activePathToLoad = null;
             let newOriginalPath = currentStore.originalTranscriptPath;
             let newEnglishPath = currentStore.englishTranscriptPath;
-
-            // Update store with new paths first, so they are available for loadTranscriptFile
             const updates = {};
+
             if (transcriptFilePath) {
                 updates.originalTranscriptPath = transcriptFilePath;
-                newOriginalPath = transcriptFilePath; // for local var use
-                // If current active lang is original, or if it's original and no translation will exist, this is the one to load.
+                newOriginalPath = transcriptFilePath;
                 if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
                     activePathToLoad = transcriptFilePath;
                 }
             }
             if (translatedTranscriptFilePath) {
                 updates.englishTranscriptPath = translatedTranscriptFilePath;
-                newEnglishPath = translatedTranscriptFilePath; // for local var use
-                // If current active lang is English, this is the one to load.
+                newEnglishPath = translatedTranscriptFilePath;
                 if (currentStore.activeTranscriptLanguage === 'english') {
                     activePathToLoad = translatedTranscriptFilePath;
                 }
             }
-            // If no specific active path was determined (e.g. active lang was english, but only original came back),
-            // default to loading the original if it exists.
             if (!activePathToLoad && newOriginalPath) {
                 activePathToLoad = newOriginalPath;
             }
 
-            transcriptStore.update(ts => ({ ...ts, ...updates }));
+            // Update paths in store before loading
+            if (Object.keys(updates).length > 0) {
+                transcriptStore.update(ts => ({ ...ts, ...updates }));
+            }
 
             if (activePathToLoad) {
                 try {
                     const service = await import('../services/projectService.js');
                     if (service.loadTranscriptFile) {
-                        console.log(`[TranscriptStore] Loading transcript after job completion: ${activePathToLoad}`);
                         await service.loadTranscriptFile(activePathToLoad);
-                        // setTranscriptData called by loadTranscriptFile should now correctly populate
-                        // originalSegments/englishSegments based on the path.
                     } else {
-                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
+                        console.error('[TranscriptStore] loadTranscriptFile function not found.');
                         updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
                     }
                 } catch (e) {
@@ -1236,52 +1238,54 @@ listen('custom_transcription_job_completed', async (event) => {
                 }
             }
 
-            // Refresh project files to update UI elements like LeftPanel about new transcript files
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
-                   console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
                 }
             } catch (e) {
-                console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
+                console.error('[TranscriptStore] Error refreshing project files:', e);
             }
-            // clearTranscriptionStatus('Transcription complete.'); // Removed
-            // toggleTranscribeModal(false); // Removed
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
 
-            // The ...updates object should be applied in the final store update for 'done'
-            // setTranscriptData handles transcribedOriginalLanguageCode and wasTranslatedToEnglish
             transcriptStore.update(ts => ({
                 ...ts,
-                ...updates, // Apply path updates
+                // ...updates, // Paths already updated
                 isTranscribing: false,
                 transcriptionJobStatus: 'done',
                 transcriptionErrorMessage: null,
-                // languageUsedForJob: null, // REMOVED - Field is being removed
+                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
             }));
 
         } else if (status === 'error') {
             console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
-            updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'error'. Payload:`, event.payload);
+            if (showToast) {
+                notificationStore.add(`Transcription failed: ${errorMessage}`, "error", 0);
+            }
+            // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
+            if (!showToast) updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
+
             transcriptStore.update(ts => ({
                 ...ts,
                 isTranscribing: false,
                 transcriptionJobStatus: 'error',
                 transcriptionErrorMessage: errorMessage,
-                // languageUsedForJob: null, // REMOVED
+                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
             }));
+
         } else if (status === 'cancelled') {
             console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
-            updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'cancelled'. Payload:`, event.payload);
+            if (showToast) {
+                notificationStore.add("Transcription cancelled", "info", 0);
+            }
+            // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
+            if (!showToast) updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
+
             transcriptStore.update(ts => ({
                 ...ts,
                 isTranscribing: false,
                 transcriptionJobStatus: 'cancelled',
                 transcriptionErrorMessage: null,
-                // languageUsedForJob: null, // REMOVED
+                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
             }));
         }
     } else {
