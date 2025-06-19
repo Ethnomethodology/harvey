@@ -1,77 +1,78 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
-	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchToOriginalTranscript, switchToEnglishTranscript } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js'; // Removed switchToOriginalTranscript, switchToEnglishTranscript
 	// import { languageOptions } from './TopBar.svelte'; // Removed import
-	import { createEventDispatcher, tick } from 'svelte';
+	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte'; // Added onMount, onDestroy
+	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
-    import { onMount } from 'svelte';
+    // import { onMount } from 'svelte'; // Already imported via named import
 
-    // Copied languageOptions array
-    const languageOptions = [
-        { value: 'auto', label: 'Auto Detect' }, { value: 'af', label: 'Afrikaans' },
-        { value: 'ar', label: 'Arabic' }, { value: 'hy', label: 'Armenian' },
-        { value: 'az', label: 'Azerbaijani' }, { value: 'be', label: 'Belarusian' },
-        { value: 'bs', label: 'Bosnian' }, { value: 'bg', label: 'Bulgarian' },
-        { value: 'ca', label: 'Catalan' }, { value: 'zh', label: 'Chinese' },
-        { value: 'hr', label: 'Croatian' }, { value: 'cs', label: 'Czech' },
-        { value: 'da', label: 'Danish' }, { value: 'nl', label: 'Dutch' },
-        { value: 'en', label: 'English' }, { value: 'et', label: 'Estonian' },
-        { value: 'fi', label: 'Finnish' }, { value: 'fr', label: 'French' },
-        { value: 'gl', label: 'Galician' }, { value: 'de', label: 'German' },
-        { value: 'el', label: 'Greek' }, { value: 'he', label: 'Hebrew' },
-        { value: 'hi', label: 'Hindi' }, { value: 'hu', label: 'Hungarian' },
-        { value: 'is', label: 'Icelandic' }, { value: 'id', label: 'Indonesian' },
-        { value: 'it', label: 'Italian' }, { value: 'ja', label: 'Japanese' },
-        { value: 'kn', label: 'Kannada' }, { value: 'kk', label: 'Kazakh' },
-        { value: 'ko', label: 'Korean' }, { value: 'lv', label: 'Latvian' },
-        { value: 'lt', label: 'Lithuanian' }, { value: 'mk', label: 'Macedonian' },
-        { value: 'ms', label: 'Malay' }, { value: 'mi', label: 'Maori' },
-        { value: 'mr', label: 'Marathi' }, { value: 'ne', label: 'Nepali' },
-        { value: 'no', label: 'Norwegian' }, { value: 'fa', label: 'Persian' },
-        { value: 'pl', label: 'Polish' }, { value: 'pt', label: 'Portuguese' },
-        { value: 'ro', label: 'Romanian' }, { value: 'ru', label: 'Russian' },
-        { value: 'sr', label: 'Serbian' }, { value: 'sk', label: 'Slovak' },
-        { value: 'sl', label: 'Slovenian' }, { value: 'es', label: 'Spanish' },
-        { value: 'sw', label: 'Swahili' }, { value: 'sv', label: 'Swedish' },
-        { value: 'tl', label: 'Tagalog' }, { value: 'ta', label: 'Tamil' },
-        { value: 'th', label: 'Thai' }, { value: 'tr', label: 'Turkish' },
-        { value: 'uk', label: 'Ukrainian' }, { value: 'ur', label: 'Urdu' },
-        { value: 'vi', label: 'Vietnamese' }, { value: 'cy', label: 'Welsh' },
-    ];
+    // Copied languageOptions array // REMOVED
+    // const languageOptions = [ ... ]; // REMOVED
 
     // let originalLanguageName = 'Original'; // Default // REMOVED
-    // $: {
-    //     const selectedLangCode = $transcriptStore.selectedLanguage;
-    //     const langOption = languageOptions.find(option => option.value === selectedLangCode);
-    //     if (langOption) {
-    //         originalLanguageName = langOption.label;
-    //     } else if (selectedLangCode === 'auto') {
-    //         originalLanguageName = 'Auto Detected'; // Or 'Original Language'
-    //     } else {
-    //         originalLanguageName = selectedLangCode ? selectedLangCode.toUpperCase() : 'Original';
-    //     }
-    // }
+    // $: { ... } // REMOVED
 
-    let actualOriginalLanguageLabel = 'Original'; // Default
+    // let actualOriginalLanguageLabel = 'Original'; // Default // REMOVED
+    // $: { ... } // REMOVED
+
+    let showTranscriptDropdown = false;
+    let transcriptDropdownButtonRef;
+    let transcriptDropdownMenuRef;
+
+    // Function to close dropdown when clicking outside
+    function handleClickOutsideTranscriptDropdown(event) {
+        if (showTranscriptDropdown && transcriptDropdownMenuRef && !transcriptDropdownMenuRef.contains(event.target) && transcriptDropdownButtonRef && !transcriptDropdownButtonRef.contains(event.target)) {
+            showTranscriptDropdown = false;
+        }
+    }
+
+    onMount(() => {
+        document.addEventListener('click', handleClickOutsideTranscriptDropdown, true);
+    });
+
+    onDestroy(() => {
+        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
+    });
+
+    // Reactive variable for the main dropdown button label
+    let currentTranscriptLabel = "Select Transcript";
     $: {
-        const langCode = $transcriptStore.transcribedOriginalLanguageCode;
-        if (langCode) {
-            const langOption = languageOptions.find(option => option.value === langCode);
-            if (langOption) {
-                actualOriginalLanguageLabel = langOption.label;
-            } else if (langCode.toLowerCase() === 'auto') {
-                actualOriginalLanguageLabel = 'Auto Detected';
-            } else {
-                // If the code is not in languageOptions (e.g., a specific code like 'ja-JP' not in the list)
-                // try to show the code itself, or a generic label.
-                actualOriginalLanguageLabel = langCode.toUpperCase();
-            }
+        if ($transcriptStore.currentTranscriptPath) {
+            basename($transcriptStore.currentTranscriptPath).then(name => currentTranscriptLabel = name).catch(() => currentTranscriptLabel = "Transcript");
+        } else if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts && $transcriptStore.selectedMediaFile.associated_transcripts.length > 0) {
+            currentTranscriptLabel = "Select Transcript";
+        } else if ($transcriptStore.selectedMediaFile) {
+            currentTranscriptLabel = "No Transcripts";
         } else {
-            actualOriginalLanguageLabel = 'Original Language'; // Fallback if no code stored
+            currentTranscriptLabel = "No Media";
+        }
+    }
+
+    // Prepare associated transcripts for the dropdown
+    let associatedTranscriptsForDropdown = [];
+    $: {
+        if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
+            // Create promises to get basenames for all associated transcripts
+            const basenamePromises = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(async t => ({
+                path: t.path,
+                name: t.path ? await basename(t.path) : "Unknown Transcript"
+            }));
+            Promise.all(basenamePromises).then(results => {
+                associatedTranscriptsForDropdown = results;
+            }).catch(error => {
+                console.error("Error getting basenames for dropdown:", error);
+                associatedTranscriptsForDropdown = ($transcriptStore.selectedMediaFile.associated_transcripts || []).map(t => ({
+                    path: t.path,
+                    name: t.path ? t.path.split(/[\/]/).pop() : "Unknown Transcript" // Fallback if basename promise fails
+                }));
+            });
+        } else {
+            associatedTranscriptsForDropdown = [];
         }
     }
 
@@ -359,33 +360,47 @@
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
-        <div class="flex items-center"> <!-- This div will be for language toggles -->
-            {#if $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0}
-                <div class="flex items-center p-1 bg-gray-100 dark:bg-gray-750 rounded-md shadow space-x-1">
-                    <!-- Original Language Button -->
-                    <button
-                        class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        class:btn-switch-active={($transcriptStore.activeTranscriptLanguage === 'original') || !$transcriptStore.wasTranslatedToEnglish}
-                        class:btn-switch-inactive={($transcriptStore.activeTranscriptLanguage !== 'original' && $transcriptStore.wasTranslatedToEnglish)}
-                        on:click={switchToOriginalTranscript}
-                        disabled={!$transcriptStore.wasTranslatedToEnglish && $transcriptStore.activeTranscriptLanguage === 'original'}
-                    >
-                        {actualOriginalLanguageLabel}
+        <div class="flex items-center"> <!-- Existing placeholder div -->
+            {#if $transcriptStore.selectedMediaFile && associatedTranscriptsForDropdown.length > 0}
+            <div class="relative inline-block text-left">
+                <div>
+                    <button bind:this={transcriptDropdownButtonRef} on:click={() => showTranscriptDropdown = !showTranscriptDropdown} type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500" id="transcript-options-menu" aria-haspopup="true" aria-expanded={showTranscriptDropdown}>
+                        <span class="truncate max-w-[150px] sm:max-w-[200px] md:max-w-[250px]">{currentTranscriptLabel}</span>
+                        <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
                     </button>
-
-                    <!-- English Button -->
-                    {#if $transcriptStore.wasTranslatedToEnglish && $transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0}
-                        <button
-                            class="px-3 py-1 text-xs rounded-md transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            class:btn-switch-active={$transcriptStore.activeTranscriptLanguage === 'english'}
-                            class:btn-switch-inactive={$transcriptStore.activeTranscriptLanguage !== 'english'}
-                            on:click={switchToEnglishTranscript}
-                        >
-                            English
-                        </button>
-                    {/if}
                 </div>
-            {/if}
+
+                {#if showTranscriptDropdown}
+                    <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
+                        <div class="py-1" role="none">
+                            {#each associatedTranscriptsForDropdown as transcript (transcript.path)}
+                                <button
+                                    on:click={() => {
+                                        dispatch('transcriptselected', transcript.path); // Will be handled in next step
+                                        showTranscriptDropdown = false;
+                                    }}
+                                    class="block w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                                    class:bg-indigo-100={$transcriptStore.currentTranscriptPath === transcript.path}
+                                    class:dark:bg-indigo-700={$transcriptStore.currentTranscriptPath === transcript.path}
+                                    role="menuitem"
+                                    title={transcript.path}
+                                >
+                                    <span class="truncate">{transcript.name}</span>
+                                </button>
+                            {:else}
+                                <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No transcripts found.</span>
+                            {/each}
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        {:else if $transcriptStore.selectedMediaFile}
+             <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Transcripts</span>
+        {:else}
+            <!-- Optionally, show nothing or "No Media Selected" if no media is selected -->
+        {/if}
         </div>
         <div class="flex items-center"> <!-- This new div groups Edit/Undo/Redo and More options -->
             {#if processedSegments.length || previewEditMode}

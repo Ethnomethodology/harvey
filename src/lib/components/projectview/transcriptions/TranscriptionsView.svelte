@@ -15,7 +15,8 @@
     import {
         saveTranscriptData,
         requestTranscription as requestTranscriptionService, // Renamed to avoid conflict
-        convertAndSaveTranscriptAsDoc
+        convertAndSaveTranscriptAsDoc,
+        loadTranscriptFile
     } from '$lib/services/projectService.js';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -243,6 +244,30 @@
     onMount(() => { console.log('[TranscriptionsView] Mounted.'); });
     onDestroy(() => { console.log('[TranscriptionsView] Destroyed.'); });
 
+    async function handleLoadSelectedTranscript(event) {
+        const transcriptPath = event.detail;
+        if (!transcriptPath) {
+            console.warn('[TranscriptionsView] handleLoadSelectedTranscript called without a path.');
+            return;
+        }
+
+        const currentLoadedPath = get(transcriptStore).currentTranscriptPath;
+        if (transcriptPath === currentLoadedPath) {
+            console.log('[TranscriptionsView] Selected transcript is already loaded:', transcriptPath);
+            return;
+        }
+
+        try {
+            // project.update(p => ({ ...p, isLoading: true, statusMessage: `Loading transcript: ${transcriptPath.split(/[\/]/).pop()}` }));
+            // The isLoading and statusMessage updates will be handled by loadTranscriptFile or setTranscriptData now.
+            await loadTranscriptFile(transcriptPath);
+            // Optionally, update a local status or rely on global status from the store.
+        } catch (error) {
+            console.error(`[TranscriptionsView] Error loading selected transcript ${transcriptPath}:`, error);
+            await message(`Failed to load transcript: ${error.message || error}`, { title: 'Error', type: 'error' });
+            // project.update(p => ({ ...p, isLoading: false, error: `Failed to load transcript: ${error.message || error}` }));
+        }
+    }
 </script>
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
@@ -301,6 +326,7 @@
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
+                on:transcriptselected={handleLoadSelectedTranscript}
              />
         </div>
     </div>
