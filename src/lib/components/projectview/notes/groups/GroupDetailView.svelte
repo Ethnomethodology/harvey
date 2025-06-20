@@ -245,27 +245,50 @@
     }
 
     async function handleRenameModalConfirm(event) {
-      const newName = event.detail.newName;
-      if (!itemToRename || !newName || newName.trim() === '') {
-        showRenameModal = false;
-        itemToRename = null;
-        return;
-      }
-      const currentProj = get(projectStore);
-      try {
-        // renameProjectItem expects full path for oldPath, and just the new name (stem or full depending on type)
-        await renameProjectItem(itemToRename.full_path, newName, itemToRename.file_type, currentProj.xmlPath, currentProj.baseDirectory);
-        updateProjectStoreState({ statusMessage: `Item "${itemToRename.name}" renamed to "${newName}" successfully.` });
-        await fetchGroupContents(); // Refresh this group's view
-        // projectService.renameProjectItem should have updated the main projectStore files list,
-        // which should trigger NotesLeftPanel to refresh reactively.
-      } catch (error) {
-        console.error('Error renaming item:', error);
-        await message(`Failed to rename item: ${error.message || error}`, { title: 'Error', type: 'error' });
-      } finally {
-        showRenameModal = false;
-        itemToRename = null;
-      }
+        const newNameFromModal = event.detail.newName; // This is the (potentially) stem name from the modal
+        const originalFullName = itemToRename.name; // Full original name, e.g., "OldName.png"
+        const itemType = itemToRename.file_type;
+
+        if (!itemToRename || !newNameFromModal || newNameFromModal.trim() === '') {
+            showRenameModal = false;
+            itemToRename = null;
+            return;
+        }
+
+        let finalNewName = newNameFromModal.trim();
+        const originalExtension = originalFullName.includes('.') ? originalFullName.substring(originalFullName.lastIndexOf('.')) : '';
+
+        // Check if the name from the modal already includes an extension.
+        // The FileRenameModal is designed to send only the stem for item types like 'image', 'doc', 'table', etc.
+        // So, newNameFromModal is not expected to have an extension for these types.
+        // We need to append the original extension if one existed.
+        if (originalExtension && !finalNewName.endsWith(originalExtension)) {
+            // A simple check for whether newNameFromModal already contains *any* dot can also be used
+            // if we want to allow users to change extensions, but the current modal doesn't facilitate that for stem input mode.
+            // For now, assume we always preserve the original extension if the modal sends a stem.
+            // More robustly, check if the modal sent a name that *doesn't* have an extension part.
+            const newNameHasExtension = finalNewName.includes('.') && finalNewName.lastIndexOf('.') > 0; // Basic check
+            if (!newNameHasExtension) {
+                finalNewName += originalExtension;
+            }
+        }
+
+        // Optional: Add a console log to verify the names
+        console.log(`[GroupDetailView] Rename Confirm: Original='${originalFullName}', FromModal='${newNameFromModal}', Final='${finalNewName}'`);
+
+        const currentProj = get(projectStore);
+        try {
+            // Call renameProjectItem with the finalNewName that includes the extension
+            await renameProjectItem(itemToRename.full_path, finalNewName, itemType, currentProj.xmlPath, currentProj.baseDirectory);
+            updateProjectStoreState({ statusMessage: `Item "${originalFullName}" renamed to "${finalNewName}" successfully.` });
+            await fetchGroupContents(); // Refresh this group's view
+        } catch (error) {
+            console.error('Error renaming item:', error);
+            await message(`Failed to rename item: ${error.message || error}`, { title: 'Error', type: 'error' });
+        } finally {
+            showRenameModal = false;
+            itemToRename = null;
+        }
     }
 
     function handleRenameModalClose() {
