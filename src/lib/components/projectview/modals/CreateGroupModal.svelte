@@ -28,6 +28,17 @@
     }
 
     async function handleSave() {
+        console.log('[CreateGroupModal] handleSave triggered. fileToAdd object:', fileToAdd);
+        if (fileToAdd) {
+            console.log('[CreateGroupModal] fileToAdd.name:', fileToAdd.name);
+            console.log('[CreateGroupModal] fileToAdd.path:', fileToAdd.path);
+            console.log('[CreateGroupModal] fileToAdd.relativePath (camelCase):', fileToAdd.relativePath);
+            console.log('[CreateGroupModal] fileToAdd.relative_path (snake_case):', fileToAdd.relative_path);
+            console.log('[CreateGroupModal] fileToAdd.asset_relative_path:', fileToAdd.asset_relative_path);
+            console.log('[CreateGroupModal] fileToAdd keys:', Object.keys(fileToAdd));
+        } else {
+            console.log('[CreateGroupModal] fileToAdd is null or undefined.');
+        }
         if (!groupName.trim()) {
             await message('Group name cannot be empty.', { title: 'Validation Error', type: 'error' });
             return;
