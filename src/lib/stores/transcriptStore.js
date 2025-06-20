@@ -1185,51 +1185,95 @@ listen('custom_transcription_job_completed', async (event) => {
     const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
     const currentStore = get(transcriptStore); // Get store state *before* updates
 
-    // Only process if the completed job was for the currently selected media
-    if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
-        const showToast = currentStore.ranInBackground || !currentStore.showTranscribeModal;
+    if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
+        const wasModalVisibleAtEventTime = currentStore.showTranscribeModal;
+        const wasJobRunInBackground = currentStore.ranInBackground;
+        const shouldShowToastNotification = wasJobRunInBackground || !wasModalVisibleAtEventTime;
 
-        if (status === 'done') {
-            console.log('[TranscriptStore] Received custom_transcription_job_completed (done):', event.payload);
-            if (showToast) {
-                notificationManager.add("Transcription successful", "success", 0);
-            }
+        let finalProgressMessage = '';
+        const updatePayload = {};
+        let activePathToLoad = null; // For 'done' status data loading
+        const pathUpdates = {}; // For 'done' status path updates
 
-            let activePathToLoad = null;
-            let newOriginalPath = currentStore.originalTranscriptPath;
-            let newEnglishPath = currentStore.englishTranscriptPath;
-            const updates = {};
-
-            if (transcriptFilePath) {
-                updates.originalTranscriptPath = transcriptFilePath;
-                newOriginalPath = transcriptFilePath;
-                if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
-                    activePathToLoad = transcriptFilePath;
+        switch (status) {
+            case 'done':
+                finalProgressMessage = "Transcription successful";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "success", 0);
                 }
-            }
-            if (translatedTranscriptFilePath) {
-                updates.englishTranscriptPath = translatedTranscriptFilePath;
-                newEnglishPath = translatedTranscriptFilePath;
-                if (currentStore.activeTranscriptLanguage === 'english') {
-                    activePathToLoad = translatedTranscriptFilePath;
+                updatePayload.transcriptionJobStatus = 'done';
+                updatePayload.transcriptionErrorMessage = null;
+                updatePayload.isTranscribing = false;
+
+                // Logic for determining paths to load (largely existing)
+                if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
+                    let newOriginalPath = currentStore.originalTranscriptPath;
+                    let newEnglishPath = currentStore.englishTranscriptPath;
+
+                    if (transcriptFilePath) {
+                        pathUpdates.originalTranscriptPath = transcriptFilePath;
+                        newOriginalPath = transcriptFilePath;
+                        if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
+                            activePathToLoad = transcriptFilePath;
+                        }
+                    }
+                    if (translatedTranscriptFilePath) {
+                        pathUpdates.englishTranscriptPath = translatedTranscriptFilePath;
+                        newEnglishPath = translatedTranscriptFilePath;
+                        if (currentStore.activeTranscriptLanguage === 'english') {
+                            activePathToLoad = translatedTranscriptFilePath;
+                        }
+                    }
+                    if (!activePathToLoad && newOriginalPath) {
+                        activePathToLoad = newOriginalPath;
+                    }
+                    if (Object.keys(pathUpdates).length > 0) {
+                        Object.assign(updatePayload, pathUpdates);
+                    }
                 }
-            }
-            if (!activePathToLoad && newOriginalPath) {
-                activePathToLoad = newOriginalPath;
-            }
+                break;
+            case 'error':
+                finalProgressMessage = `Transcription failed: ${errorMessage || 'Unknown error'}`;
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "error", 0);
+                } else {
+                    updateProjectStoreState({ error: `Transcription failed: ${errorMessage || 'Unknown error'}` });
+                }
+                updatePayload.transcriptionJobStatus = 'error';
+                updatePayload.transcriptionErrorMessage = errorMessage;
+                updatePayload.isTranscribing = false;
+                break;
+            case 'cancelled':
+                finalProgressMessage = "Transcription cancelled";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "info", 0);
+                } else {
+                    updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
+                }
+                updatePayload.transcriptionJobStatus = 'cancelled';
+                updatePayload.transcriptionErrorMessage = null;
+                updatePayload.isTranscribing = false;
+                break;
+            default:
+                console.warn(`[TranscriptStore] Unknown status in custom_transcription_job_completed: ${status}`);
+                return; // Don't proceed with updates for unknown status
+        }
 
-            // Update paths in store before loading
-            if (Object.keys(updates).length > 0) {
-                transcriptStore.update(ts => ({ ...ts, ...updates }));
-            }
+        updatePayload.showTranscribeModal = shouldShowToastNotification ? false : true;
+        updatePayload.transcriptionProgress = { ...currentStore.transcriptionProgress, message: finalProgressMessage };
 
+        transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
+
+        // Perform async operations after store update for 'done' status
+        if (status === 'done' && currentStore.selectedMediaFile?.path === jobFinishedPath) {
             if (activePathToLoad) {
                 try {
                     const service = await import('../services/projectService.js');
                     if (service.loadTranscriptFile) {
+                        console.log(`[TranscriptStore] Loading transcript after job completion: ${activePathToLoad}`);
                         await service.loadTranscriptFile(activePathToLoad);
                     } else {
-                        console.error('[TranscriptStore] loadTranscriptFile function not found.');
+                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
                         updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
                     }
                 } catch (e) {
@@ -1241,55 +1285,21 @@ listen('custom_transcription_job_completed', async (event) => {
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
+                   console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
                 }
             } catch (e) {
-                console.error('[TranscriptStore] Error refreshing project files:', e);
+                console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
             }
-
-            transcriptStore.update(ts => ({
-                ...ts,
-                // ...updates, // Paths already updated
-                isTranscribing: false,
-                transcriptionJobStatus: 'done',
-                transcriptionErrorMessage: null,
-                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
-            }));
-
-        } else if (status === 'error') {
-            console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
-            if (showToast) {
-                notificationManager.add(`Transcription failed: ${errorMessage}`, "error", 0);
-            }
-            // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
-            if (!showToast) updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
-
-            transcriptStore.update(ts => ({
-                ...ts,
-                isTranscribing: false,
-                transcriptionJobStatus: 'error',
-                transcriptionErrorMessage: errorMessage,
-                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
-            }));
-
-        } else if (status === 'cancelled') {
-            console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
-            if (showToast) {
-                notificationManager.add("Transcription cancelled", "info", 0);
-            }
-            // updateProjectStoreState is not needed here if toast is shown, but keep for modal case
-            if (!showToast) updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
-
-            transcriptStore.update(ts => ({
-                ...ts,
-                isTranscribing: false,
-                transcriptionJobStatus: 'cancelled',
-                transcriptionErrorMessage: null,
-                showTranscribeModal: showToast ? false : ts.showTranscribeModal,
-            }));
         }
+
     } else {
-         console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
+         console.log('[TranscriptStore] Received job completion for a job not actively tracked or for a different media path:', jobFinishedPath, currentStore.mediaPathForLastJob, `Is transcribing: ${currentStore.isTranscribing}`);
+         // Optionally, explicitly set isTranscribing to false if this job ID was the one being tracked,
+         // but the media path doesn't match (e.g. user switched media while job was running)
+         // For now, the primary condition handles the main logic flow.
+         // Consider if any cleanup is needed if jobID matches but path does not.
+         return;
     }
 });
 
