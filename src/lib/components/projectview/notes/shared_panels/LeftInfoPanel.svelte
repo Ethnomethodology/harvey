@@ -10,9 +10,9 @@
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte'; // Added
-    import GroupMultiSelect from '$lib/components/projectview/infopanels/GroupMultiSelect.svelte'; // Added
+    import GroupMultiSelect from '$lib/components/projectview/shared/GroupMultiSelect.svelte'; // Added
     // import type { GroupData } from '$lib/types'; // Removed for JS compatibility
-    import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
+    import { FileEarmarkCodeIcon } from '$lib/components/projectview/shared/icons.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
     import CategoryTooltip from '../CategoryTooltip.svelte';

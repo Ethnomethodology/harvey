@@ -3,7 +3,7 @@
     import { onMount } from 'svelte';
     import { slide } from 'svelte/transition';
     import { sineInOut } from 'svelte/easing';
-    import StickiesIcon from '$lib/components/icons/StickiesIcon.svelte';
+    import { StickiesIcon } from '$lib/components/projectview/shared/icons.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
     // This panel is now generic, props might be needed later
