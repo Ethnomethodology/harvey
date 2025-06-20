@@ -236,6 +236,18 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         };
         project.update((current) => ({ ...current, ...dataToSet }));
 
+        // Update project groups list
+        try {
+            const { updateProjectGroupsList } = await import('$lib/stores/projectStore.js');
+            if (loadedData.project_uuid) { // Ensure project_uuid (as id) is available
+                await updateProjectGroupsList(loadedData.project_uuid);
+            } else {
+                console.warn("[ProjectService] Project UUID not available after loading, cannot update groups list.");
+            }
+        } catch (e) {
+            console.error("[ProjectService] Error importing or calling updateProjectGroupsList:", e);
+        }
+
         await emit('project-view-ready', { projectXmlPath: projectXmlPath });
 
         let mediaFileToSelect = null;
@@ -1340,4 +1352,22 @@ export async function loadPdfAnnotationsFromFile(pdfAbsPath) {
         console.error(`[ProjectService] Error loading annotations for ${relativePdfPath}:`, errorMessage);
         setPdfAnnotationsLoadFailed(pdfAbsPath, `Service call failed: ${errorMessage}`);
     }
+}
+
+// Function to clear all project-related data from stores
+export async function clearProjectDataStore() {
+    console.log('[ProjectService] Clearing project data store.');
+    // Need to dynamically import stores here because this is a .js file, not a .svelte component
+    // and to avoid circular dependencies if projectStore itself imports projectService.
+    const projectStoreModule = await import('$lib/stores/projectStore.js');
+    const transcriptStoreModule = await import('$lib/stores/transcriptStore.js');
+
+    projectStoreModule.project.set({ ...projectStoreModule.initialState });
+    projectStoreModule.currentProjectGroupsList.set([]);
+
+    transcriptStoreModule.clearTranscriptState();
+
+    // Optionally, inform other parts of the app that the project has been cleared
+    // await emit('project-cleared');
+    console.log('[ProjectService] Project data store cleared.');
 }

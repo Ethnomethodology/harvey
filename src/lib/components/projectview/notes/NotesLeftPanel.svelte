@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/notes/NotesLeftPanel.svelte -->
 <script>
-	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup } from '$lib/stores/projectStore.js'; // Added setSelectedGroup
+	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup and currentProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
@@ -32,7 +32,8 @@
     let revealButtonLabel = 'Open File Location';
 
     // --- Group Sub-Menu State & Handlers (Step III.3 & III.4) ---
-    let projectGroups = [];
+    // let projectGroups = []; // Replaced by $currentProjectGroupsList
+    $: localProjectGroupsForSubMenu = $currentProjectGroupsList || []; // Use store for submenu
     let showGroupSubMenu = false;
     let groupSubMenuX = 0;
     let groupSubMenuY = 0;
@@ -63,26 +64,20 @@
         showGroupSubMenu = false;
     }
 
-    async function fetchProjectGroups() {
-        if ($project && $project.id) { // Changed from project_uuid to id
-            try {
-                const groups = await invoke('get_project_groups', { projectId: $project.id }); // Changed from project_uuid to id
-                projectGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
-            } catch (error) {
-                console.error('[NotesLeftPanel] Error fetching project groups:', error);
-                projectGroups = [];
-            }
-        } else {
-            projectGroups = [];
-        }
-    }
-
-    $: if ($project && $project.id) { // Changed from project_uuid to id
-        fetchProjectGroups();
-    }
+    // Removed local fetchProjectGroups function and reactive call
+    // projectGroups is now $currentProjectGroupsList
 
     onMount(async () => {
-      await fetchProjectGroups();
+      // projectStore's loadProjectDataAndUpdateStore should call updateProjectGroupsList
+      // So, direct call to fetchProjectGroups() or updateProjectGroupsList() might be redundant here
+      // if $project.id change reliably triggers it in projectStore.
+      // However, to ensure groups are available if project is already loaded,
+      // we can check $currentProjectGroupsList or trigger an update if $project.id exists.
+      if (get(project).id && get(currentProjectGroupsList).length === 0) {
+        // This scenario is less likely if loadProjectDataAndUpdateStore works as intended
+        // but can be a fallback. Or simply rely on projectStore to handle it.
+        // For now, let's assume projectStore handles initial load.
+      }
 
       try {
         const currentOs = await getOsType();
@@ -122,7 +117,7 @@
         groupSubMenuY = buttonRect.top;
 
         const menuWidthEstimate = 160; // Approx width of the submenu
-        const menuHeightEstimate = (projectGroups.length * 28) + 40 + 10; // Estimate height based on items
+        const menuHeightEstimate = (localProjectGroupsForSubMenu.length * 28) + 40 + 10; // Estimate height based on items
 
         // Adjust if submenu goes off-screen
         if (groupSubMenuX + menuWidthEstimate > window.innerWidth) {
@@ -757,8 +752,8 @@ $: {
                 Groups
             </h3>
             <ul class="space-y-1 text-xs">
-                {#if projectGroups && projectGroups.length > 0}
-                    {#each projectGroups as group (group.id)}
+                {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
+                    {#each $currentProjectGroupsList as group (group.id)}
                         <li class="group">
                             <div
                                 class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
@@ -920,8 +915,8 @@ $: {
             on:click|stopPropagation>
             <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
             <hr class="my-1 border-gray-200 dark:border-gray-600" />
-            {#if projectGroups && projectGroups.length > 0}
-                {#each projectGroups as group (group.id)}
+            {#if localProjectGroupsForSubMenu && localProjectGroupsForSubMenu.length > 0}
+                {#each localProjectGroupsForSubMenu as group (group.id)}
                     <button on:click|stopPropagation={() => { handleAddFileToExistingGroup(group); }} class="flex items-center w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title="{group.name} {group.description ? '(' + group.description + ')' : ''}">
                         <!-- Removed folder icon from here -->
                         <span class="ml-1">{group.name}</span> <!-- Added ml-1 for slight indent if needed, or adjust as per design -->
@@ -978,13 +973,14 @@ $: {
     on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
     on:groupCreatedAndFileAdded={(event) => {
         console.log('[NotesLeftPanel] Event: groupCreatedAndFileAdded', event.detail);
-        fetchProjectGroups();
+        // updateProjectGroupsList should have been called by the modal itself.
+        // $currentProjectGroupsList will update reactively.
         showCreateGroupModal = false;
         groupSubMenuItem = null;
     }}
     on:groupCreated={(event) => {
         console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
-        fetchProjectGroups();
+        // updateProjectGroupsList should have been called by the modal itself.
         showCreateGroupModal = false;
         groupSubMenuItem = null;
     }}

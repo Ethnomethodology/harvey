@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
@@ -319,20 +319,22 @@
     }
 
     async function fetchProjectGroupsForMenu(forceRefresh = false) {
-        if (projectGroupsForMenu.length > 0 && !forceRefresh) return;
-        const currentProject = get(projectStore);
-        if (currentProject && currentProject.id) {
-        try {
-            const groups = await invoke('get_project_groups', { projectId: currentProject.id });
-            projectGroupsForMenu = groups.sort((a, b) => a.name.localeCompare(b.name));
-        } catch (error) {
-            console.error("Error fetching project groups for menu:", error);
-            projectGroupsForMenu = [];
-            await message(`Could not load project groups: ${error}`, { title: 'Error', type: 'error' });
-        }
-        } else {
+      const currentProject = get(projectStore); // projectStore is the alias for project
+      if (!currentProject || !currentProject.id) {
         projectGroupsForMenu = [];
-        }
+        return;
+      }
+
+      const groupsFromStore = get(currentProjectGroupsList);
+      if (!forceRefresh && groupsFromStore && groupsFromStore.length > 0) {
+        projectGroupsForMenu = [...groupsFromStore].sort((a, b) => a.name.localeCompare(b.name)); // Ensure sort if store isn't pre-sorted or copy needed
+        // console.log('[GroupDetailView] Using groups from store for submenu.');
+        return;
+      }
+
+      // console.log('[GroupDetailView] Forcing refresh or store empty, calling updateProjectGroupsList.');
+      await updateProjectGroupsList(currentProject.id); // This updates the store
+      projectGroupsForMenu = [...get(currentProjectGroupsList)].sort((a, b) => a.name.localeCompare(b.name)); // Read from store after update
     }
 
     async function openAddToGroupSubMenu(x_pos, y_pos) {
@@ -535,7 +537,7 @@
 <CreateGroupModal
     bind:showModal={showCreateGroupModalFromGroupView}
     projectUuid={$projectStore?.id}
-    fileToAdd={itemForAddToGroup}
+    fileToAdd={itemForAddToGroup} <!-- Pass the file item -->
     on:close={() => { showCreateGroupModalFromGroupView = false; itemForAddToGroup = null; }}
     on:groupCreated={handleModalGroupCreated}
     on:groupCreatedAndFileAdded={handleModalGroupCreatedAndFileAdded}
