@@ -535,7 +535,7 @@
 <CreateGroupModal
     bind:showModal={showCreateGroupModalFromGroupView}
     projectUuid={$projectStore?.id}
-    fileToAdd={itemForAddToGroup} <!-- Pass the file item -->
+    fileToAdd={itemForAddToGroup}
     on:close={() => { showCreateGroupModalFromGroupView = false; itemForAddToGroup = null; }}
     on:groupCreated={handleModalGroupCreated}
     on:groupCreatedAndFileAdded={handleModalGroupCreatedAndFileAdded}
