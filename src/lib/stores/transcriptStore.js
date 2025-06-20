@@ -873,6 +873,13 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
         let updatedState = { ...ts };
 
         if (isTranscribing) {
+            // Safeguard: If trying to set an already completed/failed job to active again, ignore.
+            if (jobIdToSet && ts.transcriptionJobId === jobIdToSet &&
+                (ts.transcriptionJobStatus === 'done' || ts.transcriptionJobStatus === 'error' || ts.transcriptionJobStatus === 'cancelled')) {
+                console.warn(`[JULES-DEBUG TS setStatus] Attempted to set job ${jobIdToSet} to active, but it's already in terminal state: ${ts.transcriptionJobStatus}. Ignoring.`);
+                return ts; // Return current state, do not change
+            }
+
             const newActiveMediaDuringStart = mediaPath || ts.selectedMediaFile?.path || ts.activeMediaDuringTranscriptionStart;
             // Determine job status: if explicit status is passed, use it.
             // Otherwise, if a jobId is being set, it's 'running'. If no jobId yet, it's 'initiating'.
@@ -891,51 +898,50 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
                 },
                 transcriptionJobStatus: jobStatusToSet,
                 transcriptionErrorMessage: null,
-                ranInBackground: false, // Reset this flag when a new transcription starts
+                ranInBackground: false,
                 showTranscribeModal: true,
             };
         } else {
             // isTranscribing is false (job is ending or being cleared)
             const currentJobStatus = status || ts.transcriptionJobStatus;
-            let newShowModal = ts.showTranscribeModal; // Default to current state
+            let newShowModalConfig = ts.showTranscribeModal; // Default to current modal visibility
 
             if (currentJobStatus === 'done') {
-                if (ts.ranInBackground) {
-                    newShowModal = false; // Hide if 'done' and was background (toast shown by event listener)
-                } else {
-                    newShowModal = true; // Show for foreground 'done'
-                }
+                // If job is done, modal visibility depends on whether it ran in background.
+                // If it ran in background, the custom_transcription_job_completed listener
+                // would have already set showTranscribeModal to false and shown a toast.
+                // This function should respect that.
+                newShowModalConfig = ts.ranInBackground ? false : true;
             } else if (currentJobStatus === 'error' || currentJobStatus === 'cancelled') {
-                newShowModal = true; // Show modal for errors or cancellations
+                // For errors or cancellations, always show the modal to display the message.
+                newShowModalConfig = true;
             } else if (currentJobStatus === null) {
-                // This case handles explicitly clearing the status (e.g., after modal acknowledged and closed)
-                newShowModal = false;
+                // If status is being explicitly cleared to null (e.g., after user acknowledges modal), hide modal.
+                newShowModalConfig = false;
             }
             // If currentJobStatus is 'running' or 'initiating' but isTranscribing is false,
-            // it's a bit of a transient state, modal visibility might depend on prior state or specific needs.
-            // However, this 'else' block is primarily for terminal states or explicit clearing.
+            // this is an unusual state. The default newShowModalConfig (ts.showTranscribeModal)
+            // will be used, or the specific conditions above will take precedence.
 
             updatedState = {
                 ...ts,
                 isTranscribing: false,
                 transcriptionJobStatus: currentJobStatus,
                 transcriptionErrorMessage: errorMessage || ts.transcriptionErrorMessage,
-                showTranscribeModal: newShowModal,
+                showTranscribeModal: newShowModalConfig,
             };
 
-            // If status is being cleared to null, also reset other job-specific fields
+            // If currentJobStatus is being set to null (full reset), clear related fields.
             if (currentJobStatus === null) {
                 updatedState.transcriptionJobId = null;
                 updatedState.activeMediaDuringTranscriptionStart = null;
                 updatedState.mediaPathForLastJob = null;
-                updatedState.transcriptionProgress = { percent: 0, message: '' }; // Reset progress message
-                // Only reset ranInBackground if it was true and is now being fully cleared.
+                updatedState.transcriptionProgress = { percent: 0, message: '' };
+                // Reset ranInBackground only when the job is fully cleared to null state.
                 // This ensures that if setTranscriptionStatus(false, {status: 'done'}) is called
-                // for a background job, ranInBackground is still true for the event listener to check.
-                // It will be reset by the modal's closeAndReset or if a new job starts.
-                 if (ts.ranInBackground) { // Check the flag *before* this update potentially clears it
-                    updatedState.ranInBackground = false; // Cleared as part of full reset
-                 }
+                // for a background job, 'ranInBackground' is still true for the logic above
+                // and for the event listener.
+                updatedState.ranInBackground = false;
             }
         }
         console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
