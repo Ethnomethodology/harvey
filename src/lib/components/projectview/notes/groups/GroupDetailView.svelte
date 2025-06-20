@@ -76,7 +76,7 @@
 
     async function fetchGroupContents() {
         // Use get(project) to access store values if outside reactive context or component markup
-        const currentProject = get(project);
+        const currentProject = get(projectStore);
         if (!groupData || !groupData.id || !currentProject || !currentProject.id || !currentProject.xmlPath) {
             errorMessage = "Group data or project context is missing.";
             console.error("fetchGroupContents precondition failed:", { groupData, currentProject });
