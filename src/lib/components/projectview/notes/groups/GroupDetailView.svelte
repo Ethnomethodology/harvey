@@ -437,7 +437,7 @@
             {:else if errorMessage}
                 <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
             {:else}
-                {#each CATEGORY_ORDER as category}
+                {#each CATEGORY_ORDER as category} <!-- UNCOMMENTED outer loop -->
                     {@const filesInCategory = categorizedFiles[category.key]}
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
@@ -458,24 +458,24 @@
                                                 <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain rounded"/>
                                             {:else}
                                                 {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
-                                            {/if}
+                                            {/if} <!-- Closes file.file_type === 'image' -->
                                         </div>
                                         <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
-                                         <button
+                                        <button
                                             on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
                                             class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 rounded text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
                                             title="More options for {file.name}"
                                         >
                                             {@html CONTEXT_MENU_ICON_SVG}
                                         </button>
-                                    </div>
-                                {/each}
+                                    </div> <!-- Closes thumbnail-item div -->
+                                {/each} <!-- Closes filesInCategory loop -->
                             </div>
                         {:else if !isLoading} <!-- Only show "No files" if not loading -->
                             <p class="text-sm text-gray-400 dark:text-gray-500 italic">No {category.name.toLowerCase()} in this group.</p>
                         {/if}
                     </div>
-                {/each}
+                {/each} <!-- End of UNCOMMENTED outer loop -->
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
                 {#if totalFiles === 0 && !isLoading}
