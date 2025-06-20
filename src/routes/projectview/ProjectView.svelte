@@ -432,8 +432,8 @@
         }
 
         if (!canProceed) {
-            project.update(p => ({...p, isLoading: false, statusMessage: 'Media selection cancelled.'}));
-            console.log('[ProjectView] handleRequestMediaSelection: Not proceeding with media selection.');
+            project.update(p => ({ ...p, isLoading: false, statusMessage: 'Media selection cancelled.' }));
+            console.log(`[ProjectView] handleRequestMediaSelection: 'checkUnsavedChangesThenProceed' returned false. Aborting media selection.`);
             return;
         }
 
@@ -454,7 +454,7 @@
         await tick();
 
         let fileEntry = null;
-        function findMediaByPathRecursive(nodes, path) { // Keep this helper function local or move to a service if used elsewhere
+        function findMediaByPathRecursive(nodes, path) { // Keep this helper function local
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
@@ -462,15 +462,15 @@
             }
             return null;
         }
-        console.log(`[ProjectView] handleRequestMediaSelection: Attempting to find FileEntry for mediaPath: '${mediaPath}'`);
+        console.log(`[ProjectView] handleRequestMediaSelection: Attempting to find FileEntry for mediaPath: '${mediaPath}' in project files:`, get(project).files);
         fileEntry = findMediaByPathRecursive(get(project).files || [], mediaPath);
-        console.log(`[ProjectView] handleRequestMediaSelection: findMediaByPathRecursive result:`, fileEntry);
+        console.log(`[ProjectView] handleRequestMediaSelection: findMediaByPathRecursive result (fileEntry):`, fileEntry);
 
         if (fileEntry) {
             selectMediaStoreAction(fileEntry);
-            console.log(`[ProjectView] handleRequestMediaSelection: Called selectMediaStoreAction with fileEntry:`, fileEntry);
+            console.log(`[ProjectView] handleRequestMediaSelection: Called selectMediaStoreAction with fileEntry.`);
         } else {
-            console.error(`[ProjectView] handleRequestMediaSelection: FileEntry not found for path: '${mediaPath}'`);
+            console.error(`[ProjectView] handleRequestMediaSelection: FileEntry not found for path: '${mediaPath}'. An error message should be shown to the user.`);
             await message(`Error: Could not find media file (${mediaName}).`, {title: "Error", type:"error"});
             project.update(p => ({...p, statusMessage: `Error selecting ${mediaName}.`}));
         }
