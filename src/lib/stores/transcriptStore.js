@@ -882,37 +882,68 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
             updatedState = {
                 ...ts,
                 isTranscribing: true,
-                transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId, // Update if new jobId is provided, else keep existing
+                transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId,
                 mediaPathForLastJob: mediaPath || ts.mediaPathForLastJob,
                 activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
                 transcriptionProgress: {
-                    // Preserve percent if status is 'running' and jobId matches, otherwise reset to 0
                     percent: (jobStatusToSet === 'running' && ts.transcriptionJobId === jobIdToSet && ts.transcriptionJobId !== null) ? ts.transcriptionProgress.percent : 0,
                     message: messageToSet
                 },
                 transcriptionJobStatus: jobStatusToSet,
-                transcriptionErrorMessage: null, // Clear previous errors when starting/initiating
-                ranInBackground: false, // Reset this flag
-                showTranscribeModal: true, // Ensure modal remains open while transcribing or initiating
-                // languageUsedForJob: ts.selectedLanguage, // REMOVED
+                transcriptionErrorMessage: null,
+                ranInBackground: false, // Reset this flag when a new transcription starts
+                showTranscribeModal: true,
             };
         } else {
-            // This branch is for when isTranscribing is explicitly false (e.g. job finished, error, cancelled by event)
-            // languageUsedForJob was reset by the custom_transcription_job_completed listener for terminal states
+            // isTranscribing is false (job is ending or being cleared)
+            const currentJobStatus = status || ts.transcriptionJobStatus;
+            let newShowModal = ts.showTranscribeModal; // Default to current state
+
+            if (currentJobStatus === 'done') {
+                if (ts.ranInBackground) {
+                    newShowModal = false; // Hide if 'done' and was background (toast shown by event listener)
+                } else {
+                    newShowModal = true; // Show for foreground 'done'
+                }
+            } else if (currentJobStatus === 'error' || currentJobStatus === 'cancelled') {
+                newShowModal = true; // Show modal for errors or cancellations
+            } else if (currentJobStatus === null) {
+                // This case handles explicitly clearing the status (e.g., after modal acknowledged and closed)
+                newShowModal = false;
+            }
+            // If currentJobStatus is 'running' or 'initiating' but isTranscribing is false,
+            // it's a bit of a transient state, modal visibility might depend on prior state or specific needs.
+            // However, this 'else' block is primarily for terminal states or explicit clearing.
+
             updatedState = {
                 ...ts,
                 isTranscribing: false,
-                transcriptionJobStatus: status || ts.transcriptionJobStatus, // e.g. 'done', 'error', 'cancelled'
+                transcriptionJobStatus: currentJobStatus,
                 transcriptionErrorMessage: errorMessage || ts.transcriptionErrorMessage,
-                showTranscribeModal: true, // Keep modal open to show final status/error
+                showTranscribeModal: newShowModal,
             };
+
+            // If status is being cleared to null, also reset other job-specific fields
+            if (currentJobStatus === null) {
+                updatedState.transcriptionJobId = null;
+                updatedState.activeMediaDuringTranscriptionStart = null;
+                updatedState.mediaPathForLastJob = null;
+                updatedState.transcriptionProgress = { percent: 0, message: '' }; // Reset progress message
+                // Only reset ranInBackground if it was true and is now being fully cleared.
+                // This ensures that if setTranscriptionStatus(false, {status: 'done'}) is called
+                // for a background job, ranInBackground is still true for the event listener to check.
+                // It will be reset by the modal's closeAndReset or if a new job starts.
+                 if (ts.ranInBackground) { // Check the flag *before* this update potentially clears it
+                    updatedState.ranInBackground = false; // Cleared as part of full reset
+                 }
+            }
         }
-        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}'`);
+        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
         return updatedState;
     });
 
     if (isTranscribing) {
-        updateProjectStoreState({ error: null }); // Clear project-level errors when starting a new job
+        updateProjectStoreState({ error: null });
     }
 }
 
