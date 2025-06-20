@@ -159,20 +159,26 @@
         // Let's defer resetting for now, assuming consumers will be smart or the notification implies a definite state change needing refresh.
     }
 
-    function handleGroupDetailsUpdated(event) {
+    async function handleGroupDetailsUpdated(event) { // Make it async if calling await
         const updatedGroup = event.detail;
         groupData = { ...groupData, ...updatedGroup }; // Update local prop
         isEditGroupModalOpen = false;
 
-        // Update project store
+        // Update project store's selectedGroupData
         projectStore.update(p => {
             if (p.selectedGroupData && p.selectedGroupData.id === updatedGroup.id) {
                 return { ...p, selectedGroupData: { ...p.selectedGroupData, ...updatedGroup } };
             }
             return p;
         });
-        // Potentially dispatch global event for NotesLeftPanel to refresh all groups if name changed
-        // For now, this view and the central selectedGroupData are updated.
+
+        // New line: Refresh the list of all project groups
+        if (updatedGroup.project_id) { // Ensure we have a project_id
+            console.log('[GroupDetailView] Group details updated, refreshing project groups list...');
+            await updateProjectGroupsList(updatedGroup.project_id);
+        } else {
+            console.warn('[GroupDetailView] project_id not available in updatedGroup, cannot refresh project groups list.');
+        }
     }
 
     function handleFileContextMenu(event, file) {
