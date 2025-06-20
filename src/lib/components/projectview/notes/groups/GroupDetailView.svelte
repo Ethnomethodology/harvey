@@ -201,7 +201,7 @@
 
       try {
         const currentProject = get(projectStore);
-        await invoke('remove_file_from_group_command', {
+        await invoke('remove_file_from_group', {
           projectId: currentProject.id,
           groupId: groupData.id,
           fileAssetRelativePath: item.relative_path

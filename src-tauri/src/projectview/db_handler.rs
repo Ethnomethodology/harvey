@@ -831,38 +831,116 @@ pub fn rename_asset_metadata_key(
     // Wrap operations in a transaction
     let tx = conn.transaction().map_err(CommandError::from)?;
 
-    // Update asset_metadata table. Relies on ON UPDATE CASCADE for child tables.
+    // 1. Disable foreign key constraints
+    debug!("[DB TX] Disabling foreign keys for rename operation on project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
+    tx.execute("PRAGMA foreign_keys = OFF;", params![]).map_err(|e| {
+        error!("[DB TX] Failed to disable foreign keys: {}. Operation aborted.", e);
+        // No need to manually re-enable FKs here as the transaction will rollback.
+        CommandError::from(e)
+    })?;
+
+    // 2. Update Parent Table First: asset_metadata
     debug!(
-        "[DB TX] Updating asset_metadata for project_id {}: from '{}' to '{}'. New full path: '{}', new file name: '{}'",
+        "[DB TX] Updating parent asset_metadata for project_id {}: from '{}' to '{}'. New full path: '{}', new file name: '{}'",
         project_id, old_relative_path, new_relative_path, new_file_path, new_file_name
     );
-
-    let changes = tx.execute(
+    let parent_changes = tx.execute(
         "UPDATE asset_metadata
          SET asset_relative_path = ?1, file_path = ?2, file_name = ?3, last_modified = CURRENT_TIMESTAMP
          WHERE project_id = ?4 AND asset_relative_path = ?5",
         params![new_relative_path, new_file_path, new_file_name, project_id, old_relative_path],
     ).map_err(|e| {
-        error!("[DB TX] Error updating asset_metadata for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
+        error!("[DB TX] Error updating asset_metadata for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
+        if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+            error!("[DB TX] Failed to re-enable foreign keys during error handling for asset_metadata update: {}", fk_err);
+        }
         CommandError::from(e)
     })?;
 
-    if changes > 0 {
+    if parent_changes > 0 {
         info!(
-            "[DB TX] asset_metadata updated successfully for project_id {} from {} to {} ({} rows affected). Cascading updates should apply to child tables.",
-            project_id, old_relative_path, new_relative_path, changes
+            "[DB TX] asset_metadata updated successfully for project_id {} from {} to {} ({} rows affected).",
+            project_id, old_relative_path, new_relative_path, parent_changes
         );
     } else {
-        // This might not be an error if the asset didn't exist, or if old_relative_path was identical to new_relative_path (though UI should prevent that).
         warn!(
-            "[DB TX] No rows updated in asset_metadata for project_id {} and old_relative_path: '{}'. This might be unexpected if the asset was supposed to exist.",
+            "[DB TX] No rows updated in asset_metadata for project_id {} and old_relative_path: '{}'. Child table updates will still proceed.",
             project_id, old_relative_path
         );
     }
 
+    // 3. Update Child Tables Second (to match the new parent key)
+
+    // Update file_groups
+    match tx.execute(
+        "UPDATE file_groups SET file_asset_path = ?1 WHERE project_id = ?2 AND file_asset_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated file_groups for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => { // 0 rows affected
+            debug!("[DB TX] No entries in file_groups needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating file_groups for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
+            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            }
+            return Err(CommandError::from(e));
+        }
+    }
+
+    // Update table_layout_preferences
+    match tx.execute(
+        "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated table_layout_preferences for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => {
+             debug!("[DB TX] No entries in table_layout_preferences needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating table_layout_preferences for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
+            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            }
+            return Err(CommandError::from(e));
+        }
+    }
+
+    // Update media_transcript_data
+    match tx.execute(
+        "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated media_transcript_data for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => {
+            debug!("[DB TX] No entries in media_transcript_data needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating media_transcript_data for project_id {} from {} to {}: {}. Attempting to re-enable FKs and rolling back.", project_id, old_relative_path, new_relative_path, e);
+            if let Err(fk_err) = tx.execute("PRAGMA foreign_keys = ON;", params![]) {
+                 error!("[DB TX] Failed to re-enable foreign keys during error handling: {}", fk_err);
+            }
+            return Err(CommandError::from(e));
+        }
+    }
+
+    // 4. Re-enable foreign key constraints before committing
+    debug!("[DB TX] Re-enabling foreign keys for project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
+    tx.execute("PRAGMA foreign_keys = ON;", params![]).map_err(|e| {
+        error!("[DB TX] CRITICAL: Failed to re-enable foreign keys for project_id {} after updates. Transaction will be rolled back. Error: {}", project_id, e);
+        CommandError::from(e)
+    })?;
+
     tx.commit().map_err(CommandError::from)?;
     info!(
-        "[DB] Transaction committed successfully for renaming asset metadata (and cascading) for project_id {}: from {} to {}",
+        "[DB] Transaction committed successfully for renaming asset metadata and related child table paths for project_id {}: from {} to {}",
         project_id, old_relative_path, new_relative_path
     );
 
