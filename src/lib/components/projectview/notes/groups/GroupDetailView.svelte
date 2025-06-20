@@ -528,9 +528,9 @@
       {/each}
     {:else}
       <span class="block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-500 italic">No other groups</span>
-    {/if}
+    {/if} <!-- This closes the #if projectGroupsForMenu.length > 0 -->
   </div>
-{/if}
+{/if} <!-- This closes the #if showAddToGroupSubMenu && itemForAddToGroup -->
 
 <CreateGroupModal
     bind:showModal={showCreateGroupModalFromGroupView}
@@ -551,7 +551,7 @@
         on:close={handleRenameModalClose}
     />
 {/if}
-
+<!-- Ensure all {#if} and {#each} blocks above this line are properly closed -->
 <style>
     /* Ensure grid items don't overflow their container excessively if names are too long */
     .grid div > p {
