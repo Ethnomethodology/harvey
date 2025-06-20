@@ -3,6 +3,7 @@ import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { message } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event'; // Added missing import for listen
+import notificationManager from '$lib/stores/notificationStore.js';
 // Import projectStore to access project-level details.
 // This creates a partial cyclic dependency that we might want to resolve later
 // by passing necessary values as arguments or through a service.
@@ -872,6 +873,13 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
         let updatedState = { ...ts };
 
         if (isTranscribing) {
+            // Safeguard: If trying to set an already completed/failed job to active again, ignore.
+            if (jobIdToSet && ts.transcriptionJobId === jobIdToSet &&
+                (ts.transcriptionJobStatus === 'done' || ts.transcriptionJobStatus === 'error' || ts.transcriptionJobStatus === 'cancelled')) {
+                console.warn(`[JULES-DEBUG TS setStatus] Attempted to set job ${jobIdToSet} to active, but it's already in terminal state: ${ts.transcriptionJobStatus}. Ignoring.`);
+                return ts; // Return current state, do not change
+            }
+
             const newActiveMediaDuringStart = mediaPath || ts.selectedMediaFile?.path || ts.activeMediaDuringTranscriptionStart;
             // Determine job status: if explicit status is passed, use it.
             // Otherwise, if a jobId is being set, it's 'running'. If no jobId yet, it's 'initiating'.
@@ -881,37 +889,67 @@ export function setTranscriptionStatus(isTranscribing, jobIdToSet = null, option
             updatedState = {
                 ...ts,
                 isTranscribing: true,
-                transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId, // Update if new jobId is provided, else keep existing
+                transcriptionJobId: jobIdToSet !== null ? jobIdToSet : ts.transcriptionJobId,
                 mediaPathForLastJob: mediaPath || ts.mediaPathForLastJob,
                 activeMediaDuringTranscriptionStart: newActiveMediaDuringStart,
                 transcriptionProgress: {
-                    // Preserve percent if status is 'running' and jobId matches, otherwise reset to 0
                     percent: (jobStatusToSet === 'running' && ts.transcriptionJobId === jobIdToSet && ts.transcriptionJobId !== null) ? ts.transcriptionProgress.percent : 0,
                     message: messageToSet
                 },
                 transcriptionJobStatus: jobStatusToSet,
-                transcriptionErrorMessage: null, // Clear previous errors when starting/initiating
-                ranInBackground: false, // Reset this flag
-                showTranscribeModal: true, // Ensure modal remains open while transcribing or initiating
-                // languageUsedForJob: ts.selectedLanguage, // REMOVED
+                transcriptionErrorMessage: null,
+                ranInBackground: false,
+                showTranscribeModal: true,
             };
         } else {
-            // This branch is for when isTranscribing is explicitly false (e.g. job finished, error, cancelled by event)
-            // languageUsedForJob was reset by the custom_transcription_job_completed listener for terminal states
+            // isTranscribing is false (job is ending or being cleared)
+            const currentJobStatus = status || ts.transcriptionJobStatus;
+            let newShowModalConfig = ts.showTranscribeModal; // Default to current modal visibility
+
+            if (currentJobStatus === 'done') {
+                // If job is done, modal visibility depends on whether it ran in background.
+                // If it ran in background, the custom_transcription_job_completed listener
+                // would have already set showTranscribeModal to false and shown a toast.
+                // This function should respect that.
+                newShowModalConfig = ts.ranInBackground ? false : true;
+            } else if (currentJobStatus === 'error' || currentJobStatus === 'cancelled') {
+                // For errors or cancellations, always show the modal to display the message.
+                newShowModalConfig = true;
+            } else if (currentJobStatus === null) {
+                // If status is being explicitly cleared to null (e.g., after user acknowledges modal), hide modal.
+                newShowModalConfig = false;
+            }
+            // If currentJobStatus is 'running' or 'initiating' but isTranscribing is false,
+            // this is an unusual state. The default newShowModalConfig (ts.showTranscribeModal)
+            // will be used, or the specific conditions above will take precedence.
+
             updatedState = {
                 ...ts,
                 isTranscribing: false,
-                transcriptionJobStatus: status || ts.transcriptionJobStatus, // e.g. 'done', 'error', 'cancelled'
+                transcriptionJobStatus: currentJobStatus,
                 transcriptionErrorMessage: errorMessage || ts.transcriptionErrorMessage,
-                showTranscribeModal: true, // Keep modal open to show final status/error
+                showTranscribeModal: newShowModalConfig,
             };
+
+            // If currentJobStatus is being set to null (full reset), clear related fields.
+            if (currentJobStatus === null) {
+                updatedState.transcriptionJobId = null;
+                updatedState.activeMediaDuringTranscriptionStart = null;
+                updatedState.mediaPathForLastJob = null;
+                updatedState.transcriptionProgress = { percent: 0, message: '' };
+                // Reset ranInBackground only when the job is fully cleared to null state.
+                // This ensures that if setTranscriptionStatus(false, {status: 'done'}) is called
+                // for a background job, 'ranInBackground' is still true for the logic above
+                // and for the event listener.
+                updatedState.ranInBackground = false;
+            }
         }
-        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}'`);
+        console.log(`[JULES-DEBUG TS setStatus Updated] Store updated. New jobStatus=${updatedState.transcriptionJobStatus}, new jobId=${updatedState.transcriptionJobId}, progressMsg='${updatedState.transcriptionProgress.message}', showModal=${updatedState.showTranscribeModal}`);
         return updatedState;
     });
 
     if (isTranscribing) {
-        updateProjectStoreState({ error: null }); // Clear project-level errors when starting a new job
+        updateProjectStoreState({ error: null });
     }
 }
 
@@ -1182,50 +1220,95 @@ listen('media_renamed', (event) => {
 listen('custom_transcription_job_completed', async (event) => {
     if (!event.payload) return;
     const { status, jobFinishedPath, transcriptFilePath, translatedTranscriptFilePath, errorMessage } = event.payload;
-    const currentStore = get(transcriptStore);
+    const currentStore = get(transcriptStore); // Get store state *before* updates
 
-    // Only process if the completed job was for the currently selected media
-    if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
-        if (status === 'done') {
-            console.log('[TranscriptStore] Received custom_transcription_job_completed:', event.payload);
-            let activePathToLoad = null;
-            let newOriginalPath = currentStore.originalTranscriptPath;
-            let newEnglishPath = currentStore.englishTranscriptPath;
+    if (currentStore.isTranscribing && jobFinishedPath === currentStore.mediaPathForLastJob) {
+        const wasModalVisibleAtEventTime = currentStore.showTranscribeModal;
+        const wasJobRunInBackground = currentStore.ranInBackground;
+        const shouldShowToastNotification = wasJobRunInBackground || !wasModalVisibleAtEventTime;
 
-            // Update store with new paths first, so they are available for loadTranscriptFile
-            const updates = {};
-            if (transcriptFilePath) {
-                updates.originalTranscriptPath = transcriptFilePath;
-                newOriginalPath = transcriptFilePath; // for local var use
-                // If current active lang is original, or if it's original and no translation will exist, this is the one to load.
-                if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
-                    activePathToLoad = transcriptFilePath;
+        let finalProgressMessage = '';
+        const updatePayload = {};
+        let activePathToLoad = null; // For 'done' status data loading
+        const pathUpdates = {}; // For 'done' status path updates
+
+        switch (status) {
+            case 'done':
+                finalProgressMessage = "Transcription successful";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "success", 0);
                 }
-            }
-            if (translatedTranscriptFilePath) {
-                updates.englishTranscriptPath = translatedTranscriptFilePath;
-                newEnglishPath = translatedTranscriptFilePath; // for local var use
-                // If current active lang is English, this is the one to load.
-                if (currentStore.activeTranscriptLanguage === 'english') {
-                    activePathToLoad = translatedTranscriptFilePath;
+                updatePayload.transcriptionJobStatus = 'done';
+                updatePayload.transcriptionErrorMessage = null;
+                updatePayload.isTranscribing = false;
+
+                // Logic for determining paths to load (largely existing)
+                if (currentStore.selectedMediaFile?.path === jobFinishedPath) {
+                    let newOriginalPath = currentStore.originalTranscriptPath;
+                    let newEnglishPath = currentStore.englishTranscriptPath;
+
+                    if (transcriptFilePath) {
+                        pathUpdates.originalTranscriptPath = transcriptFilePath;
+                        newOriginalPath = transcriptFilePath;
+                        if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
+                            activePathToLoad = transcriptFilePath;
+                        }
+                    }
+                    if (translatedTranscriptFilePath) {
+                        pathUpdates.englishTranscriptPath = translatedTranscriptFilePath;
+                        newEnglishPath = translatedTranscriptFilePath;
+                        if (currentStore.activeTranscriptLanguage === 'english') {
+                            activePathToLoad = translatedTranscriptFilePath;
+                        }
+                    }
+                    if (!activePathToLoad && newOriginalPath) {
+                        activePathToLoad = newOriginalPath;
+                    }
+                    if (Object.keys(pathUpdates).length > 0) {
+                        Object.assign(updatePayload, pathUpdates);
+                    }
                 }
-            }
-            // If no specific active path was determined (e.g. active lang was english, but only original came back),
-            // default to loading the original if it exists.
-            if (!activePathToLoad && newOriginalPath) {
-                activePathToLoad = newOriginalPath;
-            }
+                break;
+            case 'error':
+                finalProgressMessage = `Transcription failed: ${errorMessage || 'Unknown error'}`;
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "error", 0);
+                } else {
+                    updateProjectStoreState({ error: `Transcription failed: ${errorMessage || 'Unknown error'}` });
+                }
+                updatePayload.transcriptionJobStatus = 'error';
+                updatePayload.transcriptionErrorMessage = errorMessage;
+                updatePayload.isTranscribing = false;
+                break;
+            case 'cancelled':
+                finalProgressMessage = "Transcription cancelled";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "info", 0);
+                } else {
+                    updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
+                }
+                updatePayload.transcriptionJobStatus = 'cancelled';
+                updatePayload.transcriptionErrorMessage = null;
+                updatePayload.isTranscribing = false;
+                break;
+            default:
+                console.warn(`[TranscriptStore] Unknown status in custom_transcription_job_completed: ${status}`);
+                return; // Don't proceed with updates for unknown status
+        }
 
-            transcriptStore.update(ts => ({ ...ts, ...updates }));
+        updatePayload.showTranscribeModal = shouldShowToastNotification ? false : true;
+        updatePayload.transcriptionProgress = { ...currentStore.transcriptionProgress, message: finalProgressMessage };
 
+        transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
+
+        // Perform async operations after store update for 'done' status
+        if (status === 'done' && currentStore.selectedMediaFile?.path === jobFinishedPath) {
             if (activePathToLoad) {
                 try {
                     const service = await import('../services/projectService.js');
                     if (service.loadTranscriptFile) {
                         console.log(`[TranscriptStore] Loading transcript after job completion: ${activePathToLoad}`);
                         await service.loadTranscriptFile(activePathToLoad);
-                        // setTranscriptData called by loadTranscriptFile should now correctly populate
-                        // originalSegments/englishSegments based on the path.
                     } else {
                         console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
                         updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
@@ -1236,7 +1319,6 @@ listen('custom_transcription_job_completed', async (event) => {
                 }
             }
 
-            // Refresh project files to update UI elements like LeftPanel about new transcript files
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
@@ -1246,46 +1328,15 @@ listen('custom_transcription_job_completed', async (event) => {
             } catch (e) {
                 console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
             }
-            // clearTranscriptionStatus('Transcription complete.'); // Removed
-            // toggleTranscribeModal(false); // Removed
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'done'. Payload:`, event.payload);
-
-            // The ...updates object should be applied in the final store update for 'done'
-            // setTranscriptData handles transcribedOriginalLanguageCode and wasTranslatedToEnglish
-            transcriptStore.update(ts => ({
-                ...ts,
-                ...updates, // Apply path updates
-                isTranscribing: false,
-                transcriptionJobStatus: 'done',
-                transcriptionErrorMessage: null,
-                // languageUsedForJob: null, // REMOVED - Field is being removed
-            }));
-
-        } else if (status === 'error') {
-            console.error(`[TranscriptStore] Transcription job failed for ${jobFinishedPath}: ${errorMessage}`);
-            updateProjectStoreState({ error: `Transcription failed: ${errorMessage}` });
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'error'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({
-                ...ts,
-                isTranscribing: false,
-                transcriptionJobStatus: 'error',
-                transcriptionErrorMessage: errorMessage,
-                // languageUsedForJob: null, // REMOVED
-            }));
-        } else if (status === 'cancelled') {
-            console.info(`[TranscriptStore] Transcription job cancelled for ${jobFinishedPath}.`);
-            updateProjectStoreState({ statusMessage: 'Transcription cancelled.' });
-            console.log(`[JULES-DEBUG TS eventComplete] Status: 'cancelled'. Payload:`, event.payload);
-            transcriptStore.update(ts => ({
-                ...ts,
-                isTranscribing: false,
-                transcriptionJobStatus: 'cancelled',
-                transcriptionErrorMessage: null,
-                // languageUsedForJob: null, // REMOVED
-            }));
         }
+
     } else {
-         console.log('[TranscriptStore] Received custom_transcription_job_completed for a non-selected/different media file:', jobFinishedPath, currentStore.selectedMediaFile?.path);
+         console.log('[TranscriptStore] Received job completion for a job not actively tracked or for a different media path:', jobFinishedPath, currentStore.mediaPathForLastJob, `Is transcribing: ${currentStore.isTranscribing}`);
+         // Optionally, explicitly set isTranscribing to false if this job ID was the one being tracked,
+         // but the media path doesn't match (e.g. user switched media while job was running)
+         // For now, the primary condition handles the main logic flow.
+         // Consider if any cleanup is needed if jobID matches but path does not.
+         return;
     }
 });
 

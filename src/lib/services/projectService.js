@@ -785,7 +785,10 @@ export async function requestTranscription() {
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
-    if (storeState.isTranscribing) { await message('A transcription job is already in progress.', { title: 'Transcription Request', type: 'info'}); return; }
+    if (storeState.isTranscribing) {
+        toggleTranscribeModal(true);
+        return;
+    }
     prepareForNewTranscription(); // Call the imported function directly
 }
 export async function handleConfirmStartTranscription() {
