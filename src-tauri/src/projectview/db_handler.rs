@@ -334,7 +334,7 @@ pub fn init_db() -> Result<(), CommandError> {
             group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
             project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE,
+            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE,
             UNIQUE (project_id, file_asset_path, group_id)
         )",
         [],
