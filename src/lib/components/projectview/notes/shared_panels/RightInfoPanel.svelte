@@ -3,7 +3,7 @@
     import { onMount } from 'svelte';
     import { slide } from 'svelte/transition';
     import { sineInOut } from 'svelte/easing';
-    import { StickiesIcon } from '$lib/components/projectview/shared/icons.svelte';
+    import Icon from '$lib/components/projectview/shared/icons.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
     // This panel is now generic, props might be needed later
@@ -29,7 +29,7 @@
             class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             title={$panelStateStore.rightCollapsed ? 'Expand Highlights' : 'Collapse Highlights'}
         >
-            <StickiesIcon class="w-4 h-4"/>
+            <Icon type="stickies" class="w-4 h-4"/>
         </button>
         {#if !$panelStateStore.rightCollapsed}
             <span class="ml-2">Highlights</span>
