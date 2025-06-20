@@ -43,7 +43,7 @@
                 projectId: projectUuid,
                 name: groupName.trim(),
                 description: groupDescription.trim() || null,
-                fileAssetRelativePath: fileToAdd ? fileToAdd.relativePath : null // Pass file path
+                fileAssetRelativePath: fileToAdd ? fileToAdd.relative_path : null // Pass file path
             });
 
             // newGroup is the GroupData returned from the backend command
@@ -51,7 +51,7 @@
                 if (projectUuid) { // Ensure projectUuid is valid before updating list
                     await updateProjectGroupsList(projectUuid);
                 }
-                if (fileToAdd && fileToAdd.relativePath) {
+                if (fileToAdd && fileToAdd.relative_path) {
                     // Even if backend handles association, dispatch this event for UI consistency
                     // if fileToAdd was intended. The backend log will show if association failed.
                     dispatch('groupCreatedAndFileAdded', { group: newGroup, file: fileToAdd });
