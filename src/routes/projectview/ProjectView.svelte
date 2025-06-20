@@ -413,37 +413,48 @@
     }
 
     async function handleRequestMediaSelection(event) {
+        console.log(`[ProjectView] handleRequestMediaSelection: Received event with mediaPath: '${event.detail?.mediaPath}'`);
         const { mediaPath } = event.detail;
         const mediaName = mediaPath ? mediaPath.split(/[\\/]/).pop() : "Unknown Media";
+
         if (!mediaPath) {
             project.update(p => ({...p, isLoading: false, statusMessage: 'Error: Media path missing.'}));
+            console.error('[ProjectView] handleRequestMediaSelection: mediaPath is null or undefined.');
             return;
         }
         project.update(p => ({...p, isLoading: true, statusMessage: `Selecting media ${mediaName}...`}));
 
         let canProceed = true;
         if (selectedTab === 'notes') {
+            console.log(`[ProjectView] handleRequestMediaSelection: Calling checkUnsavedChangesThenProceed for path '${mediaPath}' from current tab '${selectedTab}'`);
             canProceed = await checkUnsavedChangesThenProceed(mediaPath, "selecting media for transcription tab");
+            console.log(`[ProjectView] handleRequestMediaSelection: checkUnsavedChangesThenProceed returned: ${canProceed}`);
         }
 
         if (!canProceed) {
             project.update(p => ({...p, isLoading: false, statusMessage: 'Media selection cancelled.'}));
+            console.log('[ProjectView] handleRequestMediaSelection: Not proceeding with media selection.');
             return;
         }
 
         if (selectedTab !== 'transcriptions') {
+            console.log(`[ProjectView] handleRequestMediaSelection: Current tab is '${selectedTab}', switching to 'transcriptions'.`);
             await handleTabClick('transcriptions');
             await tick();
         } else {
-            if (get(project).selectedMediaFile?.path !== mediaPath && get(project).selectedMediaFile?.path) {
-                clearTranscriptState();
+            // If already on transcriptions tab, check if different media is being selected
+            if (get(transcriptStore).selectedMediaFile?.path !== mediaPath && get(transcriptStore).selectedMediaFile?.path) {
+                 console.log(`[ProjectView] handleRequestMediaSelection: Already on transcriptions tab, but different media. Clearing old transcript state.`);
+                clearTranscriptState(); // Clear state if switching media within the same tab
+            } else if (get(transcriptStore).selectedMediaFile?.path === mediaPath) {
+                console.log(`[ProjectView] handleRequestMediaSelection: Media path '${mediaPath}' is already selected in transcriptions tab.`);
             }
         }
-        project.update(p => ({...p, isLoading: true, statusMessage: `Loading ${mediaName} in Transcriptions...`}));
+        project.update(p => ({...p, isLoading: true, statusMessage: `Loading ${mediaName} in Transcriptions...`})); // This might be redundant if handleTabClick sets loading
         await tick();
 
         let fileEntry = null;
-        function findMediaByPathRecursive(nodes, path) {
+        function findMediaByPathRecursive(nodes, path) { // Keep this helper function local or move to a service if used elsewhere
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
                 if (node.file_type === 'media' && !node.is_directory && node.path === path) return node;
@@ -451,16 +462,20 @@
             }
             return null;
         }
+        console.log(`[ProjectView] handleRequestMediaSelection: Attempting to find FileEntry for mediaPath: '${mediaPath}'`);
         fileEntry = findMediaByPathRecursive(get(project).files || [], mediaPath);
+        console.log(`[ProjectView] handleRequestMediaSelection: findMediaByPathRecursive result:`, fileEntry);
 
         if (fileEntry) {
             selectMediaStoreAction(fileEntry);
+            console.log(`[ProjectView] handleRequestMediaSelection: Called selectMediaStoreAction with fileEntry:`, fileEntry);
         } else {
+            console.error(`[ProjectView] handleRequestMediaSelection: FileEntry not found for path: '${mediaPath}'`);
             await message(`Error: Could not find media file (${mediaName}).`, {title: "Error", type:"error"});
             project.update(p => ({...p, statusMessage: `Error selecting ${mediaName}.`}));
         }
-        await tick();
-        project.update(p => ({...p, isLoading: false }));
+        await tick(); // Ensure UI updates after selection or error
+        project.update(p => ({...p, isLoading: false })); // Ensure loading is off
     }
 
     async function handleRequestTranscriptionTabWithMedia(event) {
