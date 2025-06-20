@@ -1,12 +1,42 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-    import { get } from 'svelte/store';
+    import { get, writable } from 'svelte/store';
+    import { createEventDispatcher } from 'svelte';
+    import { confirm, message } from '@tauri-apps/plugin-dialog';
     import EditGroupModal from '$lib/components/projectview/modals/EditGroupModal.svelte';
+    import FileContextMenu from '$lib/components/projectview/shared/FileContextMenu.svelte';
+    import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
+    import FileRenameModal from '$lib/components/projectview/modals/FileRenameModal.svelte';
+    import { renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
 
     // Props
     export let groupData; // Expected: { id, name, description, project_id }
+
+    const dispatch = createEventDispatcher();
+
+    // "Add to Group" Submenu State
+    let showAddToGroupSubMenu = false;
+    let addToGroupSubMenuX = 0;
+    let addToGroupSubMenuY = 0;
+    let itemForAddToGroup = null;
+    let projectGroupsForMenu = [];
+    let showCreateGroupModalFromGroupView = false;
+    let closeAddToGroupSubMenuListener = null;
+
+    // Context Menu State
+    let contextMenuVisible = false;
+    let contextMenuItem = null;
+    let contextMenuX = 0;
+    let contextMenuY = 0;
+    let closeContextMenuListener = null;
+
+    // Rename Modal State
+    let showRenameModal = false;
+    let itemToRename = null;
+
+    const CONTEXT_MENU_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>`;
 
     // Internal State
     let categorizedFiles = {
@@ -46,7 +76,7 @@
 
     async function fetchGroupContents() {
         // Use get(project) to access store values if outside reactive context or component markup
-        const currentProject = get(project);
+        const currentProject = get(projectStore);
         if (!groupData || !groupData.id || !currentProject || !currentProject.id || !currentProject.xmlPath) {
             errorMessage = "Group data or project context is missing.";
             console.error("fetchGroupContents precondition failed:", { groupData, currentProject });
@@ -102,32 +132,336 @@
     }
 
     // Reactive watch on groupData and specific project properties
-    // Using get(project) inside the reactive block might be redundant if $project is used,
+    // Using get(projectStore) inside the reactive block might be redundant if $projectStore is used,
     // but ensures access if the block's timing is tricky with store updates.
-    // For simplicity and directness, direct $: subscription to $project.id and $project.xmlPath is cleaner.
-    $: if (groupData && groupData.id && $project.id && $project.xmlPath) {
+    // For simplicity and directness, direct $: subscription to $projectStore.id and $projectStore.xmlPath is cleaner.
+    $: if (groupData && groupData.id && $projectStore.id && $projectStore.xmlPath) {
         fetchGroupContents();
-    } else if (!groupData || !$project.id || !$project.xmlPath) { // Added condition to clear if context is lost
+    } else if (!groupData || !$projectStore.id || !$projectStore.xmlPath) { // Added condition to clear if context is lost
         categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
         isLoading = false;
         errorMessage = null;
     }
 
-    function handleGroupDetailsUpdated(event) {
+    // Listen for external notifications to refresh group content
+    $: if ($groupContentNotification && groupData && $groupContentNotification.groupId === groupData.id) {
+        console.log('[GroupDetailView] groupContentNotification received for current group, refreshing contents...', $groupContentNotification);
+        fetchGroupContents();
+        // Resetting the notification store after processing to prevent re-triggering
+        // This is a common pattern, but ensure it fits the overall design (e.g., if other components also need to react).
+        // If multiple components need to react independently, this reset should be handled more carefully,
+        // perhaps by having components acknowledge the notification or by using event-based logic.
+        // For a simple refresh, immediate reset is often fine.
+        // groupContentNotification.set(null);
+        // Edit: Per discussion, if the store value uses a timestamp, downstream components can decide if the notification is "new" enough to act on.
+        // So, direct reset here might not be needed if consumers check the timestamp.
+        // However, for this specific component, if it acts on any notification for its ID, resetting might still be useful if it shouldn't re-fetch for the exact same timestamped event.
+        // Let's defer resetting for now, assuming consumers will be smart or the notification implies a definite state change needing refresh.
+    }
+
+    async function handleGroupDetailsUpdated(event) { // Make it async if calling await
         const updatedGroup = event.detail;
         groupData = { ...groupData, ...updatedGroup }; // Update local prop
         isEditGroupModalOpen = false;
 
-        // Update project store
-        project.update(p => {
+        // Update project store's selectedGroupData
+        projectStore.update(p => {
             if (p.selectedGroupData && p.selectedGroupData.id === updatedGroup.id) {
                 return { ...p, selectedGroupData: { ...p.selectedGroupData, ...updatedGroup } };
             }
             return p;
         });
-        // Potentially dispatch global event for NotesLeftPanel to refresh all groups if name changed
-        // For now, this view and the central selectedGroupData are updated.
+
+        // New line: Refresh the list of all project groups
+        if (updatedGroup.project_id) { // Ensure we have a project_id
+            console.log('[GroupDetailView] Group details updated, refreshing project groups list...');
+            await updateProjectGroupsList(updatedGroup.project_id);
+        } else {
+            console.warn('[GroupDetailView] project_id not available in updatedGroup, cannot refresh project groups list.');
+        }
     }
+
+    function handleFileContextMenu(event, file) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (contextMenuVisible) {
+        closeContextMenu();
+      }
+      contextMenuItem = file;
+      contextMenuX = event.clientX;
+      contextMenuY = event.clientY;
+      contextMenuVisible = true;
+      // Add listener to close on outside click
+      if (closeContextMenuListener) document.removeEventListener('click', closeContextMenuListener, { capture: true });
+      closeContextMenuListener = (e) => {
+        const menuElement = document.getElementById('group-detail-context-menu'); // Ensure unique ID for this menu
+        if (menuElement && !menuElement.contains(e.target)) {
+          closeContextMenu();
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeContextMenuListener, { capture: true, once: true }), 0);
+    }
+
+    function closeContextMenu() {
+      contextMenuVisible = false;
+      contextMenuItem = null;
+      if (closeContextMenuListener) {
+        document.removeEventListener('click', closeContextMenuListener, { capture: true });
+        closeContextMenuListener = null;
+      }
+    }
+
+    async function handleContextMenuRemoveFromGroup(event) {
+      const item = event.detail.item;
+      if (!item || !groupData || !groupData.id) return;
+
+      const confirmed = await confirm(`Are you sure you want to remove "${item.name}" from the group "${groupData.name}"?`, {
+        title: 'Confirm Removal',
+        type: 'warning'
+      });
+      if (!confirmed) return;
+
+      try {
+        const currentProject = get(projectStore);
+        await invoke('remove_file_from_group', {
+          projectId: currentProject.id,
+          groupId: groupData.id,
+          fileAssetRelativePath: item.relative_path
+        });
+        updateProjectStoreState({ statusMessage: `File "${item.name}" removed from group "${groupData.name}".` });
+        await fetchGroupContents(); // Refresh the current view
+      } catch (err) {
+        console.error('Error removing file from group:', err);
+        await message(`Failed to remove file from group: ${err}`, { title: 'Error', type: 'error' });
+      }
+    }
+
+    async function handleContextMenuOpen(event) {
+      const item = event.detail.item;
+      if (!item) return;
+      console.log('Open action for:', item);
+      handleFileDoubleClick(item); // Uses existing logic to open the file
+      closeContextMenu();
+    }
+
+    async function handleContextMenuReveal(event) {
+      const item = event.detail.item;
+      if (!item || !item.full_path) return;
+      console.log('Reveal action for:', item);
+      try {
+        await invoke('reveal_in_file_explorer', { filePathStr: item.full_path });
+      } catch (err) {
+        console.error("Error revealing file:", err);
+        await message(`Could not reveal file: ${err.message || err}`, { title: 'Error', type: 'error' });
+      }
+      closeContextMenu();
+    }
+
+    function handleContextMenuRename(event) {
+      const item = event.detail.item;
+      if (!item) return;
+      console.log('Rename action for:', item);
+      itemToRename = item; // item should have { name, relative_path, file_type, full_path }
+      showRenameModal = true;
+      closeContextMenu();
+    }
+
+    async function handleRenameModalConfirm(event) {
+        const newNameFromModal = event.detail.newName; // This is the (potentially) stem name from the modal
+        const originalFullName = itemToRename.name; // Full original name, e.g., "OldName.png"
+        const itemType = itemToRename.file_type;
+
+        if (!itemToRename || !newNameFromModal || newNameFromModal.trim() === '') {
+            showRenameModal = false;
+            itemToRename = null;
+            return;
+        }
+
+        let finalNewName = newNameFromModal.trim();
+        const originalExtension = originalFullName.includes('.') ? originalFullName.substring(originalFullName.lastIndexOf('.')) : '';
+
+        // Check if the name from the modal already includes an extension.
+        // The FileRenameModal is designed to send only the stem for item types like 'image', 'doc', 'table', etc.
+        // So, newNameFromModal is not expected to have an extension for these types.
+        // We need to append the original extension if one existed.
+        if (originalExtension && !finalNewName.endsWith(originalExtension)) {
+            // A simple check for whether newNameFromModal already contains *any* dot can also be used
+            // if we want to allow users to change extensions, but the current modal doesn't facilitate that for stem input mode.
+            // For now, assume we always preserve the original extension if the modal sends a stem.
+            // More robustly, check if the modal sent a name that *doesn't* have an extension part.
+            const newNameHasExtension = finalNewName.includes('.') && finalNewName.lastIndexOf('.') > 0; // Basic check
+            if (!newNameHasExtension) {
+                finalNewName += originalExtension;
+            }
+        }
+
+        // Optional: Add a console log to verify the names
+        console.log(`[GroupDetailView] Rename Confirm: Original='${originalFullName}', FromModal='${newNameFromModal}', Final='${finalNewName}'`);
+
+        const currentProj = get(projectStore);
+        try {
+            // Call renameProjectItem with the finalNewName that includes the extension
+            await renameProjectItem(itemToRename.full_path, finalNewName, itemType, currentProj.xmlPath, currentProj.baseDirectory);
+            updateProjectStoreState({ statusMessage: `Item "${originalFullName}" renamed to "${finalNewName}" successfully.` });
+            await fetchGroupContents(); // Refresh this group's view
+        } catch (error) {
+            console.error('Error renaming item:', error);
+            await message(`Failed to rename item: ${error.message || error}`, { title: 'Error', type: 'error' });
+        } finally {
+            showRenameModal = false;
+            itemToRename = null;
+        }
+    }
+
+    function handleRenameModalClose() {
+      showRenameModal = false;
+      itemToRename = null;
+    }
+
+    async function handleContextMenuDelete(event) {
+      const item = event.detail.item;
+      if (!item || !item.full_path) return;
+      console.log('Delete action for:', item);
+
+      const confirmed = await confirm(`Are you sure you want to delete "${item.name}"? This action cannot be undone.`, {
+        title: 'Confirm Deletion',
+        type: 'warning'
+      });
+      if (!confirmed) {
+        closeContextMenu();
+        return;
+      }
+
+      const currentProj = get(projectStore);
+      try {
+        await deleteProjectItem(item.full_path, currentProj.xmlPath); // deleteProjectItem expects full path
+        updateProjectStoreState({ statusMessage: `Item "${item.name}" deleted successfully.` });
+        await fetchGroupContents(); // Refresh this group's view
+        // projectService.deleteProjectItem should have updated the main projectStore files list
+      } catch (error) {
+        console.error('Error deleting item:', error);
+        await message(`Failed to delete item: ${error.message || error}`, { title: 'Error', type: 'error' });
+      }
+      closeContextMenu();
+    }
+
+    async function handleContextMenuTranscribe(event) {
+      const item = event.detail.item;
+      if (!item || !item.full_path) return;
+      console.log('Transcribe action for:', item);
+      dispatch('requestmediaselection', { mediaPath: item.full_path });
+      updateProjectStoreState({ statusMessage: 'Transcription requested for ' + item.name });
+      closeContextMenu();
+    }
+
+    function handleContextMenuAddToGroup(event) { // Renamed from original placeholder to avoid conflict
+      const item = event.detail.item;
+      if (!item) return;
+      itemForAddToGroup = item;
+      // Position submenu relative to the main context menu click coordinates
+      openAddToGroupSubMenu(contextMenuX + 5, contextMenuY + 5); // Offset slightly
+      // Main context menu closes itself via its own click handler now
+    }
+
+    async function fetchProjectGroupsForMenu(forceRefresh = false) {
+      const currentProject = get(projectStore); // projectStore is the alias for project
+      if (!currentProject || !currentProject.id) {
+        projectGroupsForMenu = [];
+        return;
+      }
+
+      const groupsFromStore = get(currentProjectGroupsList);
+      if (!forceRefresh && groupsFromStore && groupsFromStore.length > 0) {
+        projectGroupsForMenu = [...groupsFromStore].sort((a, b) => a.name.localeCompare(b.name)); // Ensure sort if store isn't pre-sorted or copy needed
+        // console.log('[GroupDetailView] Using groups from store for submenu.');
+        return;
+      }
+
+      // console.log('[GroupDetailView] Forcing refresh or store empty, calling updateProjectGroupsList.');
+      await updateProjectGroupsList(currentProject.id); // This updates the store
+      projectGroupsForMenu = [...get(currentProjectGroupsList)].sort((a, b) => a.name.localeCompare(b.name)); // Read from store after update
+    }
+
+    async function openAddToGroupSubMenu(x_pos, y_pos) {
+        await fetchProjectGroupsForMenu(); // Ensure groups are loaded
+        addToGroupSubMenuX = x_pos;
+        addToGroupSubMenuY = y_pos;
+        showAddToGroupSubMenu = true;
+
+        if (closeAddToGroupSubMenuListener) document.removeEventListener('click', closeAddToGroupSubMenuListener, { capture: true });
+        closeAddToGroupSubMenuListener = (e) => {
+        const subMenuElement = document.getElementById('group-detail-add-to-group-submenu');
+        if (subMenuElement && !subMenuElement.contains(e.target)) {
+            closeAddToGroupSubMenu();
+        }
+        };
+        setTimeout(() => {
+        if(showAddToGroupSubMenu) document.addEventListener('click', closeAddToGroupSubMenuListener, { capture: true, once: true });
+        }, 0);
+    }
+
+    function closeAddToGroupSubMenu(preserveItemForGroupCreation = false) {
+        showAddToGroupSubMenu = false;
+        if (!preserveItemForGroupCreation) {
+            itemForAddToGroup = null;
+        }
+        if (closeAddToGroupSubMenuListener) {
+        document.removeEventListener('click', closeAddToGroupSubMenuListener, { capture: true });
+        closeAddToGroupSubMenuListener = null;
+        }
+    }
+
+    async function handleAddFileToExistingGroupInGroupView(group) {
+        if (!itemForAddToGroup || !group || !group.id) return;
+        const currentProject = get(projectStore);
+        if (!currentProject || !currentProject.id) {
+        await message('Project context is missing. Cannot add to group.', { title: 'Error', type: 'error'});
+        return;
+        }
+
+        try {
+        await invoke('add_file_to_existing_group', {
+            projectId: currentProject.id,
+            groupId: group.id,
+            fileAssetRelativePath: itemForAddToGroup.relative_path
+        });
+        updateProjectStoreState({ statusMessage: `File "${itemForAddToGroup.name}" added to group "${group.name}".` });
+        if (group.id === groupData.id) { // 'group' is the target group, 'groupData' is the currently viewed group
+            console.log('[GroupDetailView] File added to current group, refreshing contents...');
+            await fetchGroupContents();
+        }
+        } catch (err) {
+        console.error('Error adding file to group:', err);
+        await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
+        } finally {
+        closeAddToGroupSubMenu();
+        }
+    }
+
+    function handleNewGroupClickInGroupView() {
+        // itemForAddToGroup is already set when the submenu was opened.
+        showCreateGroupModalFromGroupView = true;
+        closeAddToGroupSubMenu(true);
+    }
+
+    function handleModalGroupCreated() { // When group is created, but file might not have been added if itemForAddToGroup was null
+        fetchProjectGroupsForMenu(true); // Refresh group list
+        showCreateGroupModalFromGroupView = false;
+        itemForAddToGroup = null; // Reset
+    }
+
+    function handleModalGroupCreatedAndFileAdded(event) { // When group is created AND current file added
+        fetchProjectGroupsForMenu(true); // Refresh group list
+        showCreateGroupModalFromGroupView = false;
+        updateProjectStoreState({ statusMessage: `File "${itemForAddToGroup?.name}" added to new group "${event.detail.group?.name}".` });
+
+        const newGroupData = event.detail.group;
+        if (newGroupData && itemForAddToGroup) { // Ensure itemForAddToGroup was processed
+           groupContentNotification.set({ groupId: newGroupData.id, action: 'file_added', timestamp: Date.now() });
+        }
+        itemForAddToGroup = null; // Reset
+    }
+
 </script>
 
 <div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800 rounded-md shadow">
@@ -161,7 +495,7 @@
             {:else if errorMessage}
                 <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
             {:else}
-                {#each CATEGORY_ORDER as category}
+                {#each CATEGORY_ORDER as category} <!-- UNCOMMENTED outer loop -->
                     {@const filesInCategory = categorizedFiles[category.key]}
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
@@ -169,9 +503,10 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
+                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
                                         role="button"
                                         tabindex="0"
                                         title={file.name}
@@ -181,17 +516,24 @@
                                                 <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain rounded"/>
                                             {:else}
                                                 {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
-                                            {/if}
+                                            {/if} <!-- Closes file.file_type === 'image' -->
                                         </div>
                                         <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
-                                    </div>
-                                {/each}
+                                        <button
+                                            on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 rounded text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="More options for {file.name}"
+                                        >
+                                            {@html CONTEXT_MENU_ICON_SVG}
+                                        </button>
+                                    </div> <!-- Closes thumbnail-item div -->
+                                {/each} <!-- Closes filesInCategory loop -->
                             </div>
                         {:else if !isLoading} <!-- Only show "No files" if not loading -->
                             <p class="text-sm text-gray-400 dark:text-gray-500 italic">No {category.name.toLowerCase()} in this group.</p>
                         {/if}
                     </div>
-                {/each}
+                {/each} <!-- End of UNCOMMENTED outer loop -->
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
                 {#if totalFiles === 0 && !isLoading}
@@ -211,9 +553,72 @@
     on:close={() => isEditGroupModalOpen = false}
 />
 
+<FileContextMenu
+  bind:isVisible={contextMenuVisible}
+  item={contextMenuItem}
+  x={contextMenuX}
+  y={contextMenuY}
+  on:open={handleContextMenuOpen}
+  on:reveal={handleContextMenuReveal}
+  on:rename={handleContextMenuRename}
+  on:delete={handleContextMenuDelete}
+  on:transcribe={handleContextMenuTranscribe}
+  on:addToGroup={handleContextMenuAddToGroup}
+  on:removeFromGroup={handleContextMenuRemoveFromGroup}
+  id="group-detail-context-menu"
+/>
+
+{#if showAddToGroupSubMenu && itemForAddToGroup}
+  <div
+    id="group-detail-add-to-group-submenu"
+    class="fixed z-[101] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[180px]"
+    style="left: {addToGroupSubMenuX}px; top: {addToGroupSubMenuY}px;"
+    on:click|stopPropagation
+    role="menu"
+  >
+    <button on:click|stopPropagation={handleNewGroupClickInGroupView} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
+    {#if projectGroupsForMenu.length > 0}
+      <hr class="my-1 border-gray-200 dark:border-gray-600" />
+      {#each projectGroupsForMenu as group (group.id)}
+        <button on:click|stopPropagation={() => handleAddFileToExistingGroupInGroupView(group)} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title={group.name}>
+          {group.name}
+        </button>
+      {/each}
+    {:else}
+      <span class="block w-full text-left px-3 py-1.5 text-gray-400 dark:text-gray-500 italic">No other groups</span>
+    {/if} <!-- This closes the #if projectGroupsForMenu.length > 0 -->
+  </div>
+{/if} <!-- This closes the #if showAddToGroupSubMenu && itemForAddToGroup -->
+
+<CreateGroupModal
+    bind:showModal={showCreateGroupModalFromGroupView}
+    projectUuid={$projectStore?.id}
+    fileToAdd={itemForAddToGroup}
+    on:close={() => { showCreateGroupModalFromGroupView = false; itemForAddToGroup = null; }}
+    on:groupCreated={handleModalGroupCreated}
+    on:groupCreatedAndFileAdded={handleModalGroupCreatedAndFileAdded}
+/>
+
+{#if showRenameModal && itemToRename}
+    <FileRenameModal
+        bind:showModal={showRenameModal}
+        currentName={itemToRename.name}
+        itemType={itemToRename.file_type}
+        isMediaRename={itemToRename.file_type === 'audio' || itemToRename.file_type === 'video'}
+        on:confirm={handleRenameModalConfirm}
+        on:close={handleRenameModalClose}
+    />
+{/if}
+<!-- Ensure all {#if} and {#each} blocks above this line are properly closed -->
 <style>
     /* Ensure grid items don't overflow their container excessively if names are too long */
     .grid div > p {
         max-width: 100%; /* Or specific width like '8rem' or '120px' */
+    }
+    .thumbnail-item {
+        position: relative; /* For absolute positioning of the context menu button */
+    }
+     .thumbnail-item:hover .opacity-0.group-hover\:opacity-100 {
+        opacity: 1;
     }
 </style>

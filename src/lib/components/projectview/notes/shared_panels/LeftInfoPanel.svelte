@@ -10,9 +10,9 @@
     import { renameProjectItem } from '$lib/services/projectService.js';
     import AddFieldModal from '$lib/components/projectview/modals/AddFieldModal.svelte';
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte'; // Added
-    import GroupMultiSelect from '$lib/components/projectview/infopanels/GroupMultiSelect.svelte'; // Added
+    import GroupMultiSelect from '$lib/components/projectview/shared/GroupMultiSelect.svelte'; // Added
     // import type { GroupData } from '$lib/types'; // Removed for JS compatibility
-    import FileEarmarkCodeIcon from '$lib/components/icons/FileEarmarkCodeIcon.svelte';
+    import Icon from '$lib/components/projectview/shared/icons.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
     import { deleteDefinition, customFieldDefinitions as customFieldDefinitionsStore, loadAllDefinitions } from '$lib/stores/customFieldStore.js'; // Ensure deleteDefinition is imported
     import CategoryTooltip from '../CategoryTooltip.svelte';
@@ -718,7 +718,7 @@
                 class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title={$panelStateStore.leftCollapsed ? 'Expand Metadata' : 'Collapse Metadata'}
             >
-                <FileEarmarkCodeIcon class="w-4 h-4"/>
+                <Icon type="fileEarmarkCode" class="w-4 h-4"/>
             </button>
             {#if !$panelStateStore.leftCollapsed}
                 <span class="ml-2">Metadata</span>

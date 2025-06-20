@@ -2,6 +2,8 @@
 import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event'; // Added for media_renamed event
 
+export const groupContentNotification = writable(null);
+
 const HARVEY_FILES_DIR = "harvey_files";
 const MEDIA_DIR_NAME = 'Media';
 const MEDIA_SUBDIR = 'media';
@@ -98,6 +100,33 @@ const initialState = {
 export const project = writable({ ...initialState });
 
 export const updateProjectStoreState = (newState) => project.update(s => ({...s, ...newState}));
+
+export const currentProjectGroupsList = writable([]);
+
+export async function updateProjectGroupsList(projectId) {
+    if (!projectId) {
+        console.warn('[projectStore] updateProjectGroupsList called without projectId.');
+        currentProjectGroupsList.set([]);
+        return;
+    }
+    try {
+        console.log(`[projectStore] Fetching groups for project: ${projectId}`);
+        // Ensure invoke is available in this scope, or this function needs to be part of a component/service that has it.
+        // For a store, it might be better to have this logic in a service that then calls currentProjectGroupsList.set().
+        // Assuming invoke is accessible globally or via an import if this were a .ts file with setup.
+        // If invoke is not directly available, this will be a runtime error.
+        // Consider moving this to projectService.js if invoke is not setup for standalone .js stores.
+        const { invoke } = await import('@tauri-apps/api/core'); // Dynamic import for invoke
+        const groups = await invoke('get_project_groups', { projectId });
+        const sortedGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
+        currentProjectGroupsList.set(sortedGroups);
+        console.log(`[projectStore] Updated currentProjectGroupsList with ${sortedGroups.length} groups.`);
+    } catch (error) {
+        console.error('[projectStore] Error fetching project groups:', error);
+        currentProjectGroupsList.set([]); // Set to empty on error
+        // Optionally dispatch a global error notification or update an error state in the store
+    }
+}
 
 // Action to clear selected group state
 export function clearSelectedGroup() {

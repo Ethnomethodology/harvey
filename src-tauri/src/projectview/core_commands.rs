@@ -48,14 +48,27 @@ pub async fn load_table_layout_prefs(project_id: String, table_path: String) -> 
 
 // --- Group Commands ---
 #[tauri::command]
-pub async fn create_new_group(project_id: String, name: String, description: Option<String>) -> Result<GroupData, String> {
-    if project_id.is_empty() || project_id == "null" { // Explicitly check for "null" as well, just in case
+pub async fn create_new_group(
+    project_id: String,
+    name: String,
+    description: Option<String>,
+    file_asset_relative_path: Option<String> // New parameter
+) -> Result<GroupData, String> {
+    if project_id.is_empty() || project_id == "null" {
         error!("[CMD] create_new_group - Project ID is missing or invalid.");
         return Err("Project ID is missing. Cannot create group.".to_string());
     }
+    if name.trim().is_empty() {
+        error!("[CMD] create_new_group - Group name cannot be empty.");
+        return Err("Group name cannot be empty.".to_string());
+    }
 
     let group_id = Uuid::new_v4().to_string();
-    info!("[CMD] create_new_group: id={}, project_id={}, name={}", group_id, project_id, name);
+    let trimmed_name = name.trim().to_string(); // Trim the name once
+    info!(
+        "[CMD] create_new_group: id={}, project_id={}, name={}, file_to_add_rel_path: {:?}",
+        group_id, project_id, trimmed_name, file_asset_relative_path
+    );
 
     let db_path = match db_handler::get_db_path() {
         Ok(path) => path,
@@ -65,7 +78,7 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
         }
     };
 
-    let conn = match Connection::open(db_path) {
+    let conn = match Connection::open(&db_path) {
         Ok(c) => c,
         Err(e) => {
             error!("[CMD] create_new_group - Failed to open DB: {}", e);
@@ -73,19 +86,103 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
         }
     };
 
-    match db_handler::create_group(&conn, &project_id, &group_id, &name, description.as_deref()) {
+    // Create the group first
+    match db_handler::create_group(&conn, &project_id, &group_id, &trimmed_name, description.as_deref()) {
         Ok(_) => {
-            info!("[CMD] create_new_group - Group created successfully: {}", group_id);
+            info!("[CMD] create_new_group - Group details saved successfully to 'groups' table: {}", group_id);
+
+            // If a file path is provided, try to associate it with the new group
+            if let Some(path_str) = file_asset_relative_path {
+                if !path_str.is_empty() {
+                    info!("[CMD] create_new_group - Attempting to add file '{}' to new group '{}'", path_str, group_id);
+                    match db_handler::add_file_to_group(&conn, &project_id, &group_id, &path_str) {
+                        Ok(_) => info!("[CMD] create_new_group - File '{}' successfully associated with new group '{}'.", path_str, group_id),
+                        Err(e) => {
+                            // Log a warning but don't fail the whole command, as the group was created.
+                            warn!("[CMD] create_new_group - Group '{}' created, but failed to associate file '{}': {}", group_id, path_str, e);
+                        }
+                    }
+                }
+            }
+            // Return success with GroupData regardless of file association outcome (as group was created)
             Ok(GroupData {
                 id: group_id,
                 project_id,
-                name,
+                name: trimmed_name, // Use the trimmed name
                 description,
             })
         }
         Err(e) => {
-            error!("[CMD] create_new_group - Failed: {}", e);
+            error!("[CMD] create_new_group - Failed to save group details to 'groups' table: {}", e);
+             if e.to_string().contains("UNIQUE constraint failed: groups.project_id, groups.name") {
+                 error!("[CMD] create_new_group - Unique constraint violation for group name '{}' in project '{}'.", trimmed_name, project_id);
+                 return Err(format!("A group with the name \"{}\" already exists in this project.", trimmed_name));
+            }
             Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn remove_file_from_group_command(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" { // Check for "null" string as well
+        error!("[CMD] remove_file_from_group_command - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot remove file from group.".to_string());
+    }
+    if group_id.is_empty() {
+        error!("[CMD] remove_file_from_group_command - Group ID is missing.");
+        return Err("Group ID is missing. Cannot remove file from group.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] remove_file_from_group_command - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot remove file from group.".to_string());
+    }
+
+    info!(
+        "[CMD] remove_file_from_group_command: Removing file '{}' from group '{}' in project '{}'",
+        file_asset_relative_path, group_id, project_id
+    );
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            let err_msg = format!("Failed to get database path: {}", e.to_string());
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            return Err(err_msg);
+        }
+    };
+
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = format!("Failed to open database at '{}': {}", db_path.display(), e.to_string());
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            return Err(err_msg);
+        }
+    };
+
+    match db_handler::remove_file_from_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!(
+                    "[CMD] remove_file_from_group_command - File '{}' removed from group '{}' successfully. Rows affected: {}",
+                    file_asset_relative_path, group_id, rows_affected
+                );
+            } else {
+                info!(
+                    "[CMD] remove_file_from_group_command - No association found for file '{}' in group '{}'. Nothing removed.",
+                    file_asset_relative_path, group_id
+                );
+            }
+            Ok(())
+        }
+        Err(e) => {
+            let err_msg = format!(
+                "Failed to remove file '{}' from group '{}': {}",
+                file_asset_relative_path, group_id, e.to_string()
+            );
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            Err(err_msg)
         }
     }
 }

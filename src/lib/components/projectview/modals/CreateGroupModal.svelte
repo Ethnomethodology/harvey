@@ -2,6 +2,7 @@
     import { createEventDispatcher } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { message } from '@tauri-apps/plugin-dialog'; // For error messages
+    import { updateProjectGroupsList } from '$lib/stores/projectStore.js';
 
     export let showModal = false;
     export let projectUuid = null; // Passed in from parent
@@ -27,6 +28,17 @@
     }
 
     async function handleSave() {
+        console.log('[CreateGroupModal] handleSave triggered. fileToAdd object:', fileToAdd);
+        if (fileToAdd) {
+            console.log('[CreateGroupModal] fileToAdd.name:', fileToAdd.name);
+            console.log('[CreateGroupModal] fileToAdd.path:', fileToAdd.path);
+            console.log('[CreateGroupModal] fileToAdd.relativePath (camelCase):', fileToAdd.relativePath);
+            console.log('[CreateGroupModal] fileToAdd.relative_path (snake_case):', fileToAdd.relative_path);
+            console.log('[CreateGroupModal] fileToAdd.asset_relative_path:', fileToAdd.asset_relative_path);
+            console.log('[CreateGroupModal] fileToAdd keys:', Object.keys(fileToAdd));
+        } else {
+            console.log('[CreateGroupModal] fileToAdd is null or undefined.');
+        }
         if (!groupName.trim()) {
             await message('Group name cannot be empty.', { title: 'Validation Error', type: 'error' });
             return;
@@ -41,23 +53,27 @@
             const newGroup = await invoke('create_new_group', {
                 projectId: projectUuid,
                 name: groupName.trim(),
-                description: groupDescription.trim() || null, // Send null if empty
+                description: groupDescription.trim() || null,
+                fileAssetRelativePath: fileToAdd ? (fileToAdd.relative_path || fileToAdd.relativePath) : null,
             });
 
-            if (newGroup && fileToAdd && fileToAdd.relativePath) {
-                await invoke('add_file_to_existing_group', {
-                    projectId: projectUuid,
-                    groupId: newGroup.id,
-                    fileAssetRelativePath: fileToAdd.relativePath,
-                });
-                dispatch('groupCreatedAndFileAdded', { group: newGroup, file: fileToAdd });
-            } else if (newGroup) {
-                // Case where modal might be used just to create a group without adding a file
-                dispatch('groupCreated', { group: newGroup });
+            // newGroup is the GroupData returned from the backend command
+            if (newGroup) { // If group creation was successful (backend returns GroupData)
+                if (projectUuid) { // Ensure projectUuid is valid before updating list
+                    await updateProjectGroupsList(projectUuid);
+                }
+                if (fileToAdd && (fileToAdd.relative_path || fileToAdd.relativePath)) {
+                    // Even if backend handles association, dispatch this event for UI consistency
+                    // if fileToAdd was intended. The backend log will show if association failed.
+                    dispatch('groupCreatedAndFileAdded', { group: newGroup, file: fileToAdd });
+                } else {
+                    dispatch('groupCreated', { group: newGroup });
+                }
             }
+            // If newGroup is null or command failed, an error would have been thrown by invoke
             closeModal();
         } catch (err) {
-            console.error('Error creating group or adding file:', err);
+            console.error('Error creating group:', err); // Error might include file association issues now
             await message(`Failed to create group: ${err}`, { title: 'Error', type: 'error' });
         } finally {
             isSaving = false;
