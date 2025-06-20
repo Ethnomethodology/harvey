@@ -238,7 +238,7 @@ pub fn init_db() -> Result<(), CommandError> {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
             PRIMARY KEY (project_id, table_asset_relative_path),
             FOREIGN KEY (project_id, table_asset_relative_path)
-                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
         )",
         [],
     )?;
@@ -352,7 +352,7 @@ pub fn init_db() -> Result<(), CommandError> {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
             FOREIGN KEY (project_id, asset_relative_path)
-                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
         )",
         [],
     )?;
