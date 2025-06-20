@@ -355,9 +355,11 @@
         }, 0);
     }
 
-    function closeAddToGroupSubMenu() {
+    function closeAddToGroupSubMenu(preserveItemForGroupCreation = false) {
         showAddToGroupSubMenu = false;
-        itemForAddToGroup = null; // Clear the item when submenu closes
+        if (!preserveItemForGroupCreation) {
+            itemForAddToGroup = null;
+        }
         if (closeAddToGroupSubMenuListener) {
         document.removeEventListener('click', closeAddToGroupSubMenuListener, { capture: true });
         closeAddToGroupSubMenuListener = null;
@@ -390,7 +392,7 @@
     function handleNewGroupClickInGroupView() {
         // itemForAddToGroup is already set when the submenu was opened.
         showCreateGroupModalFromGroupView = true;
-        closeAddToGroupSubMenu();
+        closeAddToGroupSubMenu(true);
     }
 
     function handleModalGroupCreated() { // When group is created, but file might not have been added if itemForAddToGroup was null
