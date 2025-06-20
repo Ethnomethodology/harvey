@@ -826,10 +826,10 @@ pub fn rename_asset_metadata_key(
         return Ok(());
     }
 
-    let mut conn = Connection::open(&db_path)?;
+    let mut conn = Connection::open(&db_path).map_err(CommandError::from)?;
 
     // Wrap operations in a transaction
-    let tx = conn.transaction().map_err(|e| CommandError::Rusqlite(e))?;
+    let tx = conn.transaction().map_err(CommandError::from)?;
 
     // Update child tables first
     // These updates will only apply if ON UPDATE CASCADE is working as expected from the DB schema.
@@ -856,7 +856,7 @@ pub fn rename_asset_metadata_key(
         Err(e) => {
             error!("[DB TX] Error updating file_groups for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
             // tx.rollback() is handled by drop if not committed
-            return Err(CommandError::Rusqlite(e));
+            return Err(CommandError::from(e));
         }
     }
 
@@ -873,7 +873,7 @@ pub fn rename_asset_metadata_key(
         }
         Err(e) => {
             error!("[DB TX] Error updating table_layout_preferences for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
-            return Err(CommandError::Rusqlite(e));
+            return Err(CommandError::from(e));
         }
     }
 
@@ -890,7 +890,7 @@ pub fn rename_asset_metadata_key(
         }
         Err(e) => {
             error!("[DB TX] Error updating media_transcript_data for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
-            return Err(CommandError::Rusqlite(e));
+            return Err(CommandError::from(e));
         }
     }
 
@@ -902,7 +902,7 @@ pub fn rename_asset_metadata_key(
         params![new_relative_path, new_file_path, new_file_name, project_id, old_relative_path],
     ).map_err(|e| {
         error!("[DB TX] Error updating asset_metadata for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
-        CommandError::Rusqlite(e)
+        CommandError::from(e)
     })?;
 
 
@@ -917,7 +917,7 @@ pub fn rename_asset_metadata_key(
         warn!("[DB TX] No asset_metadata found to rename for project_id {} and old key: {}. Previous child table updates might also have affected 0 rows.", project_id, old_relative_path);
     }
 
-    tx.commit().map_err(|e| CommandError::Rusqlite(e))?;
+    tx.commit().map_err(CommandError::from)?;
     info!("[DB] Transaction committed successfully for renaming asset metadata key for project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
 
     Ok(())
