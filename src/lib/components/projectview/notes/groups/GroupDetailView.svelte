@@ -1,6 +1,6 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js';
+    import { project as projectStore, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, updateProjectStoreState, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList, groupContentNotification } from '$lib/stores/projectStore.js';
     import { invoke, convertFileSrc } from '@tauri-apps/api/core';
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
@@ -141,6 +141,22 @@
         categorizedFiles = { audios: [], documents: [], images: [], tables: [], imported_transcripts: [], videos: [], others: [] };
         isLoading = false;
         errorMessage = null;
+    }
+
+    // Listen for external notifications to refresh group content
+    $: if ($groupContentNotification && groupData && $groupContentNotification.groupId === groupData.id) {
+        console.log('[GroupDetailView] groupContentNotification received for current group, refreshing contents...', $groupContentNotification);
+        fetchGroupContents();
+        // Resetting the notification store after processing to prevent re-triggering
+        // This is a common pattern, but ensure it fits the overall design (e.g., if other components also need to react).
+        // If multiple components need to react independently, this reset should be handled more carefully,
+        // perhaps by having components acknowledge the notification or by using event-based logic.
+        // For a simple refresh, immediate reset is often fine.
+        // groupContentNotification.set(null);
+        // Edit: Per discussion, if the store value uses a timestamp, downstream components can decide if the notification is "new" enough to act on.
+        // So, direct reset here might not be needed if consumers check the timestamp.
+        // However, for this specific component, if it acts on any notification for its ID, resetting might still be useful if it shouldn't re-fetch for the exact same timestamped event.
+        // Let's defer resetting for now, assuming consumers will be smart or the notification implies a definite state change needing refresh.
     }
 
     function handleGroupDetailsUpdated(event) {
@@ -404,6 +420,10 @@
             fileAssetRelativePath: itemForAddToGroup.relative_path
         });
         updateProjectStoreState({ statusMessage: `File "${itemForAddToGroup.name}" added to group "${group.name}".` });
+        if (group.id === groupData.id) { // 'group' is the target group, 'groupData' is the currently viewed group
+            console.log('[GroupDetailView] File added to current group, refreshing contents...');
+            await fetchGroupContents();
+        }
         } catch (err) {
         console.error('Error adding file to group:', err);
         await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
@@ -428,6 +448,11 @@
         fetchProjectGroupsForMenu(true); // Refresh group list
         showCreateGroupModalFromGroupView = false;
         updateProjectStoreState({ statusMessage: `File "${itemForAddToGroup?.name}" added to new group "${event.detail.group?.name}".` });
+
+        const newGroupData = event.detail.group;
+        if (newGroupData && itemForAddToGroup) { // Ensure itemForAddToGroup was processed
+           groupContentNotification.set({ groupId: newGroupData.id, action: 'file_added', timestamp: Date.now() });
+        }
         itemForAddToGroup = null; // Reset
     }
 

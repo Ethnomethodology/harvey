@@ -2,6 +2,8 @@
 import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event'; // Added for media_renamed event
 
+export const groupContentNotification = writable(null);
+
 const HARVEY_FILES_DIR = "harvey_files";
 const MEDIA_DIR_NAME = 'Media';
 const MEDIA_SUBDIR = 'media';
