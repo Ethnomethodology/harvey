@@ -91,6 +91,70 @@ pub async fn create_new_group(project_id: String, name: String, description: Opt
 }
 
 #[tauri::command]
+pub async fn remove_file_from_group_command(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
+    if project_id.is_empty() || project_id == "null" { // Check for "null" string as well
+        error!("[CMD] remove_file_from_group_command - Project ID is missing or invalid.");
+        return Err("Project ID is missing. Cannot remove file from group.".to_string());
+    }
+    if group_id.is_empty() {
+        error!("[CMD] remove_file_from_group_command - Group ID is missing.");
+        return Err("Group ID is missing. Cannot remove file from group.".to_string());
+    }
+    if file_asset_relative_path.is_empty() {
+        error!("[CMD] remove_file_from_group_command - File asset relative path is missing.");
+        return Err("File asset relative path is missing. Cannot remove file from group.".to_string());
+    }
+
+    info!(
+        "[CMD] remove_file_from_group_command: Removing file '{}' from group '{}' in project '{}'",
+        file_asset_relative_path, group_id, project_id
+    );
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            let err_msg = format!("Failed to get database path: {}", e.to_string());
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            return Err(err_msg);
+        }
+    };
+
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = format!("Failed to open database at '{}': {}", db_path.display(), e.to_string());
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            return Err(err_msg);
+        }
+    };
+
+    match db_handler::remove_file_from_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!(
+                    "[CMD] remove_file_from_group_command - File '{}' removed from group '{}' successfully. Rows affected: {}",
+                    file_asset_relative_path, group_id, rows_affected
+                );
+            } else {
+                info!(
+                    "[CMD] remove_file_from_group_command - No association found for file '{}' in group '{}'. Nothing removed.",
+                    file_asset_relative_path, group_id
+                );
+            }
+            Ok(())
+        }
+        Err(e) => {
+            let err_msg = format!(
+                "Failed to remove file '{}' from group '{}': {}",
+                file_asset_relative_path, group_id, e.to_string()
+            );
+            error!("[CMD] remove_file_from_group_command - {}", err_msg);
+            Err(err_msg)
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn update_group_details(
     project_id: String,
     group_id: String,
