@@ -816,65 +816,110 @@ pub fn rename_asset_metadata_key(
     new_file_name: &str, // This is the new file name (e.g., "new_stem.ext")
 ) -> Result<(), CommandError> {
     debug!(
-        "[DB] Renaming asset metadata key for project_id {}: from {} to {}, new_abs_path: {}, new_name: {}",
+        "[DB] Attempting to rename asset metadata key for project_id {}: from '{}' to '{}', new_abs_path: '{}', new_name: '{}'",
         project_id, old_relative_path, new_relative_path, new_file_path, new_file_name
     );
+
     let db_path = get_db_path()?;
-     if !db_path.exists() {
+    if !db_path.exists() {
         debug!("[DB] Database file not found at {}. Nothing to rename for project_id {}, asset: {}", db_path.display(), project_id, old_relative_path);
         return Ok(());
     }
-    let conn = Connection::open(&db_path)?;
 
-    let changes = conn.execute(
+    let mut conn = Connection::open(&db_path)?;
+
+    // Wrap operations in a transaction
+    let tx = conn.transaction().map_err(|e| CommandError::Rusqlite(e))?;
+
+    // Update child tables first
+    // These updates will only apply if ON UPDATE CASCADE is working as expected from the DB schema.
+    // If ON UPDATE CASCADE is not set or not effective for some reason, these direct updates would be necessary.
+    // However, given the previous subtask correctly set ON UPDATE CASCADE, these direct updates
+    // on child tables are redundant if the FKs are set up to cascade updates.
+    // The primary UPDATE on asset_metadata should trigger the cascades.
+    // For safety or if cascade behavior is not guaranteed across all SQLite versions/scenarios,
+    // explicit updates can be kept, but they might also lead to "no such row" errors if cascade already happened.
+
+    // Update file_groups
+    // This table relies on ON UPDATE CASCADE, so direct update is not strictly needed here if FKs are correct.
+    // However, if we want to be explicit or handle cases where cascade might not fire (e.g. older SQLite, complex scenarios):
+    match tx.execute(
+        "UPDATE file_groups SET file_asset_path = ?1 WHERE project_id = ?2 AND file_asset_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated file_groups for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => { // 0 rows affected
+            debug!("[DB TX] No entries in file_groups needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating file_groups for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
+            // tx.rollback() is handled by drop if not committed
+            return Err(CommandError::Rusqlite(e));
+        }
+    }
+
+    // Update table_layout_preferences
+    match tx.execute(
+        "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated table_layout_preferences for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => {
+             debug!("[DB TX] No entries in table_layout_preferences needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating table_layout_preferences for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
+            return Err(CommandError::Rusqlite(e));
+        }
+    }
+
+    // Update media_transcript_data
+    match tx.execute(
+        "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
+        params![new_relative_path, project_id, old_relative_path],
+    ) {
+        Ok(changes) if changes > 0 => {
+            info!("[DB TX] Updated media_transcript_data for project_id {} from {} to {} ({} rows affected)", project_id, old_relative_path, new_relative_path, changes);
+        }
+        Ok(_) => {
+            debug!("[DB TX] No entries in media_transcript_data needed update for project_id {} and old path {}", project_id, old_relative_path);
+        }
+        Err(e) => {
+            error!("[DB TX] Error updating media_transcript_data for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
+            return Err(CommandError::Rusqlite(e));
+        }
+    }
+
+    // Original asset_metadata update
+    let changes = tx.execute(
         "UPDATE asset_metadata
          SET asset_relative_path = ?1, file_path = ?2, file_name = ?3, last_modified = CURRENT_TIMESTAMP
          WHERE project_id = ?4 AND asset_relative_path = ?5",
         params![new_relative_path, new_file_path, new_file_name, project_id, old_relative_path],
-    )?;
+    ).map_err(|e| {
+        error!("[DB TX] Error updating asset_metadata for project_id {} from {} to {}: {}. Rolling back.", project_id, old_relative_path, new_relative_path, e);
+        CommandError::Rusqlite(e)
+    })?;
+
 
     if changes > 0 {
         info!(
-            "[DB] Asset metadata key renamed successfully for project_id {} from {} to {} ({} rows affected)",
+            "[DB TX] Asset_metadata key renamed successfully for project_id {} from {} to {} ({} rows affected)",
             project_id, old_relative_path, new_relative_path, changes
         );
-
-        // Also attempt to rename in table_layout_preferences if an entry exists for this project
-        match conn.execute(
-            "UPDATE table_layout_preferences SET table_asset_relative_path = ?1 WHERE project_id = ?2 AND table_asset_relative_path = ?3",
-            params![new_relative_path, project_id, old_relative_path],
-        ) {
-            Ok(layout_changes) if layout_changes > 0 => {
-                info!("[DB] Renamed corresponding table_layout_preferences key for project_id {} from {} to {}", project_id, old_relative_path, new_relative_path);
-            }
-            Ok(_) => {
-                debug!("[DB] No corresponding table_layout_preferences key found or updated for project_id {} and old path {}", project_id, old_relative_path);
-            }
-            Err(e) => {
-                error!("[DB] Error trying to rename table_layout_preferences key for project_id {} from {} to {}: {}", project_id, old_relative_path, new_relative_path, e);
-                // Not returning error here as primary rename succeeded.
-            }
-        }
-
-        // Add new logic for media_transcript_data
-        match conn.execute(
-            "UPDATE media_transcript_data SET asset_relative_path = ?1 WHERE project_id = ?2 AND asset_relative_path = ?3",
-            params![new_relative_path, project_id, old_relative_path],
-        ) {
-            Ok(mtd_changes) if mtd_changes > 0 => {
-                info!("[DB] Renamed corresponding media_transcript_data key for project_id {} from {} to {}", project_id, old_relative_path, new_relative_path);
-            }
-            Ok(_) => {
-                debug!("[DB] No corresponding media_transcript_data key found or updated for project_id {} and old path {}", project_id, old_relative_path);
-            }
-            Err(e) => {
-                error!("[DB] Error trying to rename media_transcript_data key for project_id {} from {} to {}: {}", project_id, old_relative_path, new_relative_path, e);
-                // Consider if this error should be propagated or just logged.
-            }
-        }
     } else {
-        debug!("[DB] No asset metadata found to rename for project_id {} and old key: {}", project_id, old_relative_path);
+        // This case might indicate an issue if we expected the row to exist.
+        // If old_relative_path didn't exist, previous updates on child tables might have done nothing, which is fine.
+        warn!("[DB TX] No asset_metadata found to rename for project_id {} and old key: {}. Previous child table updates might also have affected 0 rows.", project_id, old_relative_path);
     }
+
+    tx.commit().map_err(|e| CommandError::Rusqlite(e))?;
+    info!("[DB] Transaction committed successfully for renaming asset metadata key for project_id {}: from {} to {}", project_id, old_relative_path, new_relative_path);
+
     Ok(())
 }
 
