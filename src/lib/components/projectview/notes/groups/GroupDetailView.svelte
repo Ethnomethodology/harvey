@@ -376,18 +376,18 @@
 
       const canonicalFileEntry = findMediaByPathRecursiveLocal(projectFiles, mediaPathToFind);
 
+      let pathForDispatch;
       if (canonicalFileEntry) {
-        console.log('[GroupDetailView] Found canonical FileEntry:', canonicalFileEntry);
-        const { selectMedia } = await import('$lib/stores/transcriptStore.js'); // Dynamically import to avoid cycle if not already imported
-        selectMedia(canonicalFileEntry); // Selects media, loads its default transcript
-        dispatch('requestopentab', { tabName: 'transcriptions' }); // Requests ProjectView to switch tab
-        updateProjectStoreState({ statusMessage: 'Transcriptions tab opened for ' + itemFromGroup.name });
+        console.log('[GroupDetailView] Found canonical FileEntry, dispatching requestmediaselection with its path:', canonicalFileEntry.path);
+        pathForDispatch = canonicalFileEntry.path;
+         // DO NOT call selectMedia here. Let ProjectView.handleRequestMediaSelection do it.
       } else {
-        console.error(`[GroupDetailView] Canonical FileEntry not found for path: ${mediaPathToFind}. Falling back to requestmediaselection.`);
-        // Fallback to old method if file not found in main tree.
-        dispatch('requestmediaselection', { mediaPath: itemFromGroup.full_path });
-        updateProjectStoreState({ statusMessage: 'Transcription requested for ' + itemFromGroup.name + ' (media not found in main tree).' });
+        console.error(`[GroupDetailView] Canonical FileEntry not found for path: ${mediaPathToFind}. Falling back to itemFromGroup.full_path for dispatch.`);
+        pathForDispatch = itemFromGroup.full_path; // Fallback to the original path from group content
       }
+
+      dispatch('requestmediaselection', { mediaPath: pathForDispatch });
+      updateProjectStoreState({ statusMessage: 'Transcription requested for ' + itemFromGroup.name });
       closeContextMenu();
     }
 
