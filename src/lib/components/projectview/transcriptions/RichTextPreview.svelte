@@ -535,13 +535,13 @@
                     <div class="flex flex-col flex-grow gap-y-1" style="width: 37.606rem;"> <!-- Removed mx-auto, added flex-grow, kept width style -->
                         <!-- Row 1: Number and Timestamps -->
                         <div class="flex items-center gap-x-2">
-                            <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> <!-- Simplified: removed flex-col, items-center as button is moved, removed text-center -->
-                                <span class="truncate text-gray-500 dark:text-gray-400 select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                            <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;">
+                                <span class="truncate text-gray-500 dark:text-gray-400 select-none" title={`Segment Number ${String(seg.segmentIndex + 1)}`}> {/* text-sm removed */}
                                     {String(seg.segmentIndex + 1)}
                                 </span>
                                 <!-- Delete button removed from here -->
                             </div>
-                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
+                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left flex items-center gap-x-1 min-w-0"> {/* leading-tight and text-sm removed */}
                                 <span class="select-none" title="Start time">{seg.startTime}</span>
                                 <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
                                 <span class="select-none" title="End time">{seg.endTime}</span>
@@ -550,7 +550,7 @@
 
                         <!-- Row 2: Speaker and Text -->
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
-                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 text-sm font-semibold" style="flex-basis: 8rem; max-width: 8rem;">
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: 8rem; max-width: 8rem;"> {/* text-sm removed */}
                                 <span class="truncate block w-full" title={seg.speaker}>
                                     {seg.speaker.length > 12 ? seg.speaker.slice(0, 12) + '...' : seg.speaker}:
                                 </span>
