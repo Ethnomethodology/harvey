@@ -872,9 +872,6 @@ $: {
         <!-- Separator 1: Below Data section -->
         <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
 
-        <!-- Separator 2: Above Groups section (Newly Added) -->
-        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
-
         <!-- Bottom 1/3 for Groups -->
         <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
             <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
