@@ -186,7 +186,13 @@
                 groupId: group.id,
                 fileAssetRelativePath: relativePath
             });
-            await message(`File ${groupSubMenuItem.name} added to group ${group.name}.`, { title: 'Success', type: 'info' });
+            // Removed explicit success message dialog
+            project.update(p => ({ ...p, statusMessage: `File ${groupSubMenuItem.name} added to group ${group.name}.` }));
+            // Also trigger group content notification for the GroupDetailView to refresh if it's open
+            // Assuming groupContentNotification is imported and group.id is the ID of the group modified
+            const { groupContentNotification } = await import('$lib/stores/projectStore.js');
+            groupContentNotification.set({ groupId: group.id, action: 'file_added', timestamp: Date.now() });
+
         } catch (err) {
             await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
         } finally {
@@ -973,16 +979,18 @@ $: {
     on:close={() => { showCreateGroupModal = false; groupSubMenuItem = null; }}
     on:groupCreatedAndFileAdded={(event) => {
         console.log('[NotesLeftPanel] Event: groupCreatedAndFileAdded', event.detail);
-        // updateProjectGroupsList should have been called by the modal itself.
-        // $currentProjectGroupsList will update reactively.
         showCreateGroupModal = false;
         groupSubMenuItem = null;
+        project.update(p => ({ ...p, statusMessage: `File ${event.detail.file.name} added to new group ${event.detail.group.name}.` }));
+        // Notify GroupDetailView if it's open for the new group
+        const { groupContentNotification } = import('$lib/stores/projectStore.js');
+        groupContentNotification.set({ groupId: event.detail.group.id, action: 'file_added', timestamp: Date.now() });
     }}
     on:groupCreated={(event) => {
         console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
-        // updateProjectGroupsList should have been called by the modal itself.
         showCreateGroupModal = false;
         groupSubMenuItem = null;
+        project.update(p => ({ ...p, statusMessage: `Group ${event.detail.group.name} created.` }));
     }}
 />
 
