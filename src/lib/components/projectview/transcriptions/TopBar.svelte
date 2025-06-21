@@ -224,7 +224,7 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+	class="flex items-center justify-between px-3 h-10 ml-1 mt-1 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Media Select, Model Select, Language Select, Speakers, Transcribe, Export -->
