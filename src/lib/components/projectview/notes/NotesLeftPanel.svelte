@@ -869,8 +869,11 @@ $: {
             {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
         </div>
 
-        <!-- Styled Separator Added -->
-        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0"> <!-- mx-0 to ensure full width within padding of parent -->
+        <!-- Separator 1: Below Data section -->
+        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
+
+        <!-- Separator 2: Above Groups section (Newly Added) -->
+        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
 
         <!-- Bottom 1/3 for Groups -->
         <div class="flex-grow overflow-y-auto min-h-0 pr-2 pt-2" style="flex-basis: 33.33%;">
