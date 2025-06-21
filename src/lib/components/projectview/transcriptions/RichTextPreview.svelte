@@ -494,36 +494,39 @@
             {/if}
             {#each processedSegments as seg (seg.segmentIndex)}
                 <div id={`segment-${seg.segmentIndex}`} class:segment-block={true} class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700" class:segment-active={seg.segmentIndex === activeSegmentIndex} class:border-blue-400={seg.segmentIndex === activeSegmentIndex} class:bg-blue-100={seg.segmentIndex === activeSegmentIndex} class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex} class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex} class:border-gray-200={seg.segmentIndex !== activeSegmentIndex} class:bg-white={seg.segmentIndex !== activeSegmentIndex} class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex} class:preview-interaction-disabled={previewEditMode} class:hover:bg-blue-50={!previewEditMode} class:dark:hover:bg-blue-900={!previewEditMode} class:cursor-pointer={!previewEditMode} on:click={() => handleSegmentClick(seg.segmentIndex)} tabindex={previewEditMode ? -1 : 0} on:keydown={(e) => { if (!previewEditMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }} role={previewEditMode ? 'listitem' : 'button'} aria-pressed={seg.segmentIndex === activeSegmentIndex} aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}>
-                    <div class="flex items-start w-[37.606rem] mx-auto">
-                        <div
-                          class="flex flex-col text-center items-center flex-shrink-0 px-[5.75pt]"
-                          style="flex: 0 0 5%; max-width: 5%;"
-                        >
-                          <span class="truncate text-gray-500 dark:text-gray-400 select-none text-center" title={`Segment Number ${String(seg.segmentIndex + 1)}`}> {String(seg.segmentIndex + 1)} </span> <button class="btn-icon mt-1 p-0.5" class:invisible={!previewEditMode} class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode} class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode} on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)} title="Delete this segment" aria-label="Delete this segment"> {@html DELETE_ICON} </button>
+                    <div class="flex flex-col w-[37.606rem] mx-auto gap-y-1">
+                        <!-- Row 1: Number and Timestamps -->
+                        <div class="flex items-center gap-x-2 flex-shrink-0">
+                            <div class="flex flex-col text-center items-center flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem;">
+                                <span class="truncate text-gray-500 dark:text-gray-400 select-none text-center text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                                    {String(seg.segmentIndex + 1)}
+                                </span>
+                                <button class="btn-icon mt-0.5 p-0.5" class:invisible={!previewEditMode} class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode} class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode} on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)} title="Delete this segment" aria-label="Delete this segment">
+                                    {@html DELETE_ICON}
+                                </button>
+                            </div>
+                            <div class="flex-shrink-0 text-gray-600 dark:text-gray-400 text-center leading-tight flex items-center gap-x-1 text-sm">
+                                <!-- Using text-sm to match editable panel's input fields appearance -->
+                                <span class="select-none" title="Start time">{seg.startTime}</span>
+                                <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
+                                <span class="select-none" title="End time">{seg.endTime}</span>
+                            </div>
                         </div>
-                        <div
-                          class="flex-shrink-0 text-gray-600 dark:text-gray-400 select-none text-center px-[5.75pt]"
-                          style="flex: 0 0 15%; max-width: 15%;"
-                        >
-                          <div>{seg.startTime}</div>
-                          <div class="text-gray-400 dark:text-gray-500">–</div>
-                          <div>{seg.endTime}</div>
-                        </div>
-                        <div
-                          class="flex-shrink-0 truncate text-center whitespace-nowrap px-[5.75pt] text-gray-800 dark:text-gray-200"
-                          style="flex: 0 0 15%; max-width: 15%;"
-                        >
-                          {seg.speaker}:
-					</div>
-                        <div
-                          class="min-w-0 preview-content-area px-[5.75pt]"
-                          style="flex: 0 0 65%; max-width: 65%; white-space: normal; overflow-wrap: break-word; word-break: normal;"
-                        >
-                            {#if seg.isJsonContent}
-                              <div class="speech-rich-text">{@html seg.html}</div>
-                            {:else}
-                              <div class="speech-plain-text">{seg.plainText}</div>
-                            {/if}
+
+                        <!-- Row 2: Speaker and Text -->
+                        <div class="flex items-start gap-x-2 flex-grow min-h-0">
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 text-sm font-semibold" style="flex-basis: 8rem; max-width: 8rem;">
+                                <span class="truncate block w-full" title={seg.speaker}>
+                                    {seg.speaker.length > 12 ? seg.speaker.slice(0, 12) + '...' : seg.speaker}:
+                                </span>
+                            </div>
+                            <div class="min-w-0 preview-content-area flex-grow" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                                {#if seg.isJsonContent}
+                                    <div class="speech-rich-text">{@html seg.html}</div>
+                                {:else}
+                                    <div class="speech-plain-text">{seg.plainText}</div>
+                                {/if}
+                            </div>
                         </div>
                     </div>
                 </div>
