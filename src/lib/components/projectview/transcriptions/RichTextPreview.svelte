@@ -532,7 +532,7 @@
                     </div>
 
                     <!-- Item 2: Main Content Block (two rows) -->
-                    <div class="flex flex-col flex-grow gap-y-1" style="width: 37.606rem;"> {/* Removed mx-auto, added flex-grow, kept width style */}
+                    <div class="flex flex-col flex-grow gap-y-1" style="width: 37.606rem;"> <!-- Removed mx-auto, added flex-grow, kept width style -->
                         <!-- Row 1: Number and Timestamps -->
                         <div class="flex items-center gap-x-2">
                             <div class="flex-shrink-0 text-center" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> {/* Simplified: removed flex-col, items-center as button is moved */}
