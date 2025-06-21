@@ -397,12 +397,12 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 <!-- Row 1: Number and Timestamps -->
                 <div class="flex items-center gap-x-2 flex-shrink-0">
                     <div class='flex-shrink-0 text-left' style='flex-basis: 1.880rem;'>
-                        <span class='w-full truncate whitespace-normal break-words text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span> <!-- text-sm removed -->
+                        <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                     </div>
-                    <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left flex items-center gap-x-1'> <!-- leading-tight removed -->
-                        <input id='startTimeInput' class='input-field w-[5.641rem] p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' /> <!-- text-sm removed -->
+                    <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1'>
+                        <input id='startTimeInput' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
                         <span class='text-gray-400 dark:text-gray-500'>–</span>
-                        <input id='endTimeInput' class='input-field w-[5.641rem] p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' /> <!-- text-sm removed -->
+                        <input id='endTimeInput' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                     </div>
                 </div>
 
