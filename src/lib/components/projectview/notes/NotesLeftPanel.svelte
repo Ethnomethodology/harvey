@@ -6,7 +6,8 @@
 	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
-    import CreateGroupModal from '../modals/CreateGroupModal.svelte'; // III.4
+    import CreateGroupModal from '../modals/CreateGroupModal.svelte';
+    import GroupRenameModal from '../modals/GroupRenameModal.svelte'; // Added GroupRenameModal
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
 	import * as openerPlugin from '@tauri-apps/plugin-opener';
 	import { createEventDispatcher, onMount } from 'svelte';
@@ -572,6 +573,128 @@
     let tooltipVisible = false;
     let tooltipCategoryName = '';
     let tooltipFiles = [];
+
+    // --- Group Context Menu State ---
+    let groupContextMenuVisible = false;
+    let groupContextMenuX = 0;
+    let groupContextMenuY = 0;
+    let groupContextMenuItem = null; // This will store the group object for the context menu
+    let closeGroupContextMenuListener = null;
+
+    // --- Group Rename Modal State ---
+    let showGroupRenameModal = false;
+    let groupToRename = null;
+
+    function handleGroupItemContextMenu(event, group) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (groupContextMenuVisible) closeGroupContextMenu();
+        // Close other menus if open
+        if (contextMenuVisible) closeContextMenu();
+        if (categoryContextMenuVisible) closeCategoryContextMenu();
+        if (showGroupSubMenu) closeGroupSubMenu();
+
+
+        groupContextMenuItem = group;
+        groupContextMenuX = event.clientX;
+        groupContextMenuY = event.clientY;
+        groupContextMenuVisible = true;
+
+        // Add listener to close on outside click
+        setTimeout(() => {
+            if (closeGroupContextMenuListener) document.removeEventListener('click', closeGroupContextMenuListener, { capture: true });
+            closeGroupContextMenuListener = (e) => {
+                const menuElement = document.getElementById('notes-left-panel-group-item-context-menu');
+                if (menuElement && !menuElement.contains(e.target)) {
+                    closeGroupContextMenu();
+                }
+            };
+            document.addEventListener('click', closeGroupContextMenuListener, { capture: true, once: true });
+        }, 0);
+    }
+
+    function closeGroupContextMenu() {
+        if (groupContextMenuVisible) {
+            groupContextMenuVisible = false;
+            groupContextMenuItem = null;
+            if (closeGroupContextMenuListener) {
+                document.removeEventListener('click', closeGroupContextMenuListener, { capture: true });
+                closeGroupContextMenuListener = null;
+            }
+        }
+    }
+
+    function handleGroupContextMenuAction(action) {
+        const group = groupContextMenuItem;
+        closeGroupContextMenu();
+        if (!group) {
+            console.error("[NotesLeftPanel] Group context item is null for action:", action);
+            return;
+        }
+        console.log(`[NotesLeftPanel] Group context menu action: '${action}' for group:`, group.name);
+
+        if (action === 'Open') {
+            if (group && group.id) {
+                setSelectedGroup(group.id, group); // setSelectedGroup is already imported
+                // Optionally, dispatch an event if ProjectView needs to react beyond store changes,
+                // but setSelectedGroup should trigger NotesView to show GroupDetailView.
+                project.update(p => ({ ...p, statusMessage: `Opened group: ${group.name}` }));
+            } else {
+                console.error("[NotesLeftPanel] 'Open' action called with invalid group data:", group);
+                message("Cannot open group: Invalid group data.", {title: "Error", type: "error"});
+            }
+        } else if (action === 'Rename') {
+            if (group && group.id) {
+                groupToRename = { ...group }; // Store a copy of the group data
+                showGroupRenameModal = true;
+            } else {
+                console.error("[NotesLeftPanel] 'Rename' action called with invalid group data:", group);
+                message("Cannot rename group: Invalid group data.", {title: "Error", type: "error"});
+            }
+        } else if (action === 'Delete') {
+            if (group && group.id) {
+                const confirmed = await confirm(`Are you sure you want to delete the group "${group.name}"? This action cannot be undone, but the files within the group will not be deleted.`, {
+                    title: 'Confirm Group Deletion',
+                    type: 'warning',
+                    okLabel: 'Delete Group',
+                    cancelLabel: 'Cancel'
+                });
+
+                if (confirmed) {
+                    const currentProjectId = get(project).id;
+                    if (!currentProjectId) {
+                        message('Project ID is missing. Cannot delete group.', { title: 'Error', type: 'error' });
+                        return;
+                    }
+                    try {
+                        // Backend command to be implemented: delete_project_group
+                        await invoke('delete_project_group', {
+                            projectId: currentProjectId,
+                            groupId: group.id
+                        });
+
+                        await updateProjectGroupsList(currentProjectId); // Refresh the list
+
+                        if (get(project).selectedGroupId === group.id) {
+                            setSelectedGroup(null, null); // Clear selection if the deleted group was active
+                             // Additionally, make NotesView show the placeholder
+                            dispatch('requestviewchange', { viewType: 'placeholder', itemPath: null });
+                        }
+                        project.update(p => ({ ...p, statusMessage: `Group "${group.name}" deleted.` }));
+
+                    } catch (err) {
+                        console.error(`[NotesLeftPanel] Error deleting group ${group.id}:`, err);
+                        await message(`Failed to delete group "${group.name}": ${err}`, { title: 'Delete Error', type: 'error' });
+                        project.update(p => ({ ...p, statusMessage: `Failed to delete group "${group.name}".` }));
+                    }
+                }
+            } else {
+                console.error("[NotesLeftPanel] 'Delete' action called with invalid group data:", group);
+                message("Cannot delete group: Invalid group data.", {title: "Error", type: "error"});
+            }
+        }
+    }
+
     let tooltipX = 0;
     let tooltipY = 0;
 
@@ -782,7 +905,14 @@ $: {
                                     </span>
                                     <span>{group.name}</span>
                                 </span>
-                                <!-- <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {group.name}"> {@html CONTEXT_MENU_ICON_SVG} </button> -->
+                                <button
+                                    type="button"
+                                    class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                    title="Options for {group.name}"
+                                    on:click|stopPropagation={(e) => handleGroupItemContextMenu(e, group)}
+                                >
+                                    {@html CONTEXT_MENU_ICON_SVG}
+                                </button>
                             </div>
                         </li>
                     {/each}
@@ -993,6 +1123,78 @@ $: {
         project.update(p => ({ ...p, statusMessage: `Group ${event.detail.group.name} created.` }));
     }}
 />
+
+<GroupRenameModal
+    bind:showModal={showGroupRenameModal}
+    groupData={groupToRename}
+    on:close={() => {
+        showGroupRenameModal = false;
+        groupToRename = null;
+    }}
+    on:save={async (event) => {
+        const { groupId, newName, newDescription } = event.detail;
+        const currentProjectId = get(project).id;
+        const oldGroupName = groupToRename?.name || 'the group'; // For messages
+
+        if (!currentProjectId || !groupId) {
+            message('Project or Group ID is missing. Cannot rename.', { title: 'Error', type: 'error' });
+            showGroupRenameModal = false;
+            groupToRename = null;
+            return;
+        }
+
+        try {
+            // Backend command to be implemented: rename_project_group
+            // It should return the updated GroupData object
+            const updatedGroupData = await invoke('rename_project_group', {
+                projectId: currentProjectId,
+                groupId: groupId,
+                newName: newName,
+                newDescription: newDescription
+            });
+
+            await updateProjectGroupsList(currentProjectId); // Refresh the list
+
+            // If the renamed group is currently selected, update its data in the project store
+            if (get(project).selectedGroupId === groupId) {
+                project.update(p => ({
+                    ...p,
+                    selectedGroupData: updatedGroupData, // Use data returned from backend
+                    statusMessage: `Group '${oldGroupName}' renamed to '${newName}'.`
+                }));
+            } else {
+                project.update(p => ({ ...p, statusMessage: `Group '${oldGroupName}' renamed to '${newName}'.` }));
+            }
+             // Also trigger groupContentNotification for the GroupDetailView to refresh if it's open for this group
+            const { groupContentNotification } = await import('$lib/stores/projectStore.js');
+            groupContentNotification.set({ groupId: groupId, action: 'details_updated', timestamp: Date.now() });
+
+
+        } catch (err) {
+            console.error(`[NotesLeftPanel] Error renaming group ${groupId}:`, err);
+            await message(`Failed to rename group '${oldGroupName}': ${err}`, { title: 'Rename Error', type: 'error' });
+            project.update(p => ({ ...p, statusMessage: `Failed to rename group '${oldGroupName}'.` }));
+        } finally {
+            showGroupRenameModal = false;
+            groupToRename = null;
+        }
+    }}
+/>
+
+<!-- Group Item Context Menu -->
+{#if groupContextMenuVisible && groupContextMenuItem}
+    <div
+        id="notes-left-panel-group-item-context-menu"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
+        style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
+        on:click|stopPropagation
+    >
+        <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
+        <button on:click={() => handleGroupContextMenuAction('Rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename...</button>
+        <hr class="my-1 border-gray-200 dark:border-gray-600" />
+        <button on:click={() => handleGroupContextMenuAction('Delete')} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete...</button>
+    </div>
+{/if}
 
 <style lang="postcss">
 	.overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }
