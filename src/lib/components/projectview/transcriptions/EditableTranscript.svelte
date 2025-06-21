@@ -392,10 +392,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             </div>
             <div
                 class='flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'
-                style="width: 37.606rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
+                style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
             >
                 <!-- Row 1: Number and Timestamps -->
-                <div class="flex items-center gap-x-2 flex-shrink-0">
+                <div class="flex items-center gap-x-1 flex-shrink-0">
                     <div class='flex-shrink-0 text-left' style='flex-basis: 1.880rem;'>
                         <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                     </div>
@@ -407,10 +407,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 </div>
 
                 <!-- Row 2: Speaker and Text -->
-                <div class="flex items-start gap-x-2 flex-grow min-h-0">
+                <div class="flex items-start gap-x-1 flex-grow min-h-0">
                     <div
                         class='relative flex-shrink-0'
-                        style='flex-basis: 8rem; max-width: 8rem;'
+                        style='flex-basis: 6.5rem; max-width: 6.5rem;'
                         bind:this="{speakerDropdownRef}"
                     >
                         <button
@@ -482,7 +482,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
     .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-gray-600 rounded overflow-hidden; }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) { flex-grow: 1; min-height: 0; border: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden; }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; }
+    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; padding: 0px;}
     .lexical-editor-wrapper-style.is-disabled { @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-600 dark:border-gray-500 dark:opacity-70; pointer-events: none; }
     .lexical-editor-wrapper-style.is-disabled > :global(.lexical-editor-root > .lexical-wrapper > .lexical-content) { @apply cursor-not-allowed; }
     .lexical-editor-wrapper-style :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100; min-height: unset !important; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
