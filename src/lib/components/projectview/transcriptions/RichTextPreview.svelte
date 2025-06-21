@@ -550,7 +550,7 @@
 
                         <!-- Row 2: Speaker and Text -->
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
-                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: 8rem; max-width: 8rem;"> {/* text-sm removed */}
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: 8rem; max-width: 8rem;"> <!-- text-sm removed -->
                                 <span class="truncate block w-full" title={seg.speaker}>
                                     {seg.speaker.length > 12 ? seg.speaker.slice(0, 12) + '...' : seg.speaker}:
                                 </span>
