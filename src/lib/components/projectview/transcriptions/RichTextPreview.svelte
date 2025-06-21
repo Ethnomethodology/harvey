@@ -493,20 +493,55 @@
               <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
             {/if}
             {#each processedSegments as seg (seg.segmentIndex)}
-                <div id={`segment-${seg.segmentIndex}`} class:segment-block={true} class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700" class:segment-active={seg.segmentIndex === activeSegmentIndex} class:border-blue-400={seg.segmentIndex === activeSegmentIndex} class:bg-blue-100={seg.segmentIndex === activeSegmentIndex} class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex} class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex} class:border-gray-200={seg.segmentIndex !== activeSegmentIndex} class:bg-white={seg.segmentIndex !== activeSegmentIndex} class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex} class:preview-interaction-disabled={previewEditMode} class:hover:bg-blue-50={!previewEditMode} class:dark:hover:bg-blue-900={!previewEditMode} class:cursor-pointer={!previewEditMode} on:click={() => handleSegmentClick(seg.segmentIndex)} tabindex={previewEditMode ? -1 : 0} on:keydown={(e) => { if (!previewEditMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }} role={previewEditMode ? 'listitem' : 'button'} aria-pressed={seg.segmentIndex === activeSegmentIndex} aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}>
-                    <div class="flex flex-col w-[37.606rem] mx-auto gap-y-1">
+                <div
+                    id={`segment-${seg.segmentIndex}`}
+                    class:segment-block={true}
+                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"  /* <-- MODIFIED: Added flex, items-start, gap-x-2 */
+                    class:segment-active={seg.segmentIndex === activeSegmentIndex}
+                    class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
+                    class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
+                    class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex}
+                    class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex}
+                    class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
+                    class:bg-white={seg.segmentIndex !== activeSegmentIndex}
+                    class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex}
+                    class:preview-interaction-disabled={previewEditMode}
+                    class:hover:bg-blue-50={!previewEditMode}
+                    class:dark:hover:bg-blue-900={!previewEditMode}
+                    class:cursor-pointer={!previewEditMode}
+                    on:click={() => handleSegmentClick(seg.segmentIndex)}
+                    tabindex={previewEditMode ? -1 : 0}
+                    on:keydown={(e) => { if (!previewEditMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }}
+                    role={previewEditMode ? 'listitem' : 'button'}
+                    aria-pressed={seg.segmentIndex === activeSegmentIndex}
+                    aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}
+                >
+                    <!-- Item 1: Delete Button (conditionally rendered) -->
+                    <div class="flex-shrink-0"> {/* Container for button to manage visibility and spacing */}
+                        <button
+                            class="btn-icon p-0.5"  /* Adjusted padding, ensure btn-icon provides base styling */
+                            class:invisible={!previewEditMode}
+                            class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode}
+                            class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode}
+                            on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)}
+                            title="Delete this segment"
+                            aria-label="Delete this segment"
+                        >
+                            {@html DELETE_ICON}
+                        </button>
+                    </div>
+
+                    <!-- Item 2: Main Content Block (two rows) -->
+                    <div class="flex flex-col flex-grow gap-y-1" style="width: 37.606rem;"> {/* Removed mx-auto, added flex-grow, kept width style */}
                         <!-- Row 1: Number and Timestamps -->
-                        <div class="flex items-center gap-x-2"> <!-- Removed flex-shrink-0 from row container -->
-                            <div class="flex flex-col text-center items-center flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> <!-- Added min-width -->
-                                <span class="truncate text-gray-500 dark:text-gray-400 select-none text-center text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex items-center gap-x-2">
+                            <div class="flex-shrink-0 text-center" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> {/* Simplified: removed flex-col, items-center as button is moved */}
+                                <span class="truncate text-gray-500 dark:text-gray-400 select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                                     {String(seg.segmentIndex + 1)}
                                 </span>
-                                <button class="btn-icon mt-0.5 p-0.5" class:invisible={!previewEditMode} class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode} class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode} on:click|stopPropagation={(e) => handleDeleteSegment(seg.segmentIndex)} title="Delete this segment" aria-label="Delete this segment">
-                                    {@html DELETE_ICON}
-                                </button>
+                                <!-- Delete button removed from here -->
                             </div>
-                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0"> <!-- Changed to flex-1, text-left, added min-w-0 -->
-                                <!-- Using text-sm to match editable panel's input fields appearance -->
+                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
                                 <span class="select-none" title="Start time">{seg.startTime}</span>
                                 <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
                                 <span class="select-none" title="End time">{seg.endTime}</span>
