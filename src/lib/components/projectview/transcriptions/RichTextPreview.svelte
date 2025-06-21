@@ -517,9 +517,9 @@
                     aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}
                 >
                     <!-- Item 1: Delete Button (conditionally rendered) -->
-                    <div class="flex-shrink-0"> {/* Container for button to manage visibility and spacing */}
+                    <div class="flex-shrink-0"> <!-- Container for button to manage visibility and spacing -->
                         <button
-                            class="btn-icon p-0.5"  /* Adjusted padding, ensure btn-icon provides base styling */
+                            class="btn-icon p-0.5"
                             class:invisible={!previewEditMode}
                             class:text-red-500={previewEditMode} class:hover:text-red-700={previewEditMode}
                             class:dark:text-red-400={previewEditMode} class:dark:hover:text-red-300={previewEditMode}
