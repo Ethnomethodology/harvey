@@ -6,6 +6,7 @@
   export let x = 0;
   export let y = 0;
   export let isVisible = false;
+  export let revealLabel = 'Reveal in File System'; // New prop with default
 
   const dispatch = createEventDispatcher();
 
@@ -51,7 +52,7 @@
       </li>
       <hr class="my-1 border-gray-200 dark:border-gray-600" />
       <li>
-        <button on:click={() => emitAction('reveal')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Reveal in File System</button>
+        <button on:click={() => emitAction('reveal')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">{revealLabel}</button>
       </li>
       <hr class="my-1 border-gray-200 dark:border-gray-600" />
       <li>
