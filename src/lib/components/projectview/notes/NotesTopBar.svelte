@@ -240,7 +240,7 @@
   
          <button
             on:click={cycleThemePreference}
-            class="ui-button-icon h-7 w-7 flex items-center justify-center p-1" /* Adjusted: h-7 w-7, p-1 */
+            class="ui-button-icon h-7 w-7 flex items-center justify-center p-1"
             title={themeTitle}
         >
             {@html themeIconHtml}
