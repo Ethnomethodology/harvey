@@ -754,8 +754,8 @@ $: {
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
-	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-10 pb-1 border-b border-gray-200 dark:border-gray-600"
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
+	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
         class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
@@ -815,7 +815,7 @@ $: {
 {#if !$panelStateStore.notesLeftPanelCollapsed}
     <div class="flex flex-col flex-grow overflow-hidden">
         <!-- Top 2/3 for Categories -->
-        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 66.66%;">
+        <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: 66.66%;">
             <ul class="space-y-2 text-xs">
                 {#each filteredCategories as category (category.type)}
                     <li>
@@ -873,7 +873,7 @@ $: {
         <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
 
         <!-- Bottom 1/3 for Groups -->
-        <div class="flex-grow overflow-y-auto min-h-0 pr-2 pt-2" style="flex-basis: 33.33%;">
+        <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
             <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
                 <span class="mr-1.5 flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
