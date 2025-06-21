@@ -541,7 +541,7 @@
                                 </span>
                                 <!-- Delete button removed from here -->
                             </div>
-                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left flex items-center gap-x-1 min-w-0"> {/* leading-tight and text-sm removed */}
+                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left flex items-center gap-x-1 min-w-0"> <!-- leading-tight and text-sm removed -->
                                 <span class="select-none" title="Start time">{seg.startTime}</span>
                                 <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
                                 <span class="select-none" title="End time">{seg.endTime}</span>
