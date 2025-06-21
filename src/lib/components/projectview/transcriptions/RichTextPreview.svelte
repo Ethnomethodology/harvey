@@ -536,7 +536,7 @@
                         <!-- Row 1: Number and Timestamps -->
                         <div class="flex items-center gap-x-2">
                             <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;">
-                                <span class="truncate text-gray-500 dark:text-gray-400 select-none" title={`Segment Number ${String(seg.segmentIndex + 1)}`}> {/* text-sm removed */}
+                                <span class="truncate text-gray-500 dark:text-gray-400 select-none" title={`Segment Number ${String(seg.segmentIndex + 1)}`}> <!-- text-sm removed -->
                                     {String(seg.segmentIndex + 1)}
                                 </span>
                                 <!-- Delete button removed from here -->
