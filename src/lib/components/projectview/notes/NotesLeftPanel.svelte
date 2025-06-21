@@ -863,7 +863,7 @@ $: {
                              </div>
                         {/if}
                     </li>
-                    <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} --> {/* Removed separator */}
+                    <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} -->
                 {/each}
             </ul>
             {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
