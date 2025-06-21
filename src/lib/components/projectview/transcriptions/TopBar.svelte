@@ -209,9 +209,9 @@
 	$: selectedMediaValue = $transcriptStore.selectedMediaFile?.path ?? "";
 
 	// --- Theme Icons ---
-	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
-	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
-	const SYSTEM_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>`;
+	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
+	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
+	const SYSTEM_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>`;
 	$: themeIconHtml = $themePreference === 'light' ? MOON_ICON
 					 : $themePreference === 'dark' ? SYSTEM_ICON
 					 : SUN_ICON;
@@ -224,11 +224,11 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-3 h-14 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+	class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Media Select, Model Select, Language Select, Speakers, Transcribe, Export -->
-	<div class="flex items-center space-x-2">
+	<div class="flex items-center space-x-1.5">
 		<!-- Media Selection Dropdown -->
 		<select
 			class="ui-select flex-shrink-0 w-40"
@@ -301,13 +301,13 @@
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
-			<button class="ui-button-icon flex items-center space-x-1" on:click="{openSpeakersModal}">
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+			<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openSpeakersModal}">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
 				  </svg>
-				  <span class="text-xs">Add Speakers</span>
+				  <span class="text-xs">Speakers</span> <!-- Shorter Text -->
 			  {#if $transcriptStore.speakers.count > 0}
-				<span class="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full text-xs w-4 h-4 flex items-center justify-center">
+				<span class="absolute -top-0.5 -right-0.5 bg-blue-500 text-white rounded-full text-xxs w-3.5 h-3.5 flex items-center justify-center"> <!-- Adjusted badge size/pos -->
 					{$transcriptStore.speakers.count}
 				</span>
 			  {/if}
@@ -317,18 +317,18 @@
 		<!-- Transcribe / Add Blank Button (Conditional) -->
 		{#if transcriptionMode === 'automatic'}
 			<button
-				class="ui-button-icon flex items-center space-x-1"
+				class="ui-button-icon flex items-center space-x-0.5"
 				on:click="{handleTranscribeClick}"
 				title="{isTranscribeDisabled ? 'Select media, model, and language first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
 			>
 				{#if $transcriptStore.isTranscribing} <!-- isTranscribing state is now in transcriptStore -->
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 animate-spin">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Transcribing...</span>
+				<span class="text-xs">Working...</span> <!-- Shorter Text -->
 				{:else}
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
 				</svg>
 				<span class="text-xs">Transcribe</span>
@@ -336,28 +336,28 @@
 			</button>
 		{:else}
 			<button
-				class="ui-button-icon flex items-center space-x-1"
+				class="ui-button-icon flex items-center space-x-0.5"
 				on:click="{handleAddBlankTranscript}"
 				title="Add Blank Transcript"
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-5 h-5" viewBox="0 0 16 16">
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"> <!-- Adjusted icon size -->
 				  <path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/>
 				  <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/>
 				</svg>
-				<span class="text-xs">Add Blank Transcript</span>
+				<span class="text-xs">Add Blank</span> <!-- Shorter Text -->
 			</button>
 		{/if}
 
 		<!-- Export Button -->
-		<button class="ui-button-icon flex items-center space-x-1" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
-		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+		<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
+		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
 	</div>
 
 	<!-- Right Controls: Theme Toggle -->
 	<div class="flex-shrink-0">
-		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-2" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -376,23 +376,23 @@
 <style lang="postcss">
 	/* Shared button style */
 	.ui-button-icon {
-		@apply inline-flex items-center justify-center p-2 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
 	.ui-button-icon:disabled {
 		@apply opacity-50 cursor-not-allowed;
 	}
 	.ui-button-icon svg {
-		@apply w-5 h-5;
+		@apply w-4 h-4; /* Adjusted icon size */
 	}
 
 	/* Select style adjustments */
 	.ui-select {
-		@apply block flex-shrink-0 pl-3 pr-8 py-1.5 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed; /* Adjusted padding */
 	}
 
 	/* Basic style for the new checkbox */
 	.ui-checkbox {
-		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
+		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
 	}
 
 	.ui-select optgroup {
@@ -422,14 +422,17 @@
 	.w-40 { width: 10rem; } /* 160px */
 	.w-36 { width: 9rem;  } /* 144px */
 	.w-32 { width: 8rem;  } /* 128px */
-	 /* Added based on previous code */
 	.w-45 { width: 11.25rem; } /* approx */
 	.w-34 { width: 8.5rem; } /* approx */
 	.w-28 { width: 7rem; } /* approx */
 
-
 	/* Tailwind class used in SVG - ensure consistency */
-	.w-5 { width: 1.25rem; } /* 20px */
-	.h-5 { height: 1.25rem; } /* 20px */
+	.w-4 { width: 1rem; } /* 16px */
+	.h-4 { height: 1rem; } /* 16px */
 
+	/* Extra small text for speaker count badge */
+	.text-xxs {
+		font-size: 0.65rem; /* ~10.4px */
+		line-height: 0.8rem; /* ~12.8px */
+	}
 </style>
