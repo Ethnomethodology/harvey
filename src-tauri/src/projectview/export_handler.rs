@@ -411,7 +411,7 @@ pub async fn export_transcript_to_docx(
         // Row 1 for Segment: Number and Timestamps
         html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n"); // Avoid page break inside a segment's two rows
         html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Added some padding and border
-        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">Segment {}</div>\n", segment_number));
+        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">{}</div>\n", segment_number)); // Removed "Segment " prefix
         html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">{}</div>\n", encode_text(&timestamp_str)));
         html_output.push_str("      </td>\n");
         html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Empty cell, aligns with Text content
