@@ -157,15 +157,16 @@ export async function saveCloudConfig(payload) {
  * Exports the current transcript segments to a specified file path and format.
  * Currently only supports 'csv' format by generating CSV on the frontend.
  * @param {string} filePath - The full path to save the exported file.
- * @param {string} format - The desired export format ('csv').
+ * @param {string} format - The desired export format ('csv', 'docx').
  * @param {Array<object>} segments - The array of segment data to export.
  * @param {string} transcriptJsonPath - The path to the transcript JSON file (used for DOCX export).
+ * @param {string} [layoutChoice] - Optional. The chosen layout for DOCX export (e.g., 'Layout1', 'Layout2').
  * @returns {Promise<void>} A promise that resolves when export is complete or rejects on error.
  */
-export async function exportTranscript(filePath, format, segments, transcriptJsonPath) {
-	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}")`);
+export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice) {
+	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}")`);
 
-	if (!segments || segments.length === 0) {
+	if (format !== 'docx' && (!segments || segments.length === 0)) { // Segments not needed upfront for docx if using transcriptJsonPath
 		throw new Error("No transcript segments available to export.");
 	}
 	if (!filePath || filePath.trim() === '') {
@@ -178,10 +179,13 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         throw new Error('Transcript JSON path is not set.');
       }
       try {
-        const savedPath = await invoke('export_transcript_to_docx', {
+        const payload = {
           transcriptJsonPathStr: transcriptJsonPath,
-          outputPathStr: filePath
-        });
+          outputPathStr: filePath,
+          layoutChoice: layoutChoice || 'Layout2' // Default to Layout2 if not provided
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_docx with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_docx', payload);
         console.log(`[ConfigureActions] DOCX export successful: ${savedPath}`);
         return; // done
       } catch (err) {

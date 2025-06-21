@@ -234,9 +234,13 @@ pub async fn export_transcript_to_docx(
     app_handle: AppHandle,
     transcript_json_path_str: String,
     output_path_str: String,
+    layout_choice: Option<String>, // Added layout_choice parameter
 ) -> Result<String, CommandError> {
-    info!("[export_transcript_to_docx] Starting export from JSON: {}", transcript_json_path_str);
-    info!("[export_transcript_to_docx] Target DOCX path: {}", output_path_str);
+    let current_layout = layout_choice.unwrap_or_else(|| "Layout2".to_string());
+    info!(
+        "[export_transcript_to_docx] Starting export from JSON: {}, Target DOCX: {}, Layout: {}",
+        transcript_json_path_str, output_path_str, current_layout
+    );
 
     let source_path = PathBuf::from(&transcript_json_path_str);
     if !source_path.exists() || !source_path.is_file() {
@@ -360,10 +364,46 @@ pub async fn export_transcript_to_docx(
     html_output.push_str("</style></head><body>\n");
 
     html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n");
-    html_output.push_str("<colgroup>\n");
-    html_output.push_str("  <col style=\"width:20%\" />\n"); // Column 1 (Segment Number / Speaker)
-    html_output.push_str("  <col style=\"width:80%\" />\n"); // Column 2 (Timestamp / Text)
-    html_output.push_str("</colgroup>\n");
+
+    // Determine colgroup based on layout_choice
+    match current_layout.as_str() {
+        "Layout1" => { // | No | Timestamp | Speaker | Text | (5%, 15%, 15%, 65%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:5%\" />\n");
+            html_output.push_str("  <col style=\"width:15%\" />\n");
+            html_output.push_str("  <col style=\"width:15%\" />\n");
+            html_output.push_str("  <col style=\"width:65%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout2" => { // | No | Timestamp | then | Speaker | Text | (20%, 80%) - Default
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:20%\" />\n");
+            html_output.push_str("  <col style=\"width:80%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout3" => { // | Timestamp Speaker | then | Text | (100%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:100%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout4" => { // | Speaker | Text | (25%, 75%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:25%\" />\n");
+            html_output.push_str("  <col style=\"width:75%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout5" => { // | Text | (100%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:100%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        _ => { // Default to Layout2 if unknown
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:20%\" />\n");
+            html_output.push_str("  <col style=\"width:80%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+    }
     html_output.push_str("  <tbody>\n");
 
     // Helper to format timestamps as mm:ss.mmm or hh:mm:ss.mmm
@@ -391,41 +431,69 @@ pub async fn export_transcript_to_docx(
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
-
         let raw_speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
-        // Speaker: ensure max 12 chars + "..." if longer, then add colon.
-        let speaker_display = if raw_speaker.chars().count() > 12 {
+        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 {
             format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
         } else {
             format!("{}:", raw_speaker)
         };
-
+        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 {
+            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            raw_speaker.to_string()
+        };
         let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let segment_html_content = convert_lexical_or_plain_text_to_html(raw_text_content);
 
-        // Row 1 for Segment: Number and Timestamps
-        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-        // Cell 1: Segment Number
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">\n");
-        html_output.push_str(&format!("        {}\n", segment_number)); // Removed "Segment " prefix
-        html_output.push_str("      </td>\n");
-        // Cell 2: Timestamp
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">\n");
-        html_output.push_str(&format!("        {}\n", encode_text(&timestamp_str)));
-        html_output.push_str("      </td>\n");
-        html_output.push_str("    </tr>\n");
-
-        // Row 2 for Segment: Speaker and Text
-        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-        // Cell 1: Speaker
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">\n");
-        html_output.push_str(&encode_text(&speaker_display));
-        html_output.push_str("      </td>\n");
-        // Cell 2: Text
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n");
-        html_output.push_str(&segment_html_content);
-        html_output.push_str("      </td>\n");
-        html_output.push_str("    </tr>\n");
+        match current_layout.as_str() {
+            "Layout1" => { // | No | Timestamp | Speaker | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout2" => { // | No | Timestamp | then | Speaker | Text | (Default)
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout3" => { // | Timestamp Speaker | then | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{} {}</td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout4" => { // | Speaker | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout5" => { // | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            _ => { // Fallback to Layout2 if layout_choice is unknown
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+        }
     }
 
     html_output.push_str("  </tbody>\n");
