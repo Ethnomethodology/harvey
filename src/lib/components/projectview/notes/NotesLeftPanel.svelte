@@ -755,7 +755,7 @@ $: {
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
-	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-auto pb-2 border-b border-gray-200 dark:border-gray-600" <!-- Adjusted h-7 to h-auto, added pb-2 and border classes -->
+	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-auto pb-2 border-b border-gray-200 dark:border-gray-600"
         class:mb-3={!$panelStateStore.notesLeftPanelCollapsed} /* mb-3 provides good spacing after border */
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
