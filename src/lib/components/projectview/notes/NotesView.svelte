@@ -162,7 +162,12 @@
                  {:else if activeViewType === 'transcripts'}
                      <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400"><span>Media Transcript View Placeholder (NotesView - this shouldn't normally be active here)</span></div>
                 {:else if activeViewType === 'group_detail' && $project.selectedGroupData}
-                    <GroupDetailView groupData={$project.selectedGroupData} />
+                    <GroupDetailView
+                        groupData={$project.selectedGroupData}
+                        on:requestmediaselection={forwardEvent}
+                        on:requestopentab={(event) => handleViewChangeRequest(event.detail)}
+                        on:requestviewchange={(event) => handleViewChangeRequest(event.detail)}
+                    />
                 {:else}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Selected view type '{activeViewType}' not recognized, item path invalid, or required data missing.</span>

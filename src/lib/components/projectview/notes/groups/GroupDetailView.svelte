@@ -346,11 +346,48 @@
     }
 
     async function handleContextMenuTranscribe(event) {
-      const item = event.detail.item;
-      if (!item || !item.full_path) return;
-      console.log('Transcribe action for:', item);
-      dispatch('requestmediaselection', { mediaPath: item.full_path });
-      updateProjectStoreState({ statusMessage: 'Transcription requested for ' + item.name });
+      const itemFromGroup = event.detail.item;
+      if (!itemFromGroup || !itemFromGroup.full_path) {
+        await message("Cannot transcribe: media path is missing.", { title: "Error", type: "error" });
+        closeContextMenu();
+        return;
+      }
+
+      console.log('[GroupDetailView] Transcribe action for (from group):', itemFromGroup);
+      const projectFiles = get(projectStore).files; // projectStore is already imported
+      const mediaPathToFind = itemFromGroup.full_path;
+
+      // Local helper function, could be moved to a utility if used elsewhere
+      function findMediaByPathRecursiveLocal(nodes, path) {
+        if (!Array.isArray(nodes)) return null;
+        const targetPathNormalized = path?.replace(/\\/g, '/');
+        for (const node of nodes) {
+            const nodePathNormalized = node.path?.replace(/\\/g, '/');
+            if (node.file_type === 'media' && !node.is_directory && nodePathNormalized === targetPathNormalized) {
+                return node;
+            }
+            if (node.children && node.children.length > 0) {
+                const found = findMediaByPathRecursiveLocal(node.children, path);
+                if (found) return found;
+            }
+        }
+        return null;
+      }
+
+      const canonicalFileEntry = findMediaByPathRecursiveLocal(projectFiles, mediaPathToFind);
+
+      let pathForDispatch;
+      if (canonicalFileEntry) {
+        console.log('[GroupDetailView] Found canonical FileEntry, dispatching requestmediaselection with its path:', canonicalFileEntry.path);
+        pathForDispatch = canonicalFileEntry.path;
+         // DO NOT call selectMedia here. Let ProjectView.handleRequestMediaSelection do it.
+      } else {
+        console.error(`[GroupDetailView] Canonical FileEntry not found for path: ${mediaPathToFind}. Falling back to itemFromGroup.full_path for dispatch.`);
+        pathForDispatch = itemFromGroup.full_path; // Fallback to the original path from group content
+      }
+
+      dispatch('requestmediaselection', { mediaPath: pathForDispatch });
+      updateProjectStoreState({ statusMessage: 'Transcription requested for ' + itemFromGroup.name });
       closeContextMenu();
     }
 
