@@ -894,7 +894,7 @@ $: {
                                 on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
                                 title={group.name}
                             >
-                                <span class="flex items-center text-gray-800 dark:text-gray-200 truncate" /* Removed space-x-1.5 as icon is gone */
+                                <span class="flex items-center text-gray-800 dark:text-gray-200 truncate"
                                     class:!text-blue-700={$project.selectedGroupId === group.id}
                                     class:dark:!text-blue-200={$project.selectedGroupId === group.id}
                                 >
