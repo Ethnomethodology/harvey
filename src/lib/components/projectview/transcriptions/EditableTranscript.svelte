@@ -415,7 +415,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     >
                         <button
                             type='button'
-                            class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' <!-- text-sm removed -->
+                            class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between'
                             on:click="{toggleSpeakerDropdown}"
                             title="{localSpeaker}"
                             disabled="{!editEnabled}"
