@@ -755,8 +755,8 @@ $: {
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
-	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-7 pb-1"
-        class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
+	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-auto pb-2 border-b border-gray-200 dark:border-gray-600" <!-- Adjusted h-7 to h-auto, added pb-2 and border classes -->
+        class:mb-3={!$panelStateStore.notesLeftPanelCollapsed} /* mb-3 provides good spacing after border */
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
         class:justify-center={$panelStateStore.notesLeftPanelCollapsed || showSearchBox}>
@@ -869,8 +869,8 @@ $: {
             {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
         </div>
 
-        <!-- Separator Removed -->
-        <!-- <hr class="border-gray-300 dark:border-gray-600 my-2 mx-1"> -->
+        <!-- Styled Separator Added -->
+        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0"> <!-- mx-0 to ensure full width within padding of parent -->
 
         <!-- Bottom 1/3 for Groups -->
         <div class="flex-grow overflow-y-auto min-h-0 pr-2 pt-2" style="flex-basis: 33.33%;">
