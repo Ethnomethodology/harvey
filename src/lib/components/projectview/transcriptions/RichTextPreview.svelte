@@ -496,7 +496,7 @@
                 <div
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
-                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"  /* <-- MODIFIED: Added flex, items-start, gap-x-2 */
+                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
                     class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
