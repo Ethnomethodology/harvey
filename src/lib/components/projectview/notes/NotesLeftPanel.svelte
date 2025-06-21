@@ -880,10 +880,10 @@ $: {
                 </span>
                 Groups
             </h3>
-            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs"> {/* Added ml-2, border-l and removed space-y-1 */}
+            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs">
                 {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
                     {#each $currentProjectGroupsList as group (group.id)}
-                        <li class="group"> {/* Removed outer group class if it was only for hover context for button */}
+                        <li class="group">
                             <div
                                 class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                 class:bg-blue-100={$project.selectedGroupId === group.id}
