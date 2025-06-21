@@ -496,8 +496,8 @@
                 <div id={`segment-${seg.segmentIndex}`} class:segment-block={true} class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700" class:segment-active={seg.segmentIndex === activeSegmentIndex} class:border-blue-400={seg.segmentIndex === activeSegmentIndex} class:bg-blue-100={seg.segmentIndex === activeSegmentIndex} class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex} class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex} class:border-gray-200={seg.segmentIndex !== activeSegmentIndex} class:bg-white={seg.segmentIndex !== activeSegmentIndex} class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex} class:preview-interaction-disabled={previewEditMode} class:hover:bg-blue-50={!previewEditMode} class:dark:hover:bg-blue-900={!previewEditMode} class:cursor-pointer={!previewEditMode} on:click={() => handleSegmentClick(seg.segmentIndex)} tabindex={previewEditMode ? -1 : 0} on:keydown={(e) => { if (!previewEditMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }} role={previewEditMode ? 'listitem' : 'button'} aria-pressed={seg.segmentIndex === activeSegmentIndex} aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}>
                     <div class="flex flex-col w-[37.606rem] mx-auto gap-y-1">
                         <!-- Row 1: Number and Timestamps -->
-                        <div class="flex items-center gap-x-2"> {/* Removed flex-shrink-0 from row container */}
-                            <div class="flex flex-col text-center items-center flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> {/* Added min-width */}
+                        <div class="flex items-center gap-x-2"> <!-- Removed flex-shrink-0 from row container -->
+                            <div class="flex flex-col text-center items-center flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;"> <!-- Added min-width -->
                                 <span class="truncate text-gray-500 dark:text-gray-400 select-none text-center text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                                     {String(seg.segmentIndex + 1)}
                                 </span>
@@ -505,7 +505,7 @@
                                     {@html DELETE_ICON}
                                 </button>
                             </div>
-                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0"> {/* Changed to flex-1, text-left, added min-w-0 */}
+                            <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0"> <!-- Changed to flex-1, text-left, added min-w-0 -->
                                 <!-- Using text-sm to match editable panel's input fields appearance -->
                                 <span class="select-none" title="Start time">{seg.startTime}</span>
                                 <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
