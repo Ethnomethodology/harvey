@@ -624,7 +624,7 @@
         }
     }
 
-    function handleGroupContextMenuAction(action) {
+    async function handleGroupContextMenuAction(action) { // Made this function async
         const group = groupContextMenuItem;
         closeGroupContextMenu();
         if (!group) {
