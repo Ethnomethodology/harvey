@@ -755,7 +755,7 @@ $: {
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2">
-	<h2 class="relative flex items-center text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 h-7"
+	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 h-7 pb-1" /* Removed border-b, border-gray-300, dark:border-gray-600 */
         class:mb-3={!$panelStateStore.notesLeftPanelCollapsed}
         class:mb-0={$panelStateStore.notesLeftPanelCollapsed}
         class:justify-between={!$panelStateStore.notesLeftPanelCollapsed && !showSearchBox}
@@ -863,27 +863,27 @@ $: {
                              </div>
                         {/if}
                     </li>
-                    {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if}
+                    <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} --> {/* Removed separator */}
                 {/each}
             </ul>
             {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
         </div>
 
-        <!-- Separator -->
-        <hr class="border-gray-300 dark:border-gray-600 my-2 mx-1">
+        <!-- Separator Removed -->
+        <!-- <hr class="border-gray-300 dark:border-gray-600 my-2 mx-1"> -->
 
         <!-- Bottom 1/3 for Groups -->
-        <div class="flex-grow overflow-y-auto min-h-0 pr-2" style="flex-basis: 33.33%;">
+        <div class="flex-grow overflow-y-auto min-h-0 pr-2 pt-2" style="flex-basis: 33.33%;"> {/* Added pt-2 for spacing */}
             <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
                 <span class="mr-1.5 flex-shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection-fill w-3.5 h-3.5" viewBox="0 0 16 16"><path d="M0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zM2 3a.5.5 0 0 0 .5.5h11a.5.5 0 0 0 0-1h-11A.5.5 0 0 0 2 3m2-2a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 0-1h-7A.5.5 0 0 0 4 1"/></svg>
                 </span>
                 Groups
             </h3>
-            <ul class="space-y-1 text-xs">
+            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs"> {/* Added ml-2, border-l and removed space-y-1 */}
                 {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
                     {#each $currentProjectGroupsList as group (group.id)}
-                        <li class="group">
+                        <li class="group"> {/* Removed outer group class if it was only for hover context for button */}
                             <div
                                 class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                 class:bg-blue-100={$project.selectedGroupId === group.id}
@@ -894,15 +894,11 @@ $: {
                                 on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
                                 title={group.name}
                             >
-                                <span class="flex items-center space-x-1.5 text-gray-800 dark:text-gray-200 truncate"
+                                <span class="flex items-center text-gray-800 dark:text-gray-200 truncate" /* Removed space-x-1.5 as icon is gone */
                                     class:!text-blue-700={$project.selectedGroupId === group.id}
                                     class:dark:!text-blue-200={$project.selectedGroupId === group.id}
                                 >
-                                    <span class="flex-shrink-0">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-collection" viewBox="0 0 16 16">
-                                          <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-                                        </svg>
-                                    </span>
+                                    <!-- Icon span removed -->
                                     <span>{group.name}</span>
                                 </span>
                                 <button
