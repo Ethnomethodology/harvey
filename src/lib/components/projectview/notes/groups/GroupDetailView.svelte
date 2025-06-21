@@ -5,6 +5,7 @@
     import { get, writable } from 'svelte/store';
     import { createEventDispatcher } from 'svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+    import { type as getOsType } from '@tauri-apps/plugin-os'; // Added for OS detection
     import EditGroupModal from '$lib/components/projectview/modals/EditGroupModal.svelte';
     import FileContextMenu from '$lib/components/projectview/shared/FileContextMenu.svelte';
     import CreateGroupModal from '$lib/components/projectview/modals/CreateGroupModal.svelte';
@@ -35,6 +36,8 @@
     // Rename Modal State
     let showRenameModal = false;
     let itemToRename = null;
+
+    let revealButtonLabelGroupView = 'Open File Location'; // Default reveal label
 
     const CONTEXT_MENU_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots" viewBox="0 0 16 16"><path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>`;
 
@@ -130,6 +133,17 @@
             console.warn("Unknown file type for double click:", file.file_type);
         }
     }
+
+    onMount(async () => {
+        try {
+            const currentOs = await getOsType();
+            if (currentOs === 'windows') revealButtonLabelGroupView = 'Reveal in Explorer';
+            else if (currentOs === 'macos') revealButtonLabelGroupView = 'Reveal in Finder';
+            // Default 'Open File Location' is already set
+        } catch (e) {
+            console.error("[GroupDetailView] Error getting OS type for reveal label:", e);
+        }
+    });
 
     // Reactive watch on groupData and specific project properties
     // Using get(projectStore) inside the reactive block might be redundant if $projectStore is used,
@@ -595,6 +609,7 @@
   item={contextMenuItem}
   x={contextMenuX}
   y={contextMenuY}
+  revealLabel={revealButtonLabelGroupView}
   on:open={handleContextMenuOpen}
   on:reveal={handleContextMenuReveal}
   on:rename={handleContextMenuRename}
