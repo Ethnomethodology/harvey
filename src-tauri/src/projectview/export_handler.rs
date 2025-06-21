@@ -359,19 +359,16 @@ pub async fn export_transcript_to_docx(
     }\n");
     html_output.push_str("</style></head><body>\n");
 
-    html_output.push_str("<table style=\"table-layout:fixed; width:100%\">\n");
+    html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n"); // Added border-collapse
     html_output.push_str("<colgroup>\n");
-    html_output.push_str("  <col style=\"width:5%\" />\n");
-    html_output.push_str("  <col style=\"width:15%\" />\n");
-    html_output.push_str("  <col style=\"width:15%\" />\n");
-    html_output.push_str("  <col style=\"width:65%\" />\n");
+    html_output.push_str("  <col style=\"width:20%\" />\n"); // Column for Segment Info / Speaker
+    html_output.push_str("  <col style=\"width:80%\" />\n"); // Column for Empty / Text
     html_output.push_str("</colgroup>\n");
-    html_output.push_str("  <thead>\n    <tr>\n");
-    html_output.push_str("      <th>#</th>\n");
-    html_output.push_str("      <th>Timestamp</th>\n");
-    html_output.push_str("      <th>Speaker</th>\n");
-    html_output.push_str("      <th>Text</th>\n");
-    html_output.push_str("    </tr>\n  </thead>\n");
+    // Optional: Minimalistic header or remove completely if desired
+    // html_output.push_str("  <thead>\n    <tr>\n");
+    // html_output.push_str("      <th style=\"text-align:left; border: 1px solid #ddd; padding: 4px;\">Segment Details</th>\n");
+    // html_output.push_str("      <th style=\"text-align:left; border: 1px solid #ddd; padding: 4px;\">Content</th>\n");
+    // html_output.push_str("    </tr>\n  </thead>\n");
     html_output.push_str("  <tbody>\n");
 
     // Helper to format timestamps as mm:ss.mmm or hh:mm:ss.mmm
@@ -382,11 +379,11 @@ pub async fn export_transcript_to_docx(
         let total_ms = (seconds * 1000.0).round() as u64;
         let ms = total_ms % 1000;
         let total_s = total_ms / 1000;
-        if total_s < 3600 {
+        if total_s < 3600 { // Less than an hour
             let minutes = total_s / 60;
             let secs = total_s % 60;
             format!("{:02}:{:02}.{:03}", minutes, secs, ms)
-        } else {
+        } else { // Hour included
             let hours = total_s / 3600;
             let minutes = (total_s % 3600) / 60;
             let secs = total_s % 60;
@@ -398,24 +395,42 @@ pub async fn export_transcript_to_docx(
         let segment_number = index + 1;
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
-        let timestamp = format!("{} - {}", format_ts(start), format_ts(end));
-        let speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
-        let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
+        let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
 
+        // Speaker: ensure max 12 chars + "..." if longer, then add colon.
+        let raw_speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
+        let speaker_display = if raw_speaker.chars().count() > 12 {
+            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            format!("{}:", raw_speaker)
+        };
+
+        let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let segment_html_content = convert_lexical_or_plain_text_to_html(raw_text_content);
 
-        html_output.push_str("    <tr>\n");
-        html_output.push_str(&format!("      <td class=\"segment-number\">{}</td>\n", segment_number));
-        html_output.push_str(&format!("      <td class=\"timestamp\">{}</td>\n", encode_text(&timestamp)));
-        html_output.push_str(&format!("      <td class=\"speaker\">{}</td>\n", encode_text(speaker)));
-        html_output.push_str("      <td>\n");
+        // Row 1 for Segment: Number and Timestamps
+        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n"); // Avoid page break inside a segment's two rows
+        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Added some padding and border
+        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">Segment {}</div>\n", segment_number));
+        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">{}</div>\n", encode_text(&timestamp_str)));
+        html_output.push_str("      </td>\n");
+        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Empty cell, aligns with Text content
+        html_output.push_str("        <!-- Empty -->\n");
+        html_output.push_str("      </td>\n");
+        html_output.push_str("    </tr>\n");
+
+        // Row 2 for Segment: Speaker and Text
+        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">\n");
+        html_output.push_str(&encode_text(&speaker_display));
+        html_output.push_str("      </td>\n");
+        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n");
         html_output.push_str(&segment_html_content);
         html_output.push_str("      </td>\n");
         html_output.push_str("    </tr>\n");
     }
 
     html_output.push_str("  </tbody>\n");
-
     html_output.push_str("</table>\n");
     html_output.push_str("</body></html>\n");
 

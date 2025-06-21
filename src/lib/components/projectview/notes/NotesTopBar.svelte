@@ -256,28 +256,17 @@
   
   <style lang="postcss">
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-2 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-        &.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-        &.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-        &.text-xs { font-size: 0.75rem; line-height: 1rem; }
+        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component's style for ui-button-icon base */
     }
     .ui-button-icon:disabled {
         @apply opacity-50 cursor-not-allowed;
     }
     .ui-button-icon svg {
-        @apply w-5 h-5 flex-shrink-0;
+        @apply w-4 h-4 flex-shrink-0; /* Matched to transcriptions/TopBar.svelte */
     }
 
-    #theme-toggle-button svg {
-        @apply w-6 h-6;
-    }
-
-    .w-5 { width: 1.25rem; }
-    .h-5 { height: 1.25rem; }
-    .w-6 { width: 1.5rem; }
-    .h-6 { height: 1.5rem; }
-    .w-8 { width: 2rem; } /* For button */
-    .h-8 { height: 2rem; } /* For button */
+    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
   
     :global(html.dark) .dark\:bg-gray-800 {
          background-color: #1f2937 !important;

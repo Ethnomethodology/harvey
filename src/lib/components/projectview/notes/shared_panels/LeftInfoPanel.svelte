@@ -702,10 +702,10 @@
 
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden p-2"
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden py-2"
       class:w-full={!$panelStateStore.leftCollapsed}
       class:w-12={$panelStateStore.leftCollapsed} >
-    <h2 class="text-sm font-semibold border-b pb-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center h-7"
+    <h2 class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center h-7"
         class:mb-3={!$panelStateStore.leftCollapsed}
         class:mb-0={$panelStateStore.leftCollapsed}
         class:justify-between={!$panelStateStore.leftCollapsed}
@@ -742,7 +742,7 @@
         {#if !$panelStateStore.leftCollapsed}
                 <!-- Expanded View -->
                 {#if currentFileMetadata}
-                <div class="p-1 space-y-2">
+                <div class="px-2 py-1 space-y-2">
                     <!-- File Name (editable for stem, display full) -->
                 <div class="mb-3">
                     <label class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>

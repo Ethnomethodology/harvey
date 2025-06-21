@@ -453,8 +453,8 @@
 </svelte:head>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
-    <div class="flex items-center justify-between p-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
-        <div id="image-annotation-toolbar-container" class="flex items-center gap-1 min-h-[28px] border border-transparent">
+    <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
+        <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
             <span class="text-xs font-medium pr-1">Highlight:</span>
             {#if !isLoading && !error && !toolbar && anno}
                 <span class="text-xs text-red-500 italic px-2">Toolbar failed to load but Annotorious might be active.</span>
