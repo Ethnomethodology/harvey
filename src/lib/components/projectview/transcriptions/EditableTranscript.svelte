@@ -391,8 +391,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 </button>
             </div>
             <div
-                class='flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0' /* Removed w-full */
-                style="width: 37.606rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;" /* Added fixed width */
+                class='flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'
+                style="width: 37.606rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
             >
                 <!-- Row 1: Number and Timestamps -->
                 <div class="flex items-center gap-x-2 flex-shrink-0">
