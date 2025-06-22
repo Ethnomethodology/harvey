@@ -4,6 +4,7 @@
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
+	import { activeLayout } from '$lib/stores/layoutStore.js'; // Re-added
 	import { open } from '@tauri-apps/plugin-dialog';
 	// --- REMOVED: No fs functions imported for path manipulation ---
 
@@ -16,7 +17,8 @@
 	// Local state for the modal form
 	let exportFileName = '';
 	let exportFormat = 'csv'; // Default to CSV
-	let selectedDocxLayout = 'Layout2'; // Default to current layout (Segment Block)
+	// Initialize with active layout, fallback to the first option in DOCX_LAYOUT_OPTIONS or 'Layout1' if store is undefined initially
+	let selectedDocxLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
 	let exportDirectory = '';
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
@@ -102,7 +104,26 @@
 
 	// Initialize state when modal becomes visible
 	$: if (showModal) {
-		initializeModalState();
+		initializeModalState(); // This sets exportFormat to 'csv' and resets other fields
+		// If the initial active layout should be reflected immediately even if the format
+		// was already docx/md (which initializeModalState prevents by setting to csv),
+		// this would be the place. But since exportFormat becomes 'csv',
+		// the following $: block handles the change *to* docx/md correctly.
+	}
+
+	// When exportFormat (bound to the select dropdown) changes
+	$: {
+		if (exportFormat === 'docx' || exportFormat === 'md') {
+			// If the format is now docx or md, ensure our modal's layout choice
+			// reflects the global active view layout.
+			const currentActiveLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
+			if (selectedDocxLayout !== currentActiveLayout) {
+				selectedDocxLayout = currentActiveLayout;
+				console.log(`[ExportModal] Format changed to DOCX/MD, synced selectedDocxLayout to: ${selectedDocxLayout}`);
+			}
+		}
+		// No 'else' needed: if format is not docx/md, selectedDocxLayout keeps its value,
+		// which is fine as it's only used when submitting a docx/md export.
 	}
 
 	// --- Actions ---
