@@ -138,7 +138,24 @@
 			message('No transcript data loaded to export.', { title: "Cannot Export", type: "info" });
 		}
 	}
-	async function handleExportConfirm(event) { const { filePath, format } = event.detail; console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format }); const segmentsToExport = $transcriptStore.segments; if (!segmentsToExport || segmentsToExport.length === 0) { console.error("TopBar: Cannot export, no segments available in store."); message("No transcript data available to export.", { title: "Export Failed", type: "error" }); return; } try { await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport); console.log(`TopBar: Export to ${filePath} (${format}) successful.`); message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" }); } catch (error) { console.error(`TopBar: Export failed to ${filePath} (${format}):`, error); message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" }); } }
+	async function handleExportConfirm(event) {
+		const { filePath, format, layoutChoice } = event.detail;
+		console.log('TopBar: Export modal confirmed. Exporting:', { filePath, format, layoutChoice });
+		const segmentsToExport = $transcriptStore.segments;
+		if (!segmentsToExport || segmentsToExport.length === 0) {
+			console.error("TopBar: Cannot export, no segments available in store.");
+			message("No transcript data available to export.", { title: "Export Failed", type: "error" });
+			return;
+		}
+		try {
+			await exportTranscript(filePath, format, segmentsToExport, transcriptPathForExport, layoutChoice);
+			console.log(`TopBar: Export to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}) successful.`);
+			message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
+		} catch (error) {
+			console.error(`TopBar: Export failed to ${filePath} (${format}, Layout: ${layoutChoice || 'N/A'}):`, error);
+			message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
+		}
+	}
 	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier); const currentLang = $transcriptStore.selectedLanguage; const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier); if (localModelInfo && currentLang && currentLang !== 'en') { console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`); await showModelInfoDialog(localModelInfo); } } }
 	async function handleLanguageChange(event) { const selectedValue = event.target.value; const newLanguage = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected language:', newLanguage || 'None'); setSelectedLanguage(newLanguage); const currentModelIdentifier = $transcriptStore.selectedModelName; if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) { const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier); if (localModelInfo) { console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`); await showModelInfoDialog(localModelInfo); } } }
 	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return; let infoMessage = `Model Information: ${modelInfo.name}\n\n`; if (modelInfo.description && modelInfo.description.trim() !== '') { infoMessage += `${modelInfo.description}\n\n`; } else if (modelInfo.language && modelInfo.language.trim() !== '') { infoMessage += `Primary Language Focus: ${modelInfo.language}\n`; } else { infoMessage += "General purpose model.\n"; } if (modelInfo.size && modelInfo.size.trim() !== '') { infoMessage += `Size: ${modelInfo.size}`; } if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) { infoMessage += "\n\nNote: This is a multilingual model."; } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) { infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`; } infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`; await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' }); }
