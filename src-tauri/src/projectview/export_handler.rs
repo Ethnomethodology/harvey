@@ -1023,7 +1023,7 @@ fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
                 if node_type == "tablerow" { buffer.push_str("\n");} // Newline after each row
             }
             _ => { // Generic fallback for other unknown node types
-                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) { // Corrected: value -> node
                     for child in children {
                         lexical_to_markdown_text_node(child, buffer);
                     }
@@ -1103,8 +1103,8 @@ pub async fn export_transcript_to_markdown(
         md_content.push_str("|---------|------|\n");
     }
 
-    for (index, segment) in segments.iter().enumerate() {
-        let segment_number = index + 1;
+    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
+        let segment_number = _index + 1; // Use _index here for numbering
         // Using srt_timestamp for consistency, but could be simplified for MD
         let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
         let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");
@@ -1137,12 +1137,12 @@ pub async fn export_transcript_to_markdown(
                 ));
             }
             "Layout2" => { // | No | Timestamp | then | Speaker | Text |
-                if index > 0 { md_content.push_str("\n"); }
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
                 md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
                 md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
-                if index > 0 { md_content.push_str("\n"); }
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
                 md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
                 md_content.push_str(&format!("{}\n", markdown_text));
             }
@@ -1155,11 +1155,11 @@ pub async fn export_transcript_to_markdown(
                 ));
             }
             "Layout5" => { // | Text |
-                if index > 0 { md_content.push_str("\n"); }
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
                 md_content.push_str(&format!("{}\n", markdown_text));
             }
             _ => { // Fallback to Layout2
-                if index > 0 { md_content.push_str("\n"); }
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
                 md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
                 md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
             }
