@@ -567,7 +567,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
                              <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker}</span>
+                                <span class='truncate'>{localSpeaker.length > 13 ? localSpeaker.slice(0, 13) + '...' : localSpeaker}</span>
                                 <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
                             </button>
                             {#if showSpeakerDropdown}
