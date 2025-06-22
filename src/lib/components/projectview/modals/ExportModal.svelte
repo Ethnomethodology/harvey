@@ -26,7 +26,7 @@
 		{ value: 'csv', label: 'CSV (.csv)' },
 		{ value: 'docx', label: 'DOCX (.docx)' },
 		{ value: 'rtf', label: 'RTF (.rtf)', disabled: true },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: true },
+		{ value: 'srt', label: 'SRT (.srt)', disabled: false }, // Enabled SRT
 		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: true },
 	];
 
@@ -236,8 +236,8 @@
 							</option>
 						{/each}
 					</select>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">Other formats not yet implemented. Only CSV export is functional.</p>
+					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt'}
+						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, and SRT are available.</p>
 					 {/if}
 				</div>
 
@@ -297,7 +297,16 @@
 				<button type="button" on:click={closeModal} class="btn-secondary">
 					Cancel
 				</button>
-				<button type="button" on:click={handleConfirm} class="btn-primary" disabled={!exportFileName || exportFileName.trim() === '' || !exportDirectory || exportDirectory.trim() === '' || (exportFormat !== 'csv' && exportFormat !== 'docx')}>
+				<button
+					type="button"
+					on:click={handleConfirm}
+					class="btn-primary"
+					disabled={
+						!exportFileName || exportFileName.trim() === '' ||
+						!exportDirectory || exportDirectory.trim() === '' ||
+						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt')
+					}
+				>
 					Export {exportFormat.toUpperCase()}
 				</button>
 			</div>

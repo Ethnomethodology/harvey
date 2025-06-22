@@ -192,19 +192,31 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         console.error('[ConfigureActions] Error during DOCX export:', err);
         throw new Error(`Failed to export DOCX: ${err?.message || err}`);
       }
-    }
+    } else if (format === 'srt') {
+      if (!segments || segments.length === 0) {
+        throw new Error("No transcript segments available to export for SRT.");
+      }
+      try {
+        const payload = {
+          outputPathStr: filePath,
+          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_srt with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_srt', payload);
+        console.log(`[ConfigureActions] SRT export successful: ${savedPath}`);
+        return; // done
+      } catch (err) {
+        console.error('[ConfigureActions] Error during SRT export:', err);
+        throw new Error(`Failed to export SRT: ${err?.message || err}`);
+      }
+    } else if (format === 'csv') {
+		// --- Frontend CSV Generation ---
+		try {
+			const csvRows = [];
+			// CSV Header
+			csvRows.push('"StartTime","EndTime","Speaker","Text"'); // Use quotes for safety
 
-	if (format !== 'csv') {
-		throw new Error(`Export format "${format}" is not supported.`);
-	}
-
-	// --- Frontend CSV Generation ---
-	try {
-		const csvRows = [];
-		// CSV Header
-		csvRows.push('"StartTime","EndTime","Speaker","Text"'); // Use quotes for safety
-
-		// Create a single headless editor instance for text conversion
+			// Create a single headless editor instance for text conversion
 		const textConversionEditor = createHeadlessEditor({
 			nodes: ALL_EDITOR_NODES,
 			namespace: `csv-export-converter-${Math.random()}`,
@@ -320,5 +332,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 		    throw new Error(`Failed to export CSV: ${error?.message || error}`);
         }
 	}
+} else {
+	throw new Error(`Export format "${format}" is not supported.`);
+}
 }
 // Reminder: When calling exportTranscript in TopBar.svelte, pass the transcript JSON path as the fourth argument.

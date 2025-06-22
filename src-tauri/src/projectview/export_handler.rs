@@ -615,3 +615,71 @@ pub async fn export_transcript_to_docx(
     );
     Ok(output_path.to_string_lossy().to_string())
 }
+
+#[derive(serde::Deserialize, Debug)]
+struct Segment {
+    start_time: f64,
+    end_time: f64,
+    speaker: Option<String>,
+    text: String,
+}
+
+// Helper function to format seconds to HH:MM:SS,mmm
+fn format_srt_timestamp(seconds: f64) -> String {
+    if seconds.is_nan() || seconds < 0.0 {
+        return "00:00:00,000".to_string();
+    }
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let total_m = total_s / 60;
+    let m = total_m % 60;
+    let h = total_m / 60;
+    format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
+}
+
+#[tauri::command]
+pub async fn export_transcript_to_srt(
+    _app_handle: AppHandle, // Not directly used but good practice for tauri commands
+    output_path_str: String,
+    segments_json_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_transcript_to_srt] Exporting to SRT: {}", output_path_str);
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for SRT: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for SRT export."));
+    }
+
+    let mut srt_content = String::new();
+    for (index, segment) in segments.iter().enumerate() {
+        srt_content.push_str(&(index + 1).to_string());
+        srt_content.push_str("\n");
+
+        let start_ts = format_srt_timestamp(segment.start_time);
+        let end_ts = format_srt_timestamp(segment.end_time);
+        srt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
+
+        // Prepend speaker to text if speaker exists and is not empty
+        let text_line = if let Some(speaker_name) = &segment.speaker {
+            if !speaker_name.trim().is_empty() {
+                format!("{}: {}", speaker_name.trim(), segment.text)
+            } else {
+                segment.text.clone()
+            }
+        } else {
+            segment.text.clone()
+        };
+        srt_content.push_str(&text_line);
+        srt_content.push_str("\n\n"); // Two newlines to separate blocks
+    }
+
+    fs::write(&output_path_str, srt_content)
+        .map_err(|e| CommandError::from(format!("Failed to write SRT file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_srt] SRT export successful to {}", output_path_str);
+    Ok(output_path_str)
+}
