@@ -244,6 +244,24 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         console.error('[ConfigureActions] Error during Markdown export:', err);
         throw new Error(`Failed to export Markdown: ${err?.message || err}`);
       }
+    } else if (format === 'ass') {
+      if (!segments || segments.length === 0) {
+        throw new Error("No transcript segments available to export for ASS.");
+      }
+      try {
+        const payload = {
+          outputPathStr: filePath,
+          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+          // No layoutChoice needed for ASS
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_ass with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_ass', payload);
+        console.log(`[ConfigureActions] ASS export successful: ${savedPath}`);
+        return; // done
+      } catch (err) {
+        console.error('[ConfigureActions] Error during ASS export:', err);
+        throw new Error(`Failed to export ASS: ${err?.message || err}`);
+      }
     } else if (format === 'csv') {
 		// --- Frontend CSV Generation ---
 		try {

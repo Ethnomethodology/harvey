@@ -25,10 +25,10 @@
 	const exportFormats = [
 		{ value: 'csv', label: 'CSV (.csv)', disabled: false },
 		{ value: 'docx', label: 'DOCX (.docx)', disabled: false },
-		{ value: 'md', label: 'Markdown (.md)', disabled: false }, // Added Markdown
+		{ value: 'md', label: 'Markdown (.md)', disabled: false },
 		{ value: 'srt', label: 'SRT (.srt)', disabled: false },
 		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: false },
-		// { value: 'rtf', label: 'RTF (.rtf)', disabled: true }, // RTF removed
+		{ value: 'ass', label: 'Advanced SubStation Alpha (.ass)', disabled: false }, // Added ASS
 	];
 
 	const DEFAULT_EXPORT_FOLDER_NAME = 'exports'; // Name for the default subfolder
@@ -237,10 +237,12 @@
 							</option>
 						{/each}
 					</select>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, MD, SRT, and VTT are available.</p>
+					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md' && exportFormat !== 'ass'}
+						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. All listed formats are available.</p>
 					 {:else if exportFormat === 'md'}
 						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
+					 {:else if exportFormat === 'ass'}
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ASS export supports styling (bold, italic, underline, color). Highlights are converted to text color changes. Other styles stripped.</p>
 					 {/if}
 				</div>
 
