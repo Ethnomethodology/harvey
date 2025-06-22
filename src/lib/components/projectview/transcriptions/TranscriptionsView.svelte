@@ -279,10 +279,10 @@
         on:toggleEditMode={handleToggleEditMode}
     />
     <div class="flex flex-grow min-h-0 p-1 gap-1 w-full">
-        <div class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto"> {/* Changed from w-[15%] */}
+        <div class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
-        <div class="w-[40%] h-full flex flex-col gap-1"> {/* Stays w-[40%] */}
+        <div class="w-[40%] h-full flex flex-col gap-1">
 
             <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
@@ -314,7 +314,7 @@
                  />
             </div>
         </div>
-        <div class="w-[40%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto"> {/* Changed from w-[45%] */}
+        <div class="w-[40%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
