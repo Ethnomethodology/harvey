@@ -942,6 +942,133 @@ pub async fn export_transcript_to_vtt(
     Ok(output_path_str)
 }
 
+// Helper function to convert Lexical JSON to Markdown text with bold/italic
+fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
+    if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
+                    if text_content.trim().is_empty() && buffer.ends_with(' ') {
+                        // Avoid adding multiple spaces if text is just whitespace after a space
+                    } else if text_content.trim().is_empty() && !buffer.is_empty() && !buffer.ends_with('\n') {
+                        buffer.push(' '); // Add a space for empty text nodes if not at start of a line.
+                    } else {
+                        let format_flags = node.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
+                        let is_bold = (format_flags & IS_BOLD) != 0;
+                        let is_italic = (format_flags & IS_ITALIC) != 0;
+
+                        let mut prefix = String::new();
+                        let mut suffix = String::new();
+
+                        if is_bold && is_italic {
+                            prefix.push_str("***");
+                            suffix.push_str("***");
+                        } else if is_bold {
+                            prefix.push_str("**");
+                            suffix.push_str("**");
+                        } else if is_italic {
+                            prefix.push_str("*");
+                            suffix.push_str("*");
+                        }
+
+                        // Escape Markdown special characters in the text_content itself
+                        let escaped_text = text_content
+                            .replace("*", "\\*")
+                            .replace("_", "\\_")
+                            .replace("`", "\\`")
+                            .replace("[", "\\[")
+                            .replace("]", "\\]")
+                            .replace("#", "\\#");
+
+                        buffer.push_str(&prefix);
+                        buffer.push_str(&escaped_text);
+                        buffer.push_str(&suffix);
+                    }
+                }
+            }
+            "linebreak" => {
+                buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "listitem" | "quote" => { // Treat these as block elements
+                if !buffer.is_empty() && !buffer.ends_with("\n\n") && !buffer.ends_with("\n") { // Ensure space before new block unless already newlined
+                     buffer.push_str("\n"); // Start new paragraph on a new line
+                }
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                    }
+                }
+                buffer.push_str("\n"); // End paragraph with a newline, will become double with next paragraph's start
+            }
+            "link" => { // Format as Markdown link: [text](url)
+                let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("");
+                buffer.push_str("[");
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer); // Process link text
+                    }
+                }
+                buffer.push_str(&format!("]({})", encode_text(url))); // encode_text for URL safety
+            }
+            // Other block types like list, table, tablecell, tablerow are not directly translated to simple markdown text here.
+            // They would require more complex handling if their structure is to be preserved in Markdown.
+            // For now, just recurse through children to extract any text.
+            "list" | "table" | "tablerow" | "tablecell" => {
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                         if node_type == "tablecell" { buffer.push_str(" "); } // Add space between cell contents
+                    }
+                }
+                if node_type == "tablerow" { buffer.push_str("\n");} // Newline after each row
+            }
+            _ => { // Generic fallback for other unknown node types
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn get_markdown_text_from_lexical_string(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                if let Some(children) = parsed_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+                    for (i, child_node) in children.iter().enumerate() {
+                        lexical_to_markdown_text_node(child_node, &mut buffer);
+                        if i < children.len() - 1 { // Add double newline between top-level blocks from Lexical root
+                           if !buffer.ends_with("\n\n") {
+                                if buffer.ends_with("\n") { buffer.push_str("\n"); }
+                                else { buffer.push_str("\n\n"); }
+                           }
+                        }
+                    }
+                }
+                // Trim trailing newlines but try to preserve internal structure like double newlines between paragraphs
+                let mut result = buffer.as_str();
+                while result.ends_with('\n') {
+                    result = &result[0..result.len()-1];
+                }
+                result.to_string()
+
+            } else if parsed_json.is_string() { // JSON string value (already plain)
+                parsed_json.as_str().unwrap_or("").to_string()
+            } else { // Other JSON, not Lexical root or plain string
+                text_content.to_string()
+            }
+        }
+        Err(_) => { // Not valid JSON, assume it's already plain text
+            text_content.to_string()
+        }
+    }
+}
+
+
 #[tauri::command]
 pub async fn export_transcript_to_markdown(
     _app_handle: AppHandle,
@@ -993,48 +1120,51 @@ pub async fn export_transcript_to_markdown(
             format!("{}:", raw_speaker)
         };
 
-        let plain_text = get_plain_text_for_srt(&segment.text); // Re-use SRT's plain text extraction
+        let markdown_text = get_markdown_text_from_lexical_string(&segment.text);
 
         match current_layout.as_str() {
             "Layout1" => { // | # | Timestamp | Speaker | Text |
+                // For Markdown tables, internal newlines in content are tricky.
+                // Replacing with space or <br> (if renderer supports HTML) are options.
+                // Here, replacing with space for broader compatibility.
+                let table_cell_text = markdown_text.replace("\n", " ");
                 md_content.push_str(&format!(
                     "| {} | {} | {} | {} |\n",
                     segment_number,
-                    encode_text(&timestamp_str), // Basic text, no markdown interpretation needed for timestamp itself
-                    encode_text(&speaker_display_no_colon), // Basic text
-                    encode_text(&plain_text).replace("\n", "<br>") // Replace newlines for table cell
+                    encode_text(&timestamp_str),
+                    encode_text(&speaker_display_no_colon),
+                    table_cell_text // Already contains Markdown, no further encode_text
                 ));
             }
             "Layout2" => { // | No | Timestamp | then | Speaker | Text |
-                if index > 0 { md_content.push_str("\n"); } // Add space between segments
+                if index > 0 { md_content.push_str("\n"); }
                 md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
-                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
             }
             "Layout3" => { // | Timestamp Speaker | then | Text |
                 if index > 0 { md_content.push_str("\n"); }
                 md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
-                md_content.push_str(&format!("{}\n", encode_text(&plain_text)));
+                md_content.push_str(&format!("{}\n", markdown_text));
             }
             "Layout4" => { // | Speaker | Text |
+                let table_cell_text = markdown_text.replace("\n", " ");
                  md_content.push_str(&format!(
                     "| {} | {} |\n",
                     encode_text(&speaker_display_no_colon),
-                    encode_text(&plain_text).replace("\n", "<br>")
+                    table_cell_text
                 ));
             }
             "Layout5" => { // | Text |
                 if index > 0 { md_content.push_str("\n"); }
-                // Optionally prepend speaker if desired for this layout too, or keep purely text
-                // md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
-                md_content.push_str(&format!("{}\n", encode_text(&plain_text)));
+                md_content.push_str(&format!("{}\n", markdown_text));
             }
             _ => { // Fallback to Layout2
                 if index > 0 { md_content.push_str("\n"); }
                 md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
-                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
             }
         }
-        if current_layout != "Layout1" && current_layout != "Layout4" { // Add extra newline for non-table layouts
+        if current_layout != "Layout1" && current_layout != "Layout4" {
              md_content.push_str("\n");
         }
     }

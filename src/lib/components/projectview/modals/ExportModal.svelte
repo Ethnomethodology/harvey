@@ -237,8 +237,11 @@
 							</option>
 						{/each}
 					</select>
+					</select>
 					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md'}
 						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, MD, SRT, and VTT are available.</p>
+					 {:else if exportFormat === 'md'}
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
 					 {/if}
 				</div>
 
