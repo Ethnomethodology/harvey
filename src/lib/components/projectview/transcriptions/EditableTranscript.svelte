@@ -4,6 +4,9 @@
     import { transcriptStore, updateSegment, updatePlayerTime } from '$lib/stores/transcriptStore.js';
     import { onMount, onDestroy, tick, createEventDispatcher, afterUpdate } from 'svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
+	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added (though not directly used for column widths here, good for reference)
+
 
     // --- Lexical Imports --- (Keep as is)
     import { $getRoot as getRoot, $createParagraphNode as createParagraphNode, $createTextNode as createTextNode, $insertNodes as insertNodes, RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
@@ -374,6 +377,46 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;
 
+    // --- Layout specific styles ---
+    let columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0';
+    let segmentNumberContainerStyle = 'flex-basis: 1.880rem;'; // Default from original
+    let timestampContainerStyle = ''; // Default, will be part of flex
+    let speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;'; // Default from original
+    let textEditorContainerStyle = 'flex-grow'; // Default
+    let isLayout1Active = false; // Flag for Layout1 specific structure
+
+    $: {
+        const layoutKey = $activeLayout;
+        isLayout1Active = layoutKey === 'Layout1';
+
+        // Default styles for layouts other than Layout1
+        columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0';
+        segmentNumberContainerStyle = 'flex-basis: 1.880rem;';
+        timestampContainerStyle = '';
+        speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
+        textEditorContainerStyle = 'flex-grow';
+
+        if (layoutKey === 'Layout1') {
+            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4';
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400';
+        } else if (layoutKey === 'Layout2') {
+            speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
+        } else if (layoutKey === 'Layout3') {
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left';
+            timestampContainerStyle = 'flex-grow';
+            speakerContainerStyle = 'flex-shrink-0 ml-2 min-w-[6.5rem]'; // Ensure it has a min-width
+            textEditorContainerStyle = 'w-full';
+        } else if (layoutKey === 'Layout4') {
+            speakerContainerStyle = 'flex-basis: 6rem; max-width: 6rem;';
+        } else if (layoutKey === 'Layout5') {
+            // For Layout 5, speaker should take more available space
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left';
+            timestampContainerStyle = 'flex-shrink-0'; // Timestamps don't grow
+            speakerContainerStyle = 'relative flex-grow min-w-[6.5rem]'; // Speaker takes up remaining space
+            textEditorContainerStyle = 'w-full';
+        }
+    }
+
 </script>
 
 <div class="p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-gray-800 rounded-md shadow-sm overflow-hidden editable-transcript-controls">
@@ -390,83 +433,152 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /> </svg>
                 </button>
             </div>
-            <div
-                class='flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'
-                style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
-            >
-                <!-- Row 1: Number and Timestamps -->
-                <div class="flex items-center gap-x-1 flex-shrink-0">
-                    <div class='flex-shrink-0 text-left' style='flex-basis: 1.880rem;'>
-                        <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
-                    </div>
-                    <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1'>
-                        <input id='startTimeInput' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                        <span class='text-gray-400 dark:text-gray-500'>–</span>
-                        <input id='endTimeInput' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
-                    </div>
-                </div>
+            <!-- Main content area for inputs, layout driven by $activeLayout -->
+            <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
 
-                <!-- Row 2: Speaker and Text -->
-                <div class="flex items-start gap-x-1 flex-grow min-h-0">
-                    <div
-                        class='relative flex-shrink-0'
-                        style='flex-basis: 6.5rem; max-width: 6.5rem;'
-                        bind:this="{speakerDropdownRef}"
-                    >
-                        <button
-                            type='button'
-                            class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between'
-                            on:click="{toggleSpeakerDropdown}"
-                            title="{localSpeaker}"
-                            disabled="{!editEnabled}"
-                            aria-label='Select Speaker'
-                        >
-                            <span class='truncate'>{localSpeaker}</span>
-                            <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                        </button>
-                        {#if showSpeakerDropdown}
+                {#if isLayout1Active}
+                    <!-- Layout 1: Single Row Table -->
+                    <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
+                        <div class='flex-shrink-0 text-left py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                            <span class='w-full truncate whitespace-normal break-words text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        </div>
+                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                            <input id='startTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        </div>
+                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5' bind:this="{speakerDropdownRef}">
+                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
+                                <span class='truncate'>{localSpeaker}</span>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                            </button>
+                            {#if showSpeakerDropdown}
                             <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>
-                                    Unknown
-                                </li>
-                                {#each $transcriptStore.speakers.names as name (name)}
-                                    <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">
-                                        {name.length > 12 ? name.slice(0, 12) + '...' : name}
-                                    </li>
-                                {/each}
+                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
+                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
                             </ul>
-                        {/if}
-                    </div>
-                    <div
-                        class='lexical-editor-wrapper-style flex-grow'
-                        class:is-disabled="{!editEnabled}"
-                    >
-                        {#key currentIndex}
-                            {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor
-                                    bind:this="{lexicalEditorInstance}"
-                                    initialJson="{initialJsonForEditor}"
-                                    editable="{editEnabled}"
-                                    placeholder='Enter transcript text…'
-                                    toolbarConfig="{{
-                                        undo: true,
-                                        redo: true,
-                                        bold: true,
-                                        italic: true,
-                                        underline: true,
-                                        strikethrough: true,
-                                        textColor: true,
-                                        highlight: true,
-                                        clearFormatting: true
-                                    }}"
-                                    on:change="{handleEditorUpdate}"
-                                />
-                            {:else}
-                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
-                        {/key}
+                        </div>
+                        <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
+                            {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                        </div>
                     </div>
-                </div>
+                {:else if $activeLayout === 'Layout2'}
+                    <!-- Layout 2: Original Two Row Structure -->
+                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                        <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
+                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        </div>
+                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                            <input id='startTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <input id='endTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
+                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
+                                <span class='truncate'>{localSpeaker}</span>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                            </button>
+                            {#if showSpeakerDropdown}
+                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
+                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
+                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
+                            </ul>
+                            {/if}
+                        </div>
+                        <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                            {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                        </div>
+                    </div>
+                {:else if $activeLayout === 'Layout3'}
+                    <!-- Layout 3: Num, Time, Speaker on first row; Text on second -->
+                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                         <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
+                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        </div>
+                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                            <input id='startTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <input id='endTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        </div>
+                        <div class='relative {speakerContainerStyle}' bind:this="{speakerDropdownRef}">
+                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
+                                <span class='truncate'>{localSpeaker}</span>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                            </button>
+                            {#if showSpeakerDropdown}
+                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
+                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
+                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
+                            </ul>
+                            {/if}
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
+                        <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                        </div>
+                    </div>
+
+                {:else if $activeLayout === 'Layout4'}
+                     <div class="flex items-center gap-x-1 flex-shrink-0">
+                        <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
+                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        </div>
+                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                            <input id='startTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <input id='endTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
+                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
+                                <span class='truncate'>{localSpeaker}</span>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                            </button>
+                            {#if showSpeakerDropdown}
+                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
+                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
+                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
+                            </ul>
+                            {/if}
+                        </div>
+                        <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                        </div>
+                    </div>
+
+                {:else if $activeLayout === 'Layout5'}
+                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                        <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
+                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        </div>
+                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                            <input id='startTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <input id='endTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        </div>
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
+                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
+                                <span class='truncate'>{localSpeaker.length > 13 ? localSpeaker.slice(0, 13) + '...' : localSpeaker}</span>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                            </button>
+                            {#if showSpeakerDropdown}
+                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
+                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
+                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
+                            </ul>
+                            {/if}
+                        </div>
+                    </div>
+                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
+                        <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                        </div>
+                    </div>
+                {/if}
             </div>
             <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{next}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
         </div>
