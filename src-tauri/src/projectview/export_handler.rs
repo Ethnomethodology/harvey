@@ -720,21 +720,8 @@ fn get_plain_text_for_srt(text_content: &str) -> String {
     }
 }
 
-
-// Helper function to format seconds to HH:MM:SS,mmm
-fn format_srt_timestamp(seconds: f64) -> String {
-    if seconds.is_nan() || seconds < 0.0 {
-        return "00:00:00,000".to_string();
-    }
-    let total_ms = (seconds * 1000.0).round() as u64;
-    let ms = total_ms % 1000;
-    let total_s = total_ms / 1000;
-    let s = total_s % 60;
-    let total_m = total_s / 60;
-    let m = total_m % 60;
-    let h = total_m / 60;
-    format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
-}
+// The duplicate function definition that was here (around line 725) is removed.
+// The original definition at line 628 is kept.
 
 #[tauri::command]
 pub async fn export_transcript_to_srt(
