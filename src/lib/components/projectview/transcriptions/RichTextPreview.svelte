@@ -606,7 +606,7 @@
                                 {#if $activeLayout === 'Layout3'}
                                     <span class="select-none text-gray-600 dark:text-gray-400" title="Timestamp & Speaker">
                                         {seg.startTime} – {seg.endTime}
-                                        <span class="font-semibold text-gray-800 dark:text-gray-200 ml-1">{seg.speaker}:</span>
+                                        <span class="ml-1">{seg.speaker}</span>
                                     </span>
                                 {:else}
                                     <span class="select-none" title="Start time">{seg.startTime}</span>
