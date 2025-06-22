@@ -389,37 +389,32 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         const layoutKey = $activeLayout;
         isLayout1Active = layoutKey === 'Layout1';
 
-        // Default styles for layouts other than Layout1 (primarily for Layout2, 3, 4, 5's structure)
-        columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'; // Default two-rowish
+        // Default styles for layouts other than Layout1
+        columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0';
         segmentNumberContainerStyle = 'flex-basis: 1.880rem;';
-        timestampContainerStyle = ''; // Handled by input widths and flex items-center
+        timestampContainerStyle = '';
         speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
         textEditorContainerStyle = 'flex-grow';
 
-        if (layoutKey === 'Layout1') { // Detailed Table: # | Time | Spk | Text
-            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4'; // Single row
-            segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400'; // Class instead of inline for number display
-            // Widths for input containers will be handled by classes directly on them for Layout1
-        } else if (layoutKey === 'Layout2') { // Segment Block (Default): # Time \n Spk Text
-            // Styles already set by default are fine
-            speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;'; // Ensure reset if coming from L3/L4
-        } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Time Spk \n Text
+        if (layoutKey === 'Layout1') {
+            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4';
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400';
+        } else if (layoutKey === 'Layout2') {
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
-        } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Num | Time Speaker | Text
-            // All on first line: Number, Timestamps, Speaker. Text on second.
-            columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'; // Standard two-row container
-            segmentNumberContainerStyle = 'flex-shrink-0 text-left'; // Standard number style
-            timestampContainerStyle = 'flex-grow'; // Timestamps take available space next to number
-            speakerContainerStyle = 'flex-shrink-0 ml-2'; // Speaker next to timestamps, not taking full flex-grow
-            textEditorContainerStyle = 'w-full'; // Text editor full width on its own line
-        } else if (layoutKey === 'Layout4') { // Speaker & Text: Spk | Text
-            // Number and Timestamp are hidden in preview. Speaker is narrower.
-            speakerContainerStyle = 'flex-basis: 6rem; max-width: 6rem;'; // Matches preview adjustment
-        } else if (layoutKey === 'Layout5') { // Plain Text: Text
-            // Number, Timestamp, Speaker are hidden in preview. Text editor takes full width.
-            // No specific style changes needed for editor width, it will take available space.
+        } else if (layoutKey === 'Layout3') {
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left';
+            timestampContainerStyle = 'flex-grow';
+            speakerContainerStyle = 'flex-shrink-0 ml-2 min-w-[6.5rem]'; // Ensure it has a min-width
+            textEditorContainerStyle = 'w-full';
+        } else if (layoutKey === 'Layout4') {
+            speakerContainerStyle = 'flex-basis: 6rem; max-width: 6rem;';
+        } else if (layoutKey === 'Layout5') {
+            // For Layout 5, speaker should take more available space
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left';
+            timestampContainerStyle = 'flex-shrink-0'; // Timestamps don't grow
+            speakerContainerStyle = 'relative flex-grow min-w-[6.5rem]'; // Speaker takes up remaining space
+            textEditorContainerStyle = 'w-full';
         }
-        // console.log(`[EditableTranscript] Layout: ${layoutKey}, SpeakerStyle: ${speakerContainerStyle}`);
     }
 
 </script>
