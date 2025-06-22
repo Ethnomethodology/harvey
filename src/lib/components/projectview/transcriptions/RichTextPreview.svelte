@@ -604,7 +604,10 @@
                             {#if showTimestampCol || $activeLayout === 'Layout3'}
                             <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
                                 {#if $activeLayout === 'Layout3'}
-                                    <span class="select-none font-semibold" title="Timestamp & Speaker">{seg.startTime} &bull; {seg.speaker}:</span>
+                                    <span class="select-none text-gray-600 dark:text-gray-400" title="Timestamp & Speaker">
+                                        {seg.startTime} – {seg.endTime}
+                                        <span class="font-semibold text-gray-800 dark:text-gray-200 ml-1">{seg.speaker}:</span>
+                                    </span>
                                 {:else}
                                     <span class="select-none" title="Start time">{seg.startTime}</span>
                                     <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
@@ -616,7 +619,7 @@
                         {/if}
 
                         <!-- Row 2: Speaker and Text (or just Text for Layout3/Layout5) -->
-                        {#if showSpeakerCol || showTextCol}
+                        {#if ($activeLayout !== 'Layout3' && showSpeakerCol) || showTextCol}
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
                             {#if showSpeakerCol && $activeLayout !== 'Layout3' && $activeLayout !== 'Layout5'}
                             <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
@@ -627,8 +630,8 @@
                             {/if}
                             {#if showTextCol}
                             <div class="min-w-0 preview-content-area flex-grow"
-                                 style="white-space: normal; overflow-wrap: break-word; word-break: normal; {$activeLayout === 'Layout3' || $activeLayout === 'Layout5' ? 'margin-left: 0;' : ''}"
-                                 class:pl-0={$activeLayout === 'Layout3' || $activeLayout === 'Layout5'}
+                                 style="white-space: normal; overflow-wrap: break-word; word-break: normal; {$activeLayout === 'Layout3' || $activeLayout === 'Layout5' ? 'margin-left: 0;' : ($activeLayout === 'Layout1' ? '0' : '')}"
+                                 class:pl-0={$activeLayout === 'Layout3' || $activeLayout === 'Layout5' || $activeLayout === 'Layout1'}
                                  class:custom-layout3-padding={$activeLayout === 'Layout3' && !showSegmentNumberCol}
                             >
                                 {#if seg.isJsonContent}

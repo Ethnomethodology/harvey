@@ -405,12 +405,13 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;'; // Ensure reset if coming from L3/L4
         } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Time Spk \n Text
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
-        } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Time Spk \n Text
-            // Number column is hidden in preview, but shown here. Timestamps and Speaker are on one line.
-            // Text editor takes full width on its line.
-            // Speaker input might need to be narrower if timestamps are long.
-            speakerContainerStyle = 'flex-basis: auto; max-width: none; min-width: 5rem;'; // More flexible
-            // Text editor effectively takes full width on its own row.
+        } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Num | Time Speaker | Text
+            // All on first line: Number, Timestamps, Speaker. Text on second.
+            columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'; // Standard two-row container
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left'; // Standard number style
+            timestampContainerStyle = 'flex-grow'; // Timestamps take available space next to number
+            speakerContainerStyle = 'flex-shrink-0 ml-2'; // Speaker next to timestamps, not taking full flex-grow
+            textEditorContainerStyle = 'w-full'; // Text editor full width on its own line
         } else if (layoutKey === 'Layout4') { // Speaker & Text: Spk | Text
             // Number and Timestamp are hidden in preview. Speaker is narrower.
             speakerContainerStyle = 'flex-basis: 6rem; max-width: 6rem;'; // Matches preview adjustment
@@ -496,19 +497,20 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                     </div>
                 {:else if $activeLayout === 'Layout3'}
+                    <!-- Layout 3: Num, Time, Speaker on first row; Text on second -->
                     <div class="flex items-center gap-x-1 flex-shrink-0">
-                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
-                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                         <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
+                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 flex-grow' style="{timestampContainerStyle}">
+                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
                             <input id='startTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
                             <span class='text-gray-400 dark:text-gray-500'>–</span>
                             <input id='endTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
+                        <div class='relative {speakerContainerStyle}' bind:this="{speakerDropdownRef}">
                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
                                 <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
                             </button>
                             {#if showSpeakerDropdown}
                             <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
