@@ -1258,8 +1258,8 @@ fn lexical_node_to_ass_tags(node: &Value, ass_buffer: &mut String, styles_map: &
                         }
                     }
 
-                    if let Some(so) = style_override {
-                        ass_buffer.push_str(&so);
+                    if let Some(ref so) = style_override { // Changed to use ref
+                        ass_buffer.push_str(so); // Use so directly as it's a reference
                     }
                     if let Some(co) = color_override {
                         ass_buffer.push_str(&co);
@@ -1401,7 +1401,7 @@ pub async fn export_transcript_to_ass(
     ass_content.push_str("[Events]\n");
     ass_content.push_str("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n");
 
-    for segment in segments.iter() {
+    for (_index, segment) in segments.iter().enumerate() { // Changed to _index
         let start_ts = format_ass_timestamp(segment.start_time);
         let end_ts = format_ass_timestamp(segment.end_time);
 
