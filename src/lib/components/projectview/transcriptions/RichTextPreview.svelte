@@ -560,6 +560,36 @@
                     </div>
 
                     <!-- Item 2: Main Content Block (structure depends on layout) -->
+                    {#if $activeLayout === 'Layout1'}
+                    <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
+                        {#if showSegmentNumberCol}
+                        <div class="flex-shrink-0 text-gray-500 dark:text-gray-400 select-none text-sm py-1" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                            {String(seg.segmentIndex + 1)}
+                        </div>
+                        {/if}
+                        {#if showTimestampCol}
+                        <div class="flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight text-sm py-1" style="flex-basis: 15%; max-width: 15%;">
+                            <span class="select-none" title="Start time">{seg.startTime}</span>
+                            <span class="text-gray-400 dark:text-gray-500 select-none block sm:inline">-</span>
+                            <span class="select-none" title="End time">{seg.endTime}</span>
+                        </div>
+                        {/if}
+                        {#if showSpeakerCol}
+                        <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold text-sm py-1 truncate" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
+                            {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}
+                        </div>
+                        {/if}
+                        {#if showTextCol}
+                        <div class="min-w-0 preview-content-area text-sm py-1" style="flex-basis: 65%; white-space: normal; overflow-wrap: break-word; word-break: normal;">
+                            {#if seg.isJsonContent}
+                                <div class="speech-rich-text">{@html seg.html}</div>
+                            {:else}
+                                <div class="speech-plain-text">{seg.plainText}</div>
+                            {/if}
+                        </div>
+                        {/if}
+                    </div>
+                    {:else}
                     <div class="flex flex-col flex-grow gap-y-1 min-w-0">
                         <!-- Row 1: Number and Timestamps (or combined for Layout3) -->
                         {#if showSegmentNumberCol || showTimestampCol || $activeLayout === 'Layout3'}
@@ -611,6 +641,7 @@
                         </div>
                         {/if}
                     </div>
+                    {/if}
                 </div>
                 {#if previewEditMode}
                   <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
