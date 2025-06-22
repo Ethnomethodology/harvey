@@ -110,19 +110,14 @@
 		}
 	}
 
-	// When exportFormat changes, update selectedDocxLayout if necessary
-	let previousExportFormat = exportFormat;
-	$: {
-		if (showModal) {
-			if ((exportFormat === 'docx' || exportFormat === 'md') &&
-			    (previousExportFormat !== 'docx' && previousExportFormat !== 'md')) {
-				// Switched TO docx/md
-				selectedDocxLayout = get(activeLayout) || 'Layout1';
-				console.log(`[ExportModal] Switched to DOCX/MD format, synced selectedDocxLayout to: ${selectedDocxLayout}`);
-			}
-			previousExportFormat = exportFormat;
-		}
+	// When exportFormat (bound to the select dropdown) changes to docx or md,
+	// update our internal selectedDocxLayout to match the current active view layout.
+	$: if (exportFormat === 'docx' || exportFormat === 'md') {
+		selectedDocxLayout = get(activeLayout) || 'Layout1';
+		console.log(`[ExportModal] Format is DOCX/MD, ensuring selectedDocxLayout is synced to: ${selectedDocxLayout}`);
 	}
+	// No 'else' needed: if format is not docx/md, selectedDocxLayout keeps its value,
+	// which is fine as it's only used when submitting a docx/md export.
 
 	// --- Actions ---
 	async function selectExportDirectory() {
