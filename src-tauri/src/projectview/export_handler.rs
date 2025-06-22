@@ -769,3 +769,175 @@ pub async fn export_transcript_to_srt(
     info!("[export_transcript_to_srt] SRT export successful to {}", output_path_str);
     Ok(output_path_str)
 }
+
+// Helper function to format seconds to HH:MM:SS.mmm for VTT
+fn format_vtt_timestamp(seconds: f64) -> String {
+    if seconds.is_nan() || seconds < 0.0 {
+        return "00:00:00.000".to_string();
+    }
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let total_m = total_s / 60;
+    let m = total_m % 60;
+    let h = total_m / 60;
+    format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
+}
+
+// Helper function to convert Lexical JSON to VTT cue text with basic styling
+fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String) {
+    if let Some(node_type) = value.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = value.get("text").and_then(|t| t.as_str()) {
+                    let format_flags = value.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
+                    let style_str = value.get("style").and_then(|s| s.as_str()).unwrap_or("");
+
+                    let mut prefix_tags = String::new();
+                    let mut suffix_tags = String::new();
+
+                    if format_flags & IS_BOLD != 0 { prefix_tags.push_str("<b>"); suffix_tags.insert_str(0, "</b>"); }
+                    if format_flags & IS_ITALIC != 0 { prefix_tags.push_str("<i>"); suffix_tags.insert_str(0, "</i>"); }
+                    if format_flags & IS_UNDERLINE != 0 { prefix_tags.push_str("<u>"); suffix_tags.insert_str(0, "</u>"); }
+
+                    // Basic color parsing (e.g., "color: #RRGGBB" or "color: red")
+                    // VTT supports <c.colorname> and <c.#RRGGBB>
+                    if !style_str.is_empty() {
+                        for part in style_str.split(';') {
+                            let part_trimmed = part.trim();
+                            if part_trimmed.starts_with("color:") {
+                                let color_value = part_trimmed.trim_start_matches("color:").trim();
+                                if !color_value.is_empty() {
+                                    // VTT class names cannot start with a digit if not hex, and hex needs #
+                                    // Simple heuristic: if it starts with #, assume hex. Otherwise, treat as named color.
+                                    // More robust parsing might be needed for complex CSS color values.
+                                    let vtt_color_tag = format!("<c.{}>", color_value);
+                                    prefix_tags.push_str(&vtt_color_tag);
+                                    suffix_tags.insert_str(0, "</c>"); // VTT uses simple </c> to close color tags
+                                }
+                                break; // Assuming only one color declaration for simplicity
+                            }
+                            // Background color (highlight) is generally not directly supported in VTT text spans.
+                            // Could map to a class like <c.highlightYellow> if player CSS is available.
+                            // For now, we'll ignore background-color.
+                        }
+                    }
+
+                    vtt_text_buffer.push_str(&prefix_tags);
+                    vtt_text_buffer.push_str(&encode_text(text_content)); // Encode to prevent VTT syntax issues from text
+                    vtt_text_buffer.push_str(&suffix_tags);
+                }
+            }
+            "linebreak" => {
+                vtt_text_buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table" | "tablecell" | "tablerow" => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                    }
+                }
+                // Add a newline after block elements like paragraphs if they are not the last in a sequence of blocks
+                // or if they represent a distinct thought unit. For VTT, this often translates to just letting linebreaks handle it.
+                if node_type == "paragraph" && !vtt_text_buffer.ends_with("\n") && !vtt_text_buffer.is_empty() {
+                     // vtt_text_buffer.push_str("\n"); // Could add a newline if paragraphs must be distinct lines in VTT
+                }
+            }
+            _ => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                    }
+                }
+            }
+        }
+    } else if let Some(children) = value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+        for (i, child) in children.iter().enumerate() {
+            lexical_to_vtt_cue_text(child, vtt_text_buffer);
+            if i < children.len() - 1 {
+                if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
+                    if child_node_type == "paragraph" && !vtt_text_buffer.ends_with('\n') {
+                        vtt_text_buffer.push_str("\n"); // Newline between top-level paragraphs
+                    }
+                }
+            }
+        }
+    } else if value.is_string() { // If it's already a plain string
+         vtt_text_buffer.push_str(value.as_str().unwrap_or(""));
+    }
+}
+
+fn get_vtt_cue_text_from_lexical_string(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                lexical_to_vtt_cue_text(&parsed_json, &mut buffer);
+                return buffer; // No trim, preserve internal newlines
+            }
+            if parsed_json.is_string() { // JSON string value
+                return parsed_json.as_str().unwrap_or("").to_string();
+            }
+            // Fallback for other JSON that is not Lexical root (e.g. simple array/object not expected here)
+            text_content.to_string()
+        }
+        Err(_) => {
+            // Not valid JSON, assume it's already plain text
+            text_content.to_string()
+        }
+    }
+}
+
+
+#[tauri::command]
+pub async fn export_transcript_to_vtt(
+    _app_handle: AppHandle,
+    output_path_str: String,
+    segments_json_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_transcript_to_vtt] Exporting to VTT: {}", output_path_str);
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for VTT: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for VTT export."));
+    }
+
+    let mut vtt_content = String::new();
+    vtt_content.push_str("WEBVTT\n\n");
+
+    for (index, segment) in segments.iter().enumerate() {
+        // VTT sequence numbers are optional but can be helpful.
+        // If not using them, just remove this line.
+        // vtt_content.push_str(&(index + 1).to_string());
+        // vtt_content.push_str("\n");
+
+        let start_ts = format_vtt_timestamp(segment.start_time);
+        let end_ts = format_vtt_timestamp(segment.end_time);
+        vtt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
+
+        let cue_text = get_vtt_cue_text_from_lexical_string(&segment.text);
+
+        let text_line = if let Some(speaker_name) = &segment.speaker {
+            if !speaker_name.trim().is_empty() {
+                // VTT standard way to denote speaker is often <v Speaker Name>Text content
+                // or just Speaker Name: Text content. For simplicity, using the latter.
+                format!("{}: {}", speaker_name.trim(), cue_text)
+            } else {
+                cue_text
+            }
+        } else {
+            cue_text
+        };
+        vtt_content.push_str(&text_line);
+        vtt_content.push_str("\n\n");
+    }
+
+    fs::write(&output_path_str, vtt_content)
+        .map_err(|e| CommandError::from(format!("Failed to write VTT file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_vtt] VTT export successful to {}", output_path_str);
+    Ok(output_path_str)
+}

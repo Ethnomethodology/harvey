@@ -209,6 +209,23 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         console.error('[ConfigureActions] Error during SRT export:', err);
         throw new Error(`Failed to export SRT: ${err?.message || err}`);
       }
+    } else if (format === 'vtt') {
+      if (!segments || segments.length === 0) {
+        throw new Error("No transcript segments available to export for VTT.");
+      }
+      try {
+        const payload = {
+          outputPathStr: filePath,
+          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_vtt with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_vtt', payload);
+        console.log(`[ConfigureActions] VTT export successful: ${savedPath}`);
+        return; // done
+      } catch (err) {
+        console.error('[ConfigureActions] Error during VTT export:', err);
+        throw new Error(`Failed to export VTT: ${err?.message || err}`);
+      }
     } else if (format === 'csv') {
 		// --- Frontend CSV Generation ---
 		try {

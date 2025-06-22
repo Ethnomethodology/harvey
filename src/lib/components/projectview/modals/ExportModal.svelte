@@ -26,8 +26,8 @@
 		{ value: 'csv', label: 'CSV (.csv)' },
 		{ value: 'docx', label: 'DOCX (.docx)' },
 		{ value: 'rtf', label: 'RTF (.rtf)', disabled: true },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: false }, // Enabled SRT
-		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: true },
+		{ value: 'srt', label: 'SRT (.srt)', disabled: false },
+		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: false }, // Enabled VTT
 	];
 
 	const DEFAULT_EXPORT_FOLDER_NAME = 'exports'; // Name for the default subfolder
@@ -236,8 +236,8 @@
 							</option>
 						{/each}
 					</select>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, and SRT are available.</p>
+					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt'}
+						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, SRT, and VTT are available.</p>
 					 {/if}
 				</div>
 
@@ -304,7 +304,7 @@
 					disabled={
 						!exportFileName || exportFileName.trim() === '' ||
 						!exportDirectory || exportDirectory.trim() === '' ||
-						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt')
+						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt')
 					}
 				>
 					Export {exportFormat.toUpperCase()}
