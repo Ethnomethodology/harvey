@@ -769,3 +769,409 @@ pub async fn export_transcript_to_srt(
     info!("[export_transcript_to_srt] SRT export successful to {}", output_path_str);
     Ok(output_path_str)
 }
+
+// Helper function to format seconds to HH:MM:SS.mmm for VTT
+fn format_vtt_timestamp(seconds: f64) -> String {
+    if seconds.is_nan() || seconds < 0.0 {
+        return "00:00:00.000".to_string();
+    }
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let total_m = total_s / 60;
+    let m = total_m % 60;
+    let h = total_m / 60;
+    format!("{:02}:{:02}:{:02}.{:03}", h, m, s, ms)
+}
+
+// Helper function to convert Lexical JSON to VTT cue text with basic styling
+fn lexical_to_vtt_cue_text(value: &Value, vtt_text_buffer: &mut String) {
+    if let Some(node_type) = value.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = value.get("text").and_then(|t| t.as_str()) {
+                    let format_flags = value.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
+                    let style_str = value.get("style").and_then(|s| s.as_str()).unwrap_or("");
+
+                    let mut prefix_tags = String::new();
+                    let mut suffix_tags = String::new();
+
+                    if format_flags & IS_BOLD != 0 { prefix_tags.push_str("<b>"); suffix_tags.insert_str(0, "</b>"); }
+                    if format_flags & IS_ITALIC != 0 { prefix_tags.push_str("<i>"); suffix_tags.insert_str(0, "</i>"); }
+                    if format_flags & IS_UNDERLINE != 0 { prefix_tags.push_str("<u>"); suffix_tags.insert_str(0, "</u>"); }
+
+                    // Basic color parsing (e.g., "color: #RRGGBB" or "color: red")
+                    // VTT supports <c.colorname> and <c.#RRGGBB>
+                    if !style_str.is_empty() {
+                        for part in style_str.split(';') {
+                            let part_trimmed = part.trim();
+                            if part_trimmed.starts_with("color:") {
+                                let color_value = part_trimmed.trim_start_matches("color:").trim();
+                                if !color_value.is_empty() {
+                                    // VTT class names cannot start with a digit if not hex, and hex needs #
+                                    // Simple heuristic: if it starts with #, assume hex. Otherwise, treat as named color.
+                                    // More robust parsing might be needed for complex CSS color values.
+                                    let vtt_color_tag = format!("<c.{}>", color_value);
+                                    prefix_tags.push_str(&vtt_color_tag);
+                                    suffix_tags.insert_str(0, "</c>"); // VTT uses simple </c> to close color tags
+                                }
+                                break; // Assuming only one color declaration for simplicity
+                            }
+                            // Background color (highlight) is generally not directly supported in VTT text spans.
+                            // Could map to a class like <c.highlightYellow> if player CSS is available.
+                            // For now, we'll ignore background-color.
+                        }
+                    }
+
+                    vtt_text_buffer.push_str(&prefix_tags);
+                    vtt_text_buffer.push_str(&encode_text(text_content)); // Encode to prevent VTT syntax issues from text
+                    vtt_text_buffer.push_str(&suffix_tags);
+                }
+            }
+            "linebreak" => {
+                vtt_text_buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table" | "tablecell" | "tablerow" => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                    }
+                }
+                // Add a newline after block elements like paragraphs if they are not the last in a sequence of blocks
+                // or if they represent a distinct thought unit. For VTT, this often translates to just letting linebreaks handle it.
+                if node_type == "paragraph" && !vtt_text_buffer.ends_with("\n") && !vtt_text_buffer.is_empty() {
+                     // vtt_text_buffer.push_str("\n"); // Could add a newline if paragraphs must be distinct lines in VTT
+                }
+            }
+            _ => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_vtt_cue_text(child, vtt_text_buffer);
+                    }
+                }
+            }
+        }
+    } else if let Some(children) = value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+        for (i, child) in children.iter().enumerate() {
+            lexical_to_vtt_cue_text(child, vtt_text_buffer);
+            if i < children.len() - 1 {
+                if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
+                    if child_node_type == "paragraph" && !vtt_text_buffer.ends_with('\n') {
+                        vtt_text_buffer.push_str("\n"); // Newline between top-level paragraphs
+                    }
+                }
+            }
+        }
+    } else if value.is_string() { // If it's already a plain string
+         vtt_text_buffer.push_str(value.as_str().unwrap_or(""));
+    }
+}
+
+fn get_vtt_cue_text_from_lexical_string(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                lexical_to_vtt_cue_text(&parsed_json, &mut buffer);
+                return buffer; // No trim, preserve internal newlines
+            }
+            if parsed_json.is_string() { // JSON string value
+                return parsed_json.as_str().unwrap_or("").to_string();
+            }
+            // Fallback for other JSON that is not Lexical root (e.g. simple array/object not expected here)
+            text_content.to_string()
+        }
+        Err(_) => {
+            // Not valid JSON, assume it's already plain text
+            text_content.to_string()
+        }
+    }
+}
+
+
+#[tauri::command]
+pub async fn export_transcript_to_vtt(
+    _app_handle: AppHandle,
+    output_path_str: String,
+    segments_json_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_transcript_to_vtt] Exporting to VTT: {}", output_path_str);
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for VTT: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for VTT export."));
+    }
+
+    let mut vtt_content = String::new();
+    vtt_content.push_str("WEBVTT\n\n");
+
+    for (index, segment) in segments.iter().enumerate() {
+        // VTT sequence numbers are optional but can be helpful.
+        // If not using them, just remove this line.
+        // vtt_content.push_str(&(index + 1).to_string());
+        // vtt_content.push_str("\n");
+
+        let start_ts = format_vtt_timestamp(segment.start_time);
+        let end_ts = format_vtt_timestamp(segment.end_time);
+        vtt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
+
+        let cue_text = get_vtt_cue_text_from_lexical_string(&segment.text);
+
+        let text_line = if let Some(speaker_name) = &segment.speaker {
+            if !speaker_name.trim().is_empty() {
+                // VTT standard way to denote speaker is often <v Speaker Name>Text content
+                // or just Speaker Name: Text content. For simplicity, using the latter.
+                format!("{}: {}", speaker_name.trim(), cue_text)
+            } else {
+                cue_text
+            }
+        } else {
+            cue_text
+        };
+        vtt_content.push_str(&text_line);
+        vtt_content.push_str("\n\n");
+    }
+
+    fs::write(&output_path_str, vtt_content)
+        .map_err(|e| CommandError::from(format!("Failed to write VTT file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_vtt] VTT export successful to {}", output_path_str);
+    Ok(output_path_str)
+}
+
+// Helper function to convert Lexical JSON to Markdown text with bold/italic
+fn lexical_to_markdown_text_node(node: &Value, buffer: &mut String) {
+    if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = node.get("text").and_then(|t| t.as_str()) {
+                    if text_content.trim().is_empty() && buffer.ends_with(' ') {
+                        // Avoid adding multiple spaces if text is just whitespace after a space
+                    } else if text_content.trim().is_empty() && !buffer.is_empty() && !buffer.ends_with('\n') {
+                        buffer.push(' '); // Add a space for empty text nodes if not at start of a line.
+                    } else {
+                        let format_flags = node.get("format").and_then(|f| f.as_i64()).unwrap_or(0);
+                        let is_bold = (format_flags & IS_BOLD) != 0;
+                        let is_italic = (format_flags & IS_ITALIC) != 0;
+
+                        let mut prefix = String::new();
+                        let mut suffix = String::new();
+
+                        if is_bold && is_italic {
+                            prefix.push_str("***");
+                            suffix.push_str("***");
+                        } else if is_bold {
+                            prefix.push_str("**");
+                            suffix.push_str("**");
+                        } else if is_italic {
+                            prefix.push_str("*");
+                            suffix.push_str("*");
+                        }
+
+                        // Escape Markdown special characters in the text_content itself
+                        let escaped_text = text_content
+                            .replace("*", "\\*")
+                            .replace("_", "\\_")
+                            .replace("`", "\\`")
+                            .replace("[", "\\[")
+                            .replace("]", "\\]")
+                            .replace("#", "\\#");
+
+                        buffer.push_str(&prefix);
+                        buffer.push_str(&escaped_text);
+                        buffer.push_str(&suffix);
+                    }
+                }
+            }
+            "linebreak" => {
+                buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "listitem" | "quote" => { // Treat these as block elements
+                if !buffer.is_empty() && !buffer.ends_with("\n\n") && !buffer.ends_with("\n") { // Ensure space before new block unless already newlined
+                     buffer.push_str("\n"); // Start new paragraph on a new line
+                }
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                    }
+                }
+                buffer.push_str("\n"); // End paragraph with a newline, will become double with next paragraph's start
+            }
+            "link" => { // Format as Markdown link: [text](url)
+                let url = node.get("url").and_then(|u| u.as_str()).unwrap_or("");
+                buffer.push_str("[");
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer); // Process link text
+                    }
+                }
+                buffer.push_str(&format!("]({})", encode_text(url))); // encode_text for URL safety
+            }
+            // Other block types like list, table, tablecell, tablerow are not directly translated to simple markdown text here.
+            // They would require more complex handling if their structure is to be preserved in Markdown.
+            // For now, just recurse through children to extract any text.
+            "list" | "table" | "tablerow" | "tablecell" => {
+                 if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                         if node_type == "tablecell" { buffer.push_str(" "); } // Add space between cell contents
+                    }
+                }
+                if node_type == "tablerow" { buffer.push_str("\n");} // Newline after each row
+            }
+            _ => { // Generic fallback for other unknown node types
+                if let Some(children) = node.get("children").and_then(|c| c.as_array()) { // Corrected: value -> node
+                    for child in children {
+                        lexical_to_markdown_text_node(child, buffer);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn get_markdown_text_from_lexical_string(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                if let Some(children) = parsed_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+                    for (i, child_node) in children.iter().enumerate() {
+                        lexical_to_markdown_text_node(child_node, &mut buffer);
+                        if i < children.len() - 1 { // Add double newline between top-level blocks from Lexical root
+                           if !buffer.ends_with("\n\n") {
+                                if buffer.ends_with("\n") { buffer.push_str("\n"); }
+                                else { buffer.push_str("\n\n"); }
+                           }
+                        }
+                    }
+                }
+                // Trim trailing newlines but try to preserve internal structure like double newlines between paragraphs
+                let mut result = buffer.as_str();
+                while result.ends_with('\n') {
+                    result = &result[0..result.len()-1];
+                }
+                result.to_string()
+
+            } else if parsed_json.is_string() { // JSON string value (already plain)
+                parsed_json.as_str().unwrap_or("").to_string()
+            } else { // Other JSON, not Lexical root or plain string
+                text_content.to_string()
+            }
+        }
+        Err(_) => { // Not valid JSON, assume it's already plain text
+            text_content.to_string()
+        }
+    }
+}
+
+
+#[tauri::command]
+pub async fn export_transcript_to_markdown(
+    _app_handle: AppHandle,
+    output_path_str: String,
+    segments_json_str: String,
+    layout_choice: Option<String>,
+) -> Result<String, CommandError> {
+    let current_layout = layout_choice.unwrap_or_else(|| "Layout2".to_string());
+    info!(
+        "[export_transcript_to_markdown] Exporting to Markdown: {}, Layout: {}",
+        output_path_str, current_layout
+    );
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for Markdown: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for Markdown export."));
+    }
+
+    let mut md_content = String::new();
+
+    // Re-use timestamp formatting, SRT's HH:MM:SS,mmm is fine for Md info
+    // Or define a simpler one if preferred for Markdown. Using SRT's for now.
+    // fn format_markdown_timestamp(seconds: f64) -> String { format_srt_timestamp(seconds) }
+
+    if current_layout == "Layout1" {
+        md_content.push_str("| # | Timestamp | Speaker | Text |\n");
+        md_content.push_str("|---|-----------|---------|------|\n");
+    } else if current_layout == "Layout4" {
+        md_content.push_str("| Speaker | Text |\n");
+        md_content.push_str("|---------|------|\n");
+    }
+
+    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
+        let segment_number = _index + 1; // Use _index here for numbering
+        // Using srt_timestamp for consistency, but could be simplified for MD
+        let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
+        let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");
+
+        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
+            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            raw_speaker.to_string()
+        };
+        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
+            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            format!("{}:", raw_speaker)
+        };
+
+        let markdown_text = get_markdown_text_from_lexical_string(&segment.text);
+
+        match current_layout.as_str() {
+            "Layout1" => { // | # | Timestamp | Speaker | Text |
+                // For Markdown tables, internal newlines in content are tricky.
+                // Replacing with space or <br> (if renderer supports HTML) are options.
+                // Here, replacing with space for broader compatibility.
+                let table_cell_text = markdown_text.replace("\n", " ");
+                md_content.push_str(&format!(
+                    "| {} | {} | {} | {} |\n",
+                    segment_number,
+                    encode_text(&timestamp_str),
+                    encode_text(&speaker_display_no_colon),
+                    table_cell_text // Already contains Markdown, no further encode_text
+                ));
+            }
+            "Layout2" => { // | No | Timestamp | then | Speaker | Text |
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
+                md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
+            }
+            "Layout3" => { // | Timestamp Speaker | then | Text |
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
+                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                md_content.push_str(&format!("{}\n", markdown_text));
+            }
+            "Layout4" => { // | Speaker | Text |
+                let table_cell_text = markdown_text.replace("\n", " ");
+                 md_content.push_str(&format!(
+                    "| {} | {} |\n",
+                    encode_text(&speaker_display_no_colon),
+                    table_cell_text
+                ));
+            }
+            "Layout5" => { // | Text |
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
+                md_content.push_str(&format!("{}\n", markdown_text));
+            }
+            _ => { // Fallback to Layout2
+                if segment_number > 1 { md_content.push_str("\n"); } // Use segment_number for condition
+                md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), markdown_text));
+            }
+        }
+        if current_layout != "Layout1" && current_layout != "Layout4" {
+             md_content.push_str("\n");
+        }
+    }
+
+    fs::write(&output_path_str, md_content)
+        .map_err(|e| CommandError::from(format!("Failed to write Markdown file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_markdown] Markdown export successful to {}", output_path_str);
+    Ok(output_path_str)
+}

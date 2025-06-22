@@ -21,13 +21,14 @@
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
 
-	// Available export formats (only CSV is functional initially)
+	// Available export formats
 	const exportFormats = [
-		{ value: 'csv', label: 'CSV (.csv)' },
-		{ value: 'docx', label: 'DOCX (.docx)' },
-		{ value: 'rtf', label: 'RTF (.rtf)', disabled: true },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: false }, // Enabled SRT
-		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: true },
+		{ value: 'csv', label: 'CSV (.csv)', disabled: false },
+		{ value: 'docx', label: 'DOCX (.docx)', disabled: false },
+		{ value: 'md', label: 'Markdown (.md)', disabled: false }, // Added Markdown
+		{ value: 'srt', label: 'SRT (.srt)', disabled: false },
+		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: false },
+		// { value: 'rtf', label: 'RTF (.rtf)', disabled: true }, // RTF removed
 	];
 
 	const DEFAULT_EXPORT_FOLDER_NAME = 'exports'; // Name for the default subfolder
@@ -159,7 +160,7 @@
 		dispatch('confirm', {
 			filePath: fullExportPath, // Pass the string path
 			format: exportFormat,
-			layoutChoice: exportFormat === 'docx' ? selectedDocxLayout : undefined,
+			layoutChoice: (exportFormat === 'docx' || exportFormat === 'md') ? selectedDocxLayout : undefined,
 		});
 		closeModal();
 	}
@@ -236,15 +237,17 @@
 							</option>
 						{/each}
 					</select>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, and SRT are available.</p>
+					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md'}
+						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, MD, SRT, and VTT are available.</p>
+					 {:else if exportFormat === 'md'}
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Markdown export supports basic styling (bold, italic). Other rich text formatting will be converted to plain text.</p>
 					 {/if}
 				</div>
 
-				<!-- DOCX Layout Options (Conditional) -->
-				{#if exportFormat === 'docx'}
+				<!-- Layout Options (Conditional for DOCX and MD) -->
+				{#if exportFormat === 'docx' || exportFormat === 'md'}
 				<div class="pt-2">
-						<label class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">DOCX Layout:</label>
+						<label class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">{exportFormat.toUpperCase()} Layout:</label>
 						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 							{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
 								<button
@@ -304,7 +307,7 @@
 					disabled={
 						!exportFileName || exportFileName.trim() === '' ||
 						!exportDirectory || exportDirectory.trim() === '' ||
-						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt')
+						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md')
 					}
 				>
 					Export {exportFormat.toUpperCase()}

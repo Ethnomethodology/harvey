@@ -199,7 +199,9 @@ pub fn run() {
             // --- Document Import Process Command ---
             projectview::document_handler::import_document,
             projectview::export_handler::export_transcript_to_docx,
-            projectview::export_handler::export_transcript_to_srt, // Added SRT export command
+            projectview::export_handler::export_transcript_to_srt,
+            projectview::export_handler::export_transcript_to_vtt,
+            projectview::export_handler::export_transcript_to_markdown, // Added Markdown export command
 
             // --- Project view transcription PROCESS commands ---
             projectview::local_handler::transcription::run_transcription,
