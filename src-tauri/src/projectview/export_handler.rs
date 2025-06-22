@@ -941,3 +941,107 @@ pub async fn export_transcript_to_vtt(
     info!("[export_transcript_to_vtt] VTT export successful to {}", output_path_str);
     Ok(output_path_str)
 }
+
+#[tauri::command]
+pub async fn export_transcript_to_markdown(
+    _app_handle: AppHandle,
+    output_path_str: String,
+    segments_json_str: String,
+    layout_choice: Option<String>,
+) -> Result<String, CommandError> {
+    let current_layout = layout_choice.unwrap_or_else(|| "Layout2".to_string());
+    info!(
+        "[export_transcript_to_markdown] Exporting to Markdown: {}, Layout: {}",
+        output_path_str, current_layout
+    );
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for Markdown: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for Markdown export."));
+    }
+
+    let mut md_content = String::new();
+
+    // Re-use timestamp formatting, SRT's HH:MM:SS,mmm is fine for Md info
+    // Or define a simpler one if preferred for Markdown. Using SRT's for now.
+    // fn format_markdown_timestamp(seconds: f64) -> String { format_srt_timestamp(seconds) }
+
+    if current_layout == "Layout1" {
+        md_content.push_str("| # | Timestamp | Speaker | Text |\n");
+        md_content.push_str("|---|-----------|---------|------|\n");
+    } else if current_layout == "Layout4" {
+        md_content.push_str("| Speaker | Text |\n");
+        md_content.push_str("|---------|------|\n");
+    }
+
+    for (index, segment) in segments.iter().enumerate() {
+        let segment_number = index + 1;
+        // Using srt_timestamp for consistency, but could be simplified for MD
+        let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
+        let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");
+
+        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
+            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            raw_speaker.to_string()
+        };
+        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 && raw_speaker != "Unknown" {
+            format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            format!("{}:", raw_speaker)
+        };
+
+        let plain_text = get_plain_text_for_srt(&segment.text); // Re-use SRT's plain text extraction
+
+        match current_layout.as_str() {
+            "Layout1" => { // | # | Timestamp | Speaker | Text |
+                md_content.push_str(&format!(
+                    "| {} | {} | {} | {} |\n",
+                    segment_number,
+                    encode_text(&timestamp_str), // Basic text, no markdown interpretation needed for timestamp itself
+                    encode_text(&speaker_display_no_colon), // Basic text
+                    encode_text(&plain_text).replace("\n", "<br>") // Replace newlines for table cell
+                ));
+            }
+            "Layout2" => { // | No | Timestamp | then | Speaker | Text |
+                if index > 0 { md_content.push_str("\n"); } // Add space between segments
+                md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
+            }
+            "Layout3" => { // | Timestamp Speaker | then | Text |
+                if index > 0 { md_content.push_str("\n"); }
+                md_content.push_str(&format!("**{} {}**\n\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                md_content.push_str(&format!("{}\n", encode_text(&plain_text)));
+            }
+            "Layout4" => { // | Speaker | Text |
+                 md_content.push_str(&format!(
+                    "| {} | {} |\n",
+                    encode_text(&speaker_display_no_colon),
+                    encode_text(&plain_text).replace("\n", "<br>")
+                ));
+            }
+            "Layout5" => { // | Text |
+                if index > 0 { md_content.push_str("\n"); }
+                // Optionally prepend speaker if desired for this layout too, or keep purely text
+                // md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
+                md_content.push_str(&format!("{}\n", encode_text(&plain_text)));
+            }
+            _ => { // Fallback to Layout2
+                if index > 0 { md_content.push_str("\n"); }
+                md_content.push_str(&format!("**Segment {}** - {}\n\n", segment_number, encode_text(&timestamp_str)));
+                md_content.push_str(&format!("**{}** {}\n", encode_text(&speaker_display_with_colon), encode_text(&plain_text)));
+            }
+        }
+        if current_layout != "Layout1" && current_layout != "Layout4" { // Add extra newline for non-table layouts
+             md_content.push_str("\n");
+        }
+    }
+
+    fs::write(&output_path_str, md_content)
+        .map_err(|e| CommandError::from(format!("Failed to write Markdown file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_markdown] Markdown export successful to {}", output_path_str);
+    Ok(output_path_str)
+}

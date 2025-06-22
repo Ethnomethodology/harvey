@@ -226,6 +226,24 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         console.error('[ConfigureActions] Error during VTT export:', err);
         throw new Error(`Failed to export VTT: ${err?.message || err}`);
       }
+    } else if (format === 'md') {
+      if (!segments || segments.length === 0) { // Markdown also needs segments
+        throw new Error("No transcript segments available to export for Markdown.");
+      }
+      try {
+        const payload = {
+          outputPathStr: filePath,
+          segmentsJsonStr: JSON.stringify(segments), // Pass segments as JSON string
+          layoutChoice: layoutChoice || 'Layout2' // Default to Layout2 if not provided for MD
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_markdown with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_markdown', payload);
+        console.log(`[ConfigureActions] Markdown export successful: ${savedPath}`);
+        return; // done
+      } catch (err) {
+        console.error('[ConfigureActions] Error during Markdown export:', err);
+        throw new Error(`Failed to export Markdown: ${err?.message || err}`);
+      }
     } else if (format === 'csv') {
 		// --- Frontend CSV Generation ---
 		try {
