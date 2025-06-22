@@ -110,12 +110,17 @@
 		}
 	}
 
-	// When exportFormat changes, if it becomes docx/md, sync selectedDocxLayout
-	$: if (showModal && (exportFormat === 'docx' || exportFormat === 'md')) {
-		const currentActiveLayout = get(activeLayout);
-		if (selectedDocxLayout !== currentActiveLayout) {
-			selectedDocxLayout = currentActiveLayout || 'Layout1';
-			console.log(`[ExportModal] DOCX/MD format selected, synced selectedDocxLayout to: ${selectedDocxLayout}`);
+	// When exportFormat changes, update selectedDocxLayout if necessary
+	let previousExportFormat = exportFormat;
+	$: {
+		if (showModal) {
+			if ((exportFormat === 'docx' || exportFormat === 'md') &&
+			    (previousExportFormat !== 'docx' && previousExportFormat !== 'md')) {
+				// Switched TO docx/md
+				selectedDocxLayout = get(activeLayout) || 'Layout1';
+				console.log(`[ExportModal] Switched to DOCX/MD format, synced selectedDocxLayout to: ${selectedDocxLayout}`);
+			}
+			previousExportFormat = exportFormat;
 		}
 	}
 
