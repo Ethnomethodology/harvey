@@ -388,20 +388,22 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     $: {
         const layoutKey = $activeLayout;
         isLayout1Active = layoutKey === 'Layout1';
-        // Reset to defaults first
-        segmentNumberContainerStyle = 'flex-basis: 1.880rem;'; // Default for non-Layout1
-        timestampContainerStyle = '';
-        speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;'; // Default for non-Layout1
+
+        // Default styles for layouts other than Layout1 (primarily for Layout2, 3, 4, 5's structure)
+        columnContainerClass = 'flex flex-col flex-grow mx-auto gap-y-2 mt-4 min-h-0'; // Default two-rowish
+        segmentNumberContainerStyle = 'flex-basis: 1.880rem;';
+        timestampContainerStyle = ''; // Handled by input widths and flex items-center
+        speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
         textEditorContainerStyle = 'flex-grow';
 
         if (layoutKey === 'Layout1') { // Detailed Table: # | Time | Spk | Text
-            segmentNumberContainerStyle = 'flex-basis: 5%; max-width: 5%; padding-right: 0.5rem;'; // Approx 5%
-            timestampContainerStyle = 'flex-basis: 15%; max-width: 15%; padding-right: 0.5rem;'; // Approx 15% for the whole timestamp block
-            speakerContainerStyle = 'flex-basis: 15%; max-width: 15%; padding-right: 0.5rem;'; // Approx 15%
-            textEditorContainerStyle = 'flex-basis: 65%; max-width: 65%;'; // Approx 65%
+            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4'; // Single row
+            segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400'; // Class instead of inline for number display
+            // Widths for input containers will be handled by classes directly on them for Layout1
         } else if (layoutKey === 'Layout2') { // Segment Block (Default): # Time \n Spk Text
-            // Default styles are fine, reset explicitly for clarity if coming from Layout1
-            segmentNumberContainerStyle = 'flex-basis: 1.880rem;';
+            // Styles already set by default are fine
+            speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;'; // Ensure reset if coming from L3/L4
+        } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Time Spk \n Text
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
         } else if (layoutKey === 'Layout3') { // Timestamped Paragraph: Time Spk \n Text
             // Number column is hidden in preview, but shown here. Timestamps and Speaker are on one line.
@@ -441,18 +443,18 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 {#if isLayout1Active}
                     <!-- Layout 1: Single Row Table -->
                     <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-                        <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
-                            <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                        <div class='flex-shrink-0 text-left py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                            <span class='w-full truncate whitespace-normal break-words text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 py-0.5' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L1' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <span class='text-gray-400 dark:text-gray-500'>–</span>
-                            <input id='endTimeInput_L1' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col sm:flex-row items-start sm:items-center gap-x-1 py-0.5'>
+                            <input id='startTimeInput_L1' class='input-field w-full sm:w-[5.641rem] text-sm p-0 mb-0.5 sm:mb-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <span class='text-gray-400 dark:text-gray-500 hidden sm:inline'>–</span>
+                            <input id='endTimeInput_L1' class='input-field w-full sm:w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0 py-0.5' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
+                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5' bind:this="{speakerDropdownRef}">
                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
                                 <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
+                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
                             </button>
                             {#if showSpeakerDropdown}
                             <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
@@ -461,7 +463,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             </ul>
                             {/if}
                         </div>
-                        <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                        <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
                         </div>
                     </div>
