@@ -3,6 +3,7 @@
 	import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
+	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 	import { open } from '@tauri-apps/plugin-dialog';
 	// --- REMOVED: No fs functions imported for path manipulation ---
 
@@ -15,6 +16,7 @@
 	// Local state for the modal form
 	let exportFileName = '';
 	let exportFormat = 'csv'; // Default to CSV
+	let selectedDocxLayout = 'Layout2'; // Default to current layout (Segment Block)
 	let exportDirectory = '';
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
@@ -24,7 +26,7 @@
 		{ value: 'csv', label: 'CSV (.csv)' },
 		{ value: 'docx', label: 'DOCX (.docx)' },
 		{ value: 'rtf', label: 'RTF (.rtf)', disabled: true },
-		{ value: 'srt', label: 'SRT (.srt)', disabled: true },
+		{ value: 'srt', label: 'SRT (.srt)', disabled: false }, // Enabled SRT
 		{ value: 'vtt', label: 'Web VTT (.vtt)', disabled: true },
 	];
 
@@ -157,6 +159,7 @@
 		dispatch('confirm', {
 			filePath: fullExportPath, // Pass the string path
 			format: exportFormat,
+			layoutChoice: exportFormat === 'docx' ? selectedDocxLayout : undefined,
 		});
 		closeModal();
 	}
@@ -233,14 +236,46 @@
 							</option>
 						{/each}
 					</select>
-					 {#if exportFormat !== 'csv' && exportFormat !== 'docx'}
-						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">Other formats not yet implemented. Only CSV export is functional.</p>
+					 {#if exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt'}
+						<p class="mt-1 text-xs text-orange-600 dark:text-orange-400">This format is not yet fully implemented. CSV, DOCX, and SRT are available.</p>
 					 {/if}
 				</div>
 
+				<!-- DOCX Layout Options (Conditional) -->
+				{#if exportFormat === 'docx'}
+				<div class="pt-2">
+						<label class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">DOCX Layout:</label>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+							{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
+								<button
+									type="button"
+									class="text-left p-2 border rounded-md transition-colors text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+									class:bg-blue-500={selectedDocxLayout === layout.rustLayoutKey}
+									class:text-white={selectedDocxLayout === layout.rustLayoutKey}
+									class:hover:bg-gray-100={selectedDocxLayout !== layout.rustLayoutKey}
+									class:dark:hover:bg-gray-700={selectedDocxLayout !== layout.rustLayoutKey}
+									class:border-blue-500={selectedDocxLayout === layout.rustLayoutKey}
+									class:dark:border-blue-400={selectedDocxLayout === layout.rustLayoutKey}
+									class:border-gray-300={selectedDocxLayout !== layout.rustLayoutKey}
+									class:dark:border-gray-600={selectedDocxLayout !== layout.rustLayoutKey}
+									on:click={() => selectedDocxLayout = layout.rustLayoutKey}
+									title={layout.name}
+								>
+									<div class="font-medium mb-1">{layout.name}</div>
+									<div class="{layout.previewClasses} min-h-[20px]">
+										{#each layout.columnStyles as style}
+											<div class="{style.class}">{style.content}</div>
+										{/each}
+									</div>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<!-- Directory Selection -->
 				<div>
-					<label for="export-directory" class="block font-medium text-gray-700 dark:text-gray-300 mb-1">Export To:</label>
+					<label for="export-directory" class="block font-medium text-gray-700 dark:text-gray-300 mb-1 pt-2">Export To:</label>
 					<div class="flex space-x-2">
 						<input
 							id="export-directory"
@@ -262,7 +297,16 @@
 				<button type="button" on:click={closeModal} class="btn-secondary">
 					Cancel
 				</button>
-				<button type="button" on:click={handleConfirm} class="btn-primary" disabled={!exportFileName || exportFileName.trim() === '' || !exportDirectory || exportDirectory.trim() === '' || (exportFormat !== 'csv' && exportFormat !== 'docx')}>
+				<button
+					type="button"
+					on:click={handleConfirm}
+					class="btn-primary"
+					disabled={
+						!exportFileName || exportFileName.trim() === '' ||
+						!exportDirectory || exportDirectory.trim() === '' ||
+						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt')
+					}
+				>
 					Export {exportFormat.toUpperCase()}
 				</button>
 			</div>

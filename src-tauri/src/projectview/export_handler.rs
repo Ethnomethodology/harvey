@@ -234,9 +234,13 @@ pub async fn export_transcript_to_docx(
     app_handle: AppHandle,
     transcript_json_path_str: String,
     output_path_str: String,
+    layout_choice: Option<String>, // Added layout_choice parameter
 ) -> Result<String, CommandError> {
-    info!("[export_transcript_to_docx] Starting export from JSON: {}", transcript_json_path_str);
-    info!("[export_transcript_to_docx] Target DOCX path: {}", output_path_str);
+    let current_layout = layout_choice.unwrap_or_else(|| "Layout2".to_string());
+    info!(
+        "[export_transcript_to_docx] Starting export from JSON: {}, Target DOCX: {}, Layout: {}",
+        transcript_json_path_str, output_path_str, current_layout
+    );
 
     let source_path = PathBuf::from(&transcript_json_path_str);
     if !source_path.exists() || !source_path.is_file() {
@@ -359,16 +363,47 @@ pub async fn export_transcript_to_docx(
     }\n");
     html_output.push_str("</style></head><body>\n");
 
-    html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n"); // Added border-collapse
-    html_output.push_str("<colgroup>\n");
-    html_output.push_str("  <col style=\"width:20%\" />\n"); // Column for Segment Info / Speaker
-    html_output.push_str("  <col style=\"width:80%\" />\n"); // Column for Empty / Text
-    html_output.push_str("</colgroup>\n");
-    // Optional: Minimalistic header or remove completely if desired
-    // html_output.push_str("  <thead>\n    <tr>\n");
-    // html_output.push_str("      <th style=\"text-align:left; border: 1px solid #ddd; padding: 4px;\">Segment Details</th>\n");
-    // html_output.push_str("      <th style=\"text-align:left; border: 1px solid #ddd; padding: 4px;\">Content</th>\n");
-    // html_output.push_str("    </tr>\n  </thead>\n");
+    html_output.push_str("<table style=\"table-layout:fixed; width:100%; border-collapse: collapse;\">\n");
+
+    // Determine colgroup based on layout_choice
+    match current_layout.as_str() {
+        "Layout1" => { // | No | Timestamp | Speaker | Text | (5%, 15%, 15%, 65%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:5%\" />\n");
+            html_output.push_str("  <col style=\"width:15%\" />\n");
+            html_output.push_str("  <col style=\"width:15%\" />\n");
+            html_output.push_str("  <col style=\"width:65%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout2" => { // | No | Timestamp | then | Speaker | Text | (20%, 80%) - Default
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:20%\" />\n");
+            html_output.push_str("  <col style=\"width:80%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout3" => { // | Timestamp Speaker | then | Text | (100%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:100%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout4" => { // | Speaker | Text | (25%, 75%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:25%\" />\n");
+            html_output.push_str("  <col style=\"width:75%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        "Layout5" => { // | Text | (100%)
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:100%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+        _ => { // Default to Layout2 if unknown
+            html_output.push_str("<colgroup>\n");
+            html_output.push_str("  <col style=\"width:20%\" />\n");
+            html_output.push_str("  <col style=\"width:80%\" />\n");
+            html_output.push_str("</colgroup>\n");
+        }
+    }
     html_output.push_str("  <tbody>\n");
 
     // Helper to format timestamps as mm:ss.mmm or hh:mm:ss.mmm
@@ -396,38 +431,69 @@ pub async fn export_transcript_to_docx(
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
-
-        // Speaker: ensure max 12 chars + "..." if longer, then add colon.
         let raw_speaker = entry.get("speaker").and_then(Value::as_str).unwrap_or("Unknown");
-        let speaker_display = if raw_speaker.chars().count() > 12 {
+        let speaker_display_with_colon = if raw_speaker.chars().count() > 12 {
             format!("{}:", raw_speaker.chars().take(12).collect::<String>() + "...")
         } else {
             format!("{}:", raw_speaker)
         };
-
+        let speaker_display_no_colon = if raw_speaker.chars().count() > 12 {
+            format!("{}", raw_speaker.chars().take(12).collect::<String>() + "...")
+        } else {
+            raw_speaker.to_string()
+        };
         let raw_text_content = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let segment_html_content = convert_lexical_or_plain_text_to_html(raw_text_content);
 
-        // Row 1 for Segment: Number and Timestamps
-        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n"); // Avoid page break inside a segment's two rows
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Added some padding and border
-        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">Segment {}</div>\n", segment_number));
-        html_output.push_str(&format!("        <div style=\"font-size: 0.9em; color: #555;\">{}</div>\n", encode_text(&timestamp_str)));
-        html_output.push_str("      </td>\n");
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n"); // Empty cell, aligns with Text content
-        html_output.push_str("        <!-- Empty -->\n");
-        html_output.push_str("      </td>\n");
-        html_output.push_str("    </tr>\n");
-
-        // Row 2 for Segment: Speaker and Text
-        html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">\n");
-        html_output.push_str(&encode_text(&speaker_display));
-        html_output.push_str("      </td>\n");
-        html_output.push_str("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">\n");
-        html_output.push_str(&segment_html_content);
-        html_output.push_str("      </td>\n");
-        html_output.push_str("    </tr>\n");
+        match current_layout.as_str() {
+            "Layout1" => { // | No | Timestamp | Speaker | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout2" => { // | No | Timestamp | then | Speaker | Text | (Default)
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout3" => { // | Timestamp Speaker | then | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{} {}</td>\n", encode_text(&timestamp_str), encode_text(&speaker_display_no_colon)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout4" => { // | Speaker | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_no_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            "Layout5" => { // | Text |
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+            _ => { // Fallback to Layout2 if layout_choice is unknown
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", segment_number));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-size: 0.9em; color: #555;\">{}</td>\n", encode_text(&timestamp_str)));
+                html_output.push_str("    </tr>\n");
+                html_output.push_str("    <tr style=\"page-break-inside: avoid;\">\n");
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee; font-weight: bold;\">{}</td>\n", encode_text(&speaker_display_with_colon)));
+                html_output.push_str(&format!("      <td style=\"vertical-align:top; padding: 4px; border: 1px solid #eee;\">{}</td>\n", segment_html_content));
+                html_output.push_str("    </tr>\n");
+            }
+        }
     }
 
     html_output.push_str("  </tbody>\n");
@@ -548,4 +614,158 @@ pub async fn export_transcript_to_docx(
         output_path.display()
     );
     Ok(output_path.to_string_lossy().to_string())
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct Segment {
+    start_time: f64,
+    end_time: f64,
+    speaker: Option<String>,
+    text: String,
+}
+
+// Helper function to format seconds to HH:MM:SS,mmm
+fn format_srt_timestamp(seconds: f64) -> String {
+    if seconds.is_nan() || seconds < 0.0 {
+        return "00:00:00,000".to_string();
+    }
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let total_m = total_s / 60;
+    let m = total_m % 60;
+    let h = total_m / 60;
+    format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
+}
+
+/// Extracts plain text from a Lexical JSON structure.
+fn extract_plain_text_from_lexical_value(value: &Value, text_buffer: &mut String) {
+    if let Some(node_type) = value.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = value.get("text").and_then(|t| t.as_str()) {
+                    text_buffer.push_str(text_content);
+                }
+            }
+            "linebreak" => {
+                text_buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table" | "tablecell" | "tablerow" => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for (i, child) in children.iter().enumerate() {
+                        extract_plain_text_from_lexical_value(child, text_buffer);
+                        if node_type == "paragraph" && i < children.len() -1 { // Add space between children of a paragraph unless it's the last one.
+                           // This might need refinement based on desired paragraph spacing in SRT.
+                           // For SRT, often multiple "paragraphs" in Lexical might just be one continuous text block.
+                        }
+                    }
+                }
+                 // Add a space after block elements like paragraphs if they are not followed by another block or to ensure separation.
+                if node_type == "paragraph" && !text_buffer.ends_with("\n") && !text_buffer.is_empty() {
+                    // text_buffer.push_str(" "); // Or "\n" if paragraphs should be new lines in SRT
+                }
+            }
+            _ => { // For unknown types, try to process children if any
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        extract_plain_text_from_lexical_value(child, text_buffer);
+                    }
+                }
+            }
+        }
+    } else if let Some(children) = value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+        // This handles the case where the entire editor state is passed
+        for (i, child) in children.iter().enumerate() {
+            extract_plain_text_from_lexical_value(child, text_buffer);
+            // Add a newline between top-level block nodes (e.g., paragraphs)
+            if i < children.len() - 1 {
+                 if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
+                    if child_node_type == "paragraph" && !text_buffer.ends_with('\n') {
+                         text_buffer.push_str("\n");
+                    }
+                 }
+            }
+        }
+    } else if value.is_string() && value.as_str().map_or(false, |s| s.trim().is_empty() || (!s.contains("{") && !s.contains("}")) ) {
+        // If it's a plain string (likely already plain text or empty)
+        text_buffer.push_str(value.as_str().unwrap_or(""));
+    }
+    // If it's some other JSON structure not matching Lexical, it will be ignored.
+}
+
+
+fn get_plain_text_for_srt(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            // Check if it's a Lexical root structure
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                extract_plain_text_from_lexical_value(&parsed_json, &mut buffer);
+                return buffer.trim().to_string();
+            }
+            // If it's some other JSON, or not a Lexical root, try to treat as plain text
+            // or return an indication of non-Lexical JSON. For SRT, we prefer plain.
+            if parsed_json.is_string() {
+                return parsed_json.as_str().unwrap_or("").trim().to_string();
+            }
+            // Fallback for non-string JSON or non-Lexical root: return original string, trimmed.
+            // This might happen if the content was already plain text but got wrapped in quotes by mistake.
+            text_content.trim().to_string()
+        }
+        Err(_) => {
+            // Not valid JSON, assume it's already plain text
+            text_content.trim().to_string()
+        }
+    }
+}
+
+// The duplicate function definition that was here (around line 725) is removed.
+// The original definition at line 628 is kept.
+
+#[tauri::command]
+pub async fn export_transcript_to_srt(
+    _app_handle: AppHandle, // Not directly used but good practice for tauri commands
+    output_path_str: String,
+    segments_json_str: String,
+) -> Result<String, CommandError> {
+    info!("[export_transcript_to_srt] Exporting to SRT: {}", output_path_str);
+
+    let segments: Vec<Segment> = serde_json::from_str(&segments_json_str)
+        .map_err(|e| CommandError::from(format!("Failed to parse segments JSON for SRT: {}", e)))?;
+
+    if segments.is_empty() {
+        return Err(CommandError::from("No segments provided for SRT export."));
+    }
+
+    let mut srt_content = String::new();
+    for (index, segment) in segments.iter().enumerate() {
+        srt_content.push_str(&(index + 1).to_string());
+        srt_content.push_str("\n");
+
+        let start_ts = format_srt_timestamp(segment.start_time);
+        let end_ts = format_srt_timestamp(segment.end_time);
+        srt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
+
+        let plain_text = get_plain_text_for_srt(&segment.text);
+
+        // Prepend speaker to text if speaker exists and is not empty
+        let text_line = if let Some(speaker_name) = &segment.speaker {
+            if !speaker_name.trim().is_empty() {
+                format!("{}: {}", speaker_name.trim(), plain_text)
+            } else {
+                plain_text
+            }
+        } else {
+            plain_text
+        };
+        srt_content.push_str(&text_line);
+        srt_content.push_str("\n\n"); // Two newlines to separate blocks
+    }
+
+    fs::write(&output_path_str, srt_content)
+        .map_err(|e| CommandError::from(format!("Failed to write SRT file {}: {}", output_path_str, e)))?;
+
+    info!("[export_transcript_to_srt] SRT export successful to {}", output_path_str);
+    Ok(output_path_str)
 }

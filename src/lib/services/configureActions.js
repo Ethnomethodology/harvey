@@ -157,15 +157,16 @@ export async function saveCloudConfig(payload) {
  * Exports the current transcript segments to a specified file path and format.
  * Currently only supports 'csv' format by generating CSV on the frontend.
  * @param {string} filePath - The full path to save the exported file.
- * @param {string} format - The desired export format ('csv').
+ * @param {string} format - The desired export format ('csv', 'docx').
  * @param {Array<object>} segments - The array of segment data to export.
  * @param {string} transcriptJsonPath - The path to the transcript JSON file (used for DOCX export).
+ * @param {string} [layoutChoice] - Optional. The chosen layout for DOCX export (e.g., 'Layout1', 'Layout2').
  * @returns {Promise<void>} A promise that resolves when export is complete or rejects on error.
  */
-export async function exportTranscript(filePath, format, segments, transcriptJsonPath) {
-	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}")`);
+export async function exportTranscript(filePath, format, segments, transcriptJsonPath, layoutChoice) {
+	console.log(`[ConfigureActions] Attempting export to "${filePath}" (Format: "${format}", Layout: "${layoutChoice || 'default'}")`);
 
-	if (!segments || segments.length === 0) {
+	if (format !== 'docx' && (!segments || segments.length === 0)) { // Segments not needed upfront for docx if using transcriptJsonPath
 		throw new Error("No transcript segments available to export.");
 	}
 	if (!filePath || filePath.trim() === '') {
@@ -178,29 +179,44 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
         throw new Error('Transcript JSON path is not set.');
       }
       try {
-        const savedPath = await invoke('export_transcript_to_docx', {
+        const payload = {
           transcriptJsonPathStr: transcriptJsonPath,
-          outputPathStr: filePath
-        });
+          outputPathStr: filePath,
+          layoutChoice: layoutChoice || 'Layout2' // Default to Layout2 if not provided
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_docx with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_docx', payload);
         console.log(`[ConfigureActions] DOCX export successful: ${savedPath}`);
         return; // done
       } catch (err) {
         console.error('[ConfigureActions] Error during DOCX export:', err);
         throw new Error(`Failed to export DOCX: ${err?.message || err}`);
       }
-    }
+    } else if (format === 'srt') {
+      if (!segments || segments.length === 0) {
+        throw new Error("No transcript segments available to export for SRT.");
+      }
+      try {
+        const payload = {
+          outputPathStr: filePath,
+          segmentsJsonStr: JSON.stringify(segments) // Pass segments as JSON string
+        };
+        console.log('[ConfigureActions] Invoking export_transcript_to_srt with payload:', payload);
+        const savedPath = await invoke('export_transcript_to_srt', payload);
+        console.log(`[ConfigureActions] SRT export successful: ${savedPath}`);
+        return; // done
+      } catch (err) {
+        console.error('[ConfigureActions] Error during SRT export:', err);
+        throw new Error(`Failed to export SRT: ${err?.message || err}`);
+      }
+    } else if (format === 'csv') {
+		// --- Frontend CSV Generation ---
+		try {
+			const csvRows = [];
+			// CSV Header
+			csvRows.push('"StartTime","EndTime","Speaker","Text"'); // Use quotes for safety
 
-	if (format !== 'csv') {
-		throw new Error(`Export format "${format}" is not supported.`);
-	}
-
-	// --- Frontend CSV Generation ---
-	try {
-		const csvRows = [];
-		// CSV Header
-		csvRows.push('"StartTime","EndTime","Speaker","Text"'); // Use quotes for safety
-
-		// Create a single headless editor instance for text conversion
+			// Create a single headless editor instance for text conversion
 		const textConversionEditor = createHeadlessEditor({
 			nodes: ALL_EDITOR_NODES,
 			namespace: `csv-export-converter-${Math.random()}`,
@@ -316,5 +332,8 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 		    throw new Error(`Failed to export CSV: ${error?.message || error}`);
         }
 	}
+} else {
+	throw new Error(`Export format "${format}" is not supported.`);
+}
 }
 // Reminder: When calling exportTranscript in TopBar.svelte, pass the transcript JSON path as the fourth argument.

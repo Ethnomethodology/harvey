@@ -5,7 +5,7 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn}; // info and warn are used by CancelGuard and throughout
 use serde_json::json;
-use tauri::{AppHandle, Emitter, State}; // Added AppHandle, State for transcribe_media_command
+use tauri::{AppHandle, Emitter}; // Removed State
 use serde_json::Value as JsonValue;
 
 use std::{
@@ -15,7 +15,7 @@ use std::{
     sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}}, // For CancelGuard
 };
 use dashmap::DashMap; // For CancelGuard
-use crate::TranscriptionCancellationState; // For CancelGuard and command signature
+// Removed: use crate::TranscriptionCancellationState;
 use tauri_plugin_shell::{ShellExt, process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;

@@ -11,7 +11,7 @@ use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
 
 use log::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize}; // Removed Serialize
 use std::{
     cmp::Ordering as CmpOrdering,
     collections::HashMap,
