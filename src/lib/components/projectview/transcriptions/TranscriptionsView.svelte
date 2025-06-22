@@ -279,7 +279,7 @@
         on:toggleEditMode={handleToggleEditMode}
     />
     <div class="flex flex-grow min-h-0 p-1 gap-1 w-full">
-        <div class="w-[15%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
+        <div class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
             <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
         </div>
         <div class="w-[40%] h-full flex flex-col gap-1">
@@ -314,7 +314,7 @@
                  />
             </div>
         </div>
-        <div class="w-[45%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
+        <div class="w-[40%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
