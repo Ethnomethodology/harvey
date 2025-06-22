@@ -4,7 +4,6 @@
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
-	import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { open } from '@tauri-apps/plugin-dialog';
 	// --- REMOVED: No fs functions imported for path manipulation ---
 
@@ -17,7 +16,7 @@
 	// Local state for the modal form
 	let exportFileName = '';
 	let exportFormat = 'csv'; // Default to CSV
-	let selectedDocxLayout = get(activeLayout) || 'Layout1'; // Initialize with active layout or default to Layout1
+	let selectedDocxLayout = 'Layout2'; // Default to current layout (Segment Block)
 	let exportDirectory = '';
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
@@ -104,20 +103,7 @@
 	// Initialize state when modal becomes visible
 	$: if (showModal) {
 		initializeModalState();
-		// When modal becomes visible, if docx/md is selected, sync with activeLayout
-		if (exportFormat === 'docx' || exportFormat === 'md') {
-			selectedDocxLayout = get(activeLayout) || 'Layout1';
-		}
 	}
-
-	// When exportFormat (bound to the select dropdown) changes to docx or md,
-	// update our internal selectedDocxLayout to match the current active view layout.
-	$: if (exportFormat === 'docx' || exportFormat === 'md') {
-		selectedDocxLayout = get(activeLayout) || 'Layout1';
-		console.log(`[ExportModal] Format is DOCX/MD, ensuring selectedDocxLayout is synced to: ${selectedDocxLayout}`);
-	}
-	// No 'else' needed: if format is not docx/md, selectedDocxLayout keeps its value,
-	// which is fine as it's only used when submitting a docx/md export.
 
 	// --- Actions ---
 	async function selectExportDirectory() {
