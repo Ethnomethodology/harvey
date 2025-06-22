@@ -601,7 +601,7 @@
                             <div class="min-w-0 preview-content-area flex-grow"
                                  style="white-space: normal; overflow-wrap: break-word; word-break: normal; {$activeLayout === 'Layout3' || $activeLayout === 'Layout5' ? 'margin-left: 0;' : ''}"
                                  class:pl-0={$activeLayout === 'Layout3' || $activeLayout === 'Layout5'}
-                                 class:pl-[calc(1.880rem+0.5rem)]={$activeLayout === 'Layout3' && !showSegmentNumberCol}
+                                 class:custom-layout3-padding={$activeLayout === 'Layout3' && !showSegmentNumberCol}
                             >
                                 {#if seg.isJsonContent}
                                     <div class="speech-rich-text">{@html seg.html}</div>
@@ -674,5 +674,8 @@
     }
     .btn-switch-inactive {
         @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+    }
+    .custom-layout3-padding {
+        padding-left: calc(1.880rem + 0.5rem); /* The actual style */
     }
 </style>
