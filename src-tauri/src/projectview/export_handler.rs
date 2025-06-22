@@ -639,6 +639,103 @@ fn format_srt_timestamp(seconds: f64) -> String {
     format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
 }
 
+/// Extracts plain text from a Lexical JSON structure.
+fn extract_plain_text_from_lexical_value(value: &Value, text_buffer: &mut String) {
+    if let Some(node_type) = value.get("type").and_then(|t| t.as_str()) {
+        match node_type {
+            "text" | "extended-text" => {
+                if let Some(text_content) = value.get("text").and_then(|t| t.as_str()) {
+                    text_buffer.push_str(text_content);
+                }
+            }
+            "linebreak" => {
+                text_buffer.push_str("\n");
+            }
+            "paragraph" | "heading" | "list" | "listitem" | "quote" | "link" | "table" | "tablecell" | "tablerow" => {
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for (i, child) in children.iter().enumerate() {
+                        extract_plain_text_from_lexical_value(child, text_buffer);
+                        if node_type == "paragraph" && i < children.len() -1 { // Add space between children of a paragraph unless it's the last one.
+                           // This might need refinement based on desired paragraph spacing in SRT.
+                           // For SRT, often multiple "paragraphs" in Lexical might just be one continuous text block.
+                        }
+                    }
+                }
+                 // Add a space after block elements like paragraphs if they are not followed by another block or to ensure separation.
+                if node_type == "paragraph" && !text_buffer.ends_with("\n") && !text_buffer.is_empty() {
+                    // text_buffer.push_str(" "); // Or "\n" if paragraphs should be new lines in SRT
+                }
+            }
+            _ => { // For unknown types, try to process children if any
+                if let Some(children) = value.get("children").and_then(|c| c.as_array()) {
+                    for child in children {
+                        extract_plain_text_from_lexical_value(child, text_buffer);
+                    }
+                }
+            }
+        }
+    } else if let Some(children) = value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
+        // This handles the case where the entire editor state is passed
+        for (i, child) in children.iter().enumerate() {
+            extract_plain_text_from_lexical_value(child, text_buffer);
+            // Add a newline between top-level block nodes (e.g., paragraphs)
+            if i < children.len() - 1 {
+                 if let Some(child_node_type) = child.get("type").and_then(|t| t.as_str()) {
+                    if child_node_type == "paragraph" && !text_buffer.ends_with('\n') {
+                         text_buffer.push_str("\n");
+                    }
+                 }
+            }
+        }
+    } else if value.is_string() && value.as_str().map_or(false, |s| s.trim().is_empty() || (!s.contains("{") && !s.contains("}")) ) {
+        // If it's a plain string (likely already plain text or empty)
+        text_buffer.push_str(value.as_str().unwrap_or(""));
+    }
+    // If it's some other JSON structure not matching Lexical, it will be ignored.
+}
+
+
+fn get_plain_text_for_srt(text_content: &str) -> String {
+    match serde_json::from_str::<Value>(text_content) {
+        Ok(parsed_json) => {
+            // Check if it's a Lexical root structure
+            if parsed_json.get("root").and_then(|r| r.get("children")).is_some() {
+                let mut buffer = String::new();
+                extract_plain_text_from_lexical_value(&parsed_json, &mut buffer);
+                return buffer.trim().to_string();
+            }
+            // If it's some other JSON, or not a Lexical root, try to treat as plain text
+            // or return an indication of non-Lexical JSON. For SRT, we prefer plain.
+            if parsed_json.is_string() {
+                return parsed_json.as_str().unwrap_or("").trim().to_string();
+            }
+            // Fallback for non-string JSON or non-Lexical root: return original string, trimmed.
+            // This might happen if the content was already plain text but got wrapped in quotes by mistake.
+            text_content.trim().to_string()
+        }
+        Err(_) => {
+            // Not valid JSON, assume it's already plain text
+            text_content.trim().to_string()
+        }
+    }
+}
+
+
+// Helper function to format seconds to HH:MM:SS,mmm
+fn format_srt_timestamp(seconds: f64) -> String {
+    if seconds.is_nan() || seconds < 0.0 {
+        return "00:00:00,000".to_string();
+    }
+    let total_ms = (seconds * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_s = total_ms / 1000;
+    let s = total_s % 60;
+    let total_m = total_s / 60;
+    let m = total_m % 60;
+    let h = total_m / 60;
+    format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
+}
+
 #[tauri::command]
 pub async fn export_transcript_to_srt(
     _app_handle: AppHandle, // Not directly used but good practice for tauri commands
@@ -663,15 +760,17 @@ pub async fn export_transcript_to_srt(
         let end_ts = format_srt_timestamp(segment.end_time);
         srt_content.push_str(&format!("{} --> {}\n", start_ts, end_ts));
 
+        let plain_text = get_plain_text_for_srt(&segment.text);
+
         // Prepend speaker to text if speaker exists and is not empty
         let text_line = if let Some(speaker_name) = &segment.speaker {
             if !speaker_name.trim().is_empty() {
-                format!("{}: {}", speaker_name.trim(), segment.text)
+                format!("{}: {}", speaker_name.trim(), plain_text)
             } else {
-                segment.text.clone()
+                plain_text
             }
         } else {
-            segment.text.clone()
+            plain_text
         };
         srt_content.push_str(&text_line);
         srt_content.push_str("\n\n"); // Two newlines to separate blocks
