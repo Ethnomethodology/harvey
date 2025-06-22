@@ -595,18 +595,18 @@
 	.preview-editor-wrapper :global(.lexical-content p) { @apply mt-0 mb-0; overflow-wrap: break-word; word-break: break-word; }
 	.segment-active .preview-editor-wrapper :global(.lexical-editor-root), .segment-active .preview-editor-wrapper :global(.lexical-content) { background-color: transparent !important; }
 	.speech-plain-text {
-        @apply leading-normal whitespace-normal text-gray-900 dark:text-gray-100 pt-px; /* Removed break-all */
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-100 pt-px; /* Changed to pre-wrap */
         padding: 0; margin: 0;
-        overflow-wrap: break-word; /* Changed from anywhere */
-        word-break: normal;       /* Changed from break-all */
+        overflow-wrap: break-word;
+        word-break: normal;
         font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
     }
 	.speech-plain-text .italic { @apply not-italic; }
 	.speech-rich-text {
-        @apply leading-normal whitespace-normal text-gray-900 dark:text-gray-100 pt-px; /* Removed break-all */
+        @apply leading-normal whitespace-pre-wrap text-gray-900 dark:text-gray-100 pt-px; /* Changed to pre-wrap */
         padding: 0; margin: 0;
-        overflow-wrap: break-word; /* Changed from anywhere */
-        word-break: normal;       /* Changed from break-all */
+        overflow-wrap: break-word;
+        word-break: normal;
         font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;
     }
     .preview-content-area {
