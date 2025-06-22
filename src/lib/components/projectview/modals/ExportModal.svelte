@@ -309,7 +309,14 @@
 					disabled={
 						!exportFileName || exportFileName.trim() === '' ||
 						!exportDirectory || exportDirectory.trim() === '' ||
-						(exportFormat !== 'csv' && exportFormat !== 'docx' && exportFormat !== 'srt' && exportFormat !== 'vtt' && exportFormat !== 'md')
+						(
+							exportFormat !== 'csv' &&
+							exportFormat !== 'docx' &&
+							exportFormat !== 'srt' &&
+							exportFormat !== 'vtt' &&
+							exportFormat !== 'md' &&
+							exportFormat !== 'ass'
+						)
 					}
 				>
 					Export {exportFormat.toUpperCase()}
