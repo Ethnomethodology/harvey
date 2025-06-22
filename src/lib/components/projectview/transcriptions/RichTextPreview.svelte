@@ -8,8 +8,6 @@
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
-    import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
-	import { DOCX_LAYOUT_OPTIONS, DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js'; // Added
 
     let showTranscriptDropdown = false;
     let transcriptDropdownButtonRef;
@@ -382,32 +380,9 @@
 	let showExportMenu = false;
 
     // --- Layout specific visibility ---
-    let showSegmentNumberCol, showTimestampCol, showSpeakerCol, showTextCol;
-    let segmentNumberColStyle, timestampColStyle, speakerColStyle, textColStyle; // For potential width adjustments if needed
-
-    $: {
-        const layoutKey = $activeLayout;
-        // Default all to true, then selectively hide based on layoutKey
-        showSegmentNumberCol = true;
-        showTimestampCol = true;
-        showSpeakerCol = true;
-        showTextCol = true;
-
-        // These keys come from DOCX_LAYOUT_OPTIONS in exportLayouts.js
-        if (layoutKey === 'Layout3') { // Timestamped Paragraph
-            showSegmentNumberCol = false; // No dedicated number column, implied or part of text
-            // Timestamp and Speaker are combined visually, but data exists
-        } else if (layoutKey === 'Layout4') { // Speaker & Text
-            showSegmentNumberCol = false;
-            showTimestampCol = false;
-        } else if (layoutKey === 'Layout5') { // Plain Text
-            showSegmentNumberCol = false;
-            showTimestampCol = false;
-            showSpeakerCol = false;
-        }
-        // Layout1 (Detailed Table) and Layout2 (Segment Block) show all by default.
-        // console.log(`[RichTextPreview] Layout: ${layoutKey}, Show Seg#: ${showSegmentNumberCol}, Time: ${showTimestampCol}, Spk: ${showSpeakerCol}, Text: ${showTextCol}`);
-    }
+    // This section will be removed by the overwrite
+    // let showSegmentNumberCol, showTimestampCol, showSpeakerCol, showTextCol;
+    // ...
 
 </script>
 
@@ -561,48 +536,30 @@
                         </button>
                     </div>
 
-                    <!-- Item 2: Main Content Block (structure depends on layout) -->
-                    <div class="flex flex-col flex-grow gap-y-1 min-w-0">
-                        <!-- Row 1: Number and Timestamps (or combined for Layout3) -->
-                        {#if showSegmentNumberCol || showTimestampCol || $activeLayout === 'Layout3'}
+                    <!-- Item 2: Main Content Block (Reverted to original structure) -->
+                    <div class="flex flex-col flex-grow gap-y-1" style="width: 37.606rem;">
+                        <!-- Row 1: Number and Timestamps -->
                         <div class="flex items-center gap-x-2">
-                            {#if showSegmentNumberCol && $activeLayout !== 'Layout3'}
                             <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;">
                                 <span class="truncate text-gray-500 dark:text-gray-400 select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                                     {String(seg.segmentIndex + 1)}
                                 </span>
                             </div>
-                            {/if}
-                            {#if showTimestampCol || $activeLayout === 'Layout3'}
                             <div class="flex-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
-                                {#if $activeLayout === 'Layout3'}
-                                    <span class="select-none font-semibold" title="Timestamp & Speaker">{seg.startTime} &bull; {seg.speaker}:</span>
-                                {:else}
-                                    <span class="select-none" title="Start time">{seg.startTime}</span>
-                                    <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
-                                    <span class="select-none" title="End time">{seg.endTime}</span>
-                                {/if}
+                                <span class="select-none" title="Start time">{seg.startTime}</span>
+                                <span class="text-gray-400 dark:text-gray-500 select-none">–</span>
+                                <span class="select-none" title="End time">{seg.endTime}</span>
                             </div>
-                            {/if}
                         </div>
-                        {/if}
 
-                        <!-- Row 2: Speaker and Text (or just Text for Layout3/Layout5) -->
-                        {#if showSpeakerCol || showTextCol}
+                        <!-- Row 2: Speaker and Text -->
                         <div class="flex items-start gap-x-2 flex-grow min-h-0">
-                            {#if showSpeakerCol && $activeLayout !== 'Layout3' && $activeLayout !== 'Layout5'}
-                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: {$activeLayout === 'Layout4' ? '6rem' : '8rem'}; max-width: {$activeLayout === 'Layout4' ? '6rem' : '8rem'};">
+                            <div class="flex-shrink-0 text-gray-800 dark:text-gray-200 font-semibold" style="flex-basis: 8rem; max-width: 8rem;">
                                 <span class="truncate block w-full" title={seg.speaker}>
-                                    {seg.speaker.length > ($activeLayout === 'Layout4' ? 10 : 12) ? seg.speaker.slice(0, ($activeLayout === 'Layout4' ? 10 : 12)) + '...' : seg.speaker}:
+                                    {seg.speaker.length > 12 ? seg.speaker.slice(0, 12) + '...' : seg.speaker}:
                                 </span>
                             </div>
-                            {/if}
-                            {#if showTextCol}
-                            <div class="min-w-0 preview-content-area flex-grow"
-                                 style="white-space: normal; overflow-wrap: break-word; word-break: normal; {$activeLayout === 'Layout3' || $activeLayout === 'Layout5' ? 'margin-left: 0;' : ''}"
-                                 class:pl-0={$activeLayout === 'Layout3' || $activeLayout === 'Layout5'}
-                                 class:custom-layout3-padding={$activeLayout === 'Layout3' && !showSegmentNumberCol}
-                            >
+                            <div class="min-w-0 preview-content-area flex-grow" style="white-space: normal; overflow-wrap: break-word; word-break: normal;">
                                 {#if seg.isJsonContent}
                                     <div class="speech-rich-text">{@html seg.html}</div>
                                 {:else}
