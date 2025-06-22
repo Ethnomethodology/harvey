@@ -4,7 +4,7 @@ import { project } from '$lib/stores/projectStore.js'; // To get current project
 import { transcriptStore } from '$lib/stores/transcriptStore.js'; // To get current media file path
 
 const LOCAL_STORAGE_KEY_PREFIX = 'transcriptLayout_';
-const DEFAULT_LAYOUT_KEY = 'Layout2'; // Default to 'Segment Block'
+const DEFAULT_LAYOUT_KEY = 'Layout1'; // Default to 'Detailed Table'
 
 // Helper function to construct the specific local storage key
 function getStorageKey(projectId, mediaPath) {
