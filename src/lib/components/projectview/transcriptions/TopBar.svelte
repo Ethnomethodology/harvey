@@ -18,6 +18,8 @@
 	import ManageModelsModal from '../modals/ManageModelsModal.svelte';
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
+	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte'; // Added
+	import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 
 	// --- Local state ---
 	let downloadedModelsList = [];
@@ -26,6 +28,7 @@
 	let isManageModalOpen = false;
 	let isSpeakersModalOpen = false;
 	let isExportModalOpen = false;
+	let isLayoutSettingsModalOpen = false; // Added
 	let transcriptionMode = 'automatic';
 	// Variable to hold transcript path for export modal
 	let transcriptPathForExport = '';
@@ -237,6 +240,19 @@
 					 : 'Light';
 	$: themeTitle = `Switch to ${nextThemeName} Mode`;
 
+	// --- Layout Button Icon ---
+	const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
+
+	function openLayoutSettingsModal() {
+		isLayoutSettingsModalOpen = true;
+	}
+
+	function handleLayoutSelected(event) {
+		const newLayoutKey = event.detail;
+		activeLayout.setLayout(newLayoutKey);
+		// Modal closes itself on selection
+	}
+
 </script>
 
 <!-- Top Bar Structure -->
@@ -372,9 +388,19 @@
 		</button>
 	</div>
 
-	<!-- Right Controls: Theme Toggle -->
-	<div class="flex-shrink-0">
-		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
+	<!-- Right Controls: Layout Settings, Theme Toggle -->
+	<div class="flex items-center space-x-1.5 flex-shrink-0">
+		<!-- Layout Settings Button -->
+		<button
+			on:click="{openLayoutSettingsModal}"
+			class="ui-button-icon p-1.5"
+			title="Change Transcript View Layout"
+		>
+			{@html LAYOUT_ICON_SVG}
+		</button>
+
+		<!-- Theme Toggle Button -->
+		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -388,6 +414,12 @@
 	transcriptPath="{transcriptPathForExport}"
 	on:confirm="{handleExportConfirm}"
 	on:close="{() => isExportModalOpen = false}"
+/>
+<LayoutSettingsModal
+	bind:showModal="{isLayoutSettingsModalOpen}"
+	currentLayoutKey="{$activeLayout}"
+	on:selectLayout="{handleLayoutSelected}"
+	on:close="{() => isLayoutSettingsModalOpen = false}"
 />
 
 <style lang="postcss">
