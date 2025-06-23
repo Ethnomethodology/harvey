@@ -1,9 +1,8 @@
 // src-tauri/src/projectview/table_handler.rs
 use super::shared_types::*;
-use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
+use super::shared_utils::{save_project_xml, ensure_base_asset_dirs, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH};
 use crate::welcome::config::CommandError;
-// get_table_asset_metadata_path removed
-use crate::projectview::db_handler; // Added
+use crate::projectview::db_handler;
 use chrono::Utc;
 use serde_json;
 use log::{info, warn, debug, error}; // Added error
@@ -85,50 +84,63 @@ pub async fn import_table_file(
         return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table import cannot proceed.", project_xml_path.display())));
     }
 
-    let source_filename_stem = source_path.file_stem()
+    let original_source_filename_with_ext = source_path.file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| CommandError::from("Could not get table filename stem"))?;
+        .ok_or_else(|| CommandError::from("Could not get original table filename with extension"))?
+        .to_string();
 
-    let source_extension = source_path.extension()
+    let original_source_extension = source_path.extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    if source_extension != "csv" && source_extension != "xlsx" {
-        return Err(CommandError::from(format!("Unsupported table file type: .{}", source_extension)));
+    if original_source_extension != "csv" && original_source_extension != "xlsx" {
+        return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
-    // Create a folder under Tables named after the file stem
+    // Truncate the original filename's stem
+    let truncated_table_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
+    info!("[import_table_file] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, truncated_table_filename_with_ext);
+
+    let table_file_stem_truncated = Path::new(&truncated_table_filename_with_ext).file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| CommandError::from(format!("Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext)))?;
+
+    // Create a folder under Tables named after the truncated file stem
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
-    let folder_path = tables_base.join(source_filename_stem);
+    let folder_path = tables_base.join(table_file_stem_truncated); // Folder uses truncated stem
+
+    // Check for existing folder based on truncated stem. If it exists and is for a different original file, this is a collision.
+    // The current logic of `get_unique_table_path` or the loop below might need adjustment if strict collision on folder name is desired.
+    // For now, if folder exists, we'll try to place the file inside, potentially with a numeric suffix if the exact truncated filename exists.
     if !folder_path.exists() {
         fs::create_dir_all(&folder_path)?;
     }
-    // Pick unique filename inside that folder
+
+    // Determine unique filename *inside* the (potentially truncated stem) folder, using the truncated filename as base.
     let mut counter = 0;
     let final_table_path = loop {
-        let file_name = if counter == 0 {
-            format!("{}.{}", source_filename_stem, source_extension)
+        let file_name_to_try = if counter == 0 {
+            truncated_table_filename_with_ext.clone()
         } else {
-            format!("{}_{}.{}", source_filename_stem, counter, source_extension)
+            // If collision, append suffix to the *truncated stem* part, then add extension
+            format!("{}_{}.{}", table_file_stem_truncated, counter, original_source_extension)
         };
-        let candidate = folder_path.join(&file_name);
+        let candidate = folder_path.join(&file_name_to_try);
         if !candidate.exists() {
             break candidate;
         }
         counter += 1;
-        if counter > 1000 {
+        if counter > 1000 { // Safety break
             return Err(CommandError::from(format!(
-                "Could not find unique filename for table base '{}' after {} attempts.",
-                source_filename_stem, counter
+                "Could not find unique filename for table base '{}' (derived from truncated name) after {} attempts.",
+                table_file_stem_truncated, counter
             )));
         }
     };
-    let final_table_name = final_table_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_string();
+
+    // final_table_name is the name of the file as it will be saved (e.g., truncated_stem.csv or truncated_stem_1.csv)
+    let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
 
     info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
     fs::copy(&source_path, &final_table_path).map_err(|e| CommandError::from(format!("Failed to copy table file: {}", e)))?;
@@ -137,13 +149,13 @@ pub async fn import_table_file(
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
 
-    let relative_path_for_xml = final_table_path
+    let relative_path_for_xml = final_table_path // Path uses (potentially suffixed) truncated name
         .strip_prefix(project_base_dir)?
         .to_string_lossy()
         .replace("\\", "/");
 
     let new_table_entry = TableEntryXml {
-        name: final_table_name.clone(),
+        name: final_table_name.clone(), // XML name is the final (potentially suffixed) truncated filename
         relative_path: relative_path_for_xml.clone(),
     };
 
@@ -162,11 +174,11 @@ pub async fn import_table_file(
 
     // Save metadata to DB
     let file_metadata_for_db = FileMetadata {
-        file_name: final_table_name.clone(),
-        file_path: final_table_path.to_string_lossy().into_owned(),
+        file_name: final_table_name.clone(), // Use final (potentially suffixed) truncated filename
+        file_path: final_table_path.to_string_lossy().into_owned(), // Absolute path uses final name
         last_modified: Utc::now().to_rfc3339(),
-        title: String::new(),
-        description: String::new(),
+        title: String::new(), // Init empty
+        description: String::new(), // Init empty
         summary: String::new(),
         duration_seconds: None,
         width: None,
@@ -184,16 +196,18 @@ pub async fn import_table_file(
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
-        &relative_path_for_xml,
-        "table",
-        None,
+        &relative_path_for_xml, // DB key uses final (potentially suffixed) truncated name based path
+        "table", // asset_type
+        None, // custom_fields_json
     ) {
         error!("[import_table_file] Failed to save table metadata to DB for table '{}' (path: {}, project_id: {}): {}", final_table_name, relative_path_for_xml, project_id_for_db, e);
-        return Err(e); // Propagate the error from save_asset_metadata
+        // Attempt to clean up copied file if DB save fails? Or let it be and user can delete.
+        // For now, return error.
+        return Err(e);
     }
     info!("[import_table_file] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
-    Ok(final_table_path.to_string_lossy().to_string())
+    Ok(final_table_path.to_string_lossy().to_string()) // Return absolute path to the imported (potentially renamed) file
 }
 
 

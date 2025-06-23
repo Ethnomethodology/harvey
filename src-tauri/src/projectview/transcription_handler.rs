@@ -3,8 +3,8 @@ use super::shared_types::{
     TranscriptSegment, ProjectXml, ImportedTranscriptEntryXml, FileMetadata,
     HARVEY_FILES_DIR, DOCS_DIR, TEMP_SUBDIR_DOCS, TRANSCRIPTS_DIR,
 };
-use super::shared_utils::*;
-use crate::projectview::db_handler; // Added for db_handler functions
+use super::shared_utils::{truncate_filename_stem, MAX_FILENAME_STEM_LENGTH, save_project_xml};
+use crate::projectview::db_handler;
 use crate::welcome::config::CommandError;
 use regex::Regex;
 use std::{
@@ -165,12 +165,25 @@ pub async fn import_word_transcript(
         return Err(CommandError::from(format!("Source DOCX not found: {}", source_docx_path_str)));
     }
     let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base dir from XML"))?;
-    let docx_filename_stem = source_docx_path.file_stem().and_then(|s| s.to_str()).unwrap_or("imported_transcript").to_string();
+
+    let original_docx_filename = source_docx_path.file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| CommandError::from("Could not get original DOCX filename"))?
+        .to_string();
+
+    // Truncate the original DOCX filename's stem to be used for the transcript's folder and JSON filename base.
+    let truncated_transcript_base_name = truncate_filename_stem(&original_docx_filename, MAX_FILENAME_STEM_LENGTH);
+    let transcript_filename_stem = Path::new(&truncated_transcript_base_name).file_stem() // Get stem from "truncated.docx"
+        .and_then(|s| s.to_str())
+        .unwrap_or("imported_transcript") // Fallback
+        .to_string();
+    info!("[import_word_transcript] Original DOCX: '{}', Truncated base for transcript: '{}'", original_docx_filename, transcript_filename_stem);
 
     let temp_html_dir = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR).join(TEMP_SUBDIR_DOCS);
     fs::create_dir_all(&temp_html_dir).map_err(|e| CommandError::from(format!("Failed to create temp dir for HTML: {}", e)))?;
     let unique_id = Uuid::new_v4().to_string(); 
-    let temp_html_filename = format!("temp_transcript_html_{}_{}.html", docx_filename_stem, unique_id);
+    // Use truncated stem for temp file to keep it shorter as well, though not strictly necessary for temp file.
+    let temp_html_filename = format!("temp_transcript_html_{}_{}.html", transcript_filename_stem, unique_id);
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 
     let pandoc_args = vec![
@@ -278,30 +291,32 @@ pub async fn import_word_transcript(
     fs::create_dir_all(&target_standalone_transcripts_dir)
         .map_err(|e| CommandError::from(format!("Failed to create standalone transcripts dir: {}", e)))?;
 
-    // Create a dedicated subdirectory for this imported transcript
-    let import_dir = target_standalone_transcripts_dir.join(&docx_filename_stem);
+    // Create a dedicated subdirectory for this imported transcript, using the truncated stem
+    let import_dir = target_standalone_transcripts_dir.join(&transcript_filename_stem); // Folder uses truncated stem
     fs::create_dir_all(&import_dir)
         .map_err(|e| CommandError::from(format!(
             "Failed to create imported transcript dir {}: {}", 
             import_dir.display(), e
         )))?;
 
+    // Determine unique filename for the .json file, using the truncated stem as base.
     let mut counter = 0;
     let final_transcript_path = loop {
         let file_name_part = if counter == 0 {
-            format!("{}.json", docx_filename_stem)
+            format!("{}.json", transcript_filename_stem) // Base name is truncated stem
         } else {
-            format!("{}_{}.json", docx_filename_stem, counter)
+            format!("{}_{}.json", transcript_filename_stem, counter) // Suffix truncated stem
         };
         let path_candidate = import_dir.join(&file_name_part);
         if !path_candidate.exists() {
             break path_candidate;
         }
         counter += 1;
-        if counter > 100 { 
-            return Err(CommandError::from(format!("Could not find unique filename for imported transcript after {} attempts.", counter)));
+        if counter > 100 { // Safety break
+            return Err(CommandError::from(format!("Could not find unique filename for imported transcript (base: '{}') after {} attempts.", transcript_filename_stem, counter)));
         }
     };
+    // new_transcript_filename is the final name, e.g., truncated_stem.json or truncated_stem_1.json
     let new_transcript_filename = final_transcript_path.file_name().unwrap().to_string_lossy().to_string();
 
 
@@ -313,7 +328,7 @@ pub async fn import_word_transcript(
 
     // --- Save metadata to DB ---
     let file_metadata_for_db = FileMetadata {
-        file_name: new_transcript_filename.clone(),
+        file_name: new_transcript_filename.clone(), // Use final (potentially suffixed) truncated filename
         file_path: final_transcript_path.to_string_lossy().into_owned(),
         last_modified: Utc::now().to_rfc3339(),
         title: String::new(),
@@ -354,11 +369,12 @@ pub async fn import_word_transcript(
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
-        &asset_relative_path_for_db,
+        &asset_relative_path_for_db, // DB key uses final (potentially suffixed) truncated name based path
         asset_type,
         None, // custom_fields_json is None on initial import
     ) {
         error!("Failed to save transcript metadata to DB for {}: {} (project_id: {})", asset_relative_path_for_db, e, project_id_for_db);
+        // Consider cleaning up the created JSON file if DB save fails
         return Err(CommandError::from(format!("Failed to save transcript metadata to DB: {}", e)));
     }
     info!("[import_word_transcript] Saved transcript metadata to DB for: {}", asset_relative_path_for_db);
@@ -368,10 +384,10 @@ pub async fn import_word_transcript(
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
     
     // The relative_transcript_path_for_xml is the same as asset_relative_path_for_db used above
-    let relative_transcript_path_for_xml = asset_relative_path_for_db;
+    let relative_transcript_path_for_xml = asset_relative_path_for_db; // Path uses final (potentially suffixed) truncated name
 
     let new_imported_transcript_entry = ImportedTranscriptEntryXml {
-        name: new_transcript_filename.clone(),
+        name: new_transcript_filename.clone(), // XML name is the final (potentially suffixed) truncated filename
         relative_path: relative_transcript_path_for_xml.clone(),
     };
 

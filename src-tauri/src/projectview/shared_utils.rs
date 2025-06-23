@@ -167,3 +167,119 @@ pub fn ensure_base_asset_dirs(project_base_dir: &Path) -> Result<(), CommandErro
     debug!("Base asset directories ensured within {}", base_path.display());
     Ok(())
 }
+
+pub const MAX_FILENAME_STEM_LENGTH: usize = 60;
+
+pub fn truncate_filename_stem(original_filename: &str, max_stem_len: usize) -> String {
+    let path = Path::new(original_filename);
+    let original_stem_os = match path.file_stem() {
+        Some(s) => s,
+        None => {
+            // No file stem (e.g., ".bashrc" or just "filename_without_extension")
+            // If it starts with a dot and has content after, treat content after dot as stem for truncation purposes if no other extension.
+            // Otherwise, the whole name is the stem if no extension.
+            if original_filename.starts_with('.') && original_filename.rfind('.').map_or(false, |idx| idx == 0) {
+                 // e.g. ".configfile" -> stem is "configfile"
+                 return truncate_filename_stem(&original_filename[1..], max_stem_len);
+            }
+            // If it's like "filename" (no extension) or "nodotextension", the whole thing is the stem.
+            // If it's like ".nodotextension" this will be handled by the above.
+            // If it's just "." or "..", let it pass, or handle as error if needed, though Path::file_stem handles these reasonably.
+            // For simplicity, if file_stem is None, we might be dealing with an edge case like "." or ".." or empty.
+            // A robust way is to check if there's any extension-like part.
+            if let Some(ext_dot_pos) = original_filename.rfind('.') {
+                if ext_dot_pos > 0 && ext_dot_pos < original_filename.len() - 1 { // ensure dot is not first and there's something after
+                    let stem_part = &original_filename[..ext_dot_pos];
+                    let ext_part = &original_filename[ext_dot_pos..]; // includes the dot
+                     if stem_part.len() > max_stem_len {
+                        format!("{}{}", &stem_part[..max_stem_len], ext_part)
+                    } else {
+                        original_filename.to_string()
+                    }
+                } else { // No clear extension (e.g. "filename" or ".filename_no_further_dot" or "filename.")
+                    if original_filename.len() > max_stem_len {
+                        original_filename[..max_stem_len].to_string()
+                    } else {
+                        original_filename.to_string()
+                    }
+                }
+            } else { // No dot at all
+                 if original_filename.len() > max_stem_len {
+                    original_filename[..max_stem_len].to_string()
+                } else {
+                    original_filename.to_string()
+                }
+            }
+        }
+    };
+
+    let original_stem = original_stem_os.to_string_lossy().into_owned();
+
+    let extension = path.extension().and_then(|s| s.to_str()).map_or(String::new(), |s| format!(".{}", s));
+
+    // Special handling for multi-part extensions like .tar.gz
+    // Path::extension only gives the last part (e.g. "gz" from "file.tar.gz")
+    // We need to find the first dot that starts the full extension.
+    let full_extension = if let Some(first_dot_idx) = original_filename.find('.') {
+        if first_dot_idx > 0 { // Ensure it's not a leading dot file like .bashrc
+            // Check if the part before the first dot is what Path::file_stem() considers the stem.
+            // This is to correctly identify stem for "file.tar.gz" (stem="file", full_ext=".tar.gz")
+            // vs "file.name.with.dots.txt" (stem="file.name.with.dots", ext=".txt")
+            let potential_stem_from_first_dot = &original_filename[..first_dot_idx];
+            if potential_stem_from_first_dot == original_stem || original_stem.starts_with(potential_stem_from_first_dot) {
+                 // This indicates 'original_stem' is likely the true stem part we want to truncate.
+                 // The 'extension' variable already got the last part (e.g. ".gz").
+                 // If original_filename = "file.tar.gz", original_stem = "file.tar", extension = ".gz"
+                 // If original_filename = "file.gz", original_stem = "file", extension = ".gz"
+                 // What we want is: if original_stem is "file.tar", truncate "file.tar", then add ".gz"
+                 // Let's reconstruct the full extension from the original filename if stem is shorter.
+                 if original_stem.len() + extension.len() < original_filename.len() {
+                     // This implies original_stem from path.file_stem() might not be the part before the *full* extension.
+                     // e.g. for "foo.bar.baz.txt", file_stem is "foo.bar.baz", extension is ".txt"
+                     // We want to truncate "foo.bar.baz" if it's too long.
+                     // The existing `extension` variable is correct for the final extension part.
+                 }
+            }
+             // Fallback: if file_stem gives "archive.tar" and extension gives ".gz",
+             // and original is "archive.tar.gz".
+             // If original_stem itself contains dots, we are truncating that whole part.
+             // e.g. "my.document.name.is.very.long.txt" -> stem is "my.document.name.is.very.long"
+        }
+        extension // Default to single extension if complex logic above is not perfect.
+    } else {
+        String::new() // No extension
+    };
+
+
+    if original_stem.len() > max_stem_len {
+        let truncated_stem: String = original_stem.chars().take(max_stem_len).collect();
+        format!("{}{}", truncated_stem, full_extension)
+    } else {
+        original_filename.to_string()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_filename_stem() {
+        assert_eq!(truncate_filename_stem("short.txt", 10), "short.txt");
+        assert_eq!(truncate_filename_stem("verylongfilenameexample.txt", 10), "verylongfi.txt");
+        assert_eq!(truncate_filename_stem("noextension", 5), "noext");
+        assert_eq!(truncate_filename_stem("short", 10), "short");
+        assert_eq!(truncate_filename_stem(".hiddenfile", 8), ".hiddenfi"); // Path::file_stem gives "hiddenfile"
+        assert_eq!(truncate_filename_stem("archive.tar.gz", 10), "archive.ta.gz"); // Path::file_stem is "archive.tar"
+        assert_eq!(truncate_filename_stem("archive.tar.gz", 5), "archi.gz");
+        assert_eq!(truncate_filename_stem("file.with.many.dots.extension", 15), "file.with.many.extension");
+        assert_eq!(truncate_filename_stem("name_without_extension_but_very_long", 10), "name_witho");
+        assert_eq!(truncate_filename_stem("another.long.archive.name.tar.zip", 15), "another.long.ar.zip");
+        assert_eq!(truncate_filename_stem("single", 3), "sin");
+        assert_eq!(truncate_filename_stem(".bashrc", 5), ".bash"); // stem "bashrc"
+        assert_eq!(truncate_filename_stem("config.json.backup", 10), "config.jso.backup");
+        assert_eq!(truncate_filename_stem("exactlength.info", 11), "exactlength.info");
+        assert_eq!(truncate_filename_stem("exactlengthplusone.info", 11), "exactlength.info");
+    }
+}
