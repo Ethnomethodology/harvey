@@ -165,6 +165,8 @@ pub fn run() {
             projectview::core_commands::remove_file_from_group,
             projectview::core_commands::get_group_contents,
             projectview::core_commands::update_group_details,
+            projectview::core_commands::rename_project_group, // Added command
+            projectview::core_commands::delete_project_group, // Added command
 
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
