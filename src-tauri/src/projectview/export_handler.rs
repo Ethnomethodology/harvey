@@ -426,8 +426,8 @@ pub async fn export_transcript_to_docx(
         }
     };
 
-    for (index, entry) in entries.iter().enumerate() {
-        let segment_number = index + 1;
+    for (_index, entry) in entries.iter().enumerate() { // Changed index to _index
+        let segment_number = _index + 1; // Use _index here
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
@@ -739,8 +739,8 @@ pub async fn export_transcript_to_srt(
     }
 
     let mut srt_content = String::new();
-    for (index, segment) in segments.iter().enumerate() {
-        srt_content.push_str(&(index + 1).to_string());
+    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
+        srt_content.push_str(&(_index + 1).to_string()); // Use _index here
         srt_content.push_str("\n");
 
         let start_ts = format_srt_timestamp(segment.start_time);
@@ -908,10 +908,10 @@ pub async fn export_transcript_to_vtt(
     let mut vtt_content = String::new();
     vtt_content.push_str("WEBVTT\n\n");
 
-    for (index, segment) in segments.iter().enumerate() {
+    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
         // VTT sequence numbers are optional but can be helpful.
         // If not using them, just remove this line.
-        // vtt_content.push_str(&(index + 1).to_string());
+        // vtt_content.push_str(&(_index + 1).to_string()); // Use _index here if enabling
         // vtt_content.push_str("\n");
 
         let start_ts = format_vtt_timestamp(segment.start_time);
