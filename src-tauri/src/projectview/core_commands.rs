@@ -124,6 +124,119 @@ pub async fn create_new_group(
 }
 
 #[tauri::command]
+pub async fn rename_project_group(
+    project_id: String,
+    group_id: String,
+    new_name: String,
+    new_description: Option<String>,
+) -> Result<GroupData, String> {
+    info!(
+        "[CMD] rename_project_group: project_id={}, group_id={}, new_name={}",
+        project_id, group_id, new_name
+    );
+
+    if project_id.trim().is_empty() {
+        error!("[CMD] rename_project_group - Project ID cannot be empty.");
+        return Err("Project ID cannot be empty.".to_string());
+    }
+    if group_id.trim().is_empty() {
+        error!("[CMD] rename_project_group - Group ID cannot be empty.");
+        return Err("Group ID cannot be empty.".to_string());
+    }
+    let trimmed_new_name = new_name.trim();
+    if trimmed_new_name.is_empty() {
+        error!("[CMD] rename_project_group - New group name cannot be empty.");
+        return Err("New group name cannot be empty.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] rename_project_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e));
+        }
+    };
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] rename_project_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    match db_handler::rename_group_in_db(&conn, &project_id, &group_id, trimmed_new_name, new_description.as_deref()) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] rename_project_group - Group {} renamed successfully.", group_id);
+                Ok(GroupData {
+                    id: group_id,
+                    project_id,
+                    name: trimmed_new_name.to_string(),
+                    description: new_description,
+                })
+            } else {
+                error!("[CMD] rename_project_group - Group with ID {} not found or not updated.", group_id);
+                Err(format!("Group with ID {} not found or no changes made.", group_id))
+            }
+        }
+        Err(e) => {
+            error!("[CMD] rename_project_group - Failed for group {}: {}", group_id, e);
+            if e.to_string().contains("UNIQUE constraint failed: groups.project_id, groups.name") {
+                 error!("[CMD] rename_project_group - Unique constraint violation for group name '{}' in project '{}'.", trimmed_new_name, project_id);
+                 return Err(format!("A group with the name \"{}\" already exists in this project.", trimmed_new_name));
+            }
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn delete_project_group(project_id: String, group_id: String) -> Result<(), String> {
+    info!("[CMD] delete_project_group: project_id={}, group_id={}", project_id, group_id);
+
+    if project_id.trim().is_empty() {
+        error!("[CMD] delete_project_group - Project ID cannot be empty.");
+        return Err("Project ID cannot be empty.".to_string());
+    }
+    if group_id.trim().is_empty() {
+        error!("[CMD] delete_project_group - Group ID cannot be empty.");
+        return Err("Group ID cannot be empty.".to_string());
+    }
+
+    let db_path = match db_handler::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("[CMD] delete_project_group - Failed to get DB path: {}", e);
+            return Err(format!("Failed to get database path: {}", e));
+        }
+    };
+    let conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("[CMD] delete_project_group - Failed to open DB: {}", e);
+            return Err(format!("Failed to open database: {}", e));
+        }
+    };
+
+    match db_handler::delete_group_from_db(&conn, &project_id, &group_id) {
+        Ok(rows_affected) => {
+            if rows_affected > 0 {
+                info!("[CMD] delete_project_group - Group {} deleted successfully.", group_id);
+            } else {
+                // This case might mean the group was already deleted or never existed.
+                // For a delete operation, not finding the item is often not an error for the frontend.
+                info!("[CMD] delete_project_group - Group with ID {} not found or already deleted.", group_id);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] delete_project_group - Failed for group {}: {}", group_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn remove_file_from_group_command(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
     if project_id.is_empty() || project_id == "null" { // Check for "null" string as well
         error!("[CMD] remove_file_from_group_command - Project ID is missing or invalid.");

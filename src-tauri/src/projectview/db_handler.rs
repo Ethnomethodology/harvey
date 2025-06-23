@@ -510,6 +510,62 @@ pub fn update_group_details(
     )
 }
 
+pub fn rename_group_in_db(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str,
+    new_name: &str,
+    new_description: Option<&str>
+) -> Result<usize, rusqlite::Error> {
+    let current_timestamp = chrono::Utc::now().to_rfc3339();
+    debug!(
+        "[DB] Renaming group for group_id {} in project_id {}: new_name={}, new_desc_is_some={}",
+        group_id, project_id, new_name, new_description.is_some()
+    );
+    conn.execute(
+        "UPDATE groups SET name = ?1, description = ?2, updated_at = ?3 WHERE project_id = ?4 AND id = ?5",
+        params![new_name, to_sql_optional_str(new_description), current_timestamp, project_id, group_id],
+    )
+}
+
+pub fn delete_group_from_db(
+    conn: &Connection,
+    project_id: &str,
+    group_id: &str
+) -> Result<usize, rusqlite::Error> {
+    debug!("[DB] Deleting group for group_id {} in project_id {}", group_id, project_id);
+
+    // First, delete associations from file_groups.
+    // It's important to do this first if there are foreign key constraints,
+    // though in this schema, file_groups references groups, so deleting from groups
+    // might cascade if ON DELETE CASCADE is set (which it is for group_id FK).
+    // Explicitly deleting from file_groups first is safer and clearer.
+    let file_associations_deleted = conn.execute(
+        "DELETE FROM file_groups WHERE project_id = ?1 AND group_id = ?2",
+        params![project_id, group_id],
+    )?;
+    info!(
+        "[DB] Deleted {} file associations for group_id {} in project_id {}.",
+        file_associations_deleted, group_id, project_id
+    );
+
+    // Then, delete the group itself.
+    let group_rows_deleted = conn.execute(
+        "DELETE FROM groups WHERE project_id = ?1 AND id = ?2",
+        params![project_id, group_id],
+    )?;
+
+    if group_rows_deleted > 0 {
+        info!("[DB] Group group_id {} in project_id {} deleted successfully.", group_id, project_id);
+    } else {
+        warn!("[DB] No group found with group_id {} in project_id {} to delete.", group_id, project_id);
+    }
+    // Return the number of rows deleted from the 'groups' table.
+    // The command expects Result<(), String> so the exact number isn't directly passed up,
+    // but it's good practice for a DB function to return affected rows.
+    Ok(group_rows_deleted)
+}
+
 // --- End Group Functions ---
 
 // --- Media Transcript Data Functions ---
