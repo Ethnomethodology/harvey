@@ -2,6 +2,7 @@
 <script>
     import { tick, createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
+    import { slide } from 'svelte/transition'; // Import slide transition
     import { project } from '$lib/stores/projectStore.js';
     import {
         transcriptStore,
@@ -22,6 +23,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
+    import { leftPanelVisible } from '$lib/stores/layoutViewStore.js';
     import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from '../shared/InteractiveWaveform.svelte';
     import EditableTranscript from './EditableTranscript.svelte';
@@ -37,6 +39,12 @@
     let richTextPreviewRef;
     let topBarRef;
     let leftPanelRef;
+
+    // Reactive state for left panel visibility from store
+    let isLeftPanelVisible;
+    const unsubscribeLeftPanelVisible = leftPanelVisible.subscribe(value => {
+        isLeftPanelVisible = value;
+    });
 
     // State for MediaPlayer within THIS TranscriptionsView
     // These are bound to the MediaPlayer's props.
@@ -241,8 +249,20 @@
         }
     }
 
-    onMount(() => { console.log('[TranscriptionsView] Mounted.'); });
-    onDestroy(() => { console.log('[TranscriptionsView] Destroyed.'); });
+    function toggleLeftPanel() {
+        leftPanelVisible.toggle();
+    }
+
+    onMount(() => {
+        console.log('[TranscriptionsView] Mounted.');
+    });
+
+    onDestroy(() => {
+        console.log('[TranscriptionsView] Destroyed.');
+        if (unsubscribeLeftPanelVisible) {
+            unsubscribeLeftPanelVisible();
+        }
+    });
 
     async function handleLoadSelectedTranscript(event) {
         const transcriptPath = event.detail;
@@ -277,12 +297,18 @@
         on:requestTranscription={handleRequestTranscriptionEvent}
         on:save={handleSaveTranscript}
         on:toggleEditMode={handleToggleEditMode}
+        on:toggleLeftPanel={toggleLeftPanel}
     />
-    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full">
-        <div class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
-            <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
-        </div>
-        <div class="w-[40%] h-full flex flex-col gap-1">
+    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full overflow-x-hidden">
+        {#if isLeftPanelVisible}
+            <div
+                class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0"
+                transition:slide="{{ duration: 300, axis: 'x' }}"
+            >
+                <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
+            </div>
+        {/if}
+        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-1/2'} h-full flex flex-col gap-1 transition-all duration-300 ease-in-out">
 
             <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
@@ -314,7 +340,7 @@
                  />
             </div>
         </div>
-        <div class="w-[40%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
+        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-1/2'} h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto transition-all duration-300 ease-in-out flex flex-col">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
