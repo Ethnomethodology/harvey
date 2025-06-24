@@ -426,8 +426,8 @@ pub async fn export_transcript_to_docx(
         }
     };
 
-    for (_index, entry) in entries.iter().enumerate() { // Changed index to _index
-        let segment_number = _index + 1; // Use _index here
+    for (index, entry) in entries.iter().enumerate() { // Changed _index to index
+        let segment_number = index + 1; // Use index here
         let start = entry.get("start_time").and_then(Value::as_f64).unwrap_or(0.0);
         let end = entry.get("end_time").and_then(Value::as_f64).unwrap_or(0.0);
         let timestamp_str = format!("{} - {}", format_ts(start), format_ts(end));
@@ -739,8 +739,8 @@ pub async fn export_transcript_to_srt(
     }
 
     let mut srt_content = String::new();
-    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
-        srt_content.push_str(&(_index + 1).to_string()); // Use _index here
+    for (index, segment) in segments.iter().enumerate() { // Changed _index to index
+        srt_content.push_str(&(index + 1).to_string()); // Use index here
         srt_content.push_str("\n");
 
         let start_ts = format_srt_timestamp(segment.start_time);
@@ -1103,8 +1103,8 @@ pub async fn export_transcript_to_markdown(
         md_content.push_str("|---------|------|\n");
     }
 
-    for (_index, segment) in segments.iter().enumerate() { // Changed index to _index
-        let segment_number = _index + 1; // Use _index here for numbering
+    for (index, segment) in segments.iter().enumerate() { // Changed _index to index
+        let segment_number = index + 1; // Use index here for numbering
         // Using srt_timestamp for consistency, but could be simplified for MD
         let timestamp_str = format!("{} - {}", format_srt_timestamp(segment.start_time), format_srt_timestamp(segment.end_time));
         let raw_speaker = segment.speaker.as_deref().unwrap_or("Unknown");

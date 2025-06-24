@@ -544,7 +544,7 @@ pub(crate) fn prepare_output_paths(
     media_path_str: &str,
     job_id: &str,
     translate_to_english: bool,
-) -> Result<(String, PathBuf, PathBuf, PathBuf, Option<String>, Option<PathBuf>, Option<PathBuf>), CommandError> {
+) -> Result<(String, PathBuf, PathBuf, PathBuf, Option<String>, Option<PathBuf>, Option<PathBuf>), CommandError> { // Return signature matches new var names
     debug!("[prepare_output_paths][{}] Media path: {}, Translate: {}", job_id, media_path_str, translate_to_english);
     let media_path = PathBuf::from(media_path_str);
 
@@ -578,30 +578,30 @@ pub(crate) fn prepare_output_paths(
         job_id, temp_whisper_output_base_orig_str, expected_whisper_temp_json_path_orig.display(), expected_rttm_temp_path.display(), final_transcript_path_orig.display());
 
     // --- Paths for translated transcript (if requested) ---
-    let mut temp_whisper_output_base_en_str: Option<String> = None;
-    let mut expected_whisper_temp_json_path_en: Option<PathBuf> = None;
-    let mut final_transcript_path_en: Option<PathBuf> = None;
+    let mut temp_whisper_output_base_en_str_opt: Option<String> = None; // Use _opt suffix for clarity
+    let mut expected_whisper_temp_json_path_en_opt: Option<PathBuf> = None; // Use _opt suffix
+    let mut final_transcript_path_en_opt: Option<PathBuf> = None; // Use _opt suffix
 
     if translate_to_english {
         let temp_whisper_output_base_en = transcripts_dir.join(format!("whisper_temp_{}_en", job_id));
-        temp_whisper_output_base_en_str = Some(temp_whisper_output_base_en.to_string_lossy().to_string());
-        expected_whisper_temp_json_path_en = Some(temp_whisper_output_base_en.with_extension("json"));
+        temp_whisper_output_base_en_str_opt = Some(temp_whisper_output_base_en.to_string_lossy().to_string());
+        expected_whisper_temp_json_path_en_opt = Some(temp_whisper_output_base_en.with_extension("json"));
 
         // Final path for translated transcript also uses the media_filename_stem.
-        final_transcript_path_en = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
+        final_transcript_path_en_opt = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
 
         debug!("[prepare_output_paths][{}] EN Temp Whisper Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
-            job_id, temp_whisper_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en);
+            job_id, temp_whisper_output_base_en_str_opt, expected_whisper_temp_json_path_en_opt, final_transcript_path_en_opt);
     }
 
     Ok((
-        temp_transcript_output_base_orig_str,
+        temp_whisper_output_base_orig_str, // This is correct as it's the first element
         expected_whisper_temp_json_path_orig,
         expected_rttm_temp_path,
         final_transcript_path_orig,
-        temp_transcript_output_base_en_str,
-        expected_whisper_temp_json_path_en,
-        final_transcript_path_en,
+        temp_whisper_output_base_en_str_opt, // Use the new Option suffixed name
+        expected_whisper_temp_json_path_en_opt, // Use the new Option suffixed name
+        final_transcript_path_en_opt, // Use the new Option suffixed name
     ))
 }
 
@@ -734,16 +734,17 @@ pub async fn transcribe_media_command(
     let app_handle_clone = app_handle.clone(); // app_handle is used later for final emit, so clone for helpers
 
     let (
-        temp_transcript_output_base_orig_str,
+        temp_whisper_output_base_orig_str, // Changed variable name
         expected_whisper_temp_json_path_orig,
         expected_rttm_temp_path,
         final_transcript_path_orig,
-        temp_transcript_output_base_en_str,
-        expected_whisper_temp_json_path_en,
-        final_transcript_path_en,
+        temp_whisper_output_base_en_str_opt, // Changed variable name
+        expected_whisper_temp_json_path_en_opt, // Changed variable name
+        final_transcript_path_en_opt, // Changed variable name
     ) = prepare_output_paths(&payload.media_path_str, &job_id, payload.translate_to_english)?;
 
-    let final_transcript_path_en_for_payload = final_transcript_path_en.clone();
+    // Use final_transcript_path_en_opt for the payload, it's already an Option<PathBuf>
+    let final_transcript_path_en_for_payload = final_transcript_path_en_opt.clone();
 
     emit_progress_cmd(&app_handle_clone, &job_id, 0.0, &format!("Processing {}...", media_filename_for_progress))?;
 
@@ -811,7 +812,7 @@ pub async fn transcribe_media_command(
         &whisper_model_path_str,
         &payload.language_code.clone().unwrap_or_else(|| "auto".to_string()),
         &job_id,
-        &temp_transcript_output_base_orig_str,
+        &temp_whisper_output_base_orig_str, // Use changed variable name
         &expected_whisper_temp_json_path_orig,
         payload.num_speakers,
         &expected_rttm_temp_path,
@@ -920,12 +921,12 @@ pub async fn transcribe_media_command(
         }
 
         info!("[Transcribe Command][{}] DEBUG: Entered 'translate_to_english' block. translate_to_english flag is true.", job_id);
-        info!("[Transcribe Command][{}] DEBUG: Pre-translation pass paths: temp_base_en: {:?}, temp_json_en: {:?}, final_en: {:?}", job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en_for_payload);
+        info!("[Transcribe Command][{}] DEBUG: Pre-translation pass paths: temp_base_en: {:?}, temp_json_en: {:?}, final_en: {:?}", job_id, temp_whisper_output_base_en_str_opt, expected_whisper_temp_json_path_en_opt, final_transcript_path_en_for_payload);
 
         if let (Some(base_en_str), Some(json_path_en), Some(final_path_en_pb)) = (
-            temp_transcript_output_base_en_str,
-            expected_whisper_temp_json_path_en,
-            final_transcript_path_en,
+            temp_whisper_output_base_en_str_opt, // Use changed variable name
+            expected_whisper_temp_json_path_en_opt, // Use changed variable name
+            final_transcript_path_en_opt, // Use changed variable name (already an Option<PathBuf>)
         ) {
             emit_progress_cmd(&app_handle_clone, &job_id, 60.0, &format!("Translating {}...", media_filename_for_progress))?;
 
