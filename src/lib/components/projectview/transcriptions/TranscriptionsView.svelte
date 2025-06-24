@@ -299,7 +299,7 @@
         on:toggleEditMode={handleToggleEditMode}
         on:toggleLeftPanel={toggleLeftPanel}
     />
-    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full overflow-x-hidden"> {/* Added overflow-x-hidden here */}
+    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full overflow-x-hidden">
         {#if isLeftPanelVisible}
             <div
                 class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0"
