@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/TopBar.svelte -->
 <script>
 	// --- Svelte/Store Imports ---
-	import { onMount } from 'svelte';
+	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
 	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish } from '$lib/stores/transcriptStore.js';
@@ -22,6 +22,7 @@
 	import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 
 	// --- Local state ---
+	const dispatch = createEventDispatcher();
 	let downloadedModelsList = [];
 	let cloudConfig = null;
 	let isLoadingModels = true;
@@ -260,8 +261,19 @@
 	class="flex items-center justify-between px-3 h-10 ml-1 mt-1 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
 	data-tauri-drag-region
 >
-	<!-- Left Controls: Media Select, Model Select, Language Select, Speakers, Transcribe, Export -->
+	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe, Export -->
 	<div class="flex items-center space-x-1.5">
+		<!-- Toggle Left Panel Button -->
+		<button
+			class="ui-button-icon p-1.5"
+			title="Toggle File Explorer Panel"
+			on:click={() => dispatch('toggleLeftPanel')}
+		>
+			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
+				<path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+			</svg>
+		</button>
+
 		<!-- Media Selection Dropdown -->
 		<select
 			class="ui-select flex-shrink-0 w-40"
