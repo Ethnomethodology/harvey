@@ -2,6 +2,7 @@
 <script>
     import { tick, createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
+    import { slide } from 'svelte/transition'; // Import slide transition
     import { project } from '$lib/stores/projectStore.js';
     import {
         transcriptStore,
@@ -298,9 +299,12 @@
         on:toggleEditMode={handleToggleEditMode}
         on:toggleLeftPanel={toggleLeftPanel}
     />
-    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full">
+    <div class="flex flex-grow min-h-0 p-1 gap-1 w-full overflow-x-hidden"> {/* Added overflow-x-hidden here */}
         {#if isLeftPanelVisible}
-            <div class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto transition-all duration-300 ease-in-out">
+            <div
+                class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0"
+                transition:slide="{{ duration: 300, axis: 'x' }}"
+            >
                 <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
             </div>
         {/if}
