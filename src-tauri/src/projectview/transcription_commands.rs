@@ -560,31 +560,38 @@ pub(crate) fn prepare_output_paths(
     fs::create_dir_all(&transcripts_dir)?;
     debug!("[prepare_output_paths][{}] Transcripts dir ensured: {:?}", job_id, transcripts_dir);
 
-    // Paths for original transcript
-    let temp_transcript_output_base_orig = transcripts_dir.join(format!("{}_temp_{}_orig", media_filename_stem, job_id));
-    let temp_transcript_output_base_orig_str = temp_transcript_output_base_orig.to_string_lossy().to_string();
-    let expected_whisper_temp_json_path_orig = temp_transcript_output_base_orig.with_extension("json");
+    // --- Paths for original transcript ---
+    // Use a short, generic temporary base name for whisper's direct output.
+    let temp_whisper_output_base_orig = transcripts_dir.join(format!("whisper_temp_{}_orig", job_id));
+    let temp_whisper_output_base_orig_str = temp_whisper_output_base_orig.to_string_lossy().to_string();
+    // This is the path whisper-cpp will actually write its JSON to.
+    let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
+
+    // The final path for the transcript uses the (potentially truncated at import) media_filename_stem.
     let final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
     
-    // Path for RTTM (common for original transcript diarization)
-    let expected_rttm_temp_path = temp_transcript_output_base_orig.with_extension("rttm"); // Use original's temp base for RTTM
+    // Path for RTTM (common for original transcript diarization) - can also use a short temp name.
+    let temp_rttm_base = transcripts_dir.join(format!("rttm_temp_{}", job_id)); // Generic base for RTTM
+    let expected_rttm_temp_path = temp_rttm_base.with_extension("rttm");
 
-    debug!("[prepare_output_paths][{}] Orig Temp Base: '{}', Orig Whisper JSON (temp): '{}', RTTM (temp): '{}', Orig Final JSON: '{}'",
-        job_id, temp_transcript_output_base_orig_str, expected_whisper_temp_json_path_orig.display(), expected_rttm_temp_path.display(), final_transcript_path_orig.display());
+    debug!("[prepare_output_paths][{}] Orig Temp Whisper Base: '{}', Orig Whisper JSON (temp): '{}', RTTM (temp): '{}', Orig Final JSON: '{}'",
+        job_id, temp_whisper_output_base_orig_str, expected_whisper_temp_json_path_orig.display(), expected_rttm_temp_path.display(), final_transcript_path_orig.display());
 
-    // Paths for translated transcript (if requested)
-    let mut temp_transcript_output_base_en_str: Option<String> = None;
+    // --- Paths for translated transcript (if requested) ---
+    let mut temp_whisper_output_base_en_str: Option<String> = None;
     let mut expected_whisper_temp_json_path_en: Option<PathBuf> = None;
     let mut final_transcript_path_en: Option<PathBuf> = None;
 
     if translate_to_english {
-        let temp_transcript_output_base_en = transcripts_dir.join(format!("{}_temp_{}_en", media_filename_stem, job_id));
-        temp_transcript_output_base_en_str = Some(temp_transcript_output_base_en.to_string_lossy().to_string());
-        expected_whisper_temp_json_path_en = Some(temp_transcript_output_base_en.with_extension("json"));
+        let temp_whisper_output_base_en = transcripts_dir.join(format!("whisper_temp_{}_en", job_id));
+        temp_whisper_output_base_en_str = Some(temp_whisper_output_base_en.to_string_lossy().to_string());
+        expected_whisper_temp_json_path_en = Some(temp_whisper_output_base_en.with_extension("json"));
+
+        // Final path for translated transcript also uses the media_filename_stem.
         final_transcript_path_en = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
 
-        debug!("[prepare_output_paths][{}] EN Temp Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
-            job_id, temp_transcript_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en);
+        debug!("[prepare_output_paths][{}] EN Temp Whisper Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
+            job_id, temp_whisper_output_base_en_str, expected_whisper_temp_json_path_en, final_transcript_path_en);
     }
 
     Ok((
@@ -1083,6 +1090,16 @@ pub async fn transcribe_media_command(
 
     if let Err(e) = app_handle.emit("custom_transcription_job_completed", completion_payload) {
         error!("[Transcribe Command][{}] Failed to emit custom_transcription_job_completed event: {}", job_id, e);
+    }
+
+    // Cleanup temporary WAV file if it was created
+    if wav_media_path.to_string_lossy() != payload.media_path_str {
+        info!("[Transcribe Command][{}] Cleaning up temporary WAV file: {:?}", job_id, wav_media_path);
+        if let Err(e) = fs::remove_file(&wav_media_path) {
+            warn!("[Transcribe Command][{}] Failed to delete temporary WAV file {:?}: {}", job_id, wav_media_path, e);
+        } else {
+            info!("[Transcribe Command][{}] Successfully deleted temporary WAV file: {:?}", job_id, wav_media_path);
+        }
     }
 
     Ok(TranscriptionInitiatedPayload { job_id })
@@ -1756,36 +1773,70 @@ pub(crate) async fn execute_transcription_pass(
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
         job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
     // Original info log:
-    // info!(
-    //     "[Exec Pass][{}] Start. Lang: {}, Translate: {}, NumSpeakers: {}",
-    //     job_id, language_code, is_translation_pass, num_speakers
-    // );
+    // ... (kept for reference)
 
     info!("[Exec Pass][{}] DEBUG: About to call run_whisper_cpp_sidecar_cmd. is_translation_pass: {}", job_id, is_translation_pass);
-    let whisper_json_path = run_whisper_cpp_sidecar_cmd(
+    // `expected_whisper_json_output_path` is the short temporary path whisper will write to.
+    // `output_base_for_whisper` is its base name (without .json extension).
+    let temp_whisper_json_output_path = run_whisper_cpp_sidecar_cmd(
         app_handle,
         wav_media_path_str,
         model_path,
         language_code,
         job_id,
-        output_base_for_whisper,
-        expected_whisper_json_output_path,
+        output_base_for_whisper, // This is the short temp base name
+        expected_whisper_json_output_path, // This is the short temp full path with .json
         is_translation_pass,
-        cancel_flag.clone(), // Pass the flag
+        cancel_flag.clone(),
     ).await?;
 
-    let mut segments = parse_whisper_json_cmd(&whisper_json_path)?;
+    // Determine the final destination path for this pass's transcript
+    let final_transcript_destination_path = if is_translation_pass {
+        // This requires prepare_output_paths to provide the final EN path
+        // Let's assume it's passed in or reconstructed correctly
+        // For now, we need to ensure `prepare_output_paths` returns it and it's passed here.
+        // This part of the logic needs `final_transcript_path_en` to be available here.
+        // We'll assume `final_transcript_path_orig` is for original, and a similar var for EN.
+        // Let's refine this: expected_whisper_json_output_path is temp, we need a *final* path argument.
+        // This function should take the *final_destination_path* as an argument.
+        // For now, let's construct it based on is_translation_pass:
+        let media_path = PathBuf::from(wav_media_path_str);
+        let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).unwrap_or("transcript");
+        let transcripts_dir = expected_whisper_json_output_path.parent().unwrap(); // get transcripts dir from temp path
+        if is_translation_pass {
+            transcripts_dir.join(format!("{}.en.json", media_filename_stem))
+        } else {
+            transcripts_dir.join(format!("{}.json", media_filename_stem))
+        }
+    } else {
+        // This is the original pass, use the final_transcript_path_orig from prepare_output_paths
+        // This needs to be passed into execute_transcription_pass
+        // For now, reconstructing it based on the temp path's parent and media_filename_stem.
+        let media_path = PathBuf::from(wav_media_path_str);
+        let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).unwrap_or("transcript");
+        let transcripts_dir = expected_whisper_json_output_path.parent().unwrap();
+        transcripts_dir.join(format!("{}.json", media_filename_stem))
+    };
+
+
+    info!("[Exec Pass][{}] Moving temporary whisper output from {:?} to {:?}", job_id, temp_whisper_json_output_path, final_transcript_destination_path);
+    fs::rename(&temp_whisper_json_output_path, &final_transcript_destination_path)
+        .map_err(|e| CommandError::from(format!("Failed to move whisper output to final destination: {}", e)))?;
+
+    // Now parse from the final destination
+    let mut segments = parse_whisper_json_cmd(&final_transcript_destination_path)?;
 
     if num_speakers > 0 && !is_translation_pass {
-        emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?; // Example progress update
+        emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?;
 
+        // RTTM path is already temporary and short based on prepare_output_paths change.
         let rttm_path = run_diarize_cli_sidecar_cmd(
             app_handle,
             wav_media_path_str,
             num_speakers,
-            expected_rttm_output_path,
+            expected_rttm_output_path, // This is the temp RTTM path
             job_id,
-            cancel_flag.clone(), // Pass the flag
+            cancel_flag.clone(),
         ).await?;
 
         match parse_rttm_file_cmd(&rttm_path) {
@@ -1800,13 +1851,20 @@ pub(crate) async fn execute_transcription_pass(
                 warn!("[Exec Pass][{}] Failed to parse RTTM file: {}. Proceeding without merged diarization.", job_id, e);
             }
         }
+        // Clean up temp RTTM file after use
+        if rttm_path.exists() {
+            if let Err(e_rttm_del) = fs::remove_file(&rttm_path) {
+                warn!("[Exec Pass][{}] Failed to delete temporary RTTM file {:?}: {}", job_id, rttm_path, e_rttm_del);
+            }
+        }
+
     } else {
         info!("[Exec Pass][{}] Skipping diarization.", job_id);
     }
 
     map_speaker_ids_to_names(&mut segments, speaker_names);
 
-    info!("[Exec Pass][{}] Pass complete. Segments: {}", job_id, segments.len());
+    info!("[Exec Pass][{}] Pass complete. Segments: {}. Final transcript at: {:?}", job_id, segments.len(), final_transcript_destination_path);
     Ok(segments)
 }
 
