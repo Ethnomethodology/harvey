@@ -510,34 +510,44 @@
                     const mimeType = getMimeType(mediaPathToLoad);
                     const blob = new Blob([fileData], { type: mimeType });
                     const newUrl = URL.createObjectURL(blob);
-                    currentBlobUrl = newUrl;
+                    // Use convertFileSrc for the video element's src attribute
+                    localMediaUrl = convertFileSrc(mediaPathToLoad);
                     loadedPathFromProp = mediaPathToLoad;
-                    localMediaUrl = newUrl;
+                    // currentBlobUrl is not needed if using convertFileSrc for video src, but we still need fileData for waveform
 
                     let decodedBuffer = null;
                     if (webAudioApiSupported && audioContext && audioContext.state !== 'closed') {
-                         const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
-                         if (audioContext.state === 'suspended') await audioContext.resume();
-                         try {
-                             decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                             localAudioBuffer = decodedBuffer;
-                             console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. localAudioBuffer is now ${localAudioBuffer ? 'set (AudioBuffer object)' : 'null'}. Duration of buffer: ${localAudioBuffer?.duration}s`);
-                             if (!explicitMediaPath) setAudioBuffer(decodedBuffer); // Update global for main player
-                         } catch (decodeError) {
-                             console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
-                             localAudioBuffer = null;
-                             if (!explicitMediaPath) setAudioBuffer(null);
-                         }
+                        // fileData is still needed for decoding the waveform
+                        const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
+                        if (audioContext.state === 'suspended') await audioContext.resume();
+                        try {
+                            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                            localAudioBuffer = decodedBuffer;
+                            console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. localAudioBuffer is now ${localAudioBuffer ? 'set (AudioBuffer object)' : 'null'}. Duration of buffer: ${localAudioBuffer?.duration}s`);
+                            if (!explicitMediaPath) setAudioBuffer(decodedBuffer); // Update global for main player
+                        } catch (decodeError) {
+                            console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
+                            project.update(p => ({ ...p, error: `Media Error: Decode error for ${mediaPathToLoad.split(/[\\/]/).pop()}`, statusMessage: 'Error decoding audio.' }));
+                            localAudioBuffer = null;
+                            if (!explicitMediaPath) setAudioBuffer(null);
+                        }
                     } else {
-                         console.warn('[MediaPlayer] AudioContext unavailable, skipping waveform.');
-                         localAudioBuffer = null;
-                         if (!explicitMediaPath) setAudioBuffer(null);
+                        console.warn('[MediaPlayer] AudioContext unavailable, skipping waveform.');
+                        localAudioBuffer = null;
+                        if (!explicitMediaPath) setAudioBuffer(null);
                     }
                     await tick();
-                    videoElement?.load();
+                    // videoElement?.load() should be called automatically by Svelte when src changes.
+                    // If localMediaUrl is set before the videoElement is bound in the DOM for the first time,
+                    // an explicit load might be needed, or ensure reactive updates handle it.
+                    // With {#key localMediaUrl}, Svelte should re-render the video element, triggering a load.
+                    if (videoElement && videoElement.src !== localMediaUrl) {
+                        videoElement.load(); // Explicitly call load if src isn't updated by reactivity alone
+                    }
 
                 } catch (error) {
                     console.error(`[MediaPlayer] Error processing file ${mediaPathToLoad}:`, error);
+                    // Revoke blob URL if it was created and an error occurred afterwards
                     if (!explicitMediaPath) { // Only update global store error if this is the main player
                         project.update((p) => ({
                             ...p,

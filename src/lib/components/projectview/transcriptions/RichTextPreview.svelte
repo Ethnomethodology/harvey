@@ -11,6 +11,12 @@
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added
 
+    // Virtualization state
+    let scrollTop = 0;
+    let containerHeight = 0;
+    const ESTIMATED_SEGMENT_HEIGHT = 70; // Adjust as needed, or measure dynamically
+    const OVERSCAN_COUNT = 5; // Number of items to render above/below viewport
+
     let showTranscriptDropdown = false;
     let transcriptDropdownButtonRef;
     let transcriptDropdownMenuRef;
@@ -270,6 +276,8 @@
 	let processedSegments = [];
 	let canUndo = false;
 	let canRedo = false;
+
+    // This reactive block prepares the full data, but rendering will be virtualized.
 	$: {
 	  const segs = $transcriptStore.segments || [];
 	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
@@ -296,16 +304,13 @@
 	    }
 	    const isJson = isLexicalJson(contentForParsing);
 	    let plainTextForDisplay = '';
-	    let contentJsonForEditor = defaultEmptyJson;
-	    if (isJson) {
-	      contentJsonForEditor =
-	        typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
-	    } else {
-	      plainTextForDisplay = extractPlainTextForPreview(rawContent);
-	    }
-	    const html = isJson
-	      ? lexicalJsonToHtml(contentForParsing)
-	      : `<div>${plainTextForDisplay}</div>`;
+	    // HTML generation is deferred for virtualized items
+	    // const html = isJson
+	    //   ? lexicalJsonToHtml(contentForParsing)
+	    //   : `<div>${plainTextForDisplay}</div>`;
+	    if (!isJson) {
+            plainTextForDisplay = extractPlainTextForPreview(rawContent);
+        }
 	    return {
 	      segmentIndex: segIdx,
 	      startTime: formatTimestamp(seg.start_time),
@@ -314,19 +319,116 @@
 	      rawEnd: seg.end_time,
 	      speaker: seg.speaker || 'Unknown',
 	      isJsonContent: isJson,
-	      html,
-	      plainText: plainTextForDisplay
+          rawLexicalJson: isJson ? contentForParsing : null, // Store raw JSON for deferred HTML generation
+	      // html, // HTML generation is deferred
+	      plainText: plainTextForDisplay,
+          // Add a placeholder for dynamic height measurement if needed later
+          // measuredHeight: null
 	    };
 	  });
 	}
 
+    // --- Virtualization Calculations ---
+    let visibleStartIndex = 0;
+    let visibleEndIndex = 0;
+    let paddingTop = 0;
+    let paddingBottom = 0;
+    let visibleSegments = [];
+
+    $: {
+        if (previewScrollContainerRef && processedSegments.length > 0) {
+            const totalItems = processedSegments.length;
+            visibleStartIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT);
+            visibleEndIndex = Math.min(totalItems -1 , Math.ceil((scrollTop + containerHeight) / ESTIMATED_SEGMENT_HEIGHT) + OVERSCAN_COUNT);
+
+            paddingTop = visibleStartIndex * ESTIMATED_SEGMENT_HEIGHT;
+            paddingBottom = (totalItems - 1 - visibleEndIndex) * ESTIMATED_SEGMENT_HEIGHT;
+
+            visibleSegments = processedSegments.slice(visibleStartIndex, visibleEndIndex + 1).map(seg => ({
+                ...seg,
+                // Generate HTML only for visible segments
+                html: seg.isJsonContent ? lexicalJsonToHtml(seg.rawLexicalJson) : `<div>${seg.plainText}</div>`
+            }));
+        } else {
+            visibleStartIndex = 0;
+            visibleEndIndex = 0;
+            paddingTop = 0;
+            paddingBottom = 0;
+            visibleSegments = [];
+        }
+    }
+
     // --- Highlight and Scroll Logic ---
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
-    $: if (activeSegmentIndex !== -1 && isMounted) { tick().then(() => { if (!previewScrollContainerRef) return; const currentElement = document.getElementById(`segment-${activeSegmentIndex}`); if (!currentElement) return; const containerRect = previewScrollContainerRef.getBoundingClientRect(); const currentElementRect = currentElement.getBoundingClientRect(); const nextIndex = activeSegmentIndex + 1; const nextElement = document.getElementById(`segment-${nextIndex}`); const SCROLL_AHEAD_MARGIN_PX = 150; const isCurrentElementNearBottom = currentElementRect.bottom > (containerRect.bottom - SCROLL_AHEAD_MARGIN_PX); let elementToScroll = currentElement; if (nextElement && isCurrentElementNearBottom) { elementToScroll = nextElement; } elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
-    let isMounted = false; onMount(() => { isMounted = true; });
+
+    // Adjusted scroll logic for virtualization
+    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef) {
+        tick().then(() => {
+            if (!previewScrollContainerRef) return;
+
+            const targetScrollPosition = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
+            const currentScrollTop = previewScrollContainerRef.scrollTop;
+            const currentContainerHeight = previewScrollContainerRef.clientHeight;
+
+            // Check if the target segment is outside the current view + a small margin
+            const isTargetAboveView = targetScrollPosition < currentScrollTop;
+            const isTargetBelowView = targetScrollPosition > (currentScrollTop + currentContainerHeight - ESTIMATED_SEGMENT_HEIGHT); // -ESTIMATED_SEGMENT_HEIGHT to ensure it's fully visible
+
+            if (isTargetAboveView || isTargetBelowView) {
+                 // Scroll to bring the segment into the middle of the view
+                let scrollToPosition = targetScrollPosition - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
+                scrollToPosition = Math.max(0, Math.min(scrollToPosition, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+
+                previewScrollContainerRef.scrollTo({ top: scrollToPosition, behavior: 'smooth' });
+            }
+            // No need to find element by ID for scrolling, direct calculation is used.
+            // Highlighting is handled by class:segment-active on the rendered item.
+        });
+    }
+
+    let isMounted = false;
+    let scrollRafId = null;
+    let pendingScrollTop = 0;
+
+    onMount(() => {
+        isMounted = true;
+        if (previewScrollContainerRef) {
+            containerHeight = previewScrollContainerRef.clientHeight;
+            pendingScrollTop = previewScrollContainerRef.scrollTop;
+            scrollTop = pendingScrollTop; // Initial sync
+        }
+        // Consider adding a ResizeObserver for previewScrollContainerRef to update containerHeight if it can resize.
+    });
+
+    onDestroy(() => {
+        if (scrollRafId) {
+            cancelAnimationFrame(scrollRafId);
+        }
+        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true); // Already present, ensure it's the one being removed
+    });
+
+    function handleScroll() {
+        if (previewScrollContainerRef) {
+            pendingScrollTop = previewScrollContainerRef.scrollTop;
+            if (!scrollRafId) {
+                scrollRafId = requestAnimationFrame(() => {
+                    scrollTop = pendingScrollTop;
+                    scrollRafId = null;
+                });
+            }
+            // containerHeight might also change if window resizes, consider ResizeObserver for previewScrollContainerRef
+        }
+    }
 
 	/* ---------------- interactions ---------------- */
-	function handleSegmentClick(idx) { if (!previewEditMode) { dispatch('segmentclick', idx); } else { console.log(`[RichTextPreview] Click on segment ${idx} ignored (preview edit mode active).`); } }
+	function handleSegmentClick(idx) {
+        // idx here is the original segmentIndex from processedSegments, not the index in visibleSegments
+        if (!previewEditMode) {
+            dispatch('segmentclick', idx);
+        } else {
+            console.log(`[RichTextPreview] Click on segment ${idx} ignored (preview edit mode active).`);
+        }
+    }
 	function handleToggleEdit() { dispatch('toggleedit'); }
 
 	async function handleAddToDocumentsClick() {
@@ -482,7 +584,7 @@
         </div>
 
         <div class="flex items-center"> <!-- This div now only effectively holds the "More options" menu -->
-            {#if processedSegments.length}
+            {#if processedSegments.length > 0}
               <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
@@ -508,7 +610,7 @@
         </div>
     </h3>
 
-    {#if !processedSegments.length}
+    {#if processedSegments.length === 0}
         <div class="flex-grow flex items-center justify-center text-gray-400">
             {#if previewEditMode}
                 Transcript empty. Click Insert button to add a segment.
@@ -516,14 +618,21 @@
             {:else} No transcript data to preview. {/if}
         </div>
     {:else}
-        <div bind:this={previewScrollContainerRef} class="flex-grow overflow-y-auto space-y-1 pr-1">
-            {#if previewEditMode}
+        <div
+            bind:this={previewScrollContainerRef}
+            class="flex-grow overflow-y-auto space-y-1 pr-1 relative"
+            on:scroll={handleScroll}
+            bind:clientHeight={containerHeight}
+        >
+            <div style="height: {paddingTop}px;"></div>
+            {#if previewEditMode && visibleStartIndex === 0}
               <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
             {/if}
-            {#each processedSegments as seg (seg.segmentIndex)}
+            {#each visibleSegments as seg (seg.segmentIndex)}
                 <div
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
+                    style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
@@ -647,9 +756,10 @@
                     {/if}
                 </div>
                 {#if previewEditMode}
-                  <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
-                {/if}
+                      <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
+                    {/if}
             {/each}
+            <div style="height: {paddingBottom}px;"></div>
         </div>
     {/if}
 </div>

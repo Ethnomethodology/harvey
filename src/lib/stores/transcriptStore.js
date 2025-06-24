@@ -443,136 +443,92 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         // Determine active language and paths based on the loaded 'path'
         // This logic is crucial for deciding which set of segments and speaker names to use.
-        let activeLanguageForRemapping = ts.activeTranscriptLanguage; // Default to current active
-        let rawSegmentsForRemapping = [...newSegments]; // Default to newSegments (which are from 'path')
+            // console.warn('[TranscriptStore] Speaker inference requested. Overwriting current primary names and count.'); // Updated log message
+            let inferredPrimarySpeakers = { count: 0, names: [] }; // Renamed for clarity
+            if (newSegments.length > 0) {
+                const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))];
+                const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown');
+                if (knownSpeakers.length > 0) {
+                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+                    inferredPrimarySpeakers = { count: knownSpeakers.length, names: knownSpeakers };
+                } else {
+                    // If only "Unknown" speakers, or no speakers, count is 0, names empty
+                    inferredPrimarySpeakers = { count: 0, names: [] };
+                }
+            } else {
+                // No segments, so no speakers to infer
+                inferredPrimarySpeakers = { count: 0, names: [] };
+            }
 
-        if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
-            activeLanguageForRemapping = 'original';
-            // ts.originalSegments should be updated with newSegments if this path matches original
-            // This part of the logic seems to be handled by the // START: MODIFIED block below,
-            // which might need to be integrated or reconciled.
-            // For now, assume newSegments are the correct raw segments for the current 'path'.
-        } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
-            activeLanguageForRemapping = 'english';
-            // Similarly, ts.englishSegments should be updated if this path matches English.
+            // Merge with existing translatedNames:
+            updatedSpeakers = {
+                count: inferredPrimarySpeakers.count, // Get count from inference
+                names: inferredPrimarySpeakers.names,   // Get primary names from inference
+                translatedNames: ts.speakers.translatedNames || [] // Preserve existing translatedNames from the store
+            };
         }
+        // updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null }); // Moved later
 
-        // Perform remapping based on the determined active language for the newly loaded transcript
-        let finalSegmentsForDisplay = [...newSegments]; // Start with a copy of the raw newSegments
-
-        if (activeLanguageForRemapping === 'english' && newSegments.length > 0) {
-            console.log('[TranscriptStore setTranscriptData] Remapping for ENGLISH display using translatedNames.');
-            finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, updatedSpeakers.translatedNames);
-        } else if (activeLanguageForRemapping === 'original' && newSegments.length > 0) {
-            console.log('[TranscriptStore setTranscriptData] Remapping for ORIGINAL display using primary names.');
-            finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, updatedSpeakers.names);
-        }
-
-
-        // The main return statement that updates the store:
-        let returnState = {
-            ...ts,
-            currentTranscriptPath: path, // Path of the transcript just loaded
-            segments: finalSegmentsForDisplay, // Segments for UI display, now remapped
-            transcriptDirty: false,
-            isTranscriptLoading: false,
-            speakers: updatedSpeakers, // This contains both .names and .translatedNames
-            player: { ...ts.player, currentSegmentIndex: -1 },
-            transcriptUndoStack: [],
-            transcriptRedoStack: [],
-            // activeTranscriptLanguage might also need an update here based on 'path'
-            // This is handled by the subsequent block, which is a bit confusing.
-            // Let's ensure newActiveTranscriptLanguage is determined correctly before this return.
-        };
-
-        // START: MODIFIED to update original/english specific stores (This block seems to handle storage of raw segments)
-        // This block should correctly determine which backing store (originalSegments or englishSegments) gets `newSegments` (the raw data).
-        // And it should also set the definitive `newActiveTranscriptLanguage`.
+        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage;
+        let finalRawSegmentsToProcess = newSegments; // These are the segments from the 'path' just loaded
         let updatedOriginalSegments = ts.originalSegments;
         let updatedEnglishSegments = ts.englishSegments;
         let updatedOriginalTranscriptPath = ts.originalTranscriptPath;
         let updatedEnglishTranscriptPath = ts.englishTranscriptPath;
-        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage; // Start with current
 
         if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
-            updatedOriginalSegments = newSegments; // Store raw newSegments here
+            updatedOriginalSegments = newSegments;
             updatedOriginalTranscriptPath = path;
-            newActiveTranscriptLanguage = 'original'; // Set active language based on loaded path
+            newActiveTranscriptLanguage = 'original';
+            // finalRawSegmentsToProcess is already newSegments (correct for original)
         } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
-            updatedEnglishSegments = newSegments; // Store raw newSegments here
+            updatedEnglishSegments = newSegments;
             updatedEnglishTranscriptPath = path;
-            newActiveTranscriptLanguage = 'english'; // Set active language based on loaded path
-        }
-
-        // Now, reintegrate the remapping logic based on the *just determined* newActiveTranscriptLanguage
-        // This re-evaluates finalSegmentsForDisplay based on the definitive active language.
-        if (newActiveTranscriptLanguage === 'english' && updatedEnglishSegments.length > 0) {
-            // Ensure we are remapping the correct set of raw segments if they were just updated.
-            finalSegmentsForDisplay = remapSegmentSpeakerNames([...updatedEnglishSegments], updatedSpeakers, updatedSpeakers.translatedNames);
-        } else if (newActiveTranscriptLanguage === 'original' && updatedOriginalSegments.length > 0) {
-            finalSegmentsForDisplay = remapSegmentSpeakerNames([...updatedOriginalSegments], updatedSpeakers, updatedSpeakers.names);
-        } else {
-            // If neither condition met (e.g., both updatedXSegments are empty, or path is null),
-            // finalSegmentsForDisplay remains as initially set (which would be from newSegments, potentially empty).
-            // If path was null, newSegments is empty, so finalSegmentsForDisplay is empty.
-            if (!path) finalSegmentsForDisplay = []; // Explicitly clear if path is null
-        }
-
-        let newTranscribedOriginalLangCode = ts.transcribedOriginalLanguageCode; // Default to existing
-        let newWasTranslated = ts.wasTranslatedToEnglish; // Default to existing
-
-        if (path && (path === updatedOriginalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) { // Logic for identifying original transcript
-            if (ts.languageUsedForJob) { // If it's immediately after a job
-                newTranscribedOriginalLangCode = ts.languageUsedForJob;
-            } else if (!ts.transcribedOriginalLanguageCode && path) {
-                // Only default to 'auto' if no code is currently set and we are loading an original transcript.
-                // This prevents overwriting a good code with 'auto' on subsequent loads.
-                newTranscribedOriginalLangCode = 'auto';
-            }
-            // If ts.languageUsedForJob is null AND ts.transcribedOriginalLanguageCode already has a specific value,
-            // we keep the existing ts.transcribedOriginalLanguageCode (already handled by initialization).
-
-            // If we are explicitly loading/re-loading the original, and there's no English path set at all,
-            // then it means no translation exists for this.
-            if (!ts.englishTranscriptPath) {
-                newWasTranslated = false;
-            }
-            // Otherwise, if an englishTranscriptPath *does* exist, retain the current newWasTranslated status
-            // (which would have been set when the English transcript itself was loaded or by initialization).
-
-        } else if (path && (path === updatedEnglishTranscriptPath || path.endsWith('.en.json'))) { // Logic for identifying English transcript
-            if (newSegments && newSegments.length > 0) {
-                newWasTranslated = true;
-            } else {
-                // If loading an empty English transcript, wasTranslated might be true, but effectively no english content.
-                // Or, it could mean the English path exists but content is empty.
-                // For button logic, englishSegments.length > 0 is also checked, so this is okay.
-                newWasTranslated = true; // Path exists, so translation was attempted/exists.
-            }
+            newActiveTranscriptLanguage = 'english';
+            // finalRawSegmentsToProcess is already newSegments (correct for English)
         } else if (!path) { // Clearing data
-            newTranscribedOriginalLangCode = null;
-            newWasTranslated = false;
+            newActiveTranscriptLanguage = 'original'; // Default when clearing
+            finalRawSegmentsToProcess = [];
+            updatedOriginalSegments = [];
+            updatedEnglishSegments = [];
+            updatedOriginalTranscriptPath = null;
+            updatedEnglishTranscriptPath = null;
         }
+        // If path is provided but doesn't match known patterns, newActiveTranscriptLanguage remains ts.activeTranscriptLanguage
+        // and finalRawSegmentsToProcess remains newSegments. This case might need review if it occurs.
+
+        let finalSegmentsForDisplay = [];
+        if (finalRawSegmentsToProcess.length > 0) {
+            if (newActiveTranscriptLanguage === 'english') {
+                console.log('[TranscriptStore setTranscriptData] Remapping for ENGLISH display using translatedNames.');
+                finalSegmentsForDisplay = remapSegmentSpeakerNames([...finalRawSegmentsToProcess], updatedSpeakers, updatedSpeakers.translatedNames);
+            } else { // 'original' or any other case defaults to primary names
+                console.log('[TranscriptStore setTranscriptData] Remapping for ORIGINAL (or default) display using primary names.');
+                finalSegmentsForDisplay = remapSegmentSpeakerNames([...finalRawSegmentsToProcess], updatedSpeakers, updatedSpeakers.names);
+            }
+        }
+
+        // Only update status message after all decisions are made
+        updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null });
+
+        // transcribedOriginalLanguageCode and wasTranslatedToEnglish logic removed as per previous commit.
 
         return {
-            ...ts, // Spread the initial state of ts for this update cycle
+            ...ts,
             currentTranscriptPath: path,
-            segments: finalSegmentsForDisplay, // Correctly remapped segments for display
-            originalSegments: updatedOriginalSegments, // Raw original segments
-            englishSegments: updatedEnglishSegments,   // Raw English segments
+            segments: finalSegmentsForDisplay,
+            originalSegments: updatedOriginalSegments,
+            englishSegments: updatedEnglishSegments,
             originalTranscriptPath: updatedOriginalTranscriptPath,
             englishTranscriptPath: updatedEnglishTranscriptPath,
-            activeTranscriptLanguage: newActiveTranscriptLanguage, // Definitive active language
+            activeTranscriptLanguage: newActiveTranscriptLanguage,
             transcriptDirty: false,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
             transcriptUndoStack: [],
             transcriptRedoStack: [],
-            // transcribedOriginalLanguageCode: newTranscribedOriginalLangCode, // REMOVED
-            // wasTranslatedToEnglish: newWasTranslated, // REMOVED
         };
-        // END: MODIFIED
     });
 }
 
