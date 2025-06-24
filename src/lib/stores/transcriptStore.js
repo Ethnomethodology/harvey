@@ -20,6 +20,7 @@ export const initialTranscriptState = {
     speakers: { count: 0, names: [], translatedNames: [] },
     player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
     audioBuffer: null,
+    audioBufferPeaks: null, // Added for storing pre-computed peaks
     isTranscriptLoading: false,
     isTranscribing: false,
     transcriptionProgress: { percent: 0, message: '' },
@@ -140,6 +141,7 @@ export function clearTranscriptState() {
                 isTranscriptLoading: false,
                 player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
                 audioBuffer: null,
+                audioBufferPeaks: null,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
                 speakers: { count: 0, names: [], translatedNames: [] },
@@ -231,6 +233,7 @@ export function selectMedia(fileEntry) {
             ...ts,
             selectedMediaFile: newSelectedMedia,
             audioBuffer: null,
+            audioBufferPeaks: null,
             player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
             speakers: speakersToLoad,
             segments: [],
@@ -815,8 +818,8 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
         });
 }
 
-export function setAudioBuffer(buffer) {
-    transcriptStore.update((ts) => ({ ...ts, audioBuffer: buffer }));
+export function setAudioBuffer(buffer, peaks = null) {
+    transcriptStore.update((ts) => ({ ...ts, audioBuffer: buffer, audioBufferPeaks: peaks }));
 }
 
 export function toggleTranscribeModal(show) {

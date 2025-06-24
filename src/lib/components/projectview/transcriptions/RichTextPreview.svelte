@@ -273,59 +273,21 @@
 	function extractPlainTextForPreview(inputString) { if (!inputString || typeof inputString !== 'string') return '[empty]'; if (isLexicalJson(inputString)) { console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string, rendering placeholder."); return '[Error: Invalid data format - Expected plain text or HTML]'; } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) { return doc.body.textContent || '[empty]'; } return doc.body.textContent || inputString || '[empty]'; } catch (e) { console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e); return inputString || '[empty]'; } }
 
 	/* ---------------- build segment data for rendering ---------------- */
-	let processedSegments = [];
+	let allSegmentsData = []; // Stores raw or minimally processed segment data
 	let canUndo = false;
 	let canRedo = false;
 
-    // This reactive block prepares the full data, but rendering will be virtualized.
 	$: {
 	  const segs = $transcriptStore.segments || [];
 	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
 	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
-	  processedSegments = segs.map((seg, segIdx) => {
-	    const rawContent = seg.text;
-	    let contentForParsing = rawContent;
-	    try {
-	      const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-	      if (parsed && !parsed.root && Array.isArray(parsed.children)) {
-	        contentForParsing = JSON.stringify({
-	          root: {
-	            type: 'root',
-	            version: 1,
-	            format: '',
-	            indent: 0,
-	            direction: null,
-	            children: [parsed]
-	          }
-	        });
-	      }
-	    } catch (e) {
-	      // Not valid JSON
-	    }
-	    const isJson = isLexicalJson(contentForParsing);
-	    let plainTextForDisplay = '';
-	    // HTML generation is deferred for virtualized items
-	    // const html = isJson
-	    //   ? lexicalJsonToHtml(contentForParsing)
-	    //   : `<div>${plainTextForDisplay}</div>`;
-	    if (!isJson) {
-            plainTextForDisplay = extractPlainTextForPreview(rawContent);
-        }
-	    return {
+      // Minimal initial mapping, just to have an array of the correct length with original data
+	  allSegmentsData = segs.map((seg, segIdx) => ({
 	      segmentIndex: segIdx,
-	      startTime: formatTimestamp(seg.start_time),
-	      endTime: formatTimestamp(seg.end_time),
-	      rawStart: seg.start_time,
-	      rawEnd: seg.end_time,
-	      speaker: seg.speaker || 'Unknown',
-	      isJsonContent: isJson,
-          rawLexicalJson: isJson ? contentForParsing : null, // Store raw JSON for deferred HTML generation
-	      // html, // HTML generation is deferred
-	      plainText: plainTextForDisplay,
-          // Add a placeholder for dynamic height measurement if needed later
-          // measuredHeight: null
-	    };
-	  });
+          originalSegment: seg
+          // Add any other absolutely essential lightweight data needed by virtualization itself, if any.
+          // For now, originalSegment and segmentIndex should be enough.
+	  }));
 	}
 
     // --- Virtualization Calculations ---
@@ -333,22 +295,49 @@
     let visibleEndIndex = 0;
     let paddingTop = 0;
     let paddingBottom = 0;
-    let visibleSegments = [];
+    let visibleSegments = []; // This will store fully processed segments for rendering
 
     $: {
-        if (previewScrollContainerRef && processedSegments.length > 0) {
-            const totalItems = processedSegments.length;
+        if (previewScrollContainerRef && allSegmentsData.length > 0) {
+            const totalItems = allSegmentsData.length;
             visibleStartIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT);
             visibleEndIndex = Math.min(totalItems -1 , Math.ceil((scrollTop + containerHeight) / ESTIMATED_SEGMENT_HEIGHT) + OVERSCAN_COUNT);
 
             paddingTop = visibleStartIndex * ESTIMATED_SEGMENT_HEIGHT;
             paddingBottom = (totalItems - 1 - visibleEndIndex) * ESTIMATED_SEGMENT_HEIGHT;
 
-            visibleSegments = processedSegments.slice(visibleStartIndex, visibleEndIndex + 1).map(seg => ({
-                ...seg,
-                // Generate HTML only for visible segments
-                html: seg.isJsonContent ? lexicalJsonToHtml(seg.rawLexicalJson) : `<div>${seg.plainText}</div>`
-            }));
+            visibleSegments = allSegmentsData.slice(visibleStartIndex, visibleEndIndex + 1).map(item => {
+                const seg = item.originalSegment;
+                const segIdx = item.segmentIndex;
+                const rawContent = seg.text;
+                let contentForParsing = rawContent;
+                try {
+                  const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+                  if (parsed && !parsed.root && Array.isArray(parsed.children)) {
+                    contentForParsing = JSON.stringify({
+                      root: { type: 'root', version: 1, format: '', indent: 0, direction: null, children: [parsed] }
+                    });
+                  }
+                } catch (e) { /* Not valid JSON */ }
+
+                const isJson = isLexicalJson(contentForParsing);
+                let plainTextForDisplay = '';
+                if (!isJson) {
+                    plainTextForDisplay = extractPlainTextForPreview(rawContent);
+                }
+
+                return {
+                  segmentIndex: segIdx,
+                  startTime: formatTimestamp(seg.start_time),
+                  endTime: formatTimestamp(seg.end_time),
+                  rawStart: seg.start_time,
+                  rawEnd: seg.end_time,
+                  speaker: seg.speaker || 'Unknown',
+                  isJsonContent: isJson,
+                  html: isJson ? lexicalJsonToHtml(contentForParsing) : `<div>${plainTextForDisplay}</div>`,
+                  plainText: plainTextForDisplay
+                };
+            });
         } else {
             visibleStartIndex = 0;
             visibleEndIndex = 0;

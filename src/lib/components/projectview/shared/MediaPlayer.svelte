@@ -7,7 +7,7 @@
 		updatePlayerTime,
 		setPlayerDuration,
 		togglePlayerPlaying,
-		setAudioBuffer
+		setAudioBuffer // This will be used to set both buffer and peaks
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store';
 	import { readFile } from '@tauri-apps/plugin-fs';
@@ -515,25 +515,35 @@
                     localMediaUrl = newUrl; // Restore usage of Blob URL for video src
 
                     let decodedBuffer = null;
+                    let peaksData = null;
+
                     if (webAudioApiSupported && audioContext && audioContext.state !== 'closed') {
-                        // fileData is still needed for decoding the waveform
                         const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
                         if (audioContext.state === 'suspended') await audioContext.resume();
                         try {
                             decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                            localAudioBuffer = decodedBuffer;
-                            console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. localAudioBuffer is now ${localAudioBuffer ? 'set (AudioBuffer object)' : 'null'}. Duration of buffer: ${localAudioBuffer?.duration}s`);
-                            if (!explicitMediaPath) setAudioBuffer(decodedBuffer); // Update global for main player
+                            localAudioBuffer = decodedBuffer; // Set local buffer
+                            console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. Duration: ${decodedBuffer?.duration}s`);
+
+                            // Generate peaks data
+                            if (decodedBuffer) {
+                                peaksData = generateAudioPeaks(decodedBuffer, 512); // Using a block size of 512
+                                console.log(`[MediaPlayer] PEAKS_GENERATED: Peaks data generated for ${mediaPathToLoad}. Length: ${peaksData?.length}`);
+                            }
+
+                            if (!explicitMediaPath) {
+                                setAudioBuffer(decodedBuffer, peaksData); // Update global store with buffer and peaks
+                            }
                         } catch (decodeError) {
                             console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
                             project.update(p => ({ ...p, error: `Media Error: Decode error for ${mediaPathToLoad.split(/[\\/]/).pop()}`, statusMessage: 'Error decoding audio.' }));
                             localAudioBuffer = null;
-                            if (!explicitMediaPath) setAudioBuffer(null);
+                            if (!explicitMediaPath) setAudioBuffer(null, null); // Clear buffer and peaks in store
                         }
                     } else {
                         console.warn('[MediaPlayer] AudioContext unavailable, skipping waveform.');
                         localAudioBuffer = null;
-                        if (!explicitMediaPath) setAudioBuffer(null);
+                        if (!explicitMediaPath) setAudioBuffer(null, null); // Clear buffer and peaks in store
                     }
                     await tick();
                     await tick();
@@ -921,6 +931,42 @@
     $: displayTime = explicitMediaPath ? localCurrentTime : ($transcriptStore.player.currentTime || 0);
     $: displayDuration = explicitMediaPath ? localDuration : ($transcriptStore.player.duration || 0);
     $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying;
+
+    function generateAudioPeaks(audioBuffer, blockSize) {
+        if (!audioBuffer) return null;
+        const numberOfChannels = audioBuffer.numberOfChannels;
+        const length = audioBuffer.length;
+        const peaks = [];
+
+        for (let c = 0; c < numberOfChannels; c++) { // Typically we'll use the first channel or an average
+            const channelData = audioBuffer.getChannelData(c);
+            const numBlocks = Math.ceil(length / blockSize);
+            const channelPeaks = new Float32Array(numBlocks * 2); // min, max per block
+
+            for (let i = 0; i < numBlocks; i++) {
+                const blockStart = i * blockSize;
+                const blockEnd = Math.min(blockStart + blockSize, length);
+                let min = 0.0;
+                let max = 0.0;
+
+                if (blockStart < blockEnd) { // Ensure there's at least one sample
+                    min = channelData[blockStart];
+                    max = channelData[blockStart];
+                    for (let j = blockStart + 1; j < blockEnd; j++) {
+                        const sample = channelData[j];
+                        if (sample < min) min = sample;
+                        if (sample > max) max = sample;
+                    }
+                }
+                channelPeaks[i * 2] = min;
+                channelPeaks[i * 2 + 1] = max;
+            }
+            peaks.push(channelPeaks); // For now, storing each channel's peaks separately
+                                      // InteractiveWaveform typically uses mono (channel 0)
+        }
+        // For simplicity, returning peaks for the first channel if available
+        return peaks.length > 0 ? peaks[0] : null;
+    }
 
 </script>
 
