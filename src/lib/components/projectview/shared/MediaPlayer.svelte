@@ -510,10 +510,9 @@
                     const mimeType = getMimeType(mediaPathToLoad);
                     const blob = new Blob([fileData], { type: mimeType });
                     const newUrl = URL.createObjectURL(blob);
-                    // Use convertFileSrc for the video element's src attribute
-                    localMediaUrl = convertFileSrc(mediaPathToLoad);
+                    currentBlobUrl = newUrl; // Restore usage of Blob URL
                     loadedPathFromProp = mediaPathToLoad;
-                    // currentBlobUrl is not needed if using convertFileSrc for video src, but we still need fileData for waveform
+                    localMediaUrl = newUrl; // Restore usage of Blob URL for video src
 
                     let decodedBuffer = null;
                     if (webAudioApiSupported && audioContext && audioContext.state !== 'closed') {
@@ -537,17 +536,18 @@
                         if (!explicitMediaPath) setAudioBuffer(null);
                     }
                     await tick();
-                    // videoElement?.load() should be called automatically by Svelte when src changes.
-                    // If localMediaUrl is set before the videoElement is bound in the DOM for the first time,
-                    // an explicit load might be needed, or ensure reactive updates handle it.
-                    // With {#key localMediaUrl}, Svelte should re-render the video element, triggering a load.
-                    if (videoElement && videoElement.src !== localMediaUrl) {
-                        videoElement.load(); // Explicitly call load if src isn't updated by reactivity alone
+                    await tick();
+                    // Explicitly calling load after src is set via ObjectURL
+                    if (videoElement) {
+                        videoElement.load();
                     }
 
                 } catch (error) {
                     console.error(`[MediaPlayer] Error processing file ${mediaPathToLoad}:`, error);
-                    // Revoke blob URL if it was created and an error occurred afterwards
+                    if (currentBlobUrl) { // Ensure blob URL is revoked on error if it was created
+                        URL.revokeObjectURL(currentBlobUrl);
+                        currentBlobUrl = null;
+                    }
                     if (!explicitMediaPath) { // Only update global store error if this is the main player
                         project.update((p) => ({
                             ...p,
