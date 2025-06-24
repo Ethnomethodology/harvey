@@ -75,13 +75,7 @@ export function undoTranscriptChange() {
         let newIndex = -1;
         const time = ts.player.currentTime;
         if (previousSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            const idx = previousSegments.findIndex((s, index) => {
-                const isLastSegment = index === previousSegments.length - 1;
-                const startTimeCheck = time >= (s.start_time - 0.001);
-                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
-                return startTimeCheck && endTimeCheck;
-            });
-            newIndex = idx;
+            newIndex = findSegmentIndexWithBinarySearch(previousSegments, time);
         }
         // Update global status message via projectStore for now
         updateProjectStoreState({ statusMessage: 'Undo successful.' });
@@ -109,13 +103,7 @@ export function redoTranscriptChange() {
         let newIndex = -1;
         const time = ts.player.currentTime;
         if (nextSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            const idx = nextSegments.findIndex((s, index) => {
-                const isLastSegment = index === nextSegments.length - 1;
-                const startTimeCheck = time >= (s.start_time - 0.001);
-                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
-                return startTimeCheck && endTimeCheck;
-            });
-            newIndex = idx;
+            newIndex = findSegmentIndexWithBinarySearch(nextSegments, time);
         }
         updateProjectStoreState({ statusMessage: 'Redo successful.' });
         return {
@@ -338,18 +326,65 @@ export function selectMedia(fileEntry) {
     }
 }
 
+
+// Helper function for binary search
+function findSegmentIndexWithBinarySearch(segments, time) {
+    let low = 0;
+    let high = segments.length - 1;
+
+    while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const segment = segments[mid];
+        const isLastSegment = mid === segments.length - 1;
+
+        // Check if time falls within the current segment's range (with tolerance)
+        const startTimeCheck = time >= (segment.start_time - 0.001);
+        const endTimeCheck = isLastSegment ? time <= segment.end_time : time < segment.end_time;
+
+        if (startTimeCheck && endTimeCheck) {
+            return mid; // Time is within this segment
+        } else if (time < segment.start_time) {
+            high = mid - 1; // Time is before this segment
+        } else {
+            low = mid + 1; // Time is after this segment
+        }
+    }
+    return -1; // Time is not within any segment
+}
+
 export function updatePlayerTime(time) {
     transcriptStore.update((ts) => {
         let newIndex = -1;
-        if (ts.segments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            const idx = ts.segments.findIndex((s, index) => {
-                const isLastSegment = index === ts.segments.length - 1;
-                const startTimeCheck = time >= (s.start_time - 0.001);
-                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
-                return startTimeCheck && endTimeCheck;
-            });
-            newIndex = idx;
+        const segments = ts.segments;
+        const numSegments = segments.length;
+        const currentKnownIndex = ts.player.currentSegmentIndex;
+
+        if (numSegments > 0 && ts.player.duration > 0 && time >= 0) {
+            // 1. Check if currentKnownIndex is still valid
+            if (currentKnownIndex !== -1 && currentKnownIndex < numSegments) {
+                const seg = segments[currentKnownIndex];
+                const isLast = currentKnownIndex === numSegments - 1;
+                if (time >= (seg.start_time - 0.001) && (time < seg.end_time || (isLast && time <= seg.end_time))) {
+                    newIndex = currentKnownIndex;
+                }
+            }
+
+            // 2. If not in currentKnownIndex, check next segment (if playing forward and currentKnownIndex was valid)
+            if (newIndex === -1 && time > ts.player.currentTime && currentKnownIndex !== -1 && (currentKnownIndex + 1) < numSegments) {
+                const nextSeg = segments[currentKnownIndex + 1];
+                const isLast = (currentKnownIndex + 1) === numSegments - 1;
+                if (time >= (nextSeg.start_time - 0.001) && (time < nextSeg.end_time || (isLast && time <= nextSeg.end_time))) {
+                    newIndex = currentKnownIndex + 1;
+                }
+            }
+            // Could add a check for previous segment here if time < ts.player.currentTime for seeking backward
+
+            // 3. If still not found (e.g., seek, or jumped multiple segments), fallback to binary search
+            if (newIndex === -1) {
+                newIndex = findSegmentIndexWithBinarySearch(segments, time);
+            }
         }
+
         if (ts.player.currentTime !== time || ts.player.currentSegmentIndex !== newIndex) {
             return { ...ts, player: { ...ts.player, currentTime: time, currentSegmentIndex: newIndex } };
         }

@@ -96,18 +96,25 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length) {
             const needsClear = currentIndex !== -1;
             console.log(`[EditableTranscript] Index ${idx} invalid or segments empty. Clearing UI. Needs clear: ${needsClear}`);
-            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = ''; initialJsonForEditor = null; currentEditorJson = null;
+            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = '';
+            initialJsonForEditor = defaultEmptyJsonString; // Ensure it's set for potential editor reset
+            currentEditorJson = defaultEmptyJsonString;
+            if (lexicalEditorInstance && isEditorVisible) { // Check isEditorVisible to avoid errors if editor is not in DOM
+                 lexicalEditorInstance.resetEditorState(defaultEmptyJsonString);
+            }
             if (needsClear) { await tick(); dispatchEditState(); }
             return;
         }
 
-        // Proceed with loading the valid index
+        const oldIndex = currentIndex;
         currentIndex = idx;
         const seg = segments[idx];
-        targetIndexForLoad = -1; // Reset external load request tracking
+        targetIndexForLoad = -1;
 
         if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
-            console.error(`[EditableTranscript] Invalid segment data at index ${idx}:`, seg); localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error'; initialJsonForEditor = defaultEmptyJsonString;
+            console.error(`[EditableTranscript] Invalid segment data at index ${idx}:`, seg);
+            localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error';
+            initialJsonForEditor = defaultEmptyJsonString;
         } else {
             localStart = formatTimestamp(seg.start_time);
             localEnd = formatTimestamp(seg.end_time);
@@ -125,7 +132,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         isValidLexicalJson = true;
                         const fullState = {
                             root: {
-                                children: [parsed],
+                                children: [parsed], // Wrap the array of nodes in a single root object
                                 direction: parsed.direction || 'ltr',
                                 format: parsed.format || '',
                                 indent: parsed.indent || 0,
@@ -144,10 +151,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 if (!jsonToProcess || jsonToProcess.trim() === '') {
                     jsonToProcess = defaultEmptyJsonString;
                 }
-
                 try {
                     const parsedOriginal = JSON.parse(jsonToProcess);
-                    // Recursive flatten to remove any nested root wrappers
                     function flattenChildren(nodes) {
                       return nodes.flatMap(n =>
                         n.type === 'root' && Array.isArray(n.children)
@@ -155,21 +160,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                           : [n]
                       );
                     }
-
-                    // Build finalChildren by fully flattening any nested roots
                     let finalChildren = flattenChildren(parsedOriginal.root.children || []);
                     if (finalChildren.length === 0) {
-                      finalChildren.push({
-                        type: 'paragraph',
-                        version: 1,
-                        children: [],
-                        direction: null,
-                        format: '',
-                        indent: 0
-                      });
-                      console.log("[EditableTranscript] Sanitization resulted in empty children; added default paragraph.");
+                      finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
                     }
-
                     const sanitizedEditorState = {
                         root: {
                             children: finalChildren,
@@ -181,22 +175,29 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         }
                     };
                     initialJsonForEditor = JSON.stringify(sanitizedEditorState);
-                    // Updated log to reflect actual children being passed (could be the default paragraph)
-                    console.log(`[EditableTranscript] Sanitized initialJSON for index ${idx}. Preview of final children types: ${finalChildren.map(c => c.type).join(', ')}`);
-
                 } catch (e) {
                     console.error(`[EditableTranscript] Error sanitizing segment text for index ${idx}:`, e, ". Using default empty JSON.");
                     initialJsonForEditor = defaultEmptyJsonString;
                 }
-
-            } else { // if not isValidLexicalJson
+            } else {
                 const plainTextContent = extractPlainText(segmentText);
                 initialJsonForEditor = createJsonFromPlainText(plainTextContent);
             }
-            // console.log(`[EditableTranscript] Prepared initial JSON for index ${idx}`); // Original log, can be removed or kept
         }
-        currentEditorJson = initialJsonForEditor;
-        dispatchEditState(); await tick(); // Ensure UI updates before potential editor focus/interaction
+        currentEditorJson = initialJsonForEditor; // Keep track of current JSON for saving
+
+        if (lexicalEditorInstance && (oldIndex !== currentIndex || !lexicalEditorInstance.getEditorState().isEmpty())) {
+            // Only reset if the editor instance exists and index changed OR it's not already empty
+            // This avoids resetting an already correctly loaded editor if renderSegmentUI is called multiple times for the same index.
+            console.log(`[EditableTranscript] Calling resetEditorState for index ${idx}`);
+            lexicalEditorInstance.resetEditorState(initialJsonForEditor);
+        } else if (!lexicalEditorInstance && isEditorVisible) {
+            // Editor will be created by Svelte due to #if block, and will use initialJsonForEditor prop
+            console.log(`[EditableTranscript] Editor instance not yet available for index ${idx}, will mount with initialJson.`);
+        }
+
+        dispatchEditState();
+        await tick();
     }
 
 
@@ -459,7 +460,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             {/if}
                         </div>
                         <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
-                            {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                            {#if currentIndex !== -1 && initialJsonForEditor}
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                            {:else}
+                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
+                            {/if}
                         </div>
                     </div>
                 {:else if $activeLayout === 'Layout2'}
@@ -488,7 +493,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             {/if}
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
-                            {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                            {#if currentIndex !== -1 && initialJsonForEditor}
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                            {:else}
+                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
+                            {/if}
                         </div>
                     </div>
                 {:else if $activeLayout === 'Layout3'}
@@ -517,7 +526,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
-                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                            {#if currentIndex !== -1 && initialJsonForEditor}
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                            {:else}
+                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
+                            {/if}
                         </div>
                     </div>
 
@@ -546,7 +559,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             {/if}
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
-                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                            {#if currentIndex !== -1 && initialJsonForEditor}
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                            {:else}
+                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
+                            {/if}
                         </div>
                     </div>
 
@@ -575,7 +592,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                      <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
-                             {#key currentIndex} {#if currentIndex !== -1 && initialJsonForEditor} <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" /> {:else} <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div> {/if} {/key}
+                             {#if currentIndex !== -1 && initialJsonForEditor}
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                             {:else}
+                                <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
+                             {/if}
                         </div>
                     </div>
                 {/if}

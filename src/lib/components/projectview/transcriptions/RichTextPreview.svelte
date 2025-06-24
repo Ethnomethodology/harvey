@@ -123,14 +123,14 @@
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
 
-    import { RootNode, ParagraphNode, TextNode, LineBreakNode, $getRoot as lexicalGetRoot, $parseSerializedNode as lexicalParseSerializedNode } from 'lexical';
+    import { RootNode, ParagraphNode, TextNode, LineBreakNode, $getRoot as lexicalGetRoot, $parseSerializedNode as lexicalParseSerializedNode } from 'lexical'; // Ensure these are imported
     import { HeadingNode, QuoteNode } from '@lexical/rich-text';
     import { ListNode, ListItemNode } from '@lexical/list';
     import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
     import { LinkNode } from '@lexical/link';
 
     // headless editor for HTML serialization
-    const htmlEditor = createHeadlessEditor({
+    const htmlEditor = createHeadlessEditor({ // Headless editor for HTML serialization (keep as is, created once)
       namespace: 'RichTextHtmlGen',
       theme: {}, // added to prevent config.theme error
       nodes: [
@@ -151,7 +151,7 @@
     });
 
     // helper to detect Lexical JSON (accepts string or object)
-    function isLexicalJson(value) {
+    function isLexicalJson(value) { // helper to detect Lexical JSON (accepts string or object)
       if (value === null || value === undefined) return false;
 
       let data;
@@ -170,82 +170,80 @@
       return !!(data && data.root && data.root.type === 'root');
     }
 
-    // helper to convert Lexical JSON (string | object) to HTML
-    function lexicalJsonToHtml(json) {
-      const jsonStr = typeof json === 'string' ? json : JSON.stringify(json);
-      let html = '';
+    // Memoized HTML generation
+    let segmentHtmlCache = new Map();
 
-      try {
-        const parsedJson = JSON.parse(jsonStr); // Parse the JSON string into an object
-
-        if (parsedJson && parsedJson.root && Array.isArray(parsedJson.root.children)) {
-          const serializedNodes = parsedJson.root.children;
-
-          htmlEditor.update(() => {
-            const editorRoot = lexicalGetRoot(); // Get the root of the htmlEditor
-            editorRoot.clear();
-            
-            const nodesToAppend = [];
-            const validSerializedNodes = serializedNodes.filter(Boolean);
-
-            for (const serializedNodeObj of validSerializedNodes) {
-              // The console.log for diagnostics can be kept or removed. For this fix, let's keep it for now.
-              console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj));
-
-              if (serializedNodeObj.type === 'root' && serializedNodeObj.children && Array.isArray(serializedNodeObj.children)) {
-                // If the serializedNodeObj is a RootNode itself, process its children
-                for (const childOfNestedRoot of serializedNodeObj.children) {
-                  if (childOfNestedRoot) { // Ensure child is not null/undefined
-                    try {
-                        nodesToAppend.push(lexicalParseSerializedNode(childOfNestedRoot));
-                    } catch (parseErr) {
-                        console.error('[RichTextPreview] Error parsing childOfNestedRoot:', childOfNestedRoot, parseErr);
-                        // Optionally add a placeholder or skip if a child fails
-                    }
-                  }
-                }
-              } else {
-                // Otherwise, parse the serializedNodeObj directly (assuming it's a Paragraph, List, etc.)
-                try {
-                    nodesToAppend.push(lexicalParseSerializedNode(serializedNodeObj));
-                } catch (parseErr) {
-                    console.error('[RichTextPreview] Error parsing serializedNodeObj:', serializedNodeObj, parseErr);
-                    // Optionally add a placeholder or skip
-                }
-              }
-            }
-
-            // Ensure nodesToAppend is not empty for a valid Lexical state before appending
-            if (nodesToAppend.length === 0) {
-                try {
-                    const defaultParagraphNode = lexicalParseSerializedNode({ 
-                        type: 'paragraph', 
-                        version: 1, 
-                        children: [], 
-                        direction: null, 
-                        format: '', 
-                        indent: 0 
-                    });
-                    nodesToAppend.push(defaultParagraphNode);
-                    console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.');
-                } catch (defaultNodeErr) {
-                    console.error('[RichTextPreview] Error creating default paragraph node:', defaultNodeErr);
-                }
-            }
-
-            editorRoot.append(...nodesToAppend);
-            html = generateHtmlFromNodes(htmlEditor, null);
-          }, { discrete: true });
-        } else {
-          console.warn('[RichTextPreview] lexicalJsonToHtml: parsedJson or parsedJson.root.children is invalid. Rendering empty.', parsedJson);
-          html = '';
+    function getSegmentHtml(segmentText, segmentKey) {
+        if (segmentHtmlCache.has(segmentKey) && segmentHtmlCache.get(segmentKey).originalText === segmentText) {
+            return segmentHtmlCache.get(segmentKey).html;
         }
-      } catch (e) {
-        console.error('[RichTextPreview] lexicalJsonToHtml: Error processing JSON string. jsonStr:', jsonStr.substring(0, 500), 'Error:', e);
-        html = '<!-- error rendering segment content -->';
-      }
-      return html;
+
+        let contentForParsing = segmentText;
+        // ... (rest of the logic from existing lexicalJsonToHtml to prepare contentForParsing if it's not full JSON) ...
+        // This part needs to be extracted from the old processedSegments block:
+        try {
+          const parsed = typeof segmentText === 'string' ? JSON.parse(segmentText) : segmentText;
+          if (parsed && !parsed.root && Array.isArray(parsed.children)) {
+            contentForParsing = JSON.stringify({
+              root: { type: 'root', version: 1, format: '', indent: 0, direction: null, children: [parsed] }
+            });
+          }
+        } catch (e) { /* Not valid JSON, will be handled by isLexicalJson below */ }
+
+        const isJson = isLexicalJson(contentForParsing);
+        let htmlOutput;
+
+        if (isJson) {
+            const jsonStr = typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
+            try {
+                const parsedJson = JSON.parse(jsonStr);
+                if (parsedJson && parsedJson.root && Array.isArray(parsedJson.root.children)) {
+                    htmlEditor.update(() => {
+                        const editorRoot = lexicalGetRoot();
+                        editorRoot.clear();
+                        const nodesToAppend = [];
+                        const validSerializedNodes = parsedJson.root.children.filter(Boolean);
+
+                        for (const serializedNodeObj of validSerializedNodes) {
+                            // ... (same robust parsing logic as before)
+                            if (serializedNodeObj.type === 'root' && serializedNodeObj.children && Array.isArray(serializedNodeObj.children)) {
+                                for (const childOfNestedRoot of serializedNodeObj.children) {
+                                    if (childOfNestedRoot) {
+                                        try { nodesToAppend.push(lexicalParseSerializedNode(childOfNestedRoot)); }
+                                        catch (parseErr) { console.error('[RTP getSegmentHtml] Error parsing childOfNestedRoot:', childOfNestedRoot, parseErr); }
+                                    }
+                                }
+                            } else {
+                                try { nodesToAppend.push(lexicalParseSerializedNode(serializedNodeObj)); }
+                                catch (parseErr) { console.error('[RTP getSegmentHtml] Error parsing serializedNodeObj:', serializedNodeObj, parseErr); }
+                            }
+                        }
+                        if (nodesToAppend.length === 0) {
+                            try {
+                                const defaultP = lexicalParseSerializedNode({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
+                                nodesToAppend.push(defaultP);
+                            } catch (defErr) { console.error('[RTP getSegmentHtml] Error creating default paragraph:', defErr); }
+                        }
+                        editorRoot.append(...nodesToAppend);
+                        htmlOutput = generateHtmlFromNodes(htmlEditor, null);
+                    }, { discrete: true });
+                } else {
+                    htmlOutput = '<!-- error: invalid root structure -->';
+                }
+            } catch (e) {
+                console.error('[RTP getSegmentHtml] Error processing JSON string:', e, jsonStr.substring(0,100));
+                htmlOutput = '<!-- error rendering segment content -->';
+            }
+        } else {
+            // If not JSON, treat as plain text or simple HTML string
+            const plainText = extractPlainTextForPreview(segmentText); // Ensure extractPlainTextForPreview is robust
+            htmlOutput = `<div>${plainText}</div>`;
+        }
+
+        segmentHtmlCache.set(segmentKey, { originalText: segmentText, html: htmlOutput });
+        return htmlOutput;
     }
+
 
 	export let previewEditMode = false;
 	const dispatch = createEventDispatcher();
@@ -264,65 +262,117 @@
 		return `${min}:${sec}.${ms}`;
 	}
 
-	function extractPlainTextForPreview(inputString) { if (!inputString || typeof inputString !== 'string') return '[empty]'; if (isLexicalJson(inputString)) { console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string, rendering placeholder."); return '[Error: Invalid data format - Expected plain text or HTML]'; } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) { return doc.body.textContent || '[empty]'; } return doc.body.textContent || inputString || '[empty]'; } catch (e) { console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e); return inputString || '[empty]'; } }
+	function extractPlainTextForPreview(inputString) { // Ensure `extractPlainTextForPreview` is robust for non-HTML, non-JSON text.
+    if (!inputString || typeof inputString !== 'string') return '[empty]';
+    // Check if it's likely JSON by trying to parse it
+    try {
+        const parsed = JSON.parse(inputString);
+        if (typeof parsed === 'object' && parsed !== null) {
+             // It's JSON, which shouldn't be handled by this plaintext extractor directly for preview
+             // The main logic path should use lexicalJsonToHtml for JSON.
+             // This function is a fallback if content is NOT JSON.
+            console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string. This indicates a logic path error. Rendering placeholder.");
+            return '[Error: Invalid data for plaintext preview]';
+        }
+    } catch (e) {
+        // Not JSON, proceed to treat as potential HTML or plain text
+    }
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(inputString, 'text/html');
+        // Check if the parsing resulted in just a text node wrapped by body (i.e., it was plain text)
+        if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) {
+            return doc.body.textContent || '[empty]'; // Return the plain text
+        }
+        // Otherwise, it might be actual HTML, so extract text content from it
+        return doc.body.textContent || inputString || '[empty]';
+    } catch (e) {
+        console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e);
+        return inputString || '[empty]'; // Fallback to original string if parsing fails
+    }
+}
 
 	/* ---------------- build segment data for rendering ---------------- */
-	let processedSegments = [];
-	let canUndo = false;
-	let canRedo = false;
-	$: {
-	  const segs = $transcriptStore.segments || [];
-	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
-	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
-	  processedSegments = segs.map((seg, segIdx) => {
-	    const rawContent = seg.text;
-	    let contentForParsing = rawContent;
-	    try {
-	      const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-	      if (parsed && !parsed.root && Array.isArray(parsed.children)) {
-	        contentForParsing = JSON.stringify({
-	          root: {
-	            type: 'root',
-	            version: 1,
-	            format: '',
-	            indent: 0,
-	            direction: null,
-	            children: [parsed]
-	          }
-	        });
-	      }
-	    } catch (e) {
-	      // Not valid JSON
-	    }
-	    const isJson = isLexicalJson(contentForParsing);
-	    let plainTextForDisplay = '';
-	    let contentJsonForEditor = defaultEmptyJson;
-	    if (isJson) {
-	      contentJsonForEditor =
-	        typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
-	    } else {
-	      plainTextForDisplay = extractPlainTextForPreview(rawContent);
-	    }
-	    const html = isJson
-	      ? lexicalJsonToHtml(contentForParsing)
-	      : `<div>${plainTextForDisplay}</div>`;
-	    return {
-	      segmentIndex: segIdx,
-	      startTime: formatTimestamp(seg.start_time),
-	      endTime: formatTimestamp(seg.end_time),
-	      rawStart: seg.start_time,
-	      rawEnd: seg.end_time,
-	      speaker: seg.speaker || 'Unknown',
-	      isJsonContent: isJson,
-	      html,
-	      plainText: plainTextForDisplay
-	    };
-	  });
-	}
+	// This will be our main display array
+let displaySegments = [];
+
+// React to changes in the core segment data from the store
+$: {
+    const storeSegments = $transcriptStore.segments || [];
+    const newDisplaySegments = storeSegments.map((seg, segIdx) => {
+        // Use a unique key for caching, segmentIndex might not be stable if segments are deleted/inserted
+        // A combination of path and index, or a unique ID if segments have one, would be better.
+        // For now, using seg.start_time + seg.text as a heuristic key for cache.
+        // A proper unique ID per segment would be ideal.
+        const segmentCacheKey = `${$transcriptStore.currentTranscriptPath}_${segIdx}_${seg.start_time}_${seg.text}`;
+
+        return {
+            id: `segment-${segIdx}`, // For DOM element ID
+            segmentIndex: segIdx,
+            startTime: formatTimestamp(seg.start_time),
+            endTime: formatTimestamp(seg.end_time),
+            rawStart: seg.start_time,
+            rawEnd: seg.end_time,
+            speaker: seg.speaker || 'Unknown',
+            html: getSegmentHtml(seg.text, segmentCacheKey) // Get HTML from cache/generator
+        };
+    });
+
+    // Only update if there's an actual structural or content change reflected in HTML.
+    // This simple check might need refinement if HTML can be subtly different for same input.
+    if (JSON.stringify(displaySegments.map(s=>s.html)) !== JSON.stringify(newDisplaySegments.map(s=>s.html))) {
+        displaySegments = newDisplaySegments;
+    } else if (displaySegments.length !== newDisplaySegments.length) {
+        displaySegments = newDisplaySegments;
+    }
+    // Also update if speaker or time changed, even if HTML (text content) didn't
+    else if (JSON.stringify(displaySegments.map(s => ({s:s.speaker, st:s.startTime, et:s.endTime}))) !== JSON.stringify(newDisplaySegments.map(s => ({s:s.speaker, st:s.startTime, et:s.endTime})))) {
+         displaySegments = newDisplaySegments;
+    }
+
+
+    // Clear cache if currentTranscriptPath changes, as keys depend on it
+    if (previousTranscriptPath !== $transcriptStore.currentTranscriptPath) {
+        segmentHtmlCache.clear();
+        previousTranscriptPath = $transcriptStore.currentTranscriptPath;
+        // Force re-render of all segments for the new transcript
+        displaySegments = newDisplaySegments; // This was missing, ensure it updates on path change
+    }
+}
+let previousTranscriptPath = $transcriptStore.currentTranscriptPath;
+
 
     // --- Highlight and Scroll Logic ---
-    let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
-    $: if (activeSegmentIndex !== -1 && isMounted) { tick().then(() => { if (!previewScrollContainerRef) return; const currentElement = document.getElementById(`segment-${activeSegmentIndex}`); if (!currentElement) return; const containerRect = previewScrollContainerRef.getBoundingClientRect(); const currentElementRect = currentElement.getBoundingClientRect(); const nextIndex = activeSegmentIndex + 1; const nextElement = document.getElementById(`segment-${nextIndex}`); const SCROLL_AHEAD_MARGIN_PX = 150; const isCurrentElementNearBottom = currentElementRect.bottom > (containerRect.bottom - SCROLL_AHEAD_MARGIN_PX); let elementToScroll = currentElement; if (nextElement && isCurrentElementNearBottom) { elementToScroll = nextElement; } elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
+    let previewScrollContainerRef;
+// Active segment index for highlighting (no HTML regeneration needed here)
+$: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
+
+// Scroll logic (keep as is, ensure it uses `activeSegmentIndex`)
+$: if (activeSegmentIndex !== -1 && isMounted) { // Scroll logic (keep as is, ensure it uses `activeSegmentIndex`)
+    tick().then(() => {
+        // ... existing scroll logic using `activeSegmentIndex` and `displaySegments[activeSegmentIndex].id` ...
+        // Make sure the element ID lookup uses `displaySegments[activeSegmentIndex].id`
+        if (!previewScrollContainerRef) return;
+        const currentElement = document.getElementById(displaySegments[activeSegmentIndex]?.id);
+        if (!currentElement) return;
+
+        const containerRect = previewScrollContainerRef.getBoundingClientRect();
+        const currentElementRect = currentElement.getBoundingClientRect();
+
+        const nextIndex = activeSegmentIndex + 1;
+        const nextElement = document.getElementById(displaySegments[nextIndex]?.id);
+
+        const SCROLL_AHEAD_MARGIN_PX = 150;
+        const isCurrentElementNearBottom = currentElementRect.bottom > (containerRect.bottom - SCROLL_AHEAD_MARGIN_PX);
+
+        let elementToScroll = currentElement;
+        if (nextElement && isCurrentElementNearBottom) {
+            elementToScroll = nextElement;
+        }
+        elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+}
     let isMounted = false; onMount(() => { isMounted = true; });
 
 	/* ---------------- interactions ---------------- */
@@ -360,7 +410,18 @@
 		}
 	}
 
-    async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = processedSegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
+    async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = displaySegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
+    // Remove the old `processedSegments` and `canUndo`/`canRedo` reactive block.
+// Undo/redo state is still needed for button disabling if those buttons are in this component.
+// The `canUndo` and `canRedo` were for the main edit mode, not this preview.
+// If there are undo/redo buttons specific to this preview (unlikely), they need their own logic.
+// For now, removing them from this component's direct state.
+let canUndo = false;
+let canRedo = false;
+$: {
+  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
+  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
+}
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
