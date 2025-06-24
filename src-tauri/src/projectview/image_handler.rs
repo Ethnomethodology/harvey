@@ -1,12 +1,11 @@
 // src-tauri/src/projectview/image_handler.rs
 use super::shared_types::*;
-use super::shared_utils::{save_project_xml, ensure_base_asset_dirs};
+use super::shared_utils::{save_project_xml, ensure_base_asset_dirs, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH};
 use crate::welcome::config::{CommandError, get_config_dir};
-// get_image_asset_metadata_path removed
-use crate::projectview::db_handler; // Added
-    use chrono::Utc; // Removed Local
+use crate::projectview::db_handler;
+    use chrono::Utc;
 use serde_json;
-use log::{info, warn, error}; // debug removed
+use log::{info, warn, error};
 use std::{
     fs,
         path::{Path, PathBuf},
@@ -263,51 +262,61 @@ pub async fn import_image_file(
     // Ensure base asset directories (including Images) exist
     ensure_base_asset_dirs(project_base_dir)?;
 
-    let source_filename_stem = source_path.file_stem()
+    let original_source_filename_with_ext = source_path.file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| CommandError::from("Could not get image filename stem"))?;
+        .ok_or_else(|| CommandError::from("Could not get original image filename with extension"))?
+        .to_string();
 
-    let source_extension = source_path.extension()
+    let original_source_extension = source_path.extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
     // Check if the extension is supported
-    if !SUPPORTED_IMAGE_EXTENSIONS.contains(&source_extension.as_str()) {
-        return Err(CommandError::from(format!("Unsupported image file type: .{}", source_extension)));
+    if !SUPPORTED_IMAGE_EXTENSIONS.contains(&original_source_extension.as_str()) {
+        return Err(CommandError::from(format!("Unsupported image file type: .{}", original_source_extension)));
     }
 
-    // Create folder under Images named after file stem
+    // Truncate the original filename's stem
+    let truncated_image_filename_with_ext = truncate_filename_stem(&original_source_filename_with_ext, MAX_FILENAME_STEM_LENGTH);
+    info!("[import_image_file] Original filename: '{}', Truncated filename for project: '{}'", original_source_filename_with_ext, truncated_image_filename_with_ext);
+
+    let image_file_stem_truncated = Path::new(&truncated_image_filename_with_ext).file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| CommandError::from(format!("Could not get stem from truncated image filename: {}", truncated_image_filename_with_ext)))?;
+
+    // Create folder under Images named after the truncated file stem
     let images_base = project_base_dir.join(HARVEY_FILES_DIR).join(IMAGES_DIR);
-    let folder_path = images_base.join(source_filename_stem);
+    let folder_path = images_base.join(image_file_stem_truncated); // Folder uses truncated stem
     if !folder_path.exists() {
         fs::create_dir_all(&folder_path)
             .map_err(|e| CommandError::from(format!("Failed to create image folder {}: {}", folder_path.display(), e)))?;
     }
-    // Choose unique filename inside folder
+
+    // Determine unique filename *inside* the (truncated stem) folder
     let mut counter = 0;
     let final_image_path = loop {
-        let file_name = if counter == 0 {
-            format!("{}.{}", source_filename_stem, source_extension)
+        let file_name_to_try = if counter == 0 {
+            truncated_image_filename_with_ext.clone()
         } else {
-            format!("{}_{}.{}", source_filename_stem, counter, source_extension)
+            // If collision, append suffix to the *truncated stem* part, then add original extension
+            format!("{}_{}.{}", image_file_stem_truncated, counter, original_source_extension)
         };
-        let candidate = folder_path.join(&file_name);
+        let candidate = folder_path.join(&file_name_to_try);
         if !candidate.exists() {
             break candidate;
         }
         counter += 1;
-        if counter > 1000 {
+        if counter > 1000 { // Safety break
             return Err(CommandError::from(format!(
-                "Could not find unique filename for image base '{}' after {} attempts.",
-                source_filename_stem, counter
+                "Could not find unique filename for image base '{}' (derived from truncated name) after {} attempts.",
+                image_file_stem_truncated, counter
             )));
         }
     };
-    let final_image_name = final_image_path.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_string();
+
+    // final_image_name is the name of the file as it will be saved (e.g., truncated_stem.png or truncated_stem_1.png)
+    let final_image_name = final_image_path.file_name().unwrap().to_string_lossy().into_owned();
 
     // Copy the file
     info!("[import_image_file] Copying image from '{}' to '{}'", source_path.display(), final_image_path.display());
@@ -319,13 +328,13 @@ pub async fn import_image_file(
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
 
     // Calculate the relative path for XML storage
-    let relative_path_for_xml = final_image_path
+    let relative_path_for_xml = final_image_path // Path uses (potentially suffixed) truncated name
         .strip_prefix(project_base_dir)?
         .to_string_lossy()
         .replace("\\", "/");
 
     let new_image_entry = ImageEntryXml {
-        name: final_image_name.clone(),
+        name: final_image_name.clone(), // XML name is the final (potentially suffixed) truncated filename
         relative_path: relative_path_for_xml.clone(),
     };
 
@@ -346,11 +355,11 @@ pub async fn import_image_file(
 
     // Save metadata to DB
     let file_metadata_for_db = FileMetadata {
-        file_name: final_image_name.clone(),
-        file_path: final_image_path.to_string_lossy().into_owned(), // Absolute path
+        file_name: final_image_name.clone(), // Use final (potentially suffixed) truncated filename
+        file_path: final_image_path.to_string_lossy().into_owned(), // Absolute path uses final name
         last_modified: Utc::now().to_rfc3339(),
-        title: String::new(),
-        description: String::new(),
+        title: String::new(), // Init empty
+        description: String::new(), // Init empty
         summary: String::new(),
         duration_seconds: None,
         width: None, // image_handler.rs currently does not extract these on import
@@ -380,11 +389,12 @@ pub async fn import_image_file(
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db, // Pass project_id
         &file_metadata_for_db,
-        &relative_path_for_xml,
-        "image",
-        None,
+        &relative_path_for_xml, // DB key uses final (potentially suffixed) truncated name based path
+        "image", // asset_type
+        None, // custom_fields_json
     ) {
         error!("[import_image_file] Failed to save image metadata to DB for {} (project_id: {}): {}", relative_path_for_xml, project_id_for_db, e);
+        // Attempt to clean up copied file if DB save fails?
         return Err(CommandError::from(format!("Failed to save image metadata to DB: {}", e)));
     }
     info!("[import_image_file] Saved image metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
@@ -392,7 +402,7 @@ pub async fn import_image_file(
     // Annotation JSO file creation is removed, DB will handle annotations.
 
     // Return the absolute path of the newly imported image
-    Ok(final_image_path.to_string_lossy().to_string())
+    Ok(final_image_path.to_string_lossy().to_string()) // Return absolute path to the imported (potentially renamed) file
 }
 
 // --- NEW ANNOTATION COMMANDS ---

@@ -167,3 +167,122 @@ pub fn ensure_base_asset_dirs(project_base_dir: &Path) -> Result<(), CommandErro
     debug!("Base asset directories ensured within {}", base_path.display());
     Ok(())
 }
+
+pub const MAX_FILENAME_STEM_LENGTH: usize = 60;
+
+pub fn truncate_filename_stem(original_filename: &str, max_stem_len: usize) -> String {
+    let path = Path::new(original_filename);
+
+    // Determine the "stem" part as a String.
+    let stem_as_string: String = match path.file_stem() {
+        Some(s) => s.to_string_lossy().into_owned(), // Convert &OsStr to String
+        None => {
+            // Handle cases where file_stem() is None.
+            // e.g., ".bashrc" (stem should be "bashrc"), "filename" (stem is "filename")
+            if original_filename.starts_with('.') && original_filename.len() > 1 {
+                let part_after_dot = &original_filename[1..];
+                if !part_after_dot.contains('.') { // Simple hidden file like ".bashrc"
+                    part_after_dot.to_string()
+                } else { // Complex hidden file like ".config.old" -> Path::file_stem would be ".config"
+                         // This 'None' case might be for something like "..." or if original_filename is just "."
+                         // If it has other dots, rfind should find them.
+                    if let Some(idx) = original_filename.rfind('.') {
+                        if idx > 0 { original_filename[..idx].to_string() }
+                        else { original_filename.to_string() } // Should not happen if starts_with('.') and len > 1
+                    } else {
+                        original_filename.to_string() // No dots at all (e.g. if filename was just ".")
+                    }
+                }
+            } else if !original_filename.contains('.') { // No dots, e.g., "filename"
+                original_filename.to_string()
+            } else {
+                // Has dots, but file_stem is None (e.g. "filename.endingwithdot.")
+                // Take everything before the last dot if it's not leading.
+                if let Some(idx) = original_filename.rfind('.') {
+                    if idx > 0 { original_filename[..idx].to_string() }
+                    else { original_filename.to_string()} // Only a leading dot, or no valid stem
+                } else {
+                    original_filename.to_string() // Should be caught by !original_filename.contains('.')
+                }
+            }
+        }
+    };
+
+    // Determine the "full extension" part.
+    let full_extension: String = if stem_as_string.len() < original_filename.len() &&
+                                   original_filename.starts_with(&stem_as_string) &&
+                                   original_filename.chars().nth(stem_as_string.len()) == Some('.')
+    {
+        // Standard case: "stem.ext" or "stem.tar.gz"
+        original_filename[stem_as_string.len()..].to_string()
+    } else if original_filename.starts_with('.') &&
+              original_filename.len() > 1 &&
+              !stem_as_string.starts_with('.') && // stem_as_string is "bashrc"
+              original_filename == format!(".{}", stem_as_string) // original is ".bashrc"
+    {
+        // Hidden file like ".bashrc", extension is empty, prefix handled later.
+        String::new()
+    } else if stem_as_string == original_filename {
+        // No extension, e.g. "filename"
+        String::new()
+    } else {
+        // Fallback: if Path::extension() gives something, use it.
+        // This might catch some edge cases or be redundant if above logic is perfect.
+        path.extension().and_then(|e| e.to_str()).map_or(String::new(), |e_str| format!(".{}", e_str))
+    };
+
+    // Handle leading dot for hidden files separately.
+    let prefix = if original_filename.starts_with('.') &&
+                   original_filename.len() > 1 && // Not just "."
+                   !stem_as_string.starts_with('.') && // Stem itself isn't like ".config"
+                   original_filename == format!(".{}{}", stem_as_string, full_extension) // Reconstructs to original
+    {
+        "."
+    } else {
+        ""
+    };
+
+    let final_stem_to_use = if original_filename.starts_with('.') && stem_as_string == &original_filename[1..] {
+        // If original is ".bashrc", stem_as_string is "bashrc".
+        // We truncate "bashrc".
+        stem_as_string
+    } else {
+        // If original is "foo.bar.txt", stem_as_string is "foo.bar".
+        // We truncate "foo.bar".
+        stem_as_string
+    };
+
+
+    let truncated_stem_part = if final_stem_to_use.len() > max_stem_len {
+        final_stem_to_use.chars().take(max_stem_len).collect::<String>()
+    } else {
+        final_stem_to_use
+    };
+
+    format!("{}{}{}", prefix, truncated_stem_part, full_extension)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_filename_stem() {
+        assert_eq!(truncate_filename_stem("short.txt", 10), "short.txt");
+        assert_eq!(truncate_filename_stem("verylongfilenameexample.txt", 10), "verylongfi.txt");
+        assert_eq!(truncate_filename_stem("noextension", 5), "noext");
+        assert_eq!(truncate_filename_stem("short", 10), "short");
+        assert_eq!(truncate_filename_stem(".hiddenfile", 8), ".hiddenfi");
+        assert_eq!(truncate_filename_stem("archive.tar.gz", 10), "archive.ta.gz");
+        assert_eq!(truncate_filename_stem("archive.tar.gz", 5), "archi.gz");
+        assert_eq!(truncate_filename_stem("file.with.many.dots.extension", 15), "file.with.many.extension");
+        assert_eq!(truncate_filename_stem("name_without_extension_but_very_long", 10), "name_witho");
+        assert_eq!(truncate_filename_stem("another.long.archive.name.tar.zip", 15), "another.lo.zip");
+        assert_eq!(truncate_filename_stem("single", 3), "sin");
+        assert_eq!(truncate_filename_stem(".bashrc", 5), ".bashr");
+        assert_eq!(truncate_filename_stem("config.json.backup", 10), "config.jso.backup");
+        assert_eq!(truncate_filename_stem("exactlength.info", 11), "exactlength.info");
+        assert_eq!(truncate_filename_stem("exactlengthplusone.info", 11), "exactlength.info");
+    }
+}

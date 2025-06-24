@@ -973,25 +973,41 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         return Err(CommandError::from(format!("Project base directory not found: {}", project_base_dir.display())));
     }
 
-    let source_filename_os = source_path.file_name().ok_or_else(|| CommandError::from("Could not get filename"))?;
-    let source_filename = source_filename_os.to_string_lossy().to_string();
+    let original_source_filename_os = source_path.file_name().ok_or_else(|| CommandError::from("Could not get filename"))?;
+    let original_source_filename = original_source_filename_os.to_string_lossy().to_string();
 
-    let media_stem_identifier = source_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Invalid source filename stem."))?;
+    // Truncate the source filename's stem for use as the actual filename in the project
+    let truncated_source_filename = truncate_filename_stem(&original_source_filename, MAX_FILENAME_STEM_LENGTH);
+    info!("[Backend Import] Original source filename: '{}', Truncated for use in project: '{}'", original_source_filename, truncated_source_filename);
+
+    // Generate media_stem_identifier from the original source filename's stem, then truncate it.
+    let original_media_stem = source_path.file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| CommandError::from("Invalid source filename stem."))?;
+    let media_stem_identifier = Path::new(&truncate_filename_stem(&format!("{}.tmp", original_media_stem), MAX_FILENAME_STEM_LENGTH)) // Add dummy ext for truncate_filename_stem
+        .file_stem().unwrap_or_default().to_string_lossy().into_owned(); // Then get stem back
+    info!("[Backend Import] Original media stem: '{}', Truncated media_stem_identifier: '{}'", original_media_stem, media_stem_identifier);
+
 
     let media_asset_dir = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR);
-    let media_stem_base_path = media_asset_dir.join(media_stem_identifier);
+    let media_stem_base_path = media_asset_dir.join(&media_stem_identifier); // Use truncated stem for directory
     let media_subfolder_path = media_stem_base_path.join(MEDIA_SUBDIR);
     let transcripts_subfolder_path = media_stem_base_path.join(TRANSCRIPTS_SUBDIR);
-    let destination_media_path = media_subfolder_path.join(&source_filename);
+    // Use truncated_source_filename for the actual file name
+    let destination_media_path = media_subfolder_path.join(&truncated_source_filename);
 
     let xml_content_check = fs::read_to_string(&project_xml_path)?;
     let project_data_check: ProjectXml = quick_xml::de::from_str(&xml_content_check)?;
+    // Check collision with the truncated media_stem_identifier
     if project_data_check.media_files.files.iter().any(|f| f.name == media_stem_identifier) {
-        return Err(CommandError::from(format!("Media identifier '{}' already exists.", media_stem_identifier)));
+        return Err(CommandError::from(format!("A media asset derived from this name (stem: '{}') already exists. Please rename the source file or the existing asset.", media_stem_identifier)));
     }
 
     if media_stem_base_path.exists() {
-        warn!("[Backend Import] Target media stem directory exists: {}. Files may be overwritten or structure reused.", media_stem_base_path.display());
+        // This check now uses the truncated stem. If it exists, it's a collision based on the truncated name.
+        warn!("[Backend Import] Target media stem directory (from truncated name '{}') exists: {}. Files may be overwritten or structure reused if collision logic is not strict.", media_stem_identifier, media_stem_base_path.display());
+        // Depending on desired strictness, this could be an error:
+        // return Err(CommandError::from(format!("Directory for truncated stem '{}' already exists.", media_stem_identifier)));
     }
 
     fs::create_dir_all(&media_subfolder_path)?;
@@ -1081,8 +1097,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 
     // --- Prepare and save metadata to SQLite database ---
     let file_metadata_for_db = FileMetadata {
-        file_name: source_filename.clone(), // source_filename is available from earlier
-        file_path: destination_media_path.to_string_lossy().into_owned(), // Absolute path
+        file_name: truncated_source_filename.clone(), // Use truncated filename
+        file_path: destination_media_path.to_string_lossy().into_owned(), // Absolute path uses truncated filename
         last_modified: Utc::now().to_rfc3339(), // For new assets, set current time
         title: String::new(),
         description: String::new(),
@@ -1111,14 +1127,14 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     }
 
     // destination_relative_path_for_xml is calculated before this block for XML update, use it as DB key
-    let destination_relative_path_for_xml_calc = Path::new(HARVEY_FILES_DIR)
+    // db_key_relative_path should use the truncated stem and truncated filename
+    let db_key_relative_path = Path::new(HARVEY_FILES_DIR)
         .join(MEDIA_DIR)
-        .join(media_stem_identifier) // media_stem_identifier is from source_path.file_stem()
+        .join(&media_stem_identifier) // Use truncated stem identifier
         .join(MEDIA_SUBDIR)
-        .join(&source_filename) // source_filename is from source_path.file_name()
+        .join(&truncated_source_filename) // Use truncated filename
         .to_string_lossy()
         .replace("\\", "/");
-    let db_key_relative_path = destination_relative_path_for_xml_calc;
 
     // project_id_for_db is project_data_check.project_uuid, parsed earlier
     info!("[Backend Import] Media FileMetadata before save: created_at={:?}", file_metadata_for_db.created_at);
@@ -1157,18 +1173,13 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     let xml_content = fs::read_to_string(&project_xml_path)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
 
-    let destination_relative_path_for_xml = Path::new(HARVEY_FILES_DIR)
-        .join(MEDIA_DIR)
-        .join(media_stem_identifier)
-        .join(MEDIA_SUBDIR)
-        .join(&source_filename)
-        .to_string_lossy()
-        .replace("\\", "/");
+    // destination_relative_path_for_xml should be same as db_key_relative_path, using truncated names
+    let destination_relative_path_for_xml = db_key_relative_path.clone();
 
     let new_media_entry = MediaFileEntryXml {
-        name: media_stem_identifier.to_string(),
-        original_path: Some(source_file_path_str.clone()),
-        relative_path: destination_relative_path_for_xml.clone(),
+        name: media_stem_identifier.to_string(), // XML entry name is the (truncated) stem
+        original_path: Some(source_file_path_str.clone()), // Keep original source path for reference
+        relative_path: destination_relative_path_for_xml.clone(), // Path to the (potentially truncated) media file
         speakers: Some(SpeakersXml::default()),
         transcripts: Vec::new(),
     };
@@ -1181,21 +1192,21 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
 
     // Construct the FileEntry for the newly imported media
     let final_file_entry = FileEntry {
-        name: source_filename.clone(), // source_filename is the file name with extension
-        path: canonical_dest_path.to_string_lossy().to_string(),
-        relative_path: destination_relative_path_for_xml, // Calculated earlier for XML
+        name: truncated_source_filename.clone(), // Use truncated filename for display name in file tree
+        path: canonical_dest_path.to_string_lossy().to_string(), // Absolute path to the (truncated) copied file
+        relative_path: destination_relative_path_for_xml, // Relative path using truncated names
         file_type: "media".to_string(),
         is_directory: false,
         parent_relative_path: Path::new(HARVEY_FILES_DIR)
             .join(MEDIA_DIR)
-            .join(media_stem_identifier) // media_stem_identifier is stem of source_filename
+            .join(&media_stem_identifier) // Use truncated stem
             .join(MEDIA_SUBDIR)
             .to_string_lossy()
-            .replace("\\", "/"), // Ensure forward slashes for consistency
-        depth: 5, // Typical depth for a media file inside its structure
-        speakers: Some(SpeakersXml::default()), // Default for new import
-        media_xml_identifier: Some(media_stem_identifier.to_string()),
-        associated_transcripts: Vec::new(), // No transcripts initially
+            .replace("\\", "/"),
+        depth: 5,
+        speakers: Some(SpeakersXml::default()),
+        media_xml_identifier: Some(media_stem_identifier.to_string()), // Store truncated stem as identifier
+        associated_transcripts: Vec::new(),
         children: Vec::new(),
     };
 
