@@ -415,34 +415,6 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
     transcriptStore.update((ts) => {
         let updatedSpeakers = ts.speakers;
         if (inferSpeakers) {
-            console.warn('[TranscriptStore] Speaker inference requested. Overwriting current primary names and count.'); // Updated log message
-            let inferredPrimarySpeakers = { count: 0, names: [] }; // Renamed for clarity
-            if (newSegments.length > 0) {
-                const uniqueSpeakers = [...new Set(newSegments.map(s => s.speaker || 'Unknown'))];
-                const knownSpeakers = uniqueSpeakers.filter(s => s && s !== 'Unknown');
-                if (knownSpeakers.length > 0) {
-                    knownSpeakers.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
-                    inferredPrimarySpeakers = { count: knownSpeakers.length, names: knownSpeakers };
-                } else {
-                    // If only "Unknown" speakers, or no speakers, count is 0, names empty
-                    inferredPrimarySpeakers = { count: 0, names: [] };
-                }
-            } else {
-                // No segments, so no speakers to infer
-                inferredPrimarySpeakers = { count: 0, names: [] };
-            }
-
-            // Merge with existing translatedNames:
-            updatedSpeakers = {
-                count: inferredPrimarySpeakers.count, // Get count from inference
-                names: inferredPrimarySpeakers.names,   // Get primary names from inference
-                translatedNames: ts.speakers.translatedNames || [] // Preserve existing translatedNames from the store
-            };
-        }
-        updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null });
-
-        // Determine active language and paths based on the loaded 'path'
-        // This logic is crucial for deciding which set of segments and speaker names to use.
             // console.warn('[TranscriptStore] Speaker inference requested. Overwriting current primary names and count.'); // Updated log message
             let inferredPrimarySpeakers = { count: 0, names: [] }; // Renamed for clarity
             if (newSegments.length > 0) {
