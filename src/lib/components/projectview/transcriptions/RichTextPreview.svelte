@@ -352,42 +352,64 @@
 
     // Watch for changes in the loaded transcript path to reset scroll
     $: if (($transcriptStore.currentTranscriptPath || $transcriptStore.currentTranscriptPath === null) && previewScrollContainerRef && isMounted) {
-        // Check explicitly for null to handle clearing of transcript
+        // This condition ensures it runs when path changes to a new transcript or to null
+        // console.log('[RichTextPreview] Transcript path changed, resetting scroll.');
         isProgrammaticScroll = true;
-        previewScrollContainerRef.scrollTop = 0;
-        scrollTop = 0;
-        tick().then(() => { isProgrammaticScroll = false; });
+        scrollTop = 0; // Update Svelte state for virtualization first
+        previewScrollContainerRef.scrollTop = 0; // Then set DOM scroll
+        // Clear the flag after the current JS execution block + Svelte update cycle
+        tick().then(() => {
+            isProgrammaticScroll = false;
+            // console.log('[RichTextPreview] Programmatic scroll flag cleared after path change.');
+        });
     }
 
     // Adjusted scroll logic for active segment highlighting with virtualization
     $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef) {
+        // This reactive block handles scrolling to the active segment (karaoke scroll)
+        // console.log(`[RichTextPreview] Active segment index changed to: ${activeSegmentIndex}`);
         tick().then(() => {
             if (!previewScrollContainerRef) return;
 
-            const targetScrollPosition = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
-            const currentScrollTopValue = previewScrollContainerRef.scrollTop; // Use a temporary variable for current DOM scrollTop
+            const targetItemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const currentContainerHeight = previewScrollContainerRef.clientHeight;
+            const currentDomScrollTop = previewScrollContainerRef.scrollTop;
 
-            const isTargetAboveView = targetScrollPosition < currentScrollTopValue;
-            const isTargetBelowView = targetScrollPosition > (currentScrollTopValue + currentContainerHeight - ESTIMATED_SEGMENT_HEIGHT);
+            // Desired position: center of the view, or at least fully visible.
+            // Target position to scroll the item to the middle of the viewport.
+            let targetDomScrollTop = targetItemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
+            targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
 
-            if (isTargetAboveView || isTargetBelowView) {
-                let scrollToPosition = targetScrollPosition - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
-                scrollToPosition = Math.max(0, Math.min(scrollToPosition, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+            // Check if the segment is already reasonably visible to avoid unnecessary scrolls
+            const itemBottom = targetItemTop + ESTIMATED_SEGMENT_HEIGHT;
+            const isItemVisible = targetItemTop >= currentDomScrollTop && itemBottom <= (currentDomScrollTop + currentContainerHeight);
 
+            if (!isItemVisible || Math.abs(currentDomScrollTop - targetDomScrollTop) > ESTIMATED_SEGMENT_HEIGHT / 2) { // Scroll if not visible or if far from target center
+                // console.log(`[RichTextPreview] Karaoke scrolling to index ${activeSegmentIndex}, target DOM scrollTop: ${targetDomScrollTop}`);
                 isProgrammaticScroll = true;
-                previewScrollContainerRef.scrollTo({ top: scrollToPosition, behavior: 'smooth' });
+                scrollTop = targetDomScrollTop; // Update Svelte state for virtualization to the target
 
-                // Clear the flag after a delay. Adjust if smooth scroll takes longer/shorter.
-                // A more robust way would be to detect 'scrollend' if available, or use a more precise timer.
-                setTimeout(() => {
+                previewScrollContainerRef.scrollTo({ top: targetDomScrollTop, behavior: 'smooth' });
+
+                // Clear the flag using requestAnimationFrame to ensure it's after the current batch of operations.
+                // A short timeout might also work but rAF is generally better tied to rendering.
+                let clearFlagRafId;
+                const clearTheFlag = () => {
                     isProgrammaticScroll = false;
-                    // Crucially, sync Svelte's scrollTop state AFTER programmatic scroll might have finished
-                    // to ensure virtualization is based on the final position.
-                    if (previewScrollContainerRef) {
-                        scrollTop = previewScrollContainerRef.scrollTop;
-                    }
-                }, 350); // 300-350ms is a common smooth scroll duration
+                    // console.log('[RichTextPreview] Programmatic scroll flag cleared after karaoke scroll.');
+                    // Optional: One final sync of Svelte scrollTop if smooth scroll caused minor deviations
+                    // if (previewScrollContainerRef) scrollTop = previewScrollContainerRef.scrollTop;
+                };
+                // Attempt to wait for smooth scroll to be mostly done. This is tricky.
+                // A fixed timeout is a common, if imperfect, solution.
+                // 'scrollend' event would be ideal but isn't universally supported.
+                setTimeout(() => {
+                    if (clearFlagRafId) cancelAnimationFrame(clearFlagRafId); // cancel any pending rAF
+                    clearTheFlag();
+                }, 350); // Adjust timeout based on perceived smooth scroll duration
+
+                // Fallback rAF in case timeout doesn't fire or is too long/short
+                clearFlagRafId = requestAnimationFrame(clearTheFlag);
             }
         });
     }
