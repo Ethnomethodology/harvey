@@ -349,6 +349,7 @@
 
     // --- Highlight and Scroll Logic ---
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
+    let isKaraokeEffectActive = false; // New guard flag
 
     // Watch for changes in the loaded transcript path to reset scroll
     $: if (($transcriptStore.currentTranscriptPath || $transcriptStore.currentTranscriptPath === null) && previewScrollContainerRef && isMounted) {
@@ -368,9 +369,9 @@
     }
 
     // Adjusted scroll logic for active segment highlighting with virtualization
-    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef) {
+    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && !isKaraokeEffectActive) { // Added !isKaraokeEffectActive
         // This reactive block handles scrolling to the active segment (karaoke scroll)
-        // console.log(`[RichTextPreview] Active segment index changed to: ${activeSegmentIndex}`);
+        // console.log(`[RichTextPreview] Karaoke scroll triggered for index ${activeSegmentIndex}. isKaraokeEffectActive=${isKaraokeEffectActive}`);
         tick().then(() => {
             if (!previewScrollContainerRef) return;
 
@@ -394,22 +395,20 @@
                 let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
                 targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
 
-                // Anti-freeze check: if already very close to target, don't re-scroll.
-                if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1 && isProgrammaticScroll) {
-                    // If we were in a programmatic scroll and are now very close to the target,
-                    // it's possible the scroll ended slightly off. Let clearProgrammaticScrollFlag handle the final sync.
-                    // This check is more about preventing re-triggering a NEW scroll if currentDomScrollTop is already the intended target.
-                } else if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
-                    // If not currently in a programmatic scroll, but we calculate a target that's effectively the current position,
-                    // then do nothing. This can happen if isItemFullyVisible is false by a tiny margin.
-                    // console.log(`[RichTextPreview] Karaoke scroll: Target DOM scrollTop ${targetDomScrollTop} is too close to current ${currentDomScrollTop}. Not scrolling.`);
-                    // Ensure flag is clear if it somehow got set without a scroll starting.
-                    if (isProgrammaticScroll) clearProgrammaticScrollFlag("target near current, not scrolling");
-                    return;
+                const scrollDistance = Math.abs(targetDomScrollTop - currentDomScrollTop);
+                if (scrollDistance < 1) { // Target is essentially the current position
+                    // console.log(`[RichTextPreview] Karaoke scroll: Target DOM scrollTop ${targetDomScrollTop} is too close to current ${currentDomScrollTop}. Not re-scrolling.`);
+                    // If we were in a programmatic scroll (for any reason, indicated by either flag) and it's now settled at the target, ensure flags are cleared.
+                    if (isProgrammaticScroll || isKaraokeEffectActive) {
+                        clearProgrammaticScrollFlag("target met, settling scroll");
+                    }
+                    return; // Do not initiate a new scroll
                 }
 
+                // If we reach here, scrolling is needed because targetDomScrollTop is meaningfully different.
                 // console.log(`[RichTextPreview] Karaoke scrolling to index ${activeSegmentIndex}, target DOM scrollTop: ${targetDomScrollTop}`);
                 isProgrammaticScroll = true;
+                isKaraokeEffectActive = true;
                 scrollTop = targetDomScrollTop; // Update Svelte state for virtualization to the target
 
                 previewScrollContainerRef.scrollTo({ top: targetDomScrollTop, behavior: 'smooth' });
@@ -450,17 +449,18 @@
         }
         if (isProgrammaticScroll) {
             isProgrammaticScroll = false;
-            // console.log('[RichTextPreview] Programmatic scroll flag cleared.');
+            isKaraokeEffectActive = false; // Clear guard flag here as well
+            // console.log('[RichTextPreview] Programmatic scroll and KaraokeEffect flags cleared.');
             // Final sync of Svelte scrollTop state with actual DOM scroll position after programmatic scroll ends.
             // This is important because smooth scrolling means the DOM scroll position updates asynchronously.
             if (previewScrollContainerRef) {
                 const currentDomScroll = previewScrollContainerRef.scrollTop;
-                // Re-enabling the synchronization for virtualizer accuracy,
-                // assuming the new anti-freeze check in the karaoke scroll logic is sufficient.
-                if (scrollTop !== currentDomScroll) {
-                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}).`);
-                    scrollTop = currentDomScroll;
-                }
+                // Intentionally keeping this commented out for current debugging of freeze issue,
+                // as per Step 1 of the active plan.
+                // if (scrollTop !== currentDomScroll) {
+                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}). WOULD HAVE SET scrollTop = ${currentDomScroll}`);
+                    // scrollTop = currentDomScroll;
+                // }
             }
         }
     }
