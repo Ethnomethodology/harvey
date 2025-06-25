@@ -451,7 +451,26 @@
 		}
 	}
 
-    async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = processedSegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
+    async function handleDeleteSegment(idx) {
+        if (!previewEditMode) return;
+        const storeSegments = get(transcriptStore).segments;
+        const segmentToDelete = storeSegments[idx];
+        if (!segmentToDelete) {
+            console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return;
+        }
+        // Simplified confirmation message as full plainText might not be readily processed for non-visible items
+        const textPreview = segmentToDelete.text ? (isLexicalJson(segmentToDelete.text) ? "[Rich Content]" : String(segmentToDelete.text).substring(0,50) + "...") : "[empty]";
+        const confirmation = await confirm(
+            `Are you sure you want to delete segment ${idx + 1}?\n\n[${formatTimestamp(segmentToDelete.start_time)} - ${formatTimestamp(segmentToDelete.end_time)}]\n"${textPreview}"\n\nThis action can be undone until you save the transcript.`,
+            { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' }
+        );
+        if (confirmation) {
+            console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`);
+            dispatch('deletetranscriptsegment', idx);
+        } else {
+            console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`);
+        }
+    }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
     async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
@@ -562,7 +581,7 @@
         {/if}
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
-            {#if processedSegments.length || previewEditMode}
+            {#if allSegmentsData.length || previewEditMode}
                 <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" title={previewEditMode ? 'Save Transcript (Ctrl+S)' : 'Edit Transcript (Ctrl+E)'} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
                   <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-gray-500={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-400={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title="Undo (Ctrl+Z)" aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
@@ -573,7 +592,7 @@
         </div>
 
         <div class="flex items-center"> <!-- This div now only effectively holds the "More options" menu -->
-            {#if processedSegments.length > 0}
+            {#if allSegmentsData.length > 0}
               <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
@@ -599,7 +618,7 @@
         </div>
     </h3>
 
-    {#if processedSegments.length === 0}
+    {#if allSegmentsData.length === 0}
         <div class="flex-grow flex items-center justify-center text-gray-400">
             {#if previewEditMode}
                 Transcript empty. Click Insert button to add a segment.
