@@ -455,12 +455,11 @@
             // This is important because smooth scrolling means the DOM scroll position updates asynchronously.
             if (previewScrollContainerRef) {
                 const currentDomScroll = previewScrollContainerRef.scrollTop;
-                // Intentionally keeping this commented out for current debugging of freeze issue,
-                // as per Step 1 of the active plan.
-                // if (scrollTop !== currentDomScroll) {
-                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}). WOULD HAVE SET scrollTop = ${currentDomScroll}`);
-                    // scrollTop = currentDomScroll;
-                // }
+                // Re-enabling synchronization for virtualizer accuracy.
+                if (scrollTop !== currentDomScroll) {
+                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}).`);
+                    scrollTop = currentDomScroll;
+                }
             }
         }
     }
