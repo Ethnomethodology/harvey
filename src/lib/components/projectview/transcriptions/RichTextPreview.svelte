@@ -196,7 +196,7 @@
 
             for (const serializedNodeObj of validSerializedNodes) {
               // The console.log for diagnostics can be kept or removed. For this fix, let's keep it for now.
-              console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj));
+              // console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj)); // Removed verbose log
 
               if (serializedNodeObj.type === 'root' && serializedNodeObj.children && Array.isArray(serializedNodeObj.children)) {
                 // If the serializedNodeObj is a RootNode itself, process its children
@@ -233,7 +233,7 @@
                         indent: 0
                     });
                     nodesToAppend.push(defaultParagraphNode);
-                    console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.');
+                    // console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.'); // Removed verbose log
                 } catch (defaultNodeErr) {
                     console.error('[RichTextPreview] Error creating default paragraph node:', defaultNodeErr);
                 }
@@ -350,7 +350,18 @@
     // --- Highlight and Scroll Logic ---
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
 
-    // Adjusted scroll logic for virtualization
+    // Watch for changes in the loaded transcript path to reset scroll
+    $: if ($transcriptStore.currentTranscriptPath && previewScrollContainerRef && isMounted) {
+        // When a new transcript is loaded, reset scroll position
+        previewScrollContainerRef.scrollTop = 0;
+        scrollTop = 0; // Reset internal scrollTop for virtualization calculations
+    } else if (!$transcriptStore.currentTranscriptPath && previewScrollContainerRef && isMounted) {
+        // If transcript is cleared (e.g. no media selected, or media with no transcript)
+        previewScrollContainerRef.scrollTop = 0;
+        scrollTop = 0;
+    }
+
+    // Adjusted scroll logic for active segment highlighting with virtualization
     $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef) {
         tick().then(() => {
             if (!previewScrollContainerRef) return;
