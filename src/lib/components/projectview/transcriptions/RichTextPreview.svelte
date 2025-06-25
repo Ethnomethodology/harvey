@@ -356,11 +356,14 @@
         // console.log('[RichTextPreview] Transcript path changed, resetting scroll.');
         isProgrammaticScroll = true;
         scrollTop = 0; // Update Svelte state for virtualization first
-        previewScrollContainerRef.scrollTop = 0; // Then set DOM scroll
-        // Clear the flag after the current JS execution block + Svelte update cycle
+        if (previewScrollContainerRef) { // Ensure ref is available
+            previewScrollContainerRef.scrollTop = 0; // Then set DOM scroll
+        }
+        // Clear the flag after the current JS execution block + Svelte update cycle.
+        // Using tick() for immediate scrolls is generally safe.
         tick().then(() => {
-            isProgrammaticScroll = false;
-            // console.log('[RichTextPreview] Programmatic scroll flag cleared after path change.');
+            clearProgrammaticScrollFlag("transcript path change");
+            // console.log('[RichTextPreview] Programmatic scroll flag cleared after path change reset.');
         });
     }
 
@@ -397,25 +400,32 @@
 
                 previewScrollContainerRef.scrollTo({ top: targetDomScrollTop, behavior: 'smooth' });
 
-                // Clear the flag using requestAnimationFrame to ensure it's after the current batch of operations.
-                // A short timeout might also work but rAF is generally better tied to rendering.
-                let clearFlagRafId;
-                const clearTheFlag = () => {
-                    isProgrammaticScroll = false;
-                    // console.log('[RichTextPreview] Programmatic scroll flag cleared after karaoke scroll.');
-                    // Optional: One final sync of Svelte scrollTop if smooth scroll caused minor deviations
-                    // if (previewScrollContainerRef) scrollTop = previewScrollContainerRef.scrollTop;
-                };
-                // Attempt to wait for smooth scroll to be mostly done. This is tricky.
-                // A fixed timeout is a common, if imperfect, solution.
-                // 'scrollend' event would be ideal but isn't universally supported.
-                setTimeout(() => {
-                    if (clearFlagRafId) cancelAnimationFrame(clearFlagRafId); // cancel any pending rAF
-                    clearTheFlag();
-                }, 350); // Adjust timeout based on perceived smooth scroll duration
-
-                // Fallback rAF in case timeout doesn't fire or is too long/short
-                clearFlagRafId = requestAnimationFrame(clearTheFlag);
+                // If scrollend is not supported, set a timeout as a fallback to clear the flag.
+                // The duration (e.g., 500ms) should be generous enough for most smooth scrolls.
+                // If scrollend is supported, it will likely fire before this timeout.
+                if (!('onscrollend' in window)) {
+                    // console.log('[RichTextPreview] Karaoke scroll: Using setTimeout fallback for clearing programmatic scroll flag.');
+                    if (programmaticScrollClearTimeoutId) {
+                        clearTimeout(programmaticScrollClearTimeoutId);
+                    }
+                    programmaticScrollClearTimeoutId = setTimeout(() => {
+                        // console.log('[RichTextPreview] Karaoke scroll: Fallback timeout executed.');
+                        clearProgrammaticScrollFlag("karaoke fallback timeout");
+                    }, 500); // Fallback timeout duration
+                } else {
+                    // console.log('[RichTextPreview] Karaoke scroll: Relying on scrollend event to clear programmatic scroll flag.');
+                    // Potentially, a shorter safety timeout here *just in case* scrollend fails to fire,
+                    // but spec implies it should fire. For now, rely on scrollend.
+                    // If issues persist where scrollend doesn't fire, a safety net timeout can be added here too.
+                }
+            } else {
+                 // If the item is already fully visible, no scroll needed.
+                 // Ensure any pending programmatic scroll flags/timeouts are cleared if we *don't* scroll.
+                 // This case might not be strictly necessary if isProgrammaticScroll is only set when a scroll *starts*.
+                 if (isProgrammaticScroll) {
+                    // console.log('[RichTextPreview] Karaoke scroll: Item visible, no scroll needed, ensuring flag is clear.');
+                    clearProgrammaticScrollFlag("item visible, no scroll");
+                 }
             }
         });
     }
@@ -424,6 +434,41 @@
     let scrollRafId = null;
     let pendingScrollTop = 0;
     let isProgrammaticScroll = false; // Flag to ignore scroll events during programmatic scroll
+    let programmaticScrollClearTimeoutId = null;
+
+    // Function to safely clear the programmatic scroll flag and sync scrollTop
+    function clearProgrammaticScrollFlag(reason = "unknown") {
+        // console.log(`[RichTextPreview] Clearing programmatic scroll flag. Reason: ${reason}. Current isProgrammaticScroll: ${isProgrammaticScroll}`);
+        if (programmaticScrollClearTimeoutId) {
+            clearTimeout(programmaticScrollClearTimeoutId);
+            programmaticScrollClearTimeoutId = null;
+        }
+        if (isProgrammaticScroll) {
+            isProgrammaticScroll = false;
+            // console.log('[RichTextPreview] Programmatic scroll flag cleared.');
+            // Final sync of Svelte scrollTop state with actual DOM scroll position after programmatic scroll ends.
+            // This is important because smooth scrolling means the DOM scroll position updates asynchronously.
+            if (previewScrollContainerRef) {
+                const currentDomScroll = previewScrollContainerRef.scrollTop;
+                if (scrollTop !== currentDomScroll) {
+                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}).`);
+                    scrollTop = currentDomScroll;
+                }
+            }
+        }
+    }
+
+    // Handler for the 'scrollend' event
+    function handleScrollEnd() {
+        // console.log('[RichTextPreview] scrollend event fired.');
+        // This event fires after both user and programmatic scrolls.
+        // We are primarily interested in it for clearing the flag after programmatic smooth scrolls.
+        if (isProgrammaticScroll) {
+            // If a programmatic scroll was in progress, the 'scrollend' event signals its completion.
+            clearProgrammaticScrollFlag("scrollend event");
+        }
+        // No need to update scrollTop here for user scrolls, handleScroll via rAF will do that.
+    }
 
     onMount(() => {
         isMounted = true;
@@ -431,6 +476,16 @@
             containerHeight = previewScrollContainerRef.clientHeight;
             pendingScrollTop = previewScrollContainerRef.scrollTop;
             scrollTop = pendingScrollTop; // Initial sync
+
+            // Check for scrollend support
+            if ('onscrollend' in window) {
+                previewScrollContainerRef.addEventListener('scrollend', handleScrollEnd);
+                // console.log('[RichTextPreview] scrollend event listener attached.');
+            } else {
+                // console.log('[RichTextPreview] scrollend event not supported by this browser.');
+                // Fallback or alternative handling for browsers without scrollend might be managed by timeouts
+                // within the scroll initiation logic if needed.
+            }
         }
         // Consider adding a ResizeObserver for previewScrollContainerRef to update containerHeight if it can resize.
     });
@@ -439,21 +494,35 @@
         if (scrollRafId) {
             cancelAnimationFrame(scrollRafId);
         }
+        if (programmaticScrollClearTimeoutId) {
+            clearTimeout(programmaticScrollClearTimeoutId);
+        }
+        if (previewScrollContainerRef && 'onscrollend' in window) {
+            previewScrollContainerRef.removeEventListener('scrollend', handleScrollEnd);
+            // console.log('[RichTextPreview] scrollend event listener removed.');
+        }
         document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true); // Already present, ensure it's the one being removed
     });
 
     function handleScroll() {
-        if (previewScrollContainerRef && !isProgrammaticScroll) { // Only process user scrolls
+        if (previewScrollContainerRef) {
+            if (isProgrammaticScroll) {
+                // console.log('[RichTextPreview] handleScroll: Ignored due to isProgrammaticScroll=true');
+                return; // Absolutely do nothing if a programmatic scroll is active
+            }
             pendingScrollTop = previewScrollContainerRef.scrollTop;
             if (!scrollRafId) {
                 scrollRafId = requestAnimationFrame(() => {
-                    scrollTop = pendingScrollTop;
+                    if (!isProgrammaticScroll) { // Double check flag before applying scroll, in case it was set by a quick succession of events
+                        scrollTop = pendingScrollTop;
+                        // console.log(`[RichTextPreview] handleScroll: User scroll updated scrollTop to ${scrollTop}`);
+                    } else {
+                        // console.log('[RichTextPreview] handleScroll (rAF): Ignored update due to isProgrammaticScroll=true');
+                    }
                     scrollRafId = null;
                 });
             }
         }
-        // If it is a programmatic scroll, we let the setTimeout in the karaoke/reset logic handle
-        // the final synchronization of `scrollTop` Svelte state.
     }
 
 	/* ---------------- interactions ---------------- */
@@ -675,7 +744,7 @@
     {:else}
         <div
             bind:this={previewScrollContainerRef}
-            class="flex-grow overflow-y-auto space-y-1 pr-1 relative"
+            class="flex-grow overflow-y-auto space-y-1 pr-1 relative overscroll-y-contain"
             on:scroll={handleScroll}
             bind:clientHeight={containerHeight}
         >
