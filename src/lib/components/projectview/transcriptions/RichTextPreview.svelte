@@ -375,16 +375,22 @@
             const currentContainerHeight = previewScrollContainerRef.clientHeight;
             const currentDomScrollTop = previewScrollContainerRef.scrollTop;
 
-            // Desired position: center of the view, or at least fully visible.
-            // Target position to scroll the item to the middle of the viewport.
-            let targetDomScrollTop = targetItemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
-            targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+            // Calculate the segment's top and bottom boundaries based on estimated height
+            const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
+            const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
 
-            // Check if the segment is already reasonably visible to avoid unnecessary scrolls
-            const itemBottom = targetItemTop + ESTIMATED_SEGMENT_HEIGHT;
-            const isItemVisible = targetItemTop >= currentDomScrollTop && itemBottom <= (currentDomScrollTop + currentContainerHeight);
+            // Viewport boundaries
+            const viewportTop = currentDomScrollTop;
+            const viewportBottom = currentDomScrollTop + currentContainerHeight;
 
-            if (!isItemVisible || Math.abs(currentDomScrollTop - targetDomScrollTop) > ESTIMATED_SEGMENT_HEIGHT / 2) { // Scroll if not visible or if far from target center
+            // Check if the item is fully visible
+            const isItemFullyVisible = itemTop >= viewportTop && itemBottom <= viewportBottom;
+
+            if (!isItemFullyVisible) {
+                // If not fully visible, calculate position to scroll it to the center (or as close as possible)
+                let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
+                targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+
                 // console.log(`[RichTextPreview] Karaoke scrolling to index ${activeSegmentIndex}, target DOM scrollTop: ${targetDomScrollTop}`);
                 isProgrammaticScroll = true;
                 scrollTop = targetDomScrollTop; // Update Svelte state for virtualization to the target
