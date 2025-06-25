@@ -351,14 +351,12 @@
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
 
     // Watch for changes in the loaded transcript path to reset scroll
-    $: if ($transcriptStore.currentTranscriptPath && previewScrollContainerRef && isMounted) {
-        // When a new transcript is loaded, reset scroll position
-        previewScrollContainerRef.scrollTop = 0;
-        scrollTop = 0; // Reset internal scrollTop for virtualization calculations
-    } else if (!$transcriptStore.currentTranscriptPath && previewScrollContainerRef && isMounted) {
-        // If transcript is cleared (e.g. no media selected, or media with no transcript)
+    $: if (($transcriptStore.currentTranscriptPath || $transcriptStore.currentTranscriptPath === null) && previewScrollContainerRef && isMounted) {
+        // Check explicitly for null to handle clearing of transcript
+        isProgrammaticScroll = true;
         previewScrollContainerRef.scrollTop = 0;
         scrollTop = 0;
+        tick().then(() => { isProgrammaticScroll = false; });
     }
 
     // Adjusted scroll logic for active segment highlighting with virtualization
@@ -367,28 +365,37 @@
             if (!previewScrollContainerRef) return;
 
             const targetScrollPosition = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
-            const currentScrollTop = previewScrollContainerRef.scrollTop;
+            const currentScrollTopValue = previewScrollContainerRef.scrollTop; // Use a temporary variable for current DOM scrollTop
             const currentContainerHeight = previewScrollContainerRef.clientHeight;
 
-            // Check if the target segment is outside the current view + a small margin
-            const isTargetAboveView = targetScrollPosition < currentScrollTop;
-            const isTargetBelowView = targetScrollPosition > (currentScrollTop + currentContainerHeight - ESTIMATED_SEGMENT_HEIGHT); // -ESTIMATED_SEGMENT_HEIGHT to ensure it's fully visible
+            const isTargetAboveView = targetScrollPosition < currentScrollTopValue;
+            const isTargetBelowView = targetScrollPosition > (currentScrollTopValue + currentContainerHeight - ESTIMATED_SEGMENT_HEIGHT);
 
             if (isTargetAboveView || isTargetBelowView) {
-                 // Scroll to bring the segment into the middle of the view
                 let scrollToPosition = targetScrollPosition - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
                 scrollToPosition = Math.max(0, Math.min(scrollToPosition, previewScrollContainerRef.scrollHeight - currentContainerHeight));
 
+                isProgrammaticScroll = true;
                 previewScrollContainerRef.scrollTo({ top: scrollToPosition, behavior: 'smooth' });
+
+                // Clear the flag after a delay. Adjust if smooth scroll takes longer/shorter.
+                // A more robust way would be to detect 'scrollend' if available, or use a more precise timer.
+                setTimeout(() => {
+                    isProgrammaticScroll = false;
+                    // Crucially, sync Svelte's scrollTop state AFTER programmatic scroll might have finished
+                    // to ensure virtualization is based on the final position.
+                    if (previewScrollContainerRef) {
+                        scrollTop = previewScrollContainerRef.scrollTop;
+                    }
+                }, 350); // 300-350ms is a common smooth scroll duration
             }
-            // No need to find element by ID for scrolling, direct calculation is used.
-            // Highlighting is handled by class:segment-active on the rendered item.
         });
     }
 
     let isMounted = false;
     let scrollRafId = null;
     let pendingScrollTop = 0;
+    let isProgrammaticScroll = false; // Flag to ignore scroll events during programmatic scroll
 
     onMount(() => {
         isMounted = true;
@@ -408,7 +415,7 @@
     });
 
     function handleScroll() {
-        if (previewScrollContainerRef) {
+        if (previewScrollContainerRef && !isProgrammaticScroll) { // Only process user scrolls
             pendingScrollTop = previewScrollContainerRef.scrollTop;
             if (!scrollRafId) {
                 scrollRafId = requestAnimationFrame(() => {
@@ -416,8 +423,9 @@
                     scrollRafId = null;
                 });
             }
-            // containerHeight might also change if window resizes, consider ResizeObserver for previewScrollContainerRef
         }
+        // If it is a programmatic scroll, we let the setTimeout in the karaoke/reset logic handle
+        // the final synchronization of `scrollTop` Svelte state.
     }
 
 	/* ---------------- interactions ---------------- */
