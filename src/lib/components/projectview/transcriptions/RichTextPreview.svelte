@@ -394,30 +394,35 @@
                 let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
                 targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
 
+                // Anti-freeze check: if already very close to target, don't re-scroll.
+                if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1 && isProgrammaticScroll) {
+                    // If we were in a programmatic scroll and are now very close to the target,
+                    // it's possible the scroll ended slightly off. Let clearProgrammaticScrollFlag handle the final sync.
+                    // This check is more about preventing re-triggering a NEW scroll if currentDomScrollTop is already the intended target.
+                } else if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
+                    // If not currently in a programmatic scroll, but we calculate a target that's effectively the current position,
+                    // then do nothing. This can happen if isItemFullyVisible is false by a tiny margin.
+                    // console.log(`[RichTextPreview] Karaoke scroll: Target DOM scrollTop ${targetDomScrollTop} is too close to current ${currentDomScrollTop}. Not scrolling.`);
+                    // Ensure flag is clear if it somehow got set without a scroll starting.
+                    if (isProgrammaticScroll) clearProgrammaticScrollFlag("target near current, not scrolling");
+                    return;
+                }
+
                 // console.log(`[RichTextPreview] Karaoke scrolling to index ${activeSegmentIndex}, target DOM scrollTop: ${targetDomScrollTop}`);
                 isProgrammaticScroll = true;
                 scrollTop = targetDomScrollTop; // Update Svelte state for virtualization to the target
 
                 previewScrollContainerRef.scrollTo({ top: targetDomScrollTop, behavior: 'smooth' });
 
-                // If scrollend is not supported, set a timeout as a fallback to clear the flag.
-                // The duration (e.g., 500ms) should be generous enough for most smooth scrolls.
-                // If scrollend is supported, it will likely fire before this timeout.
-                if (!('onscrollend' in window)) {
-                    // console.log('[RichTextPreview] Karaoke scroll: Using setTimeout fallback for clearing programmatic scroll flag.');
-                    if (programmaticScrollClearTimeoutId) {
-                        clearTimeout(programmaticScrollClearTimeoutId);
-                    }
-                    programmaticScrollClearTimeoutId = setTimeout(() => {
-                        // console.log('[RichTextPreview] Karaoke scroll: Fallback timeout executed.');
-                        clearProgrammaticScrollFlag("karaoke fallback timeout");
-                    }, 500); // Fallback timeout duration
-                } else {
-                    // console.log('[RichTextPreview] Karaoke scroll: Relying on scrollend event to clear programmatic scroll flag.');
-                    // Potentially, a shorter safety timeout here *just in case* scrollend fails to fire,
-                    // but spec implies it should fire. For now, rely on scrollend.
-                    // If issues persist where scrollend doesn't fire, a safety net timeout can be added here too.
+                // Always use setTimeout for clearing the flag now, as scrollend is removed.
+                // console.log('[RichTextPreview] Karaoke scroll: Using setTimeout for clearing programmatic scroll flag.');
+                if (programmaticScrollClearTimeoutId) {
+                    clearTimeout(programmaticScrollClearTimeoutId);
                 }
+                programmaticScrollClearTimeoutId = setTimeout(() => {
+                    // console.log('[RichTextPreview] Karaoke scroll: Timeout executed to clear flag.');
+                    clearProgrammaticScrollFlag("karaoke scroll timeout");
+                }, 500); // Timeout duration for smooth scroll, adjust if necessary.
             } else {
                  // If the item is already fully visible, no scroll needed.
                  // Ensure any pending programmatic scroll flags/timeouts are cleared if we *don't* scroll.
@@ -450,6 +455,8 @@
             // This is important because smooth scrolling means the DOM scroll position updates asynchronously.
             if (previewScrollContainerRef) {
                 const currentDomScroll = previewScrollContainerRef.scrollTop;
+                // Re-enabling the synchronization for virtualizer accuracy,
+                // assuming the new anti-freeze check in the karaoke scroll logic is sufficient.
                 if (scrollTop !== currentDomScroll) {
                     // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}).`);
                     scrollTop = currentDomScroll;
@@ -458,17 +465,12 @@
         }
     }
 
-    // Handler for the 'scrollend' event
-    function handleScrollEnd() {
-        // console.log('[RichTextPreview] scrollend event fired.');
-        // This event fires after both user and programmatic scrolls.
-        // We are primarily interested in it for clearing the flag after programmatic smooth scrolls.
-        if (isProgrammaticScroll) {
-            // If a programmatic scroll was in progress, the 'scrollend' event signals its completion.
-            clearProgrammaticScrollFlag("scrollend event");
-        }
-        // No need to update scrollTop here for user scrolls, handleScroll via rAF will do that.
-    }
+    // Handler for the 'scrollend' event - REMOVED FOR NOW TO DEBUG FREEZE
+    // function handleScrollEnd() {
+    //     if (isProgrammaticScroll) {
+    //         clearProgrammaticScrollFlag("scrollend event");
+    //     }
+    // }
 
     onMount(() => {
         isMounted = true;
@@ -477,15 +479,10 @@
             pendingScrollTop = previewScrollContainerRef.scrollTop;
             scrollTop = pendingScrollTop; // Initial sync
 
-            // Check for scrollend support
-            if ('onscrollend' in window) {
-                previewScrollContainerRef.addEventListener('scrollend', handleScrollEnd);
-                // console.log('[RichTextPreview] scrollend event listener attached.');
-            } else {
-                // console.log('[RichTextPreview] scrollend event not supported by this browser.');
-                // Fallback or alternative handling for browsers without scrollend might be managed by timeouts
-                // within the scroll initiation logic if needed.
-            }
+            // REMOVED scrollend listener setup
+            // if ('onscrollend' in window) {
+            //     previewScrollContainerRef.addEventListener('scrollend', handleScrollEnd);
+            // }
         }
         // Consider adding a ResizeObserver for previewScrollContainerRef to update containerHeight if it can resize.
     });
@@ -497,10 +494,10 @@
         if (programmaticScrollClearTimeoutId) {
             clearTimeout(programmaticScrollClearTimeoutId);
         }
-        if (previewScrollContainerRef && 'onscrollend' in window) {
-            previewScrollContainerRef.removeEventListener('scrollend', handleScrollEnd);
-            // console.log('[RichTextPreview] scrollend event listener removed.');
-        }
+        // REMOVED scrollend listener removal
+        // if (previewScrollContainerRef && 'onscrollend' in window) {
+        //     previewScrollContainerRef.removeEventListener('scrollend', handleScrollEnd);
+        // }
         document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true); // Already present, ensure it's the one being removed
     });
 
