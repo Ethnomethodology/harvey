@@ -349,175 +349,120 @@
 
     // --- Highlight and Scroll Logic ---
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
-    let isKaraokeEffectActive = false; // New guard flag
+    let karaokeScrollIndex = -1; // Tracks the index for which karaoke scroll was last triggered.
+    let scrollAnimationId = null; // ID for the requestAnimationFrame loop
+    let isProgrammaticScroll = false;
+    let expectedScrollTop = -1; // The scroll position our animation expects to be at.
 
-    // Watch for changes in the loaded transcript path to reset scroll
-    $: if (($transcriptStore.currentTranscriptPath || $transcriptStore.currentTranscriptPath === null) && previewScrollContainerRef && isMounted) {
-        // This condition ensures it runs when path changes to a new transcript or to null
-        // console.log('[RichTextPreview] Transcript path changed, resetting scroll.');
-        isProgrammaticScroll = true;
-        scrollTop = 0; // Update Svelte state for virtualization first
-        if (previewScrollContainerRef) { // Ensure ref is available
-            previewScrollContainerRef.scrollTop = 0; // Then set DOM scroll
-        }
-        // Clear the flag after the current JS execution block + Svelte update cycle.
-        // Using tick() for immediate scrolls is generally safe.
-        tick().then(() => {
-            clearProgrammaticScrollFlag("transcript path change");
-            // console.log('[RichTextPreview] Programmatic scroll flag cleared after path change reset.');
-        });
-    }
-
-    // Adjusted scroll logic for active segment highlighting with virtualization
-    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && !isKaraokeEffectActive) { // Added !isKaraokeEffectActive
-        // This reactive block handles scrolling to the active segment (karaoke scroll)
-        // console.log(`[RichTextPreview] Karaoke scroll triggered for index ${activeSegmentIndex}. isKaraokeEffectActive=${isKaraokeEffectActive}`);
+    // Karaoke scroll logic
+    $: if ($transcriptStore.player.isPlaying && activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
         tick().then(() => {
             if (!previewScrollContainerRef) return;
 
-            const targetItemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const currentContainerHeight = previewScrollContainerRef.clientHeight;
             const currentDomScrollTop = previewScrollContainerRef.scrollTop;
-
-            // Calculate the segment's top and bottom boundaries based on estimated height
             const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
-
-            // Viewport boundaries
             const viewportTop = currentDomScrollTop;
             const viewportBottom = currentDomScrollTop + currentContainerHeight;
 
-            // Check if the item is fully visible
-            const isItemFullyVisible = itemTop >= viewportTop && itemBottom <= viewportBottom;
+            const isScrollingDown = activeSegmentIndex > karaokeScrollIndex && karaokeScrollIndex !== -1;
+            const isScrollingUp = activeSegmentIndex < karaokeScrollIndex && karaokeScrollIndex !== -1;
 
-            if (!isItemFullyVisible) {
-                // If not fully visible, calculate position to scroll it to the center (or as close as possible)
+            const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT; // Scroll when active segment is within 2 items of the edge
+
+            const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
+            const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
+
+            const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
+
+            if (!isItemInsideEffectiveViewport) {
                 let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
                 targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
 
-                const scrollDistance = Math.abs(targetDomScrollTop - currentDomScrollTop);
-                if (scrollDistance < 1) { // Target is essentially the current position
-                    // console.log(`[RichTextPreview] Karaoke scroll: Target DOM scrollTop ${targetDomScrollTop} is too close to current ${currentDomScrollTop}. Not re-scrolling.`);
-                    // If we were in a programmatic scroll (for any reason, indicated by either flag) and it's now settled at the target, ensure flags are cleared.
-                    if (isProgrammaticScroll || isKaraokeEffectActive) {
-                        clearProgrammaticScrollFlag("target met, settling scroll");
-                    }
-                    return; // Do not initiate a new scroll
+                if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
+                    karaokeScrollIndex = activeSegmentIndex;
+                    return;
                 }
 
-                // If we reach here, scrolling is needed because targetDomScrollTop is meaningfully different.
-                // console.log(`[RichTextPreview] Karaoke scrolling to index ${activeSegmentIndex}, target DOM scrollTop: ${targetDomScrollTop}`);
-                isProgrammaticScroll = true;
-                isKaraokeEffectActive = true;
-                scrollTop = targetDomScrollTop; // Update Svelte state for virtualization to the target
-
-                previewScrollContainerRef.scrollTo({ top: targetDomScrollTop, behavior: 'smooth' });
-
-                // Always use setTimeout for clearing the flag now, as scrollend is removed.
-                // console.log('[RichTextPreview] Karaoke scroll: Using setTimeout for clearing programmatic scroll flag.');
-                if (programmaticScrollClearTimeoutId) {
-                    clearTimeout(programmaticScrollClearTimeoutId);
-                }
-                programmaticScrollClearTimeoutId = setTimeout(() => {
-                    // console.log('[RichTextPreview] Karaoke scroll: Timeout executed to clear flag.');
-                    clearProgrammaticScrollFlag("karaoke scroll timeout");
-                }, 500); // Timeout duration for smooth scroll, adjust if necessary.
+                karaokeScrollIndex = activeSegmentIndex;
+                manualSmoothScroll(targetDomScrollTop);
             } else {
-                 // If the item is already fully visible, no scroll needed.
-                 // Ensure any pending programmatic scroll flags/timeouts are cleared if we *don't* scroll.
-                 // This case might not be strictly necessary if isProgrammaticScroll is only set when a scroll *starts*.
-                 if (isProgrammaticScroll) {
-                    // console.log('[RichTextPreview] Karaoke scroll: Item visible, no scroll needed, ensuring flag is clear.');
-                    clearProgrammaticScrollFlag("item visible, no scroll");
-                 }
+                karaokeScrollIndex = activeSegmentIndex;
             }
         });
     }
 
-    let isMounted = false;
-    let scrollRafId = null;
-    let pendingScrollTop = 0;
-    let isProgrammaticScroll = false; // Flag to ignore scroll events during programmatic scroll
-    let programmaticScrollClearTimeoutId = null;
+    function manualSmoothScroll(targetY, duration = 400) {
+        if (!previewScrollContainerRef) return;
+        if (scrollAnimationId) cancelAnimationFrame(scrollAnimationId);
 
-    // Function to safely clear the programmatic scroll flag and sync scrollTop
-    function clearProgrammaticScrollFlag(reason = "unknown") {
-        // console.log(`[RichTextPreview] Clearing programmatic scroll flag. Reason: ${reason}. Current isProgrammaticScroll: ${isProgrammaticScroll}`);
-        if (programmaticScrollClearTimeoutId) {
-            clearTimeout(programmaticScrollClearTimeoutId);
-            programmaticScrollClearTimeoutId = null;
-        }
-        if (isProgrammaticScroll) {
-            isProgrammaticScroll = false;
-            isKaraokeEffectActive = false; // Clear guard flag here as well
-            // console.log('[RichTextPreview] Programmatic scroll and KaraokeEffect flags cleared.');
-            // Final sync of Svelte scrollTop state with actual DOM scroll position after programmatic scroll ends.
-            // This is important because smooth scrolling means the DOM scroll position updates asynchronously.
-            if (previewScrollContainerRef) {
-                const currentDomScroll = previewScrollContainerRef.scrollTop;
-                // Re-enabling synchronization for virtualizer accuracy.
-                if (scrollTop !== currentDomScroll) {
-                    // console.log(`[RichTextPreview] Syncing Svelte scrollTop (${scrollTop}) with DOM scrollTop (${currentDomScroll}) after programmatic scroll (reason: ${reason}).`);
-                    scrollTop = currentDomScroll;
-                }
+        isProgrammaticScroll = true;
+        const startY = previewScrollContainerRef.scrollTop;
+        const distance = targetY - startY;
+        let startTime = null;
+
+        function animation(currentTime) {
+            if (startTime === null) startTime = currentTime;
+            const timeElapsed = currentTime - startTime;
+            const progress = Math.min(timeElapsed / duration, 1);
+            const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+            const newScrollTop = startY + distance * ease;
+
+            expectedScrollTop = newScrollTop;
+            previewScrollContainerRef.scrollTop = newScrollTop;
+
+            if (timeElapsed < duration) {
+                scrollAnimationId = requestAnimationFrame(animation);
+            } else {
+                expectedScrollTop = targetY;
+                previewScrollContainerRef.scrollTop = targetY;
+                isProgrammaticScroll = false;
+                scrollAnimationId = null;
             }
         }
+
+        scrollAnimationId = requestAnimationFrame(animation);
     }
 
-    // Handler for the 'scrollend' event - REMOVED FOR NOW TO DEBUG FREEZE
-    // function handleScrollEnd() {
-    //     if (isProgrammaticScroll) {
-    //         clearProgrammaticScrollFlag("scrollend event");
-    //     }
-    // }
+    let isMounted = false;
+
+    function cancelAnimation() {
+        if (scrollAnimationId) {
+            cancelAnimationFrame(scrollAnimationId);
+            scrollAnimationId = null;
+        }
+        isProgrammaticScroll = false;
+        karaokeScrollIndex = -1;
+    }
 
     onMount(() => {
         isMounted = true;
         if (previewScrollContainerRef) {
             containerHeight = previewScrollContainerRef.clientHeight;
-            pendingScrollTop = previewScrollContainerRef.scrollTop;
-            scrollTop = pendingScrollTop; // Initial sync
-
-            // REMOVED scrollend listener setup
-            // if ('onscrollend' in window) {
-            //     previewScrollContainerRef.addEventListener('scrollend', handleScrollEnd);
-            // }
+            scrollTop = previewScrollContainerRef.scrollTop;
         }
-        // Consider adding a ResizeObserver for previewScrollContainerRef to update containerHeight if it can resize.
     });
 
     onDestroy(() => {
-        if (scrollRafId) {
-            cancelAnimationFrame(scrollRafId);
-        }
-        if (programmaticScrollClearTimeoutId) {
-            clearTimeout(programmaticScrollClearTimeoutId);
-        }
-        // REMOVED scrollend listener removal
-        // if (previewScrollContainerRef && 'onscrollend' in window) {
-        //     previewScrollContainerRef.removeEventListener('scrollend', handleScrollEnd);
-        // }
-        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true); // Already present, ensure it's the one being removed
+        cancelAnimation();
+        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
     });
 
     function handleScroll() {
-        if (previewScrollContainerRef) {
-            if (isProgrammaticScroll) {
-                // console.log('[RichTextPreview] handleScroll: Ignored due to isProgrammaticScroll=true');
-                return; // Absolutely do nothing if a programmatic scroll is active
+        if (!previewScrollContainerRef) return;
+        const currentScroll = previewScrollContainerRef.scrollTop;
+
+        if (isProgrammaticScroll) {
+            if (Math.abs(currentScroll - expectedScrollTop) > 2) {
+                cancelAnimation();
+                scrollTop = currentScroll;
+            } else {
+                scrollTop = currentScroll;
             }
-            pendingScrollTop = previewScrollContainerRef.scrollTop;
-            if (!scrollRafId) {
-                scrollRafId = requestAnimationFrame(() => {
-                    if (!isProgrammaticScroll) { // Double check flag before applying scroll, in case it was set by a quick succession of events
-                        scrollTop = pendingScrollTop;
-                        // console.log(`[RichTextPreview] handleScroll: User scroll updated scrollTop to ${scrollTop}`);
-                    } else {
-                        // console.log('[RichTextPreview] handleScroll (rAF): Ignored update due to isProgrammaticScroll=true');
-                    }
-                    scrollRafId = null;
-                });
-            }
+        } else {
+            scrollTop = currentScroll;
+            karaokeScrollIndex = -1;
         }
     }
 
@@ -742,6 +687,8 @@
             bind:this={previewScrollContainerRef}
             class="flex-grow overflow-y-auto space-y-1 pr-1 relative overscroll-y-contain"
             on:scroll={handleScroll}
+            on:wheel={cancelAnimation}
+            on:touchstart={cancelAnimation}
             bind:clientHeight={containerHeight}
         >
             <div style="height: {paddingTop}px;"></div>
