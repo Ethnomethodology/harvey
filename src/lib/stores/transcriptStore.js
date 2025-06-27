@@ -360,32 +360,10 @@ export function updatePlayerTime(time) {
         let newIndex = -1;
         const segments = ts.segments;
         const numSegments = segments.length;
-        const currentKnownIndex = ts.player.currentSegmentIndex;
 
         if (numSegments > 0 && ts.player.duration > 0 && time >= 0) {
-            // 1. Check if currentKnownIndex is still valid
-            if (currentKnownIndex !== -1 && currentKnownIndex < numSegments) {
-                const seg = segments[currentKnownIndex];
-                const isLast = currentKnownIndex === numSegments - 1;
-                if (time >= (seg.start_time - 0.001) && (time < seg.end_time || (isLast && time <= seg.end_time))) {
-                    newIndex = currentKnownIndex;
-                }
-            }
-
-            // 2. If not in currentKnownIndex, check next segment (if playing forward and currentKnownIndex was valid)
-            if (newIndex === -1 && time > ts.player.currentTime && currentKnownIndex !== -1 && (currentKnownIndex + 1) < numSegments) {
-                const nextSeg = segments[currentKnownIndex + 1];
-                const isLast = (currentKnownIndex + 1) === numSegments - 1;
-                if (time >= (nextSeg.start_time - 0.001) && (time < nextSeg.end_time || (isLast && time <= nextSeg.end_time))) {
-                    newIndex = currentKnownIndex + 1;
-                }
-            }
-            // Could add a check for previous segment here if time < ts.player.currentTime for seeking backward
-
-            // 3. If still not found (e.g., seek, or jumped multiple segments), fallback to binary search
-            if (newIndex === -1) {
-                newIndex = findSegmentIndexWithBinarySearch(segments, time);
-            }
+            // Always use binary search for reliable segment index finding
+            newIndex = findSegmentIndexWithBinarySearch(segments, time);
         }
 
         if (ts.player.currentTime !== time || ts.player.currentSegmentIndex !== newIndex) {

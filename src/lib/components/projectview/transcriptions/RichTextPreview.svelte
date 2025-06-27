@@ -354,8 +354,8 @@
     let isProgrammaticScroll = false;
     let expectedScrollTop = -1; // The scroll position our animation expects to be at.
 
-    // Karaoke scroll logic
-    $: if ($transcriptStore.player.isPlaying && activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
+    // Scroll and highlight logic
+    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
         tick().then(() => {
             if (!previewScrollContainerRef) return;
 
@@ -369,24 +369,34 @@
             const isScrollingDown = activeSegmentIndex > karaokeScrollIndex && karaokeScrollIndex !== -1;
             const isScrollingUp = activeSegmentIndex < karaokeScrollIndex && karaokeScrollIndex !== -1;
 
-            const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT; // Scroll when active segment is within 2 items of the edge
+            // Only scroll if the media is playing, or if it's paused and the user clicked on the waveform/seek bar
+            // We ensure that the scroll is triggered only when the activeSegmentIndex changes.
+            // The user's action of clicking the seek bar will cause activeSegmentIndex to change.
+            // When playing, the activeSegmentIndex changes automatically.
+            const shouldScroll = $transcriptStore.player.isPlaying || (activeSegmentIndex !== karaokeScrollIndex);
 
-            const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
-            const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
+            if (shouldScroll) {
+                const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT; // Scroll when active segment is within 2 items of the edge
 
-            const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
+                const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
+                const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
 
-            if (!isItemInsideEffectiveViewport) {
-                let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
-                targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+                const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
 
-                if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
+                if (!isItemInsideEffectiveViewport) {
+                    let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
+                    targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
+
+                    if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
+                        karaokeScrollIndex = activeSegmentIndex;
+                        return;
+                    }
+
                     karaokeScrollIndex = activeSegmentIndex;
-                    return;
+                    manualSmoothScroll(targetDomScrollTop);
+                } else {
+                    karaokeScrollIndex = activeSegmentIndex;
                 }
-
-                karaokeScrollIndex = activeSegmentIndex;
-                manualSmoothScroll(targetDomScrollTop);
             } else {
                 karaokeScrollIndex = activeSegmentIndex;
             }
