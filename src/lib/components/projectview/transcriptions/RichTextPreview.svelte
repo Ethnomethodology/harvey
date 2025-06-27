@@ -592,60 +592,45 @@
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
-            <!-- Transcript Dropdown HTML -->
-            {#if $transcriptStore.selectedMediaFile && associatedTranscriptsForDropdown.length > 0}
-            <div class="relative inline-block text-left">
-                <div>
-                    <button bind:this={transcriptDropdownButtonRef} on:click={() => showTranscriptDropdown = !showTranscriptDropdown} type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500" id="transcript-options-menu" aria-haspopup="true" aria-expanded={showTranscriptDropdown}>
-                        <span class="truncate max-w-[150px] sm:max-w-[200px] md:max-w-[250px]">{currentTranscriptLabel}</span>
-                        <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <!-- Transcript Dropdown using native select -->
+            {#if $transcriptStore.selectedMediaFile}
+                <div class="relative inline-block">
+                    <select
+                        class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                               max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
+                        on:change={(e) => {
+                            const selectedPath = e.target.value;
+                            if (selectedPath) {
+                                dispatch('transcriptselected', selectedPath);
+                            }
+                        }}
+                    >
+                        {#if $transcriptStore.currentTranscriptPath}
+                            <option value={$transcriptStore.currentTranscriptPath} selected class="truncate">
+                                {currentTranscriptLabel}
+                            </option>
+                        {:else if associatedTranscriptsForDropdown.length === 0}
+                            <option value="" disabled selected class="truncate">No Transcripts</option>
+                        {/if}
+
+                        {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
+                            {#if transcript.path !== $transcriptStore.currentTranscriptPath}
+                                <option value={transcript.path || transcript.relativePath} title={transcript.path || transcript.relativePath} class="truncate">
+                                    {transcript.name}
+                                </option>
+                            {/if}
+                        {/each}
+                    </select>
+                    <!-- Custom Chevron Icon -->
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                         </svg>
-                    </button>
-                </div>
-
-                {#if showTranscriptDropdown}
-                    <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
-                        <div class="py-1" role="none">
-                            <!-- {@const filteredTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
-                                const itemPath = transcript.path || (get(project).baseDirectory ? `${get(project).baseDirectory}/${transcript.relativePath}` : null);
-                                return itemPath !== $transcriptStore.currentTranscriptPath;
-                            })} -->
-                            {#each filteredAssociatedTranscripts as transcript (transcript.unique_render_key)}
-                                <button
-                                    on:click={() => {
-                                        let pathForDispatch = transcript.path;
-                                        if (!pathForDispatch && transcript.relativePath) {
-                                            const baseDir = get(project).baseDirectory;
-                                            if (baseDir) {
-                                                pathForDispatch = `${baseDir}/${transcript.relativePath}`;
-                                            }
-                                        }
-                                        if (pathForDispatch) {
-                                            dispatch('transcriptselected', pathForDispatch);
-                                        } else {
-                                            console.error('[RichTextPreview] No valid path to dispatch for transcript:', transcript);
-                                        }
-                                        showTranscriptDropdown = false;
-                                    }}
-                                    class="block w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                                    role="menuitem"
-                                    title={transcript.path || transcript.relativePath}
-                                >
-                                    <span class="truncate">{transcript.name}</span>
-                                </button>
-                            {:else}
-                                <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No other transcripts to select.</span>
-                            {/each}
-                        </div>
                     </div>
-                {/if}
-            </div>
-        {:else if $transcriptStore.selectedMediaFile}
-             <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Transcripts</span>
-        {:else}
-            <!-- Optionally, show nothing or "No Media Selected" if no media is selected -->
-        {/if}
+                </div>
+            {:else}
+                <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Media Selected</span>
+            {/if}
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
             {#if allSegmentsData.length || previewEditMode}
