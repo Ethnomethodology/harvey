@@ -253,6 +253,40 @@
         leftPanelVisible.toggle();
     }
 
+    async function handleMediaLoaded(event) {
+        console.log('[TranscriptionsView] Media loaded event received:', event.detail);
+        const mediaPath = event.detail.mediaPath;
+        const mediaName = event.detail.mediaName; // This is now just the filename, not the full object
+
+        // Get the latest selectedMediaFile from the store, which should have the transcripts populated by selectMedia
+        const currentSelectedMediaFile = get(transcriptStore).selectedMediaFile;
+        const transcripts = currentSelectedMediaFile?.transcripts || [];
+
+        if (transcripts.length > 0) {
+            // Find the default transcription (same name as media file, excluding extension)
+            const mediaNameWithoutExt = mediaName.substring(0, mediaName.lastIndexOf('.'));
+            const defaultTranscript = transcripts.find(t => {
+                const transcriptName = t.name || (t.path ? t.path.split(/[\\/]/).pop() : ''); // Use t.name if available, fallback to path
+                const transcriptNameWithoutExt = transcriptName.substring(0, transcriptName.lastIndexOf('.'));
+                return transcriptNameWithoutExt === mediaNameWithoutExt;
+            });
+
+            if (defaultTranscript) {
+                console.log('[TranscriptionsView] Loading default transcript:', defaultTranscript.path);
+                try {
+                    await loadTranscriptFile(defaultTranscript.path);
+                } catch (error) {
+                    console.error('[TranscriptionsView] Failed to load default transcript:', error);
+                    // Optionally, show a message to the user
+                }
+            } else {
+                console.log('[TranscriptionsView] No default transcript found for media:', mediaName);
+            }
+        } else {
+            console.log('[TranscriptionsView] No transcripts associated with media:', mediaName);
+        }
+    }
+
     onMount(() => {
         console.log('[TranscriptionsView] Mounted.');
     });
@@ -327,6 +361,7 @@
                     showMainTrimButton={false}
                     on:trimModeEntered={handleMediaPlayerTrimModeEntered}
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
+                    on:mediaLoaded={handleMediaLoaded}
                 />
             </div>
             <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">

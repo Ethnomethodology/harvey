@@ -221,7 +221,8 @@ export function selectMedia(fileEntry) {
     const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
 
     if (shouldUpdateSelection || speakersChanged) {
-        const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? fileEntry : null;
+        // Ensure all properties of fileEntry (including 'transcripts') are copied to newSelectedMedia
+        const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? { ...fileEntry } : null;
         if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
             console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia); // ERROR
         }
@@ -231,7 +232,7 @@ export function selectMedia(fileEntry) {
 
         transcriptStore.update((ts) => ({
             ...ts,
-            selectedMediaFile: newSelectedMedia,
+            selectedMediaFile: newSelectedMedia, // newSelectedMedia now explicitly includes 'transcripts'
             audioBuffer: null,
             audioBufferPeaks: null,
             player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -249,6 +250,7 @@ export function selectMedia(fileEntry) {
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
+        // Use associated_transcripts, which is populated by the backend
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
             let transcriptPathToLoad = null;
             const mediaName = newlySelectedMedia.name; // e.g., "my_audio.wav"

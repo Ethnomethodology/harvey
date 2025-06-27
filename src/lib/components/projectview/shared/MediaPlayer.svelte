@@ -9,7 +9,7 @@
 		togglePlayerPlaying,
 		setAudioBuffer // This will be used to set both buffer and peaks
 	} from '$lib/stores/transcriptStore.js';
-	import { get } from 'svelte/store';
+	import { get } from 'svelte/store'; // Ensure get is imported
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
@@ -595,6 +595,14 @@
                     if (localAudioBuffer && localDuration > 0) {
                         isMediaReadyForProcessing = true;
                         console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to TRUE for ${mediaPathToLoad || loadedPathFromProp}`);
+                        // Dispatch mediaLoaded event for TranscriptionsView
+                        // TranscriptionsView will fetch transcripts from transcriptStore directly
+                        if (!explicitMediaPath) { // Only dispatch for the main player
+                            dispatch('mediaLoaded', {
+                                mediaPath: mediaPathToLoad,
+                                mediaName: mediaPathToLoad.split(/[\\/]/).pop(), // Just the filename
+                            });
+                        }
                     } else {
                         isMediaReadyForProcessing = false;
                         console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to FALSE for ${mediaPathToLoad || loadedPathFromProp}. Reason: localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}`);

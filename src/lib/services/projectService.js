@@ -187,8 +187,10 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
-              if (node.file_type === 'media' && node.transcripts) {
-                node.transcripts = node.transcripts.map(t => {
+              if (node.file_type === 'media') {
+                // Ensure node.associated_transcripts is an array before mapping
+                node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
+                node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
@@ -289,8 +291,10 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
 
         if (mediaFileToSelect) {
+            console.log('[ProjectService] Calling selectMedia with mediaFileToSelect:', JSON.stringify(mediaFileToSelect, null, 2));
             selectMedia(mediaFileToSelect);
         } else {
+            console.log('[ProjectService] Calling selectMedia with null (no media selected).');
             selectMedia(null);
         }
     } catch (error) {
