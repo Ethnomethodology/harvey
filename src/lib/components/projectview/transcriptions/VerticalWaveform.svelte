@@ -55,8 +55,6 @@
 	function pyToTime(py, mediaDuration, viewHeight) {
 		if (!mediaDuration || mediaDuration <= 0 || !viewHeight || viewHeight <= 0) return 0;
 		const contentLogicalHeight = viewHeight * zoomLevel;
-		// Assuming py is a coordinate on the visible part of the contentLogicalHeight,
-		// and assuming scrollOffsetPy = 0 for now.
 		const proportion = Math.max(0, Math.min(1, py / contentLogicalHeight));
 		return proportion * mediaDuration;
 	}
@@ -72,17 +70,14 @@
 		ctx.lineWidth = 1;
 
 		const usePeaks = peaksData && peaksData.length > 0;
-		const contentLogicalHeight = canvasClientHeight * zoomLevel; // Total height of data if laid out at current zoom
+		const contentLogicalHeight = canvasClientHeight * zoomLevel;
 
 		if (usePeaks) {
 			const numPeakBlocks = peaksData.length / 2;
-			// This defines how many peak blocks correspond to one unit in the contentLogicalHeight space
 			const peaksPerLogicalUnit = numPeakBlocks / contentLogicalHeight;
 
 			ctx.beginPath(); // Max Peaks
-			for (let yPx = 0; yPx < canvasClientHeight; yPx++) { // Iterate over screen pixels
-				// yPx on screen corresponds to logicalY_on_content = yPx (assuming scrollOffsetPy = 0)
-				// This logicalY_on_content is a point in the contentLogicalHeight.
+			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
 				const peakBlockStartIndex = Math.floor(yPx * peaksPerLogicalUnit);
 				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
 				let maxPeak = 0.0;
@@ -116,10 +111,8 @@
 
 			ctx.beginPath(); // Max Envelope
 			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
-				const logicalY_on_content = yPx; // Screen pixel yPx maps to this point in contentLogicalHeight
+				const logicalY_on_content = yPx;
 				const sampleStartIndex = Math.floor(logicalY_on_content * samplesPerLogicalUnit);
-				// The range of samples for this one screen pixel yPx.
-				// (logicalY_on_content + 1) is the next point in content space.
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_on_content + 1) * samplesPerLogicalUnit));
 
 				let maxVal = 0;
@@ -128,7 +121,7 @@
 					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
 						if (data[i] > maxVal) maxVal = data[i];
 					}
-				} else if (sampleStartIndex < totalSamples) { // Single sample covers this logical unit
+				} else if (sampleStartIndex < totalSamples) {
 					maxVal = data[sampleStartIndex];
 				}
 				const xVal = midX + maxVal * midX;
@@ -295,14 +288,14 @@
 		ctx.clearRect(0, 0, waveformCanvasWidth, visibleCanvasHeight);
 
 		if ((buf || peaks) && visibleCanvasHeight > 0) {
-			// For vertical, logicalHeight is visibleCanvasHeight (no zoom)
-			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af'); // Tailwind gray-400
+			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af');
 		}
 
-		// Draw red seek bar
 		const pyCur = timeToLogicalPy(cur, mediaDur, visibleCanvasHeight);
-		if (pyCur >= -1 && pyCur <= visibleCanvasHeight + 1) {
-			ctx.strokeStyle = '#ef4444'; // Tailwind red-500
+		const pyCurOnScreen = pyCur;
+
+		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) {
+			ctx.strokeStyle = '#ef4444';
 			ctx.lineWidth = 1.5;
 			ctx.beginPath();
 			ctx.moveTo(0, pyCur + 0.5);
@@ -486,14 +479,14 @@
 </script>
 
 <div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-	<div class="flex-shrink-0 px-2 py-1 flex items-center justify-end space-x-1 border-b border-gray-300 dark:border-gray-600">
-		<button class="ui-button-icon-sm" title="Zoom In Waveform" aria-label="Zoom In Waveform" on:click={zoomIn} disabled={!canZoomIn}>
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+	<div class="flex-shrink-0 px-2 py-1.5 flex items-center justify-end space-x-1.5 border-b border-gray-300 dark:border-gray-600 w-full">
+		<button class="ui-button-icon-panelheader" title="Zoom In Waveform" aria-label="Zoom In Waveform" on:click={zoomIn} disabled={!canZoomIn}>
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
 			</svg>
 		</button>
-		<button class="ui-button-icon-sm" title="Zoom Out Waveform" aria-label="Zoom Out Waveform" on:click={zoomOut} disabled={!canZoomOut}>
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform" aria-label="Zoom Out Waveform" on:click={zoomOut} disabled={!canZoomOut}>
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
 			</svg>
 		</button>
@@ -536,7 +529,7 @@
 		@apply absolute inset-0 flex items-center justify-center text-xs p-1 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 pointer-events-none;
 		text-align: center;
 	}
-	.ui-button-icon-sm {
-		@apply p-0.5 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-700 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent;
+	.ui-button-icon-panelheader { /* Standardized button style for panel headers */
+		@apply p-1 rounded text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700;
 	}
 </style>
