@@ -56,65 +56,72 @@
 		if (!buffer && (!peaksData || peaksData.length === 0)) return;
 
 		const midX = canvasWidth / 2;
-		ctx.strokeStyle = color;
+		const isDark = document.documentElement.classList.contains('dark');
+		// Consistent color with InteractiveWaveform.svelte's default waveform color
+		ctx.strokeStyle = isDark ? '#9ca3af' : '#9ca3af'; // Tailwind gray-400 for both, or choose specific dark/light variants
 		ctx.lineWidth = 1;
-		ctx.beginPath();
 
-		// Determine if to use peaks or raw buffer data
-		// For vertical, we always see the whole duration, so peaks are generally preferred if available.
 		const usePeaks = peaksData && peaksData.length > 0;
 
 		if (usePeaks) {
-			const numPeakBlocks = peaksData.length / 2; // Each block has a min and max
+			const numPeakBlocks = peaksData.length / 2;
 			const peaksPerLogicalPixelY = numPeakBlocks / logicalHeight;
 
-			// Path for minimums (left side)
+			// Draw Max Peaks (e.g., top line in horizontal, right line in vertical)
+			ctx.beginPath();
 			for (let yPx = 0; yPx < logicalHeight; yPx++) {
-				const peakBlockStartIndex = Math.floor(yPx * peaksPerLogicalPixelY);
-				// For a single pixel line, we might just sample one peak block or average a few
-				// Let's take the representative peak for the start of this pixel's time range
-				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
-				let minPeak = 0.0;
-				if (targetBlock * 2 < peaksData.length) {
-					minPeak = peaksData[targetBlock * 2]; // Min value from peak data
-				}
-				const xVal = midX + minPeak * midX; // minPeak is typically negative or zero
-				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
-				else ctx.lineTo(xVal, yPx + 0.5);
-			}
-
-			// Path for maximums (right side), drawing backwards to connect the shape
-			for (let yPx = logicalHeight - 1; yPx >= 0; yPx--) {
 				const peakBlockStartIndex = Math.floor(yPx * peaksPerLogicalPixelY);
 				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
 				let maxPeak = 0.0;
 				if (targetBlock * 2 + 1 < peaksData.length) {
-					maxPeak = peaksData[targetBlock * 2 + 1]; // Max value from peak data
+					maxPeak = peaksData[targetBlock * 2 + 1];
 				}
-				const xVal = midX + maxPeak * midX; // maxPeak is typically positive or zero
-				ctx.lineTo(xVal, yPx + 0.5);
+				const xVal = midX + maxPeak * midX;
+				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
+				else ctx.lineTo(xVal, yPx + 0.5);
 			}
-			ctx.closePath(); // Close the path to form a continuous shape
-			// Fill the waveform shape
-			// const gradient = ctx.createLinearGradient(0, 0, canvasWidth, 0);
-			// gradient.addColorStop(0, "rgba(156, 163, 175, 0.1)"); // Tailwind gray-400 with alpha
-			// gradient.addColorStop(0.5, "rgba(156, 163, 175, 0.5)");
-			// gradient.addColorStop(1, "rgba(156, 163, 175, 0.1)");
-			// ctx.fillStyle = gradient;
-            const isDark = document.documentElement.classList.contains('dark');
-            ctx.fillStyle = isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(209, 213, 219, 0.5)'; // gray-500 dark, gray-300 light
-			ctx.fill();
-			// Stroke the outline
-			ctx.strokeStyle = isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.7)'; // gray-400 dark, gray-500 light
 			ctx.stroke();
 
+			// Draw Min Peaks (e.g., bottom line in horizontal, left line in vertical)
+			ctx.beginPath();
+			for (let yPx = 0; yPx < logicalHeight; yPx++) {
+				const peakBlockStartIndex = Math.floor(yPx * peaksPerLogicalPixelY);
+				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+				let minPeak = 0.0;
+				if (targetBlock * 2 < peaksData.length) {
+					minPeak = peaksData[targetBlock * 2];
+				}
+				const xVal = midX + minPeak * midX; // minPeak is negative
+				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
+				else ctx.lineTo(xVal, yPx + 0.5);
+			}
+			ctx.stroke();
 
-		} else if (buffer) { // Fallback to raw data if peaks are not available
+		} else if (buffer) { // Fallback to raw data
 			const data = buffer.getChannelData(0);
 			const totalSamples = data.length;
-			const samplesPerLogicalPixelY = totalSamples / logicalHeight; // How many samples per vertical pixel
+			const samplesPerLogicalPixelY = totalSamples / logicalHeight;
 
-			// Path for minimums (left envelope)
+			// Draw Max Envelope
+			ctx.beginPath();
+			for (let yPx = 0; yPx < logicalHeight; yPx++) {
+				const sampleStartIndex = Math.floor(yPx * samplesPerLogicalPixelY);
+				const sampleEndIndex = Math.min(totalSamples, Math.floor((yPx + 1) * samplesPerLogicalPixelY));
+				let maxVal = 0;
+				if (sampleStartIndex < sampleEndIndex) {
+					maxVal = data[sampleStartIndex];
+					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
+						if (data[i] > maxVal) maxVal = data[i];
+					}
+				}
+				const xVal = midX + maxVal * midX;
+				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
+				else ctx.lineTo(xVal, yPx + 0.5);
+			}
+			ctx.stroke();
+
+			// Draw Min Envelope
+			ctx.beginPath();
 			for (let yPx = 0; yPx < logicalHeight; yPx++) {
 				const sampleStartIndex = Math.floor(yPx * samplesPerLogicalPixelY);
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((yPx + 1) * samplesPerLogicalPixelY));
@@ -129,26 +136,6 @@
 				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
 				else ctx.lineTo(xVal, yPx + 0.5);
 			}
-
-			// Path for maximums (right envelope), drawing backwards
-			for (let yPx = logicalHeight - 1; yPx >= 0; yPx--) {
-				const sampleStartIndex = Math.floor(yPx * samplesPerLogicalPixelY);
-				const sampleEndIndex = Math.min(totalSamples, Math.floor((yPx + 1) * samplesPerLogicalPixelY));
-				let maxVal = 0;
-				if (sampleStartIndex < sampleEndIndex) {
-					maxVal = data[sampleStartIndex];
-					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
-						if (data[i] > maxVal) maxVal = data[i];
-					}
-				}
-				const xVal = midX + maxVal * midX;
-				ctx.lineTo(xVal, yPx + 0.5);
-			}
-			ctx.closePath();
-            const isDark = document.documentElement.classList.contains('dark');
-            ctx.fillStyle = isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(209, 213, 219, 0.5)';
-			ctx.fill();
-			ctx.strokeStyle = isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.7)';
 			ctx.stroke();
 		}
 	}
@@ -306,7 +293,7 @@
 		ctx.restore();
 
 		lastDrawnTime = cur;
-		lastDrawnBuffer = buf; // Or peaks if primarily using that
+		lastDrawnBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
 		lastDrawnActualDuration = mediaDur;
 	}
 
@@ -314,31 +301,37 @@
 	function requestRedraw(force = false) {
 		if (force) forceNextRedraw = true;
 		if (isMounted) {
-			drawVerticalTimescale();
-			drawWaveformUI();
+            // The animationLoop will call the draw functions.
+            // We just need to ensure it's running if a redraw is requested.
+            if (animationFrameId === null) {
+                animationFrameId = requestAnimationFrame(animationLoop);
+            }
 		}
 	}
 
 	function animationLoop() {
-		if (!isMounted) return;
+        if (!isMounted) {
+            animationFrameId = null; // Stop loop if unmounted
+            return;
+        }
 		const cur = currentTime;
 		const mediaDur = duration;
-		const buf = audioBuffer; // Or peaks
+		const currentBufOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
 
 		let needsDraw = forceNextRedraw ||
-			(buf !== lastDrawnBuffer) ||
+			(currentBufOrPeaks !== lastDrawnBufferOrPeaks) ||
 			(Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) ||
 			(mediaDur !== lastDrawnActualDuration);
 
 		forceNextRedraw = false;
 
-		if (needsDraw && visibleCanvasHeight > 0 && (buf || $transcriptStore.audioBufferPeaks) && mediaDur > 0) {
-			drawVerticalTimescale();
+		if (needsDraw && visibleCanvasHeight > 0 && currentBufOrPeaks && mediaDur > 0) {
+			drawVerticalTimescale(); // Timescale might depend on duration or height
 			drawWaveformUI();
 		} else if (needsDraw) { // Conditions for drawing not met (e.g. no buffer, no duration)
             clearWaveformCanvases();
             lastDrawnTime = cur;
-            lastDrawnBuffer = buf;
+            lastDrawnBufferOrPeaks = currentBufOrPeaks;
             lastDrawnActualDuration = mediaDur;
         }
 		animationFrameId = requestAnimationFrame(animationLoop);
@@ -418,18 +411,32 @@
 	}
 
     // Watch for prop changes to force redraw
-    $: if (isMounted && (audioBuffer !== lastDrawnBuffer || duration !== lastDrawnActualDuration)) {
+    $: if (isMounted &&
+        (
+            (audioBuffer !== lastDrawnBufferOrPeaks && !$transcriptStore.audioBufferPeaks) || // audioBuffer changed
+            ($transcriptStore.audioBufferPeaks && $transcriptStore.audioBufferPeaks !== lastDrawnBufferOrPeaks) || // peaks changed
+            (audioBuffer && $transcriptStore.audioBufferPeaks && (audioBuffer !== lastDrawnBufferOrPeaks && $transcriptStore.audioBufferPeaks !== lastDrawnBufferOrPeaks)) || // both available and one changed
+            duration !== lastDrawnActualDuration
+        )
+    ) {
+        lastDrawnBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
         requestRedraw(true);
     }
-    $: if (isMounted && currentTime !== lastDrawnTime ) {
-        requestRedraw(); // Redraw for time change, no need to force full if only time
+
+    // Separate watcher for currentTime to ensure smooth updates via animation loop
+    $: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) { // A bit more sensitive for time
+        // The animation loop handles drawing if lastDrawnTime is different enough
+        // We just need to ensure the loop is running if not already.
+        if (animationFrameId === null) {
+             animationFrameId = requestAnimationFrame(animationLoop);
+        }
     }
 
 </script>
 
-<div bind:this={componentContainer} class="vertical-waveform-panel flex w-full h-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-	<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
-	<div class="waveform-canvas-container flex-grow h-full relative">
+<div bind:this={componentContainer} class="vertical-waveform-panel flex w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+	<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
+	<div class="waveform-canvas-container flex-grow h-full relative min-w-0"> {/* Added min-w-0 here */}
 		<canvas
 			bind:this={waveformCanvas}
 			class="waveform-canvas-vertical w-full h-full cursor-pointer"
