@@ -25,7 +25,8 @@
     import LeftPanel from './LeftPanel.svelte';
     import { leftPanelVisible } from '$lib/stores/layoutViewStore.js';
     import MediaPlayer from '../shared/MediaPlayer.svelte';
-    import InteractiveWaveform from '../shared/InteractiveWaveform.svelte';
+    // import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Old horizontal waveform
+    import VerticalWaveform from './VerticalWaveform.svelte'; // New vertical waveform
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';
 
@@ -34,6 +35,7 @@
     
 
     export let mediaPlayerRef = null;
+    let verticalWaveformRef = null; // Ref for the new component
 
     let editableTranscriptRef;
     let richTextPreviewRef;
@@ -325,14 +327,15 @@
     <div class="flex flex-grow min-h-0 p-1 gap-1 w-full overflow-x-hidden">
         {#if isLeftPanelVisible}
             <div
-                class="w-[20%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0"
+                class="w-[15%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                 transition:slide="{{ duration: 300, axis: 'x' }}"
             >
                 <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
             </div>
         {/if}
-        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-1/2'} h-full flex flex-col gap-1 transition-all duration-300 ease-in-out">
 
+        <!-- Middle Panel: MediaPlayer and EditableTranscript -->
+        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]'} h-full flex flex-col gap-1 transition-all duration-300 ease-in-out">
             <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 rounded-md shadow flex flex-col">
                 <MediaPlayer
                     bind:this={mediaPlayerRef}
@@ -364,7 +367,31 @@
                  />
             </div>
         </div>
-        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-1/2'} h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto transition-all duration-300 ease-in-out flex flex-col">
+
+        <!-- Vertical Waveform Panel -->
+        <div class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+            {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
+                <VerticalWaveform
+                    bind:this={verticalWaveformRef}
+                    audioBuffer={$transcriptStore.audioBuffer}
+                    peaks={$transcriptStore.audioBufferPeaks}
+                    currentTime={$transcriptStore.player.currentTime}
+                    duration={$transcriptStore.player.duration}
+                    on:navigate={handlePanelNavigate}
+                />
+            {:else if $transcriptStore.selectedMediaFile}
+                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
+                    Waveform unavailable for this media or still loading.
+                </div>
+            {:else}
+                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
+                    Select media.
+                </div>
+            {/if}
+        </div>
+
+        <!-- Right Panel: RichTextPreview -->
+        <div class="{isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]'} h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto transition-all duration-300 ease-in-out flex flex-col">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
@@ -380,43 +407,7 @@
              />
         </div>
     </div>
-    <div class="h-24 w-full px-1 pb-1 flex-shrink-0">
-        <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow">
-            {#if $transcriptStore.selectedMediaFile && $transcriptStore.audioBuffer}
-                <InteractiveWaveform
-                    audioBuffer={$transcriptStore.audioBuffer}
-                    currentTime={$transcriptStore.player.currentTime}
-                    duration={$transcriptStore.player.duration}
-                    segments={$transcriptStore.segments}
-                    isPlaying={$transcriptStore.player.isPlaying}
-                    currentSegmentIndex={$transcriptStore.player.currentSegmentIndex}
-                    on:seek={(e) => mediaPlayerRef?.seekTo(e.detail.time)}
-                    bind:isEditingSegment={isSegmentEditingActive}
-                    bind:editSegmentStartTime={currentEditSegmentStart}
-                    bind:editSegmentEndTime={currentEditSegmentEnd}
-                    bind:isTrimming={isMediaPlayerTrimming}
-                    bind:trimStartTime={mediaPlayerTrimStart}
-                    bind:trimEndTime={mediaPlayerTrimEnd}
-                    on:updateTrimTimes={(event) => mediaPlayerRef?.updateTrimTimes(event.detail.startTime, event.detail.endTime)}
-                    on:navigate={handlePanelNavigate}
-                    on:trimupdate={handleWaveformTrimUpdate}
-                    on:segmentupdate={handleWaveformSegmentUpdate}
-                />
-            {:else if $transcriptStore.selectedMediaFile && !$transcriptStore.audioBuffer && !$project.isLoading && !$project.error?.includes('Media Error')}
-                <div class="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">
-                    {#if $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mp4') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mov')  || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.webm') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.mkv') || $transcriptStore.selectedMediaFile?.name?.toLowerCase().endsWith('.avi')}
-                        Video file loaded. Waveform view is for audio analysis.
-                    {:else if $project.error && $project.error.includes("decode")}
-                        Could not decode audio data for waveform.
-                    {:else}
-                        Audio buffer not available for waveform.
-                    {/if}
-                </div>
-            {:else if !$transcriptStore.selectedMediaFile && !$project.isLoading}
-                    <div class="flex items-center justify-center h-full text-sm text-gray-500 dark:text-gray-400">Select media to view waveform.</div>
-            {/if}
-        </div>
-    </div>
+    <!-- Old horizontal waveform container removed -->
 </div>
 
 <style lang="postcss">
