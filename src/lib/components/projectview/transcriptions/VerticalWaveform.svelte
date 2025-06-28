@@ -34,6 +34,25 @@
 
 	const dispatch = createEventDispatcher();
 
+	let segments = [];
+	let currentSegmentIndex = -1;
+	let currentSegment = null;
+
+	transcriptStore.subscribe(value => {
+		segments = value.segments || [];
+		currentSegmentIndex = value.player?.currentSegmentIndex ?? -1;
+		if (currentSegmentIndex >= 0 && currentSegmentIndex < segments.length) {
+			currentSegment = segments[currentSegmentIndex];
+		} else {
+			currentSegment = null;
+		}
+		// Request redraw if segment changes and component is mounted
+		if (isMounted && lastDrawnCurrentSegment !== currentSegment) {
+			requestRedraw(true);
+		}
+	});
+	let lastDrawnCurrentSegment = null; // To track changes in currentSegment for redraw
+
 	function formatTimescaleTimeVertical(sec, totalDuration) {
 		if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '0:00';
 		const tot = Math.floor(sec);
@@ -304,6 +323,32 @@
 			// For vertical, logicalHeight is visibleCanvasHeight (no zoom)
 			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af'); // Tailwind gray-400
 		}
+
+		// Highlight current segment (drawn in the same dpr-scaled context as main waveform)
+		if (currentSegment && mediaDur > 0) {
+			const segmentStartTime = Number(currentSegment.start_time);
+			const segmentEndTime = Number(currentSegment.end_time);
+
+			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
+				const segmentStartY_logical = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
+				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
+
+				const segmentStartY_onScreen = segmentStartY_logical - scrollOffsetPy;
+				const segmentEndY_onScreen = segmentEndY_logical - scrollOffsetPy;
+
+				const highlightTop = Math.max(0, segmentStartY_onScreen);
+				const highlightBottom = Math.min(visibleCanvasHeight, segmentEndY_onScreen);
+
+				if (highlightBottom > highlightTop) {
+					ctx.fillStyle = 'rgba(59, 130, 246, 0.3)'; // Tailwind blue-500 @ 30%
+					ctx.fillRect(0, highlightTop, waveformCanvasWidth, highlightBottom - highlightTop);
+				}
+			}
+		}
+		// Ensure lastDrawnCurrentSegment is updated after attempting to draw,
+		// so redraw is triggered if currentSegment changes.
+		// This is already handled by the subscription, but also good to note here for logic flow.
+
 
 		// Draw red seek bar
 		const pyCur_logical = timeToLogicalPy(cur, mediaDur, visibleCanvasHeight); // Position on the full logical (zoomed) canvas
