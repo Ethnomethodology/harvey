@@ -286,21 +286,34 @@
 		}
 
 		const firstMajorTickTime = 0; // Start from 0 for vertical
+		const textPadding = 5; // For label positioning
 
-		for (let time = firstMajorTickTime; time <= mediaDur; time += interval) {
+		for (let time = firstMajorTickTime; time <= mediaDur + interval; time += interval) { // Iterate slightly beyond mediaDur to catch last labels
 			if (time < 0) continue;
-			const py = timeToLogicalPy(time, mediaDur, visibleCanvasHeight);
-			if (py >= 0 && py <= visibleCanvasHeight) {
-				ctx.beginPath();
-				ctx.moveTo(TIMESCALE_WIDTH - (time % (interval * 5) < 0.0001 && interval >=1 ? 7 : 5), py + 0.5);
-				ctx.lineTo(TIMESCALE_WIDTH, py + 0.5);
-				ctx.stroke();
 
+			const logicalY = timeToLogicalPy(time, mediaDur, visibleCanvasHeight);
+			const screenY = logicalY - scrollOffsetPy; // Convert logical Y to screen Y
+
+			// Check if the tick or label is reasonably within the visible canvas height
+			// Allowing labels to be drawn if their center is slightly outside, but ticks only if line is inside.
+			const labelHeightApproximation = 10; // Approximate height of the label text
+			if (screenY >= -labelHeightApproximation && screenY <= visibleCanvasHeight + labelHeightApproximation) {
+
+				// Draw tick mark only if its line is within the canvas bounds
+				if (screenY >= 0 && screenY <= visibleCanvasHeight) {
+					ctx.beginPath();
+					const tickWidth = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 7 : 5;
+					ctx.moveTo(TIMESCALE_WIDTH - tickWidth, screenY + 0.5);
+					ctx.lineTo(TIMESCALE_WIDTH, screenY + 0.5);
+					ctx.stroke();
+				}
+
+				// Draw label text
 				const labelStr = formatTimescaleTimeVertical(time, mediaDur);
-				const textPadding = 5;
-				if (py - (ctx.measureText(labelStr).actualBoundingBoxAscent / 2) >= 0 &&
-					py + (ctx.measureText(labelStr).actualBoundingBoxDescent / 2) <= visibleCanvasHeight) {
-					ctx.fillText(labelStr, TIMESCALE_WIDTH - textPadding - 2, py);
+				// Check if the label text itself will be mostly visible
+				// Using a simpler check for brevity, can be refined with measureText if needed for perfect centering
+				if (screenY - (labelHeightApproximation / 2) >= 0 && screenY + (labelHeightApproximation / 2) <= visibleCanvasHeight) {
+					ctx.fillText(labelStr, TIMESCALE_WIDTH - textPadding - 2, screenY);
 				}
 			}
 		}
@@ -605,10 +618,11 @@
 	$: {
 		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
 			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
-			const screenY = logicalY - scrollOffsetPy;
+			const screenY = logicalY - scrollOffsetPy; // screenY is a float
 
 			if (!isNaN(screenY) && isFinite(screenY)) {
-				seekBarStyle = `top: ${Math.round(screenY)}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
+				// Use float for top. Height is fixed, visibility check uses float.
+				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
 			} else {
 				seekBarStyle = 'display: none;'; // Hide if position is invalid
 			}
@@ -627,13 +641,13 @@
 				const logicalTop = timeToLogicalPy(segmentStartTime, duration, visibleCanvasHeight);
 				const logicalBottom = timeToLogicalPy(segmentEndTime, duration, visibleCanvasHeight);
 
-				const screenTop = Math.round(logicalTop - scrollOffsetPy);
-				const screenBottom = Math.round(logicalBottom - scrollOffsetPy);
+				const screenTop_float = logicalTop - scrollOffsetPy;
+				const screenBottom_float = logicalBottom - scrollOffsetPy;
 
-				const height = Math.max(0, screenBottom - screenTop);
+				const height_float = Math.max(0, screenBottom_float - screenTop_float);
 
-				if (height > 0 && screenTop < visibleCanvasHeight && screenBottom > 0) {
-					segmentHighlightStyle = `top: ${screenTop}px; height: ${height}px; display: block;`;
+				if (height_float > 0 && screenTop_float < visibleCanvasHeight && screenBottom_float > 0) {
+					segmentHighlightStyle = `top: ${screenTop_float}px; height: ${height_float}px; display: block;`;
 				} else {
 					segmentHighlightStyle = 'display: none;';
 				}
