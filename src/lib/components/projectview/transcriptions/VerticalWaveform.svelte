@@ -434,9 +434,6 @@
 		dispatch('navigate', { time: time });
 	}
 
-	let waveformScrollContainerElement; // bind:this for the scroll container
-	$: if (waveformScrollContainerRef) waveformScrollContainerElement = waveformScrollContainerRef; // compatibility if ref still used elsewhere
-
 	function handleWaveformScroll(event) {
 		if (event.target) {
 			const newScrollOffsetPy = Math.round(event.target.scrollTop);
