@@ -94,25 +94,41 @@
 		ctx.strokeStyle = isDark ? '#9ca3af' : '#9ca3af';
 		ctx.lineWidth = 1;
 
-		const usePeaks = peaksData && peaksData.length > 0;
-		// contentLogicalHeight is the total height the waveform data would occupy if laid out at current zoom.
-		// We are drawing into canvasClientHeight.
-		const contentLogicalHeight = canvasClientHeight * zoomLevel;
+		// Adaptive peak/raw data usage logic (similar to InteractiveWaveform)
+		const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20;
+		let effectiveSamplesPerVisiblePixel = Infinity;
 
-		if (usePeaks) {
+		if (buffer && canvasClientHeight > 0 && zoomLevel > 0) {
+			effectiveSamplesPerVisiblePixel = buffer.length / (canvasClientHeight * zoomLevel);
+		}
+
+		let usePeaksDecision = peaksData && peaksData.length > 0 &&
+							   (effectiveSamplesPerVisiblePixel > PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL || !buffer);
+
+		if (buffer && zoomLevel > (maxZoomLevel / 1.5)) { // Prefer raw data if highly zoomed in and buffer available
+			usePeaksDecision = false;
+		}
+
+		if (!buffer && !peaksData) return; // Nothing to draw
+		if (!buffer && peaksData && peaksData.length > 0) usePeaksDecision = true; // Must use peaks if no buffer
+		if (buffer && (!peaksData || peaksData.length === 0)) usePeaksDecision = false; // Must use buffer if no peaks
+
+
+		const contentLogicalHeight = canvasClientHeight * zoomLevel;
+		if (contentLogicalHeight <= 0) return; // Avoid division by zero if zoomLevel or height is 0
+
+		if (usePeaksDecision) {
+			// console.log('[VerticalWaveform] Drawing with PEAKS data');
 			const numPeakBlocks = peaksData.length / 2;
-			// peaksPerLogicalUnit: how many peak blocks fit into one unit of the contentLogicalHeight.
-			// Or rather, how many data units (peak blocks) correspond to each logical pixel unit if contentLogicalHeight was 1.
-			// This should be: data units per logical pixel on the zoomed canvas.
 			const peaksPerLogicalUnitOfZoomedCanvas = numPeakBlocks / contentLogicalHeight;
 
 			ctx.beginPath(); // Max Peaks
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) { // Iterate over screen pixels
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
 				const logicalY_content = yPx_screen + scrollOffsetPy;
-				const peakBlockStartIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
-				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
+				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
 				let maxPeak = 0.0;
-				if (targetBlock >= 0 && targetBlock * 2 + 1 < peaksData.length) {
+				if (targetBlock * 2 + 1 < peaksData.length) {
 					maxPeak = peaksData[targetBlock * 2 + 1];
 				}
 				const xVal = midX + maxPeak * midX;
@@ -124,10 +140,10 @@
 			ctx.beginPath(); // Min Peaks
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
 				const logicalY_content = yPx_screen + scrollOffsetPy;
-				const peakBlockStartIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
-				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
+				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
 				let minPeak = 0.0;
-				if (targetBlock >= 0 && targetBlock * 2 < peaksData.length) {
+				if (targetBlock * 2 < peaksData.length) {
 					minPeak = peaksData[targetBlock * 2];
 				}
 				const xVal = midX + minPeak * midX;
@@ -137,23 +153,25 @@
 			ctx.stroke();
 
 		} else if (buffer) {
+			// console.log('[VerticalWaveform] Drawing with RAW data');
 			const data = buffer.getChannelData(0);
 			const totalSamples = data.length;
+			if (totalSamples === 0) return; // No data to draw
 			const samplesPerLogicalUnitOfZoomedCanvas = totalSamples / contentLogicalHeight;
 
 			ctx.beginPath(); // Max Envelope
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
 				const logicalY_content = yPx_screen + scrollOffsetPy;
-				const sampleStartIndex = Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas);
+				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 
 				let maxVal = 0;
-				if (sampleStartIndex < sampleEndIndex && sampleStartIndex < totalSamples) {
+				if (sampleStartIndex < sampleEndIndex) {
 					maxVal = data[sampleStartIndex];
 					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
 						if (data[i] > maxVal) maxVal = data[i];
 					}
-				} else if (sampleStartIndex < totalSamples) {
+				} else if (sampleStartIndex >= 0 && sampleStartIndex < totalSamples) { // Single sample for this pixel
 					maxVal = data[sampleStartIndex];
 				}
 				const xVal = midX + maxVal * midX;
@@ -165,15 +183,15 @@
 			ctx.beginPath(); // Min Envelope
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
 				const logicalY_content = yPx_screen + scrollOffsetPy;
-				const sampleStartIndex = Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas);
+				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 				let minVal = 0;
-				if (sampleStartIndex < sampleEndIndex && sampleStartIndex < totalSamples) {
+				if (sampleStartIndex < sampleEndIndex) {
 					minVal = data[sampleStartIndex];
 					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
 						if (data[i] < minVal) minVal = data[i];
 					}
-				} else if (sampleStartIndex < totalSamples) {
+				} else if (sampleStartIndex >= 0 && sampleStartIndex < totalSamples) { // Single sample for this pixel
 					minVal = data[sampleStartIndex];
 				}
 				const xVal = midX + minVal * midX;
@@ -340,8 +358,19 @@
 				const highlightBottom = Math.min(visibleCanvasHeight, segmentEndY_onScreen);
 
 				if (highlightBottom > highlightTop) {
-					ctx.fillStyle = 'rgba(59, 130, 246, 0.3)'; // Tailwind blue-500 @ 30%
+					ctx.fillStyle = 'rgba(147, 197, 253, 0.4)'; // Consistent with InteractiveWaveform
 					ctx.fillRect(0, highlightTop, waveformCanvasWidth, highlightBottom - highlightTop);
+
+					// Draw the waveform within the segment with a different color
+					if ((buf || peaks) && visibleCanvasHeight > 0) {
+						ctx.save();
+						ctx.beginPath();
+						ctx.rect(0, highlightTop, waveformCanvasWidth, highlightBottom - highlightTop);
+						ctx.clip();
+						// Pass the specific color for the highlighted segment's waveform
+						drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#2563eb'); // Consistent with InteractiveWaveform
+						ctx.restore();
+					}
 				}
 			}
 		}
@@ -355,20 +384,26 @@
 		const pyCurOnScreen = pyCur_logical - scrollOffsetPy; // Subtract scroll offset to get screen position
 
 		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) { // Check if visible on screen
-			ctx.save();
-			ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Reset transform, apply only DPR for crisp line
+			// The main context is already scaled by DPR.
+			// For the seek bar, we want a crisp 1 CSS pixel line.
+			// We can draw directly into the DPR-scaled context.
+			// The +0.5 helps with anti-aliasing for sharp lines.
+			ctx.strokeStyle = '#ef4444'; // Red color for seek bar
+			ctx.lineWidth = 1 / dpr; // Aim for 1 physical pixel line width if dpr > 1, or 1 css pixel if dpr=1
+			// Correcting lineWidth: it should be specified in CSS pixels for the current transform.
+			// If the context is scaled by dpr, a lineWidth of 1 will be 1*dpr physical pixels.
+			// For a 1 *physical* pixel line, use 1/dpr. For a 1 *CSS* pixel line, use 1.
+			// InteractiveWaveform uses lineWidth = 1.5 (CSS pixels) for its seek bar. Let's match that intent.
+			ctx.lineWidth = 1.5; // Use 1.5 CSS pixels, will be scaled by DPR.
 
-			ctx.strokeStyle = '#ef4444';
-			ctx.lineWidth = 1; // 1 CSS pixel line
-
-			const finalLineY = Math.round(pyCurOnScreen) + 0.5; // Use the on-screen Y
+			const finalLineY = Math.round(pyCurOnScreen) + 0.5;
 
 			ctx.beginPath();
 			ctx.moveTo(0, finalLineY);
-			ctx.lineTo(waveformCanvasWidth, finalLineY); // waveformCanvasWidth is in CSS pixels
+			ctx.lineTo(waveformCanvasWidth, finalLineY);
 			ctx.stroke();
 
-			ctx.restore();
+			// No need for separate save/restore/setTransform here if drawing in the main scaled context.
 		}
 		ctx.restore(); // Outer restore for initial dpr scaling
 
@@ -486,18 +521,13 @@
 
 	function handleScrollDivClick(event) {
 		const mediaDur = duration;
-		if (!waveformScrollDiv || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0) return;
+		if (!waveformScrollDiv || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
 		const rect = event.currentTarget.getBoundingClientRect(); // event.currentTarget is waveformScrollDiv
 		const clickY_in_viewport = event.clientY - rect.top;
 
-		const logicalClickY = waveformScrollDiv.scrollTop + clickY_in_viewport;
-		const contentTotalScrollHeight = waveformScrollDiv.scrollHeight;
-
-		if (contentTotalScrollHeight <= 0) return;
-
-		const proportion = Math.max(0, Math.min(1, logicalClickY / contentTotalScrollHeight));
-		const time = proportion * mediaDur;
+		// Use pyToTime for accurate time calculation considering zoom and scroll
+		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, waveformScrollDiv.scrollTop);
 
 		dispatch('navigate', { time: time });
 	}
