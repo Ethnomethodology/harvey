@@ -302,10 +302,10 @@
 
 		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) {
 			ctx.strokeStyle = '#ef4444';
-			ctx.lineWidth = 1.5;
+			ctx.lineWidth = 1; // Changed from 1.5 to 1 for a potentially sharper line
 			ctx.beginPath();
-			ctx.moveTo(0, pyCur + 0.5);
-			ctx.lineTo(waveformCanvasWidth, pyCur + 0.5);
+			ctx.moveTo(0, pyCurOnScreen + 0.5);
+			ctx.lineTo(waveformCanvasWidth, pyCurOnScreen + 0.5);
 			ctx.stroke();
 		}
 		ctx.restore();
@@ -424,13 +424,17 @@
 
 	function handleCanvasClick(e) {
 		const mediaDur = duration;
-		if (!waveformCanvas || !audioBuffer || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
+		if (!waveformCanvas || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
-		const rect = waveformCanvas.getBoundingClientRect();
-		const clickY = e.clientY - rect.top; // y relative to canvas top
+		const rect = waveformCanvas.getBoundingClientRect(); // rect of the TALL canvas
+		const clickY_on_tall_canvas = e.clientY - rect.top; // This is a coordinate on the TALL canvas
 
-		// Use the updated pyToTime that accepts scrollOffsetPy
-		const time = pyToTime(clickY, mediaDur, visibleCanvasHeight, scrollOffsetPy);
+		const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
+		if (contentLogicalHeight <= 0) return;
+
+		const proportion = Math.max(0, Math.min(1, clickY_on_tall_canvas / contentLogicalHeight ));
+		const time = proportion * mediaDur;
+
 		dispatch('navigate', { time: time });
 	}
 
