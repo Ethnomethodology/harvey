@@ -7,6 +7,10 @@
 	export let duration = 0;
 
 	const TIMESCALE_WIDTH = 35; // For vertical timescale, increased for padding
+	const BAR_THICKNESS_PX = 2;
+	const BAR_SPACING_PX = 1;
+	const BAR_UNIT_HEIGHT_PX = BAR_THICKNESS_PX + BAR_SPACING_PX;
+
 	let waveformCanvas;
 	let timescaleCanvas;
 	let componentContainer; // Outermost container ref
@@ -94,117 +98,59 @@
 
 		const midX = canvasWidth / 2;
 		// const isDark = document.documentElement.classList.contains('dark'); // Removed, color is passed as param
-		// Consistent color with InteractiveWaveform.svelte's default waveform color
-		ctx.strokeStyle = color; // Use the passed 'color' parameter
-		ctx.lineWidth = 1;
+		ctx.fillStyle = color; // Use the passed 'color' parameter for filling bars
 
 		const currentScrollToUse = overrideScrollOffsetY !== null ? overrideScrollOffsetY : scrollOffsetPy;
-
-		// Adaptive peak/raw data usage logic (similar to InteractiveWaveform)
-		const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20;
-		let effectiveSamplesPerVisiblePixel = Infinity;
-
-		if (buffer && canvasClientHeight > 0 && zoomLevel > 0) {
-			effectiveSamplesPerVisiblePixel = buffer.length / (canvasClientHeight * zoomLevel);
-		}
-
-		let usePeaksDecision = peaksData && peaksData.length > 0 &&
-							   (effectiveSamplesPerVisiblePixel > PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL || !buffer);
-
-		if (buffer && zoomLevel > (maxZoomLevel / 1.5)) { // Prefer raw data if highly zoomed in and buffer available
-			usePeaksDecision = false;
-		}
-
-		if (!buffer && !peaksData) return; // Nothing to draw
-		if (!buffer && peaksData && peaksData.length > 0) usePeaksDecision = true; // Must use peaks if no buffer
-		if (buffer && (!peaksData || peaksData.length === 0)) usePeaksDecision = false; // Must use buffer if no peaks
-
-
 		const contentLogicalHeight = canvasClientHeight * zoomLevel;
-		if (contentLogicalHeight <= 0) return; // Avoid division by zero if zoomLevel or height is 0
 
-		if (usePeaksDecision) {
-			// console.log('[VerticalWaveform] Drawing with PEAKS data');
-			const numPeakBlocks = peaksData.length / 2;
-			const peaksPerLogicalUnitOfZoomedCanvas = numPeakBlocks / contentLogicalHeight;
-
-			ctx.beginPath(); // Max Peaks
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + currentScrollToUse;
-				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
-				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
-				let maxPeak = 0.0;
-				if (targetBlock * 2 + 1 < peaksData.length) {
-					maxPeak = peaksData[targetBlock * 2 + 1];
-				}
-				const xVal = midX + maxPeak * midX;
-				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
-				else ctx.lineTo(xVal, yPx_screen + 0.5);
+		if (!buffer || contentLogicalHeight <= 0) { // Bar rendering relies on raw buffer
+			// Optionally draw flat lines or nothing if no buffer
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen += BAR_UNIT_HEIGHT_PX) {
+				ctx.fillRect(midX - 1, yPx_screen, 2, BAR_THICKNESS_PX); // Draw a minimal center line
 			}
-			ctx.stroke();
+			return;
+		}
 
-			ctx.beginPath(); // Min Peaks
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + currentScrollToUse;
-				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
-				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
-				let minPeak = 0.0;
-				if (targetBlock * 2 < peaksData.length) {
-					minPeak = peaksData[targetBlock * 2];
-				}
-				const xVal = midX + minPeak * midX;
-				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
-				else ctx.lineTo(xVal, yPx_screen + 0.5);
+		const data = buffer.getChannelData(0);
+		const totalSamples = data.length;
+		if (totalSamples === 0) return;
+
+		const samplesPerLogicalPixel = totalSamples / contentLogicalHeight;
+
+		for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen += BAR_UNIT_HEIGHT_PX) {
+			const logicalY_bar_top = yPx_screen + currentScrollToUse;
+			const logicalY_bar_bottom = (yPx_screen + BAR_THICKNESS_PX) + currentScrollToUse;
+
+			const startSample = Math.max(0, Math.floor(logicalY_bar_top * samplesPerLogicalPixel));
+			let endSample = Math.ceil(logicalY_bar_bottom * samplesPerLogicalPixel); // Use ceil for end sample to include partials
+			endSample = Math.min(totalSamples, endSample);
+
+			if (startSample >= endSample) { // No samples for this bar, or invalid range
+				// Draw a minimal bar or nothing
+				// ctx.fillRect(midX - 1, yPx_screen, 2, BAR_THICKNESS_PX);
+				continue;
 			}
-			ctx.stroke();
 
-		} else if (buffer) {
-			// console.log('[VerticalWaveform] Drawing with RAW data');
-			const data = buffer.getChannelData(0);
-			const totalSamples = data.length;
-			if (totalSamples === 0) return; // No data to draw
-			const samplesPerLogicalUnitOfZoomedCanvas = totalSamples / contentLogicalHeight;
-
-			ctx.beginPath(); // Max Envelope
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + currentScrollToUse;
-				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
-				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
-
-				let maxVal = 0;
-				if (sampleStartIndex < sampleEndIndex) {
-					maxVal = data[sampleStartIndex];
-					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
-						if (data[i] > maxVal) maxVal = data[i];
-					}
-				} else if (sampleStartIndex >= 0 && sampleStartIndex < totalSamples) { // Single sample for this pixel
-					maxVal = data[sampleStartIndex];
-				}
-				const xVal = midX + maxVal * midX;
-				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
-				else ctx.lineTo(xVal, yPx_screen + 0.5);
+			let sumOfSquares = 0;
+			for (let i = startSample; i < endSample; i++) {
+				const sample = data[i];
+				sumOfSquares += sample * sample;
 			}
-			ctx.stroke();
 
-			ctx.beginPath(); // Min Envelope
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + currentScrollToUse;
-				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
-				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
-				let minVal = 0;
-				if (sampleStartIndex < sampleEndIndex) {
-					minVal = data[sampleStartIndex];
-					for (let i = sampleStartIndex + 1; i < sampleEndIndex; i++) {
-						if (data[i] < minVal) minVal = data[i];
-					}
-				} else if (sampleStartIndex >= 0 && sampleStartIndex < totalSamples) { // Single sample for this pixel
-					minVal = data[sampleStartIndex];
-				}
-				const xVal = midX + minVal * midX;
-				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
-				else ctx.lineTo(xVal, yPx_screen + 0.5);
-			}
-			ctx.stroke();
+			const numberOfSamplesInBar = endSample - startSample;
+			const rms = numberOfSamplesInBar > 0 ? Math.sqrt(sumOfSquares / numberOfSamplesInBar) : 0;
+
+			// Scale RMS to bar length. Max RMS is 1.0 for float samples [-1, 1].
+			// midX is half canvas width. So rms * midX means bar can extend to full width from center.
+			const barPixelAmplitude = Math.max(0, rms * midX); // Ensure non-negative
+
+			// Draw bar symmetrically from center
+			ctx.fillRect(
+				midX - barPixelAmplitude,
+				yPx_screen,
+				barPixelAmplitude * 2,
+				BAR_THICKNESS_PX
+			);
 		}
 	}
 
