@@ -462,7 +462,8 @@
 			<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
 		{/if}
 	</div>
-</div>
+	</div> {/* This closes the div with bind:this={waveformAreaContainerRef} */}
+</div> {/* This closes the main componentContainer div */}
 
 <style lang="postcss">
 	.vertical-waveform-panel {
