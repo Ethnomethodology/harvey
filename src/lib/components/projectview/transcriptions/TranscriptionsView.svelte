@@ -31,7 +31,7 @@
 
     const dispatch = createEventDispatcher();
 
-    $: console.log('[TranscriptionsView] $project.id value:', $project.id);
+    
 
     export let mediaPlayerRef = null;
 
@@ -93,14 +93,12 @@
     // This handler is for when the MediaPlayer component itself enters trim mode (e.g., user clicks its trim button)
     // or when its bound `isTrimming` prop changes.
     function handleMediaPlayerTrimModeEntered(event) {
-        console.log('[TranscriptionsView] MediaPlayer dispatched trimModeEntered:', event.detail);
         isMediaPlayerTrimming = true; // Ensure TranscriptionsView's state is synced
         mediaPlayerTrimStart = event.detail.startTime;
         mediaPlayerTrimEnd = event.detail.endTime;
     }
 
     function handleMediaPlayerTrimModeCancelled() {
-        console.log('[TranscriptionsView] MediaPlayer dispatched trimModeCancelled.');
         isMediaPlayerTrimming = false;
     }
 
@@ -210,7 +208,6 @@
     export function handleInsertSegmentRequest(event) { const { index, startTime, endTime } = event.detail; if (typeof index !== 'number' || typeof startTime !== 'number' || typeof endTime !== 'number' || endTime <= startTime) return; const newSegment = { start_time: startTime, end_time: endTime, speaker: "Unknown", text: JSON.stringify({ root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }], type: 'root', version: 1, direction: null, format: '', indent: 0 } }), }; insertTranscriptSegment(index, newSegment); }
 
     export function activateTrimModeOnPlayer() {
-        console.log("[TranscriptionsView] activateTrimModeOnPlayer called.");
         if (mediaPlayerRef && typeof mediaPlayerRef.enterTrimMode === 'function') {
             mediaPlayerRef.enterTrimMode();
             // The `enterTrimMode` in MediaPlayer should ideally set its `isTrimming` prop.
@@ -218,7 +215,6 @@
             // this should update `isMediaPlayerTrimming` here automatically.
             // We directly set it here to be certain the UI within TranscriptionsView updates.
             isMediaPlayerTrimming = true;
-            console.log("[TranscriptionsView] Trim mode activated on its MediaPlayer. isMediaPlayerTrimming set to true.");
         } else {
             console.warn("[TranscriptionsView] Could not activate trim mode: mediaPlayerRef or enterTrimMode method not found.");
         }
@@ -253,12 +249,40 @@
         leftPanelVisible.toggle();
     }
 
+    async function handleMediaLoaded(event) {
+        const mediaPath = event.detail.mediaPath;
+        const mediaName = event.detail.mediaName; // This is now just the filename, not the full object
+
+        // Get the latest selectedMediaFile from the store, which should have the transcripts populated by selectMedia
+        const currentSelectedMediaFile = get(transcriptStore).selectedMediaFile;
+        const transcripts = currentSelectedMediaFile?.transcripts || [];
+
+        if (transcripts.length > 0) {
+            // Find the default transcription (same name as media file, excluding extension)
+            const mediaNameWithoutExt = mediaName.substring(0, mediaName.lastIndexOf('.'));
+            const defaultTranscript = transcripts.find(t => {
+                const transcriptName = t.name || (t.path ? t.path.split(/[\\/]/).pop() : ''); // Use t.name if available, fallback to path
+                const transcriptNameWithoutExt = transcriptName.substring(0, transcriptName.lastIndexOf('.'));
+                return transcriptNameWithoutExt === mediaNameWithoutExt;
+            });
+
+            if (defaultTranscript) {
+                try {
+                    await loadTranscriptFile(defaultTranscript.path);
+                } catch (error) {
+                    console.error('[TranscriptionsView] Failed to load default transcript:', error);
+                    // Optionally, show a message to the user
+                }
+            } else {
+            }
+        } else {
+        }
+    }
+
     onMount(() => {
-        console.log('[TranscriptionsView] Mounted.');
     });
 
     onDestroy(() => {
-        console.log('[TranscriptionsView] Destroyed.');
         if (unsubscribeLeftPanelVisible) {
             unsubscribeLeftPanelVisible();
         }
@@ -273,7 +297,6 @@
 
         const currentLoadedPath = get(transcriptStore).currentTranscriptPath;
         if (transcriptPath === currentLoadedPath) {
-            console.log('[TranscriptionsView] Selected transcript is already loaded:', transcriptPath);
             return;
         }
 
@@ -327,6 +350,7 @@
                     showMainTrimButton={false}
                     on:trimModeEntered={handleMediaPlayerTrimModeEntered}
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
+                    on:mediaLoaded={handleMediaLoaded}
                 />
             </div>
             <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">

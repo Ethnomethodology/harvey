@@ -840,7 +840,8 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     depth: 5,
                     speakers: media_entry.speakers.clone(),
                     media_xml_identifier: Some(media_stem.clone()),
-                    associated_transcripts: media_entry.transcripts.clone(),
+                    // HERE: Ensure the actual media file's FileEntry has its associated_transcripts
+                    associated_transcripts: media_entry.transcripts.clone(), // This is the correct place for it
                     children: Vec::new(),
                 });
             } else {
@@ -921,7 +922,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             depth: 3,
             speakers: media_entry.speakers.clone(),
             media_xml_identifier: Some(media_stem.clone()),
-            associated_transcripts: Vec::new(),
+            associated_transcripts: media_entry.transcripts.clone(), // Populate with transcripts from XML
             children: sub_folders,
         });
     }

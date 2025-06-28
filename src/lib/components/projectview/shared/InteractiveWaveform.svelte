@@ -78,6 +78,7 @@
 	let panInitialScrollOffsetPx = 0;
 
 	$: currentAudioBuffer = externalAudioBuffer ?? $transcriptStore.audioBuffer;
+	$: currentAudioPeaks = externalAudioBuffer ? null : $transcriptStore.audioBufferPeaks; // Peaks only from store for now
 	$: currentPlayTime = externalCurrentTime ?? $transcriptStore.player.currentTime;
 	$: currentIsPlaying = externalIsPlaying ?? $transcriptStore.player.isPlaying;
 	$: currentSegmentsToDisplay = externalSegments ?? $transcriptStore.segments;
@@ -118,9 +119,143 @@
 	function timeToVisiblePx(time, duration, logicalWidth, scrollOffset) { const logicalPx = timeToLogicalPx(time, duration, logicalWidth); return logicalPx - scrollOffset; }
 	function pxToTime(px, duration, logicalWidth, visibleWidth, scrollOffset) { if (!duration || duration <= 0 || !logicalWidth || logicalWidth <= 0 || !visibleWidth || visibleWidth <= 0) return 0; const logicalPx = px + scrollOffset; const proportion = Math.max(0, Math.min(1, logicalPx / logicalWidth)); return proportion * duration; }
 
-	function drawVisibleWaveform(ctx, buffer, logicalWidth, visibleWidth, scrollOffset, height, color) { if (!buffer || !ctx || logicalWidth <= 0 || visibleWidth <= 0 || height <= 0) return; const data = buffer.getChannelData(0); const totalSamples = data.length; const mid = height / 2; ctx.strokeStyle = color; ctx.lineWidth = 1; const visibleStartTime = pxToTime(0, actualMediaDuration, logicalWidth, visibleWidth, scrollOffset); const visibleEndTime = pxToTime(visibleWidth, actualMediaDuration, logicalWidth, visibleWidth, scrollOffset); const startSampleIndex = Math.max(0, Math.floor(visibleStartTime * buffer.sampleRate)); const endSampleIndex = Math.min(totalSamples, Math.ceil(visibleEndTime * buffer.sampleRate)); if (startSampleIndex >= endSampleIndex) return; ctx.beginPath(); for (let x = 0; x < visibleWidth; x++) { const logicalX = x + scrollOffset; const sampleStartIndexForPixel = Math.max(startSampleIndex, Math.floor(logicalX * (totalSamples / logicalWidth))); const sampleEndIndexForPixel = Math.min(endSampleIndex, Math.ceil((logicalX + 1) * (totalSamples / logicalWidth))); if (sampleStartIndexForPixel >= sampleEndIndexForPixel) continue; let min = 0, max = 0; for (let i = sampleStartIndexForPixel; i < sampleEndIndexForPixel; i++) { const v = data[i]; if (v > max) max = v; if (v < min) min = v; } const yTop = mid + max * mid; if (x === 0) ctx.moveTo(x + 0.5, yTop); else ctx.lineTo(x + 0.5, yTop); } ctx.stroke(); ctx.beginPath(); for (let x = visibleWidth - 1; x >= 0; x--) { const logicalX = x + scrollOffset; const sampleStartIndexForPixel = Math.max(startSampleIndex, Math.floor(logicalX * (totalSamples / logicalWidth))); const sampleEndIndexForPixel = Math.min(endSampleIndex, Math.ceil((logicalX + 1) * (totalSamples / logicalWidth))); if (sampleStartIndexForPixel >= sampleEndIndexForPixel) continue; let min = 0; for (let i = sampleStartIndexForPixel; i < sampleEndIndexForPixel; i++) { const v = data[i]; if (v < min) min = v; } const yBottom = mid + min * mid; if (x === visibleWidth - 1) ctx.moveTo(x + 0.5, yBottom); else ctx.lineTo(x + 0.5, yBottom); } ctx.stroke(); }
-	function clearWaveformCanvases() { if (segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if (c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); } if (timescaleCanvas) { const c = timescaleCanvas.getContext('2d'); if (c) c.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height); } if (segmentWaveformCanvas && visibleCanvasWidth > 0 && waveformCanvasHeight > 0) { const c = segmentWaveformCanvas.getContext('2d'); if (c) { const dpr = window.devicePixelRatio || 1; c.save(); c.scale(dpr, dpr); c.fillStyle = '#6b7280'; c.font = `10px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; let message = 'Waveform'; if (!webAudioApiSupported) message = 'Web Audio API not supported.'; else if (!currentAudioBuffer) message = 'Load media to see waveform.'; c.fillText(message, visibleCanvasWidth / 2, waveformCanvasHeight / 2 ); c.restore(); } } }
-	function drawTimescale() { const dur = actualMediaDuration; const buf = currentAudioBuffer; const dpr = window.devicePixelRatio || 1; if (!timescaleCanvas || !buf || dur <= 0 || visibleCanvasWidth <= 0 || TIMESCALE_HEIGHT <= 0 || totalLogicalWidth <= 0) { if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; } return; } const ctx = timescaleCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(TIMESCALE_HEIGHT * dpr); if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) { timescaleCanvas.width = reqW; timescaleCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, TIMESCALE_HEIGHT); const isDark = document.documentElement.classList.contains('dark'); ctx.strokeStyle = '#d1d5db'; ctx.fillStyle = isDark ? '#ffffff' : '#6b7280'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; const minPixelSpacingForLabel = 60; const minPixelSpacingForMinorTick = 10; const intervals = [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800, 3600]; let interval = intervals[0]; let intervalPx = timeToLogicalPx(interval, dur, totalLogicalWidth); for (let i = 0; i < intervals.length; i++) { const currentIntervalPx = timeToLogicalPx(intervals[i], dur, totalLogicalWidth); if (currentIntervalPx >= minPixelSpacingForLabel) { interval = intervals[i]; intervalPx = currentIntervalPx; break; } if (i === intervals.length - 1) { interval = intervals[i]; intervalPx = currentIntervalPx; } } let minorInterval = interval / 5; let minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); while (minorIntervalPx < minPixelSpacingForMinorTick && minorInterval < interval) { minorInterval *= 2; minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); } if (minorInterval >= interval) minorInterval = 0; const visibleStartTime = pxToTime(0, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const visibleEndTime = pxToTime(visibleCanvasWidth, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const firstMajorTickTime = Math.floor(visibleStartTime / interval) * interval; const firstMinorTickTime = minorInterval > 0 ? Math.floor(visibleStartTime / minorInterval) * minorInterval : 0; if (minorInterval > 0) { for (let time = firstMinorTickTime; time <= visibleEndTime + minorInterval; time += minorInterval) { if (Math.abs(time % interval) < 0.0001 && time > 0) continue; if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= 0 && px <= visibleCanvasWidth) { ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - 5); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); } } } ctx.textAlign = 'left'; for (let time = firstMajorTickTime; time <= visibleEndTime + interval; time += interval) { if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= -1 && px <= visibleCanvasWidth + 1) { const tickHeight = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 10 : 7; ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - tickHeight); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke();
+	function drawVisibleWaveform(ctx, buffer, peaks, logicalWidth, visibleWidth, scrollOffset, height, color) {
+        if (!ctx || logicalWidth <= 0 || visibleWidth <= 0 || height <= 0) return;
+        if (!buffer && !peaks) return; // Need either buffer or peaks
+
+        const mid = height / 2;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+
+        // Threshold to switch between raw samples and peaks data
+        // If one logical pixel covers more than, say, 10 raw samples, consider using peaks.
+        // Peak block size is 512, so if samplesPerLogicalPixel > 512/X (e.g. 512/10 = ~50), peaks are better.
+        // Or, more simply, if zoomLevel is low (e.g., < 2, meaning more data per pixel), use peaks.
+        const samplesPerVisiblePixel = buffer ? (buffer.length / visibleWidth / zoomLevel) : Infinity;
+        const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20; // If a visible pixel represents more than 20 samples, use peaks.
+                                                          // This is an arbitrary threshold, can be tuned.
+                                                          // Lower value = use peaks more often.
+
+        let usePeaks = peaks && peaks.length > 0 && (samplesPerVisiblePixel > PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL || !buffer);
+        // Fallback to raw if zoom is very high and peaks might be too coarse.
+        // This needs more sophisticated multi-level peak handling for ideal results.
+        // For now, if zoomLevel is very high (e.g. > 5) and buffer exists, prefer buffer.
+        if (buffer && zoomLevel > (maxZoomLevel / 2) ) { // Heuristic: if zoomed in more than half way of max zoom
+            usePeaks = false;
+        }
+        if (!buffer && !peaks) return; // Should not happen if logic above is correct
+        if (!buffer && peaks) usePeaks = true; // Must use peaks if no raw buffer
+
+        ctx.beginPath();
+
+        if (usePeaks) {
+            // console.log('[Waveform] Drawing with PEAKS data');
+            const peakBlockSize = 512; // Must match the generation block size
+            const samplesPerPeakBlock = peakBlockSize;
+            const numPeakBlocks = peaks.length / 2;
+            const peaksPerLogicalPixel = numPeakBlocks / logicalWidth;
+
+            for (let x = 0; x < visibleWidth; x++) {
+                const logicalX = x + scrollOffset;
+                const peakBlockStartIndex = Math.floor(logicalX * peaksPerLogicalPixel);
+                const peakBlockEndIndex = Math.floor((logicalX + 1) * peaksPerLogicalPixel);
+
+                let minPeak = 0.0;
+                let maxPeak = 0.0;
+
+                if (peakBlockStartIndex < peakBlockEndIndex) { // At least one full block for this pixel
+                     minPeak = peaks[peakBlockStartIndex * 2];
+                     maxPeak = peaks[peakBlockStartIndex * 2 + 1];
+                    for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
+                        if (peaks[i*2] < minPeak) minPeak = peaks[i*2];
+                        if (peaks[i*2+1] > maxPeak) maxPeak = peaks[i*2+1];
+                    }
+                } else { // Pixel is smaller than a peak block, or falls between blocks
+                    const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+                     if (targetBlock * 2 + 1 < peaks.length) {
+                        minPeak = peaks[targetBlock * 2];
+                        maxPeak = peaks[targetBlock * 2 + 1];
+                    }
+                }
+                const yTop = mid + maxPeak * mid;
+                if (x === 0) ctx.moveTo(x + 0.5, yTop);
+                else ctx.lineTo(x + 0.5, yTop);
+            }
+            ctx.stroke();
+            ctx.beginPath();
+            for (let x = visibleWidth - 1; x >= 0; x--) {
+                const logicalX = x + scrollOffset;
+                const peakBlockStartIndex = Math.floor(logicalX * peaksPerLogicalPixel);
+                const peakBlockEndIndex = Math.floor((logicalX + 1) * peaksPerLogicalPixel);
+                let minPeak = 0.0;
+
+                if (peakBlockStartIndex < peakBlockEndIndex) {
+                    minPeak = peaks[peakBlockStartIndex * 2];
+                    for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
+                        if (peaks[i*2] < minPeak) minPeak = peaks[i*2];
+                    }
+                } else {
+                     const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+                     if (targetBlock * 2 < peaks.length) { // Check if index is valid
+                       minPeak = peaks[targetBlock * 2];
+                     }
+                }
+                const yBottom = mid + minPeak * mid;
+                if (x === visibleWidth - 1) ctx.moveTo(x + 0.5, yBottom);
+                else ctx.lineTo(x + 0.5, yBottom);
+            }
+        } else if (buffer) {
+            // console.log('[Waveform] Drawing with RAW data');
+            const data = buffer.getChannelData(0);
+            const totalSamples = data.length;
+            const samplesPerLogicalPixelRaw = totalSamples / logicalWidth;
+            const visibleStartTime = pxToTime(0, actualMediaDuration, logicalWidth, visibleWidth, scrollOffset);
+            const visibleEndTime = pxToTime(visibleWidth, actualMediaDuration, logicalWidth, visibleWidth, scrollOffset);
+            const startSampleIndexRaw = Math.max(0, Math.floor(visibleStartTime * buffer.sampleRate));
+            const endSampleIndexRaw = Math.min(totalSamples, Math.ceil(visibleEndTime * buffer.sampleRate));
+
+            if (startSampleIndexRaw >= endSampleIndexRaw) { ctx.stroke(); return; }
+
+
+            for (let x = 0; x < visibleWidth; x++) {
+                const logicalX = x + scrollOffset;
+                const sampleStartIndexForPixel = Math.max(startSampleIndexRaw, Math.floor(logicalX * samplesPerLogicalPixelRaw));
+                const sampleEndIndexForPixel = Math.min(endSampleIndexRaw, Math.floor((logicalX + 1) * samplesPerLogicalPixelRaw));
+
+                if (sampleStartIndexForPixel >= sampleEndIndexForPixel) continue;
+                let min = 0, max = 0;
+                min = data[sampleStartIndexForPixel];
+                max = data[sampleStartIndexForPixel];
+                for (let i = sampleStartIndexForPixel + 1; i < sampleEndIndexForPixel; i++) {
+                    const v = data[i];
+                    if (v > max) max = v;
+                    if (v < min) min = v;
+                }
+                const yTop = mid + max * mid;
+                if (x === 0) ctx.moveTo(x + 0.5, yTop);
+                else ctx.lineTo(x + 0.5, yTop);
+            }
+            ctx.stroke();
+            ctx.beginPath();
+            for (let x = visibleWidth - 1; x >= 0; x--) {
+                const logicalX = x + scrollOffset;
+                const sampleStartIndexForPixel = Math.max(startSampleIndexRaw, Math.floor(logicalX * samplesPerLogicalPixelRaw));
+                const sampleEndIndexForPixel = Math.min(endSampleIndexRaw, Math.floor((logicalX + 1) * samplesPerLogicalPixelRaw));
+                if (sampleStartIndexForPixel >= sampleEndIndexForPixel) continue;
+                let min = data[sampleStartIndexForPixel];
+                for (let i = sampleStartIndexForPixel + 1; i < sampleEndIndexForPixel; i++) {
+                    const v = data[i];
+                    if (v < min) min = v;
+                }
+                const yBottom = mid + min * mid;
+                if (x === visibleWidth - 1) ctx.moveTo(x + 0.5, yBottom);
+                else ctx.lineTo(x + 0.5, yBottom);
+            }
+        }
+        ctx.stroke();
+    }
+	function clearWaveformCanvases() { if (segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if (c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); } if (timescaleCanvas) { const c = timescaleCanvas.getContext('2d'); if (c) c.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height); } if (segmentWaveformCanvas && visibleCanvasWidth > 0 && waveformCanvasHeight > 0) { const c = segmentWaveformCanvas.getContext('2d'); if (c) { const dpr = window.devicePixelRatio || 1; c.save(); c.scale(dpr, dpr); c.fillStyle = '#6b7280'; c.font = `10px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; let message = 'Waveform'; if (!webAudioApiSupported) message = 'Web Audio API not supported.'; else if (!currentAudioBuffer && !currentAudioPeaks) message = 'Load media to see waveform.'; c.fillText(message, visibleCanvasWidth / 2, waveformCanvasHeight / 2 ); c.restore(); } } }
+	function drawTimescale() { const dur = actualMediaDuration; const bufOrPeaks = currentAudioBuffer || currentAudioPeaks; const dpr = window.devicePixelRatio || 1; if (!timescaleCanvas || !bufOrPeaks || dur <= 0 || visibleCanvasWidth <= 0 || TIMESCALE_HEIGHT <= 0 || totalLogicalWidth <= 0) { if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; } return; } const ctx = timescaleCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(TIMESCALE_HEIGHT * dpr); if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) { timescaleCanvas.width = reqW; timescaleCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, TIMESCALE_HEIGHT); const isDark = document.documentElement.classList.contains('dark'); ctx.strokeStyle = '#d1d5db'; ctx.fillStyle = isDark ? '#ffffff' : '#6b7280'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; const minPixelSpacingForLabel = 60; const minPixelSpacingForMinorTick = 10; const intervals = [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800, 3600]; let interval = intervals[0]; let intervalPx = timeToLogicalPx(interval, dur, totalLogicalWidth); for (let i = 0; i < intervals.length; i++) { const currentIntervalPx = timeToLogicalPx(intervals[i], dur, totalLogicalWidth); if (currentIntervalPx >= minPixelSpacingForLabel) { interval = intervals[i]; intervalPx = currentIntervalPx; break; } if (i === intervals.length - 1) { interval = intervals[i]; intervalPx = currentIntervalPx; } } let minorInterval = interval / 5; let minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); while (minorIntervalPx < minPixelSpacingForMinorTick && minorInterval < interval) { minorInterval *= 2; minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); } if (minorInterval >= interval) minorInterval = 0; const visibleStartTime = pxToTime(0, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const visibleEndTime = pxToTime(visibleCanvasWidth, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const firstMajorTickTime = Math.floor(visibleStartTime / interval) * interval; const firstMinorTickTime = minorInterval > 0 ? Math.floor(visibleStartTime / minorInterval) * minorInterval : 0; if (minorInterval > 0) { for (let time = firstMinorTickTime; time <= visibleEndTime + minorInterval; time += minorInterval) { if (Math.abs(time % interval) < 0.0001 && time > 0) continue; if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= 0 && px <= visibleCanvasWidth) { ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - 5); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); } } } ctx.textAlign = 'left'; for (let time = firstMajorTickTime; time <= visibleEndTime + interval; time += interval) { if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= -1 && px <= visibleCanvasWidth + 1) { const tickHeight = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 10 : 7; ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - tickHeight); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke();
 
 				let labelStr;
 				if (time === 0 && interval < 1.0) {
@@ -166,18 +301,191 @@
 		ctx.stroke();
 		ctx.restore();
 	}
-	function drawSegmentWaveformUI() { const buf = currentAudioBuffer; const cur = currentPlayTime || 0; const dur = actualMediaDuration; const segments = currentSegmentsToDisplay || []; const currentActiveIndex = activeSegmentIndexForDisplay ?? -1; const seg = segments[currentActiveIndex]; const dpr = window.devicePixelRatio || 1; if (!segmentWaveformCanvas || !buf || dur <= 0 || visibleCanvasWidth <= 0 || waveformCanvasHeight <= 0 || totalLogicalWidth <= 0) { if(segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if(c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); segmentWaveformCanvas.width = 0; segmentWaveformCanvas.height = 0; } return; } const ctx = segmentWaveformCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(waveformCanvasHeight * dpr); if (segmentWaveformCanvas.width !== reqW || segmentWaveformCanvas.height !== reqH) { segmentWaveformCanvas.width = reqW; segmentWaveformCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, waveformCanvasHeight); if (buf.length > 0 && totalLogicalWidth > 0) { drawVisibleWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, '#9ca3af'); } let highlightStartTime = -1; let highlightEndTime = -1; let highlightColor = 'rgba(59, 130, 246, 0.15)'; let waveColor = '#3b82f6'; if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) { highlightStartTime = editSegmentStartTime; highlightEndTime = editSegmentEndTime; } else if (currentActiveIndex >= 0 && currentActiveIndex < segments.length && seg) { const segStartTime = Number(seg.start_time); const segEndTime = Number(seg.end_time); if (!isNaN(segStartTime) && !isNaN(segEndTime) && segEndTime >= segStartTime) { highlightStartTime = segStartTime; highlightEndTime = segEndTime; } else { console.warn(`[Waveform Draw] Invalid time data for ACTIVE segment ${currentActiveIndex}.`); } } if (highlightStartTime >= 0 && highlightEndTime >= highlightStartTime) { const pxS_logical = timeToLogicalPx(highlightStartTime, dur, totalLogicalWidth); const pxE_logical = timeToLogicalPx(highlightEndTime, dur, totalLogicalWidth); const pxS_visible = pxS_logical - scrollOffsetPx; const pxE_visible = pxE_logical - scrollOffsetPx; const clamped_pxS_visible = Math.max(0, pxS_visible); const clamped_pxE_visible = Math.min(visibleCanvasWidth, pxE_visible); const pxW_visible_clamped = Math.max(0, clamped_pxE_visible - clamped_pxS_visible); if (pxW_visible_clamped >= 0) { ctx.fillStyle = highlightColor; ctx.fillRect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight); if (pxW_visible_clamped > 0 && buf.length > 0 && totalLogicalWidth > 0) { ctx.save(); ctx.beginPath(); ctx.rect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight); ctx.clip(); drawVisibleWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor); ctx.restore(); } } else { console.warn(`[Waveform Draw] Highlight width negative ${currentActiveIndex}.`); } } const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth); const pxCur_visible = pxCur_logical - scrollOffsetPx; if (pxCur_visible >= -1 && pxCur_visible <= visibleCanvasWidth + 1) { ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(pxCur_visible + 0.5, 0); ctx.lineTo(pxCur_visible + 0.5, waveformCanvasHeight); ctx.stroke(); } ctx.restore(); lastDrawnTime = cur; lastDrawnScrollOffset = scrollOffsetPx; lastDrawnZoomLevel = zoomLevel; lastDrawnSegmentIndex = currentActiveIndex; lastDrawnBuffer = buf; lastDrawnActualDuration = dur; lastDrawnIsEditing = isEditingSegment; lastDrawnEditStart = editSegmentStartTime; lastDrawnEditEnd = editSegmentEndTime; }
+	function drawSegmentWaveformUI() {
+        const buf = currentAudioBuffer;
+        const peaks = currentAudioPeaks; // Get peaks from store/prop
+        const cur = currentPlayTime || 0;
+        const dur = actualMediaDuration;
+        const segments = currentSegmentsToDisplay || [];
+        const currentActiveIndex = activeSegmentIndexForDisplay ?? -1;
+        const seg = segments[currentActiveIndex];
+        const dpr = window.devicePixelRatio || 1;
+
+        if (!segmentWaveformCanvas || (!buf && !peaks) || dur <= 0 || visibleCanvasWidth <= 0 || waveformCanvasHeight <= 0 || totalLogicalWidth <= 0) {
+            if(segmentWaveformCanvas) {
+                const c = segmentWaveformCanvas.getContext('2d');
+                if(c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height);
+                segmentWaveformCanvas.width = 0;
+                segmentWaveformCanvas.height = 0;
+            }
+            return;
+        }
+
+        const ctx = segmentWaveformCanvas.getContext('2d');
+        if (!ctx) return;
+
+        const reqW = Math.round(visibleCanvasWidth * dpr);
+        const reqH = Math.round(waveformCanvasHeight * dpr);
+        if (segmentWaveformCanvas.width !== reqW || segmentWaveformCanvas.height !== reqH) {
+            segmentWaveformCanvas.width = reqW;
+            segmentWaveformCanvas.height = reqH;
+        }
+
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, visibleCanvasWidth, waveformCanvasHeight);
+
+        if ((buf || peaks) && totalLogicalWidth > 0) {
+            drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, '#9ca3af');
+        }
+
+        let highlightStartTime = -1;
+        let highlightEndTime = -1;
+        let highlightColor = 'rgba(147, 197, 253, 0.4)'; // A light blue with some transparency
+        let waveColor = '#2563eb'; // A darker blue for the waveform within the highlight
+
+        if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
+            highlightStartTime = editSegmentStartTime;
+            highlightEndTime = editSegmentEndTime;
+        } else if (currentActiveIndex >= 0 && currentActiveIndex < segments.length && seg) {
+            const segStartTime = Number(seg.start_time);
+            const segEndTime = Number(seg.end_time);
+            if (!isNaN(segStartTime) && !isNaN(segEndTime) && segEndTime >= segStartTime) {
+                highlightStartTime = segStartTime;
+                highlightEndTime = segEndTime;
+            } else {
+                console.warn(`[Waveform Draw] Invalid time data for ACTIVE segment ${currentActiveIndex}.`);
+            }
+        }
+
+        if (highlightStartTime >= 0 && highlightEndTime >= highlightStartTime) {
+            const pxS_logical = timeToLogicalPx(highlightStartTime, dur, totalLogicalWidth);
+            const pxE_logical = timeToLogicalPx(highlightEndTime, dur, totalLogicalWidth);
+            const pxS_visible = pxS_logical - scrollOffsetPx;
+            const pxE_visible = pxE_logical - scrollOffsetPx;
+            const clamped_pxS_visible = Math.max(0, pxS_visible);
+            const clamped_pxE_visible = Math.min(visibleCanvasWidth, pxE_visible);
+            const pxW_visible_clamped = Math.max(0, clamped_pxE_visible - clamped_pxS_visible);
+
+            if (pxW_visible_clamped > 0) { // Ensure width is positive
+                ctx.fillStyle = highlightColor;
+                ctx.fillRect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight);
+                if ((buf || peaks) && totalLogicalWidth > 0) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight);
+                    ctx.clip();
+                    drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    ctx.restore();
+                }
+            }
+        }
+
+        const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth);
+        const pxCur_visible = pxCur_logical - scrollOffsetPx;
+        if (pxCur_visible >= -1 && pxCur_visible <= visibleCanvasWidth + 1) {
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(pxCur_visible + 0.5, 0);
+            ctx.lineTo(pxCur_visible + 0.5, waveformCanvasHeight);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+        lastDrawnTime = cur;
+        lastDrawnScrollOffset = scrollOffsetPx;
+        lastDrawnZoomLevel = zoomLevel;
+        lastDrawnSegmentIndex = currentActiveIndex;
+        lastDrawnBuffer = buf; // Could also store lastDrawnPeaks if needed for diffing
+        lastDrawnActualDuration = dur;
+        lastDrawnIsEditing = isEditingSegment;
+        lastDrawnEditStart = editSegmentStartTime;
+        lastDrawnEditEnd = editSegmentEndTime;
+    }
 
 	let forceNextRedraw = false; function requestRedraw(force = false) { if (force) forceNextRedraw = true; if (isMounted) { drawTimescale(); drawSegmentWaveformUI(); } }
 
-	function animationLoop() { if (!isMounted) return; const cur = currentPlayTime || 0; const dur = actualMediaDuration; const buf = currentAudioBuffer; const currentActiveIdx = activeSegmentIndexForDisplay ?? -1; let needsDraw = forceNextRedraw || (buf && buf !== lastDrawnBuffer) || (currentActiveIdx !== lastDrawnSegmentIndex) || (Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) || (Math.abs(scrollOffsetPx - lastDrawnScrollOffset) > 0.5) || (Math.abs(zoomLevel - lastDrawnZoomLevel) > 0.001) || (dur !== lastDrawnActualDuration) || (isEditingSegment !== lastDrawnIsEditing) || (isEditingSegment && (editSegmentStartTime !== lastDrawnEditStart || editSegmentEndTime !== lastDrawnEditEnd)); forceNextRedraw = false; if (needsDraw && visibleCanvasWidth > 0 && buf && dur > 0 && totalLogicalWidth > 0 ) { drawTimescale(); drawSegmentWaveformUI(); } else if (needsDraw && (!buf || visibleCanvasWidth <= 0 || dur <= 0 || totalLogicalWidth <= 0)) { clearWaveformCanvases(); lastDrawnTime = cur; lastDrawnScrollOffset = scrollOffsetPx; lastDrawnZoomLevel = zoomLevel; lastDrawnSegmentIndex = currentActiveIdx; lastDrawnBuffer = buf; lastDrawnActualDuration = dur; lastDrawnIsEditing = isEditingSegment; lastDrawnEditStart = editSegmentStartTime; lastDrawnEditEnd = editSegmentEndTime; } if (autoScrollEnabled && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) { const pxCur_visible = timeToVisiblePx(cur, dur, totalLogicalWidth, scrollOffsetPx); const scrollMarginLeft = visibleCanvasWidth * 0.25; const scrollMarginRight = visibleCanvasWidth * 0.75; let targetScrollOffset = scrollOffsetPx; let needsScrollUpdate = false; if (pxCur_visible < scrollMarginLeft) { targetScrollOffset = timeToLogicalPx(cur, dur, totalLogicalWidth) - scrollMarginLeft; needsScrollUpdate = true; } else if (pxCur_visible > scrollMarginRight) { targetScrollOffset = timeToLogicalPx(cur, dur, totalLogicalWidth) - scrollMarginRight; needsScrollUpdate = true; } if (needsScrollUpdate) { targetScrollOffset = Math.max(0, Math.min(targetScrollOffset, maxScrollPx)); const diff = targetScrollOffset - scrollOffsetPx; const moveAmount = diff * 0.1; let newScrollOffset = scrollOffsetPx + moveAmount; if (Math.abs(diff) < 1) newScrollOffset = targetScrollOffset; newScrollOffset = Math.round(newScrollOffset); if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) { scrollOffsetPx = newScrollOffset; if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = scrollOffsetPx; } } } animationFrameId = requestAnimationFrame(animationLoop); }
+	function animationLoop() {
+        if (!isMounted) return;
+        const cur = currentPlayTime || 0;
+        const dur = actualMediaDuration;
+        const buf = currentAudioBuffer;
+        const peaks = currentAudioPeaks;
+        const currentActiveIdx = activeSegmentIndexForDisplay ?? -1;
 
-	function resetZoomAndScrollState(clearBuffer = true) {
+        let needsDraw = forceNextRedraw ||
+            (buf !== lastDrawnBuffer) || // Check if buffer object itself changed
+            // (peaks !== lastDrawnPeaks) || // TODO: Add lastDrawnPeaks if complex comparison needed
+            (currentActiveIdx !== lastDrawnSegmentIndex) ||
+            (Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) ||
+            (Math.abs(scrollOffsetPx - lastDrawnScrollOffset) > 0.5) ||
+            (Math.abs(zoomLevel - lastDrawnZoomLevel) > 0.001) ||
+            (dur !== lastDrawnActualDuration) ||
+            (isEditingSegment !== lastDrawnIsEditing) ||
+            (isEditingSegment && (editSegmentStartTime !== lastDrawnEditStart || editSegmentEndTime !== lastDrawnEditEnd));
+
+        forceNextRedraw = false;
+
+        if (needsDraw && visibleCanvasWidth > 0 && (buf || peaks) && dur > 0 && totalLogicalWidth > 0 ) {
+            drawTimescale();
+            drawSegmentWaveformUI();
+        } else if (needsDraw && ((!buf && !peaks) || visibleCanvasWidth <= 0 || dur <= 0 || totalLogicalWidth <= 0)) {
+            clearWaveformCanvases();
+            lastDrawnTime = cur;
+            lastDrawnScrollOffset = scrollOffsetPx;
+            lastDrawnZoomLevel = zoomLevel;
+            lastDrawnSegmentIndex = currentActiveIdx;
+            lastDrawnBuffer = buf;
+            // lastDrawnPeaks = peaks;
+            lastDrawnActualDuration = dur;
+            lastDrawnIsEditing = isEditingSegment;
+            lastDrawnEditStart = editSegmentStartTime;
+            lastDrawnEditEnd = editSegmentEndTime;
+        }
+
+        if (autoScrollEnabled && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) {
+            const pxCur_visible = timeToVisiblePx(cur, dur, totalLogicalWidth, scrollOffsetPx);
+            const scrollMarginLeft = visibleCanvasWidth * 0.25;
+            const scrollMarginRight = visibleCanvasWidth * 0.75;
+            let targetScrollOffset = scrollOffsetPx;
+            let needsScrollUpdate = false;
+
+            if (pxCur_visible < scrollMarginLeft) {
+                targetScrollOffset = timeToLogicalPx(cur, dur, totalLogicalWidth) - scrollMarginLeft;
+                needsScrollUpdate = true;
+            } else if (pxCur_visible > scrollMarginRight) {
+                targetScrollOffset = timeToLogicalPx(cur, dur, totalLogicalWidth) - scrollMarginRight;
+                needsScrollUpdate = true;
+            }
+
+            if (needsScrollUpdate) {
+                targetScrollOffset = Math.max(0, Math.min(targetScrollOffset, maxScrollPx));
+                const diff = targetScrollOffset - scrollOffsetPx;
+                const moveAmount = diff * 0.1; // Smooth scroll factor
+                let newScrollOffset = scrollOffsetPx + moveAmount;
+                if (Math.abs(diff) < 1) newScrollOffset = targetScrollOffset;
+                newScrollOffset = Math.round(newScrollOffset);
+
+                if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) {
+                    scrollOffsetPx = newScrollOffset;
+                    // If waveformScrollContainerRef.scrollLeft was used, it would be updated here.
+                    // Since it's virtual, only scrollOffsetPx matters for drawing.
+                }
+            }
+        }
+        animationFrameId = requestAnimationFrame(animationLoop);
+    }
+
+	function resetZoomAndScrollState(clearBuffer = true) { // clearBuffer might now mean clearBufferAndPeaks
 		zoomLevel = 1; scrollOffsetPx = 0; autoScrollEnabled = true;
 		clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null;
-		// if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0; // Pure virtual scroll
 		lastDrawnTime = -1; lastDrawnScrollOffset = -1; lastDrawnZoomLevel = -1;
-		lastDrawnSegmentIndex = -1; if (clearBuffer) lastDrawnBuffer = null;
+		lastDrawnSegmentIndex = -1;
+        if (clearBuffer) {
+            lastDrawnBuffer = null;
+            // lastDrawnPeaks = null; // Also reset last drawn peaks
+        }
 		lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
 		clearWaveformCanvases(); requestRedraw(true);

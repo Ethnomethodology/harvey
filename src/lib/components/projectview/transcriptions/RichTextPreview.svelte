@@ -11,6 +11,12 @@
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added
 
+    // Virtualization state
+    let scrollTop = 0;
+    let containerHeight = 0;
+    const ESTIMATED_SEGMENT_HEIGHT = 70; // Adjust as needed, or measure dynamically
+    const OVERSCAN_COUNT = 5; // Number of items to render above/below viewport
+
     let showTranscriptDropdown = false;
     let transcriptDropdownButtonRef;
     let transcriptDropdownMenuRef;
@@ -184,13 +190,13 @@
           htmlEditor.update(() => {
             const editorRoot = lexicalGetRoot(); // Get the root of the htmlEditor
             editorRoot.clear();
-            
+
             const nodesToAppend = [];
             const validSerializedNodes = serializedNodes.filter(Boolean);
 
             for (const serializedNodeObj of validSerializedNodes) {
               // The console.log for diagnostics can be kept or removed. For this fix, let's keep it for now.
-              console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj));
+              // console.log('[RichTextPreview] Processing serializedNodeObj:', JSON.stringify(serializedNodeObj)); // Removed verbose log
 
               if (serializedNodeObj.type === 'root' && serializedNodeObj.children && Array.isArray(serializedNodeObj.children)) {
                 // If the serializedNodeObj is a RootNode itself, process its children
@@ -218,16 +224,16 @@
             // Ensure nodesToAppend is not empty for a valid Lexical state before appending
             if (nodesToAppend.length === 0) {
                 try {
-                    const defaultParagraphNode = lexicalParseSerializedNode({ 
-                        type: 'paragraph', 
-                        version: 1, 
-                        children: [], 
-                        direction: null, 
-                        format: '', 
-                        indent: 0 
+                    const defaultParagraphNode = lexicalParseSerializedNode({
+                        type: 'paragraph',
+                        version: 1,
+                        children: [],
+                        direction: null,
+                        format: '',
+                        indent: 0
                     });
                     nodesToAppend.push(defaultParagraphNode);
-                    console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.');
+                    // console.log('[RichTextPreview] nodesToAppend was empty; added default paragraph via lexicalParseSerializedNode.'); // Removed verbose log
                 } catch (defaultNodeErr) {
                     console.error('[RichTextPreview] Error creating default paragraph node:', defaultNodeErr);
                 }
@@ -267,66 +273,224 @@
 	function extractPlainTextForPreview(inputString) { if (!inputString || typeof inputString !== 'string') return '[empty]'; if (isLexicalJson(inputString)) { console.warn("[RichTextPreview] extractPlainTextForPreview called with JSON string, rendering placeholder."); return '[Error: Invalid data format - Expected plain text or HTML]'; } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); if (doc.body.childNodes.length === 1 && doc.body.firstChild.nodeType === Node.TEXT_NODE) { return doc.body.textContent || '[empty]'; } return doc.body.textContent || inputString || '[empty]'; } catch (e) { console.error("[RichTextPreview] Error parsing string in extractPlainTextForPreview:", e); return inputString || '[empty]'; } }
 
 	/* ---------------- build segment data for rendering ---------------- */
-	let processedSegments = [];
+	let allSegmentsData = []; // Stores raw or minimally processed segment data
 	let canUndo = false;
 	let canRedo = false;
+
 	$: {
 	  const segs = $transcriptStore.segments || [];
 	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
 	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
-	  processedSegments = segs.map((seg, segIdx) => {
-	    const rawContent = seg.text;
-	    let contentForParsing = rawContent;
-	    try {
-	      const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-	      if (parsed && !parsed.root && Array.isArray(parsed.children)) {
-	        contentForParsing = JSON.stringify({
-	          root: {
-	            type: 'root',
-	            version: 1,
-	            format: '',
-	            indent: 0,
-	            direction: null,
-	            children: [parsed]
-	          }
-	        });
-	      }
-	    } catch (e) {
-	      // Not valid JSON
-	    }
-	    const isJson = isLexicalJson(contentForParsing);
-	    let plainTextForDisplay = '';
-	    let contentJsonForEditor = defaultEmptyJson;
-	    if (isJson) {
-	      contentJsonForEditor =
-	        typeof contentForParsing === 'string' ? contentForParsing : JSON.stringify(contentForParsing);
-	    } else {
-	      plainTextForDisplay = extractPlainTextForPreview(rawContent);
-	    }
-	    const html = isJson
-	      ? lexicalJsonToHtml(contentForParsing)
-	      : `<div>${plainTextForDisplay}</div>`;
-	    return {
+      // Minimal initial mapping, just to have an array of the correct length with original data
+	  allSegmentsData = segs.map((seg, segIdx) => ({
 	      segmentIndex: segIdx,
-	      startTime: formatTimestamp(seg.start_time),
-	      endTime: formatTimestamp(seg.end_time),
-	      rawStart: seg.start_time,
-	      rawEnd: seg.end_time,
-	      speaker: seg.speaker || 'Unknown',
-	      isJsonContent: isJson,
-	      html,
-	      plainText: plainTextForDisplay
-	    };
-	  });
+          originalSegment: seg
+          // Add any other absolutely essential lightweight data needed by virtualization itself, if any.
+          // For now, originalSegment and segmentIndex should be enough.
+	  }));
 	}
+
+    // --- Virtualization Calculations ---
+    let visibleStartIndex = 0;
+    let visibleEndIndex = 0;
+    let paddingTop = 0;
+    let paddingBottom = 0;
+    let visibleSegments = []; // This will store fully processed segments for rendering
+
+    $: {
+        if (previewScrollContainerRef && allSegmentsData.length > 0) {
+            const totalItems = allSegmentsData.length;
+            visibleStartIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT);
+            visibleEndIndex = Math.min(totalItems -1 , Math.ceil((scrollTop + containerHeight) / ESTIMATED_SEGMENT_HEIGHT) + OVERSCAN_COUNT);
+
+            paddingTop = visibleStartIndex * ESTIMATED_SEGMENT_HEIGHT;
+            paddingBottom = (totalItems - 1 - visibleEndIndex) * ESTIMATED_SEGMENT_HEIGHT;
+
+            visibleSegments = allSegmentsData.slice(visibleStartIndex, visibleEndIndex + 1).map(item => {
+                const seg = item.originalSegment;
+                const segIdx = item.segmentIndex;
+                const rawContent = seg.text;
+                let contentForParsing = rawContent;
+                try {
+                  const parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+                  if (parsed && !parsed.root && Array.isArray(parsed.children)) {
+                    contentForParsing = JSON.stringify({
+                      root: { type: 'root', version: 1, format: '', indent: 0, direction: null, children: [parsed] }
+                    });
+                  }
+                } catch (e) { /* Not valid JSON */ }
+
+                const isJson = isLexicalJson(contentForParsing);
+                let plainTextForDisplay = '';
+                if (!isJson) {
+                    plainTextForDisplay = extractPlainTextForPreview(rawContent);
+                }
+
+                return {
+                  segmentIndex: segIdx,
+                  startTime: formatTimestamp(seg.start_time),
+                  endTime: formatTimestamp(seg.end_time),
+                  rawStart: seg.start_time,
+                  rawEnd: seg.end_time,
+                  speaker: seg.speaker || 'Unknown',
+                  isJsonContent: isJson,
+                  html: isJson ? lexicalJsonToHtml(contentForParsing) : `<div>${plainTextForDisplay}</div>`,
+                  plainText: plainTextForDisplay
+                };
+            });
+        } else {
+            visibleStartIndex = 0;
+            visibleEndIndex = 0;
+            paddingTop = 0;
+            paddingBottom = 0;
+            visibleSegments = [];
+        }
+    }
 
     // --- Highlight and Scroll Logic ---
     let previewScrollContainerRef; $: activeSegmentIndex = $transcriptStore.player?.currentSegmentIndex ?? -1;
-    $: if (activeSegmentIndex !== -1 && isMounted) { tick().then(() => { if (!previewScrollContainerRef) return; const currentElement = document.getElementById(`segment-${activeSegmentIndex}`); if (!currentElement) return; const containerRect = previewScrollContainerRef.getBoundingClientRect(); const currentElementRect = currentElement.getBoundingClientRect(); const nextIndex = activeSegmentIndex + 1; const nextElement = document.getElementById(`segment-${nextIndex}`); const SCROLL_AHEAD_MARGIN_PX = 150; const isCurrentElementNearBottom = currentElementRect.bottom > (containerRect.bottom - SCROLL_AHEAD_MARGIN_PX); let elementToScroll = currentElement; if (nextElement && isCurrentElementNearBottom) { elementToScroll = nextElement; } elementToScroll.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
-    let isMounted = false; onMount(() => { isMounted = true; });
+    let karaokeScrollIndex = -1; // Tracks the index for which karaoke scroll was last triggered.
+    let scrollAnimationId = null; // ID for the requestAnimationFrame loop
+    let isProgrammaticScroll = false;
+    let expectedScrollTop = -1; // The scroll position our animation expects to be at.
+
+    // Scroll and highlight logic
+    $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
+        tick().then(() => {
+            if (!previewScrollContainerRef) return;
+
+            const container = previewScrollContainerRef;
+            const currentContainerHeight = container.clientHeight;
+            const currentDomScrollTop = container.scrollTop;
+            const maxScrollTop = container.scrollHeight - currentContainerHeight;
+
+            const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
+            const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
+
+            const shouldScroll = $transcriptStore.player.isPlaying || (activeSegmentIndex !== karaokeScrollIndex);
+
+            if (shouldScroll) {
+                const viewportTop = currentDomScrollTop;
+                const viewportBottom = viewportTop + currentContainerHeight;
+
+                const isScrollingDown = activeSegmentIndex > karaokeScrollIndex && karaokeScrollIndex !== -1;
+                const isScrollingUp = activeSegmentIndex < karaokeScrollIndex && karaokeScrollIndex !== -1;
+
+                // Sweet spot for incremental scrolling (middle 50% of the screen)
+                const sweetSpotTop = viewportTop + currentContainerHeight * 0.25;
+                const sweetSpotBottom = viewportTop + currentContainerHeight * 0.75;
+                const isItemInSweetSpot = itemTop >= sweetSpotTop && itemBottom <= sweetSpotBottom;
+
+                // Condition for incremental scroll
+                if ($transcriptStore.player.isPlaying && isScrollingDown && isItemInSweetSpot && (maxScrollTop - currentDomScrollTop > 1)) {
+                    const targetScrollTop = Math.min(currentDomScrollTop + ESTIMATED_SEGMENT_HEIGHT, maxScrollTop);
+                    manualSmoothScroll(targetScrollTop);
+                } else {
+                    // Fallback to centering logic for seeking, scrolling up, or when the item is outside the sweet spot.
+                    const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT;
+                    const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
+                    const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
+                    const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
+
+                    if (!isItemInsideEffectiveViewport) {
+                        let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT);
+                        targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, maxScrollTop));
+
+                        if (Math.abs(targetDomScrollTop - currentDomScrollTop) > 1) {
+                            manualSmoothScroll(targetDomScrollTop);
+                        }
+                    }
+                }
+            }
+            karaokeScrollIndex = activeSegmentIndex;
+        });
+    }
+
+    function manualSmoothScroll(targetY, duration = 400) {
+        if (!previewScrollContainerRef) return;
+        if (scrollAnimationId) cancelAnimationFrame(scrollAnimationId);
+
+        isProgrammaticScroll = true;
+        const startY = previewScrollContainerRef.scrollTop;
+        const distance = targetY - startY;
+        let startTime = null;
+
+        function animation(currentTime) {
+            if (startTime === null) startTime = currentTime;
+            const timeElapsed = currentTime - startTime;
+            const progress = Math.min(timeElapsed / duration, 1);
+            const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+            const newScrollTop = startY + distance * ease;
+
+            expectedScrollTop = newScrollTop;
+            previewScrollContainerRef.scrollTop = newScrollTop;
+
+            if (timeElapsed < duration) {
+                scrollAnimationId = requestAnimationFrame(animation);
+            } else {
+                expectedScrollTop = targetY;
+                previewScrollContainerRef.scrollTop = targetY;
+                isProgrammaticScroll = false;
+                scrollAnimationId = null;
+            }
+        }
+
+        scrollAnimationId = requestAnimationFrame(animation);
+    }
+
+    let isMounted = false;
+
+    function cancelAnimation() {
+        if (scrollAnimationId) {
+            cancelAnimationFrame(scrollAnimationId);
+            scrollAnimationId = null;
+        }
+        isProgrammaticScroll = false;
+        if ($transcriptStore.player.isPlaying) {
+            karaokeScrollIndex = -1;
+        }
+    }
+
+    onMount(() => {
+        isMounted = true;
+        if (previewScrollContainerRef) {
+            containerHeight = previewScrollContainerRef.clientHeight;
+            scrollTop = previewScrollContainerRef.scrollTop;
+        }
+    });
+
+    onDestroy(() => {
+        cancelAnimation();
+        document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
+    });
+
+    function handleScroll() {
+        if (!previewScrollContainerRef) return;
+        const currentScroll = previewScrollContainerRef.scrollTop;
+
+        if (isProgrammaticScroll) {
+            if (Math.abs(currentScroll - expectedScrollTop) > 2) {
+                cancelAnimation();
+                scrollTop = currentScroll;
+            } else {
+                scrollTop = currentScroll;
+            }
+        } else {
+            scrollTop = currentScroll;
+            if ($transcriptStore.player.isPlaying) {
+                karaokeScrollIndex = -1;
+            }
+        }
+    }
 
 	/* ---------------- interactions ---------------- */
-	function handleSegmentClick(idx) { if (!previewEditMode) { dispatch('segmentclick', idx); } else { console.log(`[RichTextPreview] Click on segment ${idx} ignored (preview edit mode active).`); } }
+	function handleSegmentClick(idx) {
+        // idx here is the original segmentIndex from processedSegments, not the index in visibleSegments
+        if (!previewEditMode) {
+            dispatch('segmentclick', idx);
+        } else {
+        }
+    }
 	function handleToggleEdit() { dispatch('toggleedit'); }
 
 	async function handleAddToDocumentsClick() {
@@ -339,31 +503,45 @@
 		});
 
 		if (userConfirmed) {
-			console.log("[RichTextPreview] User confirmed adding to Documents. Converting and saving...");
-			try {
-				const newDocPath = await convertAndSaveTranscriptAsDoc();
-				if (newDocPath) {
-					console.log(`[RichTextPreview] Document saved successfully: ${newDocPath}.`);
-					await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
-					dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
-				} else {
-					 console.error("[RichTextPreview] Document saving process did not return a path.");
+            try {
+                const newDocPath = await convertAndSaveTranscriptAsDoc();
+                if (newDocPath) {
+                    await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
+                    dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
+                } else {
+                     console.error("[RichTextPreview] Document saving process did not return a path.");
                      await message("Failed to create document file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
-				}
-			} catch (error) {
-				console.error("[RichTextPreview] Error during document creation process:", error);
+                }
+            } catch (error) {
+                console.error("[RichTextPreview] Error during document creation process:", error);
                 const errorMsg = error instanceof Error ? error.message : String(error);
-				await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
-			}
-		} else {
-			console.log("[RichTextPreview] User cancelled adding to Documents.");
-		}
-	}
+                await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
+            }
+        } else {
+        }
+    }
 
-    async function handleDeleteSegment(idx) { if (!previewEditMode) return; const segmentToDelete = processedSegments[idx]; if (!segmentToDelete) { console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return; } const confirmation = await confirm( `Are you sure you want to delete segment ${idx + 1}?\n\n[${segmentToDelete.startTime} - ${segmentToDelete.endTime}]\n"${(segmentToDelete.plainText || '...').substring(0, 50)}..."\n\nThis action can be undone until you save the transcript.`, { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' } ); if (confirmation) { console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`); dispatch('deletetranscriptsegment', idx); } else { console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`); } }
+    async function handleDeleteSegment(idx) {
+        if (!previewEditMode) return;
+        const storeSegments = get(transcriptStore).segments;
+        const segmentToDelete = storeSegments[idx];
+        if (!segmentToDelete) {
+            console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return;
+        }
+        // Simplified confirmation message as full plainText might not be readily processed for non-visible items
+        const textPreview = segmentToDelete.text ? (isLexicalJson(segmentToDelete.text) ? "[Rich Content]" : String(segmentToDelete.text).substring(0,50) + "...") : "[empty]";
+        const confirmation = await confirm(
+            `Are you sure you want to delete segment ${idx + 1}?\n\n[${formatTimestamp(segmentToDelete.start_time)} - ${formatTimestamp(segmentToDelete.end_time)}]\n\"${textPreview}\"\n\nThis action can be undone until you save the transcript.`,
+            { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' }
+        );
+        if (confirmation) {
+            dispatch('deletetranscriptsegment', idx);
+        } else {
+        }
+    }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
-    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
+    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
 
 	// --- SVG Icons (Unchanged) ---
 	const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
@@ -415,63 +593,48 @@
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
-            <!-- Transcript Dropdown HTML -->
-            {#if $transcriptStore.selectedMediaFile && associatedTranscriptsForDropdown.length > 0}
-            <div class="relative inline-block text-left">
-                <div>
-                    <button bind:this={transcriptDropdownButtonRef} on:click={() => showTranscriptDropdown = !showTranscriptDropdown} type="button" class="inline-flex justify-center w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500" id="transcript-options-menu" aria-haspopup="true" aria-expanded={showTranscriptDropdown}>
-                        <span class="truncate max-w-[150px] sm:max-w-[200px] md:max-w-[250px]">{currentTranscriptLabel}</span>
-                        <svg class="-mr-1 ml-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <!-- Transcript Dropdown using native select -->
+            {#if $transcriptStore.selectedMediaFile}
+                <div class="relative inline-block">
+                    <select
+                        class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                               max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
+                        on:change={(e) => {
+                            const selectedPath = e.target.value;
+                            if (selectedPath) {
+                                dispatch('transcriptselected', selectedPath);
+                            }
+                        }}
+                    >
+                        {#if $transcriptStore.currentTranscriptPath}
+                            <option value={$transcriptStore.currentTranscriptPath} selected class="truncate">
+                                {currentTranscriptLabel}
+                            </option>
+                        {:else if associatedTranscriptsForDropdown.length === 0}
+                            <option value="" disabled selected class="truncate">No Transcripts</option>
+                        {/if}
+
+                        {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
+                            {#if transcript.path !== $transcriptStore.currentTranscriptPath}
+                                <option value={transcript.path || transcript.relativePath} title={transcript.path || transcript.relativePath} class="truncate">
+                                    {transcript.name}
+                                </option>
+                            {/if}
+                        {/each}
+                    </select>
+                    <!-- Custom Chevron Icon -->
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                         </svg>
-                    </button>
-                </div>
-
-                {#if showTranscriptDropdown}
-                    <div bind:this={transcriptDropdownMenuRef} class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-750 ring-1 ring-black dark:ring-gray-600 ring-opacity-5 focus:outline-none z-50 max-h-60 overflow-y-auto" role="menu" aria-orientation="vertical" aria-labelledby="transcript-options-menu">
-                        <div class="py-1" role="none">
-                            <!-- {@const filteredTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
-                                const itemPath = transcript.path || (get(project).baseDirectory ? `${get(project).baseDirectory}/${transcript.relativePath}` : null);
-                                return itemPath !== $transcriptStore.currentTranscriptPath;
-                            })} -->
-                            {#each filteredAssociatedTranscripts as transcript (transcript.unique_render_key)}
-                                <button
-                                    on:click={() => {
-                                        let pathForDispatch = transcript.path;
-                                        if (!pathForDispatch && transcript.relativePath) {
-                                            const baseDir = get(project).baseDirectory;
-                                            if (baseDir) {
-                                                pathForDispatch = `${baseDir}/${transcript.relativePath}`;
-                                            }
-                                        }
-                                        if (pathForDispatch) {
-                                            dispatch('transcriptselected', pathForDispatch);
-                                        } else {
-                                            console.error('[RichTextPreview] No valid path to dispatch for transcript:', transcript);
-                                        }
-                                        showTranscriptDropdown = false;
-                                    }}
-                                    class="block w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
-                                    role="menuitem"
-                                    title={transcript.path || transcript.relativePath}
-                                >
-                                    <span class="truncate">{transcript.name}</span>
-                                </button>
-                            {:else}
-                                <span class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic">No other transcripts to select.</span>
-                            {/each}
-                        </div>
                     </div>
-                {/if}
-            </div>
-        {:else if $transcriptStore.selectedMediaFile}
-             <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Transcripts</span>
-        {:else}
-            <!-- Optionally, show nothing or "No Media Selected" if no media is selected -->
-        {/if}
+                </div>
+            {:else}
+                <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Media Selected</span>
+            {/if}
 
             <!-- Edit/Save/Undo/Redo buttons HTML block starts here -->
-            {#if processedSegments.length || previewEditMode}
+            {#if allSegmentsData.length || previewEditMode}
                 <button on:click={handleToggleEdit} class="btn-icon ml-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" title={previewEditMode ? 'Save Transcript (Ctrl+S)' : 'Edit Transcript (Ctrl+E)'} aria-label={previewEditMode ? 'Save Transcript' : 'Edit Transcript'}> {@html previewEditMode ? SAVE_ICON : EDIT_ICON} </button>
                 {#if previewEditMode}
                   <button class="btn-icon ml-2" class:text-gray-400={!canUndo} class:dark:text-gray-500={!canUndo} class:text-gray-600={canUndo} class:hover:text-gray-800={canUndo} class:dark:text-gray-400={canUndo} class:dark:hover:text-gray-200={canUndo} on:click={handleUndo} title="Undo (Ctrl+Z)" aria-label="Undo Transcript Change" disabled={!canUndo}> {@html UNDO_ICON} </button>
@@ -482,7 +645,7 @@
         </div>
 
         <div class="flex items-center"> <!-- This div now only effectively holds the "More options" menu -->
-            {#if processedSegments.length}
+            {#if allSegmentsData.length > 0}
               <div class="relative inline-block ml-2">
                 <button
                   on:click={() => showExportMenu = !showExportMenu}
@@ -508,7 +671,7 @@
         </div>
     </h3>
 
-    {#if !processedSegments.length}
+    {#if allSegmentsData.length === 0}
         <div class="flex-grow flex items-center justify-center text-gray-400">
             {#if previewEditMode}
                 Transcript empty. Click Insert button to add a segment.
@@ -516,14 +679,23 @@
             {:else} No transcript data to preview. {/if}
         </div>
     {:else}
-        <div bind:this={previewScrollContainerRef} class="flex-grow overflow-y-auto space-y-1 pr-1">
-            {#if previewEditMode}
+        <div
+            bind:this={previewScrollContainerRef}
+            class="flex-grow overflow-y-auto space-y-1 pr-1 relative overscroll-y-contain"
+            on:scroll={handleScroll}
+            on:wheel={cancelAnimation}
+            on:touchstart={cancelAnimation}
+            bind:clientHeight={containerHeight}
+        >
+            <div style="height: {paddingTop}px;"></div>
+            {#if previewEditMode && visibleStartIndex === 0}
               <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
             {/if}
-            {#each processedSegments as seg (seg.segmentIndex)}
+            {#each visibleSegments as seg (seg.segmentIndex)}
                 <div
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
+                    style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
@@ -647,9 +819,10 @@
                     {/if}
                 </div>
                 {#if previewEditMode}
-                  <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
-                {/if}
+                      <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
+                    {/if}
             {/each}
+            <div style="height: {paddingBottom}px;"></div>
         </div>
     {/if}
 </div>
