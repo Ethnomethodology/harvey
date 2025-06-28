@@ -436,7 +436,7 @@
 
 <div bind:this={componentContainer} class="vertical-waveform-panel flex w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
-	<div class="waveform-canvas-container flex-grow h-full relative min-w-0"> {/* Added min-w-0 here */}
+	<div class="waveform-canvas-container flex-grow h-full relative min-w-0">
 		<canvas
 			bind:this={waveformCanvas}
 			class="waveform-canvas-vertical w-full h-full cursor-pointer"
