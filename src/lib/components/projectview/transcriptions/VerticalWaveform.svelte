@@ -10,6 +10,8 @@
 	const BAR_THICKNESS_PX = 2;
 	const BAR_SPACING_PX = 1;
 	const BAR_UNIT_HEIGHT_PX = BAR_THICKNESS_PX + BAR_SPACING_PX;
+	const RMS_GAIN_FACTOR = 1.5; // To amplify RMS effect on bar length
+	const MIN_BAR_HALF_LENGTH_PX = 0.5; // Minimum length of one side of the bar from center
 
 	let waveformCanvas;
 	let timescaleCanvas;
@@ -121,13 +123,21 @@
 			const logicalY_bar_top = yPx_screen + currentScrollToUse;
 			const logicalY_bar_bottom = (yPx_screen + BAR_THICKNESS_PX) + currentScrollToUse;
 
-			const startSample = Math.max(0, Math.floor(logicalY_bar_top * samplesPerLogicalPixel));
-			let endSample = Math.ceil(logicalY_bar_bottom * samplesPerLogicalPixel); // Use ceil for end sample to include partials
-			endSample = Math.min(totalSamples, endSample);
+			let startSample = Math.max(0, Math.floor(logicalY_bar_top * samplesPerLogicalPixel));
+			let endSample = Math.max(0, Math.ceil(logicalY_bar_bottom * samplesPerLogicalPixel));
 
-			if (startSample >= endSample) { // No samples for this bar, or invalid range
-				// Draw a minimal bar or nothing
-				// ctx.fillRect(midX - 1, yPx_screen, 2, BAR_THICKNESS_PX);
+			// Ensure endSample is at least startSample + 1 if startSample is a valid index, to get at least one sample.
+			if (startSample < totalSamples) {
+				endSample = Math.max(endSample, startSample + 1);
+			}
+			endSample = Math.min(totalSamples, endSample); // Re-cap by totalSamples
+
+			if (startSample >= endSample) {
+				// This case means no valid sample range for the bar (e.g., at the very end of audio or beyond).
+				// MIN_BAR_HALF_LENGTH_PX in the drawing logic will handle visual representation.
+				// For data consistency, treat as RMS 0.
+				const displayHalfLength = MIN_BAR_HALF_LENGTH_PX;
+                ctx.fillRect(midX - displayHalfLength, yPx_screen, displayHalfLength * 2, BAR_THICKNESS_PX);
 				continue;
 			}
 
@@ -140,15 +150,19 @@
 			const numberOfSamplesInBar = endSample - startSample;
 			const rms = numberOfSamplesInBar > 0 ? Math.sqrt(sumOfSquares / numberOfSamplesInBar) : 0;
 
-			// Scale RMS to bar length. Max RMS is 1.0 for float samples [-1, 1].
-			// midX is half canvas width. So rms * midX means bar can extend to full width from center.
-			const barPixelAmplitude = Math.max(0, rms * midX); // Ensure non-negative
+			const scaledRms = rms * RMS_GAIN_FACTOR;
+			// Cap scaledRms at 1.0 to ensure barHalfLengthFromRms doesn't exceed midX
+			// (assuming RMS is normalized 0-1, gain might push it over 1)
+			const cappedRms = Math.min(1.0, scaledRms);
+
+			const barHalfLengthFromRms = cappedRms * midX;
+			const displayHalfLength = Math.max(MIN_BAR_HALF_LENGTH_PX, barHalfLengthFromRms);
 
 			// Draw bar symmetrically from center
 			ctx.fillRect(
-				midX - barPixelAmplitude,
+				midX - displayHalfLength,
 				yPx_screen,
-				barPixelAmplitude * 2,
+				displayHalfLength * 2,
 				BAR_THICKNESS_PX
 			);
 		}
