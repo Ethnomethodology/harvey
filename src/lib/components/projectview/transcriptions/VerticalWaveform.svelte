@@ -361,7 +361,7 @@
 			animationFrameId = null;
 		}
 		lastDrawnTime = -1;
-		lastDrawnBuffer = null;
+		lastDrawnBufferOrPeaks = null;
 		lastDrawnActualDuration = -1;
 	});
 
