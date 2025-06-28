@@ -443,7 +443,9 @@
             scrollAnimationId = null;
         }
         isProgrammaticScroll = false;
-        karaokeScrollIndex = -1;
+        if ($transcriptStore.player.isPlaying) {
+            karaokeScrollIndex = -1;
+        }
     }
 
     onMount(() => {
@@ -472,7 +474,9 @@
             }
         } else {
             scrollTop = currentScroll;
-            karaokeScrollIndex = -1;
+            if ($transcriptStore.player.isPlaying) {
+                karaokeScrollIndex = -1;
+            }
         }
     }
 
