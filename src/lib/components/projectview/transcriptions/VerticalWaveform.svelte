@@ -550,7 +550,7 @@
 	</div>
 
 	<!-- Existing Waveform and Timescale Area -->
-	<div bind:this={waveformAreaContainerRef} class="flex flex-grow min-h-0 relative"> {/* Added relative for overlay */}
+	<div bind:this={waveformAreaContainerRef} class="flex flex-grow min-h-0 relative">
 		<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
 		<div
 			bind:this={waveformScrollDiv}
@@ -564,7 +564,7 @@
 				on:click={handleCanvasClick}
 				style="height: {visibleCanvasHeight * zoomLevel}px;"
 			></canvas>
-			{#if !webAudioApiSupported && isMounted} {/* Added isMounted to prevent flash on load */}
+			{#if !webAudioApiSupported && isMounted}
 				<div class="overlay-message"><p>Web Audio API not supported.</p></div>
 			{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
 				<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
