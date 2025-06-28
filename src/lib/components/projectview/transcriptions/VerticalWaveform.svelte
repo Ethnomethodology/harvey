@@ -32,6 +32,8 @@
 	let lastDrawnActualDuration = -1;
 	const redrawTimeThreshold = 1 / 60; // 60 FPS
 
+	let seekBarStyle = 'display: none;'; // For HTML seek bar
+
 	const dispatch = createEventDispatcher();
 
 	let segments = [];
@@ -89,9 +91,9 @@
 		if (!buffer && (!peaksData || peaksData.length === 0)) return;
 
 		const midX = canvasWidth / 2;
-		const isDark = document.documentElement.classList.contains('dark');
+		// const isDark = document.documentElement.classList.contains('dark'); // Removed, color is passed as param
 		// Consistent color with InteractiveWaveform.svelte's default waveform color
-		ctx.strokeStyle = isDark ? '#9ca3af' : '#9ca3af';
+		ctx.strokeStyle = color; // Use the passed 'color' parameter
 		ctx.lineWidth = 1;
 
 		// Adaptive peak/raw data usage logic (similar to InteractiveWaveform)
@@ -378,33 +380,7 @@
 		// so redraw is triggered if currentSegment changes.
 		// This is already handled by the subscription, but also good to note here for logic flow.
 
-
-		// Draw red seek bar
-		const pyCur_logical = timeToLogicalPy(cur, mediaDur, visibleCanvasHeight); // Position on the full logical (zoomed) canvas
-		const pyCurOnScreen = pyCur_logical - scrollOffsetPy; // Subtract scroll offset to get screen position
-
-		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) { // Check if visible on screen
-			// The main context is already scaled by DPR.
-			// For the seek bar, we want a crisp 1 CSS pixel line.
-			// We can draw directly into the DPR-scaled context.
-			// The +0.5 helps with anti-aliasing for sharp lines.
-			ctx.strokeStyle = '#ef4444'; // Red color for seek bar
-			ctx.lineWidth = 1 / dpr; // Aim for 1 physical pixel line width if dpr > 1, or 1 css pixel if dpr=1
-			// Correcting lineWidth: it should be specified in CSS pixels for the current transform.
-			// If the context is scaled by dpr, a lineWidth of 1 will be 1*dpr physical pixels.
-			// For a 1 *physical* pixel line, use 1/dpr. For a 1 *CSS* pixel line, use 1.
-			// InteractiveWaveform uses lineWidth = 1.5 (CSS pixels) for its seek bar. Let's match that intent.
-			ctx.lineWidth = 1.5; // Use 1.5 CSS pixels, will be scaled by DPR.
-
-			const finalLineY = Math.round(pyCurOnScreen) + 0.5;
-
-			ctx.beginPath();
-			ctx.moveTo(0, finalLineY);
-			ctx.lineTo(waveformCanvasWidth, finalLineY);
-			ctx.stroke();
-
-			// No need for separate save/restore/setTransform here if drawing in the main scaled context.
-		}
+		// Red seek bar is now an HTML element, removed from canvas drawing.
 		ctx.restore(); // Outer restore for initial dpr scaling
 
 		lastDrawnTime = cur;
@@ -612,6 +588,22 @@
         }
     }
 
+	// Reactive style for HTML seek bar
+	$: {
+		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
+			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
+			const screenY = logicalY - scrollOffsetPy;
+
+			if (!isNaN(screenY) && isFinite(screenY)) {
+				seekBarStyle = `top: ${Math.round(screenY)}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
+			} else {
+				seekBarStyle = 'display: none;'; // Hide if position is invalid
+			}
+		} else {
+			seekBarStyle = 'display: none;';
+		}
+	}
+
 	$: canZoomIn = isMounted && zoomLevel < maxZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
 	$: canZoomOut = isMounted && zoomLevel > minZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
 
@@ -646,6 +638,9 @@
 				aria-label="Vertical waveform visualization. Click to seek audio."
 				style="height: {visibleCanvasHeight * zoomLevel}px;"
 			></canvas>
+			{#if (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0}
+				<div class="vertical-seek-bar" style={seekBarStyle}></div>
+			{/if}
 			{#if !webAudioApiSupported && isMounted}
 				<div class="overlay-message"><p>Web Audio API not supported.</p></div>
 			{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
@@ -709,5 +704,14 @@
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
 		background: #3c3c3c;
+	}
+	.vertical-seek-bar {
+		position: absolute;
+		left: 0;
+		width: 100%;
+		height: 1.5px; /* Consistent with horizontal waveform's canvas line weight */
+		background-color: #ef4444; /* Red color */
+		pointer-events: none; /* So it doesn't interfere with clicks on the canvas */
+		z-index: 10; /* Ensure it's above the waveform canvas */
 	}
 </style>
