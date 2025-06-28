@@ -359,47 +359,50 @@
         tick().then(() => {
             if (!previewScrollContainerRef) return;
 
-            const currentContainerHeight = previewScrollContainerRef.clientHeight;
-            const currentDomScrollTop = previewScrollContainerRef.scrollTop;
+            const container = previewScrollContainerRef;
+            const currentContainerHeight = container.clientHeight;
+            const currentDomScrollTop = container.scrollTop;
+            const maxScrollTop = container.scrollHeight - currentContainerHeight;
+
             const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
-            const viewportTop = currentDomScrollTop;
-            const viewportBottom = currentDomScrollTop + currentContainerHeight;
 
-            const isScrollingDown = activeSegmentIndex > karaokeScrollIndex && karaokeScrollIndex !== -1;
-            const isScrollingUp = activeSegmentIndex < karaokeScrollIndex && karaokeScrollIndex !== -1;
-
-            // Only scroll if the media is playing, or if it's paused and the user clicked on the waveform/seek bar
-            // We ensure that the scroll is triggered only when the activeSegmentIndex changes.
-            // The user's action of clicking the seek bar will cause activeSegmentIndex to change.
-            // When playing, the activeSegmentIndex changes automatically.
             const shouldScroll = $transcriptStore.player.isPlaying || (activeSegmentIndex !== karaokeScrollIndex);
 
             if (shouldScroll) {
-                const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT; // Scroll when active segment is within 2 items of the edge
+                const viewportTop = currentDomScrollTop;
+                const viewportBottom = viewportTop + currentContainerHeight;
 
-                const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
-                const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
+                const isScrollingDown = activeSegmentIndex > karaokeScrollIndex && karaokeScrollIndex !== -1;
+                const isScrollingUp = activeSegmentIndex < karaokeScrollIndex && karaokeScrollIndex !== -1;
 
-                const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
+                // Sweet spot for incremental scrolling (middle 50% of the screen)
+                const sweetSpotTop = viewportTop + currentContainerHeight * 0.25;
+                const sweetSpotBottom = viewportTop + currentContainerHeight * 0.75;
+                const isItemInSweetSpot = itemTop >= sweetSpotTop && itemBottom <= sweetSpotBottom;
 
-                if (!isItemInsideEffectiveViewport) {
-                    let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT / 2);
-                    targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, previewScrollContainerRef.scrollHeight - currentContainerHeight));
-
-                    if (Math.abs(targetDomScrollTop - currentDomScrollTop) < 1) {
-                        karaokeScrollIndex = activeSegmentIndex;
-                        return;
-                    }
-
-                    karaokeScrollIndex = activeSegmentIndex;
-                    manualSmoothScroll(targetDomScrollTop);
+                // Condition for incremental scroll
+                if ($transcriptStore.player.isPlaying && isScrollingDown && isItemInSweetSpot && (maxScrollTop - currentDomScrollTop > 1)) {
+                    const targetScrollTop = Math.min(currentDomScrollTop + ESTIMATED_SEGMENT_HEIGHT, maxScrollTop);
+                    manualSmoothScroll(targetScrollTop);
                 } else {
-                    karaokeScrollIndex = activeSegmentIndex;
+                    // Fallback to centering logic for seeking, scrolling up, or when the item is outside the sweet spot.
+                    const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT;
+                    const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
+                    const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
+                    const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
+
+                    if (!isItemInsideEffectiveViewport) {
+                        let targetDomScrollTop = itemTop - (currentContainerHeight / 2) + (ESTIMATED_SEGMENT_HEIGHT);
+                        targetDomScrollTop = Math.max(0, Math.min(targetDomScrollTop, maxScrollTop));
+
+                        if (Math.abs(targetDomScrollTop - currentDomScrollTop) > 1) {
+                            manualSmoothScroll(targetDomScrollTop);
+                        }
+                    }
                 }
-            } else {
-                karaokeScrollIndex = activeSegmentIndex;
             }
+            karaokeScrollIndex = activeSegmentIndex;
         });
     }
 
