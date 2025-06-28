@@ -442,7 +442,10 @@
 
 <div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<!-- New Header Section -->
-	<div class="h-[calc(1.75rem+1px)] flex-shrink-0 px-3 flex items-center border-b border-gray-300 dark:border-gray-600">
+	<div class="flex-shrink-0 px-3 py-1 flex items-center border-b border-gray-300 dark:border-gray-600 gap-x-2">
+		<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-soundwave w-4 h-4 text-gray-600 dark:text-gray-400" viewBox="0 0 16 16">
+			<path fill-rule="evenodd" d="M8.5 2a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-1 0v-11a.5.5 0 0 1 .5-.5m-2 2a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5m4 0a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5m-6 1.5A.5.5 0 0 1 5 6v4a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m8 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m-10 1A.5.5 0 0 1 3 7v2a.5.5 0 0 1-1 0V7a.5.5 0 0 1 .5-.5m12 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0V7a.5.5 0 0 1 .5-.5"/>
+		</svg>
 		<span class="text-xs font-medium text-gray-700 dark:text-gray-200 select-none">Waveform</span>
 	</div>
 
