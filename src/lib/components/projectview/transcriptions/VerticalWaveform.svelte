@@ -354,9 +354,8 @@
 				const segmentStartY_logical = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
 				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
 
-				const segmentStartY_onScreen = segmentStartY_logical - scrollOffsetPy;
-				const segmentStartY_logical = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
-				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
+				// Removed erroneous redeclaration block that included segmentStartY_onScreen
+				// and duplicate declarations of segmentStartY_logical, segmentEndY_logical.
 
 				// Calculate screen coordinates for canvas clipping, matching HTML element logic (rounded)
 				const canvasClipY_unbounded = Math.round(segmentStartY_logical - scrollOffsetPy);
