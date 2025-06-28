@@ -11,7 +11,7 @@
 	let timescaleCanvas;
 	let componentContainer; // Outermost container ref
 	let waveformAreaContainerRef; // Ref for the actual waveform drawing area
-	let waveformScrollDiv; // Ref for the scrollable div itself
+	let waveformScrollDiv; // Ref for the scrollable div
 
 	let visibleCanvasHeight = 0;
 	let waveformCanvasWidth = 0;
@@ -48,22 +48,24 @@
 		return `${String(minutes)}:${String(seconds).padStart(2, '0')}`;
 	}
 
-	function timeToLogicalPy(time, mediaDuration, viewHeight) {
+	function timeToLogicalPy(time, mediaDuration, viewHeight) { // viewHeight is visibleCanvasHeight
 		if (!mediaDuration || mediaDuration <= 0 || !viewHeight || viewHeight <= 0) return 0;
 		const contentLogicalHeight = viewHeight * zoomLevel;
 		const proportion = Math.max(0, Math.min(1, time / mediaDuration));
 		return proportion * contentLogicalHeight;
 	}
 
-	function pyToTime(py, mediaDuration, viewHeight, currentScrollOffsetPy) {
+	// pyToTime updated to include scrollOffsetPy
+	function pyToTime(py, mediaDuration, viewHeight, currentScrollOffsetPy = 0) { // py is screen-relative
 		if (!mediaDuration || mediaDuration <= 0 || !viewHeight || viewHeight <= 0) return 0;
 		const contentLogicalHeight = viewHeight * zoomLevel;
-		const logicalPy = py + currentScrollOffsetPy; // py is screen-relative, add scroll to get logical
+		const logicalPy = py + currentScrollOffsetPy; // Add scroll to screen-relative py
 		const proportion = Math.max(0, Math.min(1, logicalPy / contentLogicalHeight));
 		return proportion * mediaDuration;
 	}
 
 	function drawVerticalWaveform(ctx, buffer, peaksData, canvasClientHeight, canvasWidth, color) {
+		// canvasClientHeight is visibleCanvasHeight
 		if (!ctx || canvasClientHeight <= 0 || canvasWidth <= 0) return;
 		if (!buffer && (!peaksData || peaksData.length === 0)) return;
 
@@ -74,52 +76,57 @@
 		ctx.lineWidth = 1;
 
 		const usePeaks = peaksData && peaksData.length > 0;
+		// contentLogicalHeight is the total height the waveform data would occupy if laid out at current zoom.
+		// We are drawing into canvasClientHeight.
 		const contentLogicalHeight = canvasClientHeight * zoomLevel;
 
 		if (usePeaks) {
 			const numPeakBlocks = peaksData.length / 2;
-			const peaksPerLogicalUnit = numPeakBlocks / contentLogicalHeight;
+			// peaksPerLogicalUnit: how many peak blocks fit into one unit of the contentLogicalHeight.
+			// Or rather, how many data units (peak blocks) correspond to each logical pixel unit if contentLogicalHeight was 1.
+			// This should be: data units per logical pixel on the zoomed canvas.
+			const peaksPerLogicalUnitOfZoomedCanvas = numPeakBlocks / contentLogicalHeight;
 
 			ctx.beginPath(); // Max Peaks
-			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
-				const logicalY = yPx + scrollOffsetPy;
-				const peakBlockStartIndex = Math.floor(logicalY * peaksPerLogicalUnit);
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) { // Iterate over screen pixels
+				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const peakBlockStartIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
 				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
 				let maxPeak = 0.0;
 				if (targetBlock >= 0 && targetBlock * 2 + 1 < peaksData.length) {
 					maxPeak = peaksData[targetBlock * 2 + 1];
 				}
 				const xVal = midX + maxPeak * midX;
-				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
-				else ctx.lineTo(xVal, yPx + 0.5);
+				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
+				else ctx.lineTo(xVal, yPx_screen + 0.5);
 			}
 			ctx.stroke();
 
 			ctx.beginPath(); // Min Peaks
-			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
-				const logicalY = yPx + scrollOffsetPy;
-				const peakBlockStartIndex = Math.floor(logicalY * peaksPerLogicalUnit);
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
+				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const peakBlockStartIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
 				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
 				let minPeak = 0.0;
 				if (targetBlock >= 0 && targetBlock * 2 < peaksData.length) {
 					minPeak = peaksData[targetBlock * 2];
 				}
 				const xVal = midX + minPeak * midX;
-				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
-				else ctx.lineTo(xVal, yPx + 0.5);
+				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
+				else ctx.lineTo(xVal, yPx_screen + 0.5);
 			}
 			ctx.stroke();
 
 		} else if (buffer) {
 			const data = buffer.getChannelData(0);
 			const totalSamples = data.length;
-			const samplesPerLogicalUnit = totalSamples / contentLogicalHeight;
+			const samplesPerLogicalUnitOfZoomedCanvas = totalSamples / contentLogicalHeight;
 
 			ctx.beginPath(); // Max Envelope
-			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
-				const logicalY = yPx + scrollOffsetPy;
-				const sampleStartIndex = Math.floor(logicalY * samplesPerLogicalUnit);
-				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY + 1) * samplesPerLogicalUnit));
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
+				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const sampleStartIndex = Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas);
+				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 
 				let maxVal = 0;
 				if (sampleStartIndex < sampleEndIndex && sampleStartIndex < totalSamples) {
@@ -131,16 +138,16 @@
 					maxVal = data[sampleStartIndex];
 				}
 				const xVal = midX + maxVal * midX;
-				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
-				else ctx.lineTo(xVal, yPx + 0.5);
+				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
+				else ctx.lineTo(xVal, yPx_screen + 0.5);
 			}
 			ctx.stroke();
 
 			ctx.beginPath(); // Min Envelope
-			for (let yPx = 0; yPx < canvasClientHeight; yPx++) {
-				const logicalY = yPx + scrollOffsetPy;
-				const sampleStartIndex = Math.floor(logicalY * samplesPerLogicalUnit);
-				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY + 1) * samplesPerLogicalUnit));
+			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
+				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const sampleStartIndex = Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas);
+				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 				let minVal = 0;
 				if (sampleStartIndex < sampleEndIndex && sampleStartIndex < totalSamples) {
 					minVal = data[sampleStartIndex];
@@ -151,8 +158,8 @@
 					minVal = data[sampleStartIndex];
 				}
 				const xVal = midX + minVal * midX;
-				if (yPx === 0) ctx.moveTo(xVal, yPx + 0.5);
-				else ctx.lineTo(xVal, yPx + 0.5);
+				if (yPx_screen === 0) ctx.moveTo(xVal, yPx_screen + 0.5);
+				else ctx.lineTo(xVal, yPx_screen + 0.5);
 			}
 			ctx.stroke();
 		}
@@ -294,21 +301,31 @@
 		ctx.clearRect(0, 0, waveformCanvasWidth, visibleCanvasHeight);
 
 		if ((buf || peaks) && visibleCanvasHeight > 0) {
-			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af');
+			// For vertical, logicalHeight is visibleCanvasHeight (no zoom)
+			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af'); // Tailwind gray-400
 		}
 
-		const pyCur = timeToLogicalPy(cur, mediaDur, visibleCanvasHeight);
-		const pyCurOnScreen = pyCur - scrollOffsetPy;
+		// Draw red seek bar
+		const pyCur_logical = timeToLogicalPy(cur, mediaDur, visibleCanvasHeight); // Position on the full logical (zoomed) canvas
+		const pyCurOnScreen = pyCur_logical - scrollOffsetPy; // Subtract scroll offset to get screen position
 
-		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) {
+		if (pyCurOnScreen >= -1 && pyCurOnScreen <= visibleCanvasHeight + 1) { // Check if visible on screen
+			ctx.save();
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Reset transform, apply only DPR for crisp line
+
 			ctx.strokeStyle = '#ef4444';
-			ctx.lineWidth = 1; // Changed from 1.5 to 1 for a potentially sharper line
+			ctx.lineWidth = 1; // 1 CSS pixel line
+
+			const finalLineY = Math.round(pyCurOnScreen) + 0.5; // Use the on-screen Y
+
 			ctx.beginPath();
-			ctx.moveTo(0, pyCurOnScreen + 0.5);
-			ctx.lineTo(waveformCanvasWidth, pyCurOnScreen + 0.5);
+			ctx.moveTo(0, finalLineY);
+			ctx.lineTo(waveformCanvasWidth, finalLineY); // waveformCanvasWidth is in CSS pixels
 			ctx.stroke();
+
+			ctx.restore();
 		}
-		ctx.restore();
+		ctx.restore(); // Outer restore for initial dpr scaling
 
 		lastDrawnTime = cur;
 		lastDrawnBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
@@ -422,45 +439,26 @@
 		}
 	}
 
-	function handleCanvasClick(e) {
+	function handleScrollDivClick(event) {
 		const mediaDur = duration;
-		if (!waveformCanvas || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
+		if (!waveformScrollDiv || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0) return;
 
-		const rect = waveformCanvas.getBoundingClientRect(); // rect of the TALL canvas
-		const clickY_on_tall_canvas = e.clientY - rect.top; // This is a coordinate on the TALL canvas
+		const rect = event.currentTarget.getBoundingClientRect(); // event.currentTarget is waveformScrollDiv
+		const clickY_in_viewport = event.clientY - rect.top;
 
-		const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
-		if (contentLogicalHeight <= 0) return;
+		const logicalClickY = waveformScrollDiv.scrollTop + clickY_in_viewport;
+		const contentTotalScrollHeight = waveformScrollDiv.scrollHeight;
 
-		const proportion = Math.max(0, Math.min(1, clickY_on_tall_canvas / contentLogicalHeight ));
+		if (contentTotalScrollHeight <= 0) return;
+
+		const proportion = Math.max(0, Math.min(1, logicalClickY / contentTotalScrollHeight));
 		const time = proportion * mediaDur;
 
 		dispatch('navigate', { time: time });
 	}
 
-	function handleWaveformScroll(event) {
-		if (event.target) {
-			const newScrollOffsetPy = Math.round(event.target.scrollTop);
-			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
-				scrollOffsetPy = newScrollOffsetPy;
-				requestRedraw(); // Redraw waveform for new scroll position
-			}
-		}
-	}
-
-	function resetScrollAndZoom() {
-		zoomLevel = 1;
-		scrollOffsetPy = 0;
-		if (waveformScrollDiv) {
-			waveformScrollDiv.scrollTop = 0;
-		}
-		requestRedraw(true);
-	}
-
-
 	function handleZoom(direction) {
 		if (!audioBuffer && !$transcriptStore.audioBufferPeaks) return;
-
 		let newZoomLevel = zoomLevel;
 		if (direction === 'in') {
 			newZoomLevel = zoomLevel * zoomStep;
@@ -468,28 +466,40 @@
 			newZoomLevel = zoomLevel / zoomStep;
 		}
 		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
-
 		if (Math.abs(newZoomLevel - zoomLevel) > 0.001) {
 			zoomLevel = newZoomLevel;
-			scrollOffsetPy = 0;
-			if (waveformScrollDiv) {
-				waveformScrollDiv.scrollTop = 0;
-			}
-			requestRedraw(true);
+			resetScrollAndZoom(false); // Don't reset zoomLevel again, just scroll
 		}
 	}
 
-	function zoomIn() {
-		handleZoom('in');
-	}
-	function zoomOut() {
-		handleZoom('out');
+	function zoomIn() { handleZoom('in'); }
+	function zoomOut() { handleZoom('out'); }
+
+	function handleWaveformScroll(event) {
+		if (event.target) {
+			const newScrollOffsetPy = Math.round(event.target.scrollTop);
+			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
+				scrollOffsetPy = newScrollOffsetPy;
+				requestRedraw();
+			}
+		}
 	}
 
-    // Watch for prop changes to force redraw and potentially reset zoom/scroll
+	function resetScrollAndZoom(resetZoomToo = true) {
+		if (resetZoomToo) {
+			zoomLevel = 1;
+		}
+		scrollOffsetPy = 0;
+		if (waveformScrollDiv) {
+			waveformScrollDiv.scrollTop = 0;
+		}
+		requestRedraw(true);
+	}
+
+    // Watch for prop changes to force redraw
     let prevAudioBuffer = audioBuffer;
     let prevDuration = duration;
-    let prevStorePeaks = $transcriptStore.audioBufferPeaks;
+    let prevStorePeaks = $transcriptStore.audioBufferPeaks; // For store-based changes
 
     $: if (isMounted) {
         let resetNeeded = false;
@@ -501,28 +511,24 @@
             resetNeeded = true;
             prevDuration = duration;
         }
-        // If not using direct audioBuffer prop, and store peaks change
         if (!audioBuffer && $transcriptStore.audioBufferPeaks !== prevStorePeaks) {
             resetNeeded = true;
             prevStorePeaks = $transcriptStore.audioBufferPeaks;
         }
 
         if (resetNeeded) {
-            resetScrollAndZoom(); // This also calls requestRedraw(true)
+            resetScrollAndZoom(true); // Full reset including zoom
         } else {
-            // If no reset, still might need a redraw if internal state like currentTime changed,
-            // or if the buffer/peaks data changed in a way not caught by instance check (e.g. store update without instance change)
-            // The animationLoop handles most redraw conditions correctly.
-            // We ensure lastDrawnBufferOrPeaks is up-to-date for the animationLoop's comparison.
             const currentEffectiveBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
             if (currentEffectiveBufferOrPeaks !== lastDrawnBufferOrPeaks) {
-                 lastDrawnBufferOrPeaks = currentEffectiveBufferOrPeaks; // Keep it synced for animationLoop
-                 requestRedraw(true); // Force redraw if effective buffer/peaks changed
+                 lastDrawnBufferOrPeaks = currentEffectiveBufferOrPeaks;
+                 requestRedraw(true);
             } else {
-                 requestRedraw(false); // Don't force, let anim loop decide details
+                 requestRedraw(false);
             }
         }
     }
+
 
     // Separate watcher for currentTime to ensure smooth updates via animation loop
     $: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) {
@@ -531,8 +537,8 @@
         }
     }
 
-	$: canZoomIn = zoomLevel < maxZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
-	$: canZoomOut = zoomLevel > minZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
+	$: canZoomIn = isMounted && zoomLevel < maxZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
+	$: canZoomOut = isMounted && zoomLevel > minZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
 
 </script>
 
@@ -557,12 +563,13 @@
 			bind:this={waveformScrollDiv}
 			class="waveform-scroll-container flex-grow h-full relative min-w-0 overflow-y-auto"
 			on:scroll={handleWaveformScroll}
+			on:click={handleScrollDivClick}
 		>
 			<canvas
 				bind:this={waveformCanvas}
 				class="waveform-canvas-vertical w-full cursor-pointer"
 				aria-label="Vertical waveform visualization. Click to seek audio."
-				on:click={handleCanvasClick}
+				<!-- on:click removed -->
 				style="height: {visibleCanvasHeight * zoomLevel}px;"
 			></canvas>
 			{#if !webAudioApiSupported && isMounted}
@@ -597,16 +604,15 @@
 	}
 
 	.waveform-scroll-container {
-		scrollbar-width: thin; /* For Firefox */
-		scrollbar-color: transparent transparent; /* For Firefox - thumb color track color */
+		scrollbar-width: thin; /* Firefox */
+		scrollbar-color: transparent transparent; /* Firefox */
 	}
 	.waveform-scroll-container:hover {
-		scrollbar-color: #a0aec0 #e2e8f0; /* For Firefox - thumb color track color on hover */
+		scrollbar-color: #a0aec0 #e2e8f0; /* Firefox on hover */
 	}
 	.dark .waveform-scroll-container:hover {
-		scrollbar-color: #6b7280 #3c3c3c; /* For Firefox in dark mode */
+		scrollbar-color: #6b7280 #3c3c3c; /* Firefox dark on hover */
 	}
-
 	.waveform-scroll-container::-webkit-scrollbar {
 		width: 8px;
 		height: 8px;
@@ -622,12 +628,12 @@
 		background-color: #a0aec0; /* Tailwind gray-400 */
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-thumb {
-		background-color: #4a5568; /* Tailwind gray-600 for dark mode */
+		background-color: #4a5568; /* Tailwind gray-600 dark */
 	}
 	.waveform-scroll-container:hover::-webkit-scrollbar-track {
 		background: #e2e8f0; /* Tailwind gray-200 */
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
-		background: #3c3c3c; /* Slightly lighter than panel bg for contrast */
+		background: #3c3c3c;
 	}
 </style>
