@@ -33,6 +33,7 @@
 	const redrawTimeThreshold = 1 / 60; // 60 FPS
 
 	let seekBarStyle = 'display: none;'; // For HTML seek bar
+	let segmentHighlightStyle = 'display: none;'; // For HTML segment highlight
 
 	const dispatch = createEventDispatcher();
 
@@ -354,20 +355,25 @@
 				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
 
 				const segmentStartY_onScreen = segmentStartY_logical - scrollOffsetPy;
-				const segmentEndY_onScreen = segmentEndY_logical - scrollOffsetPy;
+				const segmentStartY_logical = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
+				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
 
-				const highlightTop = Math.max(0, segmentStartY_onScreen);
-				const highlightBottom = Math.min(visibleCanvasHeight, segmentEndY_onScreen);
+				// Calculate screen coordinates for canvas clipping, matching HTML element logic (rounded)
+				const canvasClipY_unbounded = Math.round(segmentStartY_logical - scrollOffsetPy);
+				const canvasClipBottom_unbounded = Math.round(segmentEndY_logical - scrollOffsetPy);
 
-				if (highlightBottom > highlightTop) {
-					ctx.fillStyle = 'rgba(147, 197, 253, 0.4)'; // Consistent with InteractiveWaveform
-					ctx.fillRect(0, highlightTop, waveformCanvasWidth, highlightBottom - highlightTop);
+				// Determine the visible portion on the canvas for clipping
+				const finalCanvasClipY = Math.max(0, canvasClipY_unbounded);
+				const finalCanvasClipBottom = Math.min(visibleCanvasHeight, canvasClipBottom_unbounded);
+				const canvasClipHeight = Math.max(0, finalCanvasClipBottom - finalCanvasClipY);
 
-					// Draw the waveform within the segment with a different color
+				if (canvasClipHeight > 0) {
+					// Background highlight is now an HTML element.
+					// Still draw the waveform within the segment with a different color, using aligned clipping.
 					if ((buf || peaks) && visibleCanvasHeight > 0) {
 						ctx.save();
 						ctx.beginPath();
-						ctx.rect(0, highlightTop, waveformCanvasWidth, highlightBottom - highlightTop);
+						ctx.rect(0, finalCanvasClipY, waveformCanvasWidth, canvasClipHeight);
 						ctx.clip();
 						// Pass the specific color for the highlighted segment's waveform
 						drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#2563eb'); // Consistent with InteractiveWaveform
@@ -604,6 +610,34 @@
 		}
 	}
 
+	// Reactive style for HTML segment highlight
+	$: {
+		if (isMounted && currentSegment && duration > 0 && visibleCanvasHeight > 0) {
+			const segmentStartTime = Number(currentSegment.start_time);
+			const segmentEndTime = Number(currentSegment.end_time);
+
+			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
+				const logicalTop = timeToLogicalPy(segmentStartTime, duration, visibleCanvasHeight);
+				const logicalBottom = timeToLogicalPy(segmentEndTime, duration, visibleCanvasHeight);
+
+				const screenTop = Math.round(logicalTop - scrollOffsetPy);
+				const screenBottom = Math.round(logicalBottom - scrollOffsetPy);
+
+				const height = Math.max(0, screenBottom - screenTop);
+
+				if (height > 0 && screenTop < visibleCanvasHeight && screenBottom > 0) {
+					segmentHighlightStyle = `top: ${screenTop}px; height: ${height}px; display: block;`;
+				} else {
+					segmentHighlightStyle = 'display: none;';
+				}
+			} else {
+				segmentHighlightStyle = 'display: none;';
+			}
+		} else {
+			segmentHighlightStyle = 'display: none;';
+		}
+	}
+
 	$: canZoomIn = isMounted && zoomLevel < maxZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
 	$: canZoomOut = isMounted && zoomLevel > minZoomLevel && (audioBuffer || $transcriptStore.audioBufferPeaks);
 
@@ -640,6 +674,9 @@
 			></canvas>
 			{#if (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0}
 				<div class="vertical-seek-bar" style={seekBarStyle}></div>
+			{/if}
+			{#if currentSegment && duration > 0}
+				<div class="segment-highlight-window" style={segmentHighlightStyle}></div>
 			{/if}
 			{#if !webAudioApiSupported && isMounted}
 				<div class="overlay-message"><p>Web Audio API not supported.</p></div>
@@ -713,5 +750,13 @@
 		background-color: #ef4444; /* Red color */
 		pointer-events: none; /* So it doesn't interfere with clicks on the canvas */
 		z-index: 10; /* Ensure it's above the waveform canvas */
+	}
+	.segment-highlight-window {
+		position: absolute;
+		left: 0;
+		width: 100%;
+		background-color: rgba(147, 197, 253, 0.4); /* Consistent blue highlight */
+		pointer-events: none;
+		z-index: 5; /* Below seek bar, above waveform */
 	}
 </style>
