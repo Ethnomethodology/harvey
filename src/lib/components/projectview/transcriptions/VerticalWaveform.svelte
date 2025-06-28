@@ -9,7 +9,8 @@
 	const TIMESCALE_WIDTH = 35; // For vertical timescale, increased for padding
 	let waveformCanvas;
 	let timescaleCanvas;
-	let componentContainer; // To get available height
+	let componentContainer; // Outermost container ref
+	let waveformAreaContainerRef; // Ref for the actual waveform drawing area
 
 	let visibleCanvasHeight = 0;
 	let waveformCanvasWidth = 0;
@@ -342,9 +343,9 @@
 		webAudioApiSupported = typeof window.AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined';
 
 		tick().then(() => {
-			if (isMounted && componentContainer) {
-				setupResizeObserver();
-				// Initial draw might require dimensions from observer
+			if (isMounted && waveformAreaContainerRef) { // Changed to waveformAreaContainerRef
+				setupResizeObserver(); // Call setup
+                // Initial size update now happens inside setupResizeObserver or its subsequent tick
 			}
 		});
         // No need to subscribe to transcriptStore if props are passed down
@@ -366,36 +367,41 @@
 	});
 
 	function setupResizeObserver() {
-		if (componentContainer && !resizeObserverInstance && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
+		if (waveformAreaContainerRef && !resizeObserverInstance && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
 			resizeObserverInstance = new ResizeObserver(entries => {
 				for (const entry of entries) {
-					if (entry.target === componentContainer) {
-						const newHeight = entry.contentRect.height;
-						const newWidth = entry.contentRect.width;
+					if (entry.target === waveformAreaContainerRef) { // Observe waveformAreaContainerRef
+						const newHeight = Math.max(0, entry.contentRect.height);
+						const newWidth = Math.max(0, entry.contentRect.width);
 						let changed = false;
 
-						if (newHeight > 0 && newHeight !== visibleCanvasHeight) {
+						if (newHeight !== visibleCanvasHeight) { // Use newHeight directly
 							visibleCanvasHeight = newHeight;
 							changed = true;
 						}
-						// Waveform canvas width is container width minus timescale width
+
 						const newWaveformCanvasWidth = Math.max(0, newWidth - TIMESCALE_WIDTH);
-						if (newWaveformCanvasWidth >= 0 && newWaveformCanvasWidth !== waveformCanvasWidth) {
+						if (newWaveformCanvasWidth !== waveformCanvasWidth) {
 							waveformCanvasWidth = newWaveformCanvasWidth;
 							changed = true;
 						}
 
 						if (changed) {
-							requestRedraw(true);
+							requestRedraw(true); // Force redraw on resize
 						}
 					}
 				}
 			});
-			resizeObserverInstance.observe(componentContainer);
-			// Initial size update
-			visibleCanvasHeight = componentContainer.clientHeight;
-			waveformCanvasWidth = Math.max(0, componentContainer.clientWidth - TIMESCALE_WIDTH);
-			requestRedraw(true); // Force redraw after initial size
+			resizeObserverInstance.observe(waveformAreaContainerRef); // Observe waveformAreaContainerRef
+
+            // Initial size update more reliably after observer is set up and element is surely in DOM
+            tick().then(() => {
+                if(waveformAreaContainerRef) {
+                    visibleCanvasHeight = Math.max(0, waveformAreaContainerRef.clientHeight);
+                    waveformCanvasWidth = Math.max(0, waveformAreaContainerRef.clientWidth - TIMESCALE_WIDTH);
+                    requestRedraw(true);
+                }
+            });
 		}
 	}
 
@@ -434,11 +440,18 @@
 
 </script>
 
-<div bind:this={componentContainer} class="vertical-waveform-panel flex w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-	<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
-	<div class="waveform-canvas-container flex-grow h-full relative min-w-0">
-		<canvas
-			bind:this={waveformCanvas}
+<div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+	<!-- New Header Section -->
+	<div class="h-[calc(1.75rem+1px)] flex-shrink-0 px-3 flex items-center border-b border-gray-300 dark:border-gray-600">
+		<span class="text-xs font-medium text-gray-700 dark:text-gray-200 select-none">Waveform</span>
+	</div>
+
+	<!-- Existing Waveform and Timescale Area -->
+	<div bind:this={waveformAreaContainerRef} class="flex flex-grow min-h-0">
+		<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
+		<div class="waveform-canvas-container flex-grow h-full relative min-w-0">
+			<canvas
+				bind:this={waveformCanvas}
 			class="waveform-canvas-vertical w-full h-full cursor-pointer"
 			aria-label="Vertical waveform visualization. Click to seek audio."
 			on:click={handleCanvasClick}
