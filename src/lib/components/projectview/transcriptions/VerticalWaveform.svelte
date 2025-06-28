@@ -569,7 +569,6 @@
 				bind:this={waveformCanvas}
 				class="waveform-canvas-vertical w-full cursor-pointer"
 				aria-label="Vertical waveform visualization. Click to seek audio."
-				<!-- on:click removed -->
 				style="height: {visibleCanvasHeight * zoomLevel}px;"
 			></canvas>
 			{#if !webAudioApiSupported && isMounted}
