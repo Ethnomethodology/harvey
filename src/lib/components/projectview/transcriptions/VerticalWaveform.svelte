@@ -87,7 +87,7 @@
 		return proportion * mediaDuration;
 	}
 
-	function drawVerticalWaveform(ctx, buffer, peaksData, canvasClientHeight, canvasWidth, color) {
+	function drawVerticalWaveform(ctx, buffer, peaksData, canvasClientHeight, canvasWidth, color, overrideScrollOffsetY = null) {
 		// canvasClientHeight is visibleCanvasHeight
 		if (!ctx || canvasClientHeight <= 0 || canvasWidth <= 0) return;
 		if (!buffer && (!peaksData || peaksData.length === 0)) return;
@@ -97,6 +97,8 @@
 		// Consistent color with InteractiveWaveform.svelte's default waveform color
 		ctx.strokeStyle = color; // Use the passed 'color' parameter
 		ctx.lineWidth = 1;
+
+		const currentScrollToUse = overrideScrollOffsetY !== null ? overrideScrollOffsetY : scrollOffsetPy;
 
 		// Adaptive peak/raw data usage logic (similar to InteractiveWaveform)
 		const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20;
@@ -128,7 +130,7 @@
 
 			ctx.beginPath(); // Max Peaks
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const logicalY_content = yPx_screen + currentScrollToUse;
 				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
 				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
 				let maxPeak = 0.0;
@@ -143,7 +145,7 @@
 
 			ctx.beginPath(); // Min Peaks
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const logicalY_content = yPx_screen + currentScrollToUse;
 				const peakBlockIndex = Math.floor(logicalY_content * peaksPerLogicalUnitOfZoomedCanvas);
 				const targetBlock = Math.min(numPeakBlocks - 1, Math.max(0, peakBlockIndex));
 				let minPeak = 0.0;
@@ -165,7 +167,7 @@
 
 			ctx.beginPath(); // Max Envelope
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const logicalY_content = yPx_screen + currentScrollToUse;
 				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 
@@ -186,7 +188,7 @@
 
 			ctx.beginPath(); // Min Envelope
 			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen++) {
-				const logicalY_content = yPx_screen + scrollOffsetPy;
+				const logicalY_content = yPx_screen + currentScrollToUse;
 				const sampleStartIndex = Math.max(0, Math.floor(logicalY_content * samplesPerLogicalUnitOfZoomedCanvas));
 				const sampleEndIndex = Math.min(totalSamples, Math.floor((logicalY_content + 1) * samplesPerLogicalUnitOfZoomedCanvas));
 				let minVal = 0;
@@ -375,8 +377,13 @@
 						ctx.beginPath();
 						ctx.rect(0, finalCanvasClipY, waveformCanvasWidth, canvasClipHeight);
 						ctx.clip();
-						// Pass the specific color for the highlighted segment's waveform
-						drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#2563eb'); // Consistent with InteractiveWaveform
+
+						// Calculate the effective scroll offset for drawing the segment's content accurately
+						// so that segmentStartTime's data aligns with the top of the clip region (finalCanvasClipY)
+						const dataOffsetForSegmentDraw = segmentStartY_logical - finalCanvasClipY;
+
+						// Pass the specific color and the calculated data offset
+						drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#2563eb', dataOffsetForSegmentDraw);
 						ctx.restore();
 					}
 				}
