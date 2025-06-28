@@ -341,8 +341,8 @@
 
         let highlightStartTime = -1;
         let highlightEndTime = -1;
-        let highlightColor = 'rgba(59, 130, 246, 0.15)';
-        let waveColor = '#3b82f6';
+        let highlightColor = 'rgba(147, 197, 253, 0.4)'; // A light blue with some transparency
+        let waveColor = '#2563eb'; // A darker blue for the waveform within the highlight
 
         if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
             highlightStartTime = editSegmentStartTime;

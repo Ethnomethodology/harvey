@@ -489,7 +489,6 @@
         if (!previewEditMode) {
             dispatch('segmentclick', idx);
         } else {
-            console.log(`[RichTextPreview] Click on segment ${idx} ignored (preview edit mode active).`);
         }
     }
 	function handleToggleEdit() { dispatch('toggleedit'); }
@@ -504,26 +503,23 @@
 		});
 
 		if (userConfirmed) {
-			console.log("[RichTextPreview] User confirmed adding to Documents. Converting and saving...");
-			try {
-				const newDocPath = await convertAndSaveTranscriptAsDoc();
-				if (newDocPath) {
-					console.log(`[RichTextPreview] Document saved successfully: ${newDocPath}.`);
-					await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
-					dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
-				} else {
-					 console.error("[RichTextPreview] Document saving process did not return a path.");
+            try {
+                const newDocPath = await convertAndSaveTranscriptAsDoc();
+                if (newDocPath) {
+                    await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
+                    dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
+                } else {
+                     console.error("[RichTextPreview] Document saving process did not return a path.");
                      await message("Failed to create document file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
-				}
-			} catch (error) {
-				console.error("[RichTextPreview] Error during document creation process:", error);
+                }
+            } catch (error) {
+                console.error("[RichTextPreview] Error during document creation process:", error);
                 const errorMsg = error instanceof Error ? error.message : String(error);
-				await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
-			}
-		} else {
-			console.log("[RichTextPreview] User cancelled adding to Documents.");
-		}
-	}
+                await message(`Failed to create document file: ${errorMsg}`, {title: "Error", type: "error"});
+            }
+        } else {
+        }
+    }
 
     async function handleDeleteSegment(idx) {
         if (!previewEditMode) return;
@@ -535,19 +531,17 @@
         // Simplified confirmation message as full plainText might not be readily processed for non-visible items
         const textPreview = segmentToDelete.text ? (isLexicalJson(segmentToDelete.text) ? "[Rich Content]" : String(segmentToDelete.text).substring(0,50) + "...") : "[empty]";
         const confirmation = await confirm(
-            `Are you sure you want to delete segment ${idx + 1}?\n\n[${formatTimestamp(segmentToDelete.start_time)} - ${formatTimestamp(segmentToDelete.end_time)}]\n"${textPreview}"\n\nThis action can be undone until you save the transcript.`,
+            `Are you sure you want to delete segment ${idx + 1}?\n\n[${formatTimestamp(segmentToDelete.start_time)} - ${formatTimestamp(segmentToDelete.end_time)}]\n\"${textPreview}\"\n\nThis action can be undone until you save the transcript.`,
             { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' }
         );
         if (confirmation) {
-            console.log(`[RichTextPreview] User confirmed deletion of segment index: ${idx}. Dispatching deletetranscriptsegment.`);
             dispatch('deletetranscriptsegment', idx);
         } else {
-            console.log(`[RichTextPreview] User cancelled deletion of segment index: ${idx}.`);
         }
     }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
-    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; console.log(`[RichTextPreview] Insert check at index ${index}: PrevEnd=${prevEndTime.toFixed(3)}, NextStart=${nextStartTime.toFixed(3)}, Gap=${gap.toFixed(3)}`); if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { console.log(`[RichTextPreview] Dispatching insertnewsegment (filling gap): index=${index}, start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
+    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
 
 	// --- SVG Icons (Unchanged) ---
 	const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;

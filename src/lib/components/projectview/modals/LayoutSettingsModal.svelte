@@ -60,7 +60,7 @@
 
 			<div class="space-y-3">
 				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-					Choose how transcript segments are displayed. This affects the editor and preview panels.
+					This will change the layout of the current media only.
 				</p>
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 					{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
