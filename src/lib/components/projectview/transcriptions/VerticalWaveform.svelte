@@ -52,6 +52,7 @@
 		// Request redraw if segment changes and component is mounted
 		if (isMounted && lastDrawnCurrentSegment !== currentSegment) {
 			requestRedraw(true);
+			lastDrawnCurrentSegment = currentSegment; // Update last drawn segment
 		}
 	});
 	let lastDrawnCurrentSegment = null; // To track changes in currentSegment for redraw
