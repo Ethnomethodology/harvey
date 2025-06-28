@@ -479,31 +479,56 @@
 
         (async () => {
             if (mediaPathToLoad) {
-                if (mediaPathToLoad === loadedPathFromProp && currentBlobUrl) return; // Already loaded this explicit path
-                if (isLoadingMedia) return;
+                // Early exit for main player if media is already loaded in store
+                if (!explicitMediaPath &&
+                    $transcriptStore.selectedMediaFile?.path === mediaPathToLoad &&
+                    $transcriptStore.audioBuffer && // Buffer is present in store
+                    loadedPathFromProp === mediaPathToLoad && // This instance believes it loaded this path before
+                    localAudioBuffer // And this instance has a local buffer (implies it was successfully processed by this instance)
+                ) {
+                    // console.log(`[MediaPlayer] Main player: Media ${mediaPathToLoad} already in store and matches this instance's loaded path. Syncing local state.`);
+                    // Ensure local state is synced with store, but don't reload.
+                    localDuration = $transcriptStore.player.duration;
+                    localCurrentTime = $transcriptStore.player.currentTime;
+                    localIsPlaying = $transcriptStore.player.isPlaying;
+                    // localAudioBuffer is already $transcriptStore.audioBuffer in this case (or should be)
+                    isMediaReadyForProcessing = true;
+                    isLoadingMedia = false;
+                    // Ensure video src is set if it was somehow cleared
+                    if (videoElement && currentBlobUrl && videoElement.src !== currentBlobUrl) {
+                        videoElement.src = currentBlobUrl;
+                    }
+                    return;
+                }
+
+                if (mediaPathToLoad === loadedPathFromProp && currentBlobUrl && explicitMediaPath) {
+                     // For explicitMediaPath instances, if path is same and blob exists, assume it's fine.
+                    return;
+                }
+                if (isLoadingMedia && loadedPathFromProp === mediaPathToLoad) { // Avoid re-entry for the same path if already loading
+                    return;
+                }
 
                 isLoadingMedia = true;
-                if (isTrimming && !explicitMediaPath) cancelTrimMode(); // Cancel trim if global media changes (main player context)
+                if (isTrimming && !explicitMediaPath) cancelTrimMode();
 
-                if (currentBlobUrl) {
+                // Revoke old blob URL only if the path is different, or if it's main player and store implies different media
+                if (currentBlobUrl && (loadedPathFromProp !== mediaPathToLoad || (!explicitMediaPath && $transcriptStore.selectedMediaFile?.path !== mediaPathToLoad))) {
                     URL.revokeObjectURL(currentBlobUrl);
                     currentBlobUrl = null;
-                }
-                localMediaUrl = '';
-                localAudioBuffer = null;
-                localDuration = 0;
-                localCurrentTime = 0;
-                localIsPlaying = false;
-                loadedPathFromProp = null;
-
-                // If this is the main player (no explicitMediaPath), update global store too
-                if (!explicitMediaPath) {
-                    setAudioBuffer(null);
-                    setPlayerDuration(0);
-                    updatePlayerTime(0);
-                    togglePlayerPlaying(false);
+                    loadedPathFromProp = null; // Reset since blob is gone
                 }
 
+                // Reset local state more carefully
+                localMediaUrl = ''; // Will be set by new blob
+                // Don't nullify localAudioBuffer immediately, only on successful new load or explicit clear
+                // localAudioBuffer = null;
+                // localDuration = 0; // These will be updated by onLoadedMetadata or from store sync
+                // localCurrentTime = 0;
+                // localIsPlaying = false;
+
+                // The global store (audioBuffer, player duration/time/playing) should primarily be reset by `selectMedia` action.
+                // This MediaPlayer, when !explicitMediaPath, is responsible for POPULATING the store for the selectedMediaFile.
 
                 try {
                     const fileData = await readFile(mediaPathToLoad);
