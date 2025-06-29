@@ -27,7 +27,6 @@
 	let animationFrameId = null;
 
 	let scrollOffsetPy = 0;
-	let pendingScrollUpdateRafId = null;
 
 	let zoomLevel = 1;
 	const minZoomLevel = 1;
@@ -516,18 +515,11 @@
 
 	function handleWaveformScroll(event) {
 		if (event.target) {
-			if (pendingScrollUpdateRafId) {
-				cancelAnimationFrame(pendingScrollUpdateRafId);
+			const newScrollOffsetPy = Math.round(event.target.scrollTop);
+			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
+				scrollOffsetPy = newScrollOffsetPy;
+				requestRedraw(); // Redraws canvas elements, reactive styles update due to scrollOffsetPy change
 			}
-			const targetScrollTop = event.target.scrollTop;
-			pendingScrollUpdateRafId = requestAnimationFrame(() => {
-				const newScrollOffsetPy = Math.round(targetScrollTop);
-				if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
-					scrollOffsetPy = newScrollOffsetPy;
-					requestRedraw(); // Redraws canvas elements, reactive styles update due to scrollOffsetPy change
-				}
-				pendingScrollUpdateRafId = null;
-			});
 		}
 	}
 
