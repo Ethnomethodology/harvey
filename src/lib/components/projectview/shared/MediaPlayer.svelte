@@ -938,14 +938,14 @@
             }
         }
 
-		cancelAnimationFrame(seekRafId);
-		seekRafId = requestAnimationFrame(() => {
-			videoElement.currentTime = clamped;
-            localCurrentTime = clamped;
-			if (!explicitMediaPath) updatePlayerTime(clamped);
-		});
+		// cancelAnimationFrame(seekRafId); // No longer using rAF for seekTo
+		// seekRafId = requestAnimationFrame(() => { // No longer using rAF for seekTo
+		videoElement.currentTime = clamped;
+		localCurrentTime = clamped;
+		if (!explicitMediaPath) updatePlayerTime(clamped);
+		// }); // No longer using rAF for seekTo
 	}
-	let seekRafId = null;
+	// let seekRafId = null; // No longer using rAF for seekTo
 
     // Button handlers for Notes context
     function handleNotesTranscribeClick() {
