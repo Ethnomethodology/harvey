@@ -489,7 +489,8 @@
 		const clickY_in_viewport = event.clientY - rect.top;
 
 		// Use pyToTime for accurate time calculation considering zoom and scroll
-		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, waveformScrollDiv.scrollTop);
+		// Use component state scrollOffsetPy for consistency with seek bar rendering
+		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, scrollOffsetPy);
 
 		dispatch('navigate', { time: time });
 	}
@@ -514,10 +515,10 @@
 
 	function handleWaveformScroll(event) {
 		if (event.target) {
-			const newScrollOffsetPy = Math.round(event.target.scrollTop);
-			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
+			const newScrollOffsetPy = event.target.scrollTop;
+			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) { // Allow for float comparison
 				scrollOffsetPy = newScrollOffsetPy;
-				requestRedraw();
+				requestRedraw(); // Redraws canvas elements, reactive styles update due to scrollOffsetPy change
 			}
 		}
 	}
