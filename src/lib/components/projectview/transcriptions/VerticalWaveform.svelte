@@ -515,8 +515,8 @@
 
 	function handleWaveformScroll(event) {
 		if (event.target) {
-			const newScrollOffsetPy = event.target.scrollTop;
-			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) { // Allow for float comparison
+			const newScrollOffsetPy = Math.round(event.target.scrollTop);
+			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
 				scrollOffsetPy = newScrollOffsetPy;
 				requestRedraw(); // Redraws canvas elements, reactive styles update due to scrollOffsetPy change
 			}
