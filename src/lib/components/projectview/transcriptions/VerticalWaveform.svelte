@@ -329,46 +329,9 @@
 		}
 
 		// Highlight current segment (drawn in the same dpr-scaled context as main waveform)
-		if (currentSegment && mediaDur > 0) {
-			const segmentStartTime = Number(currentSegment.start_time);
-			const segmentEndTime = Number(currentSegment.end_time);
+		// The canvas-based highlight drawing is now removed as per user request.
+		// The HTML segment-highlight-window div will provide the visual cue.
 
-			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
-				const segmentStartY_logical = timeToLogicalPy(segmentStartTime, mediaDur, visibleCanvasHeight);
-				const segmentEndY_logical = timeToLogicalPy(segmentEndTime, mediaDur, visibleCanvasHeight);
-
-				// Removed erroneous redeclaration block that included segmentStartY_onScreen
-				// and duplicate declarations of segmentStartY_logical, segmentEndY_logical.
-
-				// Calculate screen coordinates for canvas clipping, should use float to match HTML element logic
-				const canvasClipY_unbounded = segmentStartY_logical - scrollOffsetPy;
-				const canvasClipBottom_unbounded = segmentEndY_logical - scrollOffsetPy;
-
-				// Determine the visible portion on the canvas for clipping
-				const finalCanvasClipY = Math.max(0, canvasClipY_unbounded);
-				const finalCanvasClipBottom = Math.min(visibleCanvasHeight, canvasClipBottom_unbounded);
-				const canvasClipHeight = Math.max(0, finalCanvasClipBottom - finalCanvasClipY);
-
-				if (canvasClipHeight > 0) {
-					// Background highlight is now an HTML element.
-					// Still draw the waveform within the segment with a different color, using aligned clipping.
-					if ((buf || peaks) && visibleCanvasHeight > 0) {
-						ctx.save();
-						ctx.beginPath();
-						ctx.rect(0, finalCanvasClipY, waveformCanvasWidth, canvasClipHeight);
-						ctx.clip();
-
-						// Calculate the effective scroll offset for drawing the segment's content accurately
-						// so that segmentStartTime's data aligns with the top of the clip region (finalCanvasClipY)
-						const dataOffsetForSegmentDraw = segmentStartY_logical - finalCanvasClipY;
-
-						// Pass the specific color and the calculated data offset
-						drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#2563eb', dataOffsetForSegmentDraw);
-						ctx.restore();
-					}
-				}
-			}
-		}
 		// Ensure lastDrawnCurrentSegment is updated after attempting to draw,
 		// so redraw is triggered if currentSegment changes.
 		// This is already handled by the subscription, but also good to note here for logic flow.
