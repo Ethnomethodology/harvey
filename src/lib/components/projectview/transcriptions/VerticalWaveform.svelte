@@ -503,6 +503,7 @@
 		debugScrollOffsetAtClick = scrollOffsetPy;
 		debugTimeAtClick = time;
 
+		console.log("WaveformClick:", { clickY: debugLastClickY, scrollAtClick: debugScrollOffsetAtClick, timeAtClick: debugTimeAtClick });
 		dispatch('navigate', { time: time });
 	}
 
@@ -596,6 +597,8 @@
 			debugScrollOffsetForSeekbar = scrollOffsetPy;
 			debugCalculatedScreenYForSeekbar = screenY;
 
+			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar });
+
 			if (!isNaN(screenY) && isFinite(screenY)) {
 				// Use float for top. Height is fixed, visibility check uses float.
 				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
@@ -605,6 +608,7 @@
 			}
 		} else {
 			seekBarStyle = 'display: none;';
+			console.log("WaveformSeek: Hiding seek bar (no audio/duration/etc.)");
 		}
 	}
 
@@ -681,18 +685,6 @@
 			{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
 				<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
 			{/if}
-
-			<!-- Debug Info Overlays -->
-			<div style="position: absolute; top: 0px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 5px; font-size: 10px; z-index: 100;">
-				<div>Click Y: {debugLastClickY?.toFixed(2)}</div>
-				<div>Click Scroll: {debugScrollOffsetAtClick?.toFixed(2)}</div>
-				<div>Click Time: {debugTimeAtClick?.toFixed(3)}</div>
-			</div>
-			<div style="position: absolute; top: 60px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 5px; font-size: 10px; z-index: 100;">
-				<div>Seekbar Time: {debugCurrentTimeForSeekbar?.toFixed(3)}</div>
-				<div>Seekbar Scroll: {debugScrollOffsetForSeekbar?.toFixed(2)}</div>
-				<div>Seekbar Calc Y: {debugCalculatedScreenYForSeekbar?.toFixed(2)}</div>
-			</div>
 
 		</div>
 	</div>
