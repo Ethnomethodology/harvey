@@ -47,6 +47,11 @@
 	let currentSegment = null;
 	let lastDrawnCurrentSegment = null;
 
+	// Auto-scroll state
+	let autoScrollEnabled = true;
+	let isProgrammaticScroll = false;
+	let userScrollTimeout = null;
+
 	transcriptStore.subscribe(value => {
 		segments = value.segments || [];
 		currentSegmentIndex = value.player?.currentSegmentIndex ?? -1;
@@ -285,6 +290,7 @@
 		isMounted = false;
 		if (resizeObserverInstance) resizeObserverInstance.disconnect();
 		if (animationFrameId) cancelAnimationFrame(animationFrameId);
+		if (userScrollTimeout) clearTimeout(userScrollTimeout);
 	});
 
 	function setupResizeObserver() {
@@ -325,6 +331,9 @@
 
 		if (event.target === timescaleCanvas) return;
 
+		if (userScrollTimeout) clearTimeout(userScrollTimeout);
+    	autoScrollEnabled = true;
+
 		const rect = waveformAreaContainerRef.getBoundingClientRect();
 		const clickY_in_viewport = event.clientY - rect.top;
 		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, scrollOffsetPy);
@@ -359,8 +368,14 @@
 
 	function handleWaveformScroll(event) {
 		if (event.target) {
+			if (!isProgrammaticScroll) {
+				autoScrollEnabled = false;
+				if (userScrollTimeout) clearTimeout(userScrollTimeout);
+				userScrollTimeout = setTimeout(() => {
+					autoScrollEnabled = true;
+				}, 3000); // Re-enable after 3s
+			}
 			scrollOffsetPy = Math.round(event.target.scrollTop);
-			// No redraw needed on scroll, overlays are positioned reactively
 		}
 	}
 
@@ -399,6 +414,31 @@
 	// Reactive update for seek bar position. No redraw needed, just style update.
 	$: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) {
 		lastDrawnTime = currentTime;
+	}
+
+	// Auto-scroll logic
+	$: if (isMounted && autoScrollEnabled && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && waveformAreaContainerRef) {
+		const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
+
+		const buffer = visibleCanvasHeight * 0.2; // 20% buffer from top/bottom
+		const viewTop = scrollOffsetPy;
+		const viewBottom = scrollOffsetPy + visibleCanvasHeight;
+
+		if (logicalY < viewTop + buffer || logicalY > viewBottom - buffer) {
+			let newScrollTop = logicalY - visibleCanvasHeight / 2; // Center it
+
+			const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
+			const maxScroll = Math.max(0, contentLogicalHeight - visibleCanvasHeight);
+			newScrollTop = Math.max(0, Math.min(newScrollTop, maxScroll));
+
+			if (Math.abs(newScrollTop - scrollOffsetPy) > 1) {
+				isProgrammaticScroll = true;
+				waveformAreaContainerRef.scrollTop = newScrollTop;
+				tick().then(() => {
+					isProgrammaticScroll = false;
+				});
+			}
+		}
 	}
 
 	// Reactive style for HTML seek bar
