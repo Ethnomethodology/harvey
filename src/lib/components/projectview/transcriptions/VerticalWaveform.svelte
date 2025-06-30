@@ -43,13 +43,6 @@
 
 	const dispatch = createEventDispatcher();
 
-	let debugLastClickY = null;
-	let debugScrollOffsetAtClick = null;
-	let debugTimeAtClick = null;
-	let debugCurrentTimeForSeekbar = null;
-	let debugScrollOffsetForSeekbar = null;
-	let debugCalculatedScreenYForSeekbar = null;
-
 	let segments = [];
 	let currentSegmentIndex = -1;
 	let currentSegment = null;
@@ -340,9 +333,9 @@
 				// Removed erroneous redeclaration block that included segmentStartY_onScreen
 				// and duplicate declarations of segmentStartY_logical, segmentEndY_logical.
 
-				// Calculate screen coordinates for canvas clipping, matching HTML element logic (rounded)
-				const canvasClipY_unbounded = Math.round(segmentStartY_logical - scrollOffsetPy);
-				const canvasClipBottom_unbounded = Math.round(segmentEndY_logical - scrollOffsetPy);
+				// Calculate screen coordinates for canvas clipping, should use float to match HTML element logic
+				const canvasClipY_unbounded = segmentStartY_logical - scrollOffsetPy;
+				const canvasClipBottom_unbounded = segmentEndY_logical - scrollOffsetPy;
 
 				// Determine the visible portion on the canvas for clipping
 				const finalCanvasClipY = Math.max(0, canvasClipY_unbounded);
@@ -503,7 +496,6 @@
 		debugScrollOffsetAtClick = scrollOffsetPy;
 		debugTimeAtClick = time;
 
-		console.log("WaveformClick:", { clickY: debugLastClickY, scrollAtClick: debugScrollOffsetAtClick, timeAtClick: debugTimeAtClick });
 		dispatch('navigate', { time: time });
 	}
 
@@ -597,8 +589,6 @@
 			debugScrollOffsetForSeekbar = scrollOffsetPy;
 			debugCalculatedScreenYForSeekbar = screenY;
 
-			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar });
-
 			if (!isNaN(screenY) && isFinite(screenY)) {
 				// Use float for top. Height is fixed, visibility check uses float.
 				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
@@ -608,7 +598,6 @@
 			}
 		} else {
 			seekBarStyle = 'display: none;';
-			console.log("WaveformSeek: Hiding seek bar (no audio/duration/etc.)");
 		}
 	}
 
