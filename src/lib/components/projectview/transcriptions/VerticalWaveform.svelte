@@ -43,6 +43,13 @@
 
 	const dispatch = createEventDispatcher();
 
+	let debugLastClickY = null;
+	let debugScrollOffsetAtClick = null;
+	let debugTimeAtClick = null;
+	let debugCurrentTimeForSeekbar = null;
+	let debugScrollOffsetForSeekbar = null;
+	let debugCalculatedScreenYForSeekbar = null;
+
 	let segments = [];
 	let currentSegmentIndex = -1;
 	let currentSegment = null;
@@ -492,6 +499,10 @@
 		// Use component state scrollOffsetPy for consistency with seek bar rendering
 		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, scrollOffsetPy);
 
+		debugLastClickY = clickY_in_viewport;
+		debugScrollOffsetAtClick = scrollOffsetPy;
+		debugTimeAtClick = time;
+
 		dispatch('navigate', { time: time });
 	}
 
@@ -581,11 +592,16 @@
 			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
 			const screenY = logicalY - scrollOffsetPy; // screenY is a float
 
+			debugCurrentTimeForSeekbar = currentTime;
+			debugScrollOffsetForSeekbar = scrollOffsetPy;
+			debugCalculatedScreenYForSeekbar = screenY;
+
 			if (!isNaN(screenY) && isFinite(screenY)) {
 				// Use float for top. Height is fixed, visibility check uses float.
 				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
 			} else {
 				seekBarStyle = 'display: none;'; // Hide if position is invalid
+				debugCalculatedScreenYForSeekbar = null; // Reset if invalid
 			}
 		} else {
 			seekBarStyle = 'display: none;';
@@ -665,6 +681,19 @@
 			{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
 				<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
 			{/if}
+
+			<!-- Debug Info Overlays -->
+			<div style="position: absolute; top: 0px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 5px; font-size: 10px; z-index: 100;">
+				<div>Click Y: {debugLastClickY?.toFixed(2)}</div>
+				<div>Click Scroll: {debugScrollOffsetAtClick?.toFixed(2)}</div>
+				<div>Click Time: {debugTimeAtClick?.toFixed(3)}</div>
+			</div>
+			<div style="position: absolute; top: 60px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 5px; font-size: 10px; z-index: 100;">
+				<div>Seekbar Time: {debugCurrentTimeForSeekbar?.toFixed(3)}</div>
+				<div>Seekbar Scroll: {debugScrollOffsetForSeekbar?.toFixed(2)}</div>
+				<div>Seekbar Calc Y: {debugCalculatedScreenYForSeekbar?.toFixed(2)}</div>
+			</div>
+
 		</div>
 	</div>
 </div>
