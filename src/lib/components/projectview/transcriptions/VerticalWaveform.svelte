@@ -10,8 +10,8 @@
 	const BAR_THICKNESS_PX = 2;
 	const BAR_SPACING_PX = 1;
 	const BAR_UNIT_HEIGHT_PX = BAR_THICKNESS_PX + BAR_SPACING_PX;
-	const RMS_GAIN_FACTOR = 1.5;
-	const MIN_BAR_HALF_LENGTH_PX = 0.5;
+	const RMS_GAIN_FACTOR = 2.5;
+	const MIN_BAR_HALF_LENGTH_PX = 1;
 
 	let waveformCanvas;
 	let timescaleCanvas;
