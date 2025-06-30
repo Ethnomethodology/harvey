@@ -43,6 +43,13 @@
 
 	const dispatch = createEventDispatcher();
 
+	let debugLastClickY = null;
+	let debugScrollOffsetAtClick = null;
+	let debugTimeAtClick = null;
+	let debugCurrentTimeForSeekbar = null;
+	let debugScrollOffsetForSeekbar = null;
+	let debugCalculatedScreenYForSeekbar = null;
+
 	let segments = [];
 	let currentSegmentIndex = -1;
 	let currentSegment = null;
@@ -496,6 +503,7 @@
 		debugScrollOffsetAtClick = scrollOffsetPy;
 		debugTimeAtClick = time;
 
+		console.log("WaveformClick:", { clickY: debugLastClickY, scrollAtClick: debugScrollOffsetAtClick, timeAtClick: debugTimeAtClick });
 		dispatch('navigate', { time: time });
 	}
 
@@ -589,6 +597,8 @@
 			debugScrollOffsetForSeekbar = scrollOffsetPy;
 			debugCalculatedScreenYForSeekbar = screenY;
 
+			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar });
+
 			if (!isNaN(screenY) && isFinite(screenY)) {
 				// Use float for top. Height is fixed, visibility check uses float.
 				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
@@ -598,6 +608,7 @@
 			}
 		} else {
 			seekBarStyle = 'display: none;';
+			console.log("WaveformSeek: Hiding seek bar (no audio/duration/etc.)");
 		}
 	}
 
