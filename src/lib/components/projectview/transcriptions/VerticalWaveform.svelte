@@ -1,23 +1,22 @@
 <script>
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { transcriptStore } from '$lib/stores/transcriptStore.js'; // For types if needed, or direct access
+	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 
 	export let audioBuffer = null;
 	export let currentTime = 0;
 	export let duration = 0;
 
-	const TIMESCALE_WIDTH = 35; // For vertical timescale, increased for padding
+	const TIMESCALE_WIDTH = 35;
 	const BAR_THICKNESS_PX = 2;
 	const BAR_SPACING_PX = 1;
 	const BAR_UNIT_HEIGHT_PX = BAR_THICKNESS_PX + BAR_SPACING_PX;
-	const RMS_GAIN_FACTOR = 1.5; // To amplify RMS effect on bar length
-	const MIN_BAR_HALF_LENGTH_PX = 0.5; // Minimum length of one side of the bar from center
+	const RMS_GAIN_FACTOR = 1.5;
+	const MIN_BAR_HALF_LENGTH_PX = 0.5;
 
 	let waveformCanvas;
 	let timescaleCanvas;
-	let componentContainer; // Outermost container ref
-	let waveformAreaContainerRef; // Ref for the actual waveform drawing area
-	let waveformScrollDiv; // Ref for the scrollable div
+	let componentContainer;
+	let waveformAreaContainerRef; // This is now the scroll container
 
 	let visibleCanvasHeight = 0;
 	let waveformCanvasWidth = 0;
@@ -27,6 +26,7 @@
 	let animationFrameId = null;
 
 	let scrollOffsetPy = 0;
+	let lastDrawnScrollOffsetPy = -1;
 
 	let zoomLevel = 1;
 	const minZoomLevel = 1;
@@ -34,48 +34,35 @@
 	const zoomStep = 1.2;
 
 	let lastDrawnTime = -1;
-	let lastDrawnBufferOrPeaks = null; // Combined check for buffer or peaks
+	let lastDrawnBufferOrPeaks = null;
 	let lastDrawnActualDuration = -1;
-	const redrawTimeThreshold = 1 / 60; // 60 FPS
+	const redrawTimeThreshold = 1 / 60;
 
-	let seekBarStyle = 'display: none;'; // For HTML seek bar
-	let segmentHighlightStyle = 'display: none;'; // For HTML segment highlight
+	let seekBarStyle = 'display: none;';
+	let segmentHighlightStyle = 'display: none;';
 
 	const dispatch = createEventDispatcher();
-
-	let debugLastClickY = null;
-	let debugScrollOffsetAtClick = null;
-	let debugTimeAtClick = null;
-	let debugCurrentTimeForSeekbar = null;
-	let debugScrollOffsetForSeekbar = null;
-	let debugCalculatedScreenYForSeekbar = null;
 
 	let segments = [];
 	let currentSegmentIndex = -1;
 	let currentSegment = null;
+	let lastDrawnCurrentSegment = null;
 
 	transcriptStore.subscribe(value => {
 		segments = value.segments || [];
 		currentSegmentIndex = value.player?.currentSegmentIndex ?? -1;
-		if (currentSegmentIndex >= 0 && currentSegmentIndex < segments.length) {
-			currentSegment = segments[currentSegmentIndex];
-		} else {
-			currentSegment = null;
-		}
-		// Request redraw if segment changes and component is mounted
+		currentSegment = (currentSegmentIndex >= 0 && currentSegmentIndex < segments.length) ? segments[currentSegmentIndex] : null;
 		if (isMounted && lastDrawnCurrentSegment !== currentSegment) {
 			requestRedraw(true);
-			lastDrawnCurrentSegment = currentSegment; // Update last drawn segment
+			lastDrawnCurrentSegment = currentSegment;
 		}
 	});
-	let lastDrawnCurrentSegment = null; // To track changes in currentSegment for redraw
 
 	function formatTimescaleTimeVertical(sec, totalDuration) {
 		if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '0:00';
 		const tot = Math.floor(sec);
 		const minutes = Math.floor(tot / 60);
 		const seconds = tot % 60;
-		// Display H:MM:SS if duration is very long, else M:SS
 		if (totalDuration >= 3600) {
 			const hours = Math.floor(minutes / 60);
 			const remainingMinutes = minutes % 60;
@@ -84,122 +71,74 @@
 		return `${String(minutes)}:${String(seconds).padStart(2, '0')}`;
 	}
 
-	function timeToLogicalPy(time, mediaDuration, viewHeight) { // viewHeight is visibleCanvasHeight
+	function timeToLogicalPy(time, mediaDuration, viewHeight) {
 		if (!mediaDuration || mediaDuration <= 0 || !viewHeight || viewHeight <= 0) return 0;
 		const contentLogicalHeight = viewHeight * zoomLevel;
 		const proportion = Math.max(0, Math.min(1, time / mediaDuration));
 		return proportion * contentLogicalHeight;
 	}
 
-	// pyToTime updated to include scrollOffsetPy
-	function pyToTime(py, mediaDuration, viewHeight, currentScrollOffsetPy = 0) { // py is screen-relative
+	function pyToTime(py, mediaDuration, viewHeight, currentScrollOffsetPy = 0) {
 		if (!mediaDuration || mediaDuration <= 0 || !viewHeight || viewHeight <= 0) return 0;
 		const contentLogicalHeight = viewHeight * zoomLevel;
-		const logicalPy = py + currentScrollOffsetPy; // Add scroll to screen-relative py
+		const logicalPy = py + currentScrollOffsetPy;
 		const proportion = Math.max(0, Math.min(1, logicalPy / contentLogicalHeight));
 		return proportion * mediaDuration;
 	}
 
-	function drawVerticalWaveform(ctx, buffer, peaksData, canvasClientHeight, canvasWidth, color, overrideScrollOffsetY = null) {
-		// canvasClientHeight is visibleCanvasHeight
-		if (!ctx || canvasClientHeight <= 0 || canvasWidth <= 0) return;
-		if (!buffer && (!peaksData || peaksData.length === 0)) return;
+	function drawVerticalWaveform(ctx, buffer, canvasLogicalHeight, canvasWidth, color) {
+		if (!ctx || canvasLogicalHeight <= 0 || canvasWidth <= 0 || !buffer) return;
 
 		const midX = canvasWidth / 2;
-		// const isDark = document.documentElement.classList.contains('dark'); // Removed, color is passed as param
-		ctx.fillStyle = color; // Use the passed 'color' parameter for filling bars
-
-		const currentScrollToUse = overrideScrollOffsetY !== null ? overrideScrollOffsetY : scrollOffsetPy;
-		const contentLogicalHeight = canvasClientHeight * zoomLevel;
-
-		if (!buffer || contentLogicalHeight <= 0) { // Bar rendering relies on raw buffer
-			// Optionally draw flat lines or nothing if no buffer
-			for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen += BAR_UNIT_HEIGHT_PX) {
-				ctx.fillRect(midX - 1, yPx_screen, 2, BAR_THICKNESS_PX); // Draw a minimal center line
-			}
-			return;
-		}
+		ctx.fillStyle = color;
 
 		const data = buffer.getChannelData(0);
 		const totalSamples = data.length;
 		if (totalSamples === 0) return;
 
-		const samplesPerLogicalPixel = totalSamples / contentLogicalHeight;
+		const samplesPerLogicalPixel = totalSamples / canvasLogicalHeight;
 
-		for (let yPx_screen = 0; yPx_screen < canvasClientHeight; yPx_screen += BAR_UNIT_HEIGHT_PX) {
-			const logicalY_bar_top = yPx_screen + currentScrollToUse;
-			const logicalY_bar_bottom = (yPx_screen + BAR_THICKNESS_PX) + currentScrollToUse;
-
-			let startSample = Math.max(0, Math.floor(logicalY_bar_top * samplesPerLogicalPixel));
-			let endSample = Math.max(0, Math.ceil(logicalY_bar_bottom * samplesPerLogicalPixel));
-
-			// Ensure endSample is at least startSample + 1 if startSample is a valid index, to get at least one sample.
-			if (startSample < totalSamples) {
-				endSample = Math.max(endSample, startSample + 1);
-			}
-			endSample = Math.min(totalSamples, endSample); // Re-cap by totalSamples
-
-			if (startSample >= endSample) {
-				// This case means no valid sample range for the bar (e.g., at the very end of audio or beyond).
-				// MIN_BAR_HALF_LENGTH_PX in the drawing logic will handle visual representation.
-				// For data consistency, treat as RMS 0.
-				const displayHalfLength = MIN_BAR_HALF_LENGTH_PX;
-                ctx.fillRect(midX - displayHalfLength, yPx_screen, displayHalfLength * 2, BAR_THICKNESS_PX);
-				continue;
-			}
+		for (let yPx = 0; yPx < canvasLogicalHeight; yPx += BAR_UNIT_HEIGHT_PX) {
+			const startSample = Math.floor(yPx * samplesPerLogicalPixel);
+			const endSample = Math.ceil((yPx + BAR_THICKNESS_PX) * samplesPerLogicalPixel);
+			if (startSample >= totalSamples) break;
 
 			let sumOfSquares = 0;
-			for (let i = startSample; i < endSample; i++) {
-				const sample = data[i];
-				sumOfSquares += sample * sample;
+			const effectiveEndSample = Math.min(endSample, totalSamples);
+			for (let i = startSample; i < effectiveEndSample; i++) {
+				sumOfSquares += data[i] * data[i];
 			}
 
-			const numberOfSamplesInBar = endSample - startSample;
-			const rms = numberOfSamplesInBar > 0 ? Math.sqrt(sumOfSquares / numberOfSamplesInBar) : 0;
+			const numSamples = effectiveEndSample - startSample;
+			const rms = numSamples > 0 ? Math.sqrt(sumOfSquares / numSamples) : 0;
+			const cappedRms = Math.min(1.0, rms * RMS_GAIN_FACTOR);
+			const displayHalfLength = Math.max(MIN_BAR_HALF_LENGTH_PX, cappedRms * midX);
 
-			const scaledRms = rms * RMS_GAIN_FACTOR;
-			// Cap scaledRms at 1.0 to ensure barHalfLengthFromRms doesn't exceed midX
-			// (assuming RMS is normalized 0-1, gain might push it over 1)
-			const cappedRms = Math.min(1.0, scaledRms);
-
-			const barHalfLengthFromRms = cappedRms * midX;
-			const displayHalfLength = Math.max(MIN_BAR_HALF_LENGTH_PX, barHalfLengthFromRms);
-
-			// Draw bar symmetrically from center
-			ctx.fillRect(
-				midX - displayHalfLength,
-				yPx_screen,
-				displayHalfLength * 2,
-				BAR_THICKNESS_PX
-			);
+			ctx.fillRect(midX - displayHalfLength, yPx, displayHalfLength * 2, BAR_THICKNESS_PX);
 		}
 	}
 
-
 	function clearWaveformCanvases() {
-		if (waveformCanvas) {
-			const ctx = waveformCanvas.getContext('2d');
-			if (ctx) ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-		}
-		if (timescaleCanvas) {
-			const ctx = timescaleCanvas.getContext('2d');
-			if (ctx) ctx.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height);
-		}
+		[timescaleCanvas, waveformCanvas].forEach(canvas => {
+			if (canvas) {
+				const ctx = canvas.getContext('2d');
+				if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+			}
+		});
 		if (waveformCanvas && waveformCanvasWidth > 0 && visibleCanvasHeight > 0) {
 			const ctx = waveformCanvas.getContext('2d');
 			if (ctx) {
 				const dpr = window.devicePixelRatio || 1;
 				ctx.save();
 				ctx.scale(dpr, dpr);
-				ctx.fillStyle = '#6b7280'; // Tailwind gray-500
+				ctx.fillStyle = '#6b7280';
 				ctx.font = `10px sans-serif`;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 				let message = 'Vertical Waveform';
 				if (!webAudioApiSupported) message = 'Web Audio API not supported.';
 				else if (!audioBuffer && !$transcriptStore.audioBufferPeaks) message = 'Load media for waveform.';
-				// Adjust text position for vertical canvas
-				ctx.fillText(message, waveformCanvasWidth / 2 / dpr, visibleCanvasHeight / 2 / dpr); // Account for DPR
+				ctx.fillText(message, waveformCanvasWidth / 2, visibleCanvasHeight / 2);
 				ctx.restore();
 			}
 		}
@@ -209,85 +148,59 @@
 		const mediaDur = duration;
 		const bufOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
 		const dpr = window.devicePixelRatio || 1;
+		const logicalHeight = visibleCanvasHeight * zoomLevel;
 
-		if (!timescaleCanvas || !bufOrPeaks || mediaDur <= 0 || visibleCanvasHeight <= 0 || TIMESCALE_WIDTH <= 0) {
-			if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0;}
+		if (!timescaleCanvas || !bufOrPeaks || mediaDur <= 0 || logicalHeight <= 0 || TIMESCALE_WIDTH <= 0) {
+			if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; }
 			return;
 		}
 		const ctx = timescaleCanvas.getContext('2d');
 		if (!ctx) return;
 
 		const reqW = Math.round(TIMESCALE_WIDTH * dpr);
-		const reqH = Math.round(visibleCanvasHeight * dpr);
+		const reqH = Math.round(logicalHeight * dpr);
 		if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) {
 			timescaleCanvas.width = reqW;
 			timescaleCanvas.height = reqH;
 		}
 		ctx.save();
 		ctx.scale(dpr, dpr);
-		ctx.clearRect(0, 0, TIMESCALE_WIDTH, visibleCanvasHeight);
+		ctx.clearRect(0, 0, TIMESCALE_WIDTH, logicalHeight);
 
 		const isDark = document.documentElement.classList.contains('dark');
-		ctx.strokeStyle = '#d1d5db'; // Tailwind gray-300
-		ctx.fillStyle = isDark ? '#ffffff' : '#6b7280'; // Tailwind gray-500 or white
+		ctx.strokeStyle = '#d1d5db';
+		ctx.fillStyle = isDark ? '#ffffff' : '#6b7280';
 		ctx.font = '10px sans-serif';
 		ctx.textAlign = 'right';
 		ctx.textBaseline = 'middle';
 
-		const minPixelSpacingForLabel = 30; // Vertical spacing
+		const minPixelSpacingForLabel = 30;
 		const intervals = [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800, 3600];
 		let interval = intervals[0];
-		let intervalPy = timeToLogicalPy(interval, mediaDur, visibleCanvasHeight);
-
-		for (let i = 0; i < intervals.length; i++) {
-			const currentIntervalPy = timeToLogicalPy(intervals[i], mediaDur, visibleCanvasHeight);
-			if (currentIntervalPy >= minPixelSpacingForLabel) {
-				interval = intervals[i];
-				intervalPy = currentIntervalPy;
+		for (const i of intervals) {
+			const intervalPy = timeToLogicalPy(i, mediaDur, visibleCanvasHeight);
+			if (intervalPy >= minPixelSpacingForLabel) {
+				interval = i;
 				break;
 			}
-			if (i === intervals.length - 1) { // Fallback to largest if none meet criteria
-				interval = intervals[i];
-				intervalPy = currentIntervalPy;
-			}
+			interval = i;
 		}
 
-		const firstMajorTickTime = 0; // Start from 0 for vertical
-		const textPadding = 5; // For label positioning
-
-		for (let time = firstMajorTickTime; time <= mediaDur + interval; time += interval) { // Iterate slightly beyond mediaDur to catch last labels
-			if (time < 0) continue;
-
+		const textPadding = 5;
+		for (let time = 0; time <= mediaDur; time += interval) {
 			const logicalY = timeToLogicalPy(time, mediaDur, visibleCanvasHeight);
-			const screenY = logicalY - scrollOffsetPy; // Convert logical Y to screen Y
-
-			// Check if the tick or label is reasonably within the visible canvas height
-			// Allowing labels to be drawn if their center is slightly outside, but ticks only if line is inside.
-			const labelHeightApproximation = 10; // Approximate height of the label text
-			if (screenY >= -labelHeightApproximation && screenY <= visibleCanvasHeight + labelHeightApproximation) {
-
-				// Draw tick mark only if its line is within the canvas bounds
-				if (screenY >= 0 && screenY <= visibleCanvasHeight) {
-					ctx.beginPath();
-					const tickWidth = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 7 : 5;
-					ctx.moveTo(TIMESCALE_WIDTH - tickWidth, screenY + 0.5);
-					ctx.lineTo(TIMESCALE_WIDTH, screenY + 0.5);
-					ctx.stroke();
-				}
-
-				// Draw label text
-				const labelStr = formatTimescaleTimeVertical(time, mediaDur);
-				// Check if the label text itself will be mostly visible
-				// Using a simpler check for brevity, can be refined with measureText if needed for perfect centering
-				if (screenY - (labelHeightApproximation / 2) >= 0 && screenY + (labelHeightApproximation / 2) <= visibleCanvasHeight) {
-					ctx.fillText(labelStr, TIMESCALE_WIDTH - textPadding - 2, screenY);
-				}
-			}
+			const tickWidth = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 7 : 5;
+			ctx.beginPath();
+			ctx.moveTo(TIMESCALE_WIDTH - tickWidth, logicalY + 0.5);
+			ctx.lineTo(TIMESCALE_WIDTH, logicalY + 0.5);
+			ctx.stroke();
+			const labelStr = formatTimescaleTimeVertical(time, mediaDur);
+			ctx.fillText(labelStr, TIMESCALE_WIDTH - textPadding - 2, logicalY);
 		}
 		ctx.beginPath();
 		ctx.moveTo(TIMESCALE_WIDTH - 0.5, 0);
-		ctx.lineTo(TIMESCALE_WIDTH - 0.5, visibleCanvasHeight);
-		ctx.strokeStyle = '#d1d5db'; // Tailwind gray-300
+		ctx.lineTo(TIMESCALE_WIDTH - 0.5, logicalHeight);
+		ctx.strokeStyle = '#d1d5db';
 		ctx.lineWidth = 1;
 		ctx.stroke();
 		ctx.restore();
@@ -295,25 +208,19 @@
 
 	function drawWaveformUI() {
 		const buf = audioBuffer;
-		const peaks = $transcriptStore.audioBufferPeaks; // Use peaks from store for vertical waveform
-		const cur = currentTime;
 		const mediaDur = duration;
 		const dpr = window.devicePixelRatio || 1;
+		const logicalHeight = visibleCanvasHeight * zoomLevel;
 
-		if (!waveformCanvas || (!buf && !peaks) || mediaDur <= 0 || visibleCanvasHeight <= 0 || waveformCanvasWidth <= 0) {
-			if (waveformCanvas) {
-                const c = waveformCanvas.getContext('2d');
-                if(c) c.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-				waveformCanvas.width = 0; waveformCanvas.height = 0;
-            }
+		if (!waveformCanvas || !buf || mediaDur <= 0 || logicalHeight <= 0 || waveformCanvasWidth <= 0) {
+			if (waveformCanvas) { waveformCanvas.width = 0; waveformCanvas.height = 0; }
 			return;
 		}
-
 		const ctx = waveformCanvas.getContext('2d');
 		if (!ctx) return;
 
 		const reqW = Math.round(waveformCanvasWidth * dpr);
-		const reqH = Math.round(visibleCanvasHeight * dpr);
+		const reqH = Math.round(logicalHeight * dpr);
 		if (waveformCanvas.width !== reqW || waveformCanvas.height !== reqH) {
 			waveformCanvas.width = reqW;
 			waveformCanvas.height = reqH;
@@ -321,25 +228,11 @@
 
 		ctx.save();
 		ctx.scale(dpr, dpr);
-		ctx.clearRect(0, 0, waveformCanvasWidth, visibleCanvasHeight);
+		ctx.clearRect(0, 0, waveformCanvasWidth, logicalHeight);
+		drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, '#9ca3af');
+		ctx.restore();
 
-		if ((buf || peaks) && visibleCanvasHeight > 0) {
-			// For vertical, logicalHeight is visibleCanvasHeight (no zoom)
-			drawVerticalWaveform(ctx, buf, peaks, visibleCanvasHeight, waveformCanvasWidth, '#9ca3af'); // Tailwind gray-400
-		}
-
-		// Highlight current segment (drawn in the same dpr-scaled context as main waveform)
-		// The canvas-based highlight drawing is now removed as per user request.
-		// The HTML segment-highlight-window div will provide the visual cue.
-
-		// Ensure lastDrawnCurrentSegment is updated after attempting to draw,
-		// so redraw is triggered if currentSegment changes.
-		// This is already handled by the subscription, but also good to note here for logic flow.
-
-		// Red seek bar is now an HTML element, removed from canvas drawing.
-		ctx.restore(); // Outer restore for initial dpr scaling
-
-		lastDrawnTime = cur;
+		lastDrawnTime = currentTime;
 		lastDrawnBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
 		lastDrawnActualDuration = mediaDur;
 	}
@@ -347,20 +240,16 @@
 	let forceNextRedraw = false;
 	function requestRedraw(force = false) {
 		if (force) forceNextRedraw = true;
-		if (isMounted) {
-            // The animationLoop will call the draw functions.
-            // We just need to ensure it's running if a redraw is requested.
-            if (animationFrameId === null) {
-                animationFrameId = requestAnimationFrame(animationLoop);
-            }
+		if (isMounted && animationFrameId === null) {
+			animationFrameId = requestAnimationFrame(animationLoop);
 		}
 	}
 
 	function animationLoop() {
-        if (!isMounted) {
-            animationFrameId = null; // Stop loop if unmounted
-            return;
-        }
+		if (!isMounted) {
+			animationFrameId = null;
+			return;
+		}
 		const cur = currentTime;
 		const mediaDur = duration;
 		const currentBufOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
@@ -373,116 +262,99 @@
 		forceNextRedraw = false;
 
 		if (needsDraw && visibleCanvasHeight > 0 && currentBufOrPeaks && mediaDur > 0) {
-			drawVerticalTimescale(); // Timescale might depend on duration or height
+			drawVerticalTimescale();
 			drawWaveformUI();
-		} else if (needsDraw) { // Conditions for drawing not met (e.g. no buffer, no duration)
-            clearWaveformCanvases();
-            lastDrawnTime = cur;
-            lastDrawnBufferOrPeaks = currentBufOrPeaks;
-            lastDrawnActualDuration = mediaDur;
-        }
+		} else if (needsDraw) {
+			clearWaveformCanvases();
+			lastDrawnTime = cur;
+			lastDrawnBufferOrPeaks = currentBufOrPeaks;
+			lastDrawnActualDuration = mediaDur;
+		}
 		animationFrameId = requestAnimationFrame(animationLoop);
 	}
 
 	onMount(() => {
 		isMounted = true;
 		webAudioApiSupported = typeof window.AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined';
-
 		tick().then(() => {
-			if (isMounted && waveformAreaContainerRef) { // Changed to waveformAreaContainerRef
-				setupResizeObserver(); // Call setup
-                // Initial size update now happens inside setupResizeObserver or its subsequent tick
+			if (isMounted && waveformAreaContainerRef) {
+				setupResizeObserver();
 			}
 		});
-        // No need to subscribe to transcriptStore if props are passed down
 	});
 
 	onDestroy(() => {
 		isMounted = false;
-		if (resizeObserverInstance) {
-			resizeObserverInstance.disconnect();
-			resizeObserverInstance = null;
-		}
-		if (animationFrameId) {
-			cancelAnimationFrame(animationFrameId);
-			animationFrameId = null;
-		}
-		lastDrawnTime = -1;
-		lastDrawnBufferOrPeaks = null;
-		lastDrawnActualDuration = -1;
+		if (resizeObserverInstance) resizeObserverInstance.disconnect();
+		if (animationFrameId) cancelAnimationFrame(animationFrameId);
 	});
 
 	function setupResizeObserver() {
 		if (waveformAreaContainerRef && !resizeObserverInstance && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
 			resizeObserverInstance = new ResizeObserver(entries => {
 				for (const entry of entries) {
-					if (entry.target === waveformAreaContainerRef) { // Observe waveformAreaContainerRef
+					if (entry.target === waveformAreaContainerRef) {
 						const newHeight = Math.max(0, entry.contentRect.height);
 						const newWidth = Math.max(0, entry.contentRect.width);
 						let changed = false;
-
-						if (newHeight !== visibleCanvasHeight) { // Use newHeight directly
+						if (newHeight !== visibleCanvasHeight) {
 							visibleCanvasHeight = newHeight;
 							changed = true;
 						}
-
 						const newWaveformCanvasWidth = Math.max(0, newWidth - TIMESCALE_WIDTH);
 						if (newWaveformCanvasWidth !== waveformCanvasWidth) {
 							waveformCanvasWidth = newWaveformCanvasWidth;
 							changed = true;
 						}
-
-						if (changed) {
-							requestRedraw(true); // Force redraw on resize
-						}
+						if (changed) requestRedraw(true);
 					}
 				}
 			});
-			resizeObserverInstance.observe(waveformAreaContainerRef); // Observe waveformAreaContainerRef
-
-            // Initial size update more reliably after observer is set up and element is surely in DOM
-            tick().then(() => {
-                if(waveformAreaContainerRef) {
-                    visibleCanvasHeight = Math.max(0, waveformAreaContainerRef.clientHeight);
-                    waveformCanvasWidth = Math.max(0, waveformAreaContainerRef.clientWidth - TIMESCALE_WIDTH);
-                    requestRedraw(true);
-                }
-            });
+			resizeObserverInstance.observe(waveformAreaContainerRef);
+			tick().then(() => {
+				if (waveformAreaContainerRef) {
+					visibleCanvasHeight = Math.max(0, waveformAreaContainerRef.clientHeight);
+					waveformCanvasWidth = Math.max(0, waveformAreaContainerRef.clientWidth - TIMESCALE_WIDTH);
+					requestRedraw(true);
+				}
+			});
 		}
 	}
 
-	function handleScrollDivClick(event) {
+	function handleContainerClick(event) {
 		const mediaDur = duration;
-		if (!waveformScrollDiv || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
+		if (!waveformAreaContainerRef || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
-		const rect = event.currentTarget.getBoundingClientRect(); // event.currentTarget is waveformScrollDiv
+		// Only process clicks on the waveform area, not the timescale
+		if (event.target === timescaleCanvas) return;
+
+		const rect = waveformAreaContainerRef.getBoundingClientRect();
 		const clickY_in_viewport = event.clientY - rect.top;
-
-		// Use pyToTime for accurate time calculation considering zoom and scroll
-		// Use component state scrollOffsetPy for consistency with seek bar rendering
 		const time = pyToTime(clickY_in_viewport, mediaDur, visibleCanvasHeight, scrollOffsetPy);
-
-		debugLastClickY = clickY_in_viewport;
-		debugScrollOffsetAtClick = scrollOffsetPy;
-		debugTimeAtClick = time;
-
-		console.log("WaveformClick:", { clickY: debugLastClickY, scrollAtClick: debugScrollOffsetAtClick, timeAtClick: debugTimeAtClick });
-		dispatch('navigate', { time: time });
+		dispatch('navigate', { time });
 	}
 
-	function handleZoom(direction) {
-		if (!audioBuffer && !$transcriptStore.audioBufferPeaks) return;
-		let newZoomLevel = zoomLevel;
-		if (direction === 'in') {
-			newZoomLevel = zoomLevel * zoomStep;
-		} else {
-			newZoomLevel = zoomLevel / zoomStep;
-		}
-		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
-		if (Math.abs(newZoomLevel - zoomLevel) > 0.001) {
-			zoomLevel = newZoomLevel;
-			resetScrollAndZoom(false); // Don't reset zoomLevel again, just scroll
-		}
+	async function handleZoom(direction) {
+		if ((!audioBuffer && !$transcriptStore.audioBufferPeaks) || !waveformAreaContainerRef || !visibleCanvasHeight) return;
+
+		const oldZoomLevel = zoomLevel;
+		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
+		newZoomLevel = Math.max(minZoomLevel, Math.min(newZoomLevel, maxZoomLevel));
+		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) return;
+
+		const timeAtCenter = pyToTime(visibleCanvasHeight / 2, duration, visibleCanvasHeight, scrollOffsetPy);
+		zoomLevel = newZoomLevel;
+		await tick();
+
+		const newLogicalYForTimeAtCenter = timeToLogicalPy(timeAtCenter, duration, visibleCanvasHeight);
+		let newScrollOffsetPy = newLogicalYForTimeAtCenter - (visibleCanvasHeight / 2);
+		const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
+		const maxScroll = Math.max(0, contentLogicalHeight - visibleCanvasHeight);
+		newScrollOffsetPy = Math.max(0, Math.min(newScrollOffsetPy, maxScroll));
+
+		waveformAreaContainerRef.scrollTop = newScrollOffsetPy;
+		scrollOffsetPy = Math.round(newScrollOffsetPy);
+		requestRedraw(true);
 	}
 
 	function zoomIn() { handleZoom('in'); }
@@ -490,106 +362,72 @@
 
 	function handleWaveformScroll(event) {
 		if (event.target) {
-			const newScrollOffsetPy = Math.round(event.target.scrollTop);
-			if (Math.abs(newScrollOffsetPy - scrollOffsetPy) > 0) {
-				scrollOffsetPy = newScrollOffsetPy;
-				requestRedraw(); // Redraws canvas elements, reactive styles update due to scrollOffsetPy change
-			}
+			scrollOffsetPy = Math.round(event.target.scrollTop);
 		}
 	}
 
 	function resetScrollAndZoom(resetZoomToo = true) {
-		if (resetZoomToo) {
-			zoomLevel = 1;
-		}
+		if (resetZoomToo) zoomLevel = 1;
 		scrollOffsetPy = 0;
-		if (waveformScrollDiv) {
-			waveformScrollDiv.scrollTop = 0;
-		}
+		if (waveformAreaContainerRef) waveformAreaContainerRef.scrollTop = 0;
 		requestRedraw(true);
 	}
 
-    // Watch for prop changes to force redraw
-    let prevAudioBuffer = audioBuffer;
-    let prevDuration = duration;
-    let prevStorePeaks = $transcriptStore.audioBufferPeaks; // For store-based changes
+	let prevAudioBuffer = audioBuffer;
+	let prevDuration = duration;
+	let prevStorePeaks = $transcriptStore.audioBufferPeaks;
 
-    $: if (isMounted) {
-        let resetNeeded = false;
-        if (audioBuffer !== prevAudioBuffer) {
-            resetNeeded = true;
-            prevAudioBuffer = audioBuffer;
-        }
-        if (duration !== prevDuration) {
-            resetNeeded = true;
-            prevDuration = duration;
-        }
-        if (!audioBuffer && $transcriptStore.audioBufferPeaks !== prevStorePeaks) {
-            resetNeeded = true;
-            prevStorePeaks = $transcriptStore.audioBufferPeaks;
-        }
-
-        if (resetNeeded) {
-            resetScrollAndZoom(true); // Full reset including zoom
-        } else {
-            const currentEffectiveBufferOrPeaks = audioBuffer || $transcriptStore.audioBufferPeaks;
-            if (currentEffectiveBufferOrPeaks !== lastDrawnBufferOrPeaks) {
-                 lastDrawnBufferOrPeaks = currentEffectiveBufferOrPeaks;
-                 requestRedraw(true);
-            } else {
-                 requestRedraw(false);
-            }
-        }
-    }
-
-
-    // Separate watcher for currentTime to ensure smooth updates via animation loop
-    $: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) {
-        if (animationFrameId === null) {
-             animationFrameId = requestAnimationFrame(animationLoop);
-        }
-    }
-
-	// Reactive style for HTML seek bar
-	$: {
-		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
-			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
-			const screenY = logicalY - scrollOffsetPy; // screenY is a float
-
-			debugCurrentTimeForSeekbar = currentTime;
-			debugScrollOffsetForSeekbar = scrollOffsetPy;
-			debugCalculatedScreenYForSeekbar = screenY; // Log the original screenY
-
-			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar });
-
-			if (!isNaN(screenY) && isFinite(screenY)) {
-				// Use float for top. Height is fixed, visibility check uses float.
-				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
-			} else {
-				seekBarStyle = 'display: none;'; // Hide if position is invalid
-				debugCalculatedScreenYForSeekbar = null; // Reset if invalid
-			}
+	$: if (isMounted) {
+		let resetNeeded = false;
+		if (audioBuffer !== prevAudioBuffer) {
+			resetNeeded = true;
+			prevAudioBuffer = audioBuffer;
+		}
+		if (duration !== prevDuration) {
+			resetNeeded = true;
+			prevDuration = duration;
+		}
+		if (!audioBuffer && $transcriptStore.audioBufferPeaks !== prevStorePeaks) {
+			resetNeeded = true;
+			prevStorePeaks = $transcriptStore.audioBufferPeaks;
+		}
+		if (resetNeeded) {
+			resetScrollAndZoom(true);
 		} else {
-			seekBarStyle = 'display: none;';
-			console.log("WaveformSeek: Hiding seek bar (no audio/duration/etc.)");
+			requestRedraw();
 		}
 	}
 
-	// Reactive style for HTML segment highlight
+	$: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) {
+		if (animationFrameId === null) {
+			animationFrameId = requestAnimationFrame(animationLoop);
+		}
+	}
+
+	$: {
+		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
+			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
+			const screenY = logicalY - scrollOffsetPy;
+			if (!isNaN(screenY) && isFinite(screenY)) {
+				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
+			} else {
+				seekBarStyle = 'display: none;';
+			}
+		} else {
+			seekBarStyle = 'display: none;';
+		}
+	}
+
 	$: {
 		if (isMounted && currentSegment && duration > 0 && visibleCanvasHeight > 0) {
 			const segmentStartTime = Number(currentSegment.start_time);
 			const segmentEndTime = Number(currentSegment.end_time);
-
 			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
 				const logicalTop = timeToLogicalPy(segmentStartTime, duration, visibleCanvasHeight);
 				const logicalBottom = timeToLogicalPy(segmentEndTime, duration, visibleCanvasHeight);
-
 				const screenTop_float = logicalTop - scrollOffsetPy;
 				const screenBottom_float = logicalBottom - scrollOffsetPy;
-
 				const height_float = Math.max(0, screenBottom_float - screenTop_float);
-
 				if (height_float > 0 && screenTop_float < visibleCanvasHeight && screenBottom_float > 0) {
 					segmentHighlightStyle = `top: ${screenTop_float}px; height: ${height_float}px; display: block;`;
 				} else {
@@ -622,34 +460,36 @@
 		</button>
 	</div>
 
-	<!-- Existing Waveform and Timescale Area -->
-	<div bind:this={waveformAreaContainerRef} class="flex flex-grow min-h-0 relative">
-		<canvas bind:this={timescaleCanvas} class="timescale-canvas-vertical shrink-0" style="width: {TIMESCALE_WIDTH}px; height: 100%;" aria-hidden="true"></canvas>
-		<div
-			bind:this={waveformScrollDiv}
-			class="waveform-scroll-container flex-grow h-full relative min-w-0 overflow-y-auto"
-			on:scroll={handleWaveformScroll}
-			on:click={handleScrollDivClick}
-		>
+	<div
+		bind:this={waveformAreaContainerRef}
+		class="waveform-scroll-container flex flex-grow min-h-0 relative overflow-y-auto"
+		on:scroll={handleWaveformScroll}
+		on:click={handleContainerClick}
+	>
+		<div class="flex relative" style="height: {visibleCanvasHeight * zoomLevel}px; width: 100%;">
 			<canvas
-				bind:this={waveformCanvas}
-				class="waveform-canvas-vertical w-full cursor-pointer"
-				aria-label="Vertical waveform visualization. Click to seek audio."
-				style="height: {visibleCanvasHeight * zoomLevel}px;"
+				bind:this={timescaleCanvas}
+				class="timescale-canvas-vertical shrink-0"
+				style="width: {TIMESCALE_WIDTH}px; height: 100%;"
+				aria-hidden="true"
 			></canvas>
-			{#if (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0}
-				<div class="vertical-seek-bar" style={seekBarStyle}></div>
-			{/if}
-			{#if currentSegment && duration > 0}
-				<div class="segment-highlight-window" style={segmentHighlightStyle}></div>
-			{/if}
-			{#if !webAudioApiSupported && isMounted}
-				<div class="overlay-message"><p>Web Audio API not supported.</p></div>
-			{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
-				<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
-			{/if}
-
+			<div class="relative flex-grow h-full">
+				<canvas
+					bind:this={waveformCanvas}
+					class="waveform-canvas-vertical absolute top-0 left-0 w-full h-full cursor-pointer"
+					aria-label="Vertical waveform visualization. Click to seek audio."
+				></canvas>
+				{#if (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0}
+					<div class="vertical-seek-bar" style={seekBarStyle}></div>
+					<div class="segment-highlight-window" style={segmentHighlightStyle}></div>
+				{/if}
+			</div>
 		</div>
+		{#if !webAudioApiSupported && isMounted}
+			<div class="overlay-message"><p>Web Audio API not supported.</p></div>
+		{:else if !audioBuffer && !$transcriptStore.audioBufferPeaks && isMounted}
+			<div class="overlay-message"><p>Load audio/video media for waveform.</p></div>
+		{/if}
 	</div>
 </div>
 
@@ -659,16 +499,19 @@
 	}
 	.timescale-canvas-vertical {
 		display: block;
-		/* background-color: #f0f0f0; dark mode? */
+		position: sticky;
+		left: 0;
+		z-index: 20;
+		background-color: #fff; /* Match panel bg */
 	}
-	.waveform-canvas-container {
-		/* Container for the waveform canvas if needed for layout */
+	.dark .timescale-canvas-vertical {
+		background-color: #1f2937; /* Match panel bg dark */
 	}
 	.waveform-canvas-vertical {
 		display: block;
 	}
 	.overlay-message {
-		@apply absolute inset-0 flex items-center justify-center text-xs p-1 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 pointer-events-none;
+		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 pointer-events-none z-30;
 		text-align: center;
 	}
 	.ui-button-icon-panelheader { /* Standardized button style for panel headers */
@@ -676,14 +519,14 @@
 	}
 
 	.waveform-scroll-container {
-		scrollbar-width: thin; /* Firefox */
-		scrollbar-color: transparent transparent; /* Firefox */
+		scrollbar-width: thin;
+		scrollbar-color: transparent transparent;
 	}
 	.waveform-scroll-container:hover {
-		scrollbar-color: #a0aec0 #e2e8f0; /* Firefox on hover */
+		scrollbar-color: #a0aec0 #e2e8f0;
 	}
 	.dark .waveform-scroll-container:hover {
-		scrollbar-color: #6b7280 #3c3c3c; /* Firefox dark on hover */
+		scrollbar-color: #6b7280 #3c3c3c;
 	}
 	.waveform-scroll-container::-webkit-scrollbar {
 		width: 8px;
@@ -697,13 +540,13 @@
 		border-radius: 4px;
 	}
 	.waveform-scroll-container:hover::-webkit-scrollbar-thumb {
-		background-color: #a0aec0; /* Tailwind gray-400 */
+		background-color: #a0aec0;
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-thumb {
-		background-color: #4a5568; /* Tailwind gray-600 dark */
+		background-color: #4a5568;
 	}
 	.waveform-scroll-container:hover::-webkit-scrollbar-track {
-		background: #e2e8f0; /* Tailwind gray-200 */
+		background: #e2e8f0;
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
 		background: #3c3c3c;
@@ -712,17 +555,17 @@
 		position: absolute;
 		left: 0;
 		width: 100%;
-		height: 1.5px; /* Consistent with horizontal waveform's canvas line weight */
-		background-color: #ef4444; /* Red color */
-		pointer-events: none; /* So it doesn't interfere with clicks on the canvas */
-		z-index: 10; /* Ensure it's above the waveform canvas */
+		height: 1.5px;
+		background-color: #ef4444;
+		pointer-events: none;
+		z-index: 10;
 	}
 	.segment-highlight-window {
 		position: absolute;
 		left: 0;
 		width: 100%;
-		background-color: rgba(147, 197, 253, 0.4); /* Consistent blue highlight */
+		background-color: rgba(147, 197, 253, 0.4);
 		pointer-events: none;
-		z-index: 5; /* Below seek bar, above waveform */
+		z-index: 5;
 	}
 </style>
