@@ -26,7 +26,6 @@
 	let animationFrameId = null;
 
 	let scrollOffsetPy = 0;
-	let lastDrawnScrollOffsetPy = -1;
 
 	let zoomLevel = 1;
 	const minZoomLevel = 1;
@@ -256,7 +255,6 @@
 
 		let needsDraw = forceNextRedraw ||
 			(currentBufOrPeaks !== lastDrawnBufferOrPeaks) ||
-			(Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) ||
 			(mediaDur !== lastDrawnActualDuration);
 
 		forceNextRedraw = false;
@@ -325,7 +323,6 @@
 		const mediaDur = duration;
 		if (!waveformAreaContainerRef || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
-		// Only process clicks on the waveform area, not the timescale
 		if (event.target === timescaleCanvas) return;
 
 		const rect = waveformAreaContainerRef.getBoundingClientRect();
@@ -363,6 +360,7 @@
 	function handleWaveformScroll(event) {
 		if (event.target) {
 			scrollOffsetPy = Math.round(event.target.scrollTop);
+			// No redraw needed on scroll, overlays are positioned reactively
 		}
 	}
 
@@ -398,18 +396,19 @@
 		}
 	}
 
+	// Reactive update for seek bar position. No redraw needed, just style update.
 	$: if (isMounted && Math.abs(currentTime - lastDrawnTime) > redrawTimeThreshold / 2) {
-		if (animationFrameId === null) {
-			animationFrameId = requestAnimationFrame(animationLoop);
-		}
+		lastDrawnTime = currentTime;
 	}
 
+	// Reactive style for HTML seek bar
 	$: {
 		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
 			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
-			const screenY = logicalY - scrollOffsetPy;
-			if (!isNaN(screenY) && isFinite(screenY)) {
-				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
+			const screenY = logicalY - scrollOffsetPy; // For visibility check
+
+			if (!isNaN(logicalY) && isFinite(logicalY)) {
+				seekBarStyle = `top: ${logicalY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
 			} else {
 				seekBarStyle = 'display: none;';
 			}
@@ -418,18 +417,23 @@
 		}
 	}
 
+	// Reactive style for HTML segment highlight
 	$: {
 		if (isMounted && currentSegment && duration > 0 && visibleCanvasHeight > 0) {
 			const segmentStartTime = Number(currentSegment.start_time);
 			const segmentEndTime = Number(currentSegment.end_time);
+
 			if (!isNaN(segmentStartTime) && !isNaN(segmentEndTime) && segmentEndTime > segmentStartTime) {
 				const logicalTop = timeToLogicalPy(segmentStartTime, duration, visibleCanvasHeight);
 				const logicalBottom = timeToLogicalPy(segmentEndTime, duration, visibleCanvasHeight);
-				const screenTop_float = logicalTop - scrollOffsetPy;
-				const screenBottom_float = logicalBottom - scrollOffsetPy;
-				const height_float = Math.max(0, screenBottom_float - screenTop_float);
-				if (height_float > 0 && screenTop_float < visibleCanvasHeight && screenBottom_float > 0) {
-					segmentHighlightStyle = `top: ${screenTop_float}px; height: ${height_float}px; display: block;`;
+				const logicalHeight = Math.max(0, logicalBottom - logicalTop);
+
+				// For visibility check
+				const screenTop = logicalTop - scrollOffsetPy;
+				const screenBottom = logicalBottom - scrollOffsetPy;
+
+				if (logicalHeight > 0 && screenTop < visibleCanvasHeight && screenBottom > 0) {
+					segmentHighlightStyle = `top: ${logicalTop}px; height: ${logicalHeight}px; display: block;`;
 				} else {
 					segmentHighlightStyle = 'display: none;';
 				}
