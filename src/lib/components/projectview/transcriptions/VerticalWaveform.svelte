@@ -592,16 +592,17 @@
 		if (isMounted && (audioBuffer || $transcriptStore.audioBufferPeaks) && duration > 0 && visibleCanvasHeight > 0) {
 			const logicalY = timeToLogicalPy(currentTime, duration, visibleCanvasHeight);
 			const screenY = logicalY - scrollOffsetPy; // screenY is a float
+			const finalScreenY = screenY + 60; // Apply 60px offset
 
 			debugCurrentTimeForSeekbar = currentTime;
 			debugScrollOffsetForSeekbar = scrollOffsetPy;
-			debugCalculatedScreenYForSeekbar = screenY;
+			debugCalculatedScreenYForSeekbar = finalScreenY; // Log the final value
 
-			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar });
+			console.log("WaveformSeek:", { seekTime: debugCurrentTimeForSeekbar, scrollAtSeek: debugScrollOffsetForSeekbar, calcScreenY: debugCalculatedScreenYForSeekbar, originalScreenY: screenY });
 
-			if (!isNaN(screenY) && isFinite(screenY)) {
+			if (!isNaN(finalScreenY) && isFinite(finalScreenY)) {
 				// Use float for top. Height is fixed, visibility check uses float.
-				seekBarStyle = `top: ${screenY}px; visibility: ${screenY >= -1.5 && screenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
+				seekBarStyle = `top: ${finalScreenY}px; visibility: ${finalScreenY >= -1.5 && finalScreenY <= visibleCanvasHeight + 1.5 ? 'visible' : 'hidden'};`;
 			} else {
 				seekBarStyle = 'display: none;'; // Hide if position is invalid
 				debugCalculatedScreenYForSeekbar = null; // Reset if invalid
@@ -622,13 +623,19 @@
 				const logicalTop = timeToLogicalPy(segmentStartTime, duration, visibleCanvasHeight);
 				const logicalBottom = timeToLogicalPy(segmentEndTime, duration, visibleCanvasHeight);
 
-				const screenTop_float = logicalTop - scrollOffsetPy;
-				const screenBottom_float = logicalBottom - scrollOffsetPy;
+				const screenTop_float_orig = logicalTop - scrollOffsetPy;
+				const screenBottom_float_orig = logicalBottom - scrollOffsetPy;
 
-				const height_float = Math.max(0, screenBottom_float - screenTop_float);
+				const finalScreenTop_float = screenTop_float_orig + 60;
+				// Height calculation should remain based on original screen positions to represent actual segment duration
+				const height_float = Math.max(0, screenBottom_float_orig - screenTop_float_orig);
 
-				if (height_float > 0 && screenTop_float < visibleCanvasHeight && screenBottom_float > 0) {
-					segmentHighlightStyle = `top: ${screenTop_float}px; height: ${height_float}px; display: block;`;
+				// Visibility check should also use the offset positions
+				const finalScreenBottom_float = screenBottom_float_orig + 60;
+
+
+				if (height_float > 0 && finalScreenTop_float < visibleCanvasHeight && finalScreenBottom_float > 0) {
+					segmentHighlightStyle = `top: ${finalScreenTop_float}px; height: ${height_float}px; display: block;`;
 				} else {
 					segmentHighlightStyle = 'display: none;';
 				}
