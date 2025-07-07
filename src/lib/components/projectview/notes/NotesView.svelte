@@ -197,9 +197,11 @@
         <!-- Consider adding a toggle button for infoPanelCollapsed if needed, or manage via RightBar interaction -->
 
         <!-- New Right Bar (Far Right) -->
-        <div class="h-full flex-shrink-0">
-            <RightBar on:tabchange={handleRightBarTabChange} />
-        </div>
+        {#if activeViewType !== 'group_detail'}
+            <div class="h-full flex-shrink-0">
+                <RightBar on:tabchange={handleRightBarTabChange} />
+            </div>
+        {/if}
 	</div>
 </div>
 
