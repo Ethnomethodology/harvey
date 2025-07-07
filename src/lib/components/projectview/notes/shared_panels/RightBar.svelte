@@ -28,8 +28,8 @@
     <button
         on:click={() => setActiveTab('metadata')}
         class="p-2 rounded-md focus:outline-none transition-colors"
-        class:bg-blue-500={currentActiveTab === 'metadata'}
-        class:text-white={currentActiveTab === 'metadata'}
+        class:text-blue-600={currentActiveTab === 'metadata'}
+        class:dark:text-blue-400={currentActiveTab === 'metadata'}
         class:hover:bg-gray-300={currentActiveTab !== 'metadata'}
         class:dark:hover:bg-gray-600={currentActiveTab !== 'metadata'}
         class:text-gray-700={currentActiveTab !== 'metadata'}
