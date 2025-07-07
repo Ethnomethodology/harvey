@@ -122,11 +122,11 @@
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden p-1 gap-1">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
 	<NotesTopBar />
 
-	<div class="flex flex-grow gap-1 w-full min-h-0">
+	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
 
 		<div class="{ $panelStateStore.notesLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<NotesLeftPanel
