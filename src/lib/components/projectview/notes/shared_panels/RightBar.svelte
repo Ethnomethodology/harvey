@@ -24,7 +24,7 @@
 
 </script>
 
-<div class="flex flex-col items-center w-8 h-full bg-gray-200 dark:bg-gray-700 py-2 space-y-2 shadow-md">
+<div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2 shadow-md">
     <button
         on:click={() => setActiveTab('metadata')}
         class="p-2 rounded-md focus:outline-none transition-colors"
