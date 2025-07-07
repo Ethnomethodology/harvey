@@ -2,7 +2,7 @@
 <script>
     import { onMount, onDestroy, getContext } from 'svelte'; // Added getContext
     import { get } from 'svelte/store';
-    import { project, updateDocumentMetadataDirty, updateMediaNoteMetadataDirty } from '$lib/stores/projectStore.js'; // Added dirty flags
+    import { project } from '$lib/stores/projectStore.js'; // Corrected import
     import { invoke } from '@tauri-apps/api/core';
     import { basename, extname as getFileExtname, sep as getPathSep, resolve } from '@tauri-apps/api/path';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
