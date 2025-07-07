@@ -403,8 +403,8 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     let new_media_entry = MediaFileEntryXml {
         name: output_stem_dir_name.clone(),
         original_path: None,
-        relative_path: new_relative_path_for_xml,
-        speakers: original_speakers.or_else(|| Some(SpeakersXml::default())),
+        relative_path: new_relative_path_for_xml.clone(), // Clone here
+        speakers: original_speakers.clone().or_else(|| Some(SpeakersXml::default())), // Clone here
         transcripts: Vec::new(),
     };
 
