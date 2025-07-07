@@ -191,8 +191,8 @@
             project.update(p => ({ ...p, statusMessage: `File ${groupSubMenuItem.name} added to group ${group.name}.` }));
             // Also trigger group content notification for the GroupDetailView to refresh if it's open
             // Assuming groupContentNotification is imported and group.id is the ID of the group modified
-            const { groupContentNotification } = await import('$lib/stores/projectStore.js');
-            groupContentNotification.set({ groupId: group.id, action: 'file_added', timestamp: Date.now() });
+            // const { groupContentNotification } = await import('$lib/stores/projectStore.js');
+            // groupContentNotification.set({ groupId: group.id, action: 'file_added', timestamp: Date.now() });
 
         } catch (err) {
             await message(`Failed to add file to group: ${err}`, { title: 'Error', type: 'error' });
@@ -1111,8 +1111,8 @@ $: {
         groupSubMenuItem = null;
         project.update(p => ({ ...p, statusMessage: `File ${event.detail.file.name} added to new group ${event.detail.group.name}.` }));
         // Notify GroupDetailView if it's open for the new group
-        const { groupContentNotification } = import('$lib/stores/projectStore.js');
-        groupContentNotification.set({ groupId: event.detail.group.id, action: 'file_added', timestamp: Date.now() });
+        // const { groupContentNotification } = import('$lib/stores/projectStore.js'); // Line 1114: problematic import
+        // groupContentNotification.set({ groupId: event.detail.group.id, action: 'file_added', timestamp: Date.now() }); // Line 1115: removed .set call
     }}
     on:groupCreated={(event) => {
         console.log('[NotesLeftPanel] Event: groupCreated', event.detail);
