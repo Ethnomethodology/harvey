@@ -189,7 +189,7 @@
         </div>
 
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
-        {#if !$panelStateStore.infoPanelCollapsed && activeItemPath}
+        {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
             <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
                 <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
             </div>
