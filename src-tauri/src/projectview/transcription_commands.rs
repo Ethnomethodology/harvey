@@ -3,22 +3,104 @@
 use super::shared_types::*;
 use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
-use log::{debug, error, info, warn}; // info and warn are used by CancelGuard and throughout
+use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter}; // Removed State
+use tauri::{AppHandle, Emitter, ShellExt};
 use serde_json::Value as JsonValue;
+use serde::Deserialize; // Added for FFProbeOutput
+use chrono::Utc; // Added for timestamps
+use uuid::Uuid; // Added for UUID generation (though project_uuid comes from XML)
+use crate::projectview::db_handler; // Added for database operations
 
 use std::{
     fs::{self, File},
     io::{BufWriter, Write, BufRead},
     path::{Path, PathBuf},
-    sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}}, // For CancelGuard
+    sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}},
 };
-use dashmap::DashMap; // For CancelGuard
-// Removed: use crate::TranscriptionCancellationState;
-use tauri_plugin_shell::{ShellExt, process::CommandEvent};
+use dashmap::DashMap;
+use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
+
+
+// --- FFProbe Helper Structs (copied from core_commands.rs) ---
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStreamTags {
+    #[serde(rename = "DURATION")]
+    duration: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStream {
+    codec_type: Option<String>,
+    codec_name: Option<String>,
+    width: Option<i32>,
+    height: Option<i32>,
+    avg_frame_rate: Option<String>,
+    r_frame_rate: Option<String>,
+    bit_rate: Option<String>,
+    #[serde(default)]
+    tags: FFProbeStreamTags,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormatTags {
+    #[serde(rename = "creation_time")]
+    creation_time: Option<String>, // Keep for potential future use, though not directly used now
+    #[serde(rename = "DURATION")]
+    duration: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormat {
+    duration: Option<String>,
+    bit_rate: Option<String>,
+    #[serde(default)]
+    tags: Option<FFProbeFormatTags>,
+    format_name: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeOutput {
+    #[serde(default)]
+    streams: Vec<FFProbeStream>,
+    #[serde(default)]
+    format: FFProbeFormat,
+}
+
+// --- Helper Functions for FFProbe Data Parsing (copied from core_commands.rs) ---
+fn parse_duration_str_to_seconds(s_opt: Option<String>) -> Option<f64> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains(':') {
+            let parts: Vec<&str> = s.split(':').collect();
+            if parts.len() == 3 { // HH:MM:SS.mmm
+                let hours = parts[0].parse::<f64>().ok()?;
+                let minutes = parts[1].parse::<f64>().ok()?;
+                let seconds_ms = parts[2].parse::<f64>().ok()?;
+                Some(hours * 3600.0 + minutes * 60.0 + seconds_ms)
+            } else { None }
+        } else { // Seconds only
+            s.parse::<f64>().ok()
+        }
+    })
+}
+
+fn parse_frame_rate_str(s_opt: Option<String>) -> Option<f32> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains('/') {
+            let parts: Vec<&str> = s.split('/').collect();
+            if parts.len() == 2 {
+                let num = parts[0].parse::<f32>().ok()?;
+                let den = parts[1].parse::<f32>().ok()?;
+                if den.abs() > f32::EPSILON { Some(num / den) } else { None }
+            } else { None }
+        } else {
+            s.parse::<f32>().ok()
+        }
+    })
+}
+
 
 // --- CancelGuard for managing transcription cancellation ---
 struct CancelGuard {
@@ -336,7 +418,187 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     }
 
     info!("[Trim Backend] Reloading project data...");
-    super::core_commands::load_project_data(project_xml_path_str).await.map(|data| data.files)
+    let reloaded_project_data_result = super::core_commands::load_project_data(project_xml_path_str.clone()).await;
+
+    let project_uuid_for_db = match &reloaded_project_data_result {
+        Ok(data) => data.project_uuid.clone(),
+        Err(e) => {
+            error!("[Trim Backend] Failed to reload project data to get UUID after trim: {}. Cannot save metadata to DB.", e);
+            // Depending on strictness, you might return Err here or just log and skip DB operations.
+            // For now, returning the file list as before if reload failed, but DB ops will be skipped.
+            return reloaded_project_data_result.map(|data| data.files);
+        }
+    };
+
+    if project_uuid_for_db.is_empty() {
+        error!("[Trim Backend] Project UUID is empty after reloading project data. Cannot save metadata to DB.");
+    } else {
+        info!("[Trim Backend] Project UUID for DB operations: {}", project_uuid_for_db);
+        // --- Start: Add metadata to SQLite database for the new trimmed media ---
+        let mut duration_seconds_meta: Option<f64> = None;
+        let mut width_meta: Option<i32> = None;
+        let mut height_meta: Option<i32> = None;
+        let mut frame_rate_meta: Option<f32> = None;
+        let mut bit_rate_overall_meta: Option<i64> = None;
+        let mut audio_codec_meta: Option<String> = None;
+        let mut video_codec_meta: Option<String> = None;
+
+        let ffprobe_args = vec![
+            "-v".to_string(), "quiet".to_string(),
+            "-print_format".to_string(), "json".to_string(),
+            "-show_format".to_string(),
+            "-show_streams".to_string(),
+            output_media_path.to_string_lossy().to_string(),
+        ];
+
+        info!("[Trim Backend] Running ffprobe for new trimmed media: {}", output_media_path.display());
+        match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured").args(ffprobe_args).output().await {
+            Ok(output) => {
+                if output.status.success() {
+                    let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
+                    debug!("[Trim Backend] ffprobe output for {}: {}", output_media_path.display(), ffprobe_json_str);
+                    match serde_json::from_str::<FFProbeOutput>(&ffprobe_json_str) {
+                        Ok(parsed_ffprobe_output) => {
+                            duration_seconds_meta = parse_duration_str_to_seconds(parsed_ffprobe_output.format.duration.clone())
+                                .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
+                            bit_rate_overall_meta = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
+
+                            for stream in parsed_ffprobe_output.streams {
+                                if duration_seconds_meta.is_none() {
+                                     duration_seconds_meta = parse_duration_str_to_seconds(stream.tags.duration.clone());
+                                }
+                                match stream.codec_type.as_deref() {
+                                    Some("video") if width_meta.is_none() => {
+                                        width_meta = stream.width;
+                                        height_meta = stream.height;
+                                        video_codec_meta = stream.codec_name;
+                                        frame_rate_meta = parse_frame_rate_str(stream.avg_frame_rate.clone())
+                                            .or_else(|| parse_frame_rate_str(stream.r_frame_rate.clone()));
+                                        if bit_rate_overall_meta.is_none() {
+                                            bit_rate_overall_meta = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                        }
+                                    }
+                                    Some("audio") if audio_codec_meta.is_none() => {
+                                        audio_codec_meta = stream.codec_name;
+                                        if bit_rate_overall_meta.is_none() && stream.bit_rate.is_some() {
+                                             bit_rate_overall_meta = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            info!("[Trim Backend] Successfully parsed ffprobe output for {}", output_media_path.display());
+                        }
+                        Err(e) => {
+                            error!("[Trim Backend] Failed to parse ffprobe JSON for {}: {}. JSON: '{}'", output_media_path.display(), e, ffprobe_json_str);
+                        }
+                    }
+                } else {
+                    let stderr_str = String::from_utf8_lossy(&output.stderr);
+                    error!("[Trim Backend] ffprobe failed for {}. Code: {:?}, Stderr: {}", output_media_path.display(), output.status.code(), stderr_str);
+                }
+            }
+            Err(e) => {
+                error!("[Trim Backend] ffprobe execution error for {}: {}", output_media_path.display(), e);
+            }
+        }
+
+        let trimmed_media_file_metadata = FileMetadata {
+            file_name: output_filename.clone(), // Filename of the trimmed media
+            file_path: output_media_path.to_string_lossy().into_owned(), // Absolute path
+            last_modified: Utc::now().to_rfc3339(),
+            title: String::new(), // Initialize as empty
+            description: String::new(), // Initialize as empty
+            summary: String::new(), // Initialize as empty
+            duration_seconds: duration_seconds_meta,
+            width: width_meta,
+            height: height_meta,
+            frame_rate: frame_rate_meta,
+            bit_rate: bit_rate_overall_meta,
+            audio_codec: audio_codec_meta.clone(),
+            video_codec: video_codec_meta.clone(),
+            created_at: Some(Utc::now().to_rfc3339()),
+            original_import_path: Some(original_media_path.clone()), // Store original path as import path
+            speaker_names: None, // Speaker names come from XML, not directly stored here.
+        };
+
+        let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
+
+        // The relative path used as key for DB is the same as the one stored in XML for the new media entry
+        let db_key_relative_path_trimmed = new_relative_path_for_xml.clone();
+
+        match db_handler::save_asset_metadata(
+            &project_uuid_for_db,
+            &trimmed_media_file_metadata,
+            &db_key_relative_path_trimmed,
+            &asset_type,
+            None, // custom_fields_json
+        ) {
+            Ok(_) => info!("[Trim Backend] Successfully saved asset metadata to DB for trimmed media: {}", db_key_relative_path_trimmed),
+            Err(e) => warn!("[Trim Backend] Failed to save asset metadata to DB for trimmed media {}: {}.", db_key_relative_path_trimmed, e),
+        }
+
+        // Also save initial media_transcript_data
+        if let Err(e) = db_handler::save_media_transcript_data(
+            &project_uuid_for_db,
+            &db_key_relative_path_trimmed,
+            Some(&original_media_path), // Original media path as source reference
+            original_speakers.as_ref().map(|s| s.names.clone()), // Speaker names from XML
+        ) {
+            warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
+        } else {
+            info!("[Trim Backend] Successfully saved media_transcript_data for trimmed media: {}", db_key_relative_path_trimmed);
+        }
+
+        // --- Start: Copy group associations from original media to trimmed media ---
+        let original_media_relative_path = original_path.strip_prefix(project_base_dir)
+            .map(|p| p.to_string_lossy().replace("\\", "/"))
+            .map_err(|e| CommandError::from(format!("Failed to get relative path for original media: {}", e)));
+
+        if let Ok(orig_rel_path) = original_media_relative_path {
+            info!("[Trim Backend] Attempting to copy group associations from original media '{}' to new media '{}'", orig_rel_path, db_key_relative_path_trimmed);
+            match db_handler::get_db_path() {
+                Ok(db_path_for_groups) => {
+                    match rusqlite::Connection::open(&db_path_for_groups) {
+                        Ok(conn) => {
+                            match db_handler::get_groups_for_file_asset(&conn, &project_uuid_for_db, &orig_rel_path) {
+                                Ok(groups) => {
+                                    if groups.is_empty() {
+                                        info!("[Trim Backend] Original media '{}' belongs to no groups. No associations to copy.", orig_rel_path);
+                                    } else {
+                                        info!("[Trim Backend] Original media '{}' belongs to {} group(s). Copying to new media '{}'.", orig_rel_path, groups.len(), db_key_relative_path_trimmed);
+                                        for group in groups {
+                                            match db_handler::add_file_to_group(&conn, &project_uuid_for_db, &group.id, &db_key_relative_path_trimmed) {
+                                                Ok(_) => info!("[Trim Backend] Successfully added trimmed media '{}' to group '{}' (ID: {})", db_key_relative_path_trimmed, group.name, group.id),
+                                                Err(e) => warn!("[Trim Backend] Failed to add trimmed media '{}' to group '{}' (ID: {}): {}. It might already be associated.", db_key_relative_path_trimmed, group.name, group.id, e),
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("[Trim Backend] Failed to get groups for original media '{}': {}. Skipping group association copy.", orig_rel_path, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("[Trim Backend] Failed to open DB connection to copy group associations: {}. Skipping.", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                     warn!("[Trim Backend] Failed to get DB path to copy group associations: {}. Skipping.", e);
+                }
+            }
+        } else {
+            warn!("[Trim Backend] Could not determine original media relative path. Skipping group association copy.");
+        }
+        // --- End: Copy group associations ---
+
+        // --- End: Add metadata to SQLite database ---
+    }
+
+
+    reloaded_project_data_result.map(|data| data.files)
 }
 
 
