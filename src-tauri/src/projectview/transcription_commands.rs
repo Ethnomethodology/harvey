@@ -5,11 +5,12 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, ShellExt};
+use tauri::{AppHandle, Emitter}; // Removed ShellExt from here
+use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
 use serde::Deserialize; // Added for FFProbeOutput
 use chrono::Utc; // Added for timestamps
-use uuid::Uuid; // Added for UUID generation (though project_uuid comes from XML)
+// use uuid::Uuid; // Removed unused import
 use crate::projectview::db_handler; // Added for database operations
 
 use std::{
@@ -543,7 +544,7 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
             &project_uuid_for_db,
             &db_key_relative_path_trimmed,
             Some(&original_media_path), // Original media path as source reference
-            original_speakers.as_ref().map(|s| s.names.clone()), // Speaker names from XML
+            original_speakers.as_ref().map(|s_xml| &s_xml.names), // Corrected to pass Option<&Vec<String>>
         ) {
             warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
         } else {
