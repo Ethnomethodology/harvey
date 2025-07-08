@@ -41,8 +41,8 @@
 
 	// Conditional UI for buttons
 	export let showLoopPauseButton = true; // Default to true for main player
-	export let showNotesTranscribeButton = false; // Default to false
-	export let showNotesTrimButton = false; // Default to false
+	export let showDataTranscribeButton = false; // Default to false
+	export let showDataTrimButton = false; // Default to false
 	export let showMainTrimButton = true; // Default to true
 
 	$: console.log('[MediaPlayer] projectId prop updated:', projectId);
@@ -867,11 +867,11 @@
 	}
 	// let seekRafId = null; // No longer using rAF for seekTo
 
-    // Button handlers for Notes context
-    function handleNotesTranscribeClick() {
-        dispatch('requestNotesTranscribe', { mediaPath: explicitMediaPath });
+    // Button handlers for Data context
+    function handleDataTranscribeClick() {
+        dispatch('requestDataTranscribe', { mediaPath: explicitMediaPath });
     }
-    async function handleNotesTrimClick() {
+    async function handleDataTrimClick() {
         let buffer = localAudioBuffer;
         let ready = isMediaReadyForProcessing;
 
@@ -901,7 +901,7 @@
             }
         }
 
-        dispatch('requestNotesTrim', {
+        dispatch('requestDataTrim', {
             mediaPath: explicitMediaPath,
             duration: localDuration,
             audioBuffer: buffer,
@@ -1099,10 +1099,10 @@
 			</button>
 			{/if}
 
-			<!-- Conditional Notes Transcribe Button -->
-			{#if showNotesTranscribeButton}
+			<!-- Conditional Data Transcribe Button -->
+			{#if showDataTranscribeButton}
 			<button
-				on:click={handleNotesTranscribeClick}
+				on:click={handleDataTranscribeClick}
 				class="btn-action text-xs"
 				title="Transcribe this media in main Transcriptions tab"
 				disabled={!localMediaUrl || isLoadingMedia}
@@ -1141,9 +1141,9 @@
 			</button>
 
 			<!-- Conditional Trim Buttons -->
-			{#if showNotesTrimButton}
+			{#if showDataTrimButton}
 				<button
-					on:click={handleNotesTrimClick}
+					on:click={handleDataTrimClick}
 					class="btn-control"
 					title="Trim this media"
 					disabled={isLoadingMedia || !isMediaReadyForProcessing}

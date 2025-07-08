@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/shared_panels/RightInfoPanel.svelte -->
+<!-- src/lib/components/projectview/data/shared_panels/RightInfoPanel.svelte -->
 <script>
     import { onMount } from 'svelte';
     import { slide } from 'svelte/transition';

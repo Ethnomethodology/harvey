@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/documents/DocumentView.svelte -->
+<!-- src/lib/components/projectview/data/documents/DocumentView.svelte -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store'; 
@@ -6,7 +6,7 @@
     import DocumentEditorPanel from './DocumentEditorPanel.svelte'; 
     import PDFViewerPanel from './PDFViewerPanel.svelte';          
     import { project, updateDocumentHighlights } from '$lib/stores/projectStore.js'; 
-    // panelStateStore might not be needed here anymore if panel collapsing is handled by parent (NotesView)
+    // panelStateStore might not be needed here anymore if panel collapsing is handled by parent (DataView)
 
     export let itemPath = null; 
 
@@ -72,5 +72,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    /* Removed specific width classes as this component now fills the space given by NotesView */
+    /* Removed specific width classes as this component now fills the space given by DataView */
 </style>

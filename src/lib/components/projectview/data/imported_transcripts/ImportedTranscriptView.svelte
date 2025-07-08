@@ -1,11 +1,11 @@
-<!-- src/lib/components/projectview/notes/imported_transcripts/ImportedTranscriptView.svelte -->
+<!-- src/lib/components/projectview/data/imported_transcripts/ImportedTranscriptView.svelte -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     // LeftInfoPanel and RightInfoPanel are removed
     // panelStateStore might not be needed if panel collapsing handled by parent
     import TranscriptEditorPanel from './TranscriptEditorPanel.svelte';
 
-    export let itemPath = null; // Receives the full path from NotesView
+    export let itemPath = null; // Receives the full path from DataView
 
     const dispatch = createEventDispatcher();
 
@@ -39,5 +39,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    /* Removed specific width classes as this component now fills the space given by NotesView */
+    /* Removed specific width classes as this component now fills the space given by DataView */
 </style>

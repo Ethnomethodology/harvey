@@ -32,11 +32,11 @@
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
 
-    // --- Function to handle opening a note ---
-    function handleOpenNote(item) {
-        if (!item || item.file_type !== 'note') return;
-        console.log(`[LeftPanel] Requesting to open note: ${item.name} (${item.path})`);
-        dispatch('requestopentab', { tabName: 'notes', notePath: item.path });
+    // --- Function to handle opening a data ---
+    function handleOpenData(item) {
+        if (!item || item.file_type !== 'data') return;
+        console.log(`[LeftPanel] Requesting to open data: ${item.name} (${item.path})`);
+        dispatch('requestopentab', { tabName: 'data', dataPath: item.path });
     }
 
 	// --- Item Interaction Logic ---
@@ -145,8 +145,8 @@
                 console.log('[LeftPanel] Clicked transcript is already loaded.');
             }
 
-		} else if (item.file_type === 'note') {
-            handleOpenNote(item);
+		} else if (item.file_type === 'data') {
+            handleOpenData(item);
 		} else {
 			console.log('[LeftPanel] Clicked item is of type', item.file_type, '- no primary click action defined.');
 		}
@@ -157,9 +157,9 @@
 		if (!item.is_directory && item.file_type === 'media') {
 			console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
 			selectMedia(item);
-        } else if (!item.is_directory && item.file_type === 'note') {
-            console.log('[LeftPanel] Double-clicked note, calling handleOpenNote.');
-            handleOpenNote(item);
+        } else if (!item.is_directory && item.file_type === 'data') {
+            console.log('[LeftPanel] Double-clicked data, calling handleOpenData.');
+            handleOpenData(item);
         }
 	}
 
@@ -195,9 +195,9 @@
 				if (!item.is_directory && item.file_type === 'media') selectMedia(item);
                 else console.warn("[LeftPanel] 'Load' action called on non-media item:", item);
 				break;
-            case 'OpenNote':
-                if (!item.is_directory && item.file_type === 'note') handleOpenNote(item);
-                else console.warn("[LeftPanel] 'OpenNote' action called on non-note item:", item);
+            case 'OpenData':
+                if (!item.is_directory && item.file_type === 'data') handleOpenData(item);
+                else console.warn("[LeftPanel] 'OpenData' action called on non-data item:", item);
                 break;
 			case 'Rename':
 				if (!item.is_directory) {
@@ -210,19 +210,27 @@
                     let confirmMsg = '';
                     if (item.file_type === 'media') {
                         const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name);
-						confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and notes.\n\nThis action cannot be undone.`;
+						confirmMsg = `Are you sure you want to delete the media file "${item.name}"?
+
+This will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.
+
+This action cannot be undone.`
 					} else if (item.file_type === 'transcript') {
                         const mediaStem = item.media_xml_identifier || item.name.replace(/\.[^/.]+$/, "");
                         confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
-					} else if (item.file_type === 'note') {
-                        confirmMsg = `Are you sure you want to delete the note file "${item.name}"?\n\nThis action cannot be undone.`;
+					}
+					} else if (item.file_type === 'data') {
+                        confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
                     } else { confirmMsg = `Are you sure you want to delete the file "${item.name}"?\n\nThis cannot be undone.`; }
-                    try {
-                        const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
-                        if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(item.path); } catch (err) { console.error(`[LeftPanel] Delete service call failed:`, err); } }
-                        else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); }
-                    } catch (e) { await message(`An error occurred during deletion: ${e}`, {title: "Delete Error", type: "error"}); }
-				} else console.warn("[LeftPanel] Delete requested on directory (not allowed):", item);
+                    if (item.file_type !== 'directory') { // Assuming item.file_type exists and 'directory' is a valid type
+                        try {
+                            const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+                            if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(item.path); } catch (err) { console.error(`[LeftPanel] Delete service call failed:`, err); } }
+                            else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); }
+                        } catch (e) { await message(`An error occurred during deletion: ${e}`, {title: "Delete Error", type: "error"}); }
+                    } else {
+                        console.warn("[LeftPanel] Delete requested on directory (not allowed):", item);
+                    }
 				break; // End Delete case
 			}
 			default: await message(`Action '${action}' not implemented yet.`, { title: 'Not Implemented', type: 'info' }); break;
@@ -342,7 +350,7 @@
 				    <button on:click|stopPropagation="{(e) => handleMenuAction('OpenNote')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open Note</button>
                     <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 {/if}
-				{#if ['media', 'transcript', 'note', 'other'].includes(contextMenuItem.file_type)}
+				{#if ['media', 'transcript', 'data', 'other'].includes(contextMenuItem.file_type)}
 					<button on:click|stopPropagation="{(e) => handleMenuAction('Rename')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename…</button>
 					<button on:click|stopPropagation="{(e) => handleMenuAction('Delete')}" class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete…</button>
 				{/if}

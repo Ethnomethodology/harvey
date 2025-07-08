@@ -197,7 +197,7 @@
             const newDocPath = await convertAndSaveTranscriptAsDoc();
             project.update(p => ({...p, statusMessage: "Converted to document successfully."}));
             await message(`Transcript converted and saved as a new document.`, { title: 'Conversion Successful'});
-            dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
+            dispatch('requestopentab', { tabName: 'data', loadNotePath: newDocPath });
         } catch (error) {
             await message(`Failed to convert: ${error.message || error}`, { title: 'Conversion Error', type: 'error' });
             project.update(p => ({...p, statusMessage: "Conversion failed."}));
@@ -348,8 +348,8 @@
                     projectId={$project.id}
                     bind:isVideoMinimized={isMediaPlayerHidden}
                     showLoopPauseButton={true}
-                    showNotesTranscribeButton={false}
-                    showNotesTrimButton={false}
+                    showDataTranscribeButton={false}
+                    showDataTrimButton={false}
                     showMainTrimButton={false}
                     on:trimModeEntered={handleMediaPlayerTrimModeEntered}
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
@@ -413,13 +413,5 @@
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
 
-    .btn-switch-active {
-        @apply bg-blue-500 text-white shadow-sm;
-    }
-    .dark .btn-switch-active {
-        @apply bg-blue-600 text-white;
-    }
-    .btn-switch-inactive {
-        @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
-    }
+    
 </style>

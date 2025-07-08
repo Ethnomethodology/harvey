@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/shared_panels/RightBar.svelte -->
+<!-- src/lib/components/projectview/data/shared_panels/RightBar.svelte -->
 <script>
     import { createEventDispatcher } from 'svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';

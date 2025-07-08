@@ -1,37 +1,37 @@
-<!-- src/lib/components/projectview/notes/images/ImageView.svelte -->
+<!-- src/lib/components/projectview/data/tables/TableView.svelte -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     // LeftInfoPanel and RightInfoPanel are removed
     // panelStateStore might not be needed if panel collapsing handled by parent
-    import ImageViewerPanel from './ImageViewerPanel.svelte';
+    import TableViewerPanel from './TableViewerPanel.svelte';
 
-    export let itemPath = null; // Receives the full path from NotesView
+    export let itemPath = null; // Receives the full path from DataView
 
     const dispatch = createEventDispatcher();
 
     function forwardEvent(event) {
-        console.log(`[ImageView] Forwarding event: ${event.type}`);
+        console.debug(`[TableView] Forwarding event: ${event.type}`);
 		dispatch(event.type, event.detail);
 	}
 
     onMount(() => {
-		console.log('[ImageView] Component container mounted. Image path:', itemPath);
+		console.debug('[TableView] Component container mounted. Table path:', itemPath);
 	});
 
     $: {
-        // console.log(`[ImageView] Path is now ${itemPath}`);
+        // console.debug(`[TableView] Path is now ${itemPath}`);
     }
 
 </script>
 
-<!-- Main container for the Image View - this will now be the main content panel -->
+<!-- Main container for the Table View - this will now be the main content panel -->
 <div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
     {#key itemPath}
         {#if itemPath}
-            <ImageViewerPanel imagePath={itemPath} />
+            <TableViewerPanel tablePath={itemPath} />
         {:else}
             <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
-                <span>No image path provided to ImageView.</span>
+                <span>No table path provided to TableView.</span>
             </div>
         {/if}
     {/key}
@@ -39,5 +39,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    /* Removed specific width classes as this component now fills the space given by NotesView */
+    /* Removed specific width classes as this component now fills the space given by DataView */
 </style>

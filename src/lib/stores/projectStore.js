@@ -334,7 +334,7 @@ export function prepareMediaNoteView(mediaPath) {
             mediaNoteTranscriptError: null,
             activeMediaNoteEditorRef: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.activeMediaNoteEditorRef : null,
 
-            statusMessage: normalizedMediaPath ? `Loading notes for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
+            statusMessage: normalizedMediaPath ? `Loading data for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media data selection cleared.',
             isLoading: finalIsGlobalLoading,
 
             // Clear other fieldnotes states
@@ -362,7 +362,7 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
                 isMediaNoteTranscriptDirty: false,
                 isMediaNoteTranscriptLoading: false,
                 mediaNoteTranscriptError: null,
-                statusMessage: `Loaded notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
+                statusMessage: `Loaded data for media: ${mediaPath.split(/[\\/]/).pop()}`,
                 isLoading: false,
             };
         }
@@ -380,8 +380,8 @@ export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg, isFileNotF
                 initialMediaNoteTranscriptJson: defaultEmptyJson,
                 isMediaNoteTranscriptDirty: false,
                 isMediaNoteTranscriptLoading: false,
-                mediaNoteTranscriptError: isFileNotFound ? "INFO:FILE_NOT_FOUND" : `Failed to load notes: ${errorMsg}`,
-                statusMessage: isFileNotFound ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.` : `Error loading notes for ${mediaPath.split(/[\\/]/).pop()}.`,
+                mediaNoteTranscriptError: isFileNotFound ? "INFO:FILE_NOT_FOUND" : `Failed to load data: ${errorMsg}`,
+                statusMessage: isFileNotFound ? `No data/transcription found for ${mediaPath.split(/[\\/]/).pop()}.` : `Error loading data for ${mediaPath.split(/[\\/]/).pop()}.`,
                 activeMediaNoteEditorRef: null,
                 isLoading: false,
             };
@@ -420,7 +420,7 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
                 currentMediaNoteTranscriptJson: savedJsonContent,
                 isMediaNoteTranscriptDirty: false,
                 mediaNoteTranscriptError: null,
-                statusMessage: `Notes for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
+                statusMessage: `Data for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
             };
         }
         return p;
@@ -435,8 +435,8 @@ export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
                 ? "INFO:FILE_NOT_FOUND"
                 : null;
             const statusToKeep = errorToKeep === "INFO:FILE_NOT_FOUND"
-                ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.`
-                : `Changes to notes for media ${mediaPath.split(/[\\/]/).pop()} discarded.`;
+                ? `No data/transcription found for ${mediaPath.split(/[\\/]/).pop()}.`
+                : `Changes to data for media ${mediaPath.split(/[\\/]/).pop()} discarded.`;
 
             return {
                 ...p,

@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/NotesMiddlePanel.svelte -->
+<!-- src/lib/components/projectview/data/DataMiddlePanel.svelte -->
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import {
@@ -50,7 +50,7 @@
 
 
     onMount(() => { // (onMount logic unchanged)
-        console.log('[NotesMiddlePanel] Mounting Minimal Editor.');
+        console.log('[DataMiddlePanel] Mounting Minimal Editor.');
         editor = createEditor({
             namespace: 'MinimalEditor',
             nodes: [ParagraphNode, TextNode, HeadingNode, QuoteNode, ListNode, ListItemNode],
@@ -61,7 +61,7 @@
                  quote: 'border-l-4 border-gray-300 pl-2 italic my-1',
                  align_left: 'text-left', align_center: 'text-center', align_right: 'text-right', align_justify: 'text-justify'
             },
-            onError: (error) => { console.error('[NotesMiddlePanel Minimal Editor] Error:', error); },
+            onError: (error) => { console.error('[DataMiddlePanel Minimal Editor] Error:', error); },
             historyState: historyState,
         });
         if (editorContainer) {
@@ -72,18 +72,18 @@
                 registerRichText(editor), registerHistory(editor, historyState, 200), registerList(editor),
                 editor.registerCommand(CLICK_COMMAND, () => false, COMMAND_PRIORITY_LOW),
             );
-            console.log('[NotesMiddlePanel Minimal Editor] Registered Lexical listeners.');
+            console.log('[DataMiddlePanel Minimal Editor] Registered Lexical listeners.');
             editor.update(() => { const root = _getRoot(); if (root.isEmpty()) { root.append(_createParagraphNode()); } });
             tick().then(() => {
                 if (editor) {
                     editor.setEditable(true); const isNowEditable = editor.isEditable();
-                    console.log(`[NotesMiddlePanel Minimal Editor] editor.isEditable() returned: ${isNowEditable}`);
-                    if (isNowEditable) { editor.focus(() => { console.log('[NotesMiddlePanel Minimal Editor] Focus callback.'); }); isReady = true; editor.getEditorState().read(updateMinimalToolbarState); }
-                    else { console.error('[NotesMiddlePanel Minimal Editor] FAILED TO SET EDITABLE.'); }
+                    console.log(`[DataMiddlePanel Minimal Editor] editor.isEditable() returned: ${isNowEditable}`);
+                    if (isNowEditable) { editor.focus(() => { console.log('[DataMiddlePanel Minimal Editor] Focus callback.'); }); isReady = true; editor.getEditorState().read(updateMinimalToolbarState); }
+                    else { console.error('[DataMiddlePanel Minimal Editor] FAILED TO SET EDITABLE.'); }
                 }
             });
-        } else { console.error('[NotesMiddlePanel Minimal Editor] editorContainer not found!'); }
-        return () => { if (editor) { console.log('[NotesMiddlePanel Minimal Editor] Destroying editor.'); unregisterMinimalListeners(); editor = null; } isReady = false; };
+        } else { console.error('[DataMiddlePanel Minimal Editor] editorContainer not found!'); }
+        return () => { if (editor) { console.log('[DataMiddlePanel Minimal Editor] Destroying editor.'); unregisterMinimalListeners(); editor = null; } isReady = false; };
     }); // End onMount
 
     // --- Update Toolbar State (Unchanged) ---
@@ -126,7 +126,7 @@
     // *** REVISED clearFormatting Action (Manual Implementation) ***
     function clearFormatting() {
         if (!editor || !isReady || !editor.isEditable()) { return; }
-         console.log(`[NotesMiddlePanel Minimal Editor] Clearing formatting MANUALLY`);
+         console.log(`[DataMiddlePanel Minimal Editor] Clearing formatting MANUALLY`);
          editor.focus(() => {
              editor.update(() => {
                  const selection = _getSelection();
@@ -153,7 +153,7 @@
 
                     } catch (error) {
                          // Log error if getNodes or subsequent operations fail
-                         console.error("[NotesMiddlePanel Minimal Editor] Error during manual clearFormatting:", error);
+                         console.error("[DataMiddlePanel Minimal Editor] Error during manual clearFormatting:", error);
                     }
                  }
              });

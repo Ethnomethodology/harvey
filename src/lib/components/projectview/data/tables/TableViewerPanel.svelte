@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/tables/TableViewerPanel.svelte -->
+<!-- src/lib/components/projectview/data/tables/TableViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';

@@ -91,8 +91,8 @@
 <svelte:window on:keydown={handleKeydown}/>
 
 {#if showModal}
-    <div class="fixed inset-0 z-[60] bg-gray-900 bg-opacity-50 dark:bg-opacity-75 flex items-center justify-center p-4" on:click={closeModal}>
-        <div class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation>
+    <div class="fixed inset-0 z-[60] bg-gray-900 bg-opacity-50 dark:bg-opacity-75 flex items-center justify-center p-4" on:click={closeModal} role="dialog" aria-modal="true" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeModal(); }}>
+        <div class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl w-full max-w-md" on:click|stopPropagation role="document" tabindex="-1">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New Group</h2>
 
             <div class="space-y-4">

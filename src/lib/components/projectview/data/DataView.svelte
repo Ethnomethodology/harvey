@@ -1,9 +1,9 @@
-<!-- src/lib/components/projectview/notes/NotesView.svelte -->
+<!-- src/lib/components/projectview/data/DataView.svelte -->
 <script>
 	import { onMount, createEventDispatcher } from 'svelte';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import NotesTopBar from './NotesTopBar.svelte';
-	import NotesLeftPanel from './NotesLeftPanel.svelte';
+	import DataTopBar from './DataTopBar.svelte';
+	import DataLeftPanel from './DataLeftPanel.svelte';
     import DocumentView from './documents/DocumentView.svelte';
     import TableView from './tables/TableView.svelte';
     import ImageView from './images/ImageView.svelte';
@@ -21,7 +21,7 @@
     function forwardEvent(event) {
         if (event.type === 'requestviewchange' || event.type === 'requestmediaselection' ||
             event.type === 'requestTranscriptionTabWithMedia' || event.type === 'requestTrimInTranscriptionTab') {
-             console.debug(`[NotesView] Forwarding event: ${event.type} with detail:`, event.detail);
+             console.debug(`[DataView] Forwarding event: ${event.type} with detail:`, event.detail);
         }
 		dispatch(event.type, event.detail);
 	}
@@ -63,7 +63,7 @@
                 typeFromStore = 'images';
                 itemTypeForInfo = 'image';
             } else {
-                console.warn(`[NotesView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
+                console.warn(`[DataView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
                 typeFromStore = 'placeholder';
                 itemTypeForInfo = null;
             }
@@ -78,11 +78,11 @@
             activeItemPath = pathFromStore;
             activeViewType = typeFromStore;
             activeItemTypeForInfoPanel = itemTypeForInfo; // Update type for InfoPanel
-            console.debug(`[NotesView Store Sub] Synced. Path: ${activeItemPath}, ViewType: ${activeViewType}, InfoPanelType: ${activeItemTypeForInfoPanel}`);
+            console.debug(`[DataView Store Sub] Synced. Path: ${activeItemPath}, ViewType: ${activeViewType}, InfoPanelType: ${activeItemTypeForInfoPanel}`);
         } else if (activeItemTypeForInfoPanel !== itemTypeForInfo) {
             // Path and view type might be same, but specific type for info panel changed (e.g. media_note to audio)
             activeItemTypeForInfoPanel = itemTypeForInfo;
-             console.debug(`[NotesView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
+             console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
     });
 
@@ -90,10 +90,10 @@
         const pathForView = eventDetailFromDispatch?.itemPath;
         const typeForView = eventDetailFromDispatch?.viewType;
 
-        console.debug(`[NotesView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
+        console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
-            console.error(`[NotesView] ABORTING: Invalid path or type. Path: '${pathForView}', Type: '${typeForView}'.`);
+            console.error(`[DataView] ABORTING: Invalid path or type. Path: '${pathForView}', Type: '${typeForView}'.`);
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
             prepareMediaNoteView(null);
@@ -103,11 +103,11 @@
 
         const canProceed = await checkUnsavedChangesThenProceed(pathForView, typeForView);
         if (!canProceed) {
-            console.info('[NotesView] View change cancelled.');
+            console.info('[DataView] View change cancelled.');
             return;
         }
 
-        console.debug(`[NotesView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
+        console.debug(`[DataView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
             prepareDocumentView(pathForView, typeForView);
@@ -117,36 +117,36 @@
         } else if (typeForView === 'media_note') {
             prepareMediaNoteView(pathForView);
         } else {
-            console.warn(`[NotesView] Unknown typeForView: '${typeForView}'. Clearing views.`);
+            console.warn(`[DataView] Unknown typeForView: '${typeForView}'. Clearing views.`);
             prepareDocumentView(null, 'placeholder');
             prepareImportedTranscriptView(null);
             prepareMediaNoteView(null);
             activeItemTypeForInfoPanel = null;
         }
-        console.debug(`[NotesView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
+        console.debug(`[DataView] Store preparation actions dispatched for Path: ${pathForView}, Type: ${typeForView}.`);
     }
 
     function handleRightBarTabChange(event) {
         const { tabName } = event.detail;
         // panelStateStore.setActiveInfoPanelTab(tabName); // This is already done in RightBar.svelte
-        console.log(`[NotesView] RightBar tab changed to: ${tabName}`);
+        console.log(`[DataView] RightBar tab changed to: ${tabName}`);
         // InfoPanel will react to panelStateStore.activeInfoPanelTab
     }
 
 	onMount(() => {
-		console.debug('[NotesView] Component container mounted.');
+		console.debug('[DataView] Component container mounted.');
 	});
 
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<NotesTopBar />
+	<DataTopBar />
 
 	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
         <!-- Far Left Panel (File/Data Browser) -->
-		<div class="{ $panelStateStore.notesLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
-			<NotesLeftPanel
+		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+			<DataLeftPanel
                 on:requestmediaselection={forwardEvent}
                 on:requestviewchange={ (event) => handleViewChangeRequest(event.detail) }
             />
@@ -157,7 +157,7 @@
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
-                        <span>Select an item from the Fieldnotes panel to view or edit.</span>
+                        <span>Select an item from the Data panel to view or edit.</span>
                     </div>
                 {:else if activeViewType === 'documents'}
                     <DocumentView itemPath={activeItemPath} />
@@ -207,6 +207,6 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    .w-\[15\%\] { width: 15%; } /* For NotesLeftPanel */
+    .w-\[15\%\] { width: 15%; } /* For DataLeftPanel */
     .w-\[20\.588\%\] { width: 20.58825%; } /* For new InfoPanel, same as old LeftInfoPanel width */
 </style>

@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/media/MediaView.svelte -->
+<!-- src/lib/components/projectview/data/media/MediaView.svelte -->
 <script>
     import { onMount, createEventDispatcher } from 'svelte';
     // LeftInfoPanel and RightInfoPanel are removed
@@ -43,5 +43,5 @@
 
 <style>
 	.min-h-0 { min-height: 0; }
-    /* Removed specific width classes as this component now fills the space given by NotesView */
+    /* Removed specific width classes as this component now fills the space given by DataView */
 </style>

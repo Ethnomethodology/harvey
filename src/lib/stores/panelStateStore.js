@@ -2,7 +2,7 @@
 import { writable } from 'svelte/store';
 
 const initialPanelState = {
-    notesLeftPanelCollapsed: false, // For the main data/file list panel in NotesView
+    dataLeftPanelCollapsed: false, // For the main data/file list panel in DataView
     // leftCollapsed: false, // REMOVED - old state for LeftInfoPanel in specific views
     // rightCollapsed: true, // REMOVED - old state for RightInfoPanel in specific views
     infoPanelCollapsed: false, // NEW - For the new combined InfoPanel, false = expanded by default
@@ -13,11 +13,11 @@ const initialPanelState = {
 
 const panelStateStore = writable(initialPanelState);
 
-// Function to toggle the Notes Left Panel (main data list)
-function toggleNotesLeftPanel() {
+// Function to toggle the Data Left Panel (main data list)
+function toggleDataLeftPanel() {
     panelStateStore.update(state => ({
         ...state,
-        notesLeftPanelCollapsed: !state.notesLeftPanelCollapsed
+        dataLeftPanelCollapsed: !state.dataLeftPanelCollapsed
     }));
 }
 
@@ -47,7 +47,7 @@ function toggleTranscriptionPanel() {
 
 export default {
     subscribe: panelStateStore.subscribe,
-    toggleNotesLeftPanel,
+    toggleDataLeftPanel,
     toggleInfoPanel,
     setActiveInfoPanelTab,
     // toggleLeftPanel, // REMOVED

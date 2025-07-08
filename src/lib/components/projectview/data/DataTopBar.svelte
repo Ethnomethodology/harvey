@@ -1,4 +1,4 @@
-<!-- src/lib/components/projectview/notes/NotesTopBar.svelte -->
+<!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
@@ -87,34 +87,34 @@
                                (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
         
         if (!currentCanSave) { 
-            console.warn("[NotesTopBar] Manual save clicked but conditions not met."); 
+            console.warn("[DataTopBar] Manual save clicked but conditions not met."); 
             return; 
         }
-        console.log("[NotesTopBar] Manual save proceeding...");
+        console.log("[DataTopBar] Manual save proceeding...");
 
         if ((projState.isDocumentDirty || projState.isDocumentMetadataDirty) && projState.selectedDocumentPath && projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
-            console.log("[NotesTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
-            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[NotesTopBar] Document manual save successful."); } 
-            catch (error) { console.error("[NotesTopBar] Document manual save via editor ref failed:", error); }
+            console.log("[DataTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
+            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[DataTopBar] Document manual save successful."); } 
+            catch (error) { console.error("[DataTopBar] Document manual save via editor ref failed:", error); }
         } else if (projState.isPdfAnnotationsDirty && projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            console.log("[NotesTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
+            console.log("[DataTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
             try { 
                 // PDF Annotations save might be handled differently, e.g. a direct service call if no 'ref.save'
                 // Assuming there's a service for this like `saveCurrentPdfAnnotations`
                 const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
                 await saveCurrentPdfAnnotations();
-                console.log("[NotesTopBar] PDF Annotations manual save successful."); 
-            } catch (error) { console.error("[NotesTopBar] PDF Annotations manual save failed:", error); }
+                console.log("[DataTopBar] PDF Annotations manual save successful."); 
+            } catch (error) { console.error("[DataTopBar] PDF Annotations manual save failed:", error); }
         } else if (projState.isImportedTranscriptDirty && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
-             console.log("[NotesTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
-            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[NotesTopBar] Imported Transcript manual save successful."); } 
-            catch (error) { console.error("[NotesTopBar] Imported Transcript manual save via editor ref failed:", error); }
+             console.log("[DataTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
+            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); } 
+            catch (error) { console.error("[DataTopBar] Imported Transcript manual save via editor ref failed:", error); }
         } else if (projState.isMediaNoteTranscriptDirty && projState.selectedMediaNotePath && projState.activeMediaNoteEditorRef?.ref && typeof projState.activeMediaNoteEditorRef.ref.save === 'function') {
-            console.log("[NotesTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
-            try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[NotesTopBar] Media Note Transcript manual save successful."); }
-            catch (error) { console.error("[NotesTopBar] Media Note Transcript manual save via editor ref failed:", error); }
+            console.log("[DataTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
+            try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[DataTopBar] Media Note Transcript manual save successful."); }
+            catch (error) { console.error("[DataTopBar] Media Note Transcript manual save via editor ref failed:", error); }
         } else { 
-            console.warn("[NotesTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
+            console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
         }
     }
   
@@ -134,24 +134,24 @@
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeDocumentEditorRef.ref;
                 saveAction = 'document';
-                console.log(`[NotesTopBar Autosave Watch] Document ${p.selectedDocumentPath} is dirty.`);
+                console.log(`[DataTopBar Autosave Watch] Document ${p.selectedDocumentPath} is dirty.`);
             } else if (p.isPdfAnnotationsDirty && p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
                 shouldAutosave = true;
                 // No direct editorRef.save() for PDF annotations usually, service call is direct
                 saveAction = 'pdfAnnotations';
-                console.log(`[NotesTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
+                console.log(`[DataTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
             } else if (p.isImportedTranscriptDirty && p.currentImportedTranscriptPath && p.activeImportedTranscriptEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeImportedTranscriptEditorRef.ref;
                 saveAction = 'importedTranscript';
-                 console.log(`[NotesTopBar Autosave Watch] Imported Transcript ${p.currentImportedTranscriptPath} is dirty.`);
+                 console.log(`[DataTopBar Autosave Watch] Imported Transcript ${p.currentImportedTranscriptPath} is dirty.`);
             } else if (p.isMediaNoteTranscriptDirty && p.selectedMediaNotePath && p.activeMediaNoteEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeMediaNoteEditorRef.ref;
                 saveAction = 'mediaNoteTranscript';
-                console.log(`[NotesTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`);
+                console.log(`[DataTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`);
             } else {
-                // console.log(`[NotesTopBar Autosave Watch] Conditions not met.`);
+                // console.log(`[DataTopBar Autosave Watch] Conditions not met.`);
             }
         }
 
@@ -159,7 +159,7 @@
         clearTimeout(autosaveTimeout);
         if (shouldAutosave) {
             autosaveTimeout = setTimeout(async () => {
-                console.log("[NotesTopBar] Autosave timer fired. Attempting save...");
+                console.log("[DataTopBar] Autosave timer fired. Attempting save...");
                 const currentProjState = get(project); // Re-fetch current state
                 let editorStillActiveAndDirty = false;
 
@@ -174,7 +174,7 @@
                 }
 
                 if (editorStillActiveAndDirty) {
-                     console.log(`[NotesTopBar] Autosaving (Action: ${saveAction})...`);
+                     console.log(`[DataTopBar] Autosaving (Action: ${saveAction})...`);
                      try { 
                         if (saveAction === 'pdfAnnotations') {
                             const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
@@ -182,13 +182,13 @@
                         } else if (activeEditorRefToSave && typeof activeEditorRefToSave.save === 'function') {
                             await activeEditorRefToSave.save(); 
                         } else {
-                            console.warn(`[NotesTopBar Autosave] No valid save method for action ${saveAction}`);
+                            console.warn(`[DataTopBar Autosave] No valid save method for action ${saveAction}`);
                         }
-                        console.log(`[NotesTopBar] Autosave successful for ${saveAction}.`); 
+                        console.log(`[DataTopBar] Autosave successful for ${saveAction}.`); 
                     }
-                     catch (error) { console.error(`[NotesTopBar] Autosave failed for ${saveAction}:`, error); }
+                     catch (error) { console.error(`[DataTopBar] Autosave failed for ${saveAction}:`, error); }
                 } else { 
-                    console.log(`[NotesTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`); 
+                    console.log(`[DataTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`); 
                 }
             }, 3000); 
         }

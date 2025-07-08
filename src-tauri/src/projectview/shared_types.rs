@@ -578,7 +578,7 @@ pub struct AssociatedFile {
     pub relative_path: String, // Relative to project base_directory
     pub full_path: String,     // Absolute path
     pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "imported_transcript", "other"
-    pub media_xml_identifier: Option<String>, // For media files, to link to notes, etc.
+    pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
 }
 
 // This struct is primarily for backend use when fetching from DB,

@@ -507,7 +507,7 @@
                 const newDocPath = await convertAndSaveTranscriptAsDoc();
                 if (newDocPath) {
                     await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
-                    dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
+                    dispatch('requestopentab', { tabName: 'data', loadNotePath: newDocPath });
                 } else {
                      console.error("[RichTextPreview] Document saving process did not return a path.");
                      await message("Failed to create document file: The process completed but did not provide a file path.", {title: "Error", type: "error"});

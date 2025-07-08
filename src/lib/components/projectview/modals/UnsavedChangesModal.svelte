@@ -36,9 +36,11 @@
 		class="fixed inset-0 z-[120] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
 		transition:fade={{ duration: 150 }}
 		on:click={handleCancel}
+        on:keydown={(e) => { if (e.key === 'Escape') handleCancel(); }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="unsaved-title"
+        tabindex="0"
 	>
 		<div
 			class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200"

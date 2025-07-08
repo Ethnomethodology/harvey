@@ -94,11 +94,13 @@
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
 		on:click={handleCloseAndReset}
+        tabindex="-1"
+        on:keydown={(e) => { if (e.key === 'Escape') handleCloseAndReset(); }}
 	> <!-- Allow closing by clicking backdrop if appropriate, or remove -->
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
-			on:click|stopPropagation
 			role="document"
+            tabindex="-1"
 		>
 			<h2 id="transcribe-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
 

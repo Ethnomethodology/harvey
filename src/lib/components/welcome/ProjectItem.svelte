@@ -22,14 +22,15 @@
 </script>
 
 <div class="relative group menu-container">
-  <li
-    class="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md hover:bg-gray-100 cursor-pointer transition-all duration-150 ease-in-out flex justify-between items-center"
+  <div
+    class="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md hover:bg-gray-100 cursor-pointer transition-all duration-150 ease-in-out flex justify-between items-center w-full text-left"
     on:click={openRecent}
+    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') openRecent(); }}
     role="button"
     tabindex="0"
-    on:keydown={(e) => e.key === 'Enter' && openRecent()}
     title={`Open project: ${project.name}\nPath: ${project.path}`}
   >
+
     <div class="min-w-0 mr-2 flex-grow">
       <h3 class="font-medium text-gray-800 group-hover:text-blue-600 truncate">{project.name}</h3>
       <p class="text-xs text-gray-500 truncate">{project.path}</p>
@@ -46,7 +47,7 @@
         <path d="M10 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM10 8.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM11.5 15.5a1.5 1.5 0 1 0-3 0 1.5 1.5 0 0 0 3 0Z" />
       </svg>
     </button>
-  </li>
+  </div>
 
   {#if openMenuProjectPath === project.path}
     <div
@@ -54,8 +55,9 @@
       role="menu"
       aria-orientation="vertical"
       aria-labelledby="menu-button-for-{project.path}"
-      tabindex="-1"
+      tabindex="0"
       on:click|stopPropagation
+      on:keydown={(e) => { if (e.key === 'Escape') openMenuProjectPath = null; }}
       transition:fly={{ y: -5, duration: 150 }}
     >
       <div class="py-1" role="none">

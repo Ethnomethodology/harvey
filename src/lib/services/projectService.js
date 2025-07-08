@@ -89,12 +89,20 @@ import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
+    const currentProject = get(project);
+    const projectId = currentProject.id;
+
     if (!tablePath || !layoutJson) {
         console.error('[ProjectService] saveTableLayoutPrefs: Missing tablePath or layoutJson.');
         throw new Error('Missing tablePath or layoutJson for saving table layout preferences.');
     }
+    if (!projectId) {
+        console.error('[ProjectService] saveTableLayoutPrefs: Missing projectId.');
+        throw new Error('Missing projectId for saving table layout preferences.');
+    }
+
     try {
-        await invoke('save_table_layout_prefs', { tablePath, layoutJson });
+        await invoke('save_table_layout_prefs', { projectId, tablePath, layoutJson });
     } catch (error) {
         console.error(`[ProjectService] Error saving table layout preferences for ${tablePath}:`, error);
         throw error;
@@ -102,12 +110,20 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
 }
 
 export async function loadTableLayoutPrefs(tablePath) {
+    const currentProject = get(project);
+    const projectId = currentProject.id;
+
     if (!tablePath) {
         console.error('[ProjectService] loadTableLayoutPrefs: Missing tablePath.');
         return null;
     }
+    if (!projectId) {
+        console.error('[ProjectService] loadTableLayoutPrefs: Missing projectId.');
+        return null;
+    }
+
     try {
-        const layoutJson = await invoke('load_table_layout_prefs', { tablePath });
+        const layoutJson = await invoke('load_table_layout_prefs', { projectId, tablePath });
         if (layoutJson) {
             return JSON.parse(layoutJson);
         }

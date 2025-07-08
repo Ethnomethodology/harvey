@@ -20,8 +20,8 @@
 </script>
 
 {#if showModal}
-    <div class="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" on:click={handleClose} role="dialog" aria-modal="true" aria-labelledby="import-transcript-title">
-        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-200" on:click|stopPropagation>
+    <div class="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" on:click|self={handleClose} role="dialog" aria-modal="true" aria-labelledby="import-transcript-title" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') handleClose(); }}>
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md text-gray-900 dark:text-gray-200" on:click|stopPropagation role="document" tabindex="-1" on:keydown={(e) => { if (e.key === 'Escape') handleClose(); }}>
             <div class="flex justify-between items-center mb-4">
                 <h2 id="import-transcript-title" class="text-lg font-semibold">Import Transcript From...</h2>
                 <button on:click={handleClose} class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">

@@ -99,6 +99,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="rename-modal-title"
+    tabindex="-1"
   >
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md m-4" role="document">
       <h2 id="rename-modal-title" class="text-lg font-semibold text-gray-800 mb-5">Rename Project</h2>
