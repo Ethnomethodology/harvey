@@ -45,6 +45,7 @@ export const initialTranscriptState = {
     // transcribedOriginalLanguageCode: null, // REMOVED
     // wasTranslatedToEnglish: false,       // REMOVED
     // languageUsedForJob: null, // REMOVED
+    diarizationEnabledForNextJob: false,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -1293,6 +1294,10 @@ export function setTranslateToEnglish(value) {
         }
         return ts;
     });
+}
+
+export function setDiarizationPreference(value) {
+    transcriptStore.update(ts => ({ ...ts, diarizationEnabledForNextJob: !!value }));
 }
 
 // Listen for item rename events from the backend (specifically for currentTranscriptPath)

@@ -36,7 +36,8 @@
         selectMedia as selectMediaStoreAction,
         clearTranscriptState,
         setRanInBackground, // Add this
-        clearPendingTranscriptData // <-- ADD THIS
+        clearPendingTranscriptData, // <-- ADD THIS
+        setDiarizationPreference // <-- ADD THIS
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -66,6 +67,11 @@
     let showImportTranscriptSourceModal = false;
     let unlistenTranscriptionComplete = null;
 
+async function onConfirmTranscriptionStart(event) {
+    const { enableDiarization } = event.detail;
+    setDiarizationPreference(enableDiarization);
+    await handleConfirmStartTranscription(); // projectService.handleConfirmStartTranscription
+}
 
 	onMount(async () => {
         appWindow = getCurrentWindow();
@@ -603,7 +609,7 @@
         language={$transcriptStore.selectedLanguage ?? 'N/A'}
         speakers={$transcriptStore.speakers}
         jobId={$transcriptStore.transcriptionJobId}
-        on:confirmStart={handleConfirmStartTranscription}
+        on:confirmStart={onConfirmTranscriptionStart}
         on:cancelRequest={handleCancelTranscriptionRequest}
         on:closeAndReset={() => {
             transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false, transcriptionJobStatus: null, transcriptionErrorMessage: null, transcriptionJobId: null, isTranscribing: false, transcriptionProgress: { percent: 0, message: '' } }));

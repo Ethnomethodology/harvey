@@ -5,16 +5,18 @@
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 
 	// Props
-	export let fileName = ''; // Still needed for confirm view
-	export let modelName = ''; // Still needed for confirm view
-	export let language = ''; // Still needed for confirm view
-	export let speakers = { count: 0, names: [] }; // Still needed for confirm view
+	export let fileName = '';
+	export let modelName = '';
+	export let language = '';
+	export let speakers = { count: 0, names: [] };
+	// initialDiarizationEnabled prop removed, will sync from store directly
 
 	const dispatch = createEventDispatcher();
+	let enableDiarization = false; // Local state for the checkbox, default to false
 
 	// Event Handlers
 	function handleConfirm() {
-		dispatch('confirmStart');
+		dispatch('confirmStart', { enableDiarization }); // Dispatch with diarization state
 	}
 
 	function handleCancelRequest() {
@@ -50,6 +52,10 @@
 	$: currentErrorMessage = $transcriptStore.transcriptionErrorMessage;
 	$: currentJobId = $transcriptStore.transcriptionJobId;
 
+	// When the modal is about to show the confirm view, sync enableDiarization with the store's preference
+	$: if (showModal && !isTranscribing && jobStatus === null) {
+		enableDiarization = $transcriptStore.diarizationEnabledForNextJob;
+	}
 
 	// --- Title Logic ---
 	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Confirm Transcription Settings' :
@@ -121,8 +127,30 @@
 					<p><strong>File:</strong> <span class="font-mono break-all">{fileName || 'N/A'}</span></p>
 					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
 					<p><strong>Language:</strong> <span class="font-mono">{language || 'N/A'}</span></p>
-					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Diarization Disabled)'}</p>
+					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Speaker detection off or no speakers defined)'}</p>
 					<p><strong>Translate to English:</strong> <span class="font-mono">{$transcriptStore.translateToEnglish ? 'Yes' : 'No'}</span></p>
+
+					<div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+						<div class="flex items-center space-x-2">
+							<input
+								type="checkbox"
+								id="enableDiarizationCheckbox"
+								class="ui-checkbox"
+								bind:checked={enableDiarization}
+							/>
+							<label
+								for="enableDiarizationCheckbox"
+								class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none"
+							>
+								Identify different speakers (diarize)
+							</label>
+						</div>
+						{#if enableDiarization}
+							<p class="text-xs text-orange-600 dark:text-orange-400 mt-1.5 ml-0.5 px-1 py-0.5 bg-orange-50 dark:bg-orange-900/30 rounded border border-orange-200 dark:border-orange-500/50">
+								Note: Speaker identification can significantly increase transcription time.
+							</p>
+						{/if}
+					</div>
 				</div>
 				<div class="flex justify-end space-x-3 mt-auto">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
@@ -233,7 +261,7 @@
 	.btn-primary:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-		background-color: #9ca3af; /* bg-gray-400 */
+		/* background-color: #9ca3af; Let default browser style handle disabled bg */
 	}
 	.btn-secondary {
 		background-color: #e5e7eb; /* bg-gray-200 */
@@ -265,7 +293,7 @@
 	.btn-action-cancel:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-		background-color: #fca5a5; /* bg-red-300 */
+		/* background-color: #fca5a5; Let default browser style handle disabled bg */
 	}
     .dark .btn-action-cancel {
          background-color: #dc2626; /* dark:bg-red-600 */
@@ -273,4 +301,9 @@
     .dark .btn-action-cancel:hover:not(:disabled) {
         background-color: #b91c1c; /* dark:hover:bg-red-700 */
     }
+
+	/* Checkbox style */
+	.ui-checkbox {
+		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
+	}
 </style>

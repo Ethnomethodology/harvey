@@ -826,8 +826,18 @@ export async function requestTranscription() {
 export async function handleConfirmStartTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
-    // const jobId = uuidv4(); // Removed: Will use backend-generated job_id
-    const translateToEnglish = currentTs.translateToEnglish; // Add this line
+    // const jobId = uuidv4();
+    const translateToEnglish = currentTs.translateToEnglish;
+    const diarize = currentTs.diarizationEnabledForNextJob;
+
+    let numSpeakersForPayload = 0;
+    if (diarize) {
+        if (currentTs.speakers.count > 0) {
+            numSpeakersForPayload = currentTs.speakers.count;
+        } else {
+            numSpeakersForPayload = 2; // Default to 2 speakers if diarize is checked but no count is set
+        }
+    }
     
     const mediaPathForJob = currentTs.selectedMediaFile?.path;
     const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
@@ -852,13 +862,12 @@ export async function handleConfirmStartTranscription() {
     const payload = {
         project_xml_path: currentProj.xmlPath,
         media_path_str: mediaPathForJob,
-        num_speakers: currentTs.speakers.count,
+        num_speakers: numSpeakersForPayload, // Use the adjusted num_speakers value
         language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
         model_name: modelNameForJob,
-        translate_to_english: currentTs.translateToEnglish,
+        translate_to_english: translateToEnglish, // Use variable defined above
         speaker_names: currentTs.speakers.names || [],
-        // Add translated_speaker_names if translation is enabled
-        translated_speaker_names: currentTs.translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
+        translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.
