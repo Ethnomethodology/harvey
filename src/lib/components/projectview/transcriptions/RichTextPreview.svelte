@@ -1,6 +1,6 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
-	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
+	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
 	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
@@ -8,8 +8,9 @@
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
-    import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
-	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added
+    import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
+    import { activeLayout } from '$lib/stores/layoutStore.js';
+	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 
     // Virtualization state
     let scrollTop = 0;
@@ -21,6 +22,9 @@
     let transcriptDropdownButtonRef;
     let transcriptDropdownMenuRef;
 
+    let refreshKey = 0; // Key to force re-evaluation of transcript list
+    let unlistenJobComplete = null; // To store the unlisten function
+
     // Function to close dropdown when clicking outside
     function handleClickOutsideTranscriptDropdown(event) {
         if (showTranscriptDropdown && transcriptDropdownMenuRef && !transcriptDropdownMenuRef.contains(event.target) && transcriptDropdownButtonRef && !transcriptDropdownButtonRef.contains(event.target)) {
@@ -28,12 +32,31 @@
         }
     }
 
-    onMount(() => {
+    onMount(async () => {
         document.addEventListener('click', handleClickOutsideTranscriptDropdown, true);
+
+        unlistenJobComplete = await listen('custom_transcription_job_completed', (event) => {
+            if (event.payload && event.payload.status === 'done') {
+                const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
+                if (currentSelectedMedia && event.payload.jobFinishedPath === currentSelectedMedia.path) {
+                    console.log('[RichTextPreview] Relevant transcription job completed. Incrementing refreshKey.');
+                    refreshKey++;
+                }
+            }
+        });
+        isMounted = true; // For scroll logic
+        if (previewScrollContainerRef) { // For scroll logic
+            containerHeight = previewScrollContainerRef.clientHeight;
+            scrollTop = previewScrollContainerRef.scrollTop;
+        }
     });
 
     onDestroy(() => {
         document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
+        if (unlistenJobComplete) {
+            unlistenJobComplete();
+        }
+        cancelAnimation(); // For scroll logic
     });
 
     // Reactive variable for the main dropdown button label
@@ -52,11 +75,12 @@
 
     // Prepare associated transcripts for the dropdown
     let associatedTranscriptsForDropdown = [];
-    let currentProcessingVersion = 0; // Add a version counter
+    let currentProcessingVersion = 0;
 
     $: {
-        currentProcessingVersion++; // Increment version on each trigger
-        const processingVersion = currentProcessingVersion; // Capture current version for async operation
+        refreshKey; // Make this block dependent on refreshKey
+        currentProcessingVersion++;
+        const processingVersion = currentProcessingVersion;
 
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
             const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
