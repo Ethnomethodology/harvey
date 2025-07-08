@@ -52,9 +52,16 @@
 
     // Prepare associated transcripts for the dropdown
     let associatedTranscriptsForDropdown = [];
+    let currentProcessingVersion = 0; // Add a version counter
+
     $: {
+        currentProcessingVersion++; // Increment version on each trigger
+        const processingVersion = currentProcessingVersion; // Capture current version for async operation
+
         if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
             const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
+
+            associatedTranscriptsForDropdown = []; // Clear before async operation
 
             const basenamePromises = associated.map(async (t, index) => {
                 let name = "Unknown Transcript";
@@ -85,24 +92,28 @@
             });
 
             Promise.all(basenamePromises).then(results => {
-                associatedTranscriptsForDropdown = results;
+                if (processingVersion === currentProcessingVersion) { // Only update if this is the latest request
+                    associatedTranscriptsForDropdown = results;
+                }
             }).catch(error => {
                 console.error("Error processing basenames for dropdown:", error);
-                associatedTranscriptsForDropdown = associated.map((t, index) => {
-                    let fallbackName = "Unknown Transcript";
-                    let keyPath = t.path || t.relativePath;
-                    if (t.path) {
-                        fallbackName = t.path.split(/[\/]/).pop();
-                    } else if (t.relativePath) {
-                        fallbackName = t.relativePath.split(/[\/]/).pop();
-                    }
-                    return {
-                        path: t.path,
-                        relativePath: t.relativePath,
-                        name: fallbackName,
-                        unique_render_key: keyPath || `transcript-index-${index}`
-                    };
-                });
+                if (processingVersion === currentProcessingVersion) { // Also check version on error
+                    associatedTranscriptsForDropdown = associated.map((t, index) => {
+                        let fallbackName = "Unknown Transcript";
+                        let keyPath = t.path || t.relativePath;
+                        if (t.path) {
+                            fallbackName = t.path.split(/[\/]/).pop();
+                        } else if (t.relativePath) {
+                            fallbackName = t.relativePath.split(/[\/]/).pop();
+                        }
+                        return {
+                            path: t.path,
+                            relativePath: t.relativePath,
+                            name: fallbackName,
+                            unique_render_key: keyPath || `transcript-index-${index}`
+                        };
+                    });
+                }
             });
         } else {
             associatedTranscriptsForDropdown = [];
