@@ -1,22 +1,19 @@
 <!-- src/lib/components/projectview/modals/TranscribeConfirmModal.svelte -->
 <script>
 	import { createEventDispatcher, onDestroy } from 'svelte';
-	import { get } from 'svelte/store'; // Added get
+	import { get } from 'svelte/store';
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
-	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
-
-	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
-
-	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	// Only import getCloudModelLabel, languageOptions will come as a prop
+	import { getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
 	import SpeakersModal from './SpeakersModal.svelte';
 
 	// Props
 	export let fileName = '';
 	export let downloadedModelsList = [];
 	export let cloudConfig = null;
-	export { globalLanguageOptions as languageOptions };
-	export let speakers = { count: 0, names: [], translatedNames: [] }; // Ensure translatedNames is expected by SpeakersModal
+	export let languageOptions = []; // Expect languageOptions as a prop, default to empty array
+	export let speakers = { count: 0, names: [], translatedNames: [] };
 
 
 	const dispatch = createEventDispatcher();
