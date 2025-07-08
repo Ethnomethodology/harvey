@@ -183,14 +183,14 @@
 						</select>
 					</div>
 
-					<div class="flex items-center space-x-2 pt-1"> {/* Adjusted padding */}
+					<div class="flex items-center space-x-2 pt-1"> 
 						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
 						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
 							Translate to English
 						</label>
 					</div>
 
-					<div class="pt-1 space-y-1"> {/* Adjusted padding */}
+					<div class="pt-1 space-y-1"> 
 						<div class="flex justify-between items-center">
 							<div>
 								<strong>Speakers:</strong>
@@ -213,7 +213,7 @@
 						{/if}
 					</div>
 
-					<div class="pt-2"> {/* Removed border-t and mt-3 */}
+					<div class="pt-2">
 						<div class="flex items-center space-x-2">
 							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
 							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
@@ -227,7 +227,7 @@
 						{/if}
 					</div>
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700"> {/* Keep final divider */}
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
 				</div>

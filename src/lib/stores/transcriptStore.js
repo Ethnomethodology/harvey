@@ -165,8 +165,12 @@ export function clearTranscriptState() {
 }
 
 export function selectMedia(fileEntry) {
-    const currentSelectedPath = get(transcriptStore).selectedMediaFile?.path;
-    const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path);
+    const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
+    const currentSelectedPath = currentSelectedMedia?.path;
+
+    // Force a re-selection if the associated transcripts list has changed, even if the path is the same.
+    const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
+    const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
 
     let speakersToLoad = { count: 0, names: [], translatedNames: [] };
     if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
@@ -231,23 +235,31 @@ export function selectMedia(fileEntry) {
             console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia); // WARN
         }
 
-        transcriptStore.update((ts) => ({
-            ...ts,
-            selectedMediaFile: newSelectedMedia, // newSelectedMedia now explicitly includes 'transcripts'
-            audioBuffer: null,
-            audioBufferPeaks: null,
-            player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
-            speakers: speakersToLoad,
-            segments: [],
-            currentTranscriptPath: null,
-            transcriptDirty: false,
-            isTranscriptLoading: false,
-            transcriptUndoStack: [],
-            transcriptRedoStack: [],
-            // transcribedOriginalLanguageCode: null, // REMOVED
-            // wasTranslatedToEnglish: false, // REMOVED
-            // languageUsedForJob: null, // REMOVED
-        }));
+        transcriptStore.update((ts) => {
+            const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
+            return {
+                ...ts,
+                selectedMediaFile: newSelectedMedia, // newSelectedMedia now explicitly includes 'transcripts'
+                audioBuffer: mediaPathChanged ? null : ts.audioBuffer,
+                audioBufferPeaks: mediaPathChanged ? null : ts.audioBufferPeaks,
+                player: {
+                    currentTime: 0,
+                    duration: mediaPathChanged ? 0 : ts.player.duration,
+                    isPlaying: false,
+                    currentSegmentIndex: -1
+                },
+                speakers: speakersToLoad,
+                segments: [],
+                currentTranscriptPath: null,
+                transcriptDirty: false,
+                isTranscriptLoading: false,
+                transcriptUndoStack: [],
+                transcriptRedoStack: [],
+                // transcribedOriginalLanguageCode: null, // REMOVED
+                // wasTranslatedToEnglish: false, // REMOVED
+                // languageUsedForJob: null, // REMOVED
+            };
+        });
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
@@ -1269,8 +1281,41 @@ listen('custom_transcription_job_completed', async (event) => {
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
-                   console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
-                   await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                    console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
+                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+
+                    // After refreshing, get the latest project files state
+                    const latestProjectStore = get(projectMainStore);
+                    const allFiles = latestProjectStore.files;
+                    const mediaPath = jobFinishedPath;
+
+                    let updatedMediaFile = null;
+
+                    function findMediaNodeByPath(nodes, path) {
+                        if (!Array.isArray(nodes)) return null;
+                        for (const node of nodes) {
+                            if (node.path === path && node.file_type === 'media' && !node.is_directory) {
+                                return node;
+                            }
+                            if (node.children && node.children.length > 0) {
+                                const found = findMediaNodeByPath(node.children, path);
+                                if (found) {
+                                    return found;
+                                }
+                            }
+                        }
+                        return null;
+                    }
+
+                    updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
+
+                    if (updatedMediaFile) {
+                        console.log('[TranscriptStore] Found updated media file, dispatching event to re-select it in the transcription tab.');
+                        const { emit } = await import('@tauri-apps/api/event');
+                        emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
+                    } else {
+                        console.warn(`[TranscriptStore] Could not find the updated media file in project store after refresh for path: ${mediaPath}`);
+                    }
                 }
             } catch (e) {
                 console.error('[TranscriptStore] Error refreshing project files after job completion:', e);

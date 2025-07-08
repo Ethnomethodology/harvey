@@ -77,6 +77,7 @@
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
     let unlistenTranscriptionComplete = null;
+    let unlistenSelectMedia = null;
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
@@ -158,6 +159,13 @@ async function onConfirmTranscriptionStart(event) {
         else { console.warn('[ProjectView] TranscribeConfirmModal reference not available on mount.'); }
 		window.addEventListener('keydown', handleGlobalKeys);
 
+        unlistenSelectMedia = await listen('select_media_in_transcription_tab', async (event) => {
+            const { mediaPath } = event.payload;
+            if (mediaPath) {
+                await handleRequestMediaSelection({ detail: { mediaPath } });
+            }
+        });
+
         if (appWindow) {
             removeCloseRequestListener = await appWindow.listen('tauri://close-requested', handleWindowCloseRequest);
         } else {
@@ -169,6 +177,9 @@ async function onConfirmTranscriptionStart(event) {
 		cleanupProgressListener();
         if (unlistenTranscriptionComplete) {
             unlistenTranscriptionComplete();
+        }
+        if (unlistenSelectMedia) {
+            unlistenSelectMedia();
         }
 		window.removeEventListener('keydown', handleGlobalKeys);
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
