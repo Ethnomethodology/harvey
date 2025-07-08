@@ -183,9 +183,19 @@
 						</select>
 					</div>
 
-					<div class="pt-2 space-y-1">
+					<div class="flex items-center space-x-2 pt-1"> {/* Adjusted padding */}
+						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
+						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
+							Translate to English
+						</label>
+					</div>
+
+					<div class="pt-1 space-y-1"> {/* Adjusted padding */}
 						<div class="flex justify-between items-center">
-							<p><strong>Speakers:</strong> {modalSpeakersConfig?.count > 0 ? `${modalSpeakersConfig.count} (${(modalSpeakersConfig.names || []).slice(0, 3).join(', ')}${modalSpeakersConfig.count > 3 ? ', ...' : ''})` : '0 (Auto-detect or none defined)'}</p>
+							<div>
+								<strong>Speakers:</strong>
+								<span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
+							</div>
 							<button
 								type="button"
 								class="btn-xs-secondary"
@@ -194,16 +204,16 @@
 								Edit Speakers
 							</button>
 						</div>
+						{#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
+						<div class="pl-4">
+							<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+								({modalSpeakersConfig.names.join(', ')})
+							</p>
+						</div>
+						{/if}
 					</div>
 
-					<div class="flex items-center space-x-2 pt-2">
-						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
-						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
-							Translate to English
-						</label>
-					</div>
-
-					<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
+					<div class="pt-2"> {/* Removed border-t and mt-3 */}
 						<div class="flex items-center space-x-2">
 							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
 							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
@@ -211,13 +221,13 @@
 							</label>
 						</div>
 						{#if modalEnableDiarization}
-							<p class="text-xs text-orange-600 dark:text-orange-400 mt-1.5 ml-0.5 px-1 py-0.5 bg-orange-50 dark:bg-orange-900/30 rounded border border-orange-200 dark:border-orange-500/50">
+							<p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
 								Note: Speaker identification can significantly increase transcription time.
 							</p>
 						{/if}
 					</div>
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700"> {/* Keep final divider */}
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
 				</div>
