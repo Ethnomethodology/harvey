@@ -206,32 +206,40 @@
 				} else console.warn("[LeftPanel] Rename requested on directory (not allowed):", item);
 				break;
 			case 'Delete': {
-				if (!item.is_directory) {
-                    let confirmMsg = '';
-                    if (item.file_type === 'media') {
-                        const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name);
-						confirmMsg = `Are you sure you want to delete the media file "${item.name}"?
+				if (item.is_directory) {
+					console.warn("[LeftPanel] Delete requested on directory (not allowed via context menu):", item);
+					break;
+				}
 
-This will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.
+				let confirmMsg = '';
 
-This action cannot be undone.`
-					} else if (item.file_type === 'transcript') {
-                        const mediaStem = item.media_xml_identifier || item.name.replace(/\.[^/.]+$/, "");
-                        confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
+				if (item.file_type === 'media') {
+					const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name);
+					confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
+				} else if (item.file_type === 'transcript') {
+					confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
+				} else if (item.file_type === 'data') {
+					confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
+				} else {
+					confirmMsg = `Are you sure you want to delete the file "${item.name}"?\n\nThis cannot be undone.`;
+				}
+
+				try {
+					const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+					if (confirmed) {
+						project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` }));
+						try {
+							await deleteProjectItem(item.path);
+						} catch (err) {
+							console.error(`[LeftPanel] Delete service call failed:`, err);
+						}
+					} else {
+						project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' }));
 					}
-					} else if (item.file_type === 'data') {
-                        confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
-                    } else { confirmMsg = `Are you sure you want to delete the file "${item.name}"?\n\nThis cannot be undone.`; }
-                    if (item.file_type !== 'directory') { // Assuming item.file_type exists and 'directory' is a valid type
-                        try {
-                            const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
-                            if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(item.path); } catch (err) { console.error(`[LeftPanel] Delete service call failed:`, err); } }
-                            else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); }
-                        } catch (e) { await message(`An error occurred during deletion: ${e}`, {title: "Delete Error", type: "error"}); }
-                    } else {
-                        console.warn("[LeftPanel] Delete requested on directory (not allowed):", item);
-                    }
-				break; // End Delete case
+				} catch (e) {
+					await message(`An error occurred during the deletion process: ${e.message || e}`, { title: "Delete Error", type: "error" });
+				}
+				break;
 			}
 			default: await message(`Action '${action}' not implemented yet.`, { title: 'Not Implemented', type: 'info' }); break;
 		}
