@@ -116,13 +116,22 @@
             });
 
             Promise.all(basenamePromises).then(results => {
-                if (processingVersion === currentProcessingVersion) { // Only update if this is the latest request
-                    associatedTranscriptsForDropdown = results;
+                if (processingVersion === currentProcessingVersion) {
+                    const uniqueTranscriptMap = new Map();
+                    results.forEach(transcript => {
+                        const key = transcript.path || transcript.relativePath;
+                        if (key) {
+                            if (!uniqueTranscriptMap.has(key)) {
+                                uniqueTranscriptMap.set(key, transcript);
+                            }
+                        }
+                    });
+                    associatedTranscriptsForDropdown = Array.from(uniqueTranscriptMap.values());
                 }
             }).catch(error => {
                 console.error("Error processing basenames for dropdown:", error);
-                if (processingVersion === currentProcessingVersion) { // Also check version on error
-                    associatedTranscriptsForDropdown = associated.map((t, index) => {
+                if (processingVersion === currentProcessingVersion) {
+                    const fallbackResults = associated.map((t, index) => {
                         let fallbackName = "Unknown Transcript";
                         let keyPath = t.path || t.relativePath;
                         if (t.path) {
@@ -137,6 +146,16 @@
                             unique_render_key: keyPath || `transcript-index-${index}`
                         };
                     });
+                    const uniqueFallbackMap = new Map();
+                    fallbackResults.forEach(transcript => {
+                        const key = transcript.path || transcript.relativePath;
+                        if (key) {
+                           if (!uniqueFallbackMap.has(key)) {
+                               uniqueFallbackMap.set(key, transcript);
+                           }
+                        }
+                    });
+                    associatedTranscriptsForDropdown = Array.from(uniqueFallbackMap.values());
                 }
             });
         } else {
