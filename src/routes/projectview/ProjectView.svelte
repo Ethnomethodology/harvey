@@ -20,8 +20,15 @@
         requestTranscription as requestTranscriptionService,
         refreshProjectFiles,
             silentlyRefreshProjectData,
-            loadTranscriptFile // <-- ADD THIS
+            loadTranscriptFile
 	} from '$lib/services/projectService.js';
+	import {
+		getDownloadedModels,
+		getCloudConfig
+	} from '$lib/services/configureActions.js';
+	import {
+		languageOptions
+	} from '$lib/constants/transcriptionOptions.js';
 	import {
         project,
         hideUnsavedChangesPrompt,
@@ -35,9 +42,13 @@
         toggleTranscribeModal,
         selectMedia as selectMediaStoreAction,
         clearTranscriptState,
-        setRanInBackground, // Add this
-        clearPendingTranscriptData, // <-- ADD THIS
-        setDiarizationPreference // <-- ADD THIS
+        setRanInBackground,
+        clearPendingTranscriptData,
+        setDiarizationPreference,
+        setSelectedModel,      // <-- ADD THIS
+        setSelectedLanguage,   // <-- ADD THIS
+        setTranslateToEnglish, // <-- ADD THIS
+        updateSpeakerConfig    // <-- ADD THIS
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -67,6 +78,41 @@
     let showImportTranscriptSourceModal = false;
     let unlistenTranscriptionComplete = null;
 
+	// Transcription configuration data
+	let downloadedModelsList = [];
+	let cloudConfig = null;
+	let isLoadingTranscriptionConfig = true;
+
+async function loadTranscriptionConfigData() {
+		isLoadingTranscriptionConfig = true;
+		try {
+			const [localModelsResult, cloudConfigResult] = await Promise.allSettled([
+				getDownloadedModels(),
+				getCloudConfig()
+			]);
+
+			if (localModelsResult.status === 'fulfilled') {
+				downloadedModelsList = localModelsResult.value;
+			} else {
+				console.error("[ProjectView] Failed to load local models for modal", localModelsResult.reason);
+				downloadedModelsList = [];
+			}
+
+			if (cloudConfigResult.status === 'fulfilled') {
+				cloudConfig = cloudConfigResult.value;
+			} else {
+				console.error("[ProjectView] Failed to load cloud config for modal", cloudConfigResult.reason);
+				cloudConfig = null;
+			}
+		} catch (e) {
+			console.error("[ProjectView] Error during transcription configuration loading for modal:", e);
+			downloadedModelsList = [];
+			cloudConfig = null;
+		} finally {
+			isLoadingTranscriptionConfig = false;
+		}
+	}
+
 async function onConfirmTranscriptionStart(event) {
     const { enableDiarization } = event.detail;
     setDiarizationPreference(enableDiarization);
@@ -75,6 +121,7 @@ async function onConfirmTranscriptionStart(event) {
 
 	onMount(async () => {
         appWindow = getCurrentWindow();
+		await loadTranscriptionConfigData(); // Load model/cloud config
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
 		if (xmlPath && xmlPath.trim() !== '') {
@@ -609,6 +656,10 @@ async function onConfirmTranscriptionStart(event) {
         language={$transcriptStore.selectedLanguage ?? 'N/A'}
         speakers={$transcriptStore.speakers}
         jobId={$transcriptStore.transcriptionJobId}
+		downloadedModelsList={downloadedModelsList}
+		cloudConfig={cloudConfig}
+		languageOptions={languageOptions}
+		initialDiarizationEnabled={$transcriptStore.diarizationEnabledForNextJob}
         on:confirmStart={onConfirmTranscriptionStart}
         on:cancelRequest={handleCancelTranscriptionRequest}
         on:closeAndReset={() => {

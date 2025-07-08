@@ -1,22 +1,43 @@
 <!-- src/lib/components/projectview/modals/TranscribeConfirmModal.svelte -->
 <script>
 	import { createEventDispatcher, onDestroy } from 'svelte';
+	import { get } from 'svelte/store'; // Added get
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
+	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+
+	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+
+	import { languageOptions as globalLanguageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	import SpeakersModal from './SpeakersModal.svelte';
 
 	// Props
 	export let fileName = '';
-	export let modelName = '';
-	export let language = '';
-	export let speakers = { count: 0, names: [] };
-	// initialDiarizationEnabled prop removed, will sync from store directly
+	export let downloadedModelsList = [];
+	export let cloudConfig = null;
+	export { globalLanguageOptions as languageOptions };
+	export let speakers = { count: 0, names: [], translatedNames: [] }; // Ensure translatedNames is expected by SpeakersModal
+
 
 	const dispatch = createEventDispatcher();
-	let enableDiarization = false; // Local state for the checkbox, default to false
+
+	// Local state for editable fields
+	let modalSelectedModel = '';
+	let modalSelectedLanguage = 'auto';
+	let modalTranslateToEnglish = false;
+	let modalEnableDiarization = false;
+	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
+	let showNestedSpeakersModal = false;
 
 	// Event Handlers
 	function handleConfirm() {
-		dispatch('confirmStart', { enableDiarization }); // Dispatch with diarization state
+		dispatch('confirmStart', {
+			selectedModel: modalSelectedModel,
+			selectedLanguage: modalSelectedLanguage,
+			translateToEnglish: modalTranslateToEnglish,
+			enableDiarization: modalEnableDiarization,
+			speakersConfig: modalSpeakersConfig
+		});
 	}
 
 	function handleCancelRequest() {
@@ -52,9 +73,15 @@
 	$: currentErrorMessage = $transcriptStore.transcriptionErrorMessage;
 	$: currentJobId = $transcriptStore.transcriptionJobId;
 
-	// When the modal is about to show the confirm view, sync enableDiarization with the store's preference
+	// When the modal is about to show the confirm view, initialize local states from the store
 	$: if (showModal && !isTranscribing && jobStatus === null) {
-		enableDiarization = $transcriptStore.diarizationEnabledForNextJob;
+		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : (cloudConfig?.model || ''));
+		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
+		modalTranslateToEnglish = $transcriptStore.translateToEnglish;
+		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
+		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
+		// Use a deep copy to prevent direct mutation of the prop or store value until confirmed.
+		modalSpeakersConfig = JSON.parse(JSON.stringify(speakers || { count: 0, names: [], translatedNames: [] }));
 	}
 
 	// --- Title Logic ---
@@ -123,38 +150,79 @@
 
 			{#if !isTranscribing && jobStatus === null}
 				<!-- CONFIRM VIEW -->
-				<div class="space-y-2 text-sm mb-5 text-gray-700 dark:text-gray-300">
-					<p><strong>File:</strong> <span class="font-mono break-all">{fileName || 'N/A'}</span></p>
-					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
-					<p><strong>Language:</strong> <span class="font-mono">{language || 'N/A'}</span></p>
-					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Speaker detection off or no speakers defined)'}</p>
-					<p><strong>Translate to English:</strong> <span class="font-mono">{$transcriptStore.translateToEnglish ? 'Yes' : 'No'}</span></p>
+				<div class="space-y-3 text-sm mb-5 text-gray-700 dark:text-gray-300 max-h-[60vh] overflow-y-auto pr-2">
+					<div><strong>File:</strong> <span class="font-mono break-all ml-2">{fileName || 'N/A'}</span></div>
 
-					<div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-						<div class="flex items-center space-x-2">
-							<input
-								type="checkbox"
-								id="enableDiarizationCheckbox"
-								class="ui-checkbox"
-								bind:checked={enableDiarization}
-							/>
-							<label
-								for="enableDiarizationCheckbox"
-								class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none"
+					<div class="space-y-1">
+						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+						<select id="modalModelSelect" class="ui-select w-full" bind:value={modalSelectedModel}>
+							<option value="" disabled selected={!modalSelectedModel}>Select Model</option>
+							{#if downloadedModelsList.length > 0}
+							<optgroup label="Local Models">
+								{#each downloadedModelsList as model (model.name)}
+									<option value="{model.name}">{model.name}</option>
+								{/each}
+							</optgroup>
+							{/if}
+							{#if cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model}
+								{@const configuredCloudModelId = cloudConfig.model}
+								{@const configuredCloudModelLabel = getCloudModelLabel(configuredCloudModelId)}
+								<optgroup label="Cloud Models">
+									<option value="{configuredCloudModelId}">{configuredCloudModelLabel} ☁️</option>
+								</optgroup>
+							{/if}
+							{#if downloadedModelsList.length === 0 && !(cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model)}
+								<option value="" disabled>No models available</option>
+							{/if}
+						</select>
+					</div>
+
+					<div class="space-y-1">
+						<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
+						<select id="modalLanguageSelect" class="ui-select w-full" bind:value={modalSelectedLanguage}>
+							{#each languageOptions as lang (lang.value)}
+								<option value="{lang.value}">{lang.label}</option>
+							{/each}
+						</select>
+					</div>
+
+					<div class="pt-2 space-y-1">
+						<div class="flex justify-between items-center">
+							<p><strong>Speakers:</strong> {modalSpeakersConfig?.count > 0 ? `${modalSpeakersConfig.count} (${(modalSpeakersConfig.names || []).slice(0, 3).join(', ')}${modalSpeakersConfig.count > 3 ? ', ...' : ''})` : '0 (Auto-detect or none defined)'}</p>
+							<button
+								type="button"
+								class="btn-xs-secondary"
+								on:click={() => showNestedSpeakersModal = true}
 							>
+								Edit Speakers
+							</button>
+						</div>
+					</div>
+
+					<div class="flex items-center space-x-2 pt-2">
+						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
+						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
+							Translate to English
+						</label>
+					</div>
+
+					<div class="pt-2 border-t border-gray-200 dark:border-gray-700 mt-3">
+						<div class="flex items-center space-x-2">
+							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
+							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
 								Identify different speakers (diarize)
 							</label>
 						</div>
-						{#if enableDiarization}
+						{#if modalEnableDiarization}
 							<p class="text-xs text-orange-600 dark:text-orange-400 mt-1.5 ml-0.5 px-1 py-0.5 bg-orange-50 dark:bg-orange-900/30 rounded border border-orange-200 dark:border-orange-500/50">
 								Note: Speaker identification can significantly increase transcription time.
 							</p>
 						{/if}
 					</div>
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
-					<button class="btn-primary" on:click={handleConfirm}>Start Transcription</button>
+					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
 				</div>
 
 			{:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
@@ -234,6 +302,18 @@
 	</div>
 {/if}
 
+{#if showNestedSpeakersModal}
+	<SpeakersModal
+		bind:showModal={showNestedSpeakersModal}
+		currentSpeakers={modalSpeakersConfig}
+		on:confirm={(e) => {
+			modalSpeakersConfig = e.detail; // Update local config
+			showNestedSpeakersModal = false;
+		}}
+		on:close={() => showNestedSpeakersModal = false}
+	/>
+{/if}
+
 <style>
 	/* Styles remain unchanged */
 	.btn-primary,
@@ -305,5 +385,14 @@
 	/* Checkbox style */
 	.ui-checkbox {
 		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
+	}
+	.ui-select {
+		@apply block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500;
+	}
+	.btn-xs-secondary {
+		@apply px-2 py-1 text-xs font-medium rounded border;
+		@apply bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300;
+		@apply dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-500;
+		@apply focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800;
 	}
 </style>
