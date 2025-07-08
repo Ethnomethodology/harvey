@@ -32,15 +32,15 @@
 	// --- Reactive Derivations from Store for UI ---
 	// $: console.log('[ModalDebug] Store State:', $transcriptStore); // Uncomment for deep debugging
 
-	$: {
-		console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
-	}
+	// $: {
+	// 	console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
+	// }
 
-	$: {
-		if ($transcriptStore.showTranscribeModal) {
-			console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
-		}
-	}
+	// $: {
+	// 	if ($transcriptStore.showTranscribeModal) {
+	// 		console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
+	// 	}
+	// }
 
 	$: showModal = $transcriptStore.showTranscribeModal;
 	$: isTranscribing = $transcriptStore.isTranscribing;
@@ -64,25 +64,31 @@
     // Keyboard handling (optional, can be simplified or removed if not strictly needed by new design)
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
-			// Decide if Escape should trigger 'closeAndReset' or 'runInBackgroundAndClose' depending on state
-            if (isTranscribing && jobStatus === 'running') {
-                // Maybe do nothing, or dispatch runInBackgroundAndClose
-            } else if (!isTranscribing && (jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)) {
-                 handleCloseAndReset();
-            }
+			// If transcribing and running/initiating, do nothing on Escape.
+			if (isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')) {
+				// Explicitly do nothing to prevent closure
+				event.preventDefault(); // Also prevent any default browser behavior for Escape if modal is focused
+				return;
+			} else if (!isTranscribing && (jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)) {
+				// For terminal states or initial confirm state, allow close.
+				handleCloseAndReset();
+			}
+			// Other states (e.g., 'cancelling') will also do nothing, which is fine.
 		}
 	}
 
-	$: if (showModal && typeof window !== 'undefined') {
-		window.addEventListener('keydown', handleKeydown);
-	} else if (typeof window !== 'undefined') {
-		window.removeEventListener('keydown', handleKeydown);
-	}
+	// $: if (showModal && typeof window !== 'undefined') {
+	// 	window.addEventListener('keydown', handleKeydown);
+	// } else if (typeof window !== 'undefined') {
+	// 	window.removeEventListener('keydown', handleKeydown);
+	// }
+    // The global listener is removed. Keydown is now handled by the main div.
 
-    onDestroy(() => {
-        if (typeof window !== 'undefined') {
-             window.removeEventListener('keydown', handleKeydown);
-        }
+	onDestroy(() => {
+        // if (typeof window !== 'undefined') {
+        //      window.removeEventListener('keydown', handleKeydown);
+        // }
+        // Global listener cleanup is removed.
     });
 
 </script>
@@ -93,14 +99,19 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
-		on:click={handleCloseAndReset}
+		on:click={() => {
+            if (!(isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating'))) {
+                handleCloseAndReset();
+            }
+        }}
         tabindex="-1"
-        on:keydown={(e) => { if (e.key === 'Escape') handleCloseAndReset(); }}
-	> <!-- Allow closing by clicking backdrop if appropriate, or remove -->
+        on:keydown={handleKeydown}
+	>
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
 			role="document"
             tabindex="-1"
+            on:click|stopPropagation
 		>
 			<h2 id="transcribe-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
 
