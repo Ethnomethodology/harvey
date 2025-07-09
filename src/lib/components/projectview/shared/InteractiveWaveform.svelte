@@ -10,6 +10,7 @@
 	export let trimEndTime = 0;
 	export let isEditingSegment = false;
 	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
+	export let compactMode = false; // New prop for controlling height
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -35,7 +36,7 @@
 	let componentRootRef;
 
 	let visibleCanvasWidth = 0;
-	let waveformCanvasHeight = 40;
+	let waveformCanvasHeight = 40; // Default, will be adjusted
 	let webAudioApiSupported = true;
 	let resizeObserverInstance;
 	let unsubscribePlayer;
@@ -359,8 +360,8 @@
         const pxCur_visible = pxCur_logical - scrollOffsetPx;
 
         if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth && waveformCanvasHeight > 0) {
-            ctx.fillStyle = '#000000'; // Black color for seek bar
-            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide black bar
+            ctx.fillStyle = '#FF0000'; // Red color for seek bar
+            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide red bar
         }
 
 
@@ -484,7 +485,11 @@
 			if (isMounted) {
 				if (waveformScrollContainerRef) {
 					visibleCanvasWidth = waveformScrollContainerRef.clientWidth || 0;
-					waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+					if (compactMode) {
+						waveformCanvasHeight = 32; // 52px (zoom buttons) - 20px (timescale)
+					} else {
+						waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+					}
 				}
 				setupResizeObserver();
 				animationFrameId = requestAnimationFrame(animationLoop);
@@ -514,7 +519,12 @@
 		function setupResizeObserver() {
 		if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
 			isObserverSetup = true;
-			waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+			// Initial height setting within observer setup
+			if (compactMode) {
+				waveformCanvasHeight = 32;
+			} else {
+				waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+			}
 			resizeObserverInstance = new ResizeObserver((entries) => {
 				let needsRedraw = false;
 				let needsScrollUpdate = false;
@@ -524,7 +534,13 @@
 					if (entry.target === waveformScrollContainerRef) {
 						const newWidth = entry.contentRect.width;
 						const newContainerHeight = entry.contentRect.height;
-						const newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
+
+						let newWaveformHeight;
+						if (compactMode) {
+							newWaveformHeight = 32; // Fixed height in compact mode
+						} else {
+							newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
+						}
 
 						if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) {
 							waveformCanvasHeight = newWaveformHeight;
@@ -573,9 +589,13 @@
 				if (needsRedraw) requestRedraw();
 			});
 			resizeObserverInstance.observe(waveformScrollContainerRef);
-			if (waveformScrollContainerRef) {
+			if (waveformScrollContainerRef) { // Ensure this runs after observer is set up
 				visibleCanvasWidth = waveformScrollContainerRef.clientWidth;
-				waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+				if (compactMode) {
+					waveformCanvasHeight = 32;
+				} else {
+					waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+				}
 			}
 			requestRedraw(true);
 		}

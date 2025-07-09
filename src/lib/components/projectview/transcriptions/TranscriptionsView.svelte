@@ -544,6 +544,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     editSegmentStartTime={currentEditSegmentStart}
                     editSegmentEndTime={currentEditSegmentEnd}
                     showTrimUI={false}
+                    compactMode={true}
                     on:navigate={handlePanelNavigate}
                     on:segmentupdate={handleWaveformSegmentUpdate}
                 />
