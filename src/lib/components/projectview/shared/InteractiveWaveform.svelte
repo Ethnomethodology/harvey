@@ -356,13 +356,10 @@
 
         const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth);
         const pxCur_visible = pxCur_logical - scrollOffsetPx;
-        if (pxCur_visible >= -1 && pxCur_visible <= visibleCanvasWidth + 1) {
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(pxCur_visible + 0.5, 0);
-            ctx.lineTo(pxCur_visible + 0.5, waveformCanvasHeight);
-            ctx.stroke();
+
+        if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth) {
+            ctx.fillStyle = '#000000'; // Black color for seek bar
+            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide black bar
         }
 
         ctx.restore();

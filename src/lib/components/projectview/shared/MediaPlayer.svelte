@@ -39,6 +39,11 @@
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
 
+	// Props for inline trim looping
+	export let loopStartTime = 0;
+	export let loopEndTime = 0;
+	export let enableLooping = false;
+
 	// Conditional UI for buttons
 	export let showLoopPauseButton = true; // Default to true for main player
 	export let showDataTranscribeButton = false; // Default to false
@@ -600,7 +605,13 @@
                         if(video.paused && video.currentTime === trimStartTime) video.play().catch(console.error);
                     }
                 }
-            }
+            } else if (enableLooping && loopEndTime > loopStartTime && explicitMediaPath) { // Added for inline trim looping
+				if (currentTime < loopStartTime || currentTime >= loopEndTime) {
+					video.currentTime = loopStartTime;
+					currentTime = loopStartTime;
+					if (video.paused && video.currentTime === loopStartTime) video.play().catch(console.error);
+				}
+			}
             localCurrentTime = currentTime;
 			if (!explicitMediaPath) updatePlayerTime(currentTime); // Update global for main player
 		}

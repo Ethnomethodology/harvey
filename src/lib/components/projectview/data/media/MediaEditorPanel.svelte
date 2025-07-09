@@ -315,6 +315,9 @@
                 showLoopPauseButton={false}
                 showDataTranscribeButton={false}
                 showDataTrimButton={true}
+                enableLooping={showDataTrimUI}
+                loopStartTime={dataTrimStartTime}
+                loopEndTime={dataTrimEndTime}
                 on:requestDataTranscribe={handleRequestDataTranscribe}
                 on:requestDataTrim={handleRequestDataTrim}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
@@ -343,7 +346,7 @@
                     </div>
                 </div>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                    <div class="waveform-container w-full h-[180px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
