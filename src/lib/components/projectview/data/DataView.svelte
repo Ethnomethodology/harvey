@@ -15,6 +15,7 @@
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
     import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
+    import { slide } from 'svelte/transition';
 
     const dispatch = createEventDispatcher();
 
@@ -190,14 +191,14 @@
 
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
         {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
-            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out" transition:slide="{{ duration: 300, axis: 'x' }}">
                 <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
             </div>
         {/if}
         <!-- Consider adding a toggle button for infoPanelCollapsed if needed, or manage via RightBar interaction -->
 
         <!-- New Right Bar (Far Right) -->
-        {#if activeViewType !== 'group_detail'}
+        {#if activeViewType !== 'group_detail' && activeItemPath}
             <div class="h-full flex-shrink-0">
                 <RightBar on:tabchange={handleRightBarTabChange} />
             </div>

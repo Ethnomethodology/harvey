@@ -15,25 +15,32 @@
         if (store.activeInfoPanelTab) {
             currentActiveTab = store.activeInfoPanelTab;
         }
+        // We also need infoPanelCollapsed state for the icon
     });
 
-    function setActiveTab(tabName) {
-        panelStateStore.setActiveInfoPanelTab(tabName);
-        dispatch('tabchange', { tabName });
+    function handleMetadataClick() {
+        const store = panelStateStore.get(); // Get current store values
+        if (store.activeInfoPanelTab === 'metadata' && !store.infoPanelCollapsed) {
+            panelStateStore.toggleInfoPanel(true); // Collapse it
+        } else {
+            panelStateStore.setActiveInfoPanelTab('metadata');
+            panelStateStore.toggleInfoPanel(false); // Open it
+        }
+        dispatch('tabchange', { tabName: 'metadata' }); // Notify parent if needed
     }
 
 </script>
 
 <div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2 shadow-md">
     <button
-        on:click={() => setActiveTab('metadata')}
+        on:click={handleMetadataClick}
         class="p-2 rounded-md focus:outline-none transition-colors"
-        class:text-blue-600={currentActiveTab === 'metadata'}
-        class:dark:text-blue-400={currentActiveTab === 'metadata'}
-        class:hover:bg-gray-300={currentActiveTab !== 'metadata'}
-        class:dark:hover:bg-gray-600={currentActiveTab !== 'metadata'}
-        class:text-gray-700={currentActiveTab !== 'metadata'}
-        class:dark:text-gray-300={currentActiveTab !== 'metadata'}
+        class:text-black={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
+        class:dark:text-white={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
+        class:hover:bg-gray-300={!($panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed)}
+        class:dark:hover:bg-gray-600={!($panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed)}
+        class:text-gray-700={!($panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed)}
+        class:dark:text-gray-300={!($panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed)}
         title="Metadata"
     >
         {@html METADATA_ICON_SVG}
