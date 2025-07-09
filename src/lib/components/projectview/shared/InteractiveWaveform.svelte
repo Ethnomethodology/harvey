@@ -752,8 +752,13 @@
 		return visibleCanvasWidth > 0 && waveformCanvasHeight > 0 && actualMediaDuration > 0 && (currentAudioBuffer || currentAudioPeaks);
 	}
 
-	$: if (isMounted && canDrawWaveform()) {
-		if (Math.abs(currentPlayTime - lastDrawnTime) > redrawTimeThreshold / 3) {
+	// More aggressive redraw trigger for seek bar movement
+	$: if (isMounted && currentPlayTime !== undefined && visibleCanvasWidth > 0 && actualMediaDuration > 0) {
+		// Using a threshold slightly larger than typical frame time for smoothness, but small enough for responsiveness.
+		// 0.010 seconds = 10ms. A typical frame is ~16.7ms at 60fps.
+		if (Math.abs(currentPlayTime - lastDrawnTime) > 0.010) {
+			requestRedraw(true);
+		} else if (currentPlayTime === 0 && lastDrawnTime !== 0) { // Ensure redraw if time is reset to 0
 			requestRedraw(true);
 		}
 	}
