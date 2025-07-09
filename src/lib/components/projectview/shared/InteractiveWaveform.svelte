@@ -22,7 +22,7 @@
 	const TIMESCALE_HEIGHT = 20;
 	const BAR_THICKNESS_PX = 2; // Adapted from VerticalWaveform, will be bar height
 	const BAR_SPACING_PX = 1;   // Adapted from VerticalWaveform, vertical spacing if multiple rows, or conceptual
-	const RMS_GAIN_FACTOR = 2.5;  // From VerticalWaveform
+	const RMS_GAIN_FACTOR = 4.5;  // Increased from 2.5 to make bars taller
 	const MIN_BAR_LENGTH_PX = 1; // Adapted from MIN_BAR_HALF_LENGTH_PX, represents min bar height/length from center
 
 	let actualMediaDuration = 0;
@@ -357,10 +357,15 @@
         const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth);
         const pxCur_visible = pxCur_logical - scrollOffsetPx;
 
-        if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth) {
-            ctx.fillStyle = '#000000'; // Black color for seek bar
-            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide black bar
+        // DEBUG: Make seek bar very obvious
+        // console.log(`Seekbar draw: cur=${cur}, pxCur_visible=${pxCur_visible}, visWidth=${visibleCanvasWidth}, wfHeight=${waveformCanvasHeight}`);
+        if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth && waveformCanvasHeight > 0) {
+            ctx.fillStyle = '#FF0000'; // Bright Red for debugging
+            ctx.fillRect(pxCur_visible - 2, 0, 4, waveformCanvasHeight); // Make it 4px thick for debugging
+        } else if (waveformCanvasHeight <= 0) {
+            // console.log("Seekbar not drawn: waveformCanvasHeight is not positive", waveformCanvasHeight);
         }
+
 
         ctx.restore();
         lastDrawnTime = cur;
