@@ -313,10 +313,10 @@
                 explicitMediaPath={mediaPath}
                 projectId={$projectStore.id}
                 showLoopPauseButton={false}
-                showNotesTranscribeButton={false}
-                showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestDataTranscribe}
-                on:requestNotesTrim={handleRequestDataTrim}
+                showDataTranscribeButton={false}
+                showDataTrimButton={true}
+                on:requestDataTranscribe={handleRequestDataTranscribe}
+                on:requestDataTrim={handleRequestDataTrim}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
