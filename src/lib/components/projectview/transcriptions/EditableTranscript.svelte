@@ -7,6 +7,15 @@
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added (though not directly used for column widths here, good for reference)
 
+    // Simple debounce utility
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
 
     // --- Lexical Imports --- (Keep as is)
     import { $getRoot as getRoot, $createParagraphNode as createParagraphNode, $createTextNode as createTextNode, $insertNodes as insertNodes, RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
@@ -33,9 +42,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         if (event.metaKey && !event.ctrlKey && !event.altKey) {
             if (event.key === 'ArrowUp') {
                 event.preventDefault();
+                commitCurrentSegmentEdits();
                 previous();
             } else if (event.key === 'ArrowDown') {
                 event.preventDefault();
+                commitCurrentSegmentEdits();
                 next();
             }
         }
@@ -134,8 +145,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             root: {
                                 children: [parsed], // Wrap the array of nodes in a single root object
                                 direction: parsed.direction || 'ltr',
-                                format: parsed.format || '',
-                                indent: parsed.indent || 0,
+                                format: '',
+                                indent: 0,
                                 type: 'root',
                                 version: 1
                             }
@@ -186,8 +197,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         }
         currentEditorJson = initialJsonForEditor; // Keep track of current JSON for saving
 
-        if (lexicalEditorInstance && (oldIndex !== currentIndex || !lexicalEditorInstance.getEditorState().isEmpty())) {
-            // Only reset if the editor instance exists and index changed OR it's not already empty
+        if (lexicalEditorInstance && (oldIndex !== currentIndex)) {
+            // Only reset if the editor instance exists and index changed.
             // This avoids resetting an already correctly loaded editor if renderSegmentUI is called multiple times for the same index.
             console.log(`[EditableTranscript] Calling resetEditorState for index ${idx}`);
             lexicalEditorInstance.resetEditorState(initialJsonForEditor);
@@ -282,16 +293,26 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     $: { const prevEditEnabled = editEnabled; editEnabled = panelEditMode || previewEditMode; if (isMounted && editEnabled !== prevEditEnabled) { dispatchEditState(); } }
 
     /* --- Navigation --- */
-    function previous() { if (currentIndex > 0) loadSegment(currentIndex - 1); }
-    function next() { if (currentIndex < segments.length - 1) loadSegment(currentIndex + 1); }
+    export function previous() { if (currentIndex > 0) { commitCurrentSegmentEdits(); loadSegment(currentIndex - 1); } }
+    export function next() { if (currentIndex < segments.length - 1) { commitCurrentSegmentEdits(); loadSegment(currentIndex + 1); } }
+    function handlePreviousClick() { dispatch('previous'); }
+    function handleNextClick() { dispatch('next'); }
 
     /* --- Editor Actions --- */
-    function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { changed = true; updateSegment(currentIndex, { [field]: parsedTime }); tick().then(dispatchEditState); } else if (parsedTime === null) { if (field === 'start_time') localStart = formatTimestamp(currentTime); if (field === 'end_time') localEnd = formatTimestamp(currentTime); } else { if (field === 'start_time') localStart = formatTimestamp(currentTime); if (field === 'end_time') localEnd = formatTimestamp(currentTime); } return changed; }
+    function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
-    function handleEditorUpdate(event) { const newJson = event.detail.jsonString; currentEditorJson = newJson; }
+    const debouncedCommit = debounce(commitCurrentSegmentEdits, 500); // Debounce for 500ms
+    function handleEditorUpdate(event) {
+        const newJson = event.detail.jsonString;
+        currentEditorJson = newJson;
+        if (editEnabled) { // Only commit if in edit mode
+            debouncedCommit();
+        }
+    }
     export function commitCurrentSegmentEdits() {
+        console.log("[EditableTranscript] commitCurrentSegmentEdits called.");
         if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) {
-            console.warn("Commit skipped: Not ready.");
+            console.warn("Commit skipped: Not ready or not in edit mode.");
             return false;
         }
         if (!currentEditorJson) {
@@ -361,20 +382,32 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         let timeStartChanged = false;
         let timeEndChanged = false;
         let speakerChanged = false;
-        if (segmentInStore && segmentInStore.text !== jsonString) {
-            updateSegment(currentIndex, { text: jsonString });
-            textChanged = true;
+
+        // Always update the segment in the store with the current local values
+        // This ensures transcriptDirty is correctly set if any value has changed
+        updateSegment(currentIndex, {
+            text: jsonString,
+            start_time: parseTimestamp(localStart),
+            end_time: parseTimestamp(localEnd),
+            speaker: localSpeaker
+        });
+
+        // Re-fetch the segment from the store to check if changes were actually applied
+        const updatedSegmentInStore = get(transcriptStore).segments[currentIndex];
+        if (updatedSegmentInStore) {
+            textChanged = updatedSegmentInStore.text !== segmentInStore.text;
+            timeStartChanged = updatedSegmentInStore.start_time !== segmentInStore.start_time;
+            timeEndChanged = updatedSegmentInStore.end_time !== segmentInStore.end_time;
+            speakerChanged = updatedSegmentInStore.speaker !== segmentInStore.speaker;
         }
-        timeStartChanged = handleBlurTimestamp('start_time', localStart);
-        timeEndChanged = handleBlurTimestamp('end_time', localEnd);
-        speakerChanged = handleSpeakerChange();
-        const overallChange = textChanged || timeStartChanged || timeEndChanged || speakerChanged;
+
+        const overallChange = updatedSegmentInStore.text !== segmentInStore.text || updatedSegmentInStore.start_time !== segmentInStore.start_time || updatedSegmentInStore.end_time !== segmentInStore.end_time || updatedSegmentInStore.speaker !== segmentInStore.speaker;
         if (overallChange) {
-            console.log("[EditableTranscript] Committed changes segment", currentIndex);
+            console.log("[EditableTranscript] Committed changes segment", currentIndex, "Transcript dirty state after commit:", get(transcriptStore).transcriptDirty);
         }
         return overallChange;
     }
-    function handleEditSaveClick() { if (editEnabled) { console.log("[EditableTranscript] Save clicked, dispatching 'save'."); dispatch('save'); } else { console.log("[EditableTranscript] Edit clicked, dispatching 'toggleedit'."); dispatch('toggleedit'); } }
+    function handleEditSaveClick() { if (editEnabled) { commitCurrentSegmentEdits(); console.log("[EditableTranscript] Save clicked, dispatching 'toggleedit'."); } else { console.log("[EditableTranscript] Edit clicked, dispatching 'toggleedit'."); } dispatch('toggleedit'); }
     const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;
 
@@ -408,7 +441,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             speakerContainerStyle = 'flex-shrink-0 ml-2 min-w-[6.5rem]'; // Ensure it has a min-width
             textEditorContainerStyle = 'w-full';
         } else if (layoutKey === 'Layout4') {
-            speakerContainerStyle = 'flex-basis: 6rem; max-width: 6rem;';
+            speakerContainerStyle = 'flex-basis: 6rem; max-w: 6rem;';
         } else if (layoutKey === 'Layout5') {
             // For Layout 5, speaker should take more available space
             segmentNumberContainerStyle = 'flex-shrink-0 text-left';
@@ -430,7 +463,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 <button on:click="{handleEditSaveClick}" class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200' title="{editEnabled ? 'Save Transcript (Ctrl+S)' : 'Edit Segment (Ctrl+E)'}" aria-label="{editEnabled ? 'Save Transcript' : 'Edit Segment'}">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
-                <button on:click="{previous}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
+                <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" /> </svg>
                 </button>
             </div>
@@ -461,7 +494,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -494,7 +527,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -527,7 +560,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -560,7 +593,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -593,7 +626,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                      <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                              {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
                              {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                              {/if}
@@ -601,7 +634,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 {/if}
             </div>
-            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{next}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
+            <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
         </div>
     {/if}
 </div>

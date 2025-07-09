@@ -354,11 +354,18 @@ async function onConfirmTranscriptionStart(event) {
             if (selectedTab === 'data') {
                 canProceed = await checkUnsavedChangesThenProceed(null, "closing the project window");
             } else if (selectedTab === 'transcriptions') {
-                const isDirty = get(transcriptStore).transcriptDirty;
-                if (isDirty) {
-                    const confirmClose = await confirm("You have unsaved media transcript changes. Discard them and close?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Close", cancelLabel: "Cancel" });
-                    if (confirmClose) { clearTranscriptState(); canProceed = true; } else { canProceed = false; }
-                } else { canProceed = true; }
+                if (transcriptionsViewRef) {
+                    try {
+                        // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
+                        await transcriptionsViewRef.handleToggleEditMode();
+                        canProceed = true;
+                    } catch (e) {
+                        // If handleToggleEditMode throws, it means the user cancelled the save/discard.
+                        canProceed = false;
+                    }
+                } else {
+                    canProceed = true; // No transcriptionsViewRef, so no dirty state to manage
+                }
             } else { canProceed = true; }
         } catch (error) { canProceed = false; }
         if (canProceed) {
@@ -381,15 +388,43 @@ async function onConfirmTranscriptionStart(event) {
         project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
 
         let canProceed = true;
-        if (selectedTab === 'data') {
+        // Check for unsaved changes in the transcriptions tab before switching away
+        if (selectedTab === 'transcriptions' && get(transcriptStore).transcriptDirty) {
+            project.update(p => ({
+                ...p,
+                showUnsavedChangesModal: true,
+                unsavedItemName: 'current transcript',
+                unsavedItemType: 'transcript',
+                // Set up callbacks for the modal actions
+                onUnsavedSave: async () => {
+                    hideUnsavedChangesPrompt();
+                    try {
+                        await transcriptionsViewRef.handleSaveTranscript();
+                        // After successful save, proceed with tab switch
+                        await proceedTabSwitch(tabName);
+                    } catch (e) {
+                        // If save fails, keep user on current tab and show error
+                        project.update(p => ({ ...p, isLoading: false, statusMessage: 'Save failed, tab switch cancelled.' }));
+                        message(`Failed to save transcript: ${e.message || e}`, { title: "Save Error", type: "error" });
+                    }
+                },
+                onUnsavedDiscard: async () => {
+                    hideUnsavedChangesPrompt();
+                    // Discard changes and proceed with tab switch
+                    transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
+                    await proceedTabSwitch(tabName);
+                },
+                onUnsavedCancel: () => {
+                    hideUnsavedChangesPrompt();
+                    // Cancel tab switch
+                    project.update(p => ({ ...p, isLoading: false, statusMessage: 'Tab switch cancelled.' }));
+                }
+            }));
+            return; // Stop here, wait for user interaction with the modal
+        }
+        // Existing data tab unsaved changes check (if any)
+        else if (selectedTab === 'data') {
             canProceed = await checkUnsavedChangesThenProceed(null, "switching tabs");
-        } else if (selectedTab === 'transcriptions') {
-            const isDirty = get(transcriptStore).transcriptDirty;
-            if (isDirty && transcriptionsViewRef) {
-                const confirmSwitch = await confirm( "You have unsaved media transcript changes. Discard them and switch tabs?", { title: "Unsaved Media Transcript", type: "warning", okLabel: "Discard and Switch", cancelLabel: "Cancel Switch" });
-                if (!confirmSwitch) canProceed = false;
-                else { clearTranscriptState(); if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
-            }
         }
 
         if (!canProceed) {
@@ -397,6 +432,11 @@ async function onConfirmTranscriptionStart(event) {
             return;
         }
 
+        // If no unsaved changes or user chose to save/discard, proceed
+        await proceedTabSwitch(tabName);
+    }
+
+    async function proceedTabSwitch(tabName) {
         selectedTab = tabName;
 
         project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
@@ -433,10 +473,15 @@ async function onConfirmTranscriptionStart(event) {
         if (selectedTab === 'data') {
             canProceed = await checkUnsavedChangesThenProceed(path, actionContext);
         } else if (selectedTab === 'transcriptions') {
-            if (get(transcriptStore).transcriptDirty && transcriptionsViewRef) {
-                const confirmSwitch = await confirm( `Discard unsaved transcript changes to ${actionContext}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Proceed", cancelLabel: "Cancel"});
-                if (!confirmSwitch) canProceed = false;
-                else { clearTranscriptState(); if (transcriptionsViewRef.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
+            if (transcriptionsViewRef) {
+                try {
+                    // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
+                    await transcriptionsViewRef.handleToggleEditMode();
+                    canProceed = true;
+                } catch (e) {
+                    // If handleToggleEditMode throws, it means the user cancelled the save/discard.
+                    canProceed = false;
+                }
             }
         }
 
@@ -507,6 +552,18 @@ async function onConfirmTranscriptionStart(event) {
         } else {
             // If already on transcriptions tab, check if different media is being selected
             if (get(transcriptStore).selectedMediaFile?.path !== mediaPath && get(transcriptStore).selectedMediaFile?.path) {
+                console.log("[ProjectView] handleRequestMediaSelection: Different media selected on transcriptions tab. Calling handleToggleEditMode.");
+                if (transcriptionsViewRef) {
+                    try {
+                        // Attempt to save and exit edit mode. handleToggleEditMode handles dirty check and confirmation.
+                        await transcriptionsViewRef.handleToggleEditMode();
+                    } catch (e) {
+                        // If handleToggleEditMode throws, it means the user cancelled the save/discard.
+                        project.update(p => ({ ...p, isLoading: false, statusMessage: 'Media selection cancelled.' }));
+                        console.log(`[ProjectView] handleRequestMediaSelection: 'handleToggleEditMode' threw an error. Aborting media selection.`);
+                        return;
+                    }
+                }
                  console.log(`[ProjectView] handleRequestMediaSelection: Already on transcriptions tab, but different media. Clearing old transcript state.`);
                 clearTranscriptState(); // Clear state if switching media within the same tab
             } else if (get(transcriptStore).selectedMediaFile?.path === mediaPath) {

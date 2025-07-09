@@ -164,7 +164,7 @@ export function clearTranscriptState() {
     });
 }
 
-export function selectMedia(fileEntry) {
+export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -251,7 +251,6 @@ export function selectMedia(fileEntry) {
                 speakers: speakersToLoad,
                 segments: [],
                 currentTranscriptPath: null,
-                transcriptDirty: false,
                 isTranscriptLoading: false,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
@@ -266,29 +265,40 @@ export function selectMedia(fileEntry) {
         // Use associated_transcripts, which is populated by the backend
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
             let transcriptPathToLoad = null;
-            const mediaName = newlySelectedMedia.name; // e.g., "my_audio.wav"
-            const mediaNameStem = mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; // e.g., "my_audio"
 
-            // Look for a conventionally named transcript (e.g., media_name_stem.json)
-            const conventionalTranscriptName = `${mediaNameStem}.json`;
-            const conventionalTranscript = newlySelectedMedia.associated_transcripts.find(t => {
-                const tName = t.path ? t.path.split(/[\/]/).pop() : '';
-                return tName.toLowerCase() === conventionalTranscriptName.toLowerCase();
-            });
-
-            if (conventionalTranscript && conventionalTranscript.path) {
-                transcriptPathToLoad = conventionalTranscript.path;
-                console.log(`[TranscriptStore selectMedia] Found conventional transcript: ${transcriptPathToLoad}`);
-            } else {
-                // Fallback: load the first transcript in the list
-                const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0];
-                if (firstTranscriptInfo && firstTranscriptInfo.path) {
-                    transcriptPathToLoad = firstTranscriptInfo.path;
-                    console.log(`[TranscriptStore selectMedia] No conventional transcript found. Loading first available: ${transcriptPathToLoad}`);
+            // Step 1: Prioritize the transcriptPathToPrioritize if provided and valid
+            if (transcriptPathToPrioritize) {
+                const prioritizedTranscript = newlySelectedMedia.associated_transcripts.find(t => t.path === transcriptPathToPrioritize);
+                if (prioritizedTranscript) {
+                    transcriptPathToLoad = prioritizedTranscript.path;
+                    console.log(`[TranscriptStore selectMedia] Prioritizing clicked transcript: ${transcriptPathToLoad}`);
                 }
             }
 
-            if (transcriptPathToLoad) {
+            // Step 2: If no prioritized transcript, fall back to conventional or first available
+            if (!transcriptPathToLoad) {
+                const mediaName = newlySelectedMedia.name; // e.g., "my_audio.wav"
+                const mediaNameStem = mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; // e.g., "my_audio"
+
+                // Look for a conventionally named transcript (e.g., media_name_stem.json)
+                const conventionalTranscriptName = `${mediaNameStem}.json`;
+                const conventionalTranscript = newlySelectedMedia.associated_transcripts.find(t => {
+                    const tName = t.path ? t.path.split(/[/]/).pop() : '';
+                    return tName.toLowerCase() === conventionalTranscriptName.toLowerCase();
+                });
+
+                if (conventionalTranscript && conventionalTranscript.path) {
+                    transcriptPathToLoad = conventionalTranscript.path;
+                    console.log(`[TranscriptStore selectMedia] Found conventional transcript: ${transcriptPathToLoad}`);
+                } else {
+                    // Fallback: load the first transcript in the list
+                    const firstTranscriptInfo = newlySelectedMedia.associated_transcripts[0];
+                    if (firstTranscriptInfo && firstTranscriptInfo.path) {
+                        transcriptPathToLoad = firstTranscriptInfo.path;
+                        console.log(`[TranscriptStore selectMedia] No conventional transcript found. Loading first available: ${transcriptPathToLoad}`);
+                    }
+                }
+            }
                 const transcriptInfoToLoad = newlySelectedMedia.associated_transcripts.find(t => t.path === transcriptPathToLoad);
                 const relativePathToLoad = transcriptInfoToLoad?.relativePath;
 
@@ -342,7 +352,7 @@ export function selectMedia(fileEntry) {
             }
         }
     }
-}
+
 
 
 // Helper function for binary search
@@ -490,7 +500,6 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             originalTranscriptPath: updatedOriginalTranscriptPath,
             englishTranscriptPath: updatedEnglishTranscriptPath,
             activeTranscriptLanguage: newActiveTranscriptLanguage,
-            transcriptDirty: false,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -501,6 +510,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 }
 
 export function updateSegment(index, updatedSegmentData, silent = false) {
+    console.log("[TranscriptStore] updateSegment called for index:", index, "data:", updatedSegmentData);
     const currentSegments = get(transcriptStore).segments;
     if (index < 0 || index >= currentSegments.length) {
         console.warn('[TranscriptStore] updateSegment invalid index:', index); // WARN
@@ -520,7 +530,11 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
                     valueChanged = true;
                 }
             } else if (key === 'text') {
-                 if (currentValue !== newValue) {
+                 // For text, especially Lexical JSON, a simple !== might not be enough.
+                 // Compare stringified versions to detect actual content changes.
+                 const currentTextString = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
+                 const newTextString = typeof newValue === 'string' ? newValue : JSON.stringify(newValue);
+                 if (currentTextString !== newTextString) {
                     segmentToUpdate[key] = newValue;
                     valueChanged = true;
                 }
@@ -540,6 +554,7 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
     }
 
     if (changed) {
+        console.log("[TranscriptStore] updateSegment: Changes detected, pushing to undo stack and marking dirty.");
         pushToUndoStack(currentSegments); // Uses the function defined in this store
         transcriptStore.update((ts) => {
             const newSegments = [...ts.segments];
@@ -552,6 +567,7 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
             };
         });
     } else {
+        console.log("[TranscriptStore] updateSegment: No changes detected.");
         // if (!silent) console.debug('[TranscriptStore] updateSegment no changes needed index', index); // DEBUG
     }
 }

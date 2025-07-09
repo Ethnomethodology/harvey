@@ -40,130 +40,34 @@
     }
 
 	// --- Item Interaction Logic ---
-	// MODIFIED: handleItemClick for better media/transcript loading sequence
-	async function handleItemClick(event) {
-		const item = event.detail;
-		console.log('[LeftPanel] handleItemClick triggered for:', item);
+	// MODIFIED: handleItemClick to dispatch a generic request
+    async function handleItemClick(event) {
+        const item = event.detail;
+        console.log('[LeftPanel] handleItemClick triggered for:', item);
 
-		if (item.is_directory) {
-			console.log('[LeftPanel] Clicked item is a directory, ignoring for selection/load.');
-			return; // Ignore clicks on directories
-		}
+        if (item.is_directory) {
+            console.log('[LeftPanel] Clicked item is a directory, ignoring for selection/load.');
+            return; // Ignore clicks on directories
+        }
 
-		if (item.file_type === 'media') {
-			console.log('[LeftPanel] Clicked item is media, calling selectMedia.');
-			// selectMedia handles loading the first associated transcript automatically
-			selectMedia(item); // Select the media file
-		}
-        else if (item.file_type === 'transcript') {
-			console.log('[LeftPanel] Clicked item is transcript, attempting to load.');
-			const transcriptToLoadPath = item.path;
-            const mediaIdentifier = item.media_xml_identifier; // Get associated media stem
+        // Dispatch a generic request to the parent (TranscriptionsView) to handle the item loading
+        dispatch('requestLoadItem', item);
+    }
 
-            if (!mediaIdentifier) {
-                console.warn('[LeftPanel] Transcript item missing media_xml_identifier. Cannot select associated media.');
-                // Proceed to load the transcript anyway, but without guarantees media is correct
-                if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                    try {
-                        await loadTranscriptFile(transcriptToLoadPath);
-                        console.log('[LeftPanel] Transcript loaded (without associated media selection).');
-                        await message(`Warning: Could not identify the media file associated with '${item.name}'. The transcript was loaded, but the player might not be synchronized.`, { title: 'Media Not Found', type: 'warning'});
-                    } catch (error) {
-                        console.error(`[LeftPanel] Error loading transcript ${item.name} (no media ID):`, error);
-                        await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                        project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                    }
-                } else { console.log('[LeftPanel] Clicked transcript (no media ID) is already loaded.'); }
-                return; // Stop further processing for this case
-            }
+    
 
-            // Find the corresponding media file entry in the store's raw file list
-            const allFiles = get(project).files;
-            let foundMediaEntry = null;
-            function findMediaInChildrenRecursive(nodes, identifier) {
-                 if (!Array.isArray(nodes)) return null;
-                 for (const node of nodes) {
-                     // Check if the node itself is the media file
-                     if (node.file_type === 'media' && node.media_xml_identifier === identifier) { return node; }
-                     // If it's a directory, search its children
-                     if (node.children && node.children.length > 0) {
-                         const found = findMediaInChildrenRecursive(node.children, identifier);
-                         if (found) return found;
-                     }
-                 }
-                 return null;
-             }
-            foundMediaEntry = findMediaInChildrenRecursive(allFiles, mediaIdentifier);
-
-            if (!foundMediaEntry) {
-                console.warn('[LeftPanel] Could not find corresponding media file entry for transcript identifier:', mediaIdentifier);
-                // Still try loading the transcript, similar to the no-identifier case
-                 if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                    try {
-                        await loadTranscriptFile(transcriptToLoadPath);
-                        console.log('[LeftPanel] Transcript loaded (associated media node not found).');
-                        await message(`Warning: Could not find the media file entry associated with '${item.name}' in the project structure. The transcript was loaded, but the player might not be synchronized.`, { title: 'Media Entry Missing', type: 'warning'});
-                    } catch (error) { /* ... error handling ... */
-                         console.error(`[LeftPanel] Error loading transcript ${item.name} (media entry missing):`, error);
-                         await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                         project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                    }
-                } else { console.log('[LeftPanel] Clicked transcript (media entry missing) is already loaded.'); }
-                return; // Stop further processing
-            }
-
-            // Media entry found!
-            console.log(`[LeftPanel] Found associated media entry: ${foundMediaEntry.name}`);
-            const currentSelectedMediaPath = get(transcriptStore).selectedMediaFile?.path;
-
-            // --- Sequence: Select Media FIRST, then load SPECIFIC transcript ---
-            // 1. Select the associated media (if not already selected)
-            // NOTE: Pass `true` to selectMedia to prevent it from auto-loading the *first* transcript,
-            // because we are about to load a *specific* one. We need to modify selectMedia for this.
-            // For now, let's stick to the original logic and accept the brief load of the first transcript.
-            if (currentSelectedMediaPath !== foundMediaEntry.path) {
-                console.log('[LeftPanel] Associated media is not currently selected. Calling selectMedia...');
-                selectMedia(foundMediaEntry);
-                // selectMedia will attempt to load the *primary* transcript. We wait for the next step.
-            } else {
-                console.log('[LeftPanel] Associated media is already selected.');
-            }
-
-            // 2. Load the *clicked* transcript (even if it overwrites the primary one just loaded by selectMedia)
-            if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                console.log(`[LeftPanel] Loading the *specifically clicked* transcript file: ${transcriptToLoadPath}`);
-                try {
-                    await loadTranscriptFile(transcriptToLoadPath);
-                    console.log('[LeftPanel] Clicked transcript loaded successfully.');
-                    project.update(p => ({ ...p, statusMessage: `Transcript loaded: ${item.name}` }));
-                } catch (error) {
-                    console.error(`[LeftPanel] Error loading clicked transcript ${item.name}:`, error);
-                    await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                    project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                }
-            } else {
-                console.log('[LeftPanel] Clicked transcript is already loaded.');
-            }
-
-		} else if (item.file_type === 'data') {
-            handleOpenData(item);
-		} else {
-			console.log('[LeftPanel] Clicked item is of type', item.file_type, '- no primary click action defined.');
-		}
-	}
-
-	function handleItemDoubleClick(event) {
-		const item = event.detail;
-		if (!item.is_directory && item.file_type === 'media') {
-			console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
-			selectMedia(item);
+    function handleItemDoubleClick(event) {
+        const item = event.detail;
+        if (!item.is_directory && item.file_type === 'media') {
+            console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
+            selectMedia(item);
         } else if (!item.is_directory && item.file_type === 'data') {
             console.log('[LeftPanel] Double-clicked data, calling handleOpenData.');
             handleOpenData(item);
         }
-	}
+    }
 
-	// --- Context Menu Logic ---
+    // --- Context Menu Logic ---
 	let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null;
     let closeContextMenuListener = null;
 
@@ -191,7 +95,7 @@
 		const item = contextMenuItem; if (!item) return;
         const itemPathForClosure = item.path; closeContextMenu();
 		switch (action) {
-			case 'Load':
+			            case 'Load':
 				if (!item.is_directory && item.file_type === 'media') selectMedia(item);
                 else console.warn("[LeftPanel] 'Load' action called on non-media item:", item);
 				break;

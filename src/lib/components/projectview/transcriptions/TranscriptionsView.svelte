@@ -9,9 +9,9 @@
         deleteTranscriptSegment,
         undoTranscriptChange,
         redoTranscriptChange,
-        // markTranscriptAsSaved, // Not directly used, saveTranscriptData handles it
         insertTranscriptSegment,
-        // updatePlayerCurrentSegmentIndex, // Not directly used
+        selectMedia,
+        markTranscriptAsSaved, // <-- Added this import
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -29,6 +29,7 @@
     import VerticalWaveform from './VerticalWaveform.svelte'; // New vertical waveform
     import EditableTranscript from './EditableTranscript.svelte';
     import RichTextPreview from './RichTextPreview.svelte';
+    import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte'; // <-- Added this import
 
     const dispatch = createEventDispatcher();
 
@@ -63,11 +64,39 @@
     let panelEditModeActive = false;
     let wasPlayingBeforeEdit = false;
 
-    function handleSegmentClick(event) {
+    // State for UnsavedChangesModal
+    let showUnsavedChangesModal = false;
+    let pendingLoadItem = null; // Stores the item that was requested to be loaded
+    let pendingLoadItemName = ''; // Name for the modal
+    let pendingLoadItemType = ''; // Type for the modal (e.g., 'media', 'transcript')
+
+    async function handlePreviousRequest() {
+        if (get(transcriptStore).transcriptDirty) {
+            await handleSaveTranscript();
+        }
+        editableTranscriptRef?.previous();
+    }
+
+    async function handleNextRequest() {
+        if (get(transcriptStore).transcriptDirty) {
+            await handleSaveTranscript();
+        }
+        editableTranscriptRef?.next();
+    }
+
+    async function handleSegmentClick(event) {
         if (panelEditModeActive) return;
         const index = event.detail;
         const segment = get(transcriptStore).segments?.[index];
         if (segment && typeof segment.start_time === 'number') {
+            if (get(transcriptStore).transcriptDirty) {
+                try {
+                    await handleSaveTranscript();
+                } catch (err) {
+                    console.error("Autosave failed on segment click:", err);
+                    message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
+                }
+            }
             editableTranscriptRef?.loadSegment?.(index);
             if (mediaPlayerRef) {
                 mediaPlayerRef.seekTo(segment.start_time);
@@ -77,8 +106,16 @@
         }
     }
 
-    function handlePanelNavigate(event) {
+    async function handlePanelNavigate(event) {
         const detail = event.detail;
+        if (get(transcriptStore).transcriptDirty) {
+            try {
+                await handleSaveTranscript();
+            } catch (err) {
+                console.error("Autosave failed on panel navigation:", err);
+                message(`Autosave failed: ${err.message || err}`, { title: "Error", type: "error" });
+            }
+        }
         if (detail && typeof detail.time === 'number') {
             if (mediaPlayerRef) mediaPlayerRef.seekTo(detail.time);
         } else if (detail && typeof detail.index === 'number') {
@@ -131,24 +168,34 @@
     }
 
     export async function handleToggleEditMode() {
+        console.log("[TranscriptionsView] handleToggleEditMode called. Current panelEditModeActive:", panelEditModeActive);
         const wasEditing = panelEditModeActive;
         const isDirty = get(transcriptStore).transcriptDirty;
-        if (wasEditing && isDirty) {
+
+        // If currently editing, commit any pending edits from EditableTranscript before proceeding
+        if (wasEditing && editableTranscriptRef) {
+            console.log("[TranscriptionsView] handleToggleEditMode: Committing current segment edits.");
+            editableTranscriptRef.commitCurrentSegmentEdits();
+            await tick(); // Ensure Svelte has processed the update and transcriptStore is potentially dirty
+            console.log("[TranscriptionsView] handleToggleEditMode: After commit, transcriptDirty:", get(transcriptStore).transcriptDirty);
+        }
+
+        if (wasEditing) { // If was editing, always attempt to save and then exit edit mode
             try {
-                await handleSaveTranscript();
-                panelEditModeActive = false;
+                console.log("[TranscriptionsView] handleToggleEditMode: Calling handleSaveTranscript.");
+                await handleSaveTranscript(); // This will call saveTranscriptData()
             } catch (error) {
-                 const discard = await confirm( `Failed to save changes: ${error.message}\n\nDiscard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warning", okLabel: "Discard & Exit", cancelLabel: "Keep Editing" } );
+                 const discard = await confirm( `Failed to save changes: ${error.message}
+
+Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warning", okLabel: "Discard & Exit", cancelLabel: "Keep Editing" } );
                  if (discard) {
                     // transcriptDirty, transcriptUndoStack, transcriptRedoStack are in transcriptStore now
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
-                    panelEditModeActive = false;
                     editableTranscriptRef?.forceReloadFromStore?.();
                  }
             }
-        } else if (wasEditing && !isDirty) {
-            panelEditModeActive = false;
-        } else {
+            panelEditModeActive = false; // Always exit edit mode after attempting save or discarding
+        } else { // If not editing, enter edit mode
             panelEditModeActive = true;
             await tick();
             editableTranscriptRef?.focusEditor?.();
@@ -156,26 +203,17 @@
     }
 
     export async function handleSaveTranscript() {
-        if (panelEditModeActive && editableTranscriptRef) {
-            const editsCommitted = editableTranscriptRef.commitCurrentSegmentEdits();
-            if (editsCommitted) await tick();
-        }
+        console.log("[TranscriptionsView] handleSaveTranscript called. Current transcriptDirty:", get(transcriptStore).transcriptDirty);
         const tsStore = get(transcriptStore);
-        if (!tsStore.transcriptDirty) {
-            if(topBarRef) topBarRef.showSavedIndicator(false);
-            return;
-        }
+        
         try {
             project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' })); // Global loading state
+            console.log("[TranscriptionsView] handleSaveTranscript: Calling saveTranscriptData.");
             await saveTranscriptData(); // This service will use get(transcriptStore) for currentTranscriptPath and segments
-            // markTranscriptAsSaved(); // This is now called by saveTranscriptData service via transcriptStore.
-            if (panelEditModeActive) panelEditModeActive = false;
             project.update(p => ({ ...p, isLoading: false, statusMessage: 'Transcript saved.' })); // Global status
-            if(topBarRef) topBarRef.showSavedIndicator(true);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             project.update(p => ({ ...p, isLoading: false, error: `Save failed: ${errorMsg}`, statusMessage: 'Save failed.' })); // Global error
-            if(topBarRef) topBarRef.showSavedIndicator(false);
             await message(`Error saving transcript: ${errorMsg}`, {title: "Save Error", type: "error"});
             throw error;
         }
@@ -189,7 +227,7 @@
         if (get(transcriptStore).transcriptDirty) {
 			const confirmConvert = await confirm( "You have unsaved transcript changes. Save them before converting?", { title: "Unsaved Changes", type: "warning", okLabel: "Save & Convert", cancelLabel: "Cancel" });
 			if (!confirmConvert) return;
-			try { await handleSaveTranscript(); }
+			            try { await handleSaveTranscript(); }
             catch (e) { await message(`Save failed: ${e.message || e}. Cannot convert.`, {type:'error', title: 'Save Error'}); return; }
 		}
         try {
@@ -251,66 +289,114 @@
         leftPanelVisible.toggle();
     }
 
-    async function handleMediaLoaded(event) {
-        const mediaPath = event.detail.mediaPath;
-        const mediaName = event.detail.mediaName; // This is now just the filename, not the full object
-
-        // Get the latest selectedMediaFile from the store, which should have the transcripts populated by selectMedia
-        const currentSelectedMediaFile = get(transcriptStore).selectedMediaFile;
-        const transcripts = currentSelectedMediaFile?.transcripts || [];
-
-        if (transcripts.length > 0) {
-            // Find the default transcription (same name as media file, excluding extension)
-            const mediaNameWithoutExt = mediaName.substring(0, mediaName.lastIndexOf('.'));
-            const defaultTranscript = transcripts.find(t => {
-                const transcriptName = t.name || (t.path ? t.path.split(/[\\/]/).pop() : ''); // Use t.name if available, fallback to path
-                const transcriptNameWithoutExt = transcriptName.substring(0, transcriptName.lastIndexOf('.'));
-                return transcriptNameWithoutExt === mediaNameWithoutExt;
-            });
-
-            if (defaultTranscript) {
-                try {
-                    await loadTranscriptFile(defaultTranscript.path);
-                } catch (error) {
-                    console.error('[TranscriptionsView] Failed to load default transcript:', error);
-                    // Optionally, show a message to the user
-                }
-            } else {
+    // Handlers for UnsavedChangesModal
+    async function handleModalSave() {
+        showUnsavedChangesModal = false;
+        try {
+            await handleSaveTranscript();
+            if (pendingLoadItem) {
+                await loadRequestedItem(pendingLoadItem);
             }
-        } else {
+        } catch (err) {
+            console.error("Save failed from modal:", err);
+            message(`Save failed: ${err.message || err}. Cannot proceed with loading new item.`, { title: "Error", type: "error" });
+        } finally {
+            pendingLoadItem = null;
+            pendingLoadItemName = '';
+            pendingLoadItemType = '';
         }
     }
 
-    onMount(() => {
-    });
-
-    onDestroy(() => {
-        if (unsubscribeLeftPanelVisible) {
-            unsubscribeLeftPanelVisible();
+    async function handleModalDiscard() {
+        showUnsavedChangesModal = false;
+        transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] })); // Discard changes
+        if (pendingLoadItem) {
+            await loadRequestedItem(pendingLoadItem);
         }
-    });
+        pendingLoadItem = null;
+        pendingLoadItemName = '';
+        pendingLoadItemType = '';
+    }
 
-    async function handleLoadSelectedTranscript(event) {
-        const transcriptPath = event.detail;
-        if (!transcriptPath) {
-            console.warn('[TranscriptionsView] handleLoadSelectedTranscript called without a path.');
-            return;
+    function handleModalCancel() {
+        showUnsavedChangesModal = false;
+        pendingLoadItem = null;
+        pendingLoadItemName = '';
+        pendingLoadItemType = '';
+    }
+
+    // Helper function to find media by associated transcript path
+    function findMediaByTranscriptPath(transcriptPath, projectFiles) {
+        console.log('[TranscriptionsView] findMediaByTranscriptPath: Searching for transcriptPath:', transcriptPath);
+        console.log('[TranscriptionsView] findMediaByTranscriptPath: projectFiles structure:', JSON.stringify(projectFiles, null, 2));
+
+        if (!projectFiles) return null;
+
+        function recurse(nodes) {
+            for (const node of nodes) {
+                console.log('[TranscriptionsView] findMediaByTranscriptPath: Checking node:', node.name, 'file_type:', node.file_type);
+                if (node.file_type === 'media' && node.associated_transcripts) {
+                    console.log('[TranscriptionsView] findMediaByTranscriptPath: Media node found, checking associated_transcripts:', node.associated_transcripts);
+                    if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
+                        console.log('[TranscriptionsView] findMediaByTranscriptPath: Match found for transcriptPath:', transcriptPath, 'in media node:', node.name);
+                        return node;
+                    }
+                }
+                if (node.children) {
+                    const found = recurse(node.children);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+        return recurse(projectFiles);
+    }
+
+    async function handleRequestLoadItem(event) {
+        console.log('[TranscriptionsView] handleRequestLoadItem called for item:', event.detail.name, 'file_type:', event.detail.file_type);
+
+        if (get(transcriptStore).transcriptDirty) {
+            // Store the pending item and show the modal
+            pendingLoadItem = event.detail;
+            pendingLoadItemName = event.detail.name;
+            pendingLoadItemType = event.detail.file_type;
+            showUnsavedChangesModal = true;
+            return; // Stop the current load operation
         }
 
-        const currentLoadedPath = get(transcriptStore).currentTranscriptPath;
-        if (transcriptPath === currentLoadedPath) {
-            return;
-        }
+        // If not dirty, proceed with loading
+        await loadRequestedItem(event.detail);
+    }
 
-        try {
-            // project.update(p => ({ ...p, isLoading: true, statusMessage: `Loading transcript: ${transcriptPath.split(/[\/]/).pop()}` }));
-            // The isLoading and statusMessage updates will be handled by loadTranscriptFile or setTranscriptData now.
-            await loadTranscriptFile(transcriptPath);
-            // Optionally, update a local status or rely on global status from the store.
-        } catch (error) {
-            console.error(`[TranscriptionsView] Error loading selected transcript ${transcriptPath}:`, error);
-            await message(`Failed to load transcript: ${error.message || error}`, { title: 'Error', type: 'error' });
-            // project.update(p => ({ ...p, isLoading: false, error: `Failed to load transcript: ${error.message || error}` }));
+    // New helper function to encapsulate the loading logic
+    async function loadRequestedItem(item) {
+        panelEditModeActive = false; // Exit edit mode
+
+        if (item.file_type === 'media') {
+            console.log('[TranscriptionsView] Loading media via selectMedia.');
+            selectMedia(item);
+        } else if (item.file_type === 'transcript') {
+            console.log('[TranscriptionsView] Loading data (transcript) via loadTranscriptFile for path:', item.path);
+            try {
+                await loadTranscriptFile(item.path);
+                console.log('[TranscriptionsView] Transcript loaded successfully.');
+            } catch (error) {
+                console.error('[TranscriptionsView] Error loading transcript:', error);
+                message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
+                return;
+            }
+
+            const currentProjectFiles = get(project).files;
+            console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
+            const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
+
+            if (associatedMedia) {
+                console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
+                selectMedia(associatedMedia, item.path);
+            } else {
+                console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
+                selectMedia(null);
+            }
         }
     }
 </script>
@@ -330,7 +416,7 @@
                 class="w-[15%] h-full bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                 transition:slide="{{ duration: 300, axis: 'x' }}"
             >
-                <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} />
+                <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} on:requestLoadItem={handleRequestLoadItem} />
             </div>
         {/if}
 
@@ -353,7 +439,6 @@
                     showMainTrimButton={false}
                     on:trimModeEntered={handleMediaPlayerTrimModeEntered}
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
-                    on:mediaLoaded={handleMediaLoaded}
                 />
             </div>
             <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-md shadow overflow-y-auto">
@@ -362,8 +447,9 @@
                     bind:panelEditMode={panelEditModeActive}
                     on:navigate={handlePanelNavigate}
                     on:segmenteditfocus={handleSegmentEditFocus}
-                    on:save={handleSaveTranscript}
                     on:toggleedit={handleToggleEditMode}
+                    on:previous={handlePreviousRequest}
+                    on:next={handleNextRequest}
                  />
             </div>
         </div>
@@ -403,12 +489,22 @@
                 on:undo={handleUndoRequest}
                 on:redo={handleRedoRequest}
                 on:convertToDocument={handleConvertToDocumentEvent}
-                on:transcriptselected={handleLoadSelectedTranscript}
              />
         </div>
     </div>
     <!-- Old horizontal waveform container removed -->
 </div>
+
+{#if showUnsavedChangesModal}
+    <UnsavedChangesModal
+        bind:showModal={showUnsavedChangesModal}
+        itemName={pendingLoadItemName}
+        itemType={pendingLoadItemType}
+        on:save={handleModalSave}
+        on:discard={handleModalDiscard}
+        on:cancel={handleModalCancel}
+    />
+{/if}
 
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
