@@ -2,23 +2,34 @@
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
+	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Import the new store
 
 	export let showModal = false;
-	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block'
+	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
 
 	const dispatch = createEventDispatcher();
 
 	let modalElement;
-	let selectedLayoutKey = currentLayoutKey;
+	let selectedDocxLayoutKey = currentLayoutKey;
+	let selectedWaveformLayout; // Will be initialized from the store
 
-	$: selectedLayoutKey = currentLayoutKey; // Ensure internal state updates if prop changes
+	// Subscribe to the waveform layout store
+	const unsubscribeWaveformStore = waveformLayoutStore.subscribe(value => {
+		selectedWaveformLayout = value;
+	});
 
-	function handleSelectLayout(layoutKey) {
-		selectedLayoutKey = layoutKey;
-		dispatch('selectLayout', layoutKey);
-		// Optionally close modal on selection, or require a confirm button
-		// For now, let's assume selection implies confirmation for simplicity
-		closeModal();
+	$: selectedDocxLayoutKey = currentLayoutKey; // Ensure internal state updates if prop changes
+
+	function handleSelectDocxLayout(layoutKey) {
+		selectedDocxLayoutKey = layoutKey;
+		dispatch('selectLayout', layoutKey); // This is for DOCX export layout
+		// We don't close modal here, user might want to change waveform too
+	}
+
+	function handleSelectWaveformLayout(event) {
+		const newWaveformLayout = event.target.value;
+		waveformLayoutStore.setLayout(newWaveformLayout);
+		// selectedWaveformLayout will update reactively due to store subscription
 	}
 
 	function closeModal() {
@@ -38,7 +49,16 @@
 
 	onDestroy(() => {
 		window.removeEventListener('keydown', handleKeydown);
+		if (unsubscribeWaveformStore) {
+			unsubscribeWaveformStore();
+		}
 	});
+
+	const waveformOptions = [
+		{ value: 'horizontal', label: 'Horizontal' },
+		{ value: 'vertical', label: 'Vertical' },
+		{ value: 'none', label: 'None' }
+	];
 </script>
 
 {#if showModal}
@@ -51,34 +71,54 @@
 		aria-labelledby="layout-settings-modal-title"
 	>
 		<div
-			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 		>
 			<h2 id="layout-settings-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5">
-				Select View Layout
+				View Settings
 			</h2>
 
-			<div class="space-y-3">
+			<!-- Waveform Display Section -->
+			<div class="mb-6">
+				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Display</h3>
 				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
-					This will change the layout of the current media only.
+					Choose how the audio waveform is displayed in the Transcriptions tab.
+				</p>
+				<select
+					bind:value={selectedWaveformLayout}
+					on:change={handleSelectWaveformLayout}
+					class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+					aria-label="Select waveform display type"
+				>
+					{#each waveformOptions as option (option.value)}
+						<option value={option.value}>{option.label}</option>
+					{/each}
+				</select>
+			</div>
+
+			<!-- DOCX Export Layout Section -->
+			<div>
+				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Transcript Export Layout</h3>
+				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+					This changes the layout for DOCX exports of the current transcript.
 				</p>
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 					{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
 						<button
 							type="button"
 							class="text-left p-3 border rounded-md transition-all duration-150 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 dark:focus-visible:ring-offset-gray-800"
-							class:bg-blue-500={selectedLayoutKey === layout.rustLayoutKey}
-							class:text-white={selectedLayoutKey === layout.rustLayoutKey}
-							class:hover:bg-gray-100={selectedLayoutKey !== layout.rustLayoutKey}
-							class:dark:hover:bg-gray-700={selectedLayoutKey !== layout.rustLayoutKey}
-							class:border-blue-500={selectedLayoutKey === layout.rustLayoutKey}
-							class:dark:border-blue-400={selectedLayoutKey === layout.rustLayoutKey}
-							class:border-gray-300={selectedLayoutKey !== layout.rustLayoutKey}
-							class:dark:border-gray-600={selectedLayoutKey !== layout.rustLayoutKey}
-							class:shadow-md={selectedLayoutKey === layout.rustLayoutKey}
-							on:click={() => handleSelectLayout(layout.rustLayoutKey)}
+							class:bg-blue-500={selectedDocxLayoutKey === layout.rustLayoutKey}
+							class:text-white={selectedDocxLayoutKey === layout.rustLayoutKey}
+							class:hover:bg-gray-100={selectedDocxLayoutKey !== layout.rustLayoutKey}
+							class:dark:hover:bg-gray-700={selectedDocxLayoutKey !== layout.rustLayoutKey}
+							class:border-blue-500={selectedDocxLayoutKey === layout.rustLayoutKey}
+							class:dark:border-blue-400={selectedDocxLayoutKey === layout.rustLayoutKey}
+							class:border-gray-300={selectedDocxLayoutKey !== layout.rustLayoutKey}
+							class:dark:border-gray-600={selectedDocxLayoutKey !== layout.rustLayoutKey}
+							class:shadow-md={selectedDocxLayoutKey === layout.rustLayoutKey}
+							on:click={() => handleSelectDocxLayout(layout.rustLayoutKey)}
 							title={layout.name}
-							aria-pressed={selectedLayoutKey === layout.rustLayoutKey}
+							aria-pressed={selectedDocxLayoutKey === layout.rustLayoutKey}
 						>
 							<div class="font-medium mb-1.5 text-sm">{layout.name}</div>
 							<div class="{layout.previewClasses} min-h-[24px] opacity-80">
@@ -91,19 +131,12 @@
 				</div>
 			</div>
 
-			<!-- Footer Buttons (Optional, if explicit confirm is needed) -->
+			<!-- Footer Buttons -->
 			<div class="flex justify-end space-x-3 pt-5 border-t border-gray-200 dark:border-gray-600 mt-6">
 				<button type="button" on:click={closeModal} class="btn-secondary text-sm">
 					Close
 				</button>
-				<!-- <button
-					type="button"
-					on:click={() => { dispatch('selectLayout', selectedLayoutKey); closeModal(); }}
-					class="btn-primary text-sm"
-					disabled={selectedLayoutKey === currentLayoutKey}
-				>
-					Apply Layout
-				</button> -->
+				<!-- Apply button is removed as changes are applied reactively -->
 			</div>
 		</div>
 	</div>

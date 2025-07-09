@@ -9,6 +9,7 @@
 	export let trimStartTime = 0;
 	export let trimEndTime = 0;
 	export let isEditingSegment = false;
+	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -774,7 +775,7 @@
 		<canvas bind:this={timescaleCanvas} class="timescale-canvas" style="height: {TIMESCALE_HEIGHT}px;" aria-hidden="true" />
 		<canvas
 			bind:this={segmentWaveformCanvas}
-			class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment && !isPanning) ? 'cursor-pointer' : (isPanning ? 'cursor-grabbing' : 'cursor-default')}"
+			class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment && !isPanning && showTrimUI) ? 'cursor-pointer' : (isPanning ? 'cursor-grabbing' : 'cursor-default')}"
 			style="height: {waveformCanvasHeight}px; top: {TIMESCALE_HEIGHT}px;"
 			aria-label="Waveform visualization. Click to seek audio."
 			on:click|self={handleCanvasClick}
@@ -793,7 +794,7 @@
 			}} />
 		{#if !webAudioApiSupported && isMounted} <div class="overlay-message"><p>Web Audio API not supported.</p></div> {:else if (!currentAudioBuffer && !currentAudioPeaks) && isMounted} <div class="overlay-message"><p>Load audio/video media to view waveform.</p></div> {/if}
 
-		{#if isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
+		{#if showTrimUI && isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
 			{@const trimStartPx = timeToVisiblePx(trimStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			{@const trimEndPx = timeToVisiblePx(trimEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 left-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]" style:width="{Math.max(0, trimStartPx)}px"></div>
@@ -802,7 +803,7 @@
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimEndPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-right', e)} role="slider" aria-label="Trim end time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimEndTime}> <div class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimEndTime)} </div> </div>
 		{/if}
 
-		{#if isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
+		{#if showTrimUI && isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
 			{@const editStartPx = timeToVisiblePx(editSegmentStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			{@const editEndPx = timeToVisiblePx(editSegmentEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30" style:left="{editStartPx}px" on:mousedown|preventDefault={(e) => startEditDrag('edit-left', e)} role="slider" aria-label="Segment start time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={editSegmentStartTime}>
