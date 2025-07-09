@@ -334,15 +334,14 @@
         {#if showDataTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">
-                    <h3 class="text-sm font-semibold">Inline Media Trimming</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                        Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
+                    </p>
                     <div class="space-x-2">
                         <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmDataTrim}>Trim</button>
                         <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
                     </div>
                 </div>
-                <p class="text-xs mb-1 text-gray-600 dark:text-gray-400">
-                    Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
-                </p>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
                     <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                         <InteractiveWaveform
