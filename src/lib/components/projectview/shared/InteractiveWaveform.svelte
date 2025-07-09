@@ -415,7 +415,7 @@
             lastDrawnEditEnd = editSegmentEndTime;
         }
 
-        if (autoScrollEnabled && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) {
+        if (autoScrollEnabled && currentIsPlaying && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) {
             const pxCur_visible = timeToVisiblePx(cur, dur, totalLogicalWidth, scrollOffsetPx);
             const scrollMarginLeft = visibleCanvasWidth * 0.25;
             const scrollMarginRight = visibleCanvasWidth * 0.75;
