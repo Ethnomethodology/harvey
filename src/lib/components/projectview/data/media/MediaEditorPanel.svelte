@@ -56,9 +56,9 @@
     
     $: isFileNotFoundInfo = transcriptLoadError === "INFO:FILE_NOT_FOUND";
 
-    // Reactive declarations for LIVE MediaPlayer properties needed by InteractiveWaveform
-    $: dataMediaPlayerCurrentTime = mediaPlayerInDataRef?.localCurrentTime;
-    $: dataMediaPlayerIsPlaying = mediaPlayerInDataRef?.localIsPlaying;
+    // LIVE MediaPlayer properties needed by InteractiveWaveform
+    let dataMediaPlayerCurrentTime = 0;
+    let dataMediaPlayerIsPlaying = false;
 
     const defaultEmptyJson = JSON.stringify({
         root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }],
@@ -309,6 +309,8 @@
         {#if mediaPath}
             <MediaPlayer
                 bind:this={mediaPlayerInDataRef}
+                bind:localCurrentTime={dataMediaPlayerCurrentTime}
+                bind:localIsPlaying={dataMediaPlayerIsPlaying}
                 bind:isVideoMinimized={isDataPlayerVideoHidden}
                 explicitMediaPath={mediaPath}
                 projectId={$projectStore.id}
