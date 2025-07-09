@@ -747,6 +747,16 @@
     $: if (isMounted && externalAudioBuffer && externalAudioBuffer !== prevExternalAudioBufferForDuration) {
     } else if (isMounted && !externalAudioBuffer && prevExternalAudioBufferForDuration && $transcriptStore.audioBuffer !== prevExternalAudioBufferForDuration) {
     }
+
+	function canDrawWaveform() {
+		return visibleCanvasWidth > 0 && waveformCanvasHeight > 0 && actualMediaDuration > 0 && (currentAudioBuffer || currentAudioPeaks);
+	}
+
+	$: if (isMounted && canDrawWaveform()) {
+		if (Math.abs(currentPlayTime - lastDrawnTime) > redrawTimeThreshold / 3) {
+			requestRedraw(true);
+		}
+	}
 </script>
 
 <div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
