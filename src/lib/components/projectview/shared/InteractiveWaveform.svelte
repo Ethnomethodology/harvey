@@ -67,6 +67,9 @@
 	let panStartX = 0;
 	let panInitialScrollOffsetPx = 0;
 
+	let autoScrollRafId = null;
+	let autoScrollDirection = ''; // 'left' or 'right'
+
 	$: currentAudioBuffer = externalAudioBuffer ?? $transcriptStore.audioBuffer;
 	$: currentAudioPeaks = externalAudioBuffer ? null : $transcriptStore.audioBufferPeaks;
 	$: currentPlayTime = externalCurrentTime ?? $transcriptStore.player.currentTime;
@@ -624,14 +627,100 @@
 		const clickX = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - rect.left));
 		let newTime = pxToTime(clickX, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
 		const minDuration = 0.1; let newStartTime = trimStartTime; let newEndTime = trimEndTime;
+
+		const containerRect = waveformScrollContainerRef.getBoundingClientRect();
+		const edgeZone = 50; // 50px from either edge
+		const mouseClientX = event.clientX;
+
+		if (mouseClientX < containerRect.left + edgeZone) {
+			autoScrollDirection = 'left';
+			if (!autoScrollRafId) startHandleAutoScroll();
+		} else if (mouseClientX > containerRect.right - edgeZone) {
+			autoScrollDirection = 'right';
+			if (!autoScrollRafId) startHandleAutoScroll();
+		} else {
+			stopHandleAutoScroll();
+		}
+
+		// Calculate newTime based on mouse position relative to the visible part of the waveform area
+		const clickXInVisibleArea = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - containerRect.left));
+		newTime = pxToTime(clickXInVisibleArea, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
+
 		if (draggingHandle === 'trim-left') {
 			newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration));
-		} else {
+		} else { // trim-right
 			newEndTime = Math.min(actualMediaDuration, Math.max(newTime, trimStartTime + minDuration));
 		}
-		if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) { dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime }); }
+		if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) { dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime }); requestRedraw(true); }
 	}
-	function handleTrimMouseUp() { if (draggingHandle === 'trim-left' || draggingHandle === 'trim-right') { draggingHandle = null; window.removeEventListener('mousemove', handleTrimMouseMove); } }
+
+	function handleTrimMouseUp() {
+		if (draggingHandle === 'trim-left' || draggingHandle === 'trim-right') {
+			draggingHandle = null;
+			window.removeEventListener('mousemove', handleTrimMouseMove);
+			stopHandleAutoScroll();
+		}
+	}
+
+	function startHandleAutoScroll() {
+		if (autoScrollRafId) return; // Already scrolling
+
+		function scrollLoop() {
+			if (!draggingHandle || autoScrollDirection === '') {
+				stopHandleAutoScroll();
+				return;
+			}
+
+			const scrollStep = 5; // pixels per frame
+			let scrolled = false;
+
+			if (autoScrollDirection === 'left' && scrollOffsetPx > 0) {
+				scrollOffsetPx = Math.max(0, scrollOffsetPx - scrollStep);
+				scrolled = true;
+			} else if (autoScrollDirection === 'right' && scrollOffsetPx < maxScrollPx) {
+				scrollOffsetPx = Math.min(maxScrollPx, scrollOffsetPx + scrollStep);
+				scrolled = true;
+			}
+
+			if (scrolled) {
+				// We need to re-evaluate the handle's position as if the mouse is still at the edge,
+				// but the content has scrolled. The `handleTrimMouseMove` logic for calculating `newTime`
+				// based on a fixed clientX (edge of screen) will effectively do this.
+				// So, we can call a simplified version or just rely on the next mousemove event if the user
+				// keeps the mouse at the edge.
+				// For immediate feedback during auto-scroll without new mouse events:
+				let edgeClientX;
+				const containerRect = waveformScrollContainerRef.getBoundingClientRect();
+				if (autoScrollDirection === 'left') {
+					edgeClientX = containerRect.left + edgeZone / 2; // Simulate mouse at mid-edge zone
+				} else {
+					edgeClientX = containerRect.right - edgeZone / 2;
+				}
+				const clickXInVisibleArea = Math.max(0, Math.min(visibleCanvasWidth, edgeClientX - containerRect.left));
+				let newTime = pxToTime(clickXInVisibleArea, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
+				const minDuration = 0.1;
+
+				if (draggingHandle === 'trim-left') {
+					const newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration));
+					if (newStartTime !== trimStartTime) dispatch('trimupdate', { startTime: newStartTime, endTime: trimEndTime });
+				} else { // trim-right
+					const newEndTime = Math.min(actualMediaDuration, Math.max(newTime, trimStartTime + minDuration));
+					if (newEndTime !== trimEndTime) dispatch('trimupdate', { startTime: trimStartTime, endTime: newEndTime });
+				}
+				requestRedraw(true);
+			}
+			autoScrollRafId = requestAnimationFrame(scrollLoop);
+		}
+		autoScrollRafId = requestAnimationFrame(scrollLoop);
+	}
+
+	function stopHandleAutoScroll() {
+		if (autoScrollRafId) {
+			cancelAnimationFrame(autoScrollRafId);
+			autoScrollRafId = null;
+		}
+		autoScrollDirection = '';
+	}
 
 	function startEditDrag(handle, event) {
         if (!isEditingSegment || !actualMediaDuration || !segmentWaveformCanvas || isTrimming) { return; }
@@ -677,7 +766,18 @@
 			aria-label="Waveform visualization. Click to seek audio."
 			on:click|self={handleCanvasClick}
 			on:mousedown|self={handlePanStart}
-			on:wheel|preventDefault={(e) => { if (e.ctrlKey || e.metaKey) { handleZoom(e.deltaY < 0 ? 'in' : 'out'); } else { scrollOffsetPx = Math.max(0, Math.min(maxScrollPx, scrollOffsetPx + e.deltaY)); requestRedraw(true); } }} />
+			on:wheel|preventDefault={(e) => {
+				if (e.ctrlKey || e.metaKey) {
+					handleZoom(e.deltaY < 0 ? 'in' : 'out');
+				} else {
+					let scrollAmount = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+					// Adjust sensitivity: smaller factor = slower/more controlled scroll per wheel tick
+					// Larger factor = faster scroll. Let's try a base multiplier.
+					const scrollFactor = 1; // Adjust this factor as needed
+					scrollOffsetPx = Math.max(0, Math.min(maxScrollPx, scrollOffsetPx + scrollAmount * scrollFactor));
+					requestRedraw(true);
+				}
+			}} />
 		{#if !webAudioApiSupported && isMounted} <div class="overlay-message"><p>Web Audio API not supported.</p></div> {:else if (!currentAudioBuffer && !currentAudioPeaks) && isMounted} <div class="overlay-message"><p>Load audio/video media to view waveform.</p></div> {/if}
 
 		{#if isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
