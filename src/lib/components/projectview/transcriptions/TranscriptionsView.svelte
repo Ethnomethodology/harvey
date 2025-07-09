@@ -570,7 +570,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         on:cancel={handleModalCancel}
     />
 {/if}
-
+</div>
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
     /* Ensure Tailwind JIT picks up these dynamic classes */
