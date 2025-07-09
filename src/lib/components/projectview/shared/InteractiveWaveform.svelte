@@ -20,6 +20,10 @@
 	export let externalCurrentSegmentIndex = null;
 
 	const TIMESCALE_HEIGHT = 20;
+	const BAR_THICKNESS_PX = 2; // Adapted from VerticalWaveform, will be bar height
+	const BAR_SPACING_PX = 1;   // Adapted from VerticalWaveform, vertical spacing if multiple rows, or conceptual
+	const RMS_GAIN_FACTOR = 2.5;  // From VerticalWaveform
+	const MIN_BAR_LENGTH_PX = 1; // Adapted from MIN_BAR_HALF_LENGTH_PX, represents min bar height/length from center
 
 	let actualMediaDuration = 0;
 	let prevExternalAudioBufferForDuration = null;
@@ -223,6 +227,42 @@
         }
         ctx.stroke();
     }
+
+	function drawHorizontalRmsWaveform(ctx, buffer, logicalWidth, visibleWidth, scrollOffset, canvasHeight, color) {
+		if (!ctx || logicalWidth <= 0 || visibleWidth <= 0 || canvasHeight <= 0 || !buffer) return;
+
+		const midY = canvasHeight / 2;
+		ctx.fillStyle = color;
+
+		const data = buffer.getChannelData(0);
+		const totalSamples = data.length;
+		if (totalSamples === 0) return;
+
+		const samplesPerLogicalPixel = totalSamples / logicalWidth;
+		const barUnitWidthPx = BAR_THICKNESS_PX + BAR_SPACING_PX; // How much horizontal space each bar unit takes
+
+		for (let xPx = 0; xPx < visibleWidth; xPx += barUnitWidthPx) {
+			const logicalX = xPx + scrollOffset;
+			const startSample = Math.floor(logicalX * samplesPerLogicalPixel);
+			const endSample = Math.ceil((logicalX + BAR_THICKNESS_PX) * samplesPerLogicalPixel);
+
+			if (startSample >= totalSamples) break;
+
+			let sumOfSquares = 0;
+			const effectiveEndSample = Math.min(endSample, totalSamples);
+			for (let i = startSample; i < effectiveEndSample; i++) {
+				sumOfSquares += data[i] * data[i];
+			}
+
+			const numSamples = effectiveEndSample - startSample;
+			const rms = numSamples > 0 ? Math.sqrt(sumOfSquares / numSamples) : 0;
+			const cappedRms = Math.min(1.0, rms * RMS_GAIN_FACTOR);
+			const displayHalfHeight = Math.max(MIN_BAR_LENGTH_PX, cappedRms * midY);
+
+			ctx.fillRect(xPx, midY - displayHalfHeight, BAR_THICKNESS_PX, displayHalfHeight * 2);
+		}
+	}
+
 	function clearWaveformCanvases() { if (segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if (c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); } if (timescaleCanvas) { const c = timescaleCanvas.getContext('2d'); if (c) c.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height); } if (segmentWaveformCanvas && visibleCanvasWidth > 0 && waveformCanvasHeight > 0) { const c = segmentWaveformCanvas.getContext('2d'); if (c) { const dpr = window.devicePixelRatio || 1; c.save(); c.scale(dpr, dpr); c.fillStyle = document.documentElement.classList.contains('dark') ? '#a0aec0' : '#6b7280'; c.font = `10px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; let message = 'Waveform'; if (!webAudioApiSupported) message = 'Web Audio API not supported.'; else if (!currentAudioBuffer && !currentAudioPeaks) message = 'Load media to see waveform.'; c.fillText(message, visibleCanvasWidth / 2, waveformCanvasHeight / 2 ); c.restore(); } } }
 	function drawTimescale() { const dur = actualMediaDuration; const bufOrPeaks = currentAudioBuffer || currentAudioPeaks; const dpr = window.devicePixelRatio || 1; if (!timescaleCanvas || !bufOrPeaks || dur <= 0 || visibleCanvasWidth <= 0 || TIMESCALE_HEIGHT <= 0 || totalLogicalWidth <= 0) { if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; } return; } const ctx = timescaleCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(TIMESCALE_HEIGHT * dpr); if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) { timescaleCanvas.width = reqW; timescaleCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, TIMESCALE_HEIGHT); const isDark = document.documentElement.classList.contains('dark'); ctx.strokeStyle = isDark ? '#4b5563' : '#d1d5db'; ctx.fillStyle = isDark ? '#e5e7eb' : '#4b5563'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; const minPixelSpacingForLabel = 50; const minPixelSpacingForMinorTick = 8; const intervals = [0.1, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]; let interval = intervals[0]; let intervalPx = timeToLogicalPx(interval, dur, totalLogicalWidth); for (let i = 0; i < intervals.length; i++) { const currentIntervalPx = timeToLogicalPx(intervals[i], dur, totalLogicalWidth); if (currentIntervalPx >= minPixelSpacingForLabel) { interval = intervals[i]; intervalPx = currentIntervalPx; break; } if (i === intervals.length - 1) { interval = intervals[i]; intervalPx = currentIntervalPx; } } let minorInterval = interval / 5; if (interval === 2 || interval === 15) minorInterval = interval / 2; else if (interval === 10 && intervalPx < 100) minorInterval = interval /2; let minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); while (minorIntervalPx < minPixelSpacingForMinorTick && minorInterval < interval / 2) { minorInterval *= 2; minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); } if (minorIntervalPx < minPixelSpacingForMinorTick) minorInterval = 0; const visibleStartTime = pxToTime(0, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const visibleEndTime = pxToTime(visibleCanvasWidth, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const firstMajorTickTime = Math.max(0, Math.floor(visibleStartTime / interval) * interval); const firstMinorTickTime = minorInterval > 0 ? Math.max(0, Math.floor(visibleStartTime / minorInterval) * minorInterval) : 0; if (minorInterval > 0) { for (let time = firstMinorTickTime; time <= visibleEndTime + minorInterval; time += minorInterval) { if (Math.abs(time % interval) < 0.0001 && time >= firstMajorTickTime) continue; if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= 0 && px <= visibleCanvasWidth) { ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - 5); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); } } } ctx.textAlign = 'center'; for (let time = firstMajorTickTime; time <= visibleEndTime + interval; time += interval) { if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= -minPixelSpacingForLabel/2 && px <= visibleCanvasWidth + minPixelSpacingForLabel/2) { const tickHeight = (Math.abs(time % (interval * (interval >= 300 ? 4 : 5))) < 0.0001 && interval >= 1) ? 10 : 7; ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - tickHeight); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); let labelStr = formatTimescaleTime(time, dur); ctx.fillText(labelStr, px, 2); } } ctx.beginPath(); ctx.moveTo(0, TIMESCALE_HEIGHT - 0.5); ctx.lineTo(visibleCanvasWidth, TIMESCALE_HEIGHT - 0.5); ctx.stroke(); ctx.restore(); }
 	function drawSegmentWaveformUI() {
@@ -260,9 +300,12 @@
         ctx.clearRect(0, 0, visibleCanvasWidth, waveformCanvasHeight);
 		const isDark = document.documentElement.classList.contains('dark');
 
-        if ((buf || peaks) && totalLogicalWidth > 0) {
-            drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, isDark ? '#6b7280' :'#9ca3af');
+        if (buf && totalLogicalWidth > 0) { // RMS drawing currently only supports AudioBuffer
+            drawHorizontalRmsWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, isDark ? '#6b7280' :'#9ca3af');
+        } else if (peaks && totalLogicalWidth > 0) { // Fallback to path drawing if only peaks available
+            drawVisibleWaveform(ctx, null, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, isDark ? '#6b7280' :'#9ca3af');
         }
+
 
         let highlightStartTime = -1;
         let highlightEndTime = -1;
@@ -298,7 +341,11 @@
                     ctx.beginPath();
                     ctx.rect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight);
                     ctx.clip();
-                    drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    if (buf && totalLogicalWidth > 0) { // RMS drawing for highlighted part
+                        drawHorizontalRmsWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    } else if (peaks && totalLogicalWidth > 0) { // Fallback for peaks
+                        drawVisibleWaveform(ctx, null, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    }
                     ctx.restore();
                 }
             }
@@ -615,19 +662,7 @@
     }
 </script>
 
-<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-col w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-	<div class="flex-shrink-0 px-2 py-1.5 flex items-center justify-end space-x-1.5 border-b border-gray-300 dark:border-gray-600 w-full">
-		<button class="ui-button-icon-panelheader" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || !currentAudioBuffer || visibleCanvasWidth <= 0}">
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
-			</svg>
-		</button>
-		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || !currentAudioBuffer || visibleCanvasWidth <= 0}">
-			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
-			</svg>
-		</button>
-	</div>
+<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<div
 		bind:this={waveformScrollContainerRef}
 		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-700 relative overflow-x-auto overflow-y-hidden h-full"
@@ -666,6 +701,18 @@
                 <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(editSegmentEndTime)} </div>
             </div>
 		{/if}
+	</div>
+	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 p-1 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+		<button class="ui-button-icon-panelheader" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
+			</svg>
+		</button>
+		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
+			</svg>
+		</button>
 	</div>
 </div>
 
