@@ -357,13 +357,9 @@
         const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth);
         const pxCur_visible = pxCur_logical - scrollOffsetPx;
 
-        // DEBUG: Make seek bar very obvious
-        // console.log(`Seekbar draw: cur=${cur}, pxCur_visible=${pxCur_visible}, visWidth=${visibleCanvasWidth}, wfHeight=${waveformCanvasHeight}`);
         if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth && waveformCanvasHeight > 0) {
-            ctx.fillStyle = '#FF0000'; // Bright Red for debugging
-            ctx.fillRect(pxCur_visible - 2, 0, 4, waveformCanvasHeight); // Make it 4px thick for debugging
-        } else if (waveformCanvasHeight <= 0) {
-            // console.log("Seekbar not drawn: waveformCanvasHeight is not positive", waveformCanvasHeight);
+            ctx.fillStyle = '#000000'; // Black color for seek bar
+            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide black bar
         }
 
 

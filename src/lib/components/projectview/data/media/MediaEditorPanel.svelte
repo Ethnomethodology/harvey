@@ -350,7 +350,7 @@
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
-                            externalDuration={dataTrimEndTime}
+                            externalDuration={mediaPlayerInDataRef?.localDuration}
                             externalIsPlaying={dataMediaPlayerIsPlaying}
                             externalSegments={[]}
                             externalCurrentSegmentIndex={-1}
