@@ -21,7 +21,7 @@
 
     function forwardEvent(event) {
         if (event.type === 'requestviewchange' || event.type === 'requestmediaselection' ||
-            event.type === 'requestTranscriptionTabWithMedia' || event.type === 'requestTrimInTranscriptionTab') {
+            event.type === 'requestTranscriptionTabWithMedia' || event.type === 'requestTrimInTranscriptionTab' || event.type === 'requestTranscriptionTabWithMediaAndDialog') {
              console.debug(`[DataView] Forwarding event: ${event.type} with detail:`, event.detail);
         }
 		dispatch(event.type, event.detail);
@@ -150,6 +150,7 @@
 			<DataLeftPanel
                 on:requestmediaselection={forwardEvent}
                 on:requestviewchange={ (event) => handleViewChangeRequest(event.detail) }
+                on:requestTranscriptionTabWithMediaAndDialog={forwardEvent}
             />
 		</div>
 

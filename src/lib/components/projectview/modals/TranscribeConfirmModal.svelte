@@ -20,6 +20,7 @@
 
 	// Local state for editable fields
 	let modalSelectedModel = '';
+	let modalTranscriptionMode = 'automatic';
 	let modalSelectedLanguage = 'auto';
 	let modalTranslateToEnglish = false;
 	let modalEnableDiarization = false;
@@ -30,6 +31,7 @@
 	function handleConfirm() {
 		dispatch('confirmStart', {
 			selectedModel: modalSelectedModel,
+			transcriptionMode: modalTranscriptionMode,
 			selectedLanguage: modalSelectedLanguage,
 			translateToEnglish: modalTranslateToEnglish,
 			enableDiarization: modalEnableDiarization,
@@ -149,6 +151,14 @@
 				<!-- CONFIRM VIEW -->
 				<div class="space-y-3 text-sm mb-5 text-gray-700 dark:text-gray-300 max-h-[60vh] overflow-y-auto pr-2">
 					<div><strong>File:</strong> <span class="font-mono break-all ml-2">{fileName || 'N/A'}</span></div>
+
+					<div class="space-y-1">
+						<label for="modalTranscriptionModeSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcription Mode:</label>
+						<select id="modalTranscriptionModeSelect" class="ui-select w-full" value={modalTranscriptionMode} disabled>
+							<option value="automatic">Automatic Transcription</option>
+							<option value="manual" disabled>Manual Transcription (Not Implemented)</option>
+						</select>
+					</div>
 
 					<div class="space-y-1">
 						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>

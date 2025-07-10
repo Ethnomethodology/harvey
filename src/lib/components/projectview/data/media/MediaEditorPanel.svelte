@@ -446,6 +446,51 @@
         @apply mt-0 mb-0;
     }
 
+    .lexical-editor-wrapper-style :global(.lexical-content table) {
+        border-collapse: collapse;
+        border-spacing: 0;
+        width: 100%;
+        border: 1px solid #ccc;
+        margin-bottom: 1rem;
+        table-layout: fixed;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th),
+    .lexical-editor-wrapper-style :global(.lexical-content td) {
+        border: 1px solid #ccc;
+        padding: 0.2rem 5.75pt;
+        text-align: left;
+        vertical-align: top;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th) {
+        background-color: #f0f0f0;
+        font-weight: 600;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th p),
+    .lexical-editor-wrapper-style :global(.lexical-content td p) {
+        @apply mt-0 mb-0;
+    }
+
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
+        width: 5%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
+        width: 65%;
+    }
+
     .lexical-editor-wrapper-style-placeholder {
         display: flex;
         flex-direction: column;

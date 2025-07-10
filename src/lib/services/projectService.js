@@ -82,7 +82,7 @@ import {
     selectMedia, // Ensure selectMedia is imported
     clearTranscriptState,
     markTranscriptAsSaved,
-    prepareForNewTranscription // Import the function
+    prepareForNewTranscription, // Import the function directly
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -225,7 +225,8 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
-                        relativePath: t.relativePath // Always preserve the original relativePath
+                        relativePath: t.relativePath, // Always preserve the original relativePath
+                        language_code: t.language_code // Pass the language code
                     };
                 });
               }
@@ -353,7 +354,8 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
-                        relativePath: t.relativePath // Always preserve the original relativePath
+                        relativePath: t.relativePath, // Always preserve the original relativePath
+                        language_code: t.language_code // Pass the language code
                     };
                 });
               }
@@ -425,7 +427,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
     }
 }
 
-export async function importMediaFile(importType = null, sourceView = 'unknown') {
+export async function importMediaFile(importType = null) {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -484,15 +486,12 @@ export async function importMediaFile(importType = null, sourceView = 'unknown')
         await refreshProjectFiles();
 
         // Now that the global list is updated, select the item in the appropriate view.
-        if (sourceView === 'notes') {
-            prepareMediaNoteView(newlyImportedFileEntry.path);
-            console.log(`[ProjectService] Media imported for Notes view. Path: ${newlyImportedFileEntry.path}`);
-        } else { // Default to 'transcriptions' or if sourceView is 'unknown'
-            selectMedia(newlyImportedFileEntry); // from transcriptStore
-            console.log(`[ProjectService] Media imported for Transcriptions view. Entry:`, newlyImportedFileEntry);
-        }
+        // Emit an event to request media selection in the transcription tab
+        // This ensures the ProjectView component handles tab switching and media loading consistently.
+        prepareMediaNoteView(newlyImportedFileEntry.path);
+        console.log(`[ProjectService] Media imported and selected in Data tab's Media Notes view. Path: ${newlyImportedFileEntry.path}`);
 
-        setAssetImportStatus(false, `${filename} imported and selected in ${sourceView} view.`);
+        setAssetImportStatus(false, `${filename} imported and selected in Media Notes view.`);
         // Update project store to reflect import is no longer in progress
         project.update(p => ({
             ...p,
@@ -821,9 +820,10 @@ export async function requestTranscription() {
         toggleTranscribeModal(true);
         return;
     }
-    prepareForNewTranscription(); // Call the imported function directly
+    prepareForNewTranscription(); // Call the function directly
+    toggleTranscribeModal(true); // Ensure modal is shown after preparing for new transcription
 }
-export async function handleConfirmStartTranscription() {
+export async function handleConfirmStartTranscription(transcriptionMode) {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     // const jobId = uuidv4();
@@ -868,6 +868,7 @@ export async function handleConfirmStartTranscription() {
         translate_to_english: translateToEnglish, // Use variable defined above
         speaker_names: currentTs.speakers.names || [],
         translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
+        transcription_mode: transcriptionMode,
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.

@@ -115,9 +115,17 @@ async function loadTranscriptionConfigData() {
 	}
 
 async function onConfirmTranscriptionStart(event) {
-    const { enableDiarization } = event.detail;
+    const { selectedModel, transcriptionMode, selectedLanguage, translateToEnglish, enableDiarization, speakersConfig } = event.detail;
+
+    // Update the central transcript store with the user's choices from the modal
+    setSelectedModel(selectedModel);
+    setSelectedLanguage(selectedLanguage);
+    setTranslateToEnglish(translateToEnglish);
     setDiarizationPreference(enableDiarization);
-    await handleConfirmStartTranscription(); // projectService.handleConfirmStartTranscription
+    // The updateSpeakerConfig from the store expects individual arguments, not the object
+    updateSpeakerConfig(speakersConfig.count, speakersConfig.names, speakersConfig.translatedNames);
+
+    await handleConfirmStartTranscription(transcriptionMode);
 }
 
 	onMount(async () => {
@@ -611,6 +619,22 @@ async function onConfirmTranscriptionStart(event) {
         project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Please select model and language.` }));
     }
 
+    async function handleRequestTranscriptionTabWithMediaAndDialog(event) {
+        const { mediaPath } = event.detail;
+        const mediaName = mediaPath.split(/[\\/]/).pop();
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to transcribe ${mediaName} and opening dialog...` }));
+
+        await handleTabClick('transcriptions');
+        await tick();
+        await handleRequestMediaSelection({ detail: { mediaPath } });
+        await tick();
+
+        // Now trigger the transcription dialog
+        requestTranscriptionService();
+
+        project.update(p => ({ ...p, isLoading: false, statusMessage: `Ready to transcribe ${mediaName}. Dialog opened.` }));
+    }
+
     async function handleRequestTrimInTranscriptionTab(event) {
         const { mediaPath } = event.detail;
         const mediaName = mediaPath.split(/[\\/]/).pop();
@@ -664,7 +688,7 @@ async function onConfirmTranscriptionStart(event) {
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            if (importType === 'audio' || importType === 'video') await importMediaFile(importType, selectedTab);
+            if (importType === 'audio' || importType === 'video') await importMediaFile(importType);
             else if (importType === 'document') await importDocumentFile();
             else if (importType === 'table') await importTableFile();
             else if (importType === 'image') await importImageFile();
@@ -710,6 +734,7 @@ async function onConfirmTranscriptionStart(event) {
                     on:requestmediaselection={handleRequestMediaSelection}
                     on:requestTranscriptionTabWithMedia={handleRequestTranscriptionTabWithMedia}
                     on:requestTrimInTranscriptionTab={handleRequestTrimInTranscriptionTab}
+                    on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                  />
 			{/if}
 		</div>

@@ -206,7 +206,7 @@
                     break;
                 case 'Rename': itemToRename = { path: item.path, name: item.media_xml_identifier, file_type: 'media', media_xml_identifier: item.media_xml_identifier }; showRenameModal = true; break;
                 case 'Delete': const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name); const confirmMsg = `Delete media "${stemName}"? This deletes the entire folder (media, transcripts, data). Cannot be undone.`; const options = { title: 'Confirm Media Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' }; try { const confirmed = await confirm(confirmMsg, options); if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${stemName}...` })); try { await deleteProjectItem(itemPathForClosure); } catch (err) { console.error(`[DataLeftPanel] Delete failed for ${stemName}:`, err); } } else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); } } catch (e) { console.error("[DataLeftPanel] Error confirm/delete:", e); await message(`Error deleting: ${e}`, {title: "Delete Error", type: "error"}); } break;
-                case 'Transcribe': if (!item.path) { await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestmediaselection', { mediaPath: item.path }); break;
+                case 'Transcribe': if (!item.path) { await message("Cannot transcribe: path unknown.", { title: "Error", type: "error"}); break; } dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: item.path }); break;
                 default: console.warn(`[DataLeftPanel] Unknown action for media: ${action}`);
             }
         } else if (itemType === 'doc') {
@@ -319,11 +319,13 @@
         }
 
         if (categoryType === 'video' || categoryType === 'audio') {
-            try { 
-                // Some code that might throw an error
-            } catch (e) {
-                console.error(`[DataLeftPanel] Error importMediaFile ${categoryType}:`, e); 
-            }
+            if (categoryType === 'video' || categoryType === 'audio') {
+        try { 
+            await importMediaFile(categoryType);
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error importMediaFile ${categoryType}:`, e); 
+        }
+    }
         } else if (categoryType === 'document') {
             try { await importDocumentFile(); } catch (e) { console.error(`[DataLeftPanel] Error importDocumentFile:`, e); }
         } else if (categoryType === 'table') {

@@ -60,123 +60,19 @@
     });
 
     // Reactive variable for the main dropdown button label
+    import { switchToOriginalTranscript, switchToEnglishTranscript } from '$lib/stores/transcriptStore.js';
+
+    // Reactive variable for the main dropdown button label
     let currentTranscriptLabel = "Select Transcript";
     $: {
-        if ($transcriptStore.currentTranscriptPath) {
-            basename($transcriptStore.currentTranscriptPath).then(name => currentTranscriptLabel = name).catch(() => currentTranscriptLabel = "Transcript");
-        } else if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts && $transcriptStore.selectedMediaFile.associated_transcripts.length > 0) {
-            currentTranscriptLabel = "Select Transcript";
+        if ($transcriptStore.activeTranscriptLanguage === 'original' && $transcriptStore.originalTranscriptPath) {
+            basename($transcriptStore.originalTranscriptPath).then(name => currentTranscriptLabel = `Original: ${name}`).catch(() => currentTranscriptLabel = "Original Transcript");
+        } else if ($transcriptStore.activeTranscriptLanguage === 'english' && $transcriptStore.englishTranscriptPath) {
+            basename($transcriptStore.englishTranscriptPath).then(name => currentTranscriptLabel = `English: ${name}`).catch(() => currentTranscriptLabel = "English Translation");
         } else if ($transcriptStore.selectedMediaFile) {
             currentTranscriptLabel = "No Transcripts";
         } else {
             currentTranscriptLabel = "No Media";
-        }
-    }
-
-    // Prepare associated transcripts for the dropdown
-    let associatedTranscriptsForDropdown = [];
-    let currentProcessingVersion = 0;
-
-    $: {
-        refreshKey; // Make this block dependent on refreshKey
-        currentProcessingVersion++;
-        const processingVersion = currentProcessingVersion;
-
-        if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
-            const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
-
-            associatedTranscriptsForDropdown = []; // Clear before async operation
-
-            const basenamePromises = associated.map(async (t, index) => {
-                let name = "Unknown Transcript";
-                let relativePathValue = t.relativePath;
-
-                if (t.path) {
-                    try {
-                        name = await basename(t.path);
-                    } catch (e) {
-                        console.warn(`Basename failed for path ${t.path}, trying relativePath:`, e);
-                        if (t.relativePath) {
-                            name = t.relativePath.split(/[\/]/).pop();
-                        }
-                    }
-                } else if (t.relativePath) {
-                    console.warn(`Path missing for transcript, using relativePath for name: ${t.relativePath}`);
-                    name = t.relativePath.split(/[\/]/).pop();
-                } else {
-                    console.warn('Transcript item has no path or relativePath:', t);
-                }
-
-                return {
-                    path: t.path,
-                    relativePath: relativePathValue,
-                    name: name,
-                    unique_render_key: t.path || t.relativePath || `transcript-index-${index}`
-                };
-            });
-
-            Promise.all(basenamePromises).then(results => {
-                if (processingVersion === currentProcessingVersion) {
-                    const uniqueTranscriptMap = new Map();
-                    results.forEach(transcript => {
-                        const key = transcript.path || transcript.relativePath;
-                        if (key) {
-                            if (!uniqueTranscriptMap.has(key)) {
-                                uniqueTranscriptMap.set(key, transcript);
-                            }
-                        }
-                    });
-                    associatedTranscriptsForDropdown = Array.from(uniqueTranscriptMap.values());
-                }
-            }).catch(error => {
-                console.error("Error processing basenames for dropdown:", error);
-                if (processingVersion === currentProcessingVersion) {
-                    const fallbackResults = associated.map((t, index) => {
-                        let fallbackName = "Unknown Transcript";
-                        let keyPath = t.path || t.relativePath;
-                        if (t.path) {
-                            fallbackName = t.path.split(/[\/]/).pop();
-                        } else if (t.relativePath) {
-                            fallbackName = t.relativePath.split(/[\/]/).pop();
-                        }
-                        return {
-                            path: t.path,
-                            relativePath: t.relativePath,
-                            name: fallbackName,
-                            unique_render_key: keyPath || `transcript-index-${index}`
-                        };
-                    });
-                    const uniqueFallbackMap = new Map();
-                    fallbackResults.forEach(transcript => {
-                        const key = transcript.path || transcript.relativePath;
-                        if (key) {
-                           if (!uniqueFallbackMap.has(key)) {
-                               uniqueFallbackMap.set(key, transcript);
-                           }
-                        }
-                    });
-                    associatedTranscriptsForDropdown = Array.from(uniqueFallbackMap.values());
-                }
-            });
-        } else {
-            associatedTranscriptsForDropdown = [];
-        }
-    }
-
-    let filteredAssociatedTranscripts = [];
-    $: {
-        if (associatedTranscriptsForDropdown && associatedTranscriptsForDropdown.length > 0 && $transcriptStore.currentTranscriptPath) {
-            const currentPath = $transcriptStore.currentTranscriptPath;
-            const baseDir = get(project).baseDirectory;
-            filteredAssociatedTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
-                let itemPath = transcript.path;
-                if (!itemPath && transcript.relativePath && baseDir) {
-                    itemPath = `${baseDir}/${transcript.relativePath}`;
-                }
-                return itemPath !== currentPath;
-            });
-        } else {
-             filteredAssociatedTranscripts = associatedTranscriptsForDropdown || [];
         }
     }
 
@@ -654,27 +550,27 @@
                         class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                                max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
                         on:change={(e) => {
-                            const selectedPath = e.target.value;
-                            if (selectedPath) {
-                                dispatch('transcriptselected', selectedPath);
+                            const selectedLanguage = e.target.value;
+                            if (selectedLanguage === 'original') {
+                                switchToOriginalTranscript();
+                            } else if (selectedLanguage === 'english') {
+                                switchToEnglishTranscript();
                             }
                         }}
                     >
-                        {#if $transcriptStore.currentTranscriptPath}
-                            <option value={$transcriptStore.currentTranscriptPath} selected class="truncate">
-                                {currentTranscriptLabel}
+                        {#if $transcriptStore.originalTranscriptPath}
+                            <option value="original" selected={$transcriptStore.activeTranscriptLanguage === 'original'} class="truncate">
+                                Original
                             </option>
-                        {:else if associatedTranscriptsForDropdown.length === 0}
+                        {/if}
+                        {#if $transcriptStore.englishTranscriptPath}
+                            <option value="english" selected={$transcriptStore.activeTranscriptLanguage === 'english'} class="truncate">
+                                English
+                            </option>
+                        {/if}
+                        {#if !$transcriptStore.originalTranscriptPath && !$transcriptStore.englishTranscriptPath}
                             <option value="" disabled selected class="truncate">No Transcripts</option>
                         {/if}
-
-                        {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
-                            {#if transcript.path !== $transcriptStore.currentTranscriptPath}
-                                <option value={transcript.path || transcript.relativePath} title={transcript.path || transcript.relativePath} class="truncate">
-                                    {transcript.name}
-                                </option>
-                            {/if}
-                        {/each}
                     </select>
                     <!-- Custom Chevron Icon -->
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">

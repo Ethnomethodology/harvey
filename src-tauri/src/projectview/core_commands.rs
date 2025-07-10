@@ -1159,6 +1159,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         &db_key_relative_path,
         Some(source_file_path_str.as_str()), // Pass as &str
         None, // No speaker names known at initial import by this function
+        None, // language_code: Option<&str> - Not known at initial import
     ) {
         warn!(
             "[Backend Import] Failed to save media_transcript_data for project_id {}: {}. Error: {}",

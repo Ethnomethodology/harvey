@@ -260,6 +260,7 @@ pub async fn run_transcription(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
         lexical_table_json_string,
+        Some(language.clone()), // Pass the original language code
     ).await?;
     info!("[Transcription][LocalRun][{}] Final transcript saved.", internal_job_id);
 

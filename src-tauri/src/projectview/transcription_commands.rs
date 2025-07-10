@@ -544,7 +544,8 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
             &project_uuid_for_db,
             &db_key_relative_path_trimmed,
             Some(&original_media_path), // Original media path as source reference
-            original_speakers.as_ref().map(|s_xml| &s_xml.names), // Corrected to pass Option<&Vec<String>>
+            original_speakers.as_ref().map(|s_xml| &s_xml.names),
+            None, // language_code: Option<&str> - Not known at initial import
         ) {
             warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
         } else {
@@ -704,7 +705,8 @@ pub async fn load_transcript_json(transcript_path: String) -> Result<String, Com
 pub async fn save_transcript_json(
     project_xml_path: String,
     transcript_path: String,
-    lexical_table_json_string: String 
+    lexical_table_json_string: String,
+    language_code: Option<String>, // Added language_code parameter
 ) -> Result<(), CommandError> {
     info!("[Backend Save Full Transcript JSON] Transcript Path: {}", transcript_path);
     info!("[Backend Save Full Transcript JSON] Project XML Path: {}", project_xml_path);
@@ -777,6 +779,7 @@ pub async fn save_transcript_json(
             media_entry.transcripts.push(TranscriptEntryXml {
                 name: transcript_filename.clone(),
                 relative_path: transcript_relative_path.clone(),
+                language_code: language_code.clone(), // Add language_code here
             });
              media_entry.transcripts.sort_by(|a,b| a.name.cmp(&b.name));
         }
@@ -1129,6 +1132,7 @@ pub async fn transcribe_media_command(
         payload.project_xml_path.clone(),
         final_transcript_path_orig.to_string_lossy().to_string(),
         lexical_json_orig_str,
+        payload.language_code.clone(), // Pass the original language code
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
     emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
@@ -1307,6 +1311,7 @@ pub async fn transcribe_media_command(
                 payload.project_xml_path.clone(),
                 final_path_en_pb.to_string_lossy().to_string(),
                 lexical_json_en_str,
+                Some("en".to_string()), // Pass "en" as the language code for translated transcript
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
             emit_progress_cmd(&app_handle_clone, &job_id, 95.0, &format!("Translation for {} saved.", media_filename_for_progress))?;

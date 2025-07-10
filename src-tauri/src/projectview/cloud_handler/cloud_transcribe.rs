@@ -292,6 +292,7 @@ pub async fn run_cloud_transcription(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
         lexical_table_json_string, // MODIFIED: Pass the string representation of the Lexical Table
+        None, // language_code: Option<String> - Not explicitly provided by cloud transcription
     ).await?;
     info!("[Gemini Transcribe][Job '{}'] Final processed transcript saved.", job_id);
 

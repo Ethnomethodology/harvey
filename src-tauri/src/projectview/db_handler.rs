@@ -45,6 +45,7 @@ pub struct GroupDataFromDb {
 pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
+    pub language_code: Option<String>,
 }
 
 pub fn get_db_path() -> Result<PathBuf, CommandError> {
@@ -348,6 +349,7 @@ pub fn init_db() -> Result<(), CommandError> {
             asset_relative_path TEXT NOT NULL,
             original_import_path TEXT,
             speaker_names_json TEXT,
+            language_code TEXT, -- New column for language code
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
@@ -357,6 +359,17 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized media_transcript_data table.");
+
+    // Migration for language_code
+    let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let lang_code_exists = stmt_check_lang_code
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "language_code"));
+
+    if !lang_code_exists {
+        info!("[DB] Adding language_code column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT", [])?;
+    }
 
     // Trigger for media_transcript_data updated_at
     conn.execute("DROP TRIGGER IF EXISTS update_media_transcript_data_updated_at", [])?;
@@ -575,6 +588,7 @@ pub fn save_media_transcript_data(
     asset_relative_path: &str,
     original_import_path: Option<&str>,
     speaker_names: Option<&Vec<String>>,
+    language_code: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
         "[DB] Saving media transcript data for project_id {}: {}",
@@ -590,11 +604,12 @@ pub fn save_media_transcript_data(
 
     let sql = "
         INSERT INTO media_transcript_data (
-            project_id, asset_relative_path, original_import_path, speaker_names_json
-        ) VALUES (?1, ?2, ?3, ?4)
+            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code
+        ) VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
+            language_code = excluded.language_code,
             updated_at = CURRENT_TIMESTAMP;
     ";
 
@@ -605,6 +620,7 @@ pub fn save_media_transcript_data(
             asset_relative_path,
             to_sql_optional_str(original_import_path),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
+            to_sql_optional_str(language_code),
         ],
     )?;
 
@@ -628,7 +644,7 @@ pub fn load_media_transcript_data(
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare("
-        SELECT original_import_path, speaker_names_json
+        SELECT original_import_path, speaker_names_json, language_code
         FROM media_transcript_data
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -637,6 +653,7 @@ pub fn load_media_transcript_data(
         Ok(MediaTranscriptDataValues {
             original_import_path: row.get(0)?,
             speaker_names_json: row.get(1)?,
+            language_code: row.get(2)?,
         })
     }).optional()?;
 
