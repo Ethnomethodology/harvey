@@ -554,6 +554,42 @@
                     {/if}
                 {/if}
 
+                {#if currentAssetRelativePathForGroups && get(project).id}
+                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <div class="mb-2">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-1">Groups</h3>
+                        {#if isLoadingFileGroups}
+                            <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
+                        {:else if isEditing}
+                            <GroupMultiSelect
+                                fileAssetRelativePath={currentAssetRelativePathForGroups}
+                                projectId={get(project).id}
+                                allProjectGroups={allProjectGroupsForPanel}
+                                initiallyAssignedGroups={fileAssignedGroups}
+                                isEditable={isEditing}
+                                on:groupsUpdated={() => fetchFileAssignedGroups(get(project).id, currentAssetRelativePathForGroups)}
+                                on:createNewGroup={() => {
+                                    createGroupModalFileToAssign = currentAssetRelativePathForGroups;
+                                    isCreateGroupModalOpen = true;
+                                }}
+                                on:error={(e) => message(e.detail, { title: 'Group Error', type: 'error' })}
+                            />
+                        {:else}
+                            {#if fileAssignedGroups && fileAssignedGroups.length > 0}
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    {#each fileAssignedGroups as group (group.id)}
+                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
+                                            {group.name}
+                                        </span>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <p class="text-xs text-gray-400 dark:text-gray-500 italic mt-1">No groups assigned.</p>
+                            {/if}
+                        {/if}
+                    </div>
+                {/if}
+
                 {#if $customFieldDefinitionsStore && ($customFieldDefinitionsStore.length > 0 || isEditing)}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-2">
@@ -623,41 +659,6 @@
                      {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Edit to add.</p>
                     {/if}
-                {/if}
-
-                {#if currentAssetRelativePathForGroups && get(project).id}
-                    <div class="mt-3">
-                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Groups</h3>
-                        {#if isLoadingFileGroups}
-                            <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
-                        {:else if isEditing}
-                            <GroupMultiSelect
-                                fileAssetRelativePath={currentAssetRelativePathForGroups}
-                                projectId={get(project).id}
-                                allProjectGroups={allProjectGroupsForPanel}
-                                initiallyAssignedGroups={fileAssignedGroups}
-                                isEditable={isEditing}
-                                on:groupsUpdated={() => fetchFileAssignedGroups(get(project).id, currentAssetRelativePathForGroups)}
-                                on:createNewGroup={() => {
-                                    createGroupModalFileToAssign = currentAssetRelativePathForGroups;
-                                    isCreateGroupModalOpen = true;
-                                }}
-                                on:error={(e) => message(e.detail, { title: 'Group Error', type: 'error' })}
-                            />
-                        {:else}
-                            {#if fileAssignedGroups && fileAssignedGroups.length > 0}
-                                <div class="flex flex-wrap gap-1 mt-1">
-                                    {#each fileAssignedGroups as group (group.id)}
-                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
-                                            {group.name}
-                                        </span>
-                                    {/each}
-                                </div>
-                            {:else}
-                                <p class="text-xs text-gray-400 dark:text-gray-500 italic mt-1">No groups assigned.</p>
-                            {/if}
-                        {/if}
-                    </div>
                 {/if}
 
                 {#if isEditing}
