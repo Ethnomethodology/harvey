@@ -60,7 +60,7 @@
         const item = event.detail;
         if (!item.is_directory && item.file_type === 'media') {
             console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
-            selectMedia(item);
+            selectMedia(item, item.path);
         } else if (!item.is_directory && item.file_type === 'data') {
             console.log('[LeftPanel] Double-clicked data, calling handleOpenData.');
             handleOpenData(item);

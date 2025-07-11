@@ -230,7 +230,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
-            loadInitialTranscript(newlySelectedMedia);
+            loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
         } else {
             console.log('[TranscriptStore selectMedia] No associated transcripts found or no path to load for the selected media.');
         }
@@ -813,7 +813,7 @@ export function setRanInBackground(value) {
     transcriptStore.update((ts) => ({ ...ts, ranInBackground: !!value }));
 }
 
-export async function loadInitialTranscript(mediaFileEntry) {
+export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrioritize = null) {
     transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], activeTranscript: null, transcriptDirty: false }));
     updateProjectStoreState({ statusMessage: `Loading transcripts for ${mediaFileEntry.name}...` });
 
@@ -833,8 +833,22 @@ export async function loadInitialTranscript(mediaFileEntry) {
         return a.name.localeCompare(b.name);
     });
 
-    const transcriptToLoad = sortedTranscripts[0];
-    await switchTranscript(transcriptToLoad.path);
+    let transcriptToLoad = null;
+    if (transcriptPathToPrioritize) {
+        transcriptToLoad = associatedTranscripts.find(t => t.path === transcriptPathToPrioritize);
+    }
+
+    if (!transcriptToLoad && sortedTranscripts.length > 0) {
+        transcriptToLoad = sortedTranscripts[0];
+    }
+
+    if (transcriptToLoad) {
+        await switchTranscript(transcriptToLoad.path);
+    } else {
+        console.warn('[TranscriptStore loadInitialTranscript] No transcript found to load, even after prioritization and sorting.');
+        transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false }));
+        updateProjectStoreState({ statusMessage: `No transcripts found for ${mediaFileEntry.name}.` });
+    }
 }
 
 function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerNames = null) {
