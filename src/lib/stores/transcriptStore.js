@@ -326,7 +326,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         const transcriptInfo = mediaFile?.associated_transcripts?.find(t => t.path === path);
 
         if (!transcriptInfo) {
-            console.error(`[setTranscriptData] Could not find transcript info for path: ${path}`);
+            console.error(`[setTranscriptData] Could not find transcript info for path: ${path}. Current selectedMediaFile:`, mediaFile);
             // Clear transcript data if path is invalid or not found
             return {
                 ...ts,
@@ -1089,18 +1089,4 @@ export function setDiarizationPreference(value) {
     transcriptStore.update(ts => ({ ...ts, diarizationEnabledForNextJob: !!value }));
 }
 
-listen('item_renamed', (event) => {
-    if (!event.payload) return;
 
-    const { old_path, new_path, item_type } = event.payload;
-
-    transcriptStore.update(ts => {
-        const normalized_old_path = old_path.replace(/[\\/]+/g, '/');
-        const normalized_new_path = new_path.replace(/[\\/]+/g, '/');
-
-        if (item_type === 'transcript' && ts.currentTranscriptPath && ts.currentTranscriptPath.replace(/[\\/]+/g, '/') === normalized_old_path) {
-            return { ...ts, currentTranscriptPath: normalized_new_path };
-        }
-        return ts;
-    });
-});

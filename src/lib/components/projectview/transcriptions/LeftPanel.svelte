@@ -27,7 +27,7 @@
 	$: selectedMediaPath = $transcriptStore.selectedMediaFile?.path;
     // NEW: Get current transcript path for highlighting
     // currentTranscriptPath is now sourced from transcriptStore.
-    $: currentTranscriptPath = $transcriptStore.currentTranscriptPath;
+    $: currentTranscriptPath = $transcriptStore.activeTranscript?.path;
 
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];

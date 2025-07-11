@@ -408,7 +408,21 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             console.log('[TranscriptionsView] Loading media via selectMedia.');
             selectMedia(item);
         } else if (item.file_type === 'transcript') {
-            console.log('[TranscriptionsView] Loading data (transcript) via loadTranscriptFile for path:', item.path);
+            const currentProjectFiles = get(project).files;
+            console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
+            const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
+
+            if (associatedMedia) {
+                console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
+                // First, select the media, which will trigger loadInitialTranscript for that media
+                selectMedia(associatedMedia, item.path);
+            } else {
+                console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
+                selectMedia(null);
+            }
+
+            // Now, explicitly load the transcript file if it's not already loaded by selectMedia
+            // This is a fallback/re-confirmation to ensure the correct transcript is active
             try {
                 await loadTranscriptFile(item.path);
                 console.log('[TranscriptionsView] Transcript loaded successfully.');
@@ -416,18 +430,6 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 console.error('[TranscriptionsView] Error loading transcript:', error);
                 message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
                 return;
-            }
-
-            const currentProjectFiles = get(project).files;
-            console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
-            const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
-
-            if (associatedMedia) {
-                console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
-                selectMedia(associatedMedia, item.path);
-            } else {
-                console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
-                selectMedia(null);
             }
         }
     }
