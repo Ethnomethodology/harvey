@@ -197,12 +197,12 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         }
         currentEditorJson = initialJsonForEditor; // Keep track of current JSON for saving
 
-        if (lexicalEditorInstance && (oldIndex !== currentIndex)) {
-            // Only reset if the editor instance exists and index changed.
-            // This avoids resetting an already correctly loaded editor if renderSegmentUI is called multiple times for the same index.
-            console.log(`[EditableTranscript] Calling resetEditorState for index ${idx}`);
-            lexicalEditorInstance.resetEditorState(initialJsonForEditor);
-        } else if (!lexicalEditorInstance && isEditorVisible) {
+        if (lexicalEditorInstance) {
+            // If the editor instance exists, update its content directly.
+            // This avoids re-creating the entire component, which is more performant.
+            console.log(`[EditableTranscript] Calling updateContent for index ${idx}`);
+            lexicalEditorInstance.updateContent(initialJsonForEditor);
+        } else if (isEditorVisible) {
             // Editor will be created by Svelte due to #if block, and will use initialJsonForEditor prop
             console.log(`[EditableTranscript] Editor instance not yet available for index ${idx}, will mount with initialJson.`);
         }
@@ -226,43 +226,67 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         unsubscribeTranscriptStore = transcriptStore.subscribe((ts) => {
             if (!isMounted) return;
 
-            const prevSegmentsLength = segments.length; // Capture length before update
-            const newSegs = ts.segments || [];
-            const segmentsChanged = JSON.stringify(newSegs) !== JSON.stringify(segments); // Deep compare content
-            const lengthChanged = newSegs.length !== prevSegmentsLength; // Check for structural change
-            segments = newSegs; // Update local copy
+            const newSegments = ts.segments || [];
             const currentStoreIndex = ts.player?.currentSegmentIndex ?? -1;
+            const activeTranscriptPath = ts.activeTranscript?.path;
 
-            console.log(`[EditableTranscript Sub] SegChanged: ${segmentsChanged}, LenChanged: ${lengthChanged}, StoreIdx: ${currentStoreIndex}, CurrentIdx: ${currentIndex}, EditEnabled: ${editEnabled}`);
+            // Determine if segments array itself has changed (e.g., new load, undo/redo, insert/delete)
+            // This is a shallow comparison of the array reference, plus a length check.
+            // For deep content changes, we rely on the activeTranscript.segments reference or explicit actions.
+            const segmentsArrayReferenceChanged = newSegments !== segments;
+            const segmentsLengthChanged = newSegments.length !== segments.length;
 
-            if (lengthChanged) {
-                // --- Structural change (Delete/Insert) ---
-                console.log(`[EditableTranscript Sub] Length changed. Target index from store: ${currentStoreIndex}`);
-                // Force render using the index set by the store action (delete/insert)
+            // Update local segments reference
+            segments = newSegments;
+
+            // Scenario 1: Structural change (segments array reference or length changed)
+            // This covers new transcript loads, undo/redo, segment insert/delete.
+            if (segmentsArrayReferenceChanged || segmentsLengthChanged) {
+                console.log(`[EditableTranscript Sub] Structural change detected. New length: ${newSegments.length}, StoreIdx: ${currentStoreIndex}`);
+                // Force re-render of the current segment based on the store's current index.
+                // This ensures the editor reflects the latest state after a structural modification.
                 renderSegmentUI(currentStoreIndex);
-            } else if (segmentsChanged) {
-                // --- Content change (Undo/Redo/Remap) ---
-                console.log(`[EditableTranscript Sub] Content changed (Undo/Redo?). CurrentIdx: ${currentIndex}`);
-                // If current index is still valid, re-render to reflect store state
-                if (currentIndex >= 0 && currentIndex < segments.length) {
-                     renderSegmentUI(currentIndex);
-                } else {
-                    // If current index became invalid (unlikely if length didn't change, but possible edge case)
-                    console.warn(`[EditableTranscript Sub] Content changed, but currentIndex ${currentIndex} invalid. Checking store index ${currentStoreIndex}.`);
-                    renderSegmentUI(currentStoreIndex); // Try rendering based on player index
-                }
-            } else if (!editEnabled && currentStoreIndex !== currentIndex) {
-                // --- Player seeking while NOT editing ---
-                 console.log(`[EditableTranscript Sub] Player index changed to ${currentStoreIndex} while not editing.`);
-                // Update display based on player time if index is valid
-                 if (currentStoreIndex >= 0 && currentStoreIndex < segments.length) {
+            }
+            // Scenario 2: Player seeking while NOT in edit mode, and the segment index has changed.
+            // This is for navigation through the transcript without explicit editing.
+            else if (!editEnabled && currentStoreIndex !== currentIndex) {
+                console.log(`[EditableTranscript Sub] Player index changed to ${currentStoreIndex} while not editing.`);
+                if (currentStoreIndex >= 0 && currentStoreIndex < segments.length) {
+                    // Load the new segment silently (without dispatching navigation events)
                     loadSegmentSilent(currentStoreIndex);
-                 } else if (segments.length > 0 && currentStoreIndex === -1) {
-                     // Player moved outside any segment, maybe clear editor? Or keep last? Keep last for now.
-                     console.log(`[EditableTranscript Sub] Player index -1, keeping last editor state.`);
-                 } else if (segments.length === 0) {
-                     renderSegmentUI(-1); // Clear if no segments
-                 }
+                } else if (segments.length === 0) {
+                    // If no segments, ensure UI is cleared
+                    renderSegmentUI(-1);
+                }
+                // If currentStoreIndex is -1 but segments exist, we keep the last displayed segment.
+                // This is a design choice to not clear the editor if the player is between segments or at the end.
+            }
+            // Scenario 3: Content of the *currently active* segment might have changed (e.g., external update, speaker remapping)
+            // This is a more granular check for the specific segment being displayed.
+            else if (currentIndex >= 0 && currentIndex < segments.length) {
+                const currentSegmentInStore = segments[currentIndex];
+                const currentSegmentText = currentSegmentInStore?.text;
+                const currentSegmentSpeaker = currentSegmentInStore?.speaker;
+                const currentSegmentStart = currentSegmentInStore?.start_time;
+                const currentSegmentEnd = currentSegmentInStore?.end_time;
+
+                // Compare with local state (initialJsonForEditor, localSpeaker, localStart, localEnd)
+                // Note: initialJsonForEditor is the JSON string that was last used to initialize the Lexical editor.
+                // We need to parse it to compare its content, or find a more direct way to compare.
+                // For now, a simple string comparison of the JSON is used, which is still somewhat expensive.
+                // A better approach would be to have a version/hash for each segment's content.
+                const initialJsonParsed = initialJsonForEditor ? JSON.parse(initialJsonForEditor) : null;
+                const currentSegmentTextParsed = currentSegmentText ? JSON.parse(currentSegmentText) : null;
+
+                const textContentChanged = JSON.stringify(initialJsonParsed) !== JSON.stringify(currentSegmentTextParsed);
+                const speakerChanged = localSpeaker !== currentSegmentSpeaker;
+                const startChanged = Math.abs(parseTimestamp(localStart) - currentSegmentStart) > 0.0001;
+                const endChanged = Math.abs(parseTimestamp(localEnd) - currentSegmentEnd) > 0.0001;
+
+                if (textContentChanged || speakerChanged || startChanged || endChanged) {
+                    console.log(`[EditableTranscript Sub] Active segment content changed. Re-rendering index: ${currentIndex}`);
+                    renderSegmentUI(currentIndex);
+                }
             }
         });
         tick().then(() => {
@@ -378,34 +402,36 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         }
 
         const segmentInStore = get(transcriptStore).segments[currentIndex];
-        let textChanged = false;
-        let timeStartChanged = false;
-        let timeEndChanged = false;
-        let speakerChanged = false;
+        const newStartTime = parseTimestamp(localStart);
+        const newEndTime = parseTimestamp(localEnd);
 
-        // Always update the segment in the store with the current local values
-        // This ensures transcriptDirty is correctly set if any value has changed
-        updateSegment(currentIndex, {
-            text: jsonString,
-            start_time: parseTimestamp(localStart),
-            end_time: parseTimestamp(localEnd),
-            speaker: localSpeaker
-        });
+        let changes = {};
+        let changed = false;
 
-        // Re-fetch the segment from the store to check if changes were actually applied
-        const updatedSegmentInStore = get(transcriptStore).segments[currentIndex];
-        if (updatedSegmentInStore) {
-            textChanged = updatedSegmentInStore.text !== segmentInStore.text;
-            timeStartChanged = updatedSegmentInStore.start_time !== segmentInStore.start_time;
-            timeEndChanged = updatedSegmentInStore.end_time !== segmentInStore.end_time;
-            speakerChanged = updatedSegmentInStore.speaker !== segmentInStore.speaker;
+        if (jsonString !== segmentInStore.text) {
+            changes.text = jsonString;
+            changed = true;
+        }
+        if (Math.abs(newStartTime - (segmentInStore.start_time || 0)) > 0.0001) {
+            changes.start_time = newStartTime;
+            changed = true;
+        }
+        if (Math.abs(newEndTime - (segmentInStore.end_time || 0)) > 0.0001) {
+            changes.end_time = newEndTime;
+            changed = true;
+        }
+        if (localSpeaker !== segmentInStore.speaker) {
+            changes.speaker = localSpeaker;
+            changed = true;
         }
 
-        const overallChange = updatedSegmentInStore.text !== segmentInStore.text || updatedSegmentInStore.start_time !== segmentInStore.start_time || updatedSegmentInStore.end_time !== segmentInStore.end_time || updatedSegmentInStore.speaker !== segmentInStore.speaker;
-        if (overallChange) {
+        if (changed) {
+            updateSegment(currentIndex, changes);
             console.log("[EditableTranscript] Committed changes segment", currentIndex, "Transcript dirty state after commit:", get(transcriptStore).transcriptDirty);
+        } else {
+            console.log("[EditableTranscript] No changes detected for segment", currentIndex);
         }
-        return overallChange;
+        return changed;
     }
     function handleEditSaveClick() { if (editEnabled) { commitCurrentSegmentEdits(); console.log("[EditableTranscript] Save clicked, dispatching 'toggleedit'."); } else { console.log("[EditableTranscript] Edit clicked, dispatching 'toggleedit'."); } dispatch('toggleedit'); }
     const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
