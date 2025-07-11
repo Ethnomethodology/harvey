@@ -10,7 +10,7 @@ import { project as projectMainStore, updateProjectStoreState } from './projectS
 
 export const initialTranscriptState = {
     segments: [],
-    currentTranscriptPath: null,
+    activeTranscript: null, // Holds { path, language_code, segments }
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
@@ -34,11 +34,6 @@ export const initialTranscriptState = {
     transcriptionJobStatus: null,
     transcriptionErrorMessage: null,
     translateToEnglish: false,
-    activeTranscriptLanguage: 'original',
-    originalSegments: [],
-    englishSegments: [],
-    originalTranscriptPath: null,
-    englishTranscriptPath: null,
     diarizationEnabledForNextJob: false,
 };
 
@@ -124,13 +119,13 @@ export function markTranscriptAsSaved() {
 
 export function clearTranscriptState() {
     transcriptStore.update(ts => {
-        if (ts.currentTranscriptPath || ts.segments.length > 0 || ts.transcriptDirty || ts.isTranscriptLoading || ts.transcriptUndoStack.length > 0 || ts.transcriptRedoStack.length > 0 || ts.selectedMediaFile) {
+        if (ts.activeTranscript || ts.segments.length > 0 || ts.transcriptDirty || ts.isTranscriptLoading || ts.transcriptUndoStack.length > 0 || ts.transcriptRedoStack.length > 0 || ts.selectedMediaFile) {
             updateProjectStoreState({ statusMessage: 'Media transcript cleared.' });
             return {
                 ...ts,
                 selectedMediaFile: null,
                 segments: [],
-                currentTranscriptPath: null,
+                activeTranscript: null,
                 transcriptDirty: false,
                 isTranscriptLoading: false,
                 player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -142,11 +137,6 @@ export function clearTranscriptState() {
                 activeMediaDuringTranscriptionStart: null,
                 pendingTranscriptPathForJobDone: null,
                 pendingSegmentsForJobDone: null,
-                activeTranscriptLanguage: 'original',
-                originalSegments: [],
-                englishSegments: [],
-                originalTranscriptPath: null,
-                englishTranscriptPath: null,
             };
         }
         return ts;
@@ -230,7 +220,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 },
                 speakers: speakersToLoad,
                 segments: [],
-                currentTranscriptPath: null,
+                activeTranscript: null,
                 isTranscriptLoading: false,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
@@ -240,7 +230,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
-            loadAndSetDualTranscripts(newlySelectedMedia);
+            loadInitialTranscript(newlySelectedMedia);
         } else {
             console.log('[TranscriptStore selectMedia] No associated transcripts found or no path to load for the selected media.');
         }
@@ -332,52 +322,35 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        let newActiveTranscriptLanguage = ts.activeTranscriptLanguage;
-        let finalRawSegmentsToProcess = newSegments;
-        let updatedOriginalSegments = ts.originalSegments;
-        let updatedEnglishSegments = ts.englishSegments;
-        let updatedOriginalTranscriptPath = ts.originalTranscriptPath;
-        let updatedEnglishTranscriptPath = ts.englishTranscriptPath;
+        const mediaFile = get(transcriptStore).selectedMediaFile;
+        const transcriptInfo = mediaFile?.associated_transcripts?.find(t => t.path === path);
 
-        if (path && (path === ts.originalTranscriptPath || (path.endsWith('.json') && !path.endsWith('.en.json')))) {
-            updatedOriginalSegments = newSegments;
-            updatedOriginalTranscriptPath = path;
-            newActiveTranscriptLanguage = 'original';
-        } else if (path && (path === ts.englishTranscriptPath || path.endsWith('.en.json'))) {
-            updatedEnglishSegments = newSegments;
-            updatedEnglishTranscriptPath = path;
-            newActiveTranscriptLanguage = 'english';
-        } else if (!path) {
-            newActiveTranscriptLanguage = 'original';
-            finalRawSegmentsToProcess = [];
-            updatedOriginalSegments = [];
-            updatedEnglishSegments = [];
-            updatedOriginalTranscriptPath = null;
-            updatedEnglishTranscriptPath = null;
+        if (!transcriptInfo) {
+            console.error(`[setTranscriptData] Could not find transcript info for path: ${path}`);
+            // Clear transcript data if path is invalid or not found
+            return {
+                ...ts,
+                segments: [],
+                activeTranscript: null,
+                isTranscriptLoading: false,
+                transcriptDirty: false,
+            };
         }
 
-        let finalSegmentsForDisplay = [];
-        if (finalRawSegmentsToProcess.length > 0) {
-            if (newActiveTranscriptLanguage === 'english') {
-                console.log('[TranscriptStore setTranscriptData] Remapping for ENGLISH display using translatedNames.');
-                finalSegmentsForDisplay = remapSegmentSpeakerNames([...finalRawSegmentsToProcess], updatedSpeakers, updatedSpeakers.translatedNames);
-            } else {
-                console.log('[TranscriptStore setTranscriptData] Remapping for ORIGINAL (or default) display using primary names.');
-                finalSegmentsForDisplay = remapSegmentSpeakerNames([...finalRawSegmentsToProcess], updatedSpeakers, updatedSpeakers.names);
-            }
-        }
+        const isEnglish = transcriptInfo.language_code === 'en';
+        const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
+        const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
-        updateProjectStoreState({ statusMessage: path ? `Media transcript loaded.` : 'Media transcript cleared.', error: null });
+        updateProjectStoreState({ statusMessage: `Media transcript loaded: ${path.split(/[\\/]/).pop()}` });
 
         return {
             ...ts,
-            currentTranscriptPath: path,
             segments: finalSegmentsForDisplay,
-            originalSegments: updatedOriginalSegments,
-            englishSegments: updatedEnglishSegments,
-            originalTranscriptPath: updatedOriginalTranscriptPath,
-            englishTranscriptPath: updatedEnglishTranscriptPath,
-            activeTranscriptLanguage: newActiveTranscriptLanguage,
+            activeTranscript: {
+                path: path,
+                language_code: transcriptInfo.language_code,
+                segments: newSegments, // Store raw, unmapped segments
+            },
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -840,106 +813,28 @@ export function setRanInBackground(value) {
     transcriptStore.update((ts) => ({ ...ts, ranInBackground: !!value }));
 }
 
-export async function loadAndSetDualTranscripts(mediaFileEntry) {
-    transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], originalSegments: [], englishSegments: [], currentTranscriptPath: null, originalTranscriptPath: null, englishTranscriptPath: null, transcriptDirty: false }));
+export async function loadInitialTranscript(mediaFileEntry) {
+    transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], activeTranscript: null, transcriptDirty: false }));
     updateProjectStoreState({ statusMessage: `Loading transcripts for ${mediaFileEntry.name}...` });
 
     const associatedTranscripts = mediaFileEntry.associated_transcripts || [];
-    let originalPath = null;
-    let englishPath = null;
-
-    for (const t of associatedTranscripts) {
-        if (t.path) {
-            if (t.language_code === 'en') {
-                englishPath = t.path;
-            } else if (t.language_code === 'original' || (t.path.toLowerCase().endsWith('.json') && !t.path.toLowerCase().endsWith('.en.json'))) {
-                originalPath = t.path;
-            }
-        }
-    }
-
-    // Fallback to filename convention if language_code is not explicitly set or found
-    if (!originalPath) {
-        const foundOriginal = associatedTranscripts.find(t => t.path && t.path.toLowerCase().endsWith('.json') && !t.path.toLowerCase().endsWith('.en.json'));
-        if (foundOriginal) {
-            originalPath = foundOriginal.path;
-        }
-    }
-    if (!englishPath) {
-        const foundEnglish = associatedTranscripts.find(t => t.path && t.path.toLowerCase().endsWith('.en.json'));
-        if (foundEnglish) {
-            englishPath = foundEnglish.path;
-        }
-    }
-
-
-    let originalSegments = [];
-    let englishSegments = [];
-    let activeTranscriptLanguage = 'original';
-
-    try {
-        const projectService = await import('../services/projectService.js');
-
-        if (originalPath) {
-            try {
-                const originalJsonString = await invoke('load_transcript_json', { transcriptPath: originalPath });
-                originalSegments = projectService.parseLexicalTableToSegments(originalJsonString);
-                console.log(`[TranscriptStore] Loaded original transcript from ${originalPath}`);
-            } catch (e) {
-                console.error(`[TranscriptStore] Failed to load original transcript from ${originalPath}:`, e);
-                updateProjectStoreState({ error: `Failed to load original transcript: ${e.message || e}` });
-                originalPath = null;
-            }
-        }
-
-        if (englishPath) {
-            try {
-                const englishJsonString = await invoke('load_transcript_json', { transcriptPath: englishPath });
-                englishSegments = projectService.parseLexicalTableToSegments(englishJsonString);
-                console.log(`[TranscriptStore] Loaded English transcript from ${englishPath}`);
-            } catch (e) {
-                console.error(`[TranscriptStore] Failed to load English transcript from ${englishPath}:`, e);
-                updateProjectStoreState({ error: `Failed to load English transcript: ${e.message || e}` });
-                englishPath = null;
-            }
-        }
-
-        let segmentsToDisplay = [];
-        let currentPathToDisplay = null;
-
-        if (originalSegments.length > 0) {
-            segmentsToDisplay = remapSegmentSpeakerNames([...originalSegments], mediaFileEntry.speakers, mediaFileEntry.speakers.names);
-            currentPathToDisplay = originalPath;
-            activeTranscriptLanguage = 'original';
-        } else if (englishSegments.length > 0) {
-            segmentsToDisplay = remapSegmentSpeakerNames([...englishSegments], mediaFileEntry.speakers, mediaFileEntry.speakers.translatedNames);
-            currentPathToDisplay = englishPath;
-            activeTranscriptLanguage = 'english';
-        } else {
-            updateProjectStoreState({ statusMessage: `No transcripts found for ${mediaFileEntry.name}.` });
-        }
-
-        transcriptStore.update(ts => ({
-            ...ts,
-            segments: segmentsToDisplay,
-            originalSegments: originalSegments,
-            englishSegments: englishSegments,
-            originalTranscriptPath: originalPath,
-            englishTranscriptPath: englishPath,
-            currentTranscriptPath: currentPathToDisplay,
-            activeTranscriptLanguage: activeTranscriptLanguage,
-            isTranscriptLoading: false,
-            transcriptDirty: false,
-            transcriptUndoStack: [],
-            transcriptRedoStack: [],
-        }));
-        updateProjectStoreState({ statusMessage: `Transcripts loaded for ${mediaFileEntry.name}.` });
-
-    } catch (error) {
-        console.error(`[TranscriptStore] Error in loadAndSetDualTranscripts:`, error);
+    if (associatedTranscripts.length === 0) {
         transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false }));
-        updateProjectStoreState({ error: `Failed to load transcripts: ${error.message || error}` });
+        updateProjectStoreState({ statusMessage: `No transcripts found for ${mediaFileEntry.name}.` });
+        return;
     }
+
+    // Prioritize loading: 1. 'original', 2. 'en', 3. first in list
+    const sortedTranscripts = [...associatedTranscripts].sort((a, b) => {
+        if (a.language_code === 'original') return -1;
+        if (b.language_code === 'original') return 1;
+        if (a.language_code === 'en') return -1;
+        if (b.language_code === 'en') return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    const transcriptToLoad = sortedTranscripts[0];
+    await switchTranscript(transcriptToLoad.path);
 }
 
 function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerNames = null) {
@@ -983,78 +878,24 @@ function remapSegmentSpeakerNames(segmentsToRemap, speakerConfig, targetSpeakerN
     });
 }
 
-export function switchToOriginalTranscript() {
-    transcriptStore.update(ts => {
-        if (ts.activeTranscriptLanguage === 'original' || ts.originalSegments.length === 0) {
-            return ts;
-        }
+export async function switchTranscript(path) {
+    const store = get(transcriptStore);
+    if (store.activeTranscript?.path === path) {
+        return; // Already active
+    }
 
-        const newUndoStack = [];
-        const newRedoStack = [];
+    transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true }));
 
-        let newIndex = -1;
-        const time = ts.player.currentTime;
-        if (ts.originalSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            const idx = ts.originalSegments.findIndex((s, index) => {
-                const isLastSegment = index === ts.originalSegments.length - 1;
-                const startTimeCheck = time >= (s.start_time - 0.001);
-                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
-                return startTimeCheck && endTimeCheck;
-            });
-            newIndex = idx;
-        }
-        updateProjectStoreState({ statusMessage: 'Switched to original transcript.' });
-
-        const remappedSegments = remapSegmentSpeakerNames([...ts.originalSegments], ts.speakers, ts.speakers.names);
-
-        return {
-            ...ts,
-            segments: remappedSegments,
-            activeTranscriptLanguage: 'original',
-            currentTranscriptPath: ts.originalTranscriptPath,
-            transcriptDirty: false,
-            transcriptUndoStack: newUndoStack,
-            transcriptRedoStack: newRedoStack,
-            player: { ...ts.player, currentSegmentIndex: newIndex }
-        };
-    });
-}
-
-export function switchToEnglishTranscript() {
-    transcriptStore.update(ts => {
-        if (ts.activeTranscriptLanguage === 'english' || ts.englishSegments.length === 0) {
-            return ts;
-        }
-
-        const newUndoStack = [];
-        const newRedoStack = [];
-
-        let newIndex = -1;
-        const time = ts.player.currentTime;
-        if (ts.englishSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            const idx = ts.englishSegments.findIndex((s, index) => {
-                const isLastSegment = index === ts.englishSegments.length - 1;
-                const startTimeCheck = time >= (s.start_time - 0.001);
-                const endTimeCheck = isLastSegment ? time <= s.end_time : time < s.end_time;
-                return startTimeCheck && endTimeCheck;
-            });
-            newIndex = idx;
-        }
-        updateProjectStoreState({ statusMessage: 'Switched to English transcript.' });
-
-        const remappedSegments = remapSegmentSpeakerNames([...ts.englishSegments], ts.speakers, ts.speakers.translatedNames);
-
-        return {
-            ...ts,
-            segments: remappedSegments,
-            activeTranscriptLanguage: 'english',
-            currentTranscriptPath: ts.englishTranscriptPath,
-            transcriptDirty: false,
-            transcriptUndoStack: newUndoStack,
-            transcriptRedoStack: newRedoStack,
-            player: { ...ts.player, currentSegmentIndex: newIndex }
-        };
-    });
+    try {
+        const projectService = await import('../services/projectService.js');
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const segments = projectService.parseLexicalTableToSegments(jsonString);
+        setTranscriptData(path, segments); // This will handle remapping speakers and updating the store
+    } catch (e) {
+        console.error(`[TranscriptStore] Failed to load transcript from ${path}:`, e);
+        updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}` });
+        transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false }));
+    }
 }
 
 
@@ -1110,22 +951,17 @@ listen('custom_transcription_job_completed', async (event) => {
                     let newOriginalPath = currentStore.originalTranscriptPath;
                     let newEnglishPath = currentStore.englishTranscriptPath;
 
-                    if (transcriptFilePath) {
-                        pathUpdates.originalTranscriptPath = transcriptFilePath;
-                        newOriginalPath = transcriptFilePath;
-                        if (currentStore.activeTranscriptLanguage === 'original' || !translatedTranscriptFilePath) {
-                            activePathToLoad = transcriptFilePath;
-                        }
-                    }
-                    if (translatedTranscriptFilePath) {
-                        pathUpdates.englishTranscriptPath = translatedTranscriptFilePath;
-                        newEnglishPath = translatedTranscriptFilePath;
-                        if (currentStore.activeTranscriptLanguage === 'english') {
-                            activePathToLoad = translatedTranscriptFilePath;
-                        }
-                    }
-                    if (!activePathToLoad && newOriginalPath) {
-                        activePathToLoad = newOriginalPath;
+                    // Determine which transcript to load after job completion.
+                    // Prioritize the one matching the user's last active language if possible,
+                    // otherwise default to the original, then the translation.
+                    const currentActiveLangCode = currentStore.activeTranscript?.language_code;
+
+                    if (currentActiveLangCode === 'en' && translatedTranscriptFilePath) {
+                        activePathToLoad = translatedTranscriptFilePath;
+                    } else if (transcriptFilePath) {
+                        activePathToLoad = transcriptFilePath;
+                    } else if (translatedTranscriptFilePath) {
+                        activePathToLoad = translatedTranscriptFilePath;
                     }
                     if (Object.keys(pathUpdates).length > 0) {
                         Object.assign(updatePayload, pathUpdates);

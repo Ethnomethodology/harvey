@@ -769,6 +769,9 @@ pub async fn save_transcript_json(
                      warn!("[Backend Save Full Transcript JSON] Updating transcript name in XML from '{}' to '{}' for path '{}'", transcript_xml_entry_instance.name, transcript_filename, transcript_relative_path);
                     transcript_xml_entry_instance.name = transcript_filename.clone();
                  }
+                // Always update the language code, even for existing entries.
+                transcript_xml_entry_instance.language_code = language_code.clone();
+
                 found_transcript_xml_entry = true;
                 break;
             }
@@ -834,7 +837,12 @@ pub(crate) fn prepare_output_paths(
     let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
 
     // The final path for the transcript uses the (potentially truncated at import) media_filename_stem.
-    let final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
+    let mut final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
+    let mut counter = 1;
+    while final_transcript_path_orig.exists() {
+        final_transcript_path_orig = transcripts_dir.join(format!("{}_{}.json", media_filename_stem, counter));
+        counter += 1;
+    }
     
     // Path for RTTM (common for original transcript diarization) - can also use a short temp name.
     let temp_rttm_base = transcripts_dir.join(format!("rttm_temp_{}", job_id)); // Generic base for RTTM
@@ -854,7 +862,13 @@ pub(crate) fn prepare_output_paths(
         expected_whisper_temp_json_path_en_opt = Some(temp_whisper_output_base_en.with_extension("json"));
 
         // Final path for translated transcript also uses the media_filename_stem.
-        final_transcript_path_en_opt = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
+        let mut final_transcript_path_en = transcripts_dir.join(format!("{}.en.json", media_filename_stem));
+        let mut counter = 1;
+        while final_transcript_path_en.exists() {
+            final_transcript_path_en = transcripts_dir.join(format!("{}_{}.en.json", media_filename_stem, counter));
+            counter += 1;
+        }
+        final_transcript_path_en_opt = Some(final_transcript_path_en);
 
         debug!("[prepare_output_paths][{}] EN Temp Whisper Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
             job_id, temp_whisper_output_base_en_str_opt, expected_whisper_temp_json_path_en_opt, final_transcript_path_en_opt);
@@ -1128,11 +1142,18 @@ pub async fn transcribe_media_command(
     let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
         .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
 
+    // Determine the language code to save for the original transcript.
+    let original_lang_code_to_save = match payload.language_code.as_deref() {
+        None => Some("original".to_string()),
+        Some(lang) if lang.is_empty() || lang == "auto" => Some("original".to_string()),
+        Some(lang) => Some(lang.to_string()),
+    };
+
     save_transcript_json(
         payload.project_xml_path.clone(),
         final_transcript_path_orig.to_string_lossy().to_string(),
         lexical_json_orig_str,
-        payload.language_code.clone(), // Pass the original language code
+        original_lang_code_to_save,
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
     emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
@@ -1311,7 +1332,7 @@ pub async fn transcribe_media_command(
                 payload.project_xml_path.clone(),
                 final_path_en_pb.to_string_lossy().to_string(),
                 lexical_json_en_str,
-                Some("en".to_string()), // Pass "en" as the language code for translated transcript
+                Some("en".to_string()), // Always use "en" for translated transcripts
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
             emit_progress_cmd(&app_handle_clone, &job_id, 95.0, &format!("Translation for {} saved.", media_filename_for_progress))?;

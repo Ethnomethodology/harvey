@@ -1,10 +1,11 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
-	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
+	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
@@ -24,6 +25,12 @@
 
     let refreshKey = 0; // Key to force re-evaluation of transcript list
     let unlistenJobComplete = null; // To store the unlisten function
+
+	function getLanguageLabel(langCode) {
+		if (!langCode || langCode.toLowerCase() === 'original') return 'Original';
+		const option = languageOptions.find(opt => opt.value === langCode);
+		return option ? option.label : langCode; // Fallback to code if not found
+	}
 
     // Function to close dropdown when clicking outside
     function handleClickOutsideTranscriptDropdown(event) {
@@ -59,22 +66,26 @@
         cancelAnimation(); // For scroll logic
     });
 
-    // Reactive variable for the main dropdown button label
-    import { switchToOriginalTranscript, switchToEnglishTranscript } from '$lib/stores/transcriptStore.js';
+    
+    
 
-    // Reactive variable for the main dropdown button label
-    let currentTranscriptLabel = "Select Transcript";
-    $: {
-        if ($transcriptStore.activeTranscriptLanguage === 'original' && $transcriptStore.originalTranscriptPath) {
-            basename($transcriptStore.originalTranscriptPath).then(name => currentTranscriptLabel = `Original: ${name}`).catch(() => currentTranscriptLabel = "Original Transcript");
-        } else if ($transcriptStore.activeTranscriptLanguage === 'english' && $transcriptStore.englishTranscriptPath) {
-            basename($transcriptStore.englishTranscriptPath).then(name => currentTranscriptLabel = `English: ${name}`).catch(() => currentTranscriptLabel = "English Translation");
-        } else if ($transcriptStore.selectedMediaFile) {
-            currentTranscriptLabel = "No Transcripts";
-        } else {
-            currentTranscriptLabel = "No Media";
-        }
-    }
+	import { derived } from 'svelte/store';
+
+	const displayedTranscripts = derived(transcriptStore, ($transcriptStore) => {
+		const transcripts = $transcriptStore.selectedMediaFile?.associated_transcripts;
+		if (!transcripts || transcripts.length === 0) return [];
+
+		const languageCounts = {};
+		const withLabels = transcripts.map(t => {
+			const baseLabel = getLanguageLabel(t.language_code);
+			const count = languageCounts[baseLabel] || 0;
+			languageCounts[baseLabel] = count + 1;
+			const displayLabel = count > 0 ? `${baseLabel}-${count}` : baseLabel;
+			return { ...t, displayLabel };
+		});
+
+		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+	});
 
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
@@ -549,27 +560,17 @@
                     <select
                         class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                                max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
-                        on:change={(e) => {
-                            const selectedLanguage = e.target.value;
-                            if (selectedLanguage === 'original') {
-                                switchToOriginalTranscript();
-                            } else if (selectedLanguage === 'english') {
-                                switchToEnglishTranscript();
-                            }
-                        }}
+                        value={$transcriptStore.activeTranscript?.path || ''}
+                        on:change={(e) => switchTranscript(e.target.value)}
                     >
-                        {#if $transcriptStore.originalTranscriptPath}
-                            <option value="original" selected={$transcriptStore.activeTranscriptLanguage === 'original'} class="truncate">
-                                Original
-                            </option>
-                        {/if}
-                        {#if $transcriptStore.englishTranscriptPath}
-                            <option value="english" selected={$transcriptStore.activeTranscriptLanguage === 'english'} class="truncate">
-                                English
-                            </option>
-                        {/if}
-                        {#if !$transcriptStore.originalTranscriptPath && !$transcriptStore.englishTranscriptPath}
-                            <option value="" disabled selected class="truncate">No Transcripts</option>
+                        {#if $displayedTranscripts.length === 0}
+                            <option value="" disabled>No Transcripts</option>
+                        {:else}
+                            {#each $displayedTranscripts as transcript (transcript.path)}
+                                <option value={transcript.path}>
+                                    {transcript.displayLabel}
+                                </option>
+                            {/each}
                         {/if}
                     </select>
                     <!-- Custom Chevron Icon -->
