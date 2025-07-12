@@ -1809,6 +1809,7 @@ dependencies = [
  "directories",
  "env_logger",
  "futures-util",
+ "hound",
  "html-escape",
  "log",
  "num_cpus",
@@ -1894,6 +1895,12 @@ checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
 ]
+
+[[package]]
+name = "hound"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 
 [[package]]
 name = "html-escape"

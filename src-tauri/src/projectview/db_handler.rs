@@ -739,7 +739,7 @@ fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
 }
 
 // Helper to convert Option<&[u8]> to dyn ToSql for rusqlite
-fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql> {
+fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql + '_> {
     match opt {
         Some(val) => Box::new(val),
         None => Box::new(rusqlite::types::Null),
