@@ -11,6 +11,7 @@ import { project as projectMainStore, updateProjectStoreState } from './projectS
 export const initialTranscriptState = {
     segments: [],
     activeTranscript: null, // Holds { path, language_code, segments }
+	currentTranscriptPath: null,
     transcriptDirty: false,
     selectedMediaFile: null,
     selectedModelName: null,
@@ -126,6 +127,7 @@ export function clearTranscriptState() {
                 selectedMediaFile: null,
                 segments: [],
                 activeTranscript: null,
+				currentTranscriptPath: null,
                 transcriptDirty: false,
                 isTranscriptLoading: false,
                 player: { currentTime: 0, duration: 0, isPlaying: false, currentSegmentIndex: -1 },
@@ -221,6 +223,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 speakers: speakersToLoad,
                 segments: [],
                 activeTranscript: null,
+				currentTranscriptPath: null,
                 isTranscriptLoading: false,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
@@ -327,11 +330,13 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
 
         if (!transcriptInfo) {
             console.error(`[setTranscriptData] Could not find transcript info for path: ${path}. Current selectedMediaFile:`, mediaFile);
+            console.error(`[setTranscriptData] Available associated_transcripts:`, mediaFile?.associated_transcripts);
             // Clear transcript data if path is invalid or not found
             return {
                 ...ts,
                 segments: [],
                 activeTranscript: null,
+				currentTranscriptPath: null,
                 isTranscriptLoading: false,
                 transcriptDirty: false,
             };
@@ -351,6 +356,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
                 language_code: transcriptInfo.language_code,
                 segments: newSegments, // Store raw, unmapped segments
             },
+			currentTranscriptPath: path,
             isTranscriptLoading: false,
             speakers: updatedSpeakers,
             player: { ...ts.player, currentSegmentIndex: -1 },
@@ -814,10 +820,11 @@ export function setRanInBackground(value) {
 }
 
 export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrioritize = null) {
-    transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], activeTranscript: null, transcriptDirty: false }));
+    transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], activeTranscript: null, currentTranscriptPath: null, transcriptDirty: false }));
     updateProjectStoreState({ statusMessage: `Loading transcripts for ${mediaFileEntry.name}...` });
 
     const associatedTranscripts = mediaFileEntry.associated_transcripts || [];
+    console.log('[TranscriptStore loadInitialTranscript] mediaFileEntry.associated_transcripts:', associatedTranscripts);
     if (associatedTranscripts.length === 0) {
         transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false }));
         updateProjectStoreState({ statusMessage: `No transcripts found for ${mediaFileEntry.name}.` });

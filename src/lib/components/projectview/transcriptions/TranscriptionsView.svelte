@@ -547,12 +547,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     <!-- Horizontal Waveform Panel (Conditional) -->
     {#if currentWaveformLayout === 'horizontal'}
         <div style="height: {horizontalWaveformContainerHeightPx}px;">
-            <script>
-                console.log('[TranscriptionsView] Horizontal Waveform Panel Conditions:');
-                console.log('  $transcriptStore.selectedMediaFile:', $transcriptStore.selectedMediaFile);
-                console.log('  $transcriptStore.audioBuffer:', $transcriptStore.audioBuffer);
-                console.log('  $transcriptStore.audioBufferPeaks:', $transcriptStore.audioBufferPeaks);
-            </script>
+            
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform
                     bind:this={horizontalWaveformRef}
@@ -565,7 +560,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     editSegmentStartTime={currentEditSegmentStart}
                     editSegmentEndTime={currentEditSegmentEnd}
                     showTrimUI={false}
-                    fixedHeightPx={verticalWaveformWidthPx}
+                    fixedHeightPx={horizontalWaveformContainerHeightPx}
+                    compactMode={false}
                     on:navigate={handlePanelNavigate}
                     on:segmentupdate={handleWaveformSegmentUpdate}
                 />

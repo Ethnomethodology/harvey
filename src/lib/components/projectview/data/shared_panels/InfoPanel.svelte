@@ -162,10 +162,6 @@
         }
     });
 
-    $: if (get(project).id && (!allProjectGroupsForPanel || allProjectGroupsForPanel.length === 0)) {
-        fetchAllProjectGroups();
-    }
-
     async function loadMetadata(assetRelativePathToLoad) {
         // console.log(`[InfoPanel loadMetadata] Called for: ${assetRelativePathToLoad}. Previous: ${previousSelectedItemPath}`);
         currentFileMetadata = null; // Clear existing before load

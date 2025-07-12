@@ -11,6 +11,7 @@
 	export let isEditingSegment = false;
 	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
 	export let fixedHeightPx = 0; // New prop for setting a fixed height in pixels
+export let compactMode = false; // New prop, defaults to false
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -517,88 +518,90 @@
 	});
 
 		function setupResizeObserver() {
-		if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
-			isObserverSetup = true;
-			// Initial height setting within observer setup
-			if (compactMode) {
-				waveformCanvasHeight = 32;
-			} else {
-				waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
-			}
-			resizeObserverInstance = new ResizeObserver((entries) => {
-				let needsRedraw = false;
-				let needsScrollUpdate = false;
-				let newScrollOffset = scrollOffsetPx;
+		        if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
+            isObserverSetup = true;
+            // Initial height setting within observer setup
+            if (compactMode) {
+                waveformCanvasHeight = 32;
+            } else {
+                waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+            }
+            resizeObserverInstance = new ResizeObserver((entries) => {
+                let needsRedraw = false;
+                let needsScrollUpdate = false;
+                let newScrollOffset = scrollOffsetPx;
 
-				for (const entry of entries) {
-					if (entry.target === waveformScrollContainerRef) {
-						const newWidth = entry.contentRect.width;
-						const newContainerHeight = entry.contentRect.height;
+                for (const entry of entries) {
+                    if (entry.target === waveformScrollContainerRef) {
+                        const newWidth = entry.contentRect.width;
+                        const newContainerHeight = entry.contentRect.height;
 
-						let newWaveformHeight;
-						if (fixedHeightPx > 0) {
-							newWaveformHeight = fixedHeightPx - TIMESCALE_HEIGHT;
-						} else {
-							newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
-						}
+                        let newWaveformHeight;
+                        if (fixedHeightPx > 0) {
+                            newWaveformHeight = fixedHeightPx - TIMESCALE_HEIGHT;
+                        } else if (compactMode) { // Use compactMode here
+                            newWaveformHeight = 32;
+                        } else {
+                            newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
+                        }
 
-						if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) {
-							waveformCanvasHeight = newWaveformHeight;
-							needsRedraw = true;
-						}
+                        if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) {
+                            waveformCanvasHeight = newWaveformHeight;
+                            needsRedraw = true;
+                        }
 
-						if (newWidth > 0 && newWidth !== visibleCanvasWidth) {
-							const oldVisibleWidth = visibleCanvasWidth;
-							const oldTotalLogicalWidth = totalLogicalWidth;
-							visibleCanvasWidth = newWidth;
-							const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth);
+                        if (newWidth > 0 && newWidth !== visibleCanvasWidth) {
+                            const oldVisibleWidth = visibleCanvasWidth;
+                            const oldTotalLogicalWidth = totalLogicalWidth;
+                            visibleCanvasWidth = newWidth;
+                            const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth);
 
-							if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) {
-								const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2;
-								const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0;
-								const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel;
-								newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2);
-								newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth)));
-							} else {
-								newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll));
-							}
+                            if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) {
+                                const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2;
+                                const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0;
+                                const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel;
+                                newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2);
+                                newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth)));
+                            } else {
+                                newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll));
+                            }
 
-							if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) {
-								scrollOffsetPx = Math.round(newScrollOffset);
-								needsScrollUpdate = true;
-							}
-							needsRedraw = true;
-						} else if (newWidth <= 0 && visibleCanvasWidth !== 0) {
-							visibleCanvasWidth = 0;
-							scrollOffsetPx = 0;
-							needsScrollUpdate = true;
-							clearWaveformCanvases();
-							needsRedraw = false;
-						}
-					}
-				}
+                            if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) {
+                                scrollOffsetPx = Math.round(newScrollOffset);
+                                needsScrollUpdate = true;
+                            }
+                            needsRedraw = true;
+                        } else if (newWidth <= 0 && visibleCanvasWidth !== 0) {
+                            visibleCanvasWidth = 0;
+                            scrollOffsetPx = 0;
+                            needsScrollUpdate = true;
+                            clearWaveformCanvases();
+                            needsRedraw = false;
+                        }
+                    }
+                }
 
-				if (needsScrollUpdate ) {
-					const wasAutoScrollEnabled = autoScrollEnabled;
-					autoScrollEnabled = false;
-					autoScrollEnableTimer = setTimeout(() => {
-						if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled;
-						autoScrollEnableTimer = null;
-					}, 100);
-				}
-				if (needsRedraw) requestRedraw();
-			});
-			resizeObserverInstance.observe(waveformScrollContainerRef);
-			if (waveformScrollContainerRef) { // Ensure this runs after observer is set up
-				visibleCanvasWidth = waveformScrollContainerRef.clientWidth;
-				if (compactMode) {
-					waveformCanvasHeight = 32;
-				} else {
-					waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
-				}
-			}
-			requestRedraw(true);
-		}
+                if (needsScrollUpdate ) {
+                    const wasAutoScrollEnabled = autoScrollEnabled;
+                    autoScrollEnabled = false;
+                    autoScrollEnableTimer = setTimeout(() => {
+                        if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled;
+                        autoScrollEnableTimer = null;
+                    }, 100);
+                }
+                if (needsRedraw) requestRedraw();
+            });
+            resizeObserverInstance.observe(waveformScrollContainerRef);
+            if (waveformScrollContainerRef) { // Ensure this runs after observer is set up
+                visibleCanvasWidth = waveformScrollContainerRef.clientWidth;
+                if (compactMode) {
+                    waveformCanvasHeight = 32;
+                } else {
+                    waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+                }
+            }
+            requestRedraw(true);
+        }
 	}
 	$: if (waveformScrollContainerRef && !isObserverSetup && isMounted) { setupResizeObserver(); }
 

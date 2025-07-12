@@ -595,8 +595,9 @@ async function onConfirmTranscriptionStart(event) {
         console.log(`[ProjectView] handleRequestMediaSelection: findMediaByPathRecursive result (fileEntry):`, fileEntry);
 
         if (fileEntry) {
+            console.log(`[ProjectView] handleRequestMediaSelection: Calling selectMediaStoreAction with fileEntry:`, fileEntry);
             selectMediaStoreAction(fileEntry);
-            console.log(`[ProjectView] handleRequestMediaSelection: Called selectMediaStoreAction with fileEntry.`);
+            console.log(`[ProjectView] handleRequestMediaSelection: selectMediaStoreAction called.`);
         } else {
             console.error(`[ProjectView] handleRequestMediaSelection: FileEntry not found for path: '${mediaPath}'. An error message should be shown to the user.`);
             await message(`Error: Could not find media file (${mediaName}).`, {title: "Error", type:"error"});
@@ -707,7 +708,7 @@ async function onConfirmTranscriptionStart(event) {
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
     function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
 
-    $: showLoadingOverlay = ($project.isLoading && !$transcriptStore.isTranscribing) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
+    $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
 </script>
 

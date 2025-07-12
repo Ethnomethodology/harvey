@@ -184,7 +184,7 @@
 	$: isTranscribeDisabled = !($transcriptStore.selectedMediaFile?.path);
 
 
-	$: isExportDisabled = !$transcriptStore.currentTranscriptPath || !$transcriptStore.segments || $transcriptStore.segments.length === 0 || $project.isTranscribing || $project.isLoading; // isTranscribing and isLoading can remain from projectStore
+	$: isExportDisabled = !$transcriptStore.activeTranscript?.path || !$transcriptStore.segments || $transcriptStore.segments.length === 0 || $project.isTranscribing || $project.isLoading; // isTranscribing and isLoading can remain from projectStore
 
 	$: mediaFilesForDropdown = (() => {
 		const rootNodes = $project.files || []; // files list still comes from projectStore

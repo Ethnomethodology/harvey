@@ -111,21 +111,6 @@
 		// the following $: block handles the change *to* docx/md correctly.
 	}
 
-	// When exportFormat (bound to the select dropdown) changes
-	$: {
-		if (exportFormat === 'docx' || exportFormat === 'md') {
-			// If the format is now docx or md, ensure our modal's layout choice
-			// reflects the global active view layout.
-			const currentActiveLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
-			if (selectedDocxLayout !== currentActiveLayout) {
-				selectedDocxLayout = currentActiveLayout;
-				console.log(`[ExportModal] Format changed to DOCX/MD, synced selectedDocxLayout to: ${selectedDocxLayout}`);
-			}
-		}
-		// No 'else' needed: if format is not docx/md, selectedDocxLayout keeps its value,
-		// which is fine as it's only used when submitting a docx/md export.
-	}
-
 	// --- Actions ---
 	async function selectExportDirectory() {
 		console.log('[ExportModal] Opening directory save dialog...');
