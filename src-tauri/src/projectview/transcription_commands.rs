@@ -12,6 +12,7 @@ use serde::Deserialize; // Added for FFProbeOutput
 use chrono::Utc; // Added for timestamps
 // use uuid::Uuid; // Removed unused import
 use crate::projectview::db_handler; // Added for database operations
+use crate::projectview::waveform_utils;
 
 use std::{
     fs::{self, File},
@@ -521,6 +522,7 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
             created_at: Some(Utc::now().to_rfc3339()),
             original_import_path: Some(original_media_path.clone()), // Store original path as import path
             speaker_names: None, // Speaker names come from XML, not directly stored here.
+            waveform_data: None,
         };
 
         let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
@@ -528,9 +530,34 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
         // The relative path used as key for DB is the same as the one stored in XML for the new media entry
         let db_key_relative_path_trimmed = new_relative_path_for_xml.clone();
 
+        let waveform_peaks = match fs::read(&output_media_path) {
+            Ok(audio_data) => {
+                match waveform_utils::generate_audio_peaks(&audio_data, 512) {
+                    Ok(peaks) => {
+                        let mut u8_peaks = Vec::with_capacity(peaks.len() * 4);
+                        for peak in peaks {
+                            u8_peaks.extend_from_slice(&peak.to_le_bytes());
+                        }
+                        Some(u8_peaks)
+                    }
+                    Err(e) => {
+                        warn!("[Trim Backend] Failed to generate waveform peaks: {}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("[Trim Backend] Failed to read media file for waveform generation: {}", e);
+                None
+            }
+        };
+
+        let mut trimmed_media_file_metadata_with_waveform = trimmed_media_file_metadata;
+        trimmed_media_file_metadata_with_waveform.waveform_data = waveform_peaks;
+
         match db_handler::save_asset_metadata(
             &project_uuid_for_db,
-            &trimmed_media_file_metadata,
+            &trimmed_media_file_metadata_with_waveform,
             &db_key_relative_path_trimmed,
             &asset_type,
             None, // custom_fields_json

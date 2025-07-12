@@ -48,6 +48,8 @@ pub struct FileMetadata {
     pub original_import_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker_names: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waveform_data: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

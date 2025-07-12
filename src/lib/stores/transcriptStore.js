@@ -662,6 +662,10 @@ export function setAudioBuffer(buffer, peaks = null) {
     transcriptStore.update((ts) => ({ ...ts, audioBuffer: buffer, audioBufferPeaks: peaks }));
 }
 
+export function setWaveformData(peaks) {
+    transcriptStore.update((ts) => ({ ...ts, audioBufferPeaks: peaks }));
+}
+
 export function toggleTranscribeModal(show) {
     transcriptStore.update((ts) => ({ ...ts, showTranscribeModal: !!show }));
 }

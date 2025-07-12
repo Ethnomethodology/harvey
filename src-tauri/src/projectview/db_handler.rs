@@ -29,6 +29,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub asset_type: String,
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
+    pub waveform_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -137,6 +138,7 @@ pub fn init_db() -> Result<(), CommandError> {
             custom_fields_json TEXT,
             original_import_path TEXT,
             speaker_names_json TEXT,
+            waveform_data BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -180,6 +182,17 @@ pub fn init_db() -> Result<(), CommandError> {
     if !speaker_json_exists {
         info!("[DB] Adding speaker_names_json column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT", [])?;
+    }
+
+    // Migration for waveform_data
+    let mut stmt_check_waveform_data = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let waveform_data_exists = stmt_check_waveform_data
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "waveform_data"));
+
+    if !waveform_data_exists {
+        info!("[DB] Adding waveform_data column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB", [])?;
     }
 
     // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
@@ -762,8 +775,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            original_import_path, speaker_names_json, waveform_data
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -783,6 +796,7 @@ pub fn save_asset_metadata(
             custom_fields_json = excluded.custom_fields_json,
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
+            waveform_data = excluded.waveform_data,
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -810,6 +824,7 @@ pub fn save_asset_metadata(
             to_sql_optional_str(custom_fields_json),
             to_sql_optional_str(metadata.original_import_path.as_deref()),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
+            to_sql_optional(metadata.waveform_data.as_ref().map(|v| v.as_slice())),
         ],
     )?;
 
@@ -831,7 +846,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
     let mut stmt = conn.prepare("
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json
+               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -856,6 +871,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             asset_type: row.get(15)?,
             original_import_path: row.get(16)?,
             speaker_names_json: row.get(17)?,
+            waveform_data: row.get(18)?,
         })
     }).optional()?;
 

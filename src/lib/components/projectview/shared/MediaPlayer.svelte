@@ -7,14 +7,15 @@
 		updatePlayerTime,
 		setPlayerDuration,
 		togglePlayerPlaying,
-		setAudioBuffer // This will be used to set both buffer and peaks
+		setAudioBuffer, // This will be used to set both buffer and peaks
+		setWaveformData
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store'; // Ensure get is imported
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
+	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
 	// import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut'; // Removed JS API
 
 	const dispatch = createEventDispatcher();
@@ -679,6 +680,20 @@
         if (!loadedPathFromProp || !webAudioApiSupported || !audioContext || localAudioBuffer) {
             return;
         }
+
+        const currentProject = get(project);
+        const projectId = currentProject.id;
+        const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+        if (projectId && assetRelativePath) {
+            const metadata = await getAssetMetadata(assetRelativePath);
+            if (metadata && metadata.waveform_data) {
+                const peaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+                setWaveformData(peaks);
+                return;
+            }
+        }
+
         try {
             const fileData = await readFile(loadedPathFromProp);
             const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
@@ -691,6 +706,20 @@
             if (!explicitMediaPath) {
                 const peaksData = generateAudioPeaks(decodedBuffer, 512);
                 setAudioBuffer(decodedBuffer, peaksData);
+
+                if (projectId && assetRelativePath) {
+                    const u8_peaks = new Uint8Array(peaksData.buffer);
+                    await invoke('update_asset_metadata_command', {
+                        project_xml_path_str: currentProject.xmlPath,
+                        asset_relative_path: assetRelativePath,
+                        metadata_payload: {
+                            ...$transcriptStore.selectedMediaFile,
+                            waveform_data: Array.from(u8_peaks)
+                        },
+                        custom_fields_payload: null,
+                        asset_type: 'media'
+                    });
+                }
             }
         } catch (error) {
             console.error(`[MediaPlayer] Background decode for waveform failed:`, error);
