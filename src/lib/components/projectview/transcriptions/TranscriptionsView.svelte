@@ -39,6 +39,19 @@
     export let mediaPlayerRef = null;
     let verticalWaveformRef = null;
     let horizontalWaveformRef = null; // Added for horizontal waveform
+    let verticalWaveformWidthPx = 0; // To store the actual pixel width of the vertical waveform panel
+    const HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX = 75; // Default height for the horizontal waveform container
+    let horizontalWaveformContainerHeightPx = HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX; // Initialize with default
+
+    $: {
+        if (currentWaveformLayout === 'vertical') {
+            horizontalWaveformContainerHeightPx = verticalWaveformWidthPx;
+        } else if (currentWaveformLayout === 'horizontal') {
+            horizontalWaveformContainerHeightPx = HORIZONTAL_WAVEFORM_DEFAULT_HEIGHT_PX;
+        } else { // 'none'
+            horizontalWaveformContainerHeightPx = 0;
+        }
+    }
 
     let editableTranscriptRef;
     let richTextPreviewRef;
@@ -51,11 +64,10 @@
         isLeftPanelVisible = value;
     });
 
-    let currentWaveformLayout = 'vertical'; // Default, will be updated by store
+    let currentWaveformLayout; // Will be updated by store subscription
     const unsubscribeWaveformLayout = waveformLayoutStore.subscribe(value => {
         currentWaveformLayout = value;
-        // Could potentially trigger a tick() or manual resize if needed,
-        // but reactive class changes should be sufficient.
+        console.log('[TranscriptionsView] currentWaveformLayout updated to:', currentWaveformLayout);
     });
 
     onDestroy(() => {
@@ -492,7 +504,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
         <!-- Vertical Waveform Panel (Conditional) -->
         {#if currentWaveformLayout === 'vertical'}
-            <div class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
+                
                 {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                     <VerticalWaveform
                         bind:this={verticalWaveformRef}
@@ -504,7 +517,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     />
                 {:else if $transcriptStore.selectedMediaFile}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                        Waveform unavailable for this media or still loading.
+                        Waveform still loading.
                     </div>
                 {:else}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
@@ -533,7 +546,13 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     <!-- Horizontal Waveform Panel (Conditional) -->
     {#if currentWaveformLayout === 'horizontal'}
-        <div class="flex-shrink-0 h-[62px] p-1">
+        <div style="height: {horizontalWaveformContainerHeightPx}px;">
+            <script>
+                console.log('[TranscriptionsView] Horizontal Waveform Panel Conditions:');
+                console.log('  $transcriptStore.selectedMediaFile:', $transcriptStore.selectedMediaFile);
+                console.log('  $transcriptStore.audioBuffer:', $transcriptStore.audioBuffer);
+                console.log('  $transcriptStore.audioBufferPeaks:', $transcriptStore.audioBufferPeaks);
+            </script>
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform
                     bind:this={horizontalWaveformRef}
@@ -546,13 +565,13 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     editSegmentStartTime={currentEditSegmentStart}
                     editSegmentEndTime={currentEditSegmentEnd}
                     showTrimUI={false}
-                    compactMode={true}
+                    fixedHeightPx={verticalWaveformWidthPx}
                     on:navigate={handlePanelNavigate}
                     on:segmentupdate={handleWaveformSegmentUpdate}
                 />
             {:else if $transcriptStore.selectedMediaFile}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                    Waveform unavailable or still loading.
+                    Waveform still loading.
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">

@@ -10,7 +10,7 @@
 	export let trimEndTime = 0;
 	export let isEditingSegment = false;
 	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
-	export let compactMode = false; // New prop for controlling height
+	export let fixedHeightPx = 0; // New prop for setting a fixed height in pixels
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -485,8 +485,8 @@
 			if (isMounted) {
 				if (waveformScrollContainerRef) {
 					visibleCanvasWidth = waveformScrollContainerRef.clientWidth || 0;
-					if (compactMode) {
-						waveformCanvasHeight = 32; // 52px (zoom buttons) - 20px (timescale)
+					if (fixedHeightPx > 0) {
+						waveformCanvasHeight = fixedHeightPx - TIMESCALE_HEIGHT;
 					} else {
 						waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
 					}
@@ -536,8 +536,8 @@
 						const newContainerHeight = entry.contentRect.height;
 
 						let newWaveformHeight;
-						if (compactMode) {
-							newWaveformHeight = 32; // Fixed height in compact mode
+						if (fixedHeightPx > 0) {
+							newWaveformHeight = fixedHeightPx - TIMESCALE_HEIGHT;
 						} else {
 							newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
 						}
@@ -839,6 +839,11 @@
 
 	function canDrawWaveform() {
 		return visibleCanvasWidth > 0 && waveformCanvasHeight > 0 && actualMediaDuration > 0 && (currentAudioBuffer || currentAudioPeaks);
+	}
+
+	$: if (fixedHeightPx > 0 && waveformCanvasHeight !== (fixedHeightPx - TIMESCALE_HEIGHT)) {
+		waveformCanvasHeight = fixedHeightPx - TIMESCALE_HEIGHT;
+		requestRedraw(true);
 	}
 
 	// More aggressive redraw trigger for seek bar movement

@@ -348,7 +348,7 @@
                     </div>
                 </div>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[60px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
