@@ -127,7 +127,7 @@ export async function getCloudConfig() {
   console.log('[ConfigureActions] Fetching cloud config from backend...');
   try {
 	const config = await invoke('get_cloud_config');
-	console.log('[ConfigureActions] Received cloud config:', config);
+	// console.log('[ConfigureActions] Received cloud config:', config);
 	return {
 		api_key: config?.api_key ?? null,
 		model: config?.model ?? null,

@@ -707,17 +707,25 @@
                 const peaksData = generateAudioPeaks(decodedBuffer, 512);
                 setAudioBuffer(decodedBuffer, peaksData);
 
-                if (projectId && assetRelativePath) {
+                if (projectId && assetRelativePath && currentProject.xmlPath) {
                     const u8_peaks = new Uint8Array(peaksData.buffer);
+                    const s = $transcriptStore.selectedMediaFile;
+
+                    // Construct a valid payload, mapping frontend names to backend names
+                    const metadataPayload = {
+                        ...s, // Spread existing properties
+                        file_name: s.name, // Ensure required fields are present with correct names
+                        file_path: s.path,
+                        last_modified: new Date().toISOString(),
+                        waveform_data: Array.from(u8_peaks) // Add the new waveform data
+                    };
+
                     await invoke('update_asset_metadata_command', {
-                        project_xml_path_str: currentProject.xmlPath,
-                        asset_relative_path: assetRelativePath,
-                        metadata_payload: {
-                            ...$transcriptStore.selectedMediaFile,
-                            waveform_data: Array.from(u8_peaks)
-                        },
-                        custom_fields_payload: null,
-                        asset_type: 'media'
+                        projectXmlPathStr: currentProject.xmlPath,
+                        assetRelativePath: assetRelativePath,
+                        metadataPayload: metadataPayload,
+                        customFieldsPayload: null,
+                        assetType: 'media'
                     });
                 }
             }
