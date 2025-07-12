@@ -492,13 +492,7 @@ export async function importMediaFile(importType = null) {
         console.log(`[ProjectService] Media imported and selected in Data tab's Media Notes view. Path: ${newlyImportedFileEntry.path}`);
 
         setAssetImportStatus(false, `${filename} imported and selected in Media Notes view.`);
-        // Update project store to reflect import is no longer in progress
-        project.update(p => ({
-            ...p,
-            isImportingAsset: false,
-            isLoading: false, // Ensure isLoading is also false
-            error: null
-        }));
+        return newlyImportedFileEntry.path;
 
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
@@ -606,7 +600,7 @@ export async function importDocumentFile() {
         });
         await refreshProjectFiles();
         setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
-        if (finalJsonPath) prepareDocumentView(finalJsonPath, 'documents');
+        return finalJsonPath;
 
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
@@ -644,7 +638,7 @@ export async function importTableFile() {
         await refreshProjectFiles();
         const importedTableName = await basename(finalTablePath);
         setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
-        if (finalTablePath) prepareDocumentView(finalTablePath, 'tables');
+        return finalTablePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
         await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
@@ -676,7 +670,7 @@ export async function importImageFile() {
         await refreshProjectFiles();
         const importedImageName = await basename(finalImagePath);
         setAssetImportStatus(false, `Image "${importedImageName}" imported successfully.`);
-        if (finalImagePath) prepareDocumentView(finalImagePath, 'images');
+        return finalImagePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
         await message(`Error importing image: ${errorMessage}`, { title: 'Import Error', type: 'error' });
@@ -709,7 +703,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
             await refreshProjectFiles();
             const importedTranscriptName = await basename(newTranscriptJsonPath);
             setAssetImportStatus(false, `Transcript "${importedTranscriptName}" imported successfully.`);
-            if (newTranscriptJsonPath) prepareImportedTranscriptView(newTranscriptJsonPath);
+            return newTranscriptJsonPath;
         } else {
             throw new Error(`Unsupported transcript source type: ${sourceType}`);
         }

@@ -258,7 +258,7 @@
     let paddingBottom = 0;
     let visibleSegments = []; // This will store fully processed segments for rendering
 
-    $: {
+    $: if (allSegmentsData) {
         if (previewScrollContainerRef && allSegmentsData.length > 0) {
             const totalItems = allSegmentsData.length;
             visibleStartIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT);
@@ -305,6 +305,24 @@
             paddingTop = 0;
             paddingBottom = 0;
             visibleSegments = [];
+        }
+    }
+
+    let lastSeenTranscriptPath = null;
+    $: {
+        const currentPath = $transcriptStore.activeTranscript?.path;
+        if (currentPath && currentPath !== lastSeenTranscriptPath) {
+            lastSeenTranscriptPath = currentPath;
+            // Wait for the DOM to update before resetting scroll
+            tick().then(() => {
+                if (previewScrollContainerRef) {
+                    previewScrollContainerRef.scrollTop = 0;
+                }
+            });
+            // Reset internal state immediately
+            scrollTop = 0;
+        } else if (!currentPath && lastSeenTranscriptPath !== null) {
+            lastSeenTranscriptPath = null;
         }
     }
 

@@ -676,37 +676,78 @@ async function onConfirmTranscriptionStart(event) {
         }, 0);
     }
 
-    async function triggerMediaImport(importType = null) {
+    async function triggerMediaImport(actionType) {
         project.update(p => ({...p, isLoading: true, statusMessage: `Preparing import...`}));
         let canProceed = true;
-        if (selectedTab === 'data') canProceed = await checkUnsavedChangesThenProceed(null, `importing ${importType || 'asset'}`);
+        if (selectedTab === 'data') canProceed = await checkUnsavedChangesThenProceed(null, `importing ${actionType || 'asset'}`);
         else if (selectedTab === 'transcriptions') {
             if (get(project).transcriptDirty) { // This should probably be get(transcriptStore).transcriptDirty
-                const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${importType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
+                const confirmImport = await confirm( `Discard unsaved transcript changes to import new ${actionType || 'asset'}?`, { title: "Unsaved Transcript", type: "warning", okLabel: "Discard and Import", cancelLabel: "Cancel" });
                 if (!confirmImport) canProceed = false;
                 else { clearTranscriptState(); if (transcriptionsViewRef?.handleToggleEditMode) transcriptionsViewRef.handleToggleEditMode(false); }
             }
         }
         if (!canProceed) { project.update(p => ({...p, isLoading: false, statusMessage: 'Import cancelled.'})); return; }
         try {
-            if (importType === 'audio' || importType === 'video') await importMediaFile(importType);
-            else if (importType === 'document') await importDocumentFile();
-            else if (importType === 'table') await importTableFile();
-            else if (importType === 'image') await importImageFile();
-            else if (importType === 'transcript') { showImportTranscriptSourceModal = true; project.update(p => ({...p, isLoading: false})); }
-            else { await message(`Import type (${importType}) not recognized.`, {title: "Import Error", type: "error"}); project.update(p => ({...p, isLoading: false}));}
+            if (actionType === 'audio' || actionType === 'video') {
+                const importedPath = await importMediaFile(actionType);
+                if (importedPath) {
+                    await handleTabClick('data');
+                    prepareMediaNoteView(importedPath);
+                }
+            }
+            else if (actionType === 'document') {
+                const importedPath = await importDocumentFile();
+                if (importedPath) {
+                    await handleTabClick('data');
+                    prepareDocumentView(importedPath, 'documents');
+                }
+            }
+            else if (actionType === 'table') {
+                const importedPath = await importTableFile();
+                if (importedPath) {
+                    await handleTabClick('data');
+                    prepareDocumentView(importedPath, 'tables');
+                }
+            }
+            else if (actionType === 'image') {
+                const importedPath = await importImageFile();
+                if (importedPath) {
+                    await handleTabClick('data');
+                    prepareDocumentView(importedPath, 'images');
+                }
+            }
+            else if (actionType === 'transcript') { 
+                showImportTranscriptSourceModal = true; 
+                project.update(p => ({...p, isLoading: false})); 
+            }
+            else { await message(`Import type (${actionType}) not recognized.`, {title: "Import Error", type: "error"}); project.update(p => ({...p, isLoading: false}));}
         } catch (e) { project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Import failed.`}));}
-        if (importType !== 'transcript' && !get(project).isImportingAsset) project.update(p => ({...p, isLoading: false}));
+        project.update(p => ({...p, isLoading: false}));
     }
 
     async function handleImportTranscriptSourceConfirm(event) {
-        const { sourceType } = event.detail; showImportTranscriptSourceModal = false;
-        if (sourceType === 'msWord') { try { await importTranscriptFile('msWord'); } catch (e) { project.update(p => ({...p, isImportingAsset: false, isLoading: false}));}}
+        const { sourceType } = event.detail; 
+        showImportTranscriptSourceModal = false;
+        if (sourceType === 'msWord') { 
+            try { 
+                const newTranscriptPath = await importTranscriptFile('msWord');
+                if (newTranscriptPath) {
+                    await handleTabClick('data');
+                    prepareImportedTranscriptView(newTranscriptPath);
+                }
+            } catch (e) { 
+                project.update(p => ({...p, isImportingAsset: false, isLoading: false}));
+            }
+        }
         else await message(`Import from "${sourceType}" not supported.`, { title: 'Import Error', type: 'error' });
     }
 
     function closeImportMenu() { if (importMenuVisible) { importMenuVisible = false; if (closeImportMenuListener) document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null;}}
-    function handleImportMenuAction(actionType) { closeImportMenu(); triggerMediaImport(actionType); }
+        function handleImportMenuAction(event, actionType) { 
+        closeImportMenu(); 
+        triggerMediaImport(actionType); 
+    }
 
     $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
@@ -776,12 +817,12 @@ async function onConfirmTranscriptionStart(event) {
 
     {#if importMenuVisible}
         <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
-            <button on:click={() => handleImportMenuAction('audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Audio</button>
-            <button on:click={() => handleImportMenuAction('document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Document</button>
-            <button on:click={() => handleImportMenuAction('image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Image</button>
-            <button on:click={() => handleImportMenuAction('table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Table</button>
-            <button on:click={() => handleImportMenuAction('transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcript</button>
-            <button on:click={() => handleImportMenuAction('video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Video</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Audio</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Document</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Image</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Table</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcript</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Video</button>
         </div>
     {/if}
 
