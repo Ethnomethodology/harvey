@@ -344,6 +344,7 @@ pub async fn import_word_transcript(
         created_at: Some(Utc::now().to_rfc3339()),
                 original_import_path: None,
                 speaker_names: None,
+                waveform_data: None,
     };
 
     let asset_relative_path_for_db = final_transcript_path

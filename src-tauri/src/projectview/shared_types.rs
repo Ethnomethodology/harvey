@@ -572,6 +572,7 @@ impl Default for FileMetadata {
             created_at: None, // Renamed from creation_time
             original_import_path: None, // New field
             speaker_names: None,        // New field
+            waveform_data: None,
         }
     }
 }

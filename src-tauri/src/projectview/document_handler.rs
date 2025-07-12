@@ -156,6 +156,7 @@ pub async fn import_document(
                 created_at: Some(Utc::now().to_rfc3339()),
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
+                waveform_data: None,
             };
 
             // Save metadata to SQLite database
@@ -291,6 +292,7 @@ pub async fn import_document(
                 created_at: Some(Utc::now().to_rfc3339()), // Could also attempt to get from source_path metadata if needed
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
+                waveform_data: None,
             };
 
             info!("[import_document] DOC FileMetadata before save: created_at={:?}", doc_file_metadata.created_at);

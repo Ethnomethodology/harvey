@@ -1114,6 +1114,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
         original_import_path: Some(source_file_path_str.clone()),
         speaker_names: None,
+        waveform_data: None,
     };
 
     let final_asset_type: String;
@@ -1759,6 +1760,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 created_at: None,
                                 original_import_path: None, // Added
                                 speaker_names: None,        // Added
+                                waveform_data: None,
                             },
                             highlights: Vec::new(),
                         }

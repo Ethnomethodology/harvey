@@ -737,6 +737,14 @@ fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
         None => Box::new(rusqlite::types::Null),
     }
 }
+
+// Helper to convert Option<&[u8]> to dyn ToSql for rusqlite
+fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql> {
+    match opt {
+        Some(val) => Box::new(val),
+        None => Box::new(rusqlite::types::Null),
+    }
+}
 // Helper to convert Option<&str> to dyn ToSql
 fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
     match opt_str {
@@ -824,7 +832,7 @@ pub fn save_asset_metadata(
             to_sql_optional_str(custom_fields_json),
             to_sql_optional_str(metadata.original_import_path.as_deref()),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
-            to_sql_optional(metadata.waveform_data.as_ref().map(|v| v.as_slice())),
+            to_sql_optional_blob(metadata.waveform_data.as_deref()),
         ],
     )?;
 

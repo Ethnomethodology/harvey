@@ -1,4 +1,4 @@
-use hound::{WavReader, WavSpec};
+use hound::WavReader;
 use std::io::Cursor;
 
 pub fn generate_audio_peaks(
@@ -6,7 +6,6 @@ pub fn generate_audio_peaks(
     block_size: usize,
 ) -> Result<Vec<f32>, String> {
     let mut reader = WavReader::new(Cursor::new(audio_data)).map_err(|e| e.to_string())?;
-    let spec = reader.spec();
     let samples: Vec<i16> = reader.samples().collect::<Result<_, _>>().unwrap();
 
     let num_blocks = (samples.len() as f32 / block_size as f32).ceil() as usize;

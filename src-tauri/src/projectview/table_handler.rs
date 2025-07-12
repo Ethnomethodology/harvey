@@ -190,6 +190,7 @@ pub async fn import_table_file(
         created_at: Some(Utc::now().to_rfc3339()),
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
+                waveform_data: None,
     };
 
     // relative_path_for_xml is already calculated and is the correct key for the DB
