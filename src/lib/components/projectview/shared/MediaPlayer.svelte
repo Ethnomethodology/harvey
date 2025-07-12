@@ -287,7 +287,7 @@
 
 
 	async function handleScreenshot() {
-		console.log('[MediaPlayer] handleScreenshot - projectId received:', projectId);
+		
 		const currentProjectXmlPath = get(project)?.xmlPath;
 
 		if (!currentProjectXmlPath) {
@@ -306,7 +306,7 @@
 		// If strict "must be actively playing" is needed, add: if (videoElement.paused) { ... }
 		// For now, allowing screenshot from a paused frame.
 
-		console.log('Attempting to capture screenshot...');
+		
 		project.update(p => ({ ...p, statusMessage: 'Capturing screenshot...', isLoading: true, error: null }));
 
 		try {
@@ -677,47 +677,61 @@
 	 }
 
     async function decodeAudioForWaveform() {
-        if (!loadedPathFromProp || !webAudioApiSupported || !audioContext || localAudioBuffer) {
+        if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
             return;
         }
 
-        const currentProject = get(project);
-        const projectId = currentProject.id;
-        const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
-
-        if (projectId && assetRelativePath) {
-            const metadata = await getAssetMetadata(assetRelativePath);
-            if (metadata && metadata.waveform_data) {
-                const peaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
-                setWaveformData(peaks);
-                return;
-            }
-        }
-
+        // Step 1: Always decode the audio file for playback and to have the buffer ready.
+        let decodedBuffer;
         try {
             const fileData = await readFile(loadedPathFromProp);
             const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
             if (audioContext.state === 'suspended') {
                 await audioContext.resume();
             }
-            const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            localAudioBuffer = decodedBuffer;
+            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            localAudioBuffer = decodedBuffer; // Set local buffer for this component instance
+        } catch (error) {
+            console.error(`[MediaPlayer] Critical error decoding audio file:`, error);
+            // Dispatch an error or update a store to indicate failure
+            return; // Stop execution if we can't even decode the audio
+        }
 
-            if (!explicitMediaPath) {
-                const peaksData = generateAudioPeaks(decodedBuffer, 512);
-                setAudioBuffer(decodedBuffer, peaksData);
+        // For the main player, we proceed to handle global state and caching.
+        if (!explicitMediaPath) {
+            const currentProject = get(project);
+            const projectId = currentProject.id;
+            const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
 
-                if (projectId && assetRelativePath && currentProject.xmlPath) {
+            // Step 2: Check for cached waveform data.
+            if (projectId && assetRelativePath) {
+                try {
+                    const metadata = await getAssetMetadata(assetRelativePath);
+                    if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
+                        const peaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+                        setAudioBuffer(decodedBuffer, peaks); // Set both buffer and cached peaks
+                        return; // Successfully loaded from cache
+                    }
+                } catch (e) {
+                    console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+                }
+            }
+
+            // Step 3: If no cached data, generate, set in store, and save to DB.
+            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Generating new peaks.`);
+            const peaksData = generateAudioPeaks(decodedBuffer, 512);
+            setAudioBuffer(decodedBuffer, peaksData); // Set buffer and newly generated peaks
+
+            if (projectId && assetRelativePath && currentProject.xmlPath) {
+                try {
                     const u8_peaks = new Uint8Array(peaksData.buffer);
                     const s = $transcriptStore.selectedMediaFile;
-
-                    // Construct a valid payload, mapping frontend names to backend names
                     const metadataPayload = {
-                        ...s, // Spread existing properties
-                        file_name: s.name, // Ensure required fields are present with correct names
+                        ...s,
+                        file_name: s.name,
                         file_path: s.path,
                         last_modified: new Date().toISOString(),
-                        waveform_data: Array.from(u8_peaks) // Add the new waveform data
+                        waveform_data: Array.from(u8_peaks)
                     };
 
                     await invoke('update_asset_metadata_command', {
@@ -727,10 +741,10 @@
                         customFieldsPayload: null,
                         assetType: 'media'
                     });
+                } catch (error) {
+                    console.error(`[MediaPlayer] Failed to save generated waveform to DB:`, error);
                 }
             }
-        } catch (error) {
-            console.error(`[MediaPlayer] Background decode for waveform failed:`, error);
         }
     }
 	function onError(event) {
@@ -924,7 +938,7 @@
         let ready = isMediaReadyForProcessing;
 
         if (!buffer) {
-            console.log(`[MediaPlayer] Trim requested but buffer not ready. Attempting to decode...`);
+            
             if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
                 dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Cannot process audio for trimming.' });
                 return;
@@ -939,7 +953,7 @@
                 buffer = decodedBuffer;
                 ready = true;
                 isMediaReadyForProcessing = true;
-                console.log(`[MediaPlayer] Lazy decode for trim successful.`);
+                
             } catch (error) {
                 console.error(`[MediaPlayer] Lazy decode for trim failed:`, error);
                 dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Failed to decode audio for trimming.' });
