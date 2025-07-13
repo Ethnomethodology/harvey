@@ -854,7 +854,21 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
     }
 
     if (transcriptToLoad) {
-        await switchTranscript(transcriptToLoad.path);
+        try {
+            await switchTranscript(transcriptToLoad.path);
+        } catch (e) {
+            console.error(`[TranscriptStore loadInitialTranscript] Failed to load prioritized transcript ${transcriptToLoad.path}:`, e);
+            // Try to load the next available transcript if the prioritized one fails
+            const remainingTranscripts = sortedTranscripts.filter(t => t.path !== transcriptToLoad.path);
+            if (remainingTranscripts.length > 0) {
+                console.warn('[TranscriptStore loadInitialTranscript] Trying next available transcript.');
+                await switchTranscript(remainingTranscripts[0].path);
+            } else {
+                console.error('[TranscriptStore loadInitialTranscript] No other transcripts available to load.');
+                transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false, transcriptErrorMessage: `Failed to load any transcript for ${mediaFileEntry.name}.` }));
+                updateProjectStoreState({ statusMessage: `Error loading transcripts for ${mediaFileEntry.name}.`, error: `Failed to load any transcript.` });
+            }
+        }
     } else {
         console.warn('[TranscriptStore loadInitialTranscript] No transcript found to load, even after prioritization and sorting.');
         transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false }));

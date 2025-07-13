@@ -108,7 +108,7 @@ pub async fn run_cloud_transcription(
     app_handle: AppHandle,
     media_path: String,
     cloud_model_id: String,
-    _language: String, // Language often handled by model/API implicitly or via different param
+    language: String, // Language often handled by model/API implicitly or via different param
     _num_speakers: usize, // Gemini's default model might do diarization without this hint, or might have other ways to specify.
     speaker_names: Vec<String>,
     api_key: String,
@@ -292,7 +292,7 @@ pub async fn run_cloud_transcription(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
         lexical_table_json_string, // MODIFIED: Pass the string representation of the Lexical Table
-        None, // language_code: Option<String> - Not explicitly provided by cloud transcription
+        Some(language.clone()), // language_code: Pass the selected language for cloud transcription
     ).await?;
     info!("[Gemini Transcribe][Job '{}'] Final processed transcript saved.", job_id);
 

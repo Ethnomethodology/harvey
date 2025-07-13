@@ -750,8 +750,9 @@ pub async fn save_transcript_json(
 
     match serde_json::from_str::<JsonValue>(&lexical_table_json_string) {
         Ok(json_value) => {
-            if !(json_value.get("root").is_some() && json_value.get("root").unwrap().is_object()) {
-                 return Err(CommandError::from("Provided string is not a valid Lexical JSON structure (missing root object)."));
+            if !(json_value.get("root").is_some() && json_value.get("root").unwrap().is_object() &&
+                 json_value.get("root").unwrap().get("children").is_some() && json_value.get("root").unwrap().get("children").unwrap().is_array()) {
+                 return Err(CommandError::from("Provided string is not a valid Lexical JSON structure (missing root object or children array)."));
             }
             if let Some(root_children) = json_value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
                 if root_children.is_empty() || root_children.first().and_then(|n| n.get("type")).and_then(|t| t.as_str()) != Some("table") {
@@ -864,8 +865,8 @@ pub(crate) fn prepare_output_paths(
     let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
 
     // The final path for the transcript uses the (potentially truncated at import) media_filename_stem.
-    let mut final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
-    let mut counter = 1;
+    let mut final_transcript_path_orig = transcripts_dir.join(format!("{}_1.json", media_filename_stem));
+    let mut counter = 2;
     while final_transcript_path_orig.exists() {
         final_transcript_path_orig = transcripts_dir.join(format!("{}_{}.json", media_filename_stem, counter));
         counter += 1;
