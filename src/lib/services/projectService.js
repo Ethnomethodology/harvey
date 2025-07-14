@@ -600,6 +600,7 @@ export async function importDocumentFile() {
         });
         await refreshProjectFiles();
         setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
+        prepareDocumentView(finalJsonPath, 'documents');
         return finalJsonPath;
 
     } catch (error) {
@@ -638,6 +639,7 @@ export async function importTableFile() {
         await refreshProjectFiles();
         const importedTableName = await basename(finalTablePath);
         setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
+        prepareDocumentView(finalTablePath, 'tables');
         return finalTablePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
@@ -670,6 +672,7 @@ export async function importImageFile() {
         await refreshProjectFiles();
         const importedImageName = await basename(finalImagePath);
         setAssetImportStatus(false, `Image "${importedImageName}" imported successfully.`);
+        prepareDocumentView(finalImagePath, 'images');
         return finalImagePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
@@ -703,6 +706,7 @@ export async function importTranscriptFile(sourceType = 'msWord') {
             await refreshProjectFiles();
             const importedTranscriptName = await basename(newTranscriptJsonPath);
             setAssetImportStatus(false, `Transcript "${importedTranscriptName}" imported successfully.`);
+            prepareImportedTranscriptView(newTranscriptJsonPath);
             return newTranscriptJsonPath;
         } else {
             throw new Error(`Unsupported transcript source type: ${sourceType}`);
