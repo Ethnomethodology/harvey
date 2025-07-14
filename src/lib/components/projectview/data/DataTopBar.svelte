@@ -36,9 +36,7 @@
         if (!transcripts || transcripts.length === 0) return [];
 
         const withLabels = transcripts.map(t => {
-            const langLabel = getLanguageLabel(t.language_code || 'original');
-            const displayLabel = `${langLabel} (${t.name})`;
-            return { ...t, displayLabel };
+            const langLabel = getLanguageLabel(t.language_code || 'original');            let fileName = t.name;            if (!fileName && t.path) {                try {                    const pathParts = t.path.split(/[\\/]/);                    fileName = pathParts[pathParts.length - 1];                    if (fileName.toLowerCase().endsWith('.json')) {                        fileName = fileName.substring(0, fileName.length - 5);                    }                } catch (e) {                    console.error("Error extracting filename from path:", e);                    fileName = '';                }            }            const fileNamePart = fileName ? ` (${fileName})` : '';            const displayLabel = `${langLabel}${fileNamePart}`;            return { ...t, displayLabel };
         });
 
         return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
@@ -106,6 +104,10 @@
                         displayTitle = `${$project.name} : ${currentFileName}`;
                     } else {
                         displayTitle = $project.name;
+                    }
+                    // Add a colon if a file name is present and it's a media file (which has a dropdown)
+                    if ($project.selectedMediaNotePath) {
+                        displayTitle += " :";
                     }
                 }).catch(err => {
                     console.error("Error getting basename for top bar:", err);
@@ -240,12 +242,9 @@
   >
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
-    </div>
-  
-    <div class="flex items-center space-x-2 flex-shrink-0">
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <div class="relative inline-block">
+            <div class="relative inline-block ml-2"> <!-- Added ml-2 for spacing -->
                 <select
                     class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                            max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
@@ -271,7 +270,9 @@
                 </div>
             </div>
         {/if}
-
+    </div>
+  
+    <div class="flex items-center space-x-2 flex-shrink-0">
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
             title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}

@@ -93,7 +93,7 @@
         localEditorJsonState = defaultEmptyJson;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         try {
-            const jsonContent = await invoke('load_note_json', { filePath: path });
+            const jsonContent = await invoke('load_transcript_json', { transcriptPath: path });
             if (!jsonContent || jsonContent.trim() === '') {
                 setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
             } else {
@@ -109,43 +109,31 @@
         }
     }
 
-    let previousMediaPath = null;
-    $: if (mediaPath && mediaPath !== previousMediaPath) {
-        previousMediaPath = mediaPath;
-        console.log(`[MediaEditorPanel] mediaPath changed to: ${mediaPath}`);
-        showDataTrimUI = false; currentTrimAudioBuffer = null;
-
-        function findFileInTree(nodes, path) {
-            for (const node of nodes) {
-                if (node.path === path) return node;
-                if (node.children) {
-                    const found = findFileInTree(node.children, path);
-                    if (found) return found;
-                }
-            }
-            return null;
-        }
-
-        const activeMediaFile = findFileInTree(get(project).files, mediaPath);
-        const defaultTranscript = activeMediaFile?.associated_transcripts?.[0]?.path;
-
-        projectStore.update(p => ({ ...p, activeTranscriptPathInDataTab: defaultTranscript || null }));
-
-        if (!defaultTranscript) {
-            isTranscriptLoading = false; // Explicitly set to false
-            setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript available for this media.", true);
-        }
-
-    } else if (!mediaPath && previousMediaPath) {
-        previousMediaPath = null; associatedTranscriptPath = null; transcriptName = 'N/A';
+    let previousActiveTranscriptPathInDataTab = null;
+    $: if ($projectStore.activeTranscriptPathInDataTab && $projectStore.activeTranscriptPathInDataTab !== previousActiveTranscriptPathInDataTab) {
+        previousActiveTranscriptPathInDataTab = $projectStore.activeTranscriptPathInDataTab;
+        associatedTranscriptPath = $projectStore.activeTranscriptPathInDataTab;
+        transcriptName = associatedTranscriptPath.split(/[\\/]/).pop();
+        console.log(`[MediaEditorPanel] activeTranscriptPathInDataTab changed to: ${associatedTranscriptPath}`);
+        loadTranscript(associatedTranscriptPath);
+        showDataTrimUI = false; // Hide trim UI when switching transcripts
+        currentTrimAudioBuffer = null;
+    } else if (!$projectStore.activeTranscriptPathInDataTab && previousActiveTranscriptPathInDataTab) {
+        // If activeTranscriptPathInDataTab becomes null (e.g., media file deselected)
+        previousActiveTranscriptPathInDataTab = null;
+        associatedTranscriptPath = null;
+        transcriptName = 'N/A';
         currentTranscriptJson = null; initialTranscriptJson = null; isTranscriptDirty = false;
         isTranscriptLoading = false; transcriptLoadError = null; showDataTrimUI = false; currentTrimAudioBuffer = null;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         localEditorJsonState = defaultEmptyJson;
-        if (get(projectStore).selectedMediaNotePath === previousMediaPath) {
-             projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null, }));
+        // Also clear the selectedMediaNotePath if it matches the previous one
+        if (get(projectStore).selectedMediaNotePath === mediaPath) {
+            projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null }));
         }
     }
+
+    // Initial load logic (when mediaPath first becomes available) - REMOVED, now handled by projectStore.js
 
     function handleEditorChange(event) {
         const newJson = event.detail.jsonString;

@@ -77,7 +77,21 @@
 
 		const withLabels = transcripts.map(t => {
 			const langLabel = getLanguageLabel(t.language_code || 'original');
-			const displayLabel = `${langLabel} (${t.name})`;
+			let fileName = t.name;
+			if (!fileName && t.path) {
+				try {
+					const pathParts = t.path.split(/[\\/]/);
+					fileName = pathParts[pathParts.length - 1];
+					if (fileName.toLowerCase().endsWith('.json')) {
+						fileName = fileName.substring(0, fileName.length - 5);
+					}
+				} catch (e) {
+					console.error("Error extracting filename from path:", e);
+					fileName = '';
+				}
+			}
+			const fileNamePart = fileName ? ` (${fileName})` : '';
+			const displayLabel = `${langLabel}${fileNamePart}`;
 			return { ...t, displayLabel };
 		});
 

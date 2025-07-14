@@ -344,11 +344,40 @@ export function prepareMediaNoteView(mediaPath) {
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
             currentImportedTranscriptPath: null, /* ... */
             currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
+            activeTranscriptPathInDataTab: null, // Clear active transcript when switching to other views
         };
     });
 
-    if (!normalizedMediaPath) { // If clearing selection, ensure global loading is false
-        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false }));
+    if (normalizedMediaPath) {
+        // Find the media file in the files tree to get its associated transcripts
+        const currentProjectState = get(project);
+        function findMediaFileInTree(nodes, path) {
+            if (!Array.isArray(nodes)) return null;
+            for (const node of nodes) {
+                if (node.path === path && node.file_type === 'media') {
+                    return node;
+                }
+                if (node.children) {
+                    const found = findMediaFileInTree(node.children, path);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        const mediaFileNode = findMediaFileInTree(currentProjectState.files, normalizedMediaPath);
+        const firstTranscriptPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+
+        project.update(p => ({
+            ...p,
+            activeTranscriptPathInDataTab: firstTranscriptPath,
+            // If no transcript, set error state to display "No Transcription Yet"
+            mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
+            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false, // Only load if there's a transcript
+            isLoading: firstTranscriptPath ? true : false, // Global loading
+        }));
+    } else { // If clearing selection, ensure global loading is false
+        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null }));
     }
 }
 
@@ -385,12 +414,37 @@ export async function switchTranscriptInDataTab(newTranscriptPath) {
         }
     }
 
-    project.update(p => ({
-        ...p,
-        activeTranscriptPathInDataTab: newTranscriptPath,
-        isMediaNoteTranscriptLoading: true,
-        mediaNoteTranscriptError: null,
-    }));
+    project.update(p => {
+        // Find the media file associated with the newTranscriptPath
+        // This assumes that the media file entry contains associated_transcripts with their paths
+        let mediaFileForNewTranscript = null;
+        function findMediaFileByTranscriptPath(nodes, transcriptPath) {
+            if (!Array.isArray(nodes)) return null;
+            for (const node of nodes) {
+                if (node.file_type === 'media' && node.associated_transcripts) {
+                    if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
+                        return node;
+                    }
+                }
+                if (node.children) {
+                    const found = findMediaFileByTranscriptPath(node.children, transcriptPath);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        mediaFileForNewTranscript = findMediaFileByTranscriptPath(p.files, newTranscriptPath);
+
+        return {
+            ...p,
+            activeTranscriptPathInDataTab: newTranscriptPath,
+            // Update selectedMediaNotePath to trigger MediaEditorPanel to load the correct media
+            selectedMediaNotePath: mediaFileForNewTranscript ? mediaFileForNewTranscript.path : p.selectedMediaNotePath,
+            isMediaNoteTranscriptLoading: true,
+            mediaNoteTranscriptError: null,
+        };
+    });
 
     // This will trigger the load in MediaEditorPanel
 }
