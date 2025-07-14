@@ -851,12 +851,23 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             warn!("[Backend Load XML] Media file listed in XML does not exist on disk: '{}'", media_file_abs_path.display());
         }
 
-        for transcript_xml_entry in &media_entry.transcripts {
+        for transcript_xml_entry in &mut media_entry.transcripts {
             let transcript_rel_path = &transcript_xml_entry.relative_path;
             let transcript_abs_path = project_base_dir.join(transcript_rel_path);
 
             if transcript_abs_path.exists() && transcript_abs_path.is_file() {
-                let transcript_file_name = transcript_xml_entry.name.clone();
+                let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                transcript_xml_entry.name = transcript_file_name.clone();
+
+                let file_stem = transcript_abs_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                let parts: Vec<&str> = file_stem.split('.').collect();
+                if parts.len() > 1 {
+                    let lang_code = parts.last().unwrap().to_string();
+                    if lang_code.len() == 2 {
+                        transcript_xml_entry.language_code = Some(lang_code);
+                    }
+                }
+
                  let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
