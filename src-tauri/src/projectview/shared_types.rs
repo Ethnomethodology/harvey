@@ -288,8 +288,6 @@ pub struct TranscriptEntryXml {
     pub name: String,
     #[serde(rename = "relativePath")]
     pub relative_path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub language_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -308,6 +306,8 @@ pub struct TableEntryXml {
     pub name: String,
     #[serde(rename = "relativePath")]
     pub relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
