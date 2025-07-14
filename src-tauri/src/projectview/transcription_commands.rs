@@ -48,8 +48,7 @@ struct FFProbeStream {
 
 #[derive(Deserialize, Debug, Default, Clone)]
 struct FFProbeFormatTags {
-    #[serde(rename = "creation_time")]
-    creation_time: Option<String>, // Keep for potential future use, though not directly used now
+    
     #[serde(rename = "DURATION")]
     duration: Option<String>,
 }
@@ -60,7 +59,7 @@ struct FFProbeFormat {
     bit_rate: Option<String>,
     #[serde(default)]
     tags: Option<FFProbeFormatTags>,
-    format_name: Option<String>,
+    
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -991,12 +990,14 @@ pub struct TranscriptionInitiatedPayload {
 // in case of early errors or successful initiation that then hands over to another process.
 // The local_handler/transcription.rs will use its own more detailed version for its specific events.
 #[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TranscriptionJobCompletedPayload { // Made pub
     job_id: String,
     status: String, // "done" (by local_handler), "cancelled" (by local_handler), "error" (by local_handler), "failed_initiation" (by this command)
-    jobFinishedPath: String, // Path of the media that was processed or attempted
-    transcriptFilePath: Option<String>, // Path to the main (original) transcript (None if error before creation)
-    errorMessage: Option<String>,
+    job_finished_path: String, // Path of the media that was processed or attempted
+    transcript_file_path: Option<String>, // Path to the main (original) transcript (None if error before creation)
+    translated_transcript_file_path: Option<String>,
+    error_message: Option<String>,
 }
 
 #[tauri::command]
@@ -1025,9 +1026,10 @@ pub async fn transcribe_media_command(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: payload.media_path_str.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user immediately.".to_string()),
+            job_finished_path: payload.media_path_str.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user immediately.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled by user immediately."));
     }
@@ -1073,18 +1075,20 @@ pub async fn transcribe_media_command(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()), // Use error message from helper
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()), // Use error message from helper
                 });
             } else {
                 error!("[Transcribe Command][{}] WAV conversion failed: {}. Emitting error event.", job_id, error_message);
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "error".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(format!("WAV conversion failed: {}", error_message)),
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(format!("WAV conversion failed: {}", error_message)),
                 });
             }
             return Err(e); // Propagate the original error from the helper
@@ -1104,9 +1108,10 @@ pub async fn transcribe_media_command(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: payload.media_path_str.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user before main processing pass.".to_string()),
+            job_finished_path: payload.media_path_str.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user before main processing pass.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled before main processing pass."));
     }
@@ -1146,17 +1151,19 @@ pub async fn transcribe_media_command(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()),
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()),
                 });
             } else {
                  let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "error".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(format!("Original transcription pass failed: {}", error_message)),
+                     job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(format!("Original transcription pass failed: {}", error_message)),
                 });
             }
             return Err(CommandError::from(format!("Original transcription pass failed: {}", error_message)));
@@ -1229,9 +1236,10 @@ pub async fn transcribe_media_command(
             let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                 job_id: job_id.clone(),
                 status: "cancelled".to_string(),
-                jobFinishedPath: payload.media_path_str.clone(),
-                transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
-                errorMessage: Some("Transcription cancelled by user before translation pass.".to_string()),
+                job_finished_path: payload.media_path_str.clone(),
+                transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+                translated_transcript_file_path: None,
+                error_message: Some("Transcription cancelled by user before translation pass.".to_string()),
             });
             return Err(CommandError::from("Transcription cancelled before translation pass."));
         }
@@ -1302,17 +1310,19 @@ pub async fn transcribe_media_command(
                         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                             job_id: job_id.clone(),
                             status: "cancelled".to_string(),
-                            jobFinishedPath: payload.media_path_str.clone(),
-                            transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
-                            errorMessage: Some(error_message.clone()),
+                            job_finished_path: payload.media_path_str.clone(),
+                            transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                            translated_transcript_file_path: None,
+                            error_message: Some(error_message.clone()),
                         });
                     } else {
                         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                             job_id: job_id.clone(),
                             status: "error".to_string(),
-                            jobFinishedPath: payload.media_path_str.clone(),
-                           transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
-                            errorMessage: Some(format!("Translation pass failed: {}", error_message)),
+                            job_finished_path: payload.media_path_str.clone(),
+                           transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                           translated_transcript_file_path: None,
+                            error_message: Some(format!("Translation pass failed: {}", error_message)),
                         });
                     }
                     return Err(CommandError::from(format!("Translation pass failed: {}", error_message)));
@@ -1399,11 +1409,10 @@ pub async fn transcribe_media_command(
     let completion_payload = TranscriptionJobCompletedPayload {
         job_id: job_id.clone(),
         status: "done".to_string(),
-        jobFinishedPath: payload.media_path_str.clone(),
-        transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
-        // translatedTranscriptFilePath is not part of this specific payload struct in this file.
-        // If needed, it would be communicated differently or this struct would be the more detailed one.
-        errorMessage: None,
+        job_finished_path: payload.media_path_str.clone(),
+        transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+        translated_transcript_file_path: final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned()),
+        error_message: None,
     };
 
     if let Err(e) = app_handle.emit("custom_transcription_job_completed", completion_payload) {

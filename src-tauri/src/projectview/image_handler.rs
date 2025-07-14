@@ -1,7 +1,7 @@
 // src-tauri/src/projectview/image_handler.rs
 use super::shared_types::*;
 use super::shared_utils::{save_project_xml, ensure_base_asset_dirs, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH};
-use crate::welcome::config::{CommandError, get_config_dir};
+use crate::welcome::config::{CommandError};
 use crate::projectview::db_handler;
     use chrono::Utc;
 use serde_json;
@@ -19,36 +19,7 @@ use quick_xml;
 const SUPPORTED_IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"];
 
 // Placeholder for project path resolution - NEEDS PROPER IMPLEMENTATION
-fn get_project_data_path(project_id: &str) -> Result<PathBuf, String> {
-    // Use the shared get_config_dir function to get the application's base configuration directory.
-    // This function is expected to return the path to a directory like ".../.harvey"
-    let app_config_base_dir = get_config_dir()
-        .map_err(|e| format!("Failed to get application config directory: {}", e))?;
 
-    // Construct the path to the ".harvey_projects" directory, which should be inside the app_config_base_dir.
-    let harvey_projects_path = app_config_base_dir.join(".harvey_projects");
-
-    // Ensure this base .harvey_projects directory exists
-    // Note: The original placeholder for get_project_data_path (in the save_screenshot command)
-    // also included creation of this directory if it didn't exist.
-    // This part of the logic was previously in the save_screenshot command itself.
-    // It's moved here for consistency if this function becomes the sole source of project paths.
-    // However, for save_screenshot, the project_id specific folder should already exist.
-    // Let's assume .harvey_projects should exist or be creatable.
-    if !harvey_projects_path.exists() {
-         fs::create_dir_all(&harvey_projects_path)
-            .map_err(|e| format!("Failed to create .harvey_projects directory at {}: {}", harvey_projects_path.display(), e))?;
-    }
-
-    let project_path = harvey_projects_path.join(project_id);
-
-    // Project-specific directory must exist for saving a screenshot into it.
-    if !project_path.exists() || !project_path.is_dir() {
-        error!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display());
-        return Err(format!("Project path for ID '{}' not found or is not a directory: {}", project_id, project_path.display()));
-    }
-    Ok(project_path)
-}
 // Constants from shared_utils, ensure they are accessible or defined here if not.
 // For example:
 // const HARVEY_FILES_DIR: &str = ".harvey_files";
@@ -465,27 +436,14 @@ mod tests {
     fn create_dummy_project_xml_for_image_test(project_dir: &Path, project_name: &str) -> PathBuf {
         let project_xml_path = project_dir.join("project.xml");
         let project_data = ProjectXml {
-            project_name: project_name.to_string(),
+            name: project_name.to_string(),
             project_uuid: "test-image-uuid".to_string(),
-            project_root_is_single_file: false,
-            video_files: Default::default(),
-            audio_files: Default::default(),
+            media_files: Default::default(),
             image_files: Default::default(), // Initialize as empty
             document_files: Default::default(),
             table_files: Default::default(),
-            other_files: Default::default(),
             imported_transcript_files: Default::default(),
             document_metadata_files: Default::default(), // Should remain empty for image metadata
-            chat_files: Default::default(),
-            project_settings: Default::default(),
-            saved_searches: Default::default(),
-            project_tags: Default::default(),
-            project_people: Default::default(),
-            project_places: Default::default(),
-            project_organizations: Default::default(),
-            project_highlights_config: Default::default(),
-            project_highlights_filters: Default::default(),
-            project_highlights_summary_types: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&project_data).unwrap();
         fs::write(&project_xml_path, xml_string).unwrap();
@@ -553,7 +511,7 @@ mod tests {
         assert!(updated_project_data.document_metadata_files.files.is_empty(), "document_metadata_files should be empty in XML regarding this image");
 
         // Database Assertions
-        let loaded_meta_option = test_db_handler::load_asset_metadata(&expected_relative_path)
+        let loaded_meta_option = test_db_handler::load_asset_metadata("test-image-uuid", &expected_relative_path)
             .expect("Failed to load metadata from DB for assertion");
 
         assert!(loaded_meta_option.is_some(), "Metadata should be found in DB for relative path: {}", expected_relative_path);

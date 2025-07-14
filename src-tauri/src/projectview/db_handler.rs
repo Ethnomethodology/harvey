@@ -1071,37 +1071,7 @@ pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDef
     Ok(())
 }
 
-pub fn get_custom_field_definition(project_id: &str, field_key: &str) -> Result<Option<CustomFieldDefinition>, CommandError> {
-    debug!("[DB] Getting custom field definition for project_id {} and key: {}", project_id, field_key);
-    let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)?;
 
-    let mut stmt = conn.prepare(
-        "SELECT project_id, field_key, field_name, field_type, scope, default_value, created_at, updated_at
-         FROM custom_field_definitions WHERE project_id = ?1 AND field_key = ?2",
-    )?;
-
-    let def_option = stmt.query_row(params![project_id, field_key], |row| {
-        let scope_str: String = row.get(4)?; // Adjusted index
-        Ok(CustomFieldDefinition {
-            project_id: row.get(0)?, // Added project_id
-            field_key: row.get(1)?,    // Adjusted index
-            field_name: row.get(2)?,   // Adjusted index
-            field_type: row.get(3)?,   // Adjusted index
-            scope: CustomFieldScope::from_db_string(&scope_str),
-            default_value: row.get(5)?, // Adjusted index
-            created_at: row.get(6)?,    // Adjusted index
-            updated_at: row.get(7)?,    // Adjusted index
-        })
-    }).optional()?;
-
-    if def_option.is_some() {
-        info!("[DB] Custom field definition found for project_id {} and key: {}", project_id, field_key);
-    } else {
-        info!("[DB] No custom field definition found for project_id {} and key: {}", project_id, field_key);
-    }
-    Ok(def_option)
-}
 
 pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFieldDefinition>, CommandError> {
     debug!("[DB] Getting all custom field definitions for project_id {}", project_id);
@@ -1135,32 +1105,7 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
     Ok(definitions)
 }
 
-pub fn update_custom_field_definition(project_id: &str, definition: &CustomFieldDefinition) -> Result<(), CommandError> {
-    debug!("[DB] Updating custom field definition for project_id {}: {}", project_id, definition.field_key);
-    let db_path = get_db_path()?;
-    let conn = Connection::open(db_path)?;
-    // The trigger 'update_custom_field_definitions_updated_at' will handle updating 'updated_at'.
-    let changes = conn.execute(
-        "UPDATE custom_field_definitions
-         SET field_name = ?1, field_type = ?2, scope = ?3, default_value = ?4
-         WHERE field_key = ?5 AND project_id = ?6",
-        params![
-            definition.field_name,
-            definition.field_type,
-            definition.scope.to_db_string(),
-            definition.default_value,
-            definition.field_key,
-            project_id
-        ],
-    )?;
 
-    if changes > 0 {
-        info!("[DB] Custom field definition updated successfully for project_id {}: {}", project_id, definition.field_key);
-    } else {
-        info!("[DB] No custom field definition found to update for project_id {} and key: {}", project_id, definition.field_key);
-    }
-    Ok(())
-}
 
 pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting custom field definition for project_id {}: {}", project_id, field_key);
@@ -1203,28 +1148,7 @@ pub fn add_project_to_db(id: &str, name: &str, root_path: &str, xml_path: &str) 
     Ok(())
 }
 
-pub fn is_project_in_db(xml_path_str: &str) -> Result<bool, CommandError> {
-    debug!("[DB] Checking if project exists with xml_path: {}", xml_path_str);
-    let db_path = get_db_path()?;
-    if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Project cannot exist.", db_path.display());
-        return Ok(false);
-    }
-    let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("SELECT 1 FROM projects WHERE xml_path = ?1")?;
-    let exists: Option<i32> = stmt.query_row(params![xml_path_str], |row| row.get(0)).optional()?;
 
-    match exists {
-        Some(_) => {
-            debug!("[DB] Project with xml_path: {} found.", xml_path_str);
-            Ok(true)
-        }
-        None => {
-            debug!("[DB] Project with xml_path: {} not found.", xml_path_str);
-            Ok(false)
-        }
-    }
-}
 
 pub fn delete_project_from_db(project_id: &str) -> Result<(), CommandError> {
     info!("[DB] Attempting to delete project with id: {}", project_id);

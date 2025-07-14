@@ -117,6 +117,7 @@ pub async fn import_document(
             let new_doc_entry = DocumentEntryXml {
                 name: final_pdf_name.clone(), // XML name is the truncated filename
                 relative_path: relative_path_for_pdf_xml.clone(),
+                language_code: None,
             };
 
             let mut main_doc_xml_changed = false;

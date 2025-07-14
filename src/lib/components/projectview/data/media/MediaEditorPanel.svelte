@@ -131,6 +131,11 @@
 
         projectStore.update(p => ({ ...p, activeTranscriptPathInDataTab: defaultTranscript || null }));
 
+        if (!defaultTranscript) {
+            isTranscriptLoading = false; // Explicitly set to false
+            setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript available for this media.", true);
+        }
+
     } else if (!mediaPath && previousMediaPath) {
         previousMediaPath = null; associatedTranscriptPath = null; transcriptName = 'N/A';
         currentTranscriptJson = null; initialTranscriptJson = null; isTranscriptDirty = false;
@@ -186,10 +191,14 @@
         const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
         if (activeTranscriptPath && activeTranscriptPath !== associatedTranscriptPath) {
             associatedTranscriptPath = activeTranscriptPath;
+            transcriptName = activeTranscriptPath.split(/[\\/]/).pop();
             loadTranscript(activeTranscriptPath);
-        } else if (!activeTranscriptPath && associatedTranscriptPath) {
-            associatedTranscriptPath = null;
-            setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
+        } else if (!activeTranscriptPath && mediaPath) {
+            if (associatedTranscriptPath) {
+                associatedTranscriptPath = null;
+                transcriptName = 'N/A';
+                setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
+            }
         }
     }
 

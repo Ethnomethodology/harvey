@@ -482,16 +482,16 @@ export async function importMediaFile(importType = null) {
             return;
         }
 
-        // Refresh the main file list in projectStore so all UI components are aware of the new file.
-        await refreshProjectFiles();
+        // Refresh the main file list in projectStore, and select the newly imported file.
+        // This prevents the UI from selecting the first media file by default, which might have transcripts
+        // and cause the UI to hang trying to load them for a file that doesn't have any.
+        await refreshProjectFiles(newlyImportedFileEntry.path);
 
-        // Now that the global list is updated, select the item in the appropriate view.
-        // Emit an event to request media selection in the transcription tab
-        // This ensures the ProjectView component handles tab switching and media loading consistently.
+        // Ensure the correct view is active for the newly imported media.
         prepareMediaNoteView(newlyImportedFileEntry.path);
-        console.log(`[ProjectService] Media imported and selected in Data tab's Media Notes view. Path: ${newlyImportedFileEntry.path}`);
+        console.log(`[ProjectService] Media imported. The new file has been selected. Path: ${newlyImportedFileEntry.path}`);
 
-        setAssetImportStatus(false, `${filename} imported and selected in Media Notes view.`);
+        setAssetImportStatus(false, `${filename} imported successfully.`);
         return newlyImportedFileEntry.path;
 
     } catch (error) {

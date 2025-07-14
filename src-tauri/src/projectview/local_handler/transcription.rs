@@ -35,12 +35,14 @@ use uuid::Uuid;
 #[derive(Deserialize, Debug)] struct WhisperJsonTimestamps { from: String, to: String }
 
 #[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct TranscriptionJobCompletedPayload {
     job_id: String,
     status: String,
-    jobFinishedPath: String,
-    transcriptFilePath: Option<String>,
-    errorMessage: Option<String>,
+    job_finished_path: String,
+    transcript_file_path: Option<String>,
+    translated_transcript_file_path: Option<String>,
+    error_message: Option<String>,
 }
 
 #[derive(Debug, Clone)] struct RttmRecord { start_time: f64, duration: f64, speaker_id: String }
@@ -64,9 +66,10 @@ pub async fn run_transcription(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: internal_job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: media_path.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user.".to_string()),
+            job_finished_path: media_path.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user before WAV conversion.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled by user before WAV conversion."));
     }
@@ -87,9 +90,10 @@ pub async fn run_transcription(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: internal_job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: media_path.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()),
+                    job_finished_path: media_path.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()),
                 });
             }
             return Err(CommandError::from(format!("WAV conversion failed: {}", error_message)));
@@ -114,9 +118,10 @@ pub async fn run_transcription(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: internal_job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: media_path.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user before Whisper.".to_string()),
+            job_finished_path: media_path.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user before Whisper.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled by user before Whisper processing."));
     }
@@ -150,9 +155,10 @@ pub async fn run_transcription(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: internal_job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: media_path.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()),
+                    job_finished_path: media_path.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()),
                 });
             }
             return Err(CommandError::from(format!("Whisper processing failed: {}", error_message)));
@@ -172,9 +178,10 @@ pub async fn run_transcription(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: internal_job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: media_path.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user before Diarization.".to_string()),
+            job_finished_path: media_path.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user before Diarization.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled by user before Diarization processing."));
     }
@@ -216,9 +223,10 @@ pub async fn run_transcription(
                     let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                         job_id: internal_job_id.clone(),
                         status: "cancelled".to_string(),
-                        jobFinishedPath: media_path.clone(),
-                        transcriptFilePath: None,
-                        errorMessage: Some(error_message.clone()),
+                        job_finished_path: media_path.clone(),
+                        transcript_file_path: None,
+                        translated_transcript_file_path: None,
+                        error_message: Some(error_message.clone()),
                     });
                     return Err(CommandError::from(error_message));
                  } else {
@@ -283,9 +291,10 @@ pub async fn run_transcription(
     let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
         job_id: internal_job_id.clone(),
         status: "done".to_string(),
-        jobFinishedPath: media_path.clone(),
-        transcriptFilePath: Some(final_transcript_path.to_string_lossy().to_string()),
-        errorMessage: None,
+        job_finished_path: media_path.clone(),
+        transcript_file_path: Some(final_transcript_path.to_string_lossy().to_string()),
+        translated_transcript_file_path: None,
+        error_message: None,
     });
 
     Ok(TranscriptionResult {

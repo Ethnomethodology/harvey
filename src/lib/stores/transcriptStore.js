@@ -342,7 +342,8 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             };
         }
 
-        const isEnglish = transcriptInfo.language_code === 'en';
+        const langCode = transcriptInfo.language_code || (path.endsWith('.en.json') ? 'en' : 'original');
+        const isEnglish = langCode === 'en';
         const speakerNamesToUse = isEnglish ? updatedSpeakers.translatedNames : updatedSpeakers.names;
         const finalSegmentsForDisplay = remapSegmentSpeakerNames([...newSegments], updatedSpeakers, speakerNamesToUse);
 
@@ -353,7 +354,7 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
             segments: finalSegmentsForDisplay,
             activeTranscript: {
                 path: path,
-                language_code: transcriptInfo.language_code,
+                language_code: langCode,
                 segments: newSegments, // Store raw, unmapped segments
             },
 			currentTranscriptPath: path,
@@ -837,10 +838,12 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
 
     // Prioritize loading: 1. 'original', 2. 'en', 3. first in list
     const sortedTranscripts = [...associatedTranscripts].sort((a, b) => {
-        if (a.language_code === 'original') return -1;
-        if (b.language_code === 'original') return 1;
-        if (a.language_code === 'en') return -1;
-        if (b.language_code === 'en') return 1;
+        const langA = a.language_code || (a.path.endsWith('.en.json') ? 'en' : 'original');
+        const langB = b.language_code || (b.path.endsWith('.en.json') ? 'en' : 'original');
+        if (langA === 'original') return -1;
+        if (langB === 'original') return 1;
+        if (langA === 'en') return -1;
+        if (langB === 'en') return 1;
         const nameA = a.name || a.path || '';
         const nameB = b.name || b.path || '';
         return nameA.localeCompare(nameB);

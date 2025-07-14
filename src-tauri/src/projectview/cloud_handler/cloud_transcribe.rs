@@ -39,7 +39,7 @@ use std::str::FromStr;
 #[derive(Serialize, Deserialize, Debug, Clone)] struct GeminiPart { text: Option<String>, #[serde(rename = "inlineData", skip_serializing_if = "Option::is_none")] inline_data: Option<GeminiInlineData> }
 #[derive(Serialize, Deserialize, Debug, Clone)] struct GeminiInlineData { #[serde(rename = "mimeType")] mime_type: String, data: String }
 #[derive(Deserialize, Debug)] struct GeminiResponse { candidates: Option<Vec<GeminiCandidate>>, #[serde(rename = "promptFeedback")] prompt_feedback: Option<GeminiPromptFeedback> }
-#[derive(Deserialize, Debug)] struct GeminiCandidate { content: Option<GeminiContent>, #[serde(rename = "finishReason")] finish_reason: Option<String> }
+#[derive(Deserialize, Debug)] struct GeminiCandidate { content: Option<GeminiContent> }
 #[derive(Deserialize, Debug)] struct GeminiPromptFeedback { #[serde(rename = "blockReason")] block_reason: Option<String> }
 
 // Struct for parsing the JSON array expected within Gemini's text response
