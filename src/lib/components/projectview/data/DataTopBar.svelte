@@ -32,20 +32,17 @@
     });
 
     const displayedTranscripts = derived(activeMediaFile, ($activeMediaFile) => {
-		const transcripts = $activeMediaFile?.associated_transcripts;
-		if (!transcripts || transcripts.length === 0) return [];
+        const transcripts = $activeMediaFile?.associated_transcripts;
+        if (!transcripts || transcripts.length === 0) return [];
 
-		const languageCounts = {};
-		const withLabels = transcripts.map(t => {
-			const baseLabel = getLanguageLabel(t.language_code || 'original');
-			const count = languageCounts[baseLabel] || 0;
-			languageCounts[baseLabel] = count + 1;
-			const displayLabel = count > 0 ? `${baseLabel}-${count}` : baseLabel;
-			return { ...t, displayLabel };
-		});
+        const withLabels = transcripts.map(t => {
+            const langLabel = getLanguageLabel(t.language_code || 'original');
+            const displayLabel = `${langLabel} (${t.name})`;
+            return { ...t, displayLabel };
+        });
 
-		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
-	});
+        return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+    });
 
     // --- Theme Icons ---
 	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;

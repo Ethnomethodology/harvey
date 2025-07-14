@@ -75,12 +75,9 @@
 		const transcripts = $transcriptStore.selectedMediaFile?.associated_transcripts;
 		if (!transcripts || transcripts.length === 0) return [];
 
-		const languageCounts = {};
 		const withLabels = transcripts.map(t => {
-			const baseLabel = getLanguageLabel(t.language_code);
-			const count = languageCounts[baseLabel] || 0;
-			languageCounts[baseLabel] = count + 1;
-			const displayLabel = count > 0 ? `${baseLabel}-${count}` : baseLabel;
+			const langLabel = getLanguageLabel(t.language_code || 'original');
+			const displayLabel = `${langLabel} (${t.name})`;
 			return { ...t, displayLabel };
 		});
 
