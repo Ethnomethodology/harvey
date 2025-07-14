@@ -8,18 +8,14 @@
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 
     function getLanguageLabel(langCode) {
-		if (!langCode || langCode.toLowerCase() === 'original') return 'Original';
+		if (!langCode || langCode === 'original') return 'Original';
 		const option = languageOptions.find(opt => opt.value === langCode);
 		return option ? option.label : langCode; // Fallback to code if not found
 	}
 
     // --- Transcript Dropdown Logic ---
     const activeMediaFile = derived(project, ($project) => {
-        console.log("DataTopBar project store changed:", $project);
-        if (!$project.selectedMediaNotePath || !$project.files) {
-            console.log("DataTopBar: No selectedMediaNotePath or files");
-            return null;
-        }
+        if (!$project.selectedMediaNotePath || !$project.files) return null;
 
         // Helper to search the file tree
         function findFileInTree(nodes, path) {
@@ -32,31 +28,23 @@
             }
             return null;
         }
-        const foundFile = findFileInTree($project.files, $project.selectedMediaNotePath);
-        console.log("DataTopBar activeMediaFile:", foundFile);
-        return foundFile;
+        return findFileInTree($project.files, $project.selectedMediaNotePath);
     });
 
     const displayedTranscripts = derived(activeMediaFile, ($activeMediaFile) => {
 		const transcripts = $activeMediaFile?.associated_transcripts;
-        console.log("DataTopBar activeMediaFile for displayedTranscripts:", $activeMediaFile);
-		if (!transcripts || transcripts.length === 0) {
-            console.log("DataTopBar: No associated transcripts");
-            return [];
-        }
+		if (!transcripts || transcripts.length === 0) return [];
 
 		const languageCounts = {};
 		const withLabels = transcripts.map(t => {
-			const baseLabel = getLanguageLabel(t.language_code);
+			const baseLabel = getLanguageLabel(t.language_code || 'original');
 			const count = languageCounts[baseLabel] || 0;
 			languageCounts[baseLabel] = count + 1;
 			const displayLabel = count > 0 ? `${baseLabel}-${count}` : baseLabel;
 			return { ...t, displayLabel };
 		});
 
-        const sorted = withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
-        console.log("DataTopBar displayedTranscripts:", sorted);
-		return sorted;
+		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
 	});
 
     // --- Theme Icons ---

@@ -127,9 +127,7 @@
         }
 
         const activeMediaFile = findFileInTree(get(project).files, mediaPath);
-        console.log("MediaEditorPanel activeMediaFile:", activeMediaFile);
         const defaultTranscript = activeMediaFile?.associated_transcripts?.[0]?.path;
-        console.log("MediaEditorPanel defaultTranscript:", defaultTranscript);
 
         projectStore.update(p => ({ ...p, activeTranscriptPathInDataTab: defaultTranscript || null }));
 
