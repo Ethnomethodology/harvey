@@ -807,7 +807,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
 
-    for media_entry in &project_data.media_files.files {
+    for media_entry in &mut project_data.media_files.files {
         let media_stem = &media_entry.name;
         let stem_rel_path = format!("{}/{}", media_dir_rel_path, media_stem);
         let stem_abs_path = project_base_dir.join(&stem_rel_path);
