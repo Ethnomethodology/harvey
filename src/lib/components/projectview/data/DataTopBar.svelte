@@ -15,7 +15,11 @@
 
     // --- Transcript Dropdown Logic ---
     const activeMediaFile = derived(project, ($project) => {
-        if (!$project.selectedMediaNotePath || !$project.files) return null;
+        console.log("DataTopBar project store changed:", $project);
+        if (!$project.selectedMediaNotePath || !$project.files) {
+            console.log("DataTopBar: No selectedMediaNotePath or files");
+            return null;
+        }
 
         // Helper to search the file tree
         function findFileInTree(nodes, path) {
@@ -28,12 +32,18 @@
             }
             return null;
         }
-        return findFileInTree($project.files, $project.selectedMediaNotePath);
+        const foundFile = findFileInTree($project.files, $project.selectedMediaNotePath);
+        console.log("DataTopBar activeMediaFile:", foundFile);
+        return foundFile;
     });
 
     const displayedTranscripts = derived(activeMediaFile, ($activeMediaFile) => {
 		const transcripts = $activeMediaFile?.associated_transcripts;
-		if (!transcripts || transcripts.length === 0) return [];
+        console.log("DataTopBar activeMediaFile for displayedTranscripts:", $activeMediaFile);
+		if (!transcripts || transcripts.length === 0) {
+            console.log("DataTopBar: No associated transcripts");
+            return [];
+        }
 
 		const languageCounts = {};
 		const withLabels = transcripts.map(t => {
@@ -44,7 +54,9 @@
 			return { ...t, displayLabel };
 		});
 
-		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+        const sorted = withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+        console.log("DataTopBar displayedTranscripts:", sorted);
+		return sorted;
 	});
 
     // --- Theme Icons ---
@@ -246,6 +258,35 @@
     </div>
   
     <div class="flex items-center space-x-2 flex-shrink-0">
+        <!-- Transcript Dropdown -->
+        {#if $activeMediaFile}
+            <div class="relative inline-block">
+                <select
+                    class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                           max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
+                    value={$project.activeTranscriptPathInDataTab || ''}
+                    on:change={(e) => switchTranscriptInDataTab(e.target.value)}
+                    title="Switch between available transcripts for this media file"
+                >
+                    {#if $displayedTranscripts.length === 0}
+                        <option value="" disabled>No Transcripts</option>
+                    {:else}
+                        {#each $displayedTranscripts as transcript (transcript.path)}
+                            <option value={transcript.path}>
+                                {transcript.displayLabel}
+                            </option>
+                        {/each}
+                    {/if}
+                </select>
+                <!-- Custom Chevron Icon -->
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            </div>
+        {/if}
+
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
             title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
