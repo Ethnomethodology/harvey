@@ -93,6 +93,8 @@ const initialState = {
 
     selectedGroupId: null,
     selectedGroupData: null,
+
+    activeTranscriptPathInDataTab: null,
 };
 
 export const project = writable({ ...initialState });
@@ -368,6 +370,29 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
         }
         return p;
     });
+}
+
+export async function switchTranscriptInDataTab(newTranscriptPath) {
+    const proj = get(project);
+    if (proj.isMediaNoteTranscriptDirty) {
+        const { confirm } = await import('@tauri-apps/plugin-dialog');
+        const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
+            title: 'Unsaved Changes',
+            type: 'warning',
+        });
+        if (!userConfirmed) {
+            return;
+        }
+    }
+
+    project.update(p => ({
+        ...p,
+        activeTranscriptPathInDataTab: newTranscriptPath,
+        isMediaNoteTranscriptLoading: true,
+        mediaNoteTranscriptError: null,
+    }));
+
+    // This will trigger the load in MediaEditorPanel
 }
 
 export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg, isFileNotFound = false) {

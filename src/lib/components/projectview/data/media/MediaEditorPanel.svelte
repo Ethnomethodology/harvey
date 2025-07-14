@@ -81,20 +81,6 @@
         }
     });
 
-    async function deriveTranscriptPath(currentMediaPath) {
-        if (!currentMediaPath) return null;
-        try {
-            const mediaFilename = await basename(currentMediaPath);
-            const mediaStem = mediaFilename.includes('.') ? mediaFilename.substring(0, mediaFilename.lastIndexOf('.')) : mediaFilename;
-            transcriptName = mediaStem;
-            const mediaDir = await dirname(currentMediaPath);
-            const mediaParentDir = await dirname(mediaDir);
-            if (!mediaParentDir) { console.error(`[MediaEditorPanel] Could not derive mediaParentDir from ${mediaDir}`); return null; }
-            const dataDir = await join(mediaParentDir, 'transcripts');
-            return await join(dataDir, `${mediaStem}.json`);
-        } catch (e) { console.error(`[MediaEditorPanel] Error deriving transcript path for ${currentMediaPath}:`, e); return null; }
-    }
-
     async function loadTranscript(path) {
         if (!path) {
             setMediaNoteTranscriptLoadFailed(mediaPath, "Associated transcript/note path could not be determined.", false);
@@ -128,11 +114,23 @@
         previousMediaPath = mediaPath;
         console.log(`[MediaEditorPanel] mediaPath changed to: ${mediaPath}`);
         showDataTrimUI = false; currentTrimAudioBuffer = null;
-        deriveTranscriptPath(mediaPath).then(path => {
-            associatedTranscriptPath = path;
-            if (path) { loadTranscript(path); }
-            else { setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false); }
-        });
+
+        function findFileInTree(nodes, path) {
+            for (const node of nodes) {
+                if (node.path === path) return node;
+                if (node.children) {
+                    const found = findFileInTree(node.children, path);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        const activeMediaFile = findFileInTree(get(project).files, mediaPath);
+        const defaultTranscript = activeMediaFile?.associated_transcripts?.[0]?.path;
+
+        projectStore.update(p => ({ ...p, activeTranscriptPathInDataTab: defaultTranscript || null }));
+
     } else if (!mediaPath && previousMediaPath) {
         previousMediaPath = null; associatedTranscriptPath = null; transcriptName = 'N/A';
         currentTranscriptJson = null; initialTranscriptJson = null; isTranscriptDirty = false;
@@ -184,21 +182,20 @@
         }
     }
 
+    $: {
+        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
+        if (activeTranscriptPath && activeTranscriptPath !== associatedTranscriptPath) {
+            associatedTranscriptPath = activeTranscriptPath;
+            loadTranscript(activeTranscriptPath);
+        } else if (!activeTranscriptPath && associatedTranscriptPath) {
+            associatedTranscriptPath = null;
+            setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
+        }
+    }
+
     onMount(() => {
         setActiveMediaNoteEditorRef(mediaPath, self);
-        if (mediaPath && !currentTranscriptJson && !isTranscriptLoading && !transcriptLoadError) {
-            deriveTranscriptPath(mediaPath).then(path => {
-                associatedTranscriptPath = path;
-                if (path) loadTranscript(path);
-                else { setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false); }
-            });
-        } else if (mediaPath && currentTranscriptJson) {
-            localEditorJsonState = currentTranscriptJson;
-            if (lexicalEditorRef) lexicalEditorRef.resetEditorState(currentTranscriptJson);
-        } else if (!mediaPath) {
-            isTranscriptLoading = false; transcriptLoadError = null; localEditorJsonState = defaultEmptyJson;
-            if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
-        }
+        // Initial load is now handled by the reactive blocks
         showDataTrimUI = false;
         currentTrimAudioBuffer = null;
     });
