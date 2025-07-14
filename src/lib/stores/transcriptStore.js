@@ -841,7 +841,9 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
         if (b.language_code === 'original') return 1;
         if (a.language_code === 'en') return -1;
         if (b.language_code === 'en') return 1;
-        return a.name.localeCompare(b.name);
+        const nameA = a.name || a.path || '';
+        const nameB = b.name || b.path || '';
+        return nameA.localeCompare(nameB);
     });
 
     let transcriptToLoad = null;
