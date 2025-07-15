@@ -250,11 +250,6 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     export async function handleSaveTranscript() {
         console.log("[TranscriptionsView] handleSaveTranscript called. Current transcriptDirty:", get(transcriptStore).transcriptDirty);
         const tsStore = get(transcriptStore);
-
-        if (!tsStore.transcriptDirty) {
-            console.log("[TranscriptionsView] handleSaveTranscript: No changes to save.");
-            return;
-        }
         
         try {
             project.update(p => ({ ...p, isLoading: true, statusMessage: 'Saving transcript...' })); // Global loading state
