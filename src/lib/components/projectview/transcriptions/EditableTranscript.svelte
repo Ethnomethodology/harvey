@@ -62,7 +62,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let lexicalEditorInstance;
     let currentEditorJson = null;
     let initialJsonForEditor = null;
-    let isDirty = false;
     const dispatch = createEventDispatcher();
     let isMounted = false;
     let isEditorVisible = false;
@@ -310,28 +309,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     $: { const prevEditEnabled = editEnabled; editEnabled = panelEditMode || previewEditMode; if (isMounted && editEnabled !== prevEditEnabled) { dispatchEditState(); } }
 
     /* --- Navigation --- */
-    async function confirmAndCommitChanges() {
-        if (isDirty) {
-            const userConfirmed = await confirm('You have unsaved changes. Do you want to save them?', {
-                type: 'warning',
-                title: 'Unsaved Changes'
-            });
-            if (userConfirmed) {
-                commitCurrentSegmentEdits();
-            } else {
-                isDirty = false; // Discard changes
-            }
-        }
-    }
-
-    export async function previous() {
-        await confirmAndCommitChanges();
+    export function previous() {
+        commitCurrentSegmentEdits();
         if (currentIndex > 0) {
             loadSegment(currentIndex - 1);
         }
     }
-    export async function next() {
-        await confirmAndCommitChanges();
+    export function next() {
+        commitCurrentSegmentEdits();
         if (currentIndex < segments.length - 1) {
             loadSegment(currentIndex + 1);
         }
@@ -343,12 +328,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
     function handleEditorUpdate(event) {
-        const newJson = event.detail.jsonString;
-        if (currentEditorJson !== newJson) {
-            currentEditorJson = newJson;
-            isDirty = true;
-        }
-    }
+        currentEditorJson = event.detail.jsonString;
+	}
     export function commitCurrentSegmentEdits() {
         console.log("[EditableTranscript] commitCurrentSegmentEdits called.");
         if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) {
@@ -361,13 +342,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         const newEndTime = parseTimestamp(localEnd);
 
         let changes = {};
-        let textChanged = isDirty;
+        let textChanged = false;
 
-        if (isDirty) {
-            if (!currentEditorJson) {
-                console.warn("Commit skipped: No editor JSON.");
-                return false;
-            }
+        if (currentEditorJson) {
             // --- normalize and sanitize JSON: flatten nested root wrappers ---
             let jsonStringRaw =
                 typeof currentEditorJson === 'string'
@@ -427,8 +404,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             }
             if (jsonString !== segmentInStore.text) {
                 changes.text = jsonString;
-            } else {
-                textChanged = false;
+                textChanged = true;
             }
         }
 
@@ -447,16 +423,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             changes.speaker = localSpeaker;
         }
 
-        const changed = textChanged || startTimeChanged || endTimeChanged || speakerChanged;
+        const hasChanges = Object.keys(changes).length > 0;
 
-        if (changed) {
+        if (hasChanges) {
             updateSegment(currentIndex, changes);
-            isDirty = false; // Reset dirty flag
             console.log("[EditableTranscript] Committed changes segment", currentIndex, "Transcript dirty state after commit:", get(transcriptStore).transcriptDirty);
         } else {
             console.log("[EditableTranscript] No changes detected for segment", currentIndex);
         }
-        return changed;
+        return hasChanges;
     }
     function handleEditSaveClick() {
         if (editEnabled) {
