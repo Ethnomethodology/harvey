@@ -1613,8 +1613,10 @@ $: if (editor && activeLayout) {
                 if (_isTableNode(node)) {
                     foundTables.push(node);
                 }
-                for (const child of node.getChildren()) {
-                    findTableNodes(child, foundTables);
+                if (typeof node.getChildren === 'function') {
+                    for (const child of node.getChildren()) {
+                        findTableNodes(child, foundTables);
+                    }
                 }
             };
 
