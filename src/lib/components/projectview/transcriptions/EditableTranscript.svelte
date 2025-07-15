@@ -435,7 +435,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     }
     function handleEditSaveClick() {
         if (editEnabled) {
-            commitCurrentSegmentEdits();
             dispatch('toggleedit');
         } else {
             dispatch('toggleedit');
