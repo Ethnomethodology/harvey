@@ -93,6 +93,12 @@
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
+        // If the requested path and type are already active, do nothing.
+        if (pathForView === activeItemPath && typeForView === activeViewType) {
+            console.debug(`[DataView] Requested view change to already active item. Path: ${pathForView}, Type: ${typeForView}. Aborting redundant action.`);
+            return;
+        }
+
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
             console.error(`[DataView] ABORTING: Invalid path or type. Path: '${pathForView}', Type: '${typeForView}'.`);
             prepareDocumentView(null, 'placeholder');
