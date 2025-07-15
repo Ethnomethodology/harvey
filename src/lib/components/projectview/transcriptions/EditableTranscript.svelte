@@ -6,16 +6,8 @@
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added (though not directly used for column widths here, good for reference)
+    import { confirm } from '@tauri-apps/plugin-dialog';
 
-    // Simple debounce utility
-    function debounce(func, delay) {
-        let timeout;
-        return function(...args) {
-            const context = this;
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(context, args), delay);
-        };
-    }
 
     // --- Lexical Imports --- (Keep as is)
     import { $getRoot as getRoot, $createParagraphNode as createParagraphNode, $createTextNode as createTextNode, $insertNodes as insertNodes, RootNode, ParagraphNode, TextNode, LineBreakNode } from 'lexical';
@@ -70,6 +62,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let lexicalEditorInstance;
     let currentEditorJson = null;
     let initialJsonForEditor = null;
+    let isDirty = false;
     const dispatch = createEventDispatcher();
     let isMounted = false;
     let isEditorVisible = false;
@@ -317,20 +310,43 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     $: { const prevEditEnabled = editEnabled; editEnabled = panelEditMode || previewEditMode; if (isMounted && editEnabled !== prevEditEnabled) { dispatchEditState(); } }
 
     /* --- Navigation --- */
-    export function previous() { if (currentIndex > 0) { commitCurrentSegmentEdits(); loadSegment(currentIndex - 1); } }
-    export function next() { if (currentIndex < segments.length - 1) { commitCurrentSegmentEdits(); loadSegment(currentIndex + 1); } }
+    async function confirmAndCommitChanges() {
+        if (isDirty) {
+            const userConfirmed = await confirm('You have unsaved changes. Do you want to save them?', {
+                type: 'warning',
+                title: 'Unsaved Changes'
+            });
+            if (userConfirmed) {
+                commitCurrentSegmentEdits();
+            } else {
+                isDirty = false; // Discard changes
+            }
+        }
+    }
+
+    export async function previous() {
+        await confirmAndCommitChanges();
+        if (currentIndex > 0) {
+            loadSegment(currentIndex - 1);
+        }
+    }
+    export async function next() {
+        await confirmAndCommitChanges();
+        if (currentIndex < segments.length - 1) {
+            loadSegment(currentIndex + 1);
+        }
+    }
     function handlePreviousClick() { dispatch('previous'); }
     function handleNextClick() { dispatch('next'); }
 
     /* --- Editor Actions --- */
     function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
-    const debouncedCommit = debounce(commitCurrentSegmentEdits, 500); // Debounce for 500ms
     function handleEditorUpdate(event) {
         const newJson = event.detail.jsonString;
-        currentEditorJson = newJson;
-        if (editEnabled) { // Only commit if in edit mode
-            debouncedCommit();
+        if (currentEditorJson !== newJson) {
+            currentEditorJson = newJson;
+            isDirty = true;
         }
     }
     export function commitCurrentSegmentEdits() {
@@ -339,101 +355,117 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             console.warn("Commit skipped: Not ready or not in edit mode.");
             return false;
         }
-        if (!currentEditorJson) {
-            console.warn("Commit skipped: No editor JSON.");
-            return false;
-        }
-        // --- normalize and sanitize JSON: flatten nested root wrappers ---
-        let jsonStringRaw =
-            typeof currentEditorJson === 'string'
-                ? currentEditorJson
-                : JSON.stringify(currentEditorJson);
-        let jsonString;
-        try {
-          const obj = JSON.parse(jsonStringRaw);
-          if (obj && obj.root && Array.isArray(obj.root.children)) {
-            function flattenChildren(nodes) {
-              return nodes.flatMap(n =>
-                n.type === 'root' && Array.isArray(n.children)
-                  ? flattenChildren(n.children)
-                  : [n]
-              );
-            }
-            let finalChildren = flattenChildren(obj.root.children);
-            if (finalChildren.length === 0) {
-              finalChildren.push({
-                type: 'paragraph',
-                version: 1,
-                children: [],
-                direction: null,
-                format: '',
-                indent: 0
-              });
-            }
-            obj.root.children = finalChildren;
-            jsonString = JSON.stringify(obj);
-          } else {
-            jsonString = jsonStringRaw;
-          }
-        } catch (e) {
-          console.error("[EditableTranscript] Error sanitizing JSON on save:", e);
-          jsonString = jsonStringRaw;
-        }
-
-        console.log('[DEBUG save]', {
-            idx: currentIndex,
-            first120: jsonString.slice(0, 120),
-            typeof: typeof jsonString
-        });
-
-        // validate it contains a Lexical root
-        try {
-            const parsed = JSON.parse(jsonString);
-            if (!parsed || !parsed.root) {
-                throw new Error("Invalid JSON structure (missing root)");
-            }
-        } catch (e) {
-            console.warn("Commit skipped: currentEditorJson invalid.", e);
-            console.error(
-                "Invalid JSON:",
-                jsonString ? jsonString.substring(0, 200) + "..." : "null"
-            );
-            return false;
-        }
 
         const segmentInStore = get(transcriptStore).segments[currentIndex];
         const newStartTime = parseTimestamp(localStart);
         const newEndTime = parseTimestamp(localEnd);
 
         let changes = {};
-        let changed = false;
+        let textChanged = isDirty;
 
-        if (jsonString !== segmentInStore.text) {
-            changes.text = jsonString;
-            changed = true;
+        if (isDirty) {
+            if (!currentEditorJson) {
+                console.warn("Commit skipped: No editor JSON.");
+                return false;
+            }
+            // --- normalize and sanitize JSON: flatten nested root wrappers ---
+            let jsonStringRaw =
+                typeof currentEditorJson === 'string'
+                    ? currentEditorJson
+                    : JSON.stringify(currentEditorJson);
+            let jsonString;
+            try {
+              const obj = JSON.parse(jsonStringRaw);
+              if (obj && obj.root && Array.isArray(obj.root.children)) {
+                function flattenChildren(nodes) {
+                  return nodes.flatMap(n =>
+                    n.type === 'root' && Array.isArray(n.children)
+                      ? flattenChildren(n.children)
+                      : [n]
+                  );
+                }
+                let finalChildren = flattenChildren(obj.root.children);
+                if (finalChildren.length === 0) {
+                  finalChildren.push({
+                    type: 'paragraph',
+                    version: 1,
+                    children: [],
+                    direction: null,
+                    format: '',
+                    indent: 0
+                  });
+                }
+                obj.root.children = finalChildren;
+                jsonString = JSON.stringify(obj);
+              } else {
+                jsonString = jsonStringRaw;
+              }
+            } catch (e) {
+              console.error("[EditableTranscript] Error sanitizing JSON on save:", e);
+              jsonString = jsonStringRaw;
+            }
+
+            console.log('[DEBUG save]', {
+                idx: currentIndex,
+                first120: jsonString.slice(0, 120),
+                typeof: typeof jsonString
+            });
+
+            // validate it contains a Lexical root
+            try {
+                const parsed = JSON.parse(jsonString);
+                if (!parsed || !parsed.root) {
+                    throw new Error("Invalid JSON structure (missing root)");
+                }
+            } catch (e) {
+                console.warn("Commit skipped: currentEditorJson invalid.", e);
+                console.error(
+                    "Invalid JSON:",
+                    jsonString ? jsonString.substring(0, 200) + "..." : "null"
+                );
+                return false;
+            }
+            if (jsonString !== segmentInStore.text) {
+                changes.text = jsonString;
+            } else {
+                textChanged = false;
+            }
         }
-        if (Math.abs(newStartTime - (segmentInStore.start_time || 0)) > 0.0001) {
+
+        const startTimeChanged = Math.abs(newStartTime - (segmentInStore.start_time || 0)) > 0.0001;
+        if (startTimeChanged) {
             changes.start_time = newStartTime;
-            changed = true;
         }
-        if (Math.abs(newEndTime - (segmentInStore.end_time || 0)) > 0.0001) {
+
+        const endTimeChanged = Math.abs(newEndTime - (segmentInStore.end_time || 0)) > 0.0001;
+        if (endTimeChanged) {
             changes.end_time = newEndTime;
-            changed = true;
         }
-        if (localSpeaker !== segmentInStore.speaker) {
+
+        const speakerChanged = localSpeaker !== segmentInStore.speaker;
+        if (speakerChanged) {
             changes.speaker = localSpeaker;
-            changed = true;
         }
+
+        const changed = textChanged || startTimeChanged || endTimeChanged || speakerChanged;
 
         if (changed) {
             updateSegment(currentIndex, changes);
+            isDirty = false; // Reset dirty flag
             console.log("[EditableTranscript] Committed changes segment", currentIndex, "Transcript dirty state after commit:", get(transcriptStore).transcriptDirty);
         } else {
             console.log("[EditableTranscript] No changes detected for segment", currentIndex);
         }
         return changed;
     }
-    function handleEditSaveClick() { if (editEnabled) { commitCurrentSegmentEdits(); console.log("[EditableTranscript] Save clicked, dispatching 'toggleedit'."); } else { console.log("[EditableTranscript] Edit clicked, dispatching 'toggleedit'."); } dispatch('toggleedit'); }
+    function handleEditSaveClick() {
+        if (editEnabled) {
+            commitCurrentSegmentEdits();
+            // We don't dispatch toggleedit anymore, user stays in edit mode
+        } else {
+            dispatch('toggleedit');
+        }
+    }
     const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /> </svg>`;
 
@@ -486,7 +518,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     {:else}
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
-                <button on:click="{handleEditSaveClick}" class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200' title="{editEnabled ? 'Save Transcript (Ctrl+S)' : 'Edit Segment (Ctrl+E)'}" aria-label="{editEnabled ? 'Save Transcript' : 'Edit Segment'}">
+                <button on:click="{handleEditSaveClick}"
+                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                        title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
+                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
+                        disabled="{editEnabled && !isDirty}">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
@@ -520,7 +556,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -553,7 +589,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -586,7 +622,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -619,7 +655,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -652,7 +688,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                      <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                              {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" on:blur="{commitCurrentSegmentEdits}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" />
                              {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                              {/if}
