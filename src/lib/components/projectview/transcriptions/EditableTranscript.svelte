@@ -436,7 +436,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function handleEditSaveClick() {
         if (editEnabled) {
             commitCurrentSegmentEdits();
-            // We don't dispatch toggleedit anymore, user stays in edit mode
+            dispatch('toggleedit');
         } else {
             dispatch('toggleedit');
         }
