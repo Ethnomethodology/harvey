@@ -496,8 +496,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 <button on:click="{handleEditSaveClick}"
                         class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
                         title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        disabled="{editEnabled && !isDirty}">
+                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
