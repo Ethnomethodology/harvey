@@ -255,7 +255,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             }
             // Scenario 3: Content of the *currently active* segment might have changed (e.g., external update, speaker remapping)
             // This is a more granular check for the specific segment being displayed.
-            else if (currentIndex >= 0 && currentIndex < segments.length) {
+            else if (!editEnabled && currentIndex >= 0 && currentIndex < segments.length) {
                 const currentSegmentInStore = segments[currentIndex];
                 const currentSegmentText = currentSegmentInStore?.text;
                 const currentSegmentSpeaker = currentSegmentInStore?.speaker;
