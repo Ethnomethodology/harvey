@@ -27,7 +27,7 @@ Harvey 1.0 is designed with privacy as a priority; core AI functionalities like 
     *   **Cloud-Powered**: Leverage cloud-based transcription services (e.g., Google Gemini) for high-accuracy transcription with an internet connection.
 *   **Interactive Transcript Editor**: Edit and refine transcripts with a rich-text editor (Lexical-based) linked to media playback, including timestamp adjustment and speaker labeling.
 *   **Versatile Document Handling**:
-    *   **Rich Text Documents**: Create and edit notes and documents with formatting, tables, and lists.
+    *   **Rich Text Documents**: Create and edit data and documents with formatting, tables, and lists.
     *   **PDF Viewing & Annotation**: Open and view PDF documents, with robust text-based annotation capabilities (highlights, comments) that are stored and re-applied accurately. Annotations are saved in a separate SQLite database (`harvey_annotations.sqlite`).
     *   **Table Viewing**: Import and view CSV and XLSX files with interactive features like sorting and filtering.
     *   **Image Handling & Annotation**: Import, view (using OpenSeadragon), and annotate (using Annotorious) various image formats. Annotations can be saved and reloaded, managed by the backend `image_handler.rs`.
@@ -87,10 +87,10 @@ This is the main multi-tab interface for working within a project.
 #### Overall Structure & Navigation
 
 * **Frontend Components**:
-    * `ProjectView.svelte` (in `src/routes/projectview/`): The root component for the project workspace, likely managing the "Transcriptions" and "Fieldnotes" tabs.
+    * `ProjectView.svelte` (in `src/routes/projectview/`): The root component for the project workspace, likely managing the "Transcriptions" and "Data" tabs.
     * `BottomBar.svelte` (in `src/lib/components/projectview/shared/`): A shared component for displaying status messages or common actions across project views.
 * **Functionality**:
-    * Provides the main tabbed interface for "Transcriptions" (media-based) and "Fieldnotes" (asset management).
+    * Provides the main tabbed interface for "Transcriptions" (media-based) and "Data" (asset management).
     * Loads initial project data.
 * **Associated Backend**:
     * `projectview/core_commands.rs`: `load_project_data` is crucial for populating the project view.
@@ -138,7 +138,7 @@ This is the main multi-tab interface for working within a project.
 
 ---
 
-#### Fieldnotes View (`src/lib/components/projectview/notes/`)
+#### Data View (`src/lib/components/projectview/notes/`)
 
 This section handles the display and management of various project assets.
 

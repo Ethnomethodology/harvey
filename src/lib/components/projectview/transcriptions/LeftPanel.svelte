@@ -27,143 +27,47 @@
 	$: selectedMediaPath = $transcriptStore.selectedMediaFile?.path;
     // NEW: Get current transcript path for highlighting
     // currentTranscriptPath is now sourced from transcriptStore.
-    $: currentTranscriptPath = $transcriptStore.currentTranscriptPath;
+    $: currentTranscriptPath = $transcriptStore.activeTranscript?.path;
 
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
 
-    // --- Function to handle opening a note ---
-    function handleOpenNote(item) {
-        if (!item || item.file_type !== 'note') return;
-        console.log(`[LeftPanel] Requesting to open note: ${item.name} (${item.path})`);
-        dispatch('requestopentab', { tabName: 'notes', notePath: item.path });
+    // --- Function to handle opening a data ---
+    function handleOpenData(item) {
+        if (!item || item.file_type !== 'data') return;
+        console.log(`[LeftPanel] Requesting to open data: ${item.name} (${item.path})`);
+        dispatch('requestopentab', { tabName: 'data', dataPath: item.path });
     }
 
 	// --- Item Interaction Logic ---
-	// MODIFIED: handleItemClick for better media/transcript loading sequence
-	async function handleItemClick(event) {
-		const item = event.detail;
-		console.log('[LeftPanel] handleItemClick triggered for:', item);
+	// MODIFIED: handleItemClick to dispatch a generic request
+    async function handleItemClick(event) {
+        const item = event.detail;
+        console.log('[LeftPanel] handleItemClick triggered for:', item);
 
-		if (item.is_directory) {
-			console.log('[LeftPanel] Clicked item is a directory, ignoring for selection/load.');
-			return; // Ignore clicks on directories
-		}
-
-		if (item.file_type === 'media') {
-			console.log('[LeftPanel] Clicked item is media, calling selectMedia.');
-			// selectMedia handles loading the first associated transcript automatically
-			selectMedia(item); // Select the media file
-		}
-        else if (item.file_type === 'transcript') {
-			console.log('[LeftPanel] Clicked item is transcript, attempting to load.');
-			const transcriptToLoadPath = item.path;
-            const mediaIdentifier = item.media_xml_identifier; // Get associated media stem
-
-            if (!mediaIdentifier) {
-                console.warn('[LeftPanel] Transcript item missing media_xml_identifier. Cannot select associated media.');
-                // Proceed to load the transcript anyway, but without guarantees media is correct
-                if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                    try {
-                        await loadTranscriptFile(transcriptToLoadPath);
-                        console.log('[LeftPanel] Transcript loaded (without associated media selection).');
-                        await message(`Warning: Could not identify the media file associated with '${item.name}'. The transcript was loaded, but the player might not be synchronized.`, { title: 'Media Not Found', type: 'warning'});
-                    } catch (error) {
-                        console.error(`[LeftPanel] Error loading transcript ${item.name} (no media ID):`, error);
-                        await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                        project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                    }
-                } else { console.log('[LeftPanel] Clicked transcript (no media ID) is already loaded.'); }
-                return; // Stop further processing for this case
-            }
-
-            // Find the corresponding media file entry in the store's raw file list
-            const allFiles = get(project).files;
-            let foundMediaEntry = null;
-            function findMediaInChildrenRecursive(nodes, identifier) {
-                 if (!Array.isArray(nodes)) return null;
-                 for (const node of nodes) {
-                     // Check if the node itself is the media file
-                     if (node.file_type === 'media' && node.media_xml_identifier === identifier) { return node; }
-                     // If it's a directory, search its children
-                     if (node.children && node.children.length > 0) {
-                         const found = findMediaInChildrenRecursive(node.children, identifier);
-                         if (found) return found;
-                     }
-                 }
-                 return null;
-             }
-            foundMediaEntry = findMediaInChildrenRecursive(allFiles, mediaIdentifier);
-
-            if (!foundMediaEntry) {
-                console.warn('[LeftPanel] Could not find corresponding media file entry for transcript identifier:', mediaIdentifier);
-                // Still try loading the transcript, similar to the no-identifier case
-                 if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                    try {
-                        await loadTranscriptFile(transcriptToLoadPath);
-                        console.log('[LeftPanel] Transcript loaded (associated media node not found).');
-                        await message(`Warning: Could not find the media file entry associated with '${item.name}' in the project structure. The transcript was loaded, but the player might not be synchronized.`, { title: 'Media Entry Missing', type: 'warning'});
-                    } catch (error) { /* ... error handling ... */
-                         console.error(`[LeftPanel] Error loading transcript ${item.name} (media entry missing):`, error);
-                         await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                         project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                    }
-                } else { console.log('[LeftPanel] Clicked transcript (media entry missing) is already loaded.'); }
-                return; // Stop further processing
-            }
-
-            // Media entry found!
-            console.log(`[LeftPanel] Found associated media entry: ${foundMediaEntry.name}`);
-            const currentSelectedMediaPath = get(transcriptStore).selectedMediaFile?.path;
-
-            // --- Sequence: Select Media FIRST, then load SPECIFIC transcript ---
-            // 1. Select the associated media (if not already selected)
-            // NOTE: Pass `true` to selectMedia to prevent it from auto-loading the *first* transcript,
-            // because we are about to load a *specific* one. We need to modify selectMedia for this.
-            // For now, let's stick to the original logic and accept the brief load of the first transcript.
-            if (currentSelectedMediaPath !== foundMediaEntry.path) {
-                console.log('[LeftPanel] Associated media is not currently selected. Calling selectMedia...');
-                selectMedia(foundMediaEntry);
-                // selectMedia will attempt to load the *primary* transcript. We wait for the next step.
-            } else {
-                console.log('[LeftPanel] Associated media is already selected.');
-            }
-
-            // 2. Load the *clicked* transcript (even if it overwrites the primary one just loaded by selectMedia)
-            if (get(transcriptStore).currentTranscriptPath !== transcriptToLoadPath) {
-                console.log(`[LeftPanel] Loading the *specifically clicked* transcript file: ${transcriptToLoadPath}`);
-                try {
-                    await loadTranscriptFile(transcriptToLoadPath);
-                    console.log('[LeftPanel] Clicked transcript loaded successfully.');
-                    project.update(p => ({ ...p, statusMessage: `Transcript loaded: ${item.name}` }));
-                } catch (error) {
-                    console.error(`[LeftPanel] Error loading clicked transcript ${item.name}:`, error);
-                    await message(`Error loading transcript ${item.name}: ${error.message || error}`, { title: 'Load Error', type: 'error'});
-                    project.update((p) => ({ ...p, statusMessage: `Error loading ${item.name}` }));
-                }
-            } else {
-                console.log('[LeftPanel] Clicked transcript is already loaded.');
-            }
-
-		} else if (item.file_type === 'note') {
-            handleOpenNote(item);
-		} else {
-			console.log('[LeftPanel] Clicked item is of type', item.file_type, '- no primary click action defined.');
-		}
-	}
-
-	function handleItemDoubleClick(event) {
-		const item = event.detail;
-		if (!item.is_directory && item.file_type === 'media') {
-			console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
-			selectMedia(item);
-        } else if (!item.is_directory && item.file_type === 'note') {
-            console.log('[LeftPanel] Double-clicked note, calling handleOpenNote.');
-            handleOpenNote(item);
+        if (item.is_directory) {
+            console.log('[LeftPanel] Clicked item is a directory, ignoring for selection/load.');
+            return; // Ignore clicks on directories
         }
-	}
 
-	// --- Context Menu Logic ---
+        // Dispatch a generic request to the parent (TranscriptionsView) to handle the item loading
+        dispatch('requestLoadItem', item);
+    }
+
+    
+
+    function handleItemDoubleClick(event) {
+        const item = event.detail;
+        if (!item.is_directory && item.file_type === 'media') {
+            console.log('[LeftPanel] Double-clicked media, calling selectMedia.');
+            selectMedia(item, item.path);
+        } else if (!item.is_directory && item.file_type === 'data') {
+            console.log('[LeftPanel] Double-clicked data, calling handleOpenData.');
+            handleOpenData(item);
+        }
+    }
+
+    // --- Context Menu Logic ---
 	let contextMenuVisible = false; let contextMenuX = 0; let contextMenuY = 0; let contextMenuItem = null;
     let closeContextMenuListener = null;
 
@@ -191,13 +95,13 @@
 		const item = contextMenuItem; if (!item) return;
         const itemPathForClosure = item.path; closeContextMenu();
 		switch (action) {
-			case 'Load':
+			            case 'Load':
 				if (!item.is_directory && item.file_type === 'media') selectMedia(item);
                 else console.warn("[LeftPanel] 'Load' action called on non-media item:", item);
 				break;
-            case 'OpenNote':
-                if (!item.is_directory && item.file_type === 'note') handleOpenNote(item);
-                else console.warn("[LeftPanel] 'OpenNote' action called on non-note item:", item);
+            case 'OpenData':
+                if (!item.is_directory && item.file_type === 'data') handleOpenData(item);
+                else console.warn("[LeftPanel] 'OpenData' action called on non-data item:", item);
                 break;
 			case 'Rename':
 				if (!item.is_directory) {
@@ -206,24 +110,40 @@
 				} else console.warn("[LeftPanel] Rename requested on directory (not allowed):", item);
 				break;
 			case 'Delete': {
-				if (!item.is_directory) {
-                    let confirmMsg = '';
-                    if (item.file_type === 'media') {
-                        const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name);
-						confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and notes.\n\nThis action cannot be undone.`;
-					} else if (item.file_type === 'transcript') {
-                        const mediaStem = item.media_xml_identifier || item.name.replace(/\.[^/.]+$/, "");
-                        confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
-					} else if (item.file_type === 'note') {
-                        confirmMsg = `Are you sure you want to delete the note file "${item.name}"?\n\nThis action cannot be undone.`;
-                    } else { confirmMsg = `Are you sure you want to delete the file "${item.name}"?\n\nThis cannot be undone.`; }
-                    try {
-                        const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
-                        if (confirmed) { project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` })); try { await deleteProjectItem(item.path); } catch (err) { console.error(`[LeftPanel] Delete service call failed:`, err); } }
-                        else { project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' })); }
-                    } catch (e) { await message(`An error occurred during deletion: ${e}`, {title: "Delete Error", type: "error"}); }
-				} else console.warn("[LeftPanel] Delete requested on directory (not allowed):", item);
-				break; // End Delete case
+				if (item.is_directory) {
+					console.warn("[LeftPanel] Delete requested on directory (not allowed via context menu):", item);
+					break;
+				}
+
+				let confirmMsg = '';
+
+				if (item.file_type === 'media') {
+					const stemName = item.media_xml_identifier || (item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name);
+					confirmMsg = `Are you sure you want to delete the media file "${item.name}"?\n\nThis will permanently delete the entire folder for this media source ("${stemName}"), including associated transcripts and data.\n\nThis action cannot be undone.`;
+				} else if (item.file_type === 'transcript') {
+					confirmMsg = `Are you sure you want to delete the transcript file "${item.name}"?\n\nThis will remove it from the project.\n\nThis action cannot be undone.`;
+				} else if (item.file_type === 'data') {
+					confirmMsg = `Are you sure you want to delete the data file "${item.name}"?\n\nThis action cannot be undone.`;
+				} else {
+					confirmMsg = `Are you sure you want to delete the file "${item.name}"?\n\nThis cannot be undone.`;
+				}
+
+				try {
+					const confirmed = await confirm(confirmMsg, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
+					if (confirmed) {
+						project.update(p => ({ ...p, statusMessage: `Deleting ${item.name}...` }));
+						try {
+							await deleteProjectItem(item.path);
+						} catch (err) {
+							console.error(`[LeftPanel] Delete service call failed:`, err);
+						}
+					} else {
+						project.update(p => ({ ...p, statusMessage: 'Deletion cancelled.' }));
+					}
+				} catch (e) {
+					await message(`An error occurred during the deletion process: ${e.message || e}`, { title: "Delete Error", type: "error" });
+				}
+				break;
 			}
 			default: await message(`Action '${action}' not implemented yet.`, { title: 'Not Implemented', type: 'info' }); break;
 		}
@@ -342,7 +262,7 @@
 				    <button on:click|stopPropagation="{(e) => handleMenuAction('OpenNote')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open Note</button>
                     <hr class="my-1 border-gray-200 dark:border-gray-600" />
                 {/if}
-				{#if ['media', 'transcript', 'note', 'other'].includes(contextMenuItem.file_type)}
+				{#if ['media', 'transcript', 'data', 'other'].includes(contextMenuItem.file_type)}
 					<button on:click|stopPropagation="{(e) => handleMenuAction('Rename')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename…</button>
 					<button on:click|stopPropagation="{(e) => handleMenuAction('Delete')}" class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete…</button>
 				{/if}

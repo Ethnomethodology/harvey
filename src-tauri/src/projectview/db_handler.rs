@@ -29,6 +29,7 @@ pub struct FileMetadataWithCustomFieldsFromDb {
     pub asset_type: String,
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
+    pub waveform_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,6 +46,7 @@ pub struct GroupDataFromDb {
 pub struct MediaTranscriptDataValues {
     pub original_import_path: Option<String>,
     pub speaker_names_json: Option<String>,
+    pub language_code: Option<String>,
 }
 
 pub fn get_db_path() -> Result<PathBuf, CommandError> {
@@ -136,6 +138,7 @@ pub fn init_db() -> Result<(), CommandError> {
             custom_fields_json TEXT,
             original_import_path TEXT,
             speaker_names_json TEXT,
+            waveform_data BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
@@ -179,6 +182,17 @@ pub fn init_db() -> Result<(), CommandError> {
     if !speaker_json_exists {
         info!("[DB] Adding speaker_names_json column to asset_metadata table.");
         conn.execute("ALTER TABLE asset_metadata ADD COLUMN speaker_names_json TEXT", [])?;
+    }
+
+    // Migration for waveform_data
+    let mut stmt_check_waveform_data = conn.prepare("PRAGMA table_info(asset_metadata)")?;
+    let waveform_data_exists = stmt_check_waveform_data
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "waveform_data"));
+
+    if !waveform_data_exists {
+        info!("[DB] Adding waveform_data column to asset_metadata table.");
+        conn.execute("ALTER TABLE asset_metadata ADD COLUMN waveform_data BLOB", [])?;
     }
 
     // Update trigger for asset_metadata to use composite key if possible, or retain old logic if table structure is old.
@@ -348,6 +362,7 @@ pub fn init_db() -> Result<(), CommandError> {
             asset_relative_path TEXT NOT NULL,
             original_import_path TEXT,
             speaker_names_json TEXT,
+            language_code TEXT, -- New column for language code
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path),
@@ -357,6 +372,17 @@ pub fn init_db() -> Result<(), CommandError> {
         [],
     )?;
     info!("[DB] Initialized media_transcript_data table.");
+
+    // Migration for language_code
+    let mut stmt_check_lang_code = conn.prepare("PRAGMA table_info(media_transcript_data)")?;
+    let lang_code_exists = stmt_check_lang_code
+        .query_map([], |row| row.get::<_, String>(1))?
+        .any(|name_res| name_res.map_or(false, |name| name == "language_code"));
+
+    if !lang_code_exists {
+        info!("[DB] Adding language_code column to media_transcript_data table.");
+        conn.execute("ALTER TABLE media_transcript_data ADD COLUMN language_code TEXT", [])?;
+    }
 
     // Trigger for media_transcript_data updated_at
     conn.execute("DROP TRIGGER IF EXISTS update_media_transcript_data_updated_at", [])?;
@@ -575,6 +601,7 @@ pub fn save_media_transcript_data(
     asset_relative_path: &str,
     original_import_path: Option<&str>,
     speaker_names: Option<&Vec<String>>,
+    language_code: Option<&str>,
 ) -> Result<(), CommandError> {
     debug!(
         "[DB] Saving media transcript data for project_id {}: {}",
@@ -590,11 +617,12 @@ pub fn save_media_transcript_data(
 
     let sql = "
         INSERT INTO media_transcript_data (
-            project_id, asset_relative_path, original_import_path, speaker_names_json
-        ) VALUES (?1, ?2, ?3, ?4)
+            project_id, asset_relative_path, original_import_path, speaker_names_json, language_code
+        ) VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
+            language_code = excluded.language_code,
             updated_at = CURRENT_TIMESTAMP;
     ";
 
@@ -605,6 +633,7 @@ pub fn save_media_transcript_data(
             asset_relative_path,
             to_sql_optional_str(original_import_path),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
+            to_sql_optional_str(language_code),
         ],
     )?;
 
@@ -628,7 +657,7 @@ pub fn load_media_transcript_data(
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare("
-        SELECT original_import_path, speaker_names_json
+        SELECT original_import_path, speaker_names_json, language_code
         FROM media_transcript_data
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -637,6 +666,7 @@ pub fn load_media_transcript_data(
         Ok(MediaTranscriptDataValues {
             original_import_path: row.get(0)?,
             speaker_names_json: row.get(1)?,
+            language_code: row.get(2)?,
         })
     }).optional()?;
 
@@ -707,6 +737,14 @@ fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
         None => Box::new(rusqlite::types::Null),
     }
 }
+
+// Helper to convert Option<&[u8]> to dyn ToSql for rusqlite
+fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql + '_> {
+    match opt {
+        Some(val) => Box::new(val),
+        None => Box::new(rusqlite::types::Null),
+    }
+}
 // Helper to convert Option<&str> to dyn ToSql
 fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
     match opt_str {
@@ -745,8 +783,8 @@ pub fn save_asset_metadata(
             project_id, asset_relative_path, file_name, file_path, last_modified, title,
             description, summary, duration_seconds, width, height, frame_rate,
             bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
-            original_import_path, speaker_names_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
+            original_import_path, speaker_names_json, waveform_data
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
         ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_path = excluded.file_path,
@@ -766,6 +804,7 @@ pub fn save_asset_metadata(
             custom_fields_json = excluded.custom_fields_json,
             original_import_path = excluded.original_import_path,
             speaker_names_json = excluded.speaker_names_json,
+            waveform_data = excluded.waveform_data,
             updated_at = CURRENT_TIMESTAMP
         ;
     ";
@@ -793,6 +832,7 @@ pub fn save_asset_metadata(
             to_sql_optional_str(custom_fields_json),
             to_sql_optional_str(metadata.original_import_path.as_deref()),
             to_sql_optional_str(speaker_names_json_str.as_deref()),
+            to_sql_optional_blob(metadata.waveform_data.as_deref()),
         ],
     )?;
 
@@ -814,7 +854,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
     let mut stmt = conn.prepare("
         SELECT file_name, file_path, last_modified, title, description, summary,
                duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json
+               creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data
         FROM asset_metadata
         WHERE project_id = ?1 AND asset_relative_path = ?2
     ")?;
@@ -839,6 +879,7 @@ pub fn load_asset_metadata(project_id: &str, asset_relative_path: &str) -> Resul
             asset_type: row.get(15)?,
             original_import_path: row.get(16)?,
             speaker_names_json: row.get(17)?,
+            waveform_data: row.get(18)?,
         })
     }).optional()?;
 
@@ -1030,37 +1071,7 @@ pub fn add_custom_field_definition(project_id: &str, definition: &CustomFieldDef
     Ok(())
 }
 
-pub fn get_custom_field_definition(project_id: &str, field_key: &str) -> Result<Option<CustomFieldDefinition>, CommandError> {
-    debug!("[DB] Getting custom field definition for project_id {} and key: {}", project_id, field_key);
-    let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)?;
 
-    let mut stmt = conn.prepare(
-        "SELECT project_id, field_key, field_name, field_type, scope, default_value, created_at, updated_at
-         FROM custom_field_definitions WHERE project_id = ?1 AND field_key = ?2",
-    )?;
-
-    let def_option = stmt.query_row(params![project_id, field_key], |row| {
-        let scope_str: String = row.get(4)?; // Adjusted index
-        Ok(CustomFieldDefinition {
-            project_id: row.get(0)?, // Added project_id
-            field_key: row.get(1)?,    // Adjusted index
-            field_name: row.get(2)?,   // Adjusted index
-            field_type: row.get(3)?,   // Adjusted index
-            scope: CustomFieldScope::from_db_string(&scope_str),
-            default_value: row.get(5)?, // Adjusted index
-            created_at: row.get(6)?,    // Adjusted index
-            updated_at: row.get(7)?,    // Adjusted index
-        })
-    }).optional()?;
-
-    if def_option.is_some() {
-        info!("[DB] Custom field definition found for project_id {} and key: {}", project_id, field_key);
-    } else {
-        info!("[DB] No custom field definition found for project_id {} and key: {}", project_id, field_key);
-    }
-    Ok(def_option)
-}
 
 pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFieldDefinition>, CommandError> {
     debug!("[DB] Getting all custom field definitions for project_id {}", project_id);
@@ -1094,32 +1105,7 @@ pub fn get_all_custom_field_definitions(project_id: &str) -> Result<Vec<CustomFi
     Ok(definitions)
 }
 
-pub fn update_custom_field_definition(project_id: &str, definition: &CustomFieldDefinition) -> Result<(), CommandError> {
-    debug!("[DB] Updating custom field definition for project_id {}: {}", project_id, definition.field_key);
-    let db_path = get_db_path()?;
-    let conn = Connection::open(db_path)?;
-    // The trigger 'update_custom_field_definitions_updated_at' will handle updating 'updated_at'.
-    let changes = conn.execute(
-        "UPDATE custom_field_definitions
-         SET field_name = ?1, field_type = ?2, scope = ?3, default_value = ?4
-         WHERE field_key = ?5 AND project_id = ?6",
-        params![
-            definition.field_name,
-            definition.field_type,
-            definition.scope.to_db_string(),
-            definition.default_value,
-            definition.field_key,
-            project_id
-        ],
-    )?;
 
-    if changes > 0 {
-        info!("[DB] Custom field definition updated successfully for project_id {}: {}", project_id, definition.field_key);
-    } else {
-        info!("[DB] No custom field definition found to update for project_id {} and key: {}", project_id, definition.field_key);
-    }
-    Ok(())
-}
 
 pub fn delete_custom_field_definition(project_id: &str, field_key: &str) -> Result<(), CommandError> {
     debug!("[DB] Deleting custom field definition for project_id {}: {}", project_id, field_key);
@@ -1162,28 +1148,7 @@ pub fn add_project_to_db(id: &str, name: &str, root_path: &str, xml_path: &str) 
     Ok(())
 }
 
-pub fn is_project_in_db(xml_path_str: &str) -> Result<bool, CommandError> {
-    debug!("[DB] Checking if project exists with xml_path: {}", xml_path_str);
-    let db_path = get_db_path()?;
-    if !db_path.exists() {
-        debug!("[DB] Database file not found at {}. Project cannot exist.", db_path.display());
-        return Ok(false);
-    }
-    let conn = Connection::open(&db_path)?;
-    let mut stmt = conn.prepare("SELECT 1 FROM projects WHERE xml_path = ?1")?;
-    let exists: Option<i32> = stmt.query_row(params![xml_path_str], |row| row.get(0)).optional()?;
 
-    match exists {
-        Some(_) => {
-            debug!("[DB] Project with xml_path: {} found.", xml_path_str);
-            Ok(true)
-        }
-        None => {
-            debug!("[DB] Project with xml_path: {} not found.", xml_path_str);
-            Ok(false)
-        }
-    }
-}
 
 pub fn delete_project_from_db(project_id: &str) -> Result<(), CommandError> {
     info!("[DB] Attempting to delete project with id: {}", project_id);

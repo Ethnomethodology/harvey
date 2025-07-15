@@ -102,6 +102,7 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     let new_doc_entry = DocumentEntryXml {
         name: document_name.clone(),
         relative_path: relative_path_for_doc_xml.clone(),
+        language_code: None,
     };
 
     let mut is_new_document_entry = false;

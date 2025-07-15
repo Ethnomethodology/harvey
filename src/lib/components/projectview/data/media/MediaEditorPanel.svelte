@@ -1,7 +1,8 @@
-<!-- src/lib/components/projectview/notes/media/MediaEditorPanel.svelte -->
+<!-- src/lib/components/projectview/data/media/MediaEditorPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
+    import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import {
         project, // Store, aliased to projectStore below for clarity in functions
         setLoadedMediaNoteTranscriptData,
@@ -21,6 +22,7 @@
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
 
     export let mediaPath = null;
 
@@ -28,10 +30,10 @@
 
     $: console.log('[MediaEditorPanel] $projectStore.id value:', $projectStore.id);
 
-    let showNotesTrimUI = false;
+    let showDataTrimUI = false;
     let currentTrimAudioBuffer = null; // Buffer for the active trim session
-    let notesTrimStartTime = 0;
-    let notesTrimEndTime = 0;
+    let dataTrimStartTime = 0;
+    let dataTrimEndTime = 0;
 
     const mediaToolbarConfig = {
       undo: true, redo: true, blockType: true, bold: true, italic: true,
@@ -41,10 +43,10 @@
     };
 
     let lexicalEditorRef;
-    let mediaPlayerInNotesRef;
+    let mediaPlayerInDataRef;
 
     let localEditorJsonState = '';
-    let isNotesPlayerVideoHidden = false; // State for MediaPlayer's video visibility
+    let isDataPlayerVideoHidden = false; // State for MediaPlayer's video visibility
     let associatedTranscriptPath = null;
     let transcriptName = 'N/A';
 
@@ -56,9 +58,9 @@
     
     $: isFileNotFoundInfo = transcriptLoadError === "INFO:FILE_NOT_FOUND";
 
-    // Reactive declarations for LIVE MediaPlayer properties needed by InteractiveWaveform
-    $: notesMediaPlayerCurrentTime = mediaPlayerInNotesRef?.localCurrentTime;
-    $: notesMediaPlayerIsPlaying = mediaPlayerInNotesRef?.localIsPlaying;
+    // LIVE MediaPlayer properties needed by InteractiveWaveform
+    let dataMediaPlayerCurrentTime = 0;
+    let dataMediaPlayerIsPlaying = false;
 
     const defaultEmptyJson = JSON.stringify({
         root: { children: [{ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 }],
@@ -81,20 +83,6 @@
         }
     });
 
-    async function deriveTranscriptPath(currentMediaPath) {
-        if (!currentMediaPath) return null;
-        try {
-            const mediaFilename = await basename(currentMediaPath);
-            const mediaStem = mediaFilename.includes('.') ? mediaFilename.substring(0, mediaFilename.lastIndexOf('.')) : mediaFilename;
-            transcriptName = mediaStem;
-            const mediaDir = await dirname(currentMediaPath);
-            const mediaParentDir = await dirname(mediaDir);
-            if (!mediaParentDir) { console.error(`[MediaEditorPanel] Could not derive mediaParentDir from ${mediaDir}`); return null; }
-            const notesDir = await join(mediaParentDir, 'transcripts');
-            return await join(notesDir, `${mediaStem}.json`);
-        } catch (e) { console.error(`[MediaEditorPanel] Error deriving transcript path for ${currentMediaPath}:`, e); return null; }
-    }
-
     async function loadTranscript(path) {
         if (!path) {
             setMediaNoteTranscriptLoadFailed(mediaPath, "Associated transcript/note path could not be determined.", false);
@@ -107,7 +95,7 @@
         localEditorJsonState = defaultEmptyJson;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         try {
-            const jsonContent = await invoke('load_note_json', { filePath: path });
+            const jsonContent = await invoke('load_transcript_json', { transcriptPath: path });
             if (!jsonContent || jsonContent.trim() === '') {
                 setMediaNoteTranscriptLoadFailed(mediaPath, "File not found during load.", true);
             } else {
@@ -123,26 +111,31 @@
         }
     }
 
-    let previousMediaPath = null;
-    $: if (mediaPath && mediaPath !== previousMediaPath) {
-        previousMediaPath = mediaPath;
-        console.log(`[MediaEditorPanel] mediaPath changed to: ${mediaPath}`);
-        showNotesTrimUI = false; currentTrimAudioBuffer = null;
-        deriveTranscriptPath(mediaPath).then(path => {
-            associatedTranscriptPath = path;
-            if (path) { loadTranscript(path); }
-            else { setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false); }
-        });
-    } else if (!mediaPath && previousMediaPath) {
-        previousMediaPath = null; associatedTranscriptPath = null; transcriptName = 'N/A';
+    let previousActiveTranscriptPathInDataTab = null;
+    $: if ($projectStore.activeTranscriptPathInDataTab && $projectStore.activeTranscriptPathInDataTab !== previousActiveTranscriptPathInDataTab) {
+        previousActiveTranscriptPathInDataTab = $projectStore.activeTranscriptPathInDataTab;
+        associatedTranscriptPath = $projectStore.activeTranscriptPathInDataTab;
+        transcriptName = associatedTranscriptPath.split(/[\\/]/).pop();
+        console.log(`[MediaEditorPanel] activeTranscriptPathInDataTab changed to: ${associatedTranscriptPath}`);
+        loadTranscript(associatedTranscriptPath);
+        showDataTrimUI = false; // Hide trim UI when switching transcripts
+        currentTrimAudioBuffer = null;
+    } else if (!$projectStore.activeTranscriptPathInDataTab && previousActiveTranscriptPathInDataTab) {
+        // If activeTranscriptPathInDataTab becomes null (e.g., media file deselected)
+        previousActiveTranscriptPathInDataTab = null;
+        associatedTranscriptPath = null;
+        transcriptName = 'N/A';
         currentTranscriptJson = null; initialTranscriptJson = null; isTranscriptDirty = false;
-        isTranscriptLoading = false; transcriptLoadError = null; showNotesTrimUI = false; currentTrimAudioBuffer = null;
+        isTranscriptLoading = false; transcriptLoadError = null; showDataTrimUI = false; currentTrimAudioBuffer = null;
         if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
         localEditorJsonState = defaultEmptyJson;
-        if (get(projectStore).selectedMediaNotePath === previousMediaPath) {
-             projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null, }));
+        // Also clear the selectedMediaNotePath if it matches the previous one
+        if (get(projectStore).selectedMediaNotePath === mediaPath) {
+            projectStore.update(p => ({ ...p, selectedMediaNotePath: null, currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, isMediaNoteTranscriptLoading: false, mediaNoteTranscriptError: null, activeMediaNoteEditorRef: null }));
         }
     }
+
+    // Initial load logic (when mediaPath first becomes available) - REMOVED, now handled by projectStore.js
 
     function handleEditorChange(event) {
         const newJson = event.detail.jsonString;
@@ -159,17 +152,17 @@
 
     async function handleSave() {
         if (!mediaPath) { console.error("[MediaEditorPanel] Save Error: No mediaPath for context."); await message("Cannot save: No media file is active for this note.", { title: "Save Error", type: "error" }); return; }
-        if (!associatedTranscriptPath) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated notes path is not determined.`); await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" }); return; }
+        if (!associatedTranscriptPath) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated data path is not determined.`); await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" }); return; }
         if (isTranscriptLoading || (transcriptLoadError && !isFileNotFoundInfo)) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state.`); await message(`Cannot save: ${isTranscriptLoading ? 'Note is still loading.' : `Note failed to load (${transcriptLoadError})`}`, { title: "Save Error", type: "error" }); return; }
         const finalJsonToSave = localEditorJsonState || defaultEmptyJson;
-        projectStore.update(p => ({ ...p, statusMessage: `Saving notes for ${transcriptName}...`}));
+        projectStore.update(p => ({ ...p, statusMessage: `Saving data for ${transcriptName}...`}));
         try {
             await invoke('save_note_json', { targetPath: associatedTranscriptPath, jsonContent: finalJsonToSave });
             if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave); }
-            projectStore.update(p => ({ ...p, statusMessage: `Notes for ${transcriptName} saved.`}));
+            projectStore.update(p => ({ ...p, statusMessage: `Data for ${transcriptName} saved.`}));
         } catch (error) {
-             await message(`Failed to save notes: ${error.message || error}`, { title: 'Save Error', type: 'error' });
-             projectStore.update(p => ({ ...p, statusMessage: `Error saving notes for ${transcriptName}.`}));
+             await message(`Failed to save data: ${error.message || error}`, { title: 'Save Error', type: 'error' });
+             projectStore.update(p => ({ ...p, statusMessage: `Error saving data for ${transcriptName}.`}));
         }
     }
 
@@ -177,35 +170,40 @@
         const currentStoreState = get(projectStore);
         const dirtyFlagForThisNote = currentStoreState.selectedMediaNotePath === mediaPath && currentStoreState.isMediaNoteTranscriptDirty;
         if (dirtyFlagForThisNote) {
-            const userConfirmed = await confirm(`Discard unsaved changes to the notes for "${mediaPath.split(/[\\/]/).pop()}"?`, { type: 'warning', title: 'Discard Changes' });
+            const userConfirmed = await confirm(`Discard unsaved changes to the data for "${mediaPath.split(/[\\/]/).pop()}"?`, { type: 'warning', title: 'Discard Changes' });
             if (userConfirmed) {
                 if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptChangesDiscarded(mediaPath); }
             }
         }
     }
 
+    $: {
+        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
+        if (activeTranscriptPath && activeTranscriptPath !== associatedTranscriptPath) {
+            associatedTranscriptPath = activeTranscriptPath;
+            transcriptName = activeTranscriptPath.split(/[\\/]/).pop();
+            loadTranscript(activeTranscriptPath);
+        } else if (!activeTranscriptPath && mediaPath) {
+            if (associatedTranscriptPath) {
+                associatedTranscriptPath = null;
+                transcriptName = 'N/A';
+                setMediaNoteTranscriptLoadFailed(mediaPath, "No transcript selected.", true);
+            }
+        }
+    }
+
     onMount(() => {
         setActiveMediaNoteEditorRef(mediaPath, self);
-        if (mediaPath && !currentTranscriptJson && !isTranscriptLoading && !transcriptLoadError) {
-            deriveTranscriptPath(mediaPath).then(path => {
-                associatedTranscriptPath = path;
-                if (path) loadTranscript(path);
-                else { setMediaNoteTranscriptLoadFailed(mediaPath, "Could not determine note file location.", false); }
-            });
-        } else if (mediaPath && currentTranscriptJson) {
-            localEditorJsonState = currentTranscriptJson;
-            if (lexicalEditorRef) lexicalEditorRef.resetEditorState(currentTranscriptJson);
-        } else if (!mediaPath) {
-            isTranscriptLoading = false; transcriptLoadError = null; localEditorJsonState = defaultEmptyJson;
-            if (lexicalEditorRef) lexicalEditorRef.resetEditorState(defaultEmptyJson);
-        }
-        showNotesTrimUI = false;
+        isMediaEditorOpen.set(true);
+        // Initial load is now handled by the reactive blocks
+        showDataTrimUI = false;
         currentTrimAudioBuffer = null;
     });
 
 	onDestroy(() => {
         const activeRefTuple = get(projectStore).activeMediaNoteEditorRef;
         if (activeRefTuple && activeRefTuple.path === mediaPath) { clearActiveMediaNoteEditorRef(); }
+        isMediaEditorOpen.set(false);
         unsubscribeProject();
 	});
 
@@ -220,13 +218,13 @@
     export function getItemPath() { return mediaPath; }
     const self = { save, discard, resetEditorState, getItemPath };
 
-    function handleRequestNotesTranscribe(event) {
+    function handleRequestDataTranscribe(event) {
         dispatch('requestTranscriptionTabWithMedia', { mediaPath: event.detail.mediaPath });
     }
 
-    function handleRequestNotesTrim(event) {
-        if (showNotesTrimUI) {
-            showNotesTrimUI = false;
+    function handleRequestDataTrim(event) {
+        if (showDataTrimUI) {
+            showDataTrimUI = false;
             currentTrimAudioBuffer = null;
             console.log('[MediaEditorPanel] Trim UI explicitly hidden by button toggle.');
         } else {
@@ -235,13 +233,13 @@
             const isReady = event.detail.isReady;
 
             if (isReady && audioBuffer && duration > 0) {
-                notesTrimStartTime = 0;
-                notesTrimEndTime = duration;
+                dataTrimStartTime = 0;
+                dataTrimEndTime = duration;
                 currentTrimAudioBuffer = audioBuffer;
-                showNotesTrimUI = true;
+                showDataTrimUI = true;
                 console.log(`[MediaEditorPanel] Trim UI shown based on event data. Duration: ${duration}, Buffer Present: ${!!audioBuffer}, isReady Signal from Player: ${isReady}`);
             } else {
-                showNotesTrimUI = false;
+                showDataTrimUI = false;
                 currentTrimAudioBuffer = null;
                 console.error(`[MediaEditorPanel] Error: MediaPlayer event indicated not ready or event data invalid. Duration from event: ${duration}, Buffer from event: ${!!audioBuffer}, isReady signal from event: ${isReady}`);
                 alert("MediaPlayer reported not ready or essential data was missing from the event. Cannot show trim UI.");
@@ -251,17 +249,17 @@
 
     function handleWaveformTrimUpdate(event) {
         if (event.detail) {
-            notesTrimStartTime = event.detail.startTime;
-            notesTrimEndTime = event.detail.endTime;
+            dataTrimStartTime = event.detail.startTime;
+            dataTrimEndTime = event.detail.endTime;
         }
     }
 
-    async function handleConfirmNotesTrim() {
+    async function handleConfirmDataTrim() {
         if (!mediaPath) { console.error("Trim Error: No mediaPath specified."); await message("Error: No media file is specified for trimming.", { title: "Trim Error", type: "error" }); return; }
-        if (notesTrimEndTime <= notesTrimStartTime) { await message("Error: Trim end time must be after start time.", { title: "Trim Error", type: "error" }); return; }
-        projectStore.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media in notes...' }));
+        if (dataTrimEndTime <= dataTrimStartTime) { await message("Error: Trim end time must be after start time.", { title: "Trim Error", type: "error" }); return; }
+        projectStore.update(p => ({ ...p, isLoading: true, statusMessage: 'Trimming media in data...' }));
         try {
-            await handleTrimMediaConfirm(mediaPath, notesTrimStartTime, notesTrimEndTime); // This is an existing external function call
+            await handleTrimMediaConfirm(mediaPath, dataTrimStartTime, dataTrimEndTime); // This is an existing external function call
 
             const fileName = await basename(mediaPath);
             let mediaTypeFolder = 'Media'; // Default or could be 'Output' or similar if type unknown
@@ -277,14 +275,14 @@
             projectStore.update(p => ({ ...p, isLoading: false, statusMessage: `Trimmed ${fileName} saved to ${mediaTypeFolder}. Reloading media...` }));
             await message(`Trimmed ${fileName} saved to ${mediaTypeFolder}.`, { title: 'Trim Successful' });
 
-            showNotesTrimUI = false;
+            showDataTrimUI = false;
             currentTrimAudioBuffer = null;
             const tempPath = mediaPath;
             mediaPath = null; // This triggers reactivity to reload the player
             await tick();
             mediaPath = tempPath;
-            notesTrimStartTime = 0;
-            notesTrimEndTime = 0;
+            dataTrimStartTime = 0;
+            dataTrimEndTime = 0;
         } catch (error) {
             console.error('[MediaEditorPanel] Trim failed:', error);
             projectStore.update(p => ({ ...p, isLoading: false, error: `Trim failed: ${error.message || error}`, statusMessage: 'Trim failed.' }));
@@ -292,11 +290,11 @@
         }
     }
 
-    function handleCancelNotesTrim() {
-        showNotesTrimUI = false;
+    function handleCancelDataTrim() {
+        showDataTrimUI = false;
         currentTrimAudioBuffer = null;
-        notesTrimStartTime = 0;
-        notesTrimEndTime = 0;
+        dataTrimStartTime = 0;
+        dataTrimEndTime = 0;
         console.log('[MediaEditorPanel] Trim cancelled. UI hidden, times reset, buffer cleared.');
     }
 </script>
@@ -304,21 +302,26 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow">
     <div
         class="border-b border-gray-200 dark:border-gray-700 flex flex-col
-               {!isNotesPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
+               {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
     >
         {#if mediaPath}
             <MediaPlayer
-                bind:this={mediaPlayerInNotesRef}
-                bind:isVideoMinimized={isNotesPlayerVideoHidden}
+                bind:this={mediaPlayerInDataRef}
+                bind:localCurrentTime={dataMediaPlayerCurrentTime}
+                bind:localIsPlaying={dataMediaPlayerIsPlaying}
+                bind:isVideoMinimized={isDataPlayerVideoHidden}
                 explicitMediaPath={mediaPath}
                 projectId={$projectStore.id}
                 showLoopPauseButton={false}
-                showNotesTranscribeButton={false}
-                showNotesTrimButton={true}
-                on:requestNotesTranscribe={handleRequestNotesTranscribe}
-                on:requestNotesTrim={handleRequestNotesTrim}
-                on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in notes: ${e.detail.error}`}))}
-                class="{!isNotesPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
+                showDataTranscribeButton={false}
+                showDataTrimButton={true}
+                enableLooping={showDataTrimUI}
+                loopStartTime={dataTrimStartTime}
+                loopEndTime={dataTrimEndTime}
+                on:requestDataTranscribe={handleRequestDataTranscribe}
+                on:requestDataTrim={handleRequestDataTrim}
+                on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
+                class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
         {:else}
             <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -328,38 +331,37 @@
     </div>
 
     <div
-        class="min-h-0 overflow-hidden {!isNotesPlayerVideoHidden ? 'h-1/2' : ''}"
-        class:flex-grow={isNotesPlayerVideoHidden}
+        class="min-h-0 overflow-hidden {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
+        class:flex-grow={isDataPlayerVideoHidden}
     >
-        {#if showNotesTrimUI && mediaPath}
+        {#if showDataTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">
-                    <h3 class="text-sm font-semibold">Inline Media Trimming</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                        Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
+                    </p>
                     <div class="space-x-2">
-                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmNotesTrim}>Trim</button>
-                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelNotesTrim}>Cancel</button>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmDataTrim}>Trim</button>
+                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
                     </div>
                 </div>
-                <p class="text-xs mb-1 text-gray-600 dark:text-gray-400">
-                    Adjust start and end times by dragging the red bars on both sides: {notesTrimStartTime.toFixed(3)}s — {notesTrimEndTime.toFixed(3)}s
-                </p>
-                {#if currentTrimAudioBuffer && notesTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[100px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
+                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
-                            externalCurrentTime={notesMediaPlayerCurrentTime}
-                            externalDuration={notesTrimEndTime}
-                            externalIsPlaying={notesMediaPlayerIsPlaying}
+                            externalCurrentTime={dataMediaPlayerCurrentTime}
+                            externalDuration={mediaPlayerInDataRef?.localDuration}
+                            externalIsPlaying={dataMediaPlayerIsPlaying}
                             externalSegments={[]}
                             externalCurrentSegmentIndex={-1}
                             isTrimming={true}
-                            bind:trimStartTime={notesTrimStartTime}
-                            bind:trimEndTime={notesTrimEndTime}
+                            bind:trimStartTime={dataTrimStartTime}
+                            bind:trimEndTime={dataTrimEndTime}
                             isEditingSegment={false}
                             editSegmentStartTime={0}
                             editSegmentEndTime={0}
                             on:trimupdate={handleWaveformTrimUpdate}
-                            on:seek={(e) => mediaPlayerInNotesRef?.seekTo(e.detail.time)}
+                            on:seek={(e) => mediaPlayerInDataRef?.seekTo(e.detail.time)}
                         />
                     </div>
                 {:else}
@@ -372,7 +374,7 @@
 
         {#if isTranscriptLoading && mediaPath}
             <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
-                Loading notes for <span class="font-semibold ml-1">{transcriptName}</span>...
+                Loading data for <span class="font-semibold ml-1">{transcriptName}</span>...
             </div>
         {:else if transcriptLoadError && mediaPath}
             {#if isFileNotFoundInfo}
@@ -385,14 +387,14 @@
                 </div>
             {:else}
                 <div class="flex-grow flex flex-col items-center justify-center text-orange-600 dark:text-orange-400 p-4 text-center">
-                    <p class="font-semibold">Error Loading Notes</p>
+                    <p class="font-semibold">Error Loading Data</p>
                     <p class="text-xs mt-1">{transcriptLoadError}</p>
                     <p class="text-xs mt-2">Please check the file or try again.</p>
                 </div>
             {/if}
         {:else if !mediaPath}
             <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
-                Select an audio or video file from the Fieldnotes panel to view its player and notes.
+                Select an audio or video file from the Data panel to view its player and data.
             </div>
         {:else}
             <div class="lexical-editor-wrapper-style w-full h-full dark:text-gray-100">
@@ -401,10 +403,11 @@
                         bind:this={lexicalEditorRef}
                         initialJson={currentTranscriptJson || defaultEmptyJson}
                         editable={true}
-                        placeholder="Enter notes for this media file..."
+                        placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
                         enableSearch={true}
                         toolbarConfig={mediaToolbarConfig}
+                        activeLayout={$activeLayout}
                     />
                 {/key}
             </div>
@@ -440,6 +443,51 @@
     }
     .lexical-editor-wrapper-style :global(.lexical-content p) {
         @apply mt-0 mb-0;
+    }
+
+    .lexical-editor-wrapper-style :global(.lexical-content table) {
+        border-collapse: collapse;
+        border-spacing: 0;
+        width: 100%;
+        border: 1px solid #ccc;
+        margin-bottom: 1rem;
+        table-layout: fixed;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th),
+    .lexical-editor-wrapper-style :global(.lexical-content td) {
+        border: 1px solid #ccc;
+        padding: 0.2rem 5.75pt;
+        text-align: left;
+        vertical-align: top;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12pt;
+        line-height: 1.5;
+        word-break: break-word;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th) {
+        background-color: #f0f0f0;
+        font-weight: 600;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content th p),
+    .lexical-editor-wrapper-style :global(.lexical-content td p) {
+        @apply mt-0 mb-0;
+    }
+
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
+        width: 5%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
+        width: 65%;
     }
 
     .lexical-editor-wrapper-style-placeholder {

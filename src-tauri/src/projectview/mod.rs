@@ -17,6 +17,7 @@ pub mod export_handler;
 pub mod shared_types;
 pub mod shared_utils;
 pub mod db_handler;
+pub mod waveform_utils;
 
 // Re-export specific commands if needed, for now, direct paths are used in lib.rs
 // Example: pub use core_commands::load_project_data;

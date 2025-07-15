@@ -3,22 +3,105 @@
 use super::shared_types::*;
 use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
-use log::{debug, error, info, warn}; // info and warn are used by CancelGuard and throughout
+use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter}; // Removed State
+use tauri::{AppHandle, Emitter}; // Removed ShellExt from here
+use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
+use serde::Deserialize; // Added for FFProbeOutput
+use chrono::Utc; // Added for timestamps
+// use uuid::Uuid; // Removed unused import
+use crate::projectview::db_handler; // Added for database operations
+use crate::projectview::waveform_utils;
 
 use std::{
     fs::{self, File},
     io::{BufWriter, Write, BufRead},
     path::{Path, PathBuf},
-    sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}}, // For CancelGuard
+    sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}},
 };
-use dashmap::DashMap; // For CancelGuard
-// Removed: use crate::TranscriptionCancellationState;
-use tauri_plugin_shell::{ShellExt, process::CommandEvent};
+use dashmap::DashMap;
+use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
+
+
+// --- FFProbe Helper Structs (copied from core_commands.rs) ---
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStreamTags {
+    #[serde(rename = "DURATION")]
+    duration: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeStream {
+    codec_type: Option<String>,
+    codec_name: Option<String>,
+    width: Option<i32>,
+    height: Option<i32>,
+    avg_frame_rate: Option<String>,
+    r_frame_rate: Option<String>,
+    bit_rate: Option<String>,
+    #[serde(default)]
+    tags: FFProbeStreamTags,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormatTags {
+    
+    #[serde(rename = "DURATION")]
+    duration: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeFormat {
+    duration: Option<String>,
+    bit_rate: Option<String>,
+    #[serde(default)]
+    tags: Option<FFProbeFormatTags>,
+    
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+struct FFProbeOutput {
+    #[serde(default)]
+    streams: Vec<FFProbeStream>,
+    #[serde(default)]
+    format: FFProbeFormat,
+}
+
+// --- Helper Functions for FFProbe Data Parsing (copied from core_commands.rs) ---
+fn parse_duration_str_to_seconds(s_opt: Option<String>) -> Option<f64> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains(':') {
+            let parts: Vec<&str> = s.split(':').collect();
+            if parts.len() == 3 { // HH:MM:SS.mmm
+                let hours = parts[0].parse::<f64>().ok()?;
+                let minutes = parts[1].parse::<f64>().ok()?;
+                let seconds_ms = parts[2].parse::<f64>().ok()?;
+                Some(hours * 3600.0 + minutes * 60.0 + seconds_ms)
+            } else { None }
+        } else { // Seconds only
+            s.parse::<f64>().ok()
+        }
+    })
+}
+
+fn parse_frame_rate_str(s_opt: Option<String>) -> Option<f32> {
+    s_opt.as_deref().and_then(|s| {
+        if s.contains('/') {
+            let parts: Vec<&str> = s.split('/').collect();
+            if parts.len() == 2 {
+                let num = parts[0].parse::<f32>().ok()?;
+                let den = parts[1].parse::<f32>().ok()?;
+                if den.abs() > f32::EPSILON { Some(num / den) } else { None }
+            } else { None }
+        } else {
+            s.parse::<f32>().ok()
+        }
+    })
+}
+
 
 // --- CancelGuard for managing transcription cancellation ---
 struct CancelGuard {
@@ -320,8 +403,8 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     let new_media_entry = MediaFileEntryXml {
         name: output_stem_dir_name.clone(),
         original_path: None,
-        relative_path: new_relative_path_for_xml,
-        speakers: original_speakers.or_else(|| Some(SpeakersXml::default())),
+        relative_path: new_relative_path_for_xml.clone(), // Clone here
+        speakers: original_speakers.clone().or_else(|| Some(SpeakersXml::default())), // Clone here
         transcripts: Vec::new(),
     };
 
@@ -336,7 +419,214 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     }
 
     info!("[Trim Backend] Reloading project data...");
-    super::core_commands::load_project_data(project_xml_path_str).await.map(|data| data.files)
+    let reloaded_project_data_result = super::core_commands::load_project_data(project_xml_path_str.clone()).await;
+
+    let project_uuid_for_db = match &reloaded_project_data_result {
+        Ok(data) => data.project_uuid.clone(),
+        Err(e) => {
+            error!("[Trim Backend] Failed to reload project data to get UUID after trim: {}. Cannot save metadata to DB.", e);
+            // Depending on strictness, you might return Err here or just log and skip DB operations.
+            // For now, returning the file list as before if reload failed, but DB ops will be skipped.
+            return reloaded_project_data_result.map(|data| data.files);
+        }
+    };
+
+    if project_uuid_for_db.is_empty() {
+        error!("[Trim Backend] Project UUID is empty after reloading project data. Cannot save metadata to DB.");
+    } else {
+        info!("[Trim Backend] Project UUID for DB operations: {}", project_uuid_for_db);
+        // --- Start: Add metadata to SQLite database for the new trimmed media ---
+        let mut duration_seconds_meta: Option<f64> = None;
+        let mut width_meta: Option<i32> = None;
+        let mut height_meta: Option<i32> = None;
+        let mut frame_rate_meta: Option<f32> = None;
+        let mut bit_rate_overall_meta: Option<i64> = None;
+        let mut audio_codec_meta: Option<String> = None;
+        let mut video_codec_meta: Option<String> = None;
+
+        let ffprobe_args = vec![
+            "-v".to_string(), "quiet".to_string(),
+            "-print_format".to_string(), "json".to_string(),
+            "-show_format".to_string(),
+            "-show_streams".to_string(),
+            output_media_path.to_string_lossy().to_string(),
+        ];
+
+        info!("[Trim Backend] Running ffprobe for new trimmed media: {}", output_media_path.display());
+        match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured").args(ffprobe_args).output().await {
+            Ok(output) => {
+                if output.status.success() {
+                    let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
+                    debug!("[Trim Backend] ffprobe output for {}: {}", output_media_path.display(), ffprobe_json_str);
+                    match serde_json::from_str::<FFProbeOutput>(&ffprobe_json_str) {
+                        Ok(parsed_ffprobe_output) => {
+                            duration_seconds_meta = parse_duration_str_to_seconds(parsed_ffprobe_output.format.duration.clone())
+                                .or_else(|| parse_duration_str_to_seconds(parsed_ffprobe_output.format.tags.as_ref().and_then(|t| t.duration.clone())));
+                            bit_rate_overall_meta = parsed_ffprobe_output.format.bit_rate.as_deref().and_then(|s| s.parse().ok());
+
+                            for stream in parsed_ffprobe_output.streams {
+                                if duration_seconds_meta.is_none() {
+                                     duration_seconds_meta = parse_duration_str_to_seconds(stream.tags.duration.clone());
+                                }
+                                match stream.codec_type.as_deref() {
+                                    Some("video") if width_meta.is_none() => {
+                                        width_meta = stream.width;
+                                        height_meta = stream.height;
+                                        video_codec_meta = stream.codec_name;
+                                        frame_rate_meta = parse_frame_rate_str(stream.avg_frame_rate.clone())
+                                            .or_else(|| parse_frame_rate_str(stream.r_frame_rate.clone()));
+                                        if bit_rate_overall_meta.is_none() {
+                                            bit_rate_overall_meta = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                        }
+                                    }
+                                    Some("audio") if audio_codec_meta.is_none() => {
+                                        audio_codec_meta = stream.codec_name;
+                                        if bit_rate_overall_meta.is_none() && stream.bit_rate.is_some() {
+                                             bit_rate_overall_meta = stream.bit_rate.as_deref().and_then(|s| s.parse().ok());
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            info!("[Trim Backend] Successfully parsed ffprobe output for {}", output_media_path.display());
+                        }
+                        Err(e) => {
+                            error!("[Trim Backend] Failed to parse ffprobe JSON for {}: {}. JSON: '{}'", output_media_path.display(), e, ffprobe_json_str);
+                        }
+                    }
+                } else {
+                    let stderr_str = String::from_utf8_lossy(&output.stderr);
+                    error!("[Trim Backend] ffprobe failed for {}. Code: {:?}, Stderr: {}", output_media_path.display(), output.status.code(), stderr_str);
+                }
+            }
+            Err(e) => {
+                error!("[Trim Backend] ffprobe execution error for {}: {}", output_media_path.display(), e);
+            }
+        }
+
+        let trimmed_media_file_metadata = FileMetadata {
+            file_name: output_filename.clone(), // Filename of the trimmed media
+            file_path: output_media_path.to_string_lossy().into_owned(), // Absolute path
+            last_modified: Utc::now().to_rfc3339(),
+            title: String::new(), // Initialize as empty
+            description: String::new(), // Initialize as empty
+            summary: String::new(), // Initialize as empty
+            duration_seconds: duration_seconds_meta,
+            width: width_meta,
+            height: height_meta,
+            frame_rate: frame_rate_meta,
+            bit_rate: bit_rate_overall_meta,
+            audio_codec: audio_codec_meta.clone(),
+            video_codec: video_codec_meta.clone(),
+            created_at: Some(Utc::now().to_rfc3339()),
+            original_import_path: Some(original_media_path.clone()), // Store original path as import path
+            speaker_names: None, // Speaker names come from XML, not directly stored here.
+            waveform_data: None,
+        };
+
+        let asset_type = if video_codec_meta.is_some() { "video" } else if audio_codec_meta.is_some() { "audio" } else { "media" }.to_string();
+
+        // The relative path used as key for DB is the same as the one stored in XML for the new media entry
+        let db_key_relative_path_trimmed = new_relative_path_for_xml.clone();
+
+        let waveform_peaks = match fs::read(&output_media_path) {
+            Ok(audio_data) => {
+                match waveform_utils::generate_audio_peaks(&audio_data, 512) {
+                    Ok(peaks) => {
+                        let mut u8_peaks = Vec::with_capacity(peaks.len() * 4);
+                        for peak in peaks {
+                            u8_peaks.extend_from_slice(&peak.to_le_bytes());
+                        }
+                        Some(u8_peaks)
+                    }
+                    Err(e) => {
+                        warn!("[Trim Backend] Failed to generate waveform peaks: {}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("[Trim Backend] Failed to read media file for waveform generation: {}", e);
+                None
+            }
+        };
+
+        let mut trimmed_media_file_metadata_with_waveform = trimmed_media_file_metadata;
+        trimmed_media_file_metadata_with_waveform.waveform_data = waveform_peaks;
+
+        match db_handler::save_asset_metadata(
+            &project_uuid_for_db,
+            &trimmed_media_file_metadata_with_waveform,
+            &db_key_relative_path_trimmed,
+            &asset_type,
+            None, // custom_fields_json
+        ) {
+            Ok(_) => info!("[Trim Backend] Successfully saved asset metadata to DB for trimmed media: {}", db_key_relative_path_trimmed),
+            Err(e) => warn!("[Trim Backend] Failed to save asset metadata to DB for trimmed media {}: {}.", db_key_relative_path_trimmed, e),
+        }
+
+        // Also save initial media_transcript_data
+        if let Err(e) = db_handler::save_media_transcript_data(
+            &project_uuid_for_db,
+            &db_key_relative_path_trimmed,
+            Some(&original_media_path), // Original media path as source reference
+            original_speakers.as_ref().map(|s_xml| &s_xml.names),
+            None, // language_code: Option<&str> - Not known at initial import
+        ) {
+            warn!("[Trim Backend] Failed to save media_transcript_data for trimmed media {}: {}", db_key_relative_path_trimmed, e);
+        } else {
+            info!("[Trim Backend] Successfully saved media_transcript_data for trimmed media: {}", db_key_relative_path_trimmed);
+        }
+
+        // --- Start: Copy group associations from original media to trimmed media ---
+        let original_media_relative_path = original_path.strip_prefix(project_base_dir)
+            .map(|p| p.to_string_lossy().replace("\\", "/"))
+            .map_err(|e| CommandError::from(format!("Failed to get relative path for original media: {}", e)));
+
+        if let Ok(orig_rel_path) = original_media_relative_path {
+            info!("[Trim Backend] Attempting to copy group associations from original media '{}' to new media '{}'", orig_rel_path, db_key_relative_path_trimmed);
+            match db_handler::get_db_path() {
+                Ok(db_path_for_groups) => {
+                    match rusqlite::Connection::open(&db_path_for_groups) {
+                        Ok(conn) => {
+                            match db_handler::get_groups_for_file_asset(&conn, &project_uuid_for_db, &orig_rel_path) {
+                                Ok(groups) => {
+                                    if groups.is_empty() {
+                                        info!("[Trim Backend] Original media '{}' belongs to no groups. No associations to copy.", orig_rel_path);
+                                    } else {
+                                        info!("[Trim Backend] Original media '{}' belongs to {} group(s). Copying to new media '{}'.", orig_rel_path, groups.len(), db_key_relative_path_trimmed);
+                                        for group in groups {
+                                            match db_handler::add_file_to_group(&conn, &project_uuid_for_db, &group.id, &db_key_relative_path_trimmed) {
+                                                Ok(_) => info!("[Trim Backend] Successfully added trimmed media '{}' to group '{}' (ID: {})", db_key_relative_path_trimmed, group.name, group.id),
+                                                Err(e) => warn!("[Trim Backend] Failed to add trimmed media '{}' to group '{}' (ID: {}): {}. It might already be associated.", db_key_relative_path_trimmed, group.name, group.id, e),
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!("[Trim Backend] Failed to get groups for original media '{}': {}. Skipping group association copy.", orig_rel_path, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("[Trim Backend] Failed to open DB connection to copy group associations: {}. Skipping.", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                     warn!("[Trim Backend] Failed to get DB path to copy group associations: {}. Skipping.", e);
+                }
+            }
+        } else {
+            warn!("[Trim Backend] Could not determine original media relative path. Skipping group association copy.");
+        }
+        // --- End: Copy group associations ---
+
+        // --- End: Add metadata to SQLite database ---
+    }
+
+
+    reloaded_project_data_result.map(|data| data.files)
 }
 
 
@@ -441,7 +731,8 @@ pub async fn load_transcript_json(transcript_path: String) -> Result<String, Com
 pub async fn save_transcript_json(
     project_xml_path: String,
     transcript_path: String,
-    lexical_table_json_string: String 
+    lexical_table_json_string: String,
+    language_code: Option<String>, // Added language_code parameter
 ) -> Result<(), CommandError> {
     info!("[Backend Save Full Transcript JSON] Transcript Path: {}", transcript_path);
     info!("[Backend Save Full Transcript JSON] Project XML Path: {}", project_xml_path);
@@ -458,8 +749,9 @@ pub async fn save_transcript_json(
 
     match serde_json::from_str::<JsonValue>(&lexical_table_json_string) {
         Ok(json_value) => {
-            if !(json_value.get("root").is_some() && json_value.get("root").unwrap().is_object()) {
-                 return Err(CommandError::from("Provided string is not a valid Lexical JSON structure (missing root object)."));
+            if !(json_value.get("root").is_some() && json_value.get("root").unwrap().is_object() &&
+                 json_value.get("root").unwrap().get("children").is_some() && json_value.get("root").unwrap().get("children").unwrap().is_array()) {
+                 return Err(CommandError::from("Provided string is not a valid Lexical JSON structure (missing root object or children array)."));
             }
             if let Some(root_children) = json_value.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()) {
                 if root_children.is_empty() || root_children.first().and_then(|n| n.get("type")).and_then(|t| t.as_str()) != Some("table") {
@@ -504,6 +796,9 @@ pub async fn save_transcript_json(
                      warn!("[Backend Save Full Transcript JSON] Updating transcript name in XML from '{}' to '{}' for path '{}'", transcript_xml_entry_instance.name, transcript_filename, transcript_relative_path);
                     transcript_xml_entry_instance.name = transcript_filename.clone();
                  }
+                // Always update the language code, even for existing entries.
+                transcript_xml_entry_instance.language_code = language_code.clone();
+
                 found_transcript_xml_entry = true;
                 break;
             }
@@ -514,6 +809,7 @@ pub async fn save_transcript_json(
             media_entry.transcripts.push(TranscriptEntryXml {
                 name: transcript_filename.clone(),
                 relative_path: transcript_relative_path.clone(),
+                language_code: language_code.clone(), // Add language_code here
             });
              media_entry.transcripts.sort_by(|a,b| a.name.cmp(&b.name));
         }
@@ -568,7 +864,12 @@ pub(crate) fn prepare_output_paths(
     let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
 
     // The final path for the transcript uses the (potentially truncated at import) media_filename_stem.
-    let final_transcript_path_orig = transcripts_dir.join(format!("{}.json", media_filename_stem));
+    let mut final_transcript_path_orig = transcripts_dir.join(format!("{}_1.json", media_filename_stem));
+    let mut counter = 2;
+    while final_transcript_path_orig.exists() {
+        final_transcript_path_orig = transcripts_dir.join(format!("{}_{}.json", media_filename_stem, counter));
+        counter += 1;
+    }
     
     // Path for RTTM (common for original transcript diarization) - can also use a short temp name.
     let temp_rttm_base = transcripts_dir.join(format!("rttm_temp_{}", job_id)); // Generic base for RTTM
@@ -588,7 +889,13 @@ pub(crate) fn prepare_output_paths(
         expected_whisper_temp_json_path_en_opt = Some(temp_whisper_output_base_en.with_extension("json"));
 
         // Final path for translated transcript also uses the media_filename_stem.
-        final_transcript_path_en_opt = Some(transcripts_dir.join(format!("{}.en.json", media_filename_stem)));
+        let mut final_transcript_path_en = transcripts_dir.join(format!("{}.en.json", media_filename_stem));
+        let mut counter = 1;
+        while final_transcript_path_en.exists() {
+            final_transcript_path_en = transcripts_dir.join(format!("{}_{}.en.json", media_filename_stem, counter));
+            counter += 1;
+        }
+        final_transcript_path_en_opt = Some(final_transcript_path_en);
 
         debug!("[prepare_output_paths][{}] EN Temp Whisper Base: '{:?}', EN Whisper JSON (temp): '{:?}', EN Final JSON: '{:?}'",
             job_id, temp_whisper_output_base_en_str_opt, expected_whisper_temp_json_path_en_opt, final_transcript_path_en_opt);
@@ -683,12 +990,14 @@ pub struct TranscriptionInitiatedPayload {
 // in case of early errors or successful initiation that then hands over to another process.
 // The local_handler/transcription.rs will use its own more detailed version for its specific events.
 #[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TranscriptionJobCompletedPayload { // Made pub
     job_id: String,
     status: String, // "done" (by local_handler), "cancelled" (by local_handler), "error" (by local_handler), "failed_initiation" (by this command)
-    jobFinishedPath: String, // Path of the media that was processed or attempted
-    transcriptFilePath: Option<String>, // Path to the main (original) transcript (None if error before creation)
-    errorMessage: Option<String>,
+    job_finished_path: String, // Path of the media that was processed or attempted
+    transcript_file_path: Option<String>, // Path to the main (original) transcript (None if error before creation)
+    translated_transcript_file_path: Option<String>,
+    error_message: Option<String>,
 }
 
 #[tauri::command]
@@ -717,9 +1026,10 @@ pub async fn transcribe_media_command(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: payload.media_path_str.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user immediately.".to_string()),
+            job_finished_path: payload.media_path_str.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user immediately.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled by user immediately."));
     }
@@ -765,18 +1075,20 @@ pub async fn transcribe_media_command(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()), // Use error message from helper
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()), // Use error message from helper
                 });
             } else {
                 error!("[Transcribe Command][{}] WAV conversion failed: {}. Emitting error event.", job_id, error_message);
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "error".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(format!("WAV conversion failed: {}", error_message)),
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(format!("WAV conversion failed: {}", error_message)),
                 });
             }
             return Err(e); // Propagate the original error from the helper
@@ -796,9 +1108,10 @@ pub async fn transcribe_media_command(
         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
             job_id: job_id.clone(),
             status: "cancelled".to_string(),
-            jobFinishedPath: payload.media_path_str.clone(),
-            transcriptFilePath: None,
-            errorMessage: Some("Transcription cancelled by user before main processing pass.".to_string()),
+            job_finished_path: payload.media_path_str.clone(),
+            transcript_file_path: None,
+            translated_transcript_file_path: None,
+            error_message: Some("Transcription cancelled by user before main processing pass.".to_string()),
         });
         return Err(CommandError::from("Transcription cancelled before main processing pass."));
     }
@@ -838,17 +1151,19 @@ pub async fn transcribe_media_command(
                 let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "cancelled".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(error_message.clone()),
+                    job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(error_message.clone()),
                 });
             } else {
                  let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                     job_id: job_id.clone(),
                     status: "error".to_string(),
-                    jobFinishedPath: payload.media_path_str.clone(),
-                    transcriptFilePath: None,
-                    errorMessage: Some(format!("Original transcription pass failed: {}", error_message)),
+                     job_finished_path: payload.media_path_str.clone(),
+                    transcript_file_path: None,
+                    translated_transcript_file_path: None,
+                    error_message: Some(format!("Original transcription pass failed: {}", error_message)),
                 });
             }
             return Err(CommandError::from(format!("Original transcription pass failed: {}", error_message)));
@@ -862,10 +1177,18 @@ pub async fn transcribe_media_command(
     let lexical_json_orig_str = serde_json::to_string_pretty(&lexical_json_orig)
         .map_err(|e| CommandError::from(format!("Failed to serialize original Lexical Table JSON: {}", e)))?;
 
+    // Determine the language code to save for the original transcript.
+    let original_lang_code_to_save = match payload.language_code.as_deref() {
+        None => Some("original".to_string()),
+        Some(lang) if lang.is_empty() || lang == "auto" => Some("original".to_string()),
+        Some(lang) => Some(lang.to_string()),
+    };
+
     save_transcript_json(
         payload.project_xml_path.clone(),
         final_transcript_path_orig.to_string_lossy().to_string(),
         lexical_json_orig_str,
+        original_lang_code_to_save,
     ).await?;
     info!("[Transcribe Command][{}] Original transcript saved to: {:?}", job_id, final_transcript_path_orig);
     emit_progress_cmd(&app_handle_clone, &job_id, 55.0, &format!("Original transcript for {} saved.", media_filename_for_progress))?;
@@ -913,9 +1236,10 @@ pub async fn transcribe_media_command(
             let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                 job_id: job_id.clone(),
                 status: "cancelled".to_string(),
-                jobFinishedPath: payload.media_path_str.clone(),
-                transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
-                errorMessage: Some("Transcription cancelled by user before translation pass.".to_string()),
+                job_finished_path: payload.media_path_str.clone(),
+                transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+                translated_transcript_file_path: None,
+                error_message: Some("Transcription cancelled by user before translation pass.".to_string()),
             });
             return Err(CommandError::from("Transcription cancelled before translation pass."));
         }
@@ -986,17 +1310,19 @@ pub async fn transcribe_media_command(
                         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                             job_id: job_id.clone(),
                             status: "cancelled".to_string(),
-                            jobFinishedPath: payload.media_path_str.clone(),
-                            transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
-                            errorMessage: Some(error_message.clone()),
+                            job_finished_path: payload.media_path_str.clone(),
+                            transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                            translated_transcript_file_path: None,
+                            error_message: Some(error_message.clone()),
                         });
                     } else {
                         let _ = app_handle.emit("custom_transcription_job_completed", TranscriptionJobCompletedPayload {
                             job_id: job_id.clone(),
                             status: "error".to_string(),
-                            jobFinishedPath: payload.media_path_str.clone(),
-                           transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
-                            errorMessage: Some(format!("Translation pass failed: {}", error_message)),
+                            job_finished_path: payload.media_path_str.clone(),
+                           transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()), // Original is kept
+                           translated_transcript_file_path: None,
+                            error_message: Some(format!("Translation pass failed: {}", error_message)),
                         });
                     }
                     return Err(CommandError::from(format!("Translation pass failed: {}", error_message)));
@@ -1044,6 +1370,7 @@ pub async fn transcribe_media_command(
                 payload.project_xml_path.clone(),
                 final_path_en_pb.to_string_lossy().to_string(),
                 lexical_json_en_str,
+                Some("en".to_string()), // Always use "en" for translated transcripts
             ).await?;
             info!("[Transcribe Command][{}] Translated transcript saved to: {:?}", job_id, final_path_en_pb);
             emit_progress_cmd(&app_handle_clone, &job_id, 95.0, &format!("Translation for {} saved.", media_filename_for_progress))?;
@@ -1082,11 +1409,10 @@ pub async fn transcribe_media_command(
     let completion_payload = TranscriptionJobCompletedPayload {
         job_id: job_id.clone(),
         status: "done".to_string(),
-        jobFinishedPath: payload.media_path_str.clone(),
-        transcriptFilePath: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
-        // translatedTranscriptFilePath is not part of this specific payload struct in this file.
-        // If needed, it would be communicated differently or this struct would be the more detailed one.
-        errorMessage: None,
+        job_finished_path: payload.media_path_str.clone(),
+        transcript_file_path: Some(final_transcript_path_orig.to_string_lossy().into_owned()),
+        translated_transcript_file_path: final_transcript_path_en_for_payload.map(|p| p.to_string_lossy().into_owned()),
+        error_message: None,
     };
 
     if let Err(e) = app_handle.emit("custom_transcription_job_completed", completion_payload) {

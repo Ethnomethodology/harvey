@@ -1,15 +1,17 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
-	import { project, prepareDocumentView } from '$lib/stores/projectStore.js'; // prepareDocumentView remains
-	import { transcriptStore, updatePlayerCurrentSegmentIndex } from '$lib/stores/transcriptStore.js';
+	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
+	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import { convertAndSaveTranscriptAsDoc } from '$lib/services/projectService.js';
 	import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     import { get } from 'svelte/store';
-    import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
-	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added
+    import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
+    import { activeLayout } from '$lib/stores/layoutStore.js';
+	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 
     // Virtualization state
     let scrollTop = 0;
@@ -21,6 +23,15 @@
     let transcriptDropdownButtonRef;
     let transcriptDropdownMenuRef;
 
+    let refreshKey = 0; // Key to force re-evaluation of transcript list
+    let unlistenJobComplete = null; // To store the unlisten function
+
+	function getLanguageLabel(langCode) {
+		if (!langCode || langCode.toLowerCase() === 'original') return 'Original';
+		const option = languageOptions.find(opt => opt.value === langCode);
+		return option ? option.label : langCode; // Fallback to code if not found
+	}
+
     // Function to close dropdown when clicking outside
     function handleClickOutsideTranscriptDropdown(event) {
         if (showTranscriptDropdown && transcriptDropdownMenuRef && !transcriptDropdownMenuRef.contains(event.target) && transcriptDropdownButtonRef && !transcriptDropdownButtonRef.contains(event.target)) {
@@ -28,103 +39,64 @@
         }
     }
 
-    onMount(() => {
+    onMount(async () => {
         document.addEventListener('click', handleClickOutsideTranscriptDropdown, true);
+
+        unlistenJobComplete = await listen('custom_transcription_job_completed', (event) => {
+            if (event.payload && event.payload.status === 'done') {
+                const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
+                if (currentSelectedMedia && event.payload.jobFinishedPath === currentSelectedMedia.path) {
+                    console.log('[RichTextPreview] Relevant transcription job completed. Incrementing refreshKey.');
+                    refreshKey++;
+                }
+            }
+        });
+        isMounted = true; // For scroll logic
+        if (previewScrollContainerRef) { // For scroll logic
+            containerHeight = previewScrollContainerRef.clientHeight;
+            scrollTop = previewScrollContainerRef.scrollTop;
+        }
     });
 
     onDestroy(() => {
         document.removeEventListener('click', handleClickOutsideTranscriptDropdown, true);
+        if (unlistenJobComplete) {
+            unlistenJobComplete();
+        }
+        cancelAnimation(); // For scroll logic
     });
 
-    // Reactive variable for the main dropdown button label
-    let currentTranscriptLabel = "Select Transcript";
-    $: {
-        if ($transcriptStore.currentTranscriptPath) {
-            basename($transcriptStore.currentTranscriptPath).then(name => currentTranscriptLabel = name).catch(() => currentTranscriptLabel = "Transcript");
-        } else if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts && $transcriptStore.selectedMediaFile.associated_transcripts.length > 0) {
-            currentTranscriptLabel = "Select Transcript";
-        } else if ($transcriptStore.selectedMediaFile) {
-            currentTranscriptLabel = "No Transcripts";
-        } else {
-            currentTranscriptLabel = "No Media";
-        }
-    }
+    
+    
 
-    // Prepare associated transcripts for the dropdown
-    let associatedTranscriptsForDropdown = [];
-    $: {
-        if ($transcriptStore.selectedMediaFile && $transcriptStore.selectedMediaFile.associated_transcripts) {
-            const associated = $transcriptStore.selectedMediaFile.associated_transcripts || [];
+	import { derived } from 'svelte/store';
 
-            const basenamePromises = associated.map(async (t, index) => {
-                let name = "Unknown Transcript";
-                let relativePathValue = t.relativePath;
+	const displayedTranscripts = derived(transcriptStore, ($transcriptStore) => {
+		const transcripts = $transcriptStore.selectedMediaFile?.associated_transcripts;
+		if (!transcripts || transcripts.length === 0) return [];
 
-                if (t.path) {
-                    try {
-                        name = await basename(t.path);
-                    } catch (e) {
-                        console.warn(`Basename failed for path ${t.path}, trying relativePath:`, e);
-                        if (t.relativePath) {
-                            name = t.relativePath.split(/[\/]/).pop();
-                        }
-                    }
-                } else if (t.relativePath) {
-                    console.warn(`Path missing for transcript, using relativePath for name: ${t.relativePath}`);
-                    name = t.relativePath.split(/[\/]/).pop();
-                } else {
-                    console.warn('Transcript item has no path or relativePath:', t);
-                }
+		const withLabels = transcripts.map(t => {
+			const langLabel = getLanguageLabel(t.language_code || 'original');
+			let fileName = t.name;
+			if (!fileName && t.path) {
+				try {
+					const pathParts = t.path.split(/[\\/]/);
+					fileName = pathParts[pathParts.length - 1];
+					if (fileName.toLowerCase().endsWith('.json')) {
+						fileName = fileName.substring(0, fileName.length - 5);
+					}
+				} catch (e) {
+					console.error("Error extracting filename from path:", e);
+					fileName = '';
+				}
+			}
+			const fileNamePart = fileName ? ` (${fileName})` : '';
+			const displayLabel = `${langLabel}${fileNamePart}`;
+			return { ...t, displayLabel };
+		});
 
-                return {
-                    path: t.path,
-                    relativePath: relativePathValue,
-                    name: name,
-                    unique_render_key: t.path || t.relativePath || `transcript-index-${index}`
-                };
-            });
-
-            Promise.all(basenamePromises).then(results => {
-                associatedTranscriptsForDropdown = results;
-            }).catch(error => {
-                console.error("Error processing basenames for dropdown:", error);
-                associatedTranscriptsForDropdown = associated.map((t, index) => {
-                    let fallbackName = "Unknown Transcript";
-                    let keyPath = t.path || t.relativePath;
-                    if (t.path) {
-                        fallbackName = t.path.split(/[\/]/).pop();
-                    } else if (t.relativePath) {
-                        fallbackName = t.relativePath.split(/[\/]/).pop();
-                    }
-                    return {
-                        path: t.path,
-                        relativePath: t.relativePath,
-                        name: fallbackName,
-                        unique_render_key: keyPath || `transcript-index-${index}`
-                    };
-                });
-            });
-        } else {
-            associatedTranscriptsForDropdown = [];
-        }
-    }
-
-    let filteredAssociatedTranscripts = [];
-    $: {
-        if (associatedTranscriptsForDropdown && associatedTranscriptsForDropdown.length > 0 && $transcriptStore.currentTranscriptPath) {
-            const currentPath = $transcriptStore.currentTranscriptPath;
-            const baseDir = get(project).baseDirectory;
-            filteredAssociatedTranscripts = associatedTranscriptsForDropdown.filter(transcript => {
-                let itemPath = transcript.path;
-                if (!itemPath && transcript.relativePath && baseDir) {
-                    itemPath = `${baseDir}/${transcript.relativePath}`;
-                }
-                return itemPath !== currentPath;
-            });
-        } else {
-             filteredAssociatedTranscripts = associatedTranscriptsForDropdown || [];
-        }
-    }
+		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+	});
 
     import { createHeadlessEditor } from '@lexical/headless';
     import { $generateHtmlFromNodes as generateHtmlFromNodes } from '@lexical/html';
@@ -297,7 +269,7 @@
     let paddingBottom = 0;
     let visibleSegments = []; // This will store fully processed segments for rendering
 
-    $: {
+    $: if (allSegmentsData) {
         if (previewScrollContainerRef && allSegmentsData.length > 0) {
             const totalItems = allSegmentsData.length;
             visibleStartIndex = Math.max(0, Math.floor(scrollTop / ESTIMATED_SEGMENT_HEIGHT) - OVERSCAN_COUNT);
@@ -344,6 +316,24 @@
             paddingTop = 0;
             paddingBottom = 0;
             visibleSegments = [];
+        }
+    }
+
+    let lastSeenTranscriptPath = null;
+    $: {
+        const currentPath = $transcriptStore.activeTranscript?.path;
+        if (currentPath && currentPath !== lastSeenTranscriptPath) {
+            lastSeenTranscriptPath = currentPath;
+            // Wait for the DOM to update before resetting scroll
+            tick().then(() => {
+                if (previewScrollContainerRef) {
+                    previewScrollContainerRef.scrollTop = 0;
+                }
+            });
+            // Reset internal state immediately
+            scrollTop = 0;
+        } else if (!currentPath && lastSeenTranscriptPath !== null) {
+            lastSeenTranscriptPath = null;
         }
     }
 
@@ -507,7 +497,7 @@
                 const newDocPath = await convertAndSaveTranscriptAsDoc();
                 if (newDocPath) {
                     await message(`Transcript copied to Documents:\n${newDocPath.split(/[\\/]/).pop()}`, {title: "Document Created", type: "info"});
-                    dispatch('requestopentab', { tabName: 'notes', loadNotePath: newDocPath });
+                    dispatch('requestopentab', { tabName: 'data', loadNotePath: newDocPath });
                 } else {
                      console.error("[RichTextPreview] Document saving process did not return a path.");
                      await message("Failed to create document file: The process completed but did not provide a file path.", {title: "Error", type: "error"});
@@ -599,28 +589,18 @@
                     <select
                         class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                                max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
-                        on:change={(e) => {
-                            const selectedPath = e.target.value;
-                            if (selectedPath) {
-                                dispatch('transcriptselected', selectedPath);
-                            }
-                        }}
+                        value={$transcriptStore.activeTranscript?.path || ''}
+                        on:change={(e) => switchTranscript(e.target.value)}
                     >
-                        {#if $transcriptStore.currentTranscriptPath}
-                            <option value={$transcriptStore.currentTranscriptPath} selected class="truncate">
-                                {currentTranscriptLabel}
-                            </option>
-                        {:else if associatedTranscriptsForDropdown.length === 0}
-                            <option value="" disabled selected class="truncate">No Transcripts</option>
-                        {/if}
-
-                        {#each associatedTranscriptsForDropdown as transcript (transcript.unique_render_key)}
-                            {#if transcript.path !== $transcriptStore.currentTranscriptPath}
-                                <option value={transcript.path || transcript.relativePath} title={transcript.path || transcript.relativePath} class="truncate">
-                                    {transcript.name}
+                        {#if $displayedTranscripts.length === 0}
+                            <option value="" disabled>No Transcripts</option>
+                        {:else}
+                            {#each $displayedTranscripts as transcript (transcript.path)}
+                                <option value={transcript.path}>
+                                    {transcript.displayLabel}
                                 </option>
-                            {/if}
-                        {/each}
+                            {/each}
+                        {/if}
                     </select>
                     <!-- Custom Chevron Icon -->
                     <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">

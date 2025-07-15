@@ -185,7 +185,7 @@ pub fn run() {
             projectview::transcription_commands::convert_srt_to_vtt_command,
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
 
-            // --- Project view DOCUMENT/NOTES commands ---
+            // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,
             projectview::document_commands::load_note_json,
             projectview::document_commands::save_document_and_update_xml,

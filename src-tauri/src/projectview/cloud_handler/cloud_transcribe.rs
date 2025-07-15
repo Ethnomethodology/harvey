@@ -39,7 +39,7 @@ use std::str::FromStr;
 #[derive(Serialize, Deserialize, Debug, Clone)] struct GeminiPart { text: Option<String>, #[serde(rename = "inlineData", skip_serializing_if = "Option::is_none")] inline_data: Option<GeminiInlineData> }
 #[derive(Serialize, Deserialize, Debug, Clone)] struct GeminiInlineData { #[serde(rename = "mimeType")] mime_type: String, data: String }
 #[derive(Deserialize, Debug)] struct GeminiResponse { candidates: Option<Vec<GeminiCandidate>>, #[serde(rename = "promptFeedback")] prompt_feedback: Option<GeminiPromptFeedback> }
-#[derive(Deserialize, Debug)] struct GeminiCandidate { content: Option<GeminiContent>, #[serde(rename = "finishReason")] finish_reason: Option<String> }
+#[derive(Deserialize, Debug)] struct GeminiCandidate { content: Option<GeminiContent> }
 #[derive(Deserialize, Debug)] struct GeminiPromptFeedback { #[serde(rename = "blockReason")] block_reason: Option<String> }
 
 // Struct for parsing the JSON array expected within Gemini's text response
@@ -108,7 +108,7 @@ pub async fn run_cloud_transcription(
     app_handle: AppHandle,
     media_path: String,
     cloud_model_id: String,
-    _language: String, // Language often handled by model/API implicitly or via different param
+    language: String, // Language often handled by model/API implicitly or via different param
     _num_speakers: usize, // Gemini's default model might do diarization without this hint, or might have other ways to specify.
     speaker_names: Vec<String>,
     api_key: String,
@@ -292,6 +292,7 @@ pub async fn run_cloud_transcription(
         project_xml_path_str,
         final_transcript_path.to_string_lossy().to_string(),
         lexical_table_json_string, // MODIFIED: Pass the string representation of the Lexical Table
+        Some(language.clone()), // language_code: Pass the selected language for cloud transcription
     ).await?;
     info!("[Gemini Transcribe][Job '{}'] Final processed transcript saved.", job_id);
 

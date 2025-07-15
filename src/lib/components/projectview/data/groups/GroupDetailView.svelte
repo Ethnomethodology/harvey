@@ -508,7 +508,7 @@
 
         const newGroupData = event.detail.group;
         if (newGroupData && itemForAddToGroup) { // Ensure itemForAddToGroup was processed
-           groupContentNotification.set({ groupId: newGroupData.id, action: 'file_added', timestamp: Date.now() });
+           // groupContentNotification.set({ groupId: newGroupData.id, action: 'file_added', timestamp: Date.now() }); // Line 511: removed .set call
         }
         itemForAddToGroup = null; // Reset
     }

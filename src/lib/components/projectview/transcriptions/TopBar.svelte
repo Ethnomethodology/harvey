@@ -15,11 +15,12 @@
 	import { message } from '@tauri-apps/plugin-dialog';
 
 	// --- Child Component Imports ---
-	import ManageModelsModal from '../modals/ManageModelsModal.svelte';
+	
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
-	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte'; // Added
-	import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
+	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+	import { activeLayout } from '$lib/stores/layoutStore.js';
+	import { languageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -38,16 +39,6 @@
 		console.log('Add Blank Transcript clicked');
 		// TODO: implement blank transcript creation
 	}
-
-	// --- Language Options ---
-	export const languageOptions = [
-		{ value: 'auto', label: 'Auto Detect' }, { value: 'af', label: 'Afrikaans' }, { value: 'ar', label: 'Arabic' }, { value: 'hy', label: 'Armenian' }, { value: 'az', label: 'Azerbaijani' }, { value: 'be', label: 'Belarusian' }, { value: 'bs', label: 'Bosnian' }, { value: 'bg', label: 'Bulgarian' }, { value: 'ca', label: 'Catalan' }, { value: 'zh', label: 'Chinese' }, { value: 'hr', label: 'Croatian' }, { value: 'cs', label: 'Czech' }, { value: 'da', label: 'Danish' }, { value: 'nl', label: 'Dutch' }, { value: 'en', label: 'English' }, { value: 'et', label: 'Estonian' }, { value: 'fi', label: 'Finnish' }, { value: 'fr', label: 'French' }, { value: 'gl', label: 'Galician' }, { value: 'de', label: 'German' }, { value: 'el', label: 'Greek' }, { value: 'he', label: 'Hebrew' }, { value: 'hi', label: 'Hindi' }, { value: 'hu', label: 'Hungarian' }, { value: 'is', label: 'Icelandic' }, { value: 'id', label: 'Indonesian' }, { value: 'it', label: 'Italian' }, { value: 'ja', label: 'Japanese' }, { value: 'kn', label: 'Kannada' }, { value: 'kk', label: 'Kazakh' }, { value: 'ko', label: 'Korean' }, { value: 'lv', label: 'Latvian' }, { value: 'lt', label: 'Lithuanian' }, { value: 'mk', label: 'Macedonian' }, { value: 'ms', label: 'Malay' }, { value: 'mi', label: 'Maori' }, { value: 'mr', label: 'Marathi' }, { value: 'ne', label: 'Nepali' }, { value: 'no', label: 'Norwegian' }, { value: 'fa', label: 'Persian' }, { value: 'pl', label: 'Polish' }, { value: 'pt', label: 'Portuguese' }, { value: 'ro', label: 'Romanian' }, { value: 'ru', label: 'Russian' }, { value: 'sr', label: 'Serbian' }, { value: 'sk', label: 'Slovak' }, { value: 'sl', label: 'Slovenian' }, { value: 'es', label: 'Spanish' }, { value: 'sw', label: 'Swahili' }, { value: 'sv', label: 'Swedish' }, { value: 'tl', label: 'Tagalog' }, { value: 'ta', label: 'Tamil' }, { value: 'th', label: 'Thai' }, { value: 'tr', label: 'Turkish' }, { value: 'uk', label: 'Ukrainian' }, { value: 'ur', label: 'Urdu' }, { value: 'vi', label: 'Vietnamese' }, { value: 'cy', label: 'Welsh' },
-	];
-
-
-	// --- Cloud Model Labels ---
-	const cloudModelLabels = { 'google-2.0-flash': 'Google 2.0 Flash', 'gemini-2.0-flash-live-001': 'Gemini 2.0 Flash Live', };
-	function getCloudModelLabel(modelId) { if (!modelId) return 'Unknown Cloud Model'; return cloudModelLabels[modelId] || modelId; }
 
 	// --- Load Configuration ---
 	async function loadConfiguration() {
@@ -190,24 +181,10 @@
 	}
 
 	// --- Reactive check for Transcribe button disable state ---
-	$: isTranscribeDisabled = (() => {
-		const mediaSelected = !!$transcriptStore.selectedMediaFile?.path;
-		const modelSelected = !!$transcriptStore.selectedModelName;
-		const languageSelected = !!$transcriptStore.selectedLanguage;
-		const isDisabled = !mediaSelected || !modelSelected || !languageSelected;
-
-		// Keep logging for verification
-		console.log(`[TopBar] isTranscribeDisabled check:
-		  Media Path: ${$transcriptStore.selectedMediaFile?.path} (Selected: ${mediaSelected})
-		  Model Name: ${$transcriptStore.selectedModelName} (Selected: ${modelSelected})
-		  Language: ${$transcriptStore.selectedLanguage} (Selected: ${languageSelected})
-		  --> Disabled: ${isDisabled}`);
-
-		return isDisabled;
-	})();
+	$: isTranscribeDisabled = !($transcriptStore.selectedMediaFile?.path);
 
 
-	$: isExportDisabled = !$transcriptStore.currentTranscriptPath || !$transcriptStore.segments || $transcriptStore.segments.length === 0 || $project.isTranscribing || $project.isLoading; // isTranscribing and isLoading can remain from projectStore
+	$: isExportDisabled = !$transcriptStore.activeTranscript?.path || !$transcriptStore.segments || $transcriptStore.segments.length === 0 || $project.isTranscribing || $project.isLoading; // isTranscribing and isLoading can remain from projectStore
 
 	$: mediaFilesForDropdown = (() => {
 		const rootNodes = $project.files || []; // files list still comes from projectStore
@@ -258,10 +235,10 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-3 h-10 ml-1 mt-1 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+	class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
 	data-tauri-drag-region
 >
-	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe, Export -->
+	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
 		<!-- Toggle Left Panel Button -->
 		<button
@@ -269,9 +246,9 @@
 			title="Toggle File Explorer Panel"
 			on:click={() => dispatch('toggleLeftPanel')}
 		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
-				<path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
-			</svg>
+			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
+				<path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
+			 </svg>
 		</button>
 
 		<!-- Media Selection Dropdown -->
@@ -300,50 +277,6 @@
 			<option value="manual">Manual Transcription</option>
 		</select>
 
-		<!-- Model Selection (Conditional) -->
-		{#if transcriptionMode === 'automatic'}
-		<select class="ui-select flex-shrink-0 w-36" on:change="{handleModelChange}" disabled="{isLoadingModels}" bind:value="{modelSelectValue}" title="{isLoadingModels ? 'Loading models...' : 'Select transcription model'}">
-			<option value="" disabled>Select Model</option>
-			{#if !isLoadingModels}
-				<optgroup label="Local Models"> {#if downloadedModelsList.length === 0} <option value="" disabled>No local models</option> {:else} {#each downloadedModelsList as model (model.name)} <option value="{model.name}">{model.name}</option> {/each} {/if} </optgroup>
-				 {#if cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model} {@const configuredCloudModelId = cloudConfig.model} {@const configuredCloudModelLabel = getCloudModelLabel(configuredCloudModelId)} <optgroup label="Cloud Models"> <option value="{configuredCloudModelId}">{configuredCloudModelLabel} ☁️</option> </optgroup> {/if}
-				<option value="" disabled class="separator">────────</option> <option value="__manage__">Manage Models...</option>
-			{:else} <option value="" disabled>Loading...</option> {/if}
-		</select>
-		{/if}
-
-		<!-- Language Selection -->
-		<select
-			class="ui-select flex-shrink-0 w-34"
-			bind:value="{languageSelectValue}"
-			on:change="{handleLanguageChange}"
-			title="Select Audio Language"
-		>
-			<option value="" disabled>Select Audio Language</option>
-			{#each languageOptions as lang (lang.value)}
-				<option value="{lang.value}">{lang.label}</option>
-			{/each}
-		</select>
-
-		<!-- Translate to English Checkbox -->
-		<div class="flex items-center space-x-1.5 ml-1.5" title={$transcriptStore.selectedLanguage === 'en' ? 'Translation N/A for English audio' : 'Translate transcript to English'}>
-			<input
-				type="checkbox"
-				id="translateToEnglishCheckbox"
-				class="ui-checkbox"
-				checked={$transcriptStore.translateToEnglish}
-				disabled={$transcriptStore.selectedLanguage === 'en'}
-				on:click={() => { setTranslateToEnglish(!$transcriptStore.translateToEnglish); if ($transcriptStore.selectedLanguage === 'en') setTranslateToEnglish(false); }}
-			/>
-			<label
-				for="translateToEnglishCheckbox"
-				class="text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none"
-				class:opacity-50={$transcriptStore.selectedLanguage === 'en'}
-			>
-				Translate to English
-			</label>
-		</div>
-
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
 			<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openSpeakersModal}">
@@ -359,19 +292,18 @@
 			</button>
 		  </div>
 
-		<!-- Transcribe / Add Blank Button (Conditional) -->
-		{#if transcriptionMode === 'automatic'}
+		<!-- Transcribe Button -->
 			<button
 				class="ui-button-icon flex items-center space-x-0.5"
 				on:click="{handleTranscribeClick}"
-				title="{isTranscribeDisabled ? 'Select media, model, and language first' : 'Transcribe Media'}"
+				title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
 			>
-				{#if $transcriptStore.isTranscribing} <!-- isTranscribing state is now in transcriptStore -->
+				{#if $transcriptStore.isTranscribing}
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 animate-spin">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
 				</svg>
-				<span class="text-xs">Working...</span> <!-- Shorter Text -->
+				<span class="text-xs">Transcribing...</span>
 				{:else}
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
@@ -379,29 +311,15 @@
 				<span class="text-xs">Transcribe</span>
 				{/if}
 			</button>
-		{:else}
-			<button
-				class="ui-button-icon flex items-center space-x-0.5"
-				on:click="{handleAddBlankTranscript}"
-				title="Add Blank Transcript"
-			>
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-plus w-4 h-4" viewBox="0 0 16 16"> <!-- Adjusted icon size -->
-				  <path d="M8 6.5a.5.5 0 0 1 .5.5v1.5H10a.5.5 0 0 1 0 1H8.5V11a.5.5 0 0 1-1 0V9.5H6a.5.5 0 0 1 0-1h1.5V7a.5.5 0 0 1 .5-.5"/>
-				  <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/>
-				</svg>
-				<span class="text-xs">Add Blank</span> <!-- Shorter Text -->
-			</button>
-		{/if}
+	</div>
 
+	<!-- Right Controls: Layout Settings, Theme Toggle -->
+	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
 		<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
 		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
-	</div>
-
-	<!-- Right Controls: Layout Settings, Theme Toggle -->
-	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
@@ -419,7 +337,7 @@
 </div>
 
 <!-- Modals -->
-<ManageModelsModal bind:showModal="{isManageModalOpen}" on:close="{handleManageModalClose}" />
+
 <SpeakersModal bind:showModal="{isSpeakersModalOpen}" currentSpeakers="{$transcriptStore.speakers}" on:confirm="{handleSpeakersConfirm}" />
 <ExportModal
 	bind:showModal="{isExportModalOpen}"

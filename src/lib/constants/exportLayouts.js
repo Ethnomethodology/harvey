@@ -19,14 +19,14 @@ export const DOCX_LAYOUT_OPTIONS = [
 		description: '| No | Timestamp |\n| Speaker | Text |',
 		columns: 2, // Visually two, but data-wise could be seen as 2x2
 		rustLayoutKey: 'Layout2',
-		previewClasses: 'grid grid-cols-10 gap-1 text-xs p-1 border rounded',
+		previewClasses: 'grid grid-cols-4 gap-1 text-xs p-1 border rounded',
 		columnStyles: [
 			// Row 1
-			{ content: '#', class: 'col-span-2 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
-			{ content: 'Time', class: 'col-span-8 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
+			{ content: '#', class: 'col-span-1 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
+			{ content: 'Time', class: 'col-span-3 bg-slate-200 dark:bg-slate-700 p-0.5 rounded text-center truncate' },
 			// Row 2
-			{ content: 'Spk', class: 'col-span-2 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
-			{ content: 'Text', class: 'col-span-8 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
+			{ content: 'Spk', class: 'col-span-1 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
+			{ content: 'Text', class: 'col-span-3 row-start-2 bg-slate-300 dark:bg-slate-600 p-0.5 rounded text-center truncate' },
 		],
 	},
 	{
@@ -68,7 +68,7 @@ export const DOCX_LAYOUT_OPTIONS = [
 
 export const DOCX_LAYOUT_COLUMN_CONFIGS = {
 	Layout1: { colgroup: ["5%", "15%", "15%", "65%"] },
-	Layout2: { colgroup: ["20%", "80%"] }, // Current default
+	Layout2: { colgroup: ["5%", "15%", "25%", "75%"] }, // Updated for 2x2 logical layout: No, Timestamp, Speaker, Text
 	Layout3: { colgroup: ["100%"] }, // Single column for both rows
 	Layout4: { colgroup: ["25%", "75%"] },
 	Layout5: { colgroup: ["100%"] },

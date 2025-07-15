@@ -236,69 +236,7 @@ pub async fn delete_project_group(project_id: String, group_id: String) -> Resul
     }
 }
 
-#[tauri::command]
-pub async fn remove_file_from_group_command(project_id: String, group_id: String, file_asset_relative_path: String) -> Result<(), String> {
-    if project_id.is_empty() || project_id == "null" { // Check for "null" string as well
-        error!("[CMD] remove_file_from_group_command - Project ID is missing or invalid.");
-        return Err("Project ID is missing. Cannot remove file from group.".to_string());
-    }
-    if group_id.is_empty() {
-        error!("[CMD] remove_file_from_group_command - Group ID is missing.");
-        return Err("Group ID is missing. Cannot remove file from group.".to_string());
-    }
-    if file_asset_relative_path.is_empty() {
-        error!("[CMD] remove_file_from_group_command - File asset relative path is missing.");
-        return Err("File asset relative path is missing. Cannot remove file from group.".to_string());
-    }
 
-    info!(
-        "[CMD] remove_file_from_group_command: Removing file '{}' from group '{}' in project '{}'",
-        file_asset_relative_path, group_id, project_id
-    );
-
-    let db_path = match db_handler::get_db_path() {
-        Ok(path) => path,
-        Err(e) => {
-            let err_msg = format!("Failed to get database path: {}", e.to_string());
-            error!("[CMD] remove_file_from_group_command - {}", err_msg);
-            return Err(err_msg);
-        }
-    };
-
-    let conn = match Connection::open(&db_path) {
-        Ok(c) => c,
-        Err(e) => {
-            let err_msg = format!("Failed to open database at '{}': {}", db_path.display(), e.to_string());
-            error!("[CMD] remove_file_from_group_command - {}", err_msg);
-            return Err(err_msg);
-        }
-    };
-
-    match db_handler::remove_file_from_group(&conn, &project_id, &group_id, &file_asset_relative_path) {
-        Ok(rows_affected) => {
-            if rows_affected > 0 {
-                info!(
-                    "[CMD] remove_file_from_group_command - File '{}' removed from group '{}' successfully. Rows affected: {}",
-                    file_asset_relative_path, group_id, rows_affected
-                );
-            } else {
-                info!(
-                    "[CMD] remove_file_from_group_command - No association found for file '{}' in group '{}'. Nothing removed.",
-                    file_asset_relative_path, group_id
-                );
-            }
-            Ok(())
-        }
-        Err(e) => {
-            let err_msg = format!(
-                "Failed to remove file '{}' from group '{}': {}",
-                file_asset_relative_path, group_id, e.to_string()
-            );
-            error!("[CMD] remove_file_from_group_command - {}", err_msg);
-            Err(err_msg)
-        }
-    }
-}
 
 #[tauri::command]
 pub async fn update_group_details(
@@ -678,8 +616,7 @@ struct FFProbeStream {
 
 #[derive(Deserialize, Debug, Default, Clone)]
 struct FFProbeFormatTags {
-    #[serde(rename = "creation_time")]
-    creation_time: Option<String>,
+    
     #[serde(rename = "DURATION")]
     duration: Option<String>,
 }
@@ -690,7 +627,7 @@ struct FFProbeFormat {
     bit_rate: Option<String>,
     #[serde(default)]
     tags: Option<FFProbeFormatTags>,
-    format_name: Option<String>,
+    
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -807,7 +744,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
     let media_dir_rel_path = format!("{}/{}", HARVEY_FILES_DIR, MEDIA_DIR);
     let mut file_entries: Vec<FileEntry> = Vec::new();
 
-    for media_entry in &project_data.media_files.files {
+    for media_entry in &mut project_data.media_files.files {
         let media_stem = &media_entry.name;
         let stem_rel_path = format!("{}/{}", media_dir_rel_path, media_stem);
         let stem_abs_path = project_base_dir.join(&stem_rel_path);
@@ -851,12 +788,23 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             warn!("[Backend Load XML] Media file listed in XML does not exist on disk: '{}'", media_file_abs_path.display());
         }
 
-        for transcript_xml_entry in &media_entry.transcripts {
+        for transcript_xml_entry in &mut media_entry.transcripts {
             let transcript_rel_path = &transcript_xml_entry.relative_path;
             let transcript_abs_path = project_base_dir.join(transcript_rel_path);
 
             if transcript_abs_path.exists() && transcript_abs_path.is_file() {
-                let transcript_file_name = transcript_xml_entry.name.clone();
+                let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                transcript_xml_entry.name = transcript_file_name.clone();
+
+                let file_stem = transcript_abs_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                let parts: Vec<&str> = file_stem.split('.').collect();
+                if parts.len() > 1 {
+                    let lang_code = parts.last().unwrap().to_string();
+                    if lang_code.len() == 2 {
+                        transcript_xml_entry.language_code = Some(lang_code);
+                    }
+                }
+
                  let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
@@ -1114,6 +1062,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         created_at: Some(Utc::now().to_rfc3339()), // Set to current time on import
         original_import_path: Some(source_file_path_str.clone()),
         speaker_names: None,
+        waveform_data: None,
     };
 
     let final_asset_type: String;
@@ -1159,6 +1108,7 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
         &db_key_relative_path,
         Some(source_file_path_str.as_str()), // Pass as &str
         None, // No speaker names known at initial import by this function
+        None, // language_code: Option<&str> - Not known at initial import
     ) {
         warn!(
             "[Backend Import] Failed to save media_transcript_data for project_id {}: {}. Error: {}",
@@ -1758,6 +1708,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                                 created_at: None,
                                 original_import_path: None, // Added
                                 speaker_names: None,        // Added
+                                waveform_data: None,
                             },
                             highlights: Vec::new(),
                         }
@@ -2121,7 +2072,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 }
             }
 
-            let mut current_doc_folder_path_for_xml_update = old_doc_folder_path.clone();
+            let mut current_doc_folder_path_for_xml_update = old_doc_folder_path;
             if old_doc_folder_path != &new_doc_folder_path {
                 info!("[Backend Rename] Renaming document folder {} -> {}", old_doc_folder_path.display(), new_doc_folder_path.display());
                 if let Err(e) = fs::rename(old_doc_folder_path, &new_doc_folder_path) {

@@ -1,20 +1,42 @@
 <!-- src/lib/components/projectview/modals/TranscribeConfirmModal.svelte -->
 <script>
 	import { createEventDispatcher, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
+	// Only import getCloudModelLabel, languageOptions will come as a prop
+	import { getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	import SpeakersModal from './SpeakersModal.svelte';
 
 	// Props
-	export let fileName = ''; // Still needed for confirm view
-	export let modelName = ''; // Still needed for confirm view
-	export let language = ''; // Still needed for confirm view
-	export let speakers = { count: 0, names: [] }; // Still needed for confirm view
+	export let fileName = '';
+	export let downloadedModelsList = [];
+	export let cloudConfig = null;
+	export let languageOptions = []; // Expect languageOptions as a prop, default to empty array
+	export let speakers = { count: 0, names: [], translatedNames: [] };
+
 
 	const dispatch = createEventDispatcher();
 
+	// Local state for editable fields
+	let modalSelectedModel = '';
+	let modalTranscriptionMode = 'automatic';
+	let modalSelectedLanguage = 'auto';
+	let modalTranslateToEnglish = false;
+	let modalEnableDiarization = false;
+	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
+	let showNestedSpeakersModal = false;
+
 	// Event Handlers
 	function handleConfirm() {
-		dispatch('confirmStart');
+		dispatch('confirmStart', {
+			selectedModel: modalSelectedModel,
+			transcriptionMode: modalTranscriptionMode,
+			selectedLanguage: modalSelectedLanguage,
+			translateToEnglish: modalTranslateToEnglish,
+			enableDiarization: modalEnableDiarization,
+			speakersConfig: modalSpeakersConfig
+		});
 	}
 
 	function handleCancelRequest() {
@@ -32,15 +54,15 @@
 	// --- Reactive Derivations from Store for UI ---
 	// $: console.log('[ModalDebug] Store State:', $transcriptStore); // Uncomment for deep debugging
 
-	$: {
-		console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
-	}
+	// $: {
+	// 	console.log(`[JULES-DEBUG Modal Env] showModal=${showModal}`); // Prop
+	// }
 
-	$: {
-		if ($transcriptStore.showTranscribeModal) {
-			console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
-		}
-	}
+	// $: {
+	// 	if ($transcriptStore.showTranscribeModal) {
+	// 		console.log(`[JULES-DEBUG Modal React] Store state: isTranscribing=${$transcriptStore.isTranscribing}, jobStatus='${$transcriptStore.transcriptionJobStatus}', jobID='${$transcriptStore.transcriptionJobId ? $transcriptStore.transcriptionJobId.substring(0,8) : null}', progressMsg='${$transcriptStore.transcriptionProgress.message}', errorMsg='${$transcriptStore.transcriptionErrorMessage}'`);
+	// 	}
+	// }
 
 	$: showModal = $transcriptStore.showTranscribeModal;
 	$: isTranscribing = $transcriptStore.isTranscribing;
@@ -50,6 +72,16 @@
 	$: currentErrorMessage = $transcriptStore.transcriptionErrorMessage;
 	$: currentJobId = $transcriptStore.transcriptionJobId;
 
+	// When the modal is about to show the confirm view, initialize local states from the store
+	$: if (showModal && !isTranscribing && jobStatus === null) {
+		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : (cloudConfig?.model || ''));
+		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
+		modalTranslateToEnglish = $transcriptStore.translateToEnglish;
+		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
+		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
+		// Use a deep copy to prevent direct mutation of the prop or store value until confirmed.
+		modalSpeakersConfig = JSON.parse(JSON.stringify(speakers || { count: 0, names: [], translatedNames: [] }));
+	}
 
 	// --- Title Logic ---
 	$: modalTitle = (!isTranscribing && jobStatus === null) ? 'Confirm Transcription Settings' :
@@ -64,25 +96,31 @@
     // Keyboard handling (optional, can be simplified or removed if not strictly needed by new design)
 	function handleKeydown(event) {
 		if (showModal && event.key === 'Escape') {
-			// Decide if Escape should trigger 'closeAndReset' or 'runInBackgroundAndClose' depending on state
-            if (isTranscribing && jobStatus === 'running') {
-                // Maybe do nothing, or dispatch runInBackgroundAndClose
-            } else if (!isTranscribing && (jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)) {
-                 handleCloseAndReset();
-            }
+			// If transcribing and running/initiating, do nothing on Escape.
+			if (isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')) {
+				// Explicitly do nothing to prevent closure
+				event.preventDefault(); // Also prevent any default browser behavior for Escape if modal is focused
+				return;
+			} else if (!isTranscribing && (jobStatus === 'done' || jobStatus === 'error' || jobStatus === 'cancelled' || jobStatus === null)) {
+				// For terminal states or initial confirm state, allow close.
+				handleCloseAndReset();
+			}
+			// Other states (e.g., 'cancelling') will also do nothing, which is fine.
 		}
 	}
 
-	$: if (showModal && typeof window !== 'undefined') {
-		window.addEventListener('keydown', handleKeydown);
-	} else if (typeof window !== 'undefined') {
-		window.removeEventListener('keydown', handleKeydown);
-	}
+	// $: if (showModal && typeof window !== 'undefined') {
+	// 	window.addEventListener('keydown', handleKeydown);
+	// } else if (typeof window !== 'undefined') {
+	// 	window.removeEventListener('keydown', handleKeydown);
+	// }
+    // The global listener is removed. Keydown is now handled by the main div.
 
-    onDestroy(() => {
-        if (typeof window !== 'undefined') {
-             window.removeEventListener('keydown', handleKeydown);
-        }
+	onDestroy(() => {
+        // if (typeof window !== 'undefined') {
+        //      window.removeEventListener('keydown', handleKeydown);
+        // }
+        // Global listener cleanup is removed.
     });
 
 </script>
@@ -93,27 +131,115 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="transcribe-modal-title"
-		on:click={handleCloseAndReset}
-	> <!-- Allow closing by clicking backdrop if appropriate, or remove -->
+		on:click={() => {
+            if (!(isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating'))) {
+                handleCloseAndReset();
+            }
+        }}
+        tabindex="-1"
+        on:keydown={handleKeydown}
+	>
 		<div
 			class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md text-gray-800 dark:text-gray-200 flex flex-col"
-			on:click|stopPropagation
 			role="document"
+            tabindex="-1"
+            on:click|stopPropagation
 		>
 			<h2 id="transcribe-modal-title" class="text-lg font-semibold mb-4 text-center">{modalTitle}</h2>
 
 			{#if !isTranscribing && jobStatus === null}
 				<!-- CONFIRM VIEW -->
-				<div class="space-y-2 text-sm mb-5 text-gray-700 dark:text-gray-300">
-					<p><strong>File:</strong> <span class="font-mono break-all">{fileName || 'N/A'}</span></p>
-					<p><strong>Model:</strong> <span class="font-mono">{modelName || 'N/A'}</span></p>
-					<p><strong>Language:</strong> <span class="font-mono">{language || 'N/A'}</span></p>
-					<p><strong>Speakers:</strong> {speakers?.count > 0 ? `${speakers.count} (${(speakers.names || []).slice(0, 3).join(', ')}${speakers.count > 3 ? ', ...' : ''})` : '0 (Diarization Disabled)'}</p>
-					<p><strong>Translate to English:</strong> <span class="font-mono">{$transcriptStore.translateToEnglish ? 'Yes' : 'No'}</span></p>
+				<div class="space-y-3 text-sm mb-5 text-gray-700 dark:text-gray-300 max-h-[60vh] overflow-y-auto pr-2">
+					<div><strong>File:</strong> <span class="font-mono break-all ml-2">{fileName || 'N/A'}</span></div>
+
+					<div class="space-y-1">
+						<label for="modalTranscriptionModeSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcription Mode:</label>
+						<select id="modalTranscriptionModeSelect" class="ui-select w-full" value={modalTranscriptionMode} disabled>
+							<option value="automatic">Automatic Transcription</option>
+							<option value="manual" disabled>Manual Transcription (Not Implemented)</option>
+						</select>
+					</div>
+
+					<div class="space-y-1">
+						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
+						<select id="modalModelSelect" class="ui-select w-full" bind:value={modalSelectedModel}>
+							<option value="" disabled selected={!modalSelectedModel}>Select Model</option>
+							{#if downloadedModelsList.length > 0}
+							<optgroup label="Local Models">
+								{#each downloadedModelsList as model (model.name)}
+									<option value="{model.name}">{model.name}</option>
+								{/each}
+							</optgroup>
+							{/if}
+							{#if cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model}
+								{@const configuredCloudModelId = cloudConfig.model}
+								{@const configuredCloudModelLabel = getCloudModelLabel(configuredCloudModelId)}
+								<optgroup label="Cloud Models">
+									<option value="{configuredCloudModelId}">{configuredCloudModelLabel} ☁️</option>
+								</optgroup>
+							{/if}
+							{#if downloadedModelsList.length === 0 && !(cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model)}
+								<option value="" disabled>No models available</option>
+							{/if}
+						</select>
+					</div>
+
+					<div class="space-y-1">
+						<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
+						<select id="modalLanguageSelect" class="ui-select w-full" bind:value={modalSelectedLanguage}>
+							{#each languageOptions as lang (lang.value)}
+								<option value="{lang.value}">{lang.label}</option>
+							{/each}
+						</select>
+					</div>
+
+					<div class="flex items-center space-x-2 pt-1"> 
+						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
+						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
+							Translate to English
+						</label>
+					</div>
+
+					<div class="pt-1 space-y-1"> 
+						<div class="flex justify-between items-center">
+							<div>
+								<strong>Speakers:</strong>
+								<span>{modalSpeakersConfig?.count > 0 ? modalSpeakersConfig.count : '0'}</span>
+							</div>
+							<button
+								type="button"
+								class="btn-xs-secondary"
+								on:click={() => showNestedSpeakersModal = true}
+							>
+								Edit Speakers
+							</button>
+						</div>
+						{#if modalSpeakersConfig?.count > 0 && modalSpeakersConfig.names && modalSpeakersConfig.names.length > 0}
+						<div class="pl-4">
+							<p class="text-xs text-gray-500 dark:text-gray-400 break-all">
+								({modalSpeakersConfig.names.join(', ')})
+							</p>
+						</div>
+						{/if}
+					</div>
+
+					<div class="pt-2">
+						<div class="flex items-center space-x-2">
+							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
+							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+								Identify different speakers (diarize)
+							</label>
+						</div>
+						{#if modalEnableDiarization}
+							<p class="text-xs mt-1.5 ml-0.5 px-2 py-1 rounded bg-yellow-300 text-black dark:bg-yellow-500 dark:text-black">
+								Note: Speaker identification can significantly increase transcription time.
+							</p>
+						{/if}
+					</div>
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
-					<button class="btn-primary" on:click={handleConfirm}>Start Transcription</button>
+					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
 				</div>
 
 			{:else if isTranscribing && (jobStatus === 'running' || jobStatus === 'initiating')}
@@ -193,6 +319,18 @@
 	</div>
 {/if}
 
+{#if showNestedSpeakersModal}
+	<SpeakersModal
+		bind:showModal={showNestedSpeakersModal}
+		currentSpeakers={modalSpeakersConfig}
+		on:confirm={(e) => {
+			modalSpeakersConfig = e.detail; // Update local config
+			showNestedSpeakersModal = false;
+		}}
+		on:close={() => showNestedSpeakersModal = false}
+	/>
+{/if}
+
 <style>
 	/* Styles remain unchanged */
 	.btn-primary,
@@ -220,7 +358,7 @@
 	.btn-primary:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-		background-color: #9ca3af; /* bg-gray-400 */
+		/* background-color: #9ca3af; Let default browser style handle disabled bg */
 	}
 	.btn-secondary {
 		background-color: #e5e7eb; /* bg-gray-200 */
@@ -252,7 +390,7 @@
 	.btn-action-cancel:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-		background-color: #fca5a5; /* bg-red-300 */
+		/* background-color: #fca5a5; Let default browser style handle disabled bg */
 	}
     .dark .btn-action-cancel {
          background-color: #dc2626; /* dark:bg-red-600 */
@@ -260,4 +398,18 @@
     .dark .btn-action-cancel:hover:not(:disabled) {
         background-color: #b91c1c; /* dark:hover:bg-red-700 */
     }
+
+	/* Checkbox style */
+	.ui-checkbox {
+		@apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600;
+	}
+	.ui-select {
+		@apply block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500;
+	}
+	.btn-xs-secondary {
+		@apply px-2 py-1 text-xs font-medium rounded border;
+		@apply bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300;
+		@apply dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 dark:border-gray-500;
+		@apply focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-offset-gray-800;
+	}
 </style>

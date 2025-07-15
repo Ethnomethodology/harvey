@@ -7,14 +7,15 @@
 		updatePlayerTime,
 		setPlayerDuration,
 		togglePlayerPlaying,
-		setAudioBuffer // This will be used to set both buffer and peaks
+		setAudioBuffer, // This will be used to set both buffer and peaks
+		setWaveformData
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store'; // Ensure get is imported
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
-	import { handleTrimMediaConfirm, refreshProjectFiles } from '$lib/services/projectService.js';
+	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
 	// import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut'; // Removed JS API
 
 	const dispatch = createEventDispatcher();
@@ -39,17 +40,21 @@
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
 
+	// Props for inline trim looping
+	export let loopStartTime = 0;
+	export let loopEndTime = 0;
+	export let enableLooping = false;
+
 	// Conditional UI for buttons
 	export let showLoopPauseButton = true; // Default to true for main player
-	export let showNotesTranscribeButton = false; // Default to false
-	export let showNotesTrimButton = false; // Default to false
+	export let showDataTranscribeButton = false; // Default to false
+	export let showDataTrimButton = false; // Default to false
 	export let showMainTrimButton = true; // Default to true
 
 	$: console.log('[MediaPlayer] projectId prop updated:', projectId);
 
 	// --- Internal State ---
 	let localMediaUrl = ''; // URL for the <video> src
-	let currentBlobUrl = null; // To manage Object URL lifecycle
 	let isLoadingMedia = false;
 	let loadedPathFromProp = null; // Keep track of the loaded explicit path
 
@@ -282,7 +287,7 @@
 
 
 	async function handleScreenshot() {
-		console.log('[MediaPlayer] handleScreenshot - projectId received:', projectId);
+		
 		const currentProjectXmlPath = get(project)?.xmlPath;
 
 		if (!currentProjectXmlPath) {
@@ -301,7 +306,7 @@
 		// If strict "must be actively playing" is needed, add: if (videoElement.paused) { ... }
 		// For now, allowing screenshot from a paused frame.
 
-		console.log('Attempting to capture screenshot...');
+		
 		project.update(p => ({ ...p, statusMessage: 'Capturing screenshot...', isLoading: true, error: null }));
 
 		try {
@@ -438,9 +443,6 @@
         if (audioContext && audioContext.state !== 'closed') {
             audioContext.close().catch(console.error);
         }
-        if (currentBlobUrl) {
-            URL.revokeObjectURL(currentBlobUrl);
-        }
 		document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
 			URL.revokeObjectURL(activeSubtitleUrl);
@@ -477,165 +479,89 @@
 	$: {
         const mediaPathToLoad = explicitMediaPath || $transcriptStore.selectedMediaFile?.path;
 
-        (async () => {
-            if (mediaPathToLoad) {
-                if (mediaPathToLoad === loadedPathFromProp && currentBlobUrl) return; // Already loaded this explicit path
-                if (isLoadingMedia) return;
+        const loadMedia = async (path) => {
+            if (isLoadingMedia || path === loadedPathFromProp) {
+                return;
+            }
 
-                isLoadingMedia = true;
-                if (isTrimming && !explicitMediaPath) cancelTrimMode(); // Cancel trim if global media changes (main player context)
+            isLoadingMedia = true;
+            if (isTrimming && !explicitMediaPath) cancelTrimMode();
 
-                if (currentBlobUrl) {
-                    URL.revokeObjectURL(currentBlobUrl);
-                    currentBlobUrl = null;
-                }
-                localMediaUrl = '';
-                localAudioBuffer = null;
-                localDuration = 0;
-                localCurrentTime = 0;
-                localIsPlaying = false;
-                loadedPathFromProp = null;
+            // Reset local state
+            localMediaUrl = '';
+            localAudioBuffer = null;
+            localDuration = 0;
+            localCurrentTime = 0;
+            localIsPlaying = false;
+            isMediaReadyForProcessing = false;
 
-                // If this is the main player (no explicitMediaPath), update global store too
+            try {
+                const assetUrl = await convertFileSrc(path);
+                loadedPathFromProp = path;
+                localMediaUrl = assetUrl;
+
                 if (!explicitMediaPath) {
-                    setAudioBuffer(null);
+                    setAudioBuffer(null, null);
+                }
+
+                await tick();
+                if (videoElement) {
+                    videoElement.load();
+                }
+
+            } catch (error) {
+                console.error(`[MediaPlayer] Error getting asset URL for ${path}:`, error);
+                if (!explicitMediaPath) { // Only update global store error if this is the main player
+                    project.update((p) => ({
+                        ...p,
+                        error: `Failed to load media: ${error?.message || error}`,
+                        statusMessage: 'Error loading media.'
+                    }));
+                    setAudioBuffer(null, null);
                     setPlayerDuration(0);
                     updatePlayerTime(0);
                     togglePlayerPlaying(false);
+                } else {
+                    dispatch('mediaLoadError', { path: path, error: error?.message || error });
                 }
-
-
-                try {
-                    const fileData = await readFile(mediaPathToLoad);
-                    const mimeType = getMimeType(mediaPathToLoad);
-                    const blob = new Blob([fileData], { type: mimeType });
-                    const newUrl = URL.createObjectURL(blob);
-                    currentBlobUrl = newUrl; // Restore usage of Blob URL
-                    loadedPathFromProp = mediaPathToLoad;
-                    localMediaUrl = newUrl; // Restore usage of Blob URL for video src
-
-                    let decodedBuffer = null;
-                    let peaksData = null;
-
-                    if (webAudioApiSupported && audioContext && audioContext.state !== 'closed') {
-                        const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
-                        if (audioContext.state === 'suspended') await audioContext.resume();
-                        try {
-                            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                            localAudioBuffer = decodedBuffer; // Set local buffer
-                            console.log(`[MediaPlayer] DECODE_SUCCESS: Audio decoded for ${mediaPathToLoad}. Duration: ${decodedBuffer?.duration}s`);
-
-                            // Generate peaks data
-                            if (decodedBuffer) {
-                                peaksData = generateAudioPeaks(decodedBuffer, 512); // Using a block size of 512
-                                console.log(`[MediaPlayer] PEAKS_GENERATED: Peaks data generated for ${mediaPathToLoad}. Length: ${peaksData?.length}`);
-                            }
-
-                            if (!explicitMediaPath) {
-                                setAudioBuffer(decodedBuffer, peaksData); // Update global store with buffer and peaks
-                            }
-                        } catch (decodeError) {
-                            console.error(`[MediaPlayer] DECODE_FAILED: Critical error decoding audio for ${mediaPathToLoad}. Error:`, decodeError);
-                            project.update(p => ({ ...p, error: `Media Error: Decode error for ${mediaPathToLoad.split(/[\\/]/).pop()}`, statusMessage: 'Error decoding audio.' }));
-                            localAudioBuffer = null;
-                            if (!explicitMediaPath) setAudioBuffer(null, null); // Clear buffer and peaks in store
-                        }
-                    } else {
-                        console.warn('[MediaPlayer] AudioContext unavailable, skipping waveform.');
-                        localAudioBuffer = null;
-                        if (!explicitMediaPath) setAudioBuffer(null, null); // Clear buffer and peaks in store
-                    }
-                    await tick();
-                    await tick();
-                    // Explicitly calling load after src is set via ObjectURL
-                    if (videoElement) {
-                        videoElement.load();
-                    }
-
-                } catch (error) {
-                    console.error(`[MediaPlayer] Error processing file ${mediaPathToLoad}:`, error);
-                    if (currentBlobUrl) { // Ensure blob URL is revoked on error if it was created
-                        URL.revokeObjectURL(currentBlobUrl);
-                        currentBlobUrl = null;
-                    }
-                    if (!explicitMediaPath) { // Only update global store error if this is the main player
-                        project.update((p) => ({
-                            ...p,
-                            error: `Failed to load media: ${error?.message || error}`,
-                            statusMessage: 'Error loading media.'
-                        }));
-                        setAudioBuffer(null);
-                        setPlayerDuration(0);
-                        updatePlayerTime(0);
-                        togglePlayerPlaying(false);
-                    } else {
-                        // For explicit path, maybe dispatch an error event or set local error state
-                        dispatch('mediaLoadError', { path: mediaPathToLoad, error: error?.message || error });
-                    }
-                    localMediaUrl = '';
-                    currentBlobUrl = null;
-                    loadedPathFromProp = null;
-                    localAudioBuffer = null;
-                    localDuration = 0;
-                    localCurrentTime = 0;
-                    localIsPlaying = false;
-                    // isMediaReadyForProcessing is set in the finally block
-                } finally {
-                    isLoadingMedia = false;
-                    // Fallback for localDuration if video metadata didn't provide it but AudioBuffer did
-                    if (localAudioBuffer && localAudioBuffer.duration > 0 && (localDuration === 0 || localDuration === undefined || isNaN(localDuration))) {
-                        console.log(`[MediaPlayer] Updating localDuration (was: ${localDuration}) with localAudioBuffer.duration (${localAudioBuffer.duration}).`);
-                        localDuration = localAudioBuffer.duration;
-                        if (!explicitMediaPath) {
-                            setPlayerDuration(localDuration);
-                        }
-                    }
-                    // Update isMediaReadyForProcessing based on the final state of buffer and duration
-                    console.log(`[MediaPlayer] CHECK_READY_STATE: For ${mediaPathToLoad || loadedPathFromProp || 'unknown media'} - localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}.`);
-                    if (localAudioBuffer && localDuration > 0) {
-                        isMediaReadyForProcessing = true;
-                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to TRUE for ${mediaPathToLoad || loadedPathFromProp}`);
-                        // Dispatch mediaLoaded event for TranscriptionsView
-                        // TranscriptionsView will fetch transcripts from transcriptStore directly
-                        if (!explicitMediaPath) { // Only dispatch for the main player
-                            dispatch('mediaLoaded', {
-                                mediaPath: mediaPathToLoad,
-                                mediaName: mediaPathToLoad.split(/[\\/]/).pop(), // Just the filename
-                            });
-                        }
-                    } else {
-                        isMediaReadyForProcessing = false;
-                        console.log(`[MediaPlayer] SET_READY_STATE: isMediaReadyForProcessing set to FALSE for ${mediaPathToLoad || loadedPathFromProp}. Reason: localAudioBuffer is ${localAudioBuffer ? 'PRESENT' : 'NULL'}, localDuration is ${localDuration}`);
-                    }
-                }
-            } else { // No mediaPathToLoad
-                if (isTrimming && !explicitMediaPath) cancelTrimMode();
+                localMediaUrl = '';
                 loadedPathFromProp = null;
-                if (currentBlobUrl) {
-                    URL.revokeObjectURL(currentBlobUrl);
-                    currentBlobUrl = null;
-                }
-                if (localMediaUrl !== '') {
-                    localMediaUrl = '';
-                    localDuration = 0;
-                    localCurrentTime = 0;
-                    localIsPlaying = false;
-                }
-                if (localAudioBuffer) {
-                    localAudioBuffer = null;
-                }
-                // If this is the main player, update global store too
-                if (!explicitMediaPath) {
-                    if ($transcriptStore.audioBuffer) setAudioBuffer(null); // from transcriptStore
-                    if ($transcriptStore.player.duration > 0) setPlayerDuration(0); // from transcriptStore
-                    if ($transcriptStore.player.currentTime > 0) updatePlayerTime(0); // from transcriptStore
-                    if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false); // from transcriptStore
-                }
+            } finally {
                 isLoadingMedia = false;
-                isMediaReadyForProcessing = false; // Explicitly false when no media path
-                console.log(`[MediaPlayer] MEDIA_UNLOADED: Resetting state for ${loadedPathFromProp || 'previous media'}. isMediaReadyForProcessing is now ${isMediaReadyForProcessing}.`);
             }
-        })();
+        };
+
+        const unloadMedia = () => {
+            if (isTrimming && !explicitMediaPath) cancelTrimMode();
+            loadedPathFromProp = null;
+            if (localMediaUrl !== '') {
+                localMediaUrl = '';
+                localDuration = 0;
+                localCurrentTime = 0;
+                localIsPlaying = false;
+            }
+            if (localAudioBuffer) {
+                localAudioBuffer = null;
+            }
+            if (!explicitMediaPath) {
+                if ($transcriptStore.audioBuffer) setAudioBuffer(null, null);
+                if ($transcriptStore.player.duration > 0) setPlayerDuration(0);
+                if ($transcriptStore.player.currentTime > 0) updatePlayerTime(0);
+                if ($transcriptStore.player.isPlaying) togglePlayerPlaying(false);
+            }
+            isLoadingMedia = false;
+            isMediaReadyForProcessing = false;
+        };
+
+        if (mediaPathToLoad) {
+            if (mediaPathToLoad !== loadedPathFromProp) {
+                 loadMedia(mediaPathToLoad);
+            }
+        } else {
+            if (loadedPathFromProp) {
+                unloadMedia();
+            }
+        }
     }
 
 
@@ -680,7 +606,13 @@
                         if(video.paused && video.currentTime === trimStartTime) video.play().catch(console.error);
                     }
                 }
-            }
+            } else if (enableLooping && loopEndTime > loopStartTime && explicitMediaPath) { // Added for inline trim looping
+				if (currentTime < loopStartTime || currentTime >= loopEndTime) {
+					video.currentTime = loopStartTime;
+					currentTime = loopStartTime;
+					if (video.paused && video.currentTime === loopStartTime) video.play().catch(console.error);
+				}
+			}
             localCurrentTime = currentTime;
 			if (!explicitMediaPath) updatePlayerTime(currentTime); // Update global for main player
 		}
@@ -688,6 +620,7 @@
 	function onLoadedMetadata(event) {
         if (event.target && typeof event.target.duration === 'number' && !isNaN(event.target.duration)) {
             const duration = event.target.duration;
+            isMediaReadyForProcessing = true;
             localDuration = duration;
             localCurrentTime = 0;
             if (videoElement) videoElement.currentTime = 0;
@@ -697,6 +630,8 @@
                 setPlayerDuration(duration);
                 updatePlayerTime(0);
             }
+            // Asynchronously decode audio for waveform
+            decodeAudioForWaveform();
         } else {
             localDuration = 0;
             localCurrentTime = 0;
@@ -740,6 +675,78 @@
 			if (!explicitMediaPath) updatePlayerTime(duration || 0);
 		}
 	 }
+
+    async function decodeAudioForWaveform() {
+        if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
+            return;
+        }
+
+        // Step 1: Always decode the audio file for playback and to have the buffer ready.
+        let decodedBuffer;
+        try {
+            const fileData = await readFile(loadedPathFromProp);
+            const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            localAudioBuffer = decodedBuffer; // Set local buffer for this component instance
+        } catch (error) {
+            console.error(`[MediaPlayer] Critical error decoding audio file:`, error);
+            // Dispatch an error or update a store to indicate failure
+            return; // Stop execution if we can't even decode the audio
+        }
+
+        // For the main player, we proceed to handle global state and caching.
+        if (!explicitMediaPath) {
+            const currentProject = get(project);
+            const projectId = currentProject.id;
+            const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+            // Step 2: Check for cached waveform data.
+            if (projectId && assetRelativePath) {
+                try {
+                    const metadata = await getAssetMetadata(assetRelativePath);
+                    if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
+                        const peaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+                        setAudioBuffer(decodedBuffer, peaks); // Set both buffer and cached peaks
+                        return; // Successfully loaded from cache
+                    }
+                } catch (e) {
+                    console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+                }
+            }
+
+            // Step 3: If no cached data, generate, set in store, and save to DB.
+            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Generating new peaks.`);
+            const peaksData = generateAudioPeaks(decodedBuffer, 512);
+            setAudioBuffer(decodedBuffer, peaksData); // Set buffer and newly generated peaks
+
+            if (projectId && assetRelativePath && currentProject.xmlPath) {
+                try {
+                    const u8_peaks = new Uint8Array(peaksData.buffer);
+                    const s = $transcriptStore.selectedMediaFile;
+                    const metadataPayload = {
+                        ...s,
+                        file_name: s.name,
+                        file_path: s.path,
+                        last_modified: new Date().toISOString(),
+                        waveform_data: Array.from(u8_peaks)
+                    };
+
+                    await invoke('update_asset_metadata_command', {
+                        projectXmlPathStr: currentProject.xmlPath,
+                        assetRelativePath: assetRelativePath,
+                        metadataPayload: metadataPayload,
+                        customFieldsPayload: null,
+                        assetType: 'media'
+                    });
+                } catch (error) {
+                    console.error(`[MediaPlayer] Failed to save generated waveform to DB:`, error);
+                }
+            }
+        }
+    }
 	function onError(event) {
         console.error('[MediaPlayer] onError event', event?.target?.error);
         let errorMsg = 'Unknown video error';
@@ -757,7 +764,7 @@
             togglePlayerPlaying(false);
             setPlayerDuration(0);
             updatePlayerTime(0);
-            setAudioBuffer(null);
+            setAudioBuffer(null, null);
         } else { // Local player error
             dispatch('mediaPlayError', { path: explicitMediaPath, error: errorMsg });
         }
@@ -913,25 +920,54 @@
             }
         }
 
-		cancelAnimationFrame(seekRafId);
-		seekRafId = requestAnimationFrame(() => {
-			videoElement.currentTime = clamped;
-            localCurrentTime = clamped;
-			if (!explicitMediaPath) updatePlayerTime(clamped);
-		});
+		// cancelAnimationFrame(seekRafId); // No longer using rAF for seekTo
+		// seekRafId = requestAnimationFrame(() => { // No longer using rAF for seekTo
+		videoElement.currentTime = clamped;
+		localCurrentTime = clamped;
+		if (!explicitMediaPath) updatePlayerTime(clamped);
+		// }); // No longer using rAF for seekTo
 	}
-	let seekRafId = null;
+	// let seekRafId = null; // No longer using rAF for seekTo
 
-    // Button handlers for Notes context
-    function handleNotesTranscribeClick() {
-        dispatch('requestNotesTranscribe', { mediaPath: explicitMediaPath });
+    // Button handlers for Data context
+    function handleDataTranscribeClick() {
+        dispatch('requestDataTranscribe', { mediaPath: explicitMediaPath });
     }
-    function handleNotesTrimClick() {
-        dispatch('requestNotesTrim', {
+    async function handleDataTrimClick() {
+        let buffer = localAudioBuffer;
+        let ready = isMediaReadyForProcessing;
+
+        if (!buffer) {
+            
+            if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
+                dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Cannot process audio for trimming.' });
+                return;
+            }
+            try {
+                isLoadingMedia = true;
+                const fileData = await readFile(loadedPathFromProp);
+                const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
+                if (audioContext.state === 'suspended') await audioContext.resume();
+                const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                localAudioBuffer = decodedBuffer;
+                buffer = decodedBuffer;
+                ready = true;
+                isMediaReadyForProcessing = true;
+                
+            } catch (error) {
+                console.error(`[MediaPlayer] Lazy decode for trim failed:`, error);
+                dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Failed to decode audio for trimming.' });
+                ready = false;
+            } finally {
+                isLoadingMedia = false;
+            }
+        }
+
+        dispatch('requestDataTrim', {
             mediaPath: explicitMediaPath,
             duration: localDuration,
-            audioBuffer: localAudioBuffer,
-            isReady: isMediaReadyForProcessing // Add this line
+            audioBuffer: buffer,
+            isReady: ready
         });
     }
 
@@ -1125,10 +1161,10 @@
 			</button>
 			{/if}
 
-			<!-- Conditional Notes Transcribe Button -->
-			{#if showNotesTranscribeButton}
+			<!-- Conditional Data Transcribe Button -->
+			{#if showDataTranscribeButton}
 			<button
-				on:click={handleNotesTranscribeClick}
+				on:click={handleDataTranscribeClick}
 				class="btn-action text-xs"
 				title="Transcribe this media in main Transcriptions tab"
 				disabled={!localMediaUrl || isLoadingMedia}
@@ -1167,9 +1203,9 @@
 			</button>
 
 			<!-- Conditional Trim Buttons -->
-			{#if showNotesTrimButton}
+			{#if showDataTrimButton}
 				<button
-					on:click={handleNotesTrimClick}
+					on:click={handleDataTrimClick}
 					class="btn-control"
 					title="Trim this media"
 					disabled={isLoadingMedia || !isMediaReadyForProcessing}

@@ -5,13 +5,13 @@
 	import { transcriptStore, updatePlayerTime } from '$lib/stores/transcriptStore.js';
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 
-	/* -------------------------------------------------- */
-	/* Props                                              */
-	/* -------------------------------------------------- */
 	export let isTrimming = false;
 	export let trimStartTime = 0;
 	export let trimEndTime = 0;
 	export let isEditingSegment = false;
+	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
+	export let fixedHeightPx = 0; // New prop for setting a fixed height in pixels
+export let compactMode = false; // New prop, defaults to false
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -22,29 +22,22 @@
 	export let externalSegments = null;
 	export let externalCurrentSegmentIndex = null;
 
-	/* -------------------------------------------------- */
-	/* Constants                                          */
-	/* -------------------------------------------------- */
 	const TIMESCALE_HEIGHT = 20;
+	const BAR_THICKNESS_PX = 2; // Adapted from VerticalWaveform, will be bar height
+	const BAR_SPACING_PX = 1;   // Adapted from VerticalWaveform, vertical spacing if multiple rows, or conceptual
+	const RMS_GAIN_FACTOR = 4.5;  // Increased from 2.5 to make bars taller
+	const MIN_BAR_LENGTH_PX = 1; // Adapted from MIN_BAR_HALF_LENGTH_PX, represents min bar height/length from center
 
-	/* -------------------------------------------------- */
-	/* Local state                                       */
-	/* -------------------------------------------------- */
 	let actualMediaDuration = 0;
 	let prevExternalAudioBufferForDuration = null;
 
-	/* -------------------------------------------------- */
-	/* Refs                                               */
-	/* -------------------------------------------------- */
 	let timescaleCanvas;
 	let segmentWaveformCanvas;
 	let waveformScrollContainerRef;
+	let componentRootRef;
 
-	/* -------------------------------------------------- */
-	/* Waveform state                                     */
-	/* -------------------------------------------------- */
 	let visibleCanvasWidth = 0;
-	let waveformCanvasHeight = 64 - TIMESCALE_HEIGHT;
+	let waveformCanvasHeight = 40; // Default, will be adjusted
 	let webAudioApiSupported = true;
 	let resizeObserverInstance;
 	let unsubscribePlayer;
@@ -77,8 +70,11 @@
 	let panStartX = 0;
 	let panInitialScrollOffsetPx = 0;
 
+	let autoScrollRafId = null;
+	let autoScrollDirection = ''; // 'left' or 'right'
+
 	$: currentAudioBuffer = externalAudioBuffer ?? $transcriptStore.audioBuffer;
-	$: currentAudioPeaks = externalAudioBuffer ? null : $transcriptStore.audioBufferPeaks; // Peaks only from store for now
+	$: currentAudioPeaks = externalAudioBuffer ? null : $transcriptStore.audioBufferPeaks;
 	$: currentPlayTime = externalCurrentTime ?? $transcriptStore.player.currentTime;
 	$: currentIsPlaying = externalIsPlaying ?? $transcriptStore.player.isPlaying;
 	$: currentSegmentsToDisplay = externalSegments ?? $transcriptStore.segments;
@@ -88,20 +84,16 @@
 		if (currentAudioBuffer && currentAudioBuffer !== prevExternalAudioBufferForDuration) {
 			if (currentAudioBuffer.duration > 0) {
 				actualMediaDuration = currentAudioBuffer.duration;
-				// console.log(`[Waveform] actualMediaDuration synced from currentAudioBuffer: ${actualMediaDuration}`);
 				zoomLevel = 1;
 				scrollOffsetPx = 0;
-				// if (waveformScrollContainerRef) waveformScrollContainerRef.scrollLeft = 0; // Pure virtual scroll
 				requestRedraw(true);
 			} else {
 				actualMediaDuration = 0;
-				// console.warn(`[Waveform] currentAudioBuffer is present but has duration 0 or less. actualMediaDuration set to 0.`);
 			}
 			prevExternalAudioBufferForDuration = currentAudioBuffer;
 		} else if (!currentAudioBuffer && prevExternalAudioBufferForDuration) {
 			actualMediaDuration = 0;
 			prevExternalAudioBufferForDuration = null;
-			// console.log(`[Waveform] currentAudioBuffer became null. actualMediaDuration reset to 0.`);
 			requestRedraw(true);
 		}
 	}
@@ -121,37 +113,26 @@
 
 	function drawVisibleWaveform(ctx, buffer, peaks, logicalWidth, visibleWidth, scrollOffset, height, color) {
         if (!ctx || logicalWidth <= 0 || visibleWidth <= 0 || height <= 0) return;
-        if (!buffer && !peaks) return; // Need either buffer or peaks
+        if (!buffer && !peaks) return;
 
         const mid = height / 2;
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
 
-        // Threshold to switch between raw samples and peaks data
-        // If one logical pixel covers more than, say, 10 raw samples, consider using peaks.
-        // Peak block size is 512, so if samplesPerLogicalPixel > 512/X (e.g. 512/10 = ~50), peaks are better.
-        // Or, more simply, if zoomLevel is low (e.g., < 2, meaning more data per pixel), use peaks.
         const samplesPerVisiblePixel = buffer ? (buffer.length / visibleWidth / zoomLevel) : Infinity;
-        const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20; // If a visible pixel represents more than 20 samples, use peaks.
-                                                          // This is an arbitrary threshold, can be tuned.
-                                                          // Lower value = use peaks more often.
+        const PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL = 20;
 
         let usePeaks = peaks && peaks.length > 0 && (samplesPerVisiblePixel > PEAK_USAGE_THRESHOLD_SAMPLES_PER_PIXEL || !buffer);
-        // Fallback to raw if zoom is very high and peaks might be too coarse.
-        // This needs more sophisticated multi-level peak handling for ideal results.
-        // For now, if zoomLevel is very high (e.g. > 5) and buffer exists, prefer buffer.
-        if (buffer && zoomLevel > (maxZoomLevel / 2) ) { // Heuristic: if zoomed in more than half way of max zoom
+        if (buffer && zoomLevel > (maxZoomLevel / 2) ) {
             usePeaks = false;
         }
-        if (!buffer && !peaks) return; // Should not happen if logic above is correct
-        if (!buffer && peaks) usePeaks = true; // Must use peaks if no raw buffer
+        if (!buffer && !peaks) return;
+        if (!buffer && peaks) usePeaks = true;
 
         ctx.beginPath();
 
         if (usePeaks) {
-            // console.log('[Waveform] Drawing with PEAKS data');
-            const peakBlockSize = 512; // Must match the generation block size
-            const samplesPerPeakBlock = peakBlockSize;
+            const peakBlockSize = 512;
             const numPeakBlocks = peaks.length / 2;
             const peaksPerLogicalPixel = numPeakBlocks / logicalWidth;
 
@@ -163,14 +144,14 @@
                 let minPeak = 0.0;
                 let maxPeak = 0.0;
 
-                if (peakBlockStartIndex < peakBlockEndIndex) { // At least one full block for this pixel
+                if (peakBlockStartIndex < peakBlockEndIndex) {
                      minPeak = peaks[peakBlockStartIndex * 2];
                      maxPeak = peaks[peakBlockStartIndex * 2 + 1];
                     for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
                         if (peaks[i*2] < minPeak) minPeak = peaks[i*2];
                         if (peaks[i*2+1] > maxPeak) maxPeak = peaks[i*2+1];
                     }
-                } else { // Pixel is smaller than a peak block, or falls between blocks
+                } else {
                     const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
                      if (targetBlock * 2 + 1 < peaks.length) {
                         minPeak = peaks[targetBlock * 2];
@@ -196,7 +177,7 @@
                     }
                 } else {
                      const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
-                     if (targetBlock * 2 < peaks.length) { // Check if index is valid
+                     if (targetBlock * 2 < peaks.length) {
                        minPeak = peaks[targetBlock * 2];
                      }
                 }
@@ -205,7 +186,6 @@
                 else ctx.lineTo(x + 0.5, yBottom);
             }
         } else if (buffer) {
-            // console.log('[Waveform] Drawing with RAW data');
             const data = buffer.getChannelData(0);
             const totalSamples = data.length;
             const samplesPerLogicalPixelRaw = totalSamples / logicalWidth;
@@ -215,7 +195,6 @@
             const endSampleIndexRaw = Math.min(totalSamples, Math.ceil(visibleEndTime * buffer.sampleRate));
 
             if (startSampleIndexRaw >= endSampleIndexRaw) { ctx.stroke(); return; }
-
 
             for (let x = 0; x < visibleWidth; x++) {
                 const logicalX = x + scrollOffset;
@@ -254,56 +233,47 @@
         }
         ctx.stroke();
     }
-	function clearWaveformCanvases() { if (segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if (c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); } if (timescaleCanvas) { const c = timescaleCanvas.getContext('2d'); if (c) c.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height); } if (segmentWaveformCanvas && visibleCanvasWidth > 0 && waveformCanvasHeight > 0) { const c = segmentWaveformCanvas.getContext('2d'); if (c) { const dpr = window.devicePixelRatio || 1; c.save(); c.scale(dpr, dpr); c.fillStyle = '#6b7280'; c.font = `10px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; let message = 'Waveform'; if (!webAudioApiSupported) message = 'Web Audio API not supported.'; else if (!currentAudioBuffer && !currentAudioPeaks) message = 'Load media to see waveform.'; c.fillText(message, visibleCanvasWidth / 2, waveformCanvasHeight / 2 ); c.restore(); } } }
-	function drawTimescale() { const dur = actualMediaDuration; const bufOrPeaks = currentAudioBuffer || currentAudioPeaks; const dpr = window.devicePixelRatio || 1; if (!timescaleCanvas || !bufOrPeaks || dur <= 0 || visibleCanvasWidth <= 0 || TIMESCALE_HEIGHT <= 0 || totalLogicalWidth <= 0) { if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; } return; } const ctx = timescaleCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(TIMESCALE_HEIGHT * dpr); if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) { timescaleCanvas.width = reqW; timescaleCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, TIMESCALE_HEIGHT); const isDark = document.documentElement.classList.contains('dark'); ctx.strokeStyle = '#d1d5db'; ctx.fillStyle = isDark ? '#ffffff' : '#6b7280'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; const minPixelSpacingForLabel = 60; const minPixelSpacingForMinorTick = 10; const intervals = [0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 1800, 3600]; let interval = intervals[0]; let intervalPx = timeToLogicalPx(interval, dur, totalLogicalWidth); for (let i = 0; i < intervals.length; i++) { const currentIntervalPx = timeToLogicalPx(intervals[i], dur, totalLogicalWidth); if (currentIntervalPx >= minPixelSpacingForLabel) { interval = intervals[i]; intervalPx = currentIntervalPx; break; } if (i === intervals.length - 1) { interval = intervals[i]; intervalPx = currentIntervalPx; } } let minorInterval = interval / 5; let minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); while (minorIntervalPx < minPixelSpacingForMinorTick && minorInterval < interval) { minorInterval *= 2; minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); } if (minorInterval >= interval) minorInterval = 0; const visibleStartTime = pxToTime(0, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const visibleEndTime = pxToTime(visibleCanvasWidth, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const firstMajorTickTime = Math.floor(visibleStartTime / interval) * interval; const firstMinorTickTime = minorInterval > 0 ? Math.floor(visibleStartTime / minorInterval) * minorInterval : 0; if (minorInterval > 0) { for (let time = firstMinorTickTime; time <= visibleEndTime + minorInterval; time += minorInterval) { if (Math.abs(time % interval) < 0.0001 && time > 0) continue; if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= 0 && px <= visibleCanvasWidth) { ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - 5); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); } } } ctx.textAlign = 'left'; for (let time = firstMajorTickTime; time <= visibleEndTime + interval; time += interval) { if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= -1 && px <= visibleCanvasWidth + 1) { const tickHeight = (Math.abs(time % (interval * 5)) < 0.0001 && interval >= 1) ? 10 : 7; ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - tickHeight); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke();
 
-				let labelStr;
-				if (time === 0 && interval < 1.0) {
-					if (interval < 0.01) labelStr = "0.000";
-					else if (interval < 0.1) labelStr = "0.00";
-					else labelStr = "0.0";
-				} else if (interval < 0.01) {
-					labelStr = time.toFixed(3);
-				} else if (interval < 0.1) {
-					labelStr = time.toFixed(2);
-				} else if (interval < 1.0) {
-					const minutesPart = Math.floor(time / 60);
-					const secondsPart = time % 60;
-					if (minutesPart > 0) {
-						labelStr = `${minutesPart}:${secondsPart.toFixed(1)}`;
-					} else {
-						labelStr = secondsPart.toFixed(1);
-					}
-				} else {
-					const h = Math.floor(time / 3600);
-					const m = Math.floor((time % 3600) / 60);
-					const s = Math.floor(time % 60);
-					if (h > 0) {
-						labelStr = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-					} else if (m > 0) {
-						labelStr = `${m}:${String(s).padStart(2, '0')}`;
-					} else {
-						labelStr = `${s}`;
-					}
-				}
-				const textWidth = ctx.measureText(labelStr).width;
-				const textPadding = 3;
-				if (px + textPadding >= 0 && px + textPadding + textWidth <= visibleCanvasWidth + 5) {
-					ctx.fillText(labelStr, px + textPadding, 2);
-				}
+	function drawHorizontalRmsWaveform(ctx, buffer, logicalWidth, visibleWidth, scrollOffset, canvasHeight, color) {
+		if (!ctx || logicalWidth <= 0 || visibleWidth <= 0 || canvasHeight <= 0 || !buffer) return;
+
+		const midY = canvasHeight / 2;
+		ctx.fillStyle = color;
+
+		const data = buffer.getChannelData(0);
+		const totalSamples = data.length;
+		if (totalSamples === 0) return;
+
+		const samplesPerLogicalPixel = totalSamples / logicalWidth;
+		const barUnitWidthPx = BAR_THICKNESS_PX + BAR_SPACING_PX; // How much horizontal space each bar unit takes
+
+		for (let xPx = 0; xPx < visibleWidth; xPx += barUnitWidthPx) {
+			const logicalX = xPx + scrollOffset;
+			const startSample = Math.floor(logicalX * samplesPerLogicalPixel);
+			const endSample = Math.ceil((logicalX + BAR_THICKNESS_PX) * samplesPerLogicalPixel);
+
+			if (startSample >= totalSamples) break;
+
+			let sumOfSquares = 0;
+			const effectiveEndSample = Math.min(endSample, totalSamples);
+			for (let i = startSample; i < effectiveEndSample; i++) {
+				sumOfSquares += data[i] * data[i];
 			}
+
+			const numSamples = effectiveEndSample - startSample;
+			const rms = numSamples > 0 ? Math.sqrt(sumOfSquares / numSamples) : 0;
+			const cappedRms = Math.min(1.0, rms * RMS_GAIN_FACTOR);
+			const displayHalfHeight = Math.max(MIN_BAR_LENGTH_PX, cappedRms * midY);
+
+			ctx.fillRect(xPx, midY - displayHalfHeight, BAR_THICKNESS_PX, displayHalfHeight * 2);
 		}
-		ctx.beginPath();
-		ctx.moveTo(0, TIMESCALE_HEIGHT - 0.5);
-		ctx.lineTo(visibleCanvasWidth, TIMESCALE_HEIGHT - 0.5);
-		ctx.strokeStyle = '#d1d5db';
-		ctx.lineWidth = 1;
-		ctx.stroke();
-		ctx.restore();
 	}
+
+	function clearWaveformCanvases() { if (segmentWaveformCanvas) { const c = segmentWaveformCanvas.getContext('2d'); if (c) c.clearRect(0, 0, segmentWaveformCanvas.width, segmentWaveformCanvas.height); } if (timescaleCanvas) { const c = timescaleCanvas.getContext('2d'); if (c) c.clearRect(0, 0, timescaleCanvas.width, timescaleCanvas.height); } if (segmentWaveformCanvas && visibleCanvasWidth > 0 && waveformCanvasHeight > 0) { const c = segmentWaveformCanvas.getContext('2d'); if (c) { const dpr = window.devicePixelRatio || 1; c.save(); c.scale(dpr, dpr); c.fillStyle = document.documentElement.classList.contains('dark') ? '#a0aec0' : '#6b7280'; c.font = `10px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; let message = 'Waveform'; if (!webAudioApiSupported) message = 'Web Audio API not supported.'; else if (!currentAudioBuffer && !currentAudioPeaks) message = 'Load media to see waveform.'; c.fillText(message, visibleCanvasWidth / 2, waveformCanvasHeight / 2 ); c.restore(); } } }
+	function drawTimescale() { const dur = actualMediaDuration; const bufOrPeaks = currentAudioBuffer || currentAudioPeaks; const dpr = window.devicePixelRatio || 1; if (!timescaleCanvas || !bufOrPeaks || dur <= 0 || visibleCanvasWidth <= 0 || TIMESCALE_HEIGHT <= 0 || totalLogicalWidth <= 0) { if (timescaleCanvas) { timescaleCanvas.width = 0; timescaleCanvas.height = 0; } return; } const ctx = timescaleCanvas.getContext('2d'); if (!ctx) return; const reqW = Math.round(visibleCanvasWidth * dpr); const reqH = Math.round(TIMESCALE_HEIGHT * dpr); if (timescaleCanvas.width !== reqW || timescaleCanvas.height !== reqH) { timescaleCanvas.width = reqW; timescaleCanvas.height = reqH; } ctx.save(); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, visibleCanvasWidth, TIMESCALE_HEIGHT); const isDark = document.documentElement.classList.contains('dark'); ctx.strokeStyle = isDark ? '#4b5563' : '#d1d5db'; ctx.fillStyle = isDark ? '#e5e7eb' : '#4b5563'; ctx.font = '10px sans-serif'; ctx.textBaseline = 'top'; const minPixelSpacingForLabel = 50; const minPixelSpacingForMinorTick = 8; const intervals = [0.1, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]; let interval = intervals[0]; let intervalPx = timeToLogicalPx(interval, dur, totalLogicalWidth); for (let i = 0; i < intervals.length; i++) { const currentIntervalPx = timeToLogicalPx(intervals[i], dur, totalLogicalWidth); if (currentIntervalPx >= minPixelSpacingForLabel) { interval = intervals[i]; intervalPx = currentIntervalPx; break; } if (i === intervals.length - 1) { interval = intervals[i]; intervalPx = currentIntervalPx; } } let minorInterval = interval / 5; if (interval === 2 || interval === 15) minorInterval = interval / 2; else if (interval === 10 && intervalPx < 100) minorInterval = interval /2; let minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); while (minorIntervalPx < minPixelSpacingForMinorTick && minorInterval < interval / 2) { minorInterval *= 2; minorIntervalPx = timeToLogicalPx(minorInterval, dur, totalLogicalWidth); } if (minorIntervalPx < minPixelSpacingForMinorTick) minorInterval = 0; const visibleStartTime = pxToTime(0, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const visibleEndTime = pxToTime(visibleCanvasWidth, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); const firstMajorTickTime = Math.max(0, Math.floor(visibleStartTime / interval) * interval); const firstMinorTickTime = minorInterval > 0 ? Math.max(0, Math.floor(visibleStartTime / minorInterval) * minorInterval) : 0; if (minorInterval > 0) { for (let time = firstMinorTickTime; time <= visibleEndTime + minorInterval; time += minorInterval) { if (Math.abs(time % interval) < 0.0001 && time >= firstMajorTickTime) continue; if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= 0 && px <= visibleCanvasWidth) { ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - 5); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); } } } ctx.textAlign = 'center'; for (let time = firstMajorTickTime; time <= visibleEndTime + interval; time += interval) { if (time < 0) continue; const px = timeToVisiblePx(time, dur, totalLogicalWidth, scrollOffsetPx); if (px >= -minPixelSpacingForLabel/2 && px <= visibleCanvasWidth + minPixelSpacingForLabel/2) { const tickHeight = (Math.abs(time % (interval * (interval >= 300 ? 4 : 5))) < 0.0001 && interval >= 1) ? 10 : 7; ctx.beginPath(); ctx.moveTo(px + 0.5, TIMESCALE_HEIGHT - tickHeight); ctx.lineTo(px + 0.5, TIMESCALE_HEIGHT); ctx.stroke(); let labelStr = formatTimescaleTime(time, dur); ctx.fillText(labelStr, px, 2); } } ctx.beginPath(); ctx.moveTo(0, TIMESCALE_HEIGHT - 0.5); ctx.lineTo(visibleCanvasWidth, TIMESCALE_HEIGHT - 0.5); ctx.stroke(); ctx.restore(); }
 	function drawSegmentWaveformUI() {
         const buf = currentAudioBuffer;
-        const peaks = currentAudioPeaks; // Get peaks from store/prop
+        const peaks = currentAudioPeaks;
         const cur = currentPlayTime || 0;
         const dur = actualMediaDuration;
         const segments = currentSegmentsToDisplay || [];
@@ -334,15 +304,19 @@
         ctx.save();
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, visibleCanvasWidth, waveformCanvasHeight);
+		const isDark = document.documentElement.classList.contains('dark');
 
-        if ((buf || peaks) && totalLogicalWidth > 0) {
-            drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, '#9ca3af');
+        if (buf && totalLogicalWidth > 0) { // RMS drawing currently only supports AudioBuffer
+            drawHorizontalRmsWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, isDark ? '#6b7280' :'#9ca3af');
+        } else if (peaks && totalLogicalWidth > 0) { // Fallback to path drawing if only peaks available
+            drawVisibleWaveform(ctx, null, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, isDark ? '#6b7280' :'#9ca3af');
         }
+
 
         let highlightStartTime = -1;
         let highlightEndTime = -1;
-        let highlightColor = 'rgba(147, 197, 253, 0.4)'; // A light blue with some transparency
-        let waveColor = '#2563eb'; // A darker blue for the waveform within the highlight
+        let highlightColor = isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(147, 197, 253, 0.4)';
+        let waveColor = isDark ? '#60a5fa' : '#2563eb';
 
         if (isEditingSegment && editSegmentEndTime > editSegmentStartTime) {
             highlightStartTime = editSegmentStartTime;
@@ -353,8 +327,6 @@
             if (!isNaN(segStartTime) && !isNaN(segEndTime) && segEndTime >= segStartTime) {
                 highlightStartTime = segStartTime;
                 highlightEndTime = segEndTime;
-            } else {
-                console.warn(`[Waveform Draw] Invalid time data for ACTIVE segment ${currentActiveIndex}.`);
             }
         }
 
@@ -367,7 +339,7 @@
             const clamped_pxE_visible = Math.min(visibleCanvasWidth, pxE_visible);
             const pxW_visible_clamped = Math.max(0, clamped_pxE_visible - clamped_pxS_visible);
 
-            if (pxW_visible_clamped > 0) { // Ensure width is positive
+            if (pxW_visible_clamped > 0) {
                 ctx.fillStyle = highlightColor;
                 ctx.fillRect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight);
                 if ((buf || peaks) && totalLogicalWidth > 0) {
@@ -375,7 +347,11 @@
                     ctx.beginPath();
                     ctx.rect(clamped_pxS_visible, 0, pxW_visible_clamped, waveformCanvasHeight);
                     ctx.clip();
-                    drawVisibleWaveform(ctx, buf, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    if (buf && totalLogicalWidth > 0) { // RMS drawing for highlighted part
+                        drawHorizontalRmsWaveform(ctx, buf, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    } else if (peaks && totalLogicalWidth > 0) { // Fallback for peaks
+                        drawVisibleWaveform(ctx, null, peaks, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx, waveformCanvasHeight, waveColor);
+                    }
                     ctx.restore();
                 }
             }
@@ -383,21 +359,19 @@
 
         const pxCur_logical = timeToLogicalPx(cur, dur, totalLogicalWidth);
         const pxCur_visible = pxCur_logical - scrollOffsetPx;
-        if (pxCur_visible >= -1 && pxCur_visible <= visibleCanvasWidth + 1) {
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(pxCur_visible + 0.5, 0);
-            ctx.lineTo(pxCur_visible + 0.5, waveformCanvasHeight);
-            ctx.stroke();
+
+        if (pxCur_visible >= 0 && pxCur_visible <= visibleCanvasWidth && waveformCanvasHeight > 0) {
+            ctx.fillStyle = '#FF0000'; // Red color for seek bar
+            ctx.fillRect(pxCur_visible - 0.75, 0, 1.5, waveformCanvasHeight); // Draw a 1.5px wide red bar
         }
+
 
         ctx.restore();
         lastDrawnTime = cur;
         lastDrawnScrollOffset = scrollOffsetPx;
         lastDrawnZoomLevel = zoomLevel;
         lastDrawnSegmentIndex = currentActiveIndex;
-        lastDrawnBuffer = buf; // Could also store lastDrawnPeaks if needed for diffing
+        lastDrawnBuffer = buf;
         lastDrawnActualDuration = dur;
         lastDrawnIsEditing = isEditingSegment;
         lastDrawnEditStart = editSegmentStartTime;
@@ -415,8 +389,7 @@
         const currentActiveIdx = activeSegmentIndexForDisplay ?? -1;
 
         let needsDraw = forceNextRedraw ||
-            (buf !== lastDrawnBuffer) || // Check if buffer object itself changed
-            // (peaks !== lastDrawnPeaks) || // TODO: Add lastDrawnPeaks if complex comparison needed
+            (buf !== lastDrawnBuffer) ||
             (currentActiveIdx !== lastDrawnSegmentIndex) ||
             (Math.abs(cur - lastDrawnTime) > redrawTimeThreshold) ||
             (Math.abs(scrollOffsetPx - lastDrawnScrollOffset) > 0.5) ||
@@ -437,14 +410,13 @@
             lastDrawnZoomLevel = zoomLevel;
             lastDrawnSegmentIndex = currentActiveIdx;
             lastDrawnBuffer = buf;
-            // lastDrawnPeaks = peaks;
             lastDrawnActualDuration = dur;
             lastDrawnIsEditing = isEditingSegment;
             lastDrawnEditStart = editSegmentStartTime;
             lastDrawnEditEnd = editSegmentEndTime;
         }
 
-        if (autoScrollEnabled && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) {
+        if (autoScrollEnabled && currentIsPlaying && dur > 0 && totalLogicalWidth > visibleCanvasWidth && !isTrimming && !isEditingSegment) {
             const pxCur_visible = timeToVisiblePx(cur, dur, totalLogicalWidth, scrollOffsetPx);
             const scrollMarginLeft = visibleCanvasWidth * 0.25;
             const scrollMarginRight = visibleCanvasWidth * 0.75;
@@ -462,29 +434,26 @@
             if (needsScrollUpdate) {
                 targetScrollOffset = Math.max(0, Math.min(targetScrollOffset, maxScrollPx));
                 const diff = targetScrollOffset - scrollOffsetPx;
-                const moveAmount = diff * 0.1; // Smooth scroll factor
+                const moveAmount = diff * 0.1;
                 let newScrollOffset = scrollOffsetPx + moveAmount;
                 if (Math.abs(diff) < 1) newScrollOffset = targetScrollOffset;
                 newScrollOffset = Math.round(newScrollOffset);
 
                 if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) {
                     scrollOffsetPx = newScrollOffset;
-                    // If waveformScrollContainerRef.scrollLeft was used, it would be updated here.
-                    // Since it's virtual, only scrollOffsetPx matters for drawing.
                 }
             }
         }
         animationFrameId = requestAnimationFrame(animationLoop);
     }
 
-	function resetZoomAndScrollState(clearBuffer = true) { // clearBuffer might now mean clearBufferAndPeaks
+	function resetZoomAndScrollState(clearBuffer = true) {
 		zoomLevel = 1; scrollOffsetPx = 0; autoScrollEnabled = true;
 		clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null;
 		lastDrawnTime = -1; lastDrawnScrollOffset = -1; lastDrawnZoomLevel = -1;
 		lastDrawnSegmentIndex = -1;
         if (clearBuffer) {
             lastDrawnBuffer = null;
-            // lastDrawnPeaks = null; // Also reset last drawn peaks
         }
 		lastDrawnActualDuration = -1; lastDrawnIsEditing = false;
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
@@ -503,23 +472,25 @@
                 }
 			}
 		});
-		unsubscribePlayer = transcriptStore.subscribe(ts => { /* Player state changes picked up by animationLoop */ });
-		unsubscribeSegments = transcriptStore.subscribe(ts => { /* Segments changes picked up by animationLoop */ });
+		unsubscribePlayer = transcriptStore.subscribe(ts => { });
+		unsubscribeSegments = transcriptStore.subscribe(ts => { });
 
 		prevExternalAudioBufferForDuration = externalAudioBuffer;
 		if (externalAudioBuffer && externalAudioBuffer.duration > 0) {
 			actualMediaDuration = externalAudioBuffer.duration;
-			// console.log(`[Waveform] actualMediaDuration initialized from prop onMount: ${actualMediaDuration}`);
 		} else if ($transcriptStore.audioBuffer && $transcriptStore.audioBuffer.duration > 0 && !externalAudioBuffer) {
             actualMediaDuration = $transcriptStore.audioBuffer.duration;
-            // console.log(`[Waveform] actualMediaDuration initialized from store onMount: ${actualMediaDuration}`);
         }
 
 		tick().then(() => {
 			if (isMounted) {
 				if (waveformScrollContainerRef) {
 					visibleCanvasWidth = waveformScrollContainerRef.clientWidth || 0;
-					waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+					if (fixedHeightPx > 0) {
+						waveformCanvasHeight = fixedHeightPx - TIMESCALE_HEIGHT;
+					} else {
+						waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+					}
 				}
 				setupResizeObserver();
 				animationFrameId = requestAnimationFrame(animationLoop);
@@ -546,73 +517,125 @@
 		lastDrawnEditStart = -1; lastDrawnEditEnd = -1;
 	});
 
-	function setupResizeObserver() { if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) { isObserverSetup = true; waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; resizeObserverInstance = new ResizeObserver((entries) => { let needsRedraw = false; let needsScrollUpdate = false; let newScrollOffset = scrollOffsetPx; for (const entry of entries) { if (entry.target === waveformScrollContainerRef) { const newWidth = entry.contentRect.width; const newContainerHeight = entry.contentRect.height; const newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT; if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) { waveformCanvasHeight = newWaveformHeight; needsRedraw = true; } if (newWidth > 0 && newWidth !== visibleCanvasWidth) { const oldVisibleWidth = visibleCanvasWidth; const oldTotalLogicalWidth = totalLogicalWidth; visibleCanvasWidth = newWidth; const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth); if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) { const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2; const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0; const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel; newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2); newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth))); } else { newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll)); } if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) { scrollOffsetPx = Math.round(newScrollOffset); needsScrollUpdate = true; } needsRedraw = true; } else if (newWidth <= 0 && visibleCanvasWidth !== 0) { visibleCanvasWidth = 0; scrollOffsetPx = 0; needsScrollUpdate = true; clearWaveformCanvases(); needsRedraw = false; } } } if (needsScrollUpdate /*&& waveformScrollContainerRef*/) { const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; /* waveformScrollContainerRef.scrollLeft = scrollOffsetPx; */ autoScrollEnableTimer = setTimeout(() => { if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled; autoScrollEnableTimer = null; }, 100); } if (needsRedraw) requestRedraw(); }); resizeObserverInstance.observe(waveformScrollContainerRef); if (waveformScrollContainerRef) { visibleCanvasWidth = waveformScrollContainerRef.clientWidth; waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT; } requestRedraw(true); } }
+		function setupResizeObserver() {
+		        if (waveformScrollContainerRef && !isObserverSetup && isMounted && typeof window !== 'undefined' && window.ResizeObserver) {
+            isObserverSetup = true;
+            // Initial height setting within observer setup
+            if (compactMode) {
+                waveformCanvasHeight = 32;
+            } else {
+                waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+            }
+            resizeObserverInstance = new ResizeObserver((entries) => {
+                let needsRedraw = false;
+                let needsScrollUpdate = false;
+                let newScrollOffset = scrollOffsetPx;
+
+                for (const entry of entries) {
+                    if (entry.target === waveformScrollContainerRef) {
+                        const newWidth = entry.contentRect.width;
+                        const newContainerHeight = entry.contentRect.height;
+
+                        let newWaveformHeight;
+                        if (fixedHeightPx > 0) {
+                            newWaveformHeight = fixedHeightPx - TIMESCALE_HEIGHT;
+                        } else if (compactMode) { // Use compactMode here
+                            newWaveformHeight = 32;
+                        } else {
+                            newWaveformHeight = (newContainerHeight || 80) - TIMESCALE_HEIGHT;
+                        }
+
+                        if (newWaveformHeight > 0 && newWaveformHeight !== waveformCanvasHeight) {
+                            waveformCanvasHeight = newWaveformHeight;
+                            needsRedraw = true;
+                        }
+
+                        if (newWidth > 0 && newWidth !== visibleCanvasWidth) {
+                            const oldVisibleWidth = visibleCanvasWidth;
+                            const oldTotalLogicalWidth = totalLogicalWidth;
+                            visibleCanvasWidth = newWidth;
+                            const currentMaxScroll = Math.max(0, (visibleCanvasWidth * zoomLevel) - visibleCanvasWidth);
+
+                            if (oldVisibleWidth > 0 && oldTotalLogicalWidth > 0 && oldTotalLogicalWidth > oldVisibleWidth) {
+                                const scrollCenterLogicalPx = scrollOffsetPx + oldVisibleWidth / 2;
+                                const centerProportion = oldTotalLogicalWidth > 0 ? scrollCenterLogicalPx / oldTotalLogicalWidth : 0;
+                                const newTotalLogicalWidthAfterUpdate = visibleCanvasWidth * zoomLevel;
+                                newScrollOffset = (centerProportion * newTotalLogicalWidthAfterUpdate) - (visibleCanvasWidth / 2);
+                                newScrollOffset = Math.max(0, Math.min(newScrollOffset, Math.max(0, newTotalLogicalWidthAfterUpdate - visibleCanvasWidth)));
+                            } else {
+                                newScrollOffset = Math.max(0, Math.min(scrollOffsetPx, currentMaxScroll));
+                            }
+
+                            if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) {
+                                scrollOffsetPx = Math.round(newScrollOffset);
+                                needsScrollUpdate = true;
+                            }
+                            needsRedraw = true;
+                        } else if (newWidth <= 0 && visibleCanvasWidth !== 0) {
+                            visibleCanvasWidth = 0;
+                            scrollOffsetPx = 0;
+                            needsScrollUpdate = true;
+                            clearWaveformCanvases();
+                            needsRedraw = false;
+                        }
+                    }
+                }
+
+                if (needsScrollUpdate ) {
+                    const wasAutoScrollEnabled = autoScrollEnabled;
+                    autoScrollEnabled = false;
+                    autoScrollEnableTimer = setTimeout(() => {
+                        if (!isTrimming && !isEditingSegment) autoScrollEnabled = wasAutoScrollEnabled;
+                        autoScrollEnableTimer = null;
+                    }, 100);
+                }
+                if (needsRedraw) requestRedraw();
+            });
+            resizeObserverInstance.observe(waveformScrollContainerRef);
+            if (waveformScrollContainerRef) { // Ensure this runs after observer is set up
+                visibleCanvasWidth = waveformScrollContainerRef.clientWidth;
+                if (compactMode) {
+                    waveformCanvasHeight = 32;
+                } else {
+                    waveformCanvasHeight = (waveformScrollContainerRef.offsetHeight || 80) - TIMESCALE_HEIGHT;
+                }
+            }
+            requestRedraw(true);
+        }
+	}
 	$: if (waveformScrollContainerRef && !isObserverSetup && isMounted) { setupResizeObserver(); }
 
 	function handleScroll(event) {
-		// const newScrollOffset = Math.round(event.target.scrollLeft);
-		// if (Math.abs(newScrollOffset - scrollOffsetPx) > 0) {
-		//     const wasManualScroll = isScrolling;
-		//     if (autoScrollEnabled && !wasManualScroll && !isTrimming && !isEditingSegment) {
-		//         autoScrollEnabled = false;
-		//         clearTimeout(autoScrollEnableTimer);
-		//         autoScrollEnableTimer = null;
-		//     }
-		//     scrollOffsetPx = newScrollOffset;
-		//     isScrolling = true;
-		//     clearTimeout(debounceScrollTimer);
-		//     debounceScrollTimer = setTimeout(() => {
-		//         isScrolling = false;
-		//         if (!autoScrollEnabled && !autoScrollEnableTimer && !isTrimming && !isEditingSegment) {
-		//             autoScrollEnableTimer = setTimeout(() => {
-		//                 autoScrollEnabled = true;
-		//                 autoScrollEnableTimer = null;
-		//                 requestRedraw(true);
-		//             }, 1500);
-		//         }
-		//         requestRedraw(true);
-		//     }, 150);
-		//     requestRedraw();
-		// }
+
 	}
 
 	function handleCanvasClick(e) { const dur = actualMediaDuration; if (isTrimming || isEditingSegment || !segmentWaveformCanvas || !currentAudioBuffer || dur <= 0 || !waveformScrollContainerRef || visibleCanvasWidth <= 0 || totalLogicalWidth <= 0) return; const rect = waveformScrollContainerRef.getBoundingClientRect(); const clickX = e.clientX - rect.left; const time = pxToTime(clickX, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); if (!autoScrollEnabled) { autoScrollEnabled = true; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } dispatch('navigate', { time: time }); }
 
 	function handleZoom(direction) {
-		// if (waveformScrollContainerRef) { // No longer reading from DOM
-		// 	scrollOffsetPx = waveformScrollContainerRef.scrollLeft;
-		// }
 		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || !actualMediaDuration) {
 			return;
 		}
 		const oldZoomLevel = zoomLevel;
-		// const oldTotalLogicalWidth = totalLogicalWidth; // Not needed for right-edge anchor
-		// const initialScrollOffsetPx = scrollOffsetPx; // scrollOffsetPx is already the initial state
-
 		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
 		newZoomLevel = Math.max(minZoomLevel, Math.min(maxZoomLevel, newZoomLevel));
 
 		if (Math.abs(newZoomLevel - oldZoomLevel) < 0.001) { return; }
 
-		// const viewCenterTimeBeforeZoom = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, oldTotalLogicalWidth, visibleCanvasWidth, initialScrollOffsetPx); // Old centering logic
+		const viewCenterPx = scrollOffsetPx + visibleCanvasWidth / 2;
+		const timeAtCenter = pxToTime(visibleCanvasWidth / 2, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
 
-		zoomLevel = newZoomLevel; // Update zoomLevel state first
+		zoomLevel = newZoomLevel;
 
 		tick().then(() => {
-			const newTotalLogicalWidthAfterZoom = totalLogicalWidth; // totalLogicalWidth is now updated due to zoomLevel change
-
-			// Right-edge anchoring logic
-			let newScrollOffset = newTotalLogicalWidthAfterZoom - visibleCanvasWidth;
+			const newTotalLogicalWidthAfterZoom = totalLogicalWidth;
+			let newScrollOffset = timeToLogicalPx(timeAtCenter, actualMediaDuration, newTotalLogicalWidthAfterZoom) - visibleCanvasWidth / 2;
 
 			const newMaxScroll = Math.max(0, newTotalLogicalWidthAfterZoom - visibleCanvasWidth);
-			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll)); // Clamping
+			newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
 
-			scrollOffsetPx = Math.round(newScrollOffset); // Update scrollOffsetPx state
+			scrollOffsetPx = Math.round(newScrollOffset);
 
 			const wasAutoScrollEnabled = autoScrollEnabled; autoScrollEnabled = false; clearTimeout(autoScrollEnableTimer);
-			// if (waveformScrollContainerRef) { // No longer writing to DOM
-			// 	waveformScrollContainerRef.scrollLeft = scrollOffsetPx;
-			// }
 			requestRedraw(true);
 			autoScrollEnableTimer = setTimeout(() => {
 				if (isMounted && !isTrimming && !isEditingSegment) { autoScrollEnabled = wasAutoScrollEnabled; }
@@ -694,17 +717,100 @@
 		const clickX = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - rect.left));
 		let newTime = pxToTime(clickX, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
 		const minDuration = 0.1; let newStartTime = trimStartTime; let newEndTime = trimEndTime;
+
+		const containerRect = waveformScrollContainerRef.getBoundingClientRect();
+		const edgeZone = 50; // 50px from either edge
+		const mouseClientX = event.clientX;
+
+		if (mouseClientX < containerRect.left + edgeZone) {
+			autoScrollDirection = 'left';
+			if (!autoScrollRafId) startHandleAutoScroll();
+		} else if (mouseClientX > containerRect.right - edgeZone) {
+			autoScrollDirection = 'right';
+			if (!autoScrollRafId) startHandleAutoScroll();
+		} else {
+			stopHandleAutoScroll();
+		}
+
+		// Calculate newTime based on mouse position relative to the visible part of the waveform area
+		const clickXInVisibleArea = Math.max(0, Math.min(visibleCanvasWidth, event.clientX - containerRect.left));
+		newTime = pxToTime(clickXInVisibleArea, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
+
 		if (draggingHandle === 'trim-left') {
 			newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration));
 		} else { // trim-right
 			newEndTime = Math.min(actualMediaDuration, Math.max(newTime, trimStartTime + minDuration));
-			// console.log(`[Waveform.trim-right] clientX: ${event.clientX.toFixed(2)}, rect.left: ${rect.left.toFixed(2)}, clickX: ${clickX.toFixed(2)}`);
-			// console.log(`[Waveform.trim-right] actualMediaDuration: ${actualMediaDuration.toFixed(3)}, totalWidth: ${totalLogicalWidth.toFixed(2)}, visWidth: ${visibleCanvasWidth.toFixed(2)}, scroll: ${scrollOffsetPx.toFixed(2)}`);
-			// console.log(`[Waveform.trim-right] newTime: ${newTime.toFixed(3)}, trimStart: ${trimStartTime.toFixed(3)}, newEnd (pre-dispatch): ${newEndTime.toFixed(3)}`);
 		}
-		if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) { dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime }); }
+		if (newStartTime !== trimStartTime || newEndTime !== trimEndTime) { dispatch('trimupdate', { startTime: newStartTime, endTime: newEndTime }); requestRedraw(true); }
 	}
-	function handleTrimMouseUp() { if (draggingHandle === 'trim-left' || draggingHandle === 'trim-right') { draggingHandle = null; window.removeEventListener('mousemove', handleTrimMouseMove); } }
+
+	function handleTrimMouseUp() {
+		if (draggingHandle === 'trim-left' || draggingHandle === 'trim-right') {
+			draggingHandle = null;
+			window.removeEventListener('mousemove', handleTrimMouseMove);
+			stopHandleAutoScroll();
+		}
+	}
+
+	function startHandleAutoScroll() {
+		if (autoScrollRafId) return; // Already scrolling
+
+		function scrollLoop() {
+			if (!draggingHandle || autoScrollDirection === '') {
+				stopHandleAutoScroll();
+				return;
+			}
+
+			const scrollStep = 5; // pixels per frame
+			let scrolled = false;
+
+			if (autoScrollDirection === 'left' && scrollOffsetPx > 0) {
+				scrollOffsetPx = Math.max(0, scrollOffsetPx - scrollStep);
+				scrolled = true;
+			} else if (autoScrollDirection === 'right' && scrollOffsetPx < maxScrollPx) {
+				scrollOffsetPx = Math.min(maxScrollPx, scrollOffsetPx + scrollStep);
+				scrolled = true;
+			}
+
+			if (scrolled) {
+				// We need to re-evaluate the handle's position as if the mouse is still at the edge,
+				// but the content has scrolled. The `handleTrimMouseMove` logic for calculating `newTime`
+				// based on a fixed clientX (edge of screen) will effectively do this.
+				// So, we can call a simplified version or just rely on the next mousemove event if the user
+				// keeps the mouse at the edge.
+				// For immediate feedback during auto-scroll without new mouse events:
+				let edgeClientX;
+				const containerRect = waveformScrollContainerRef.getBoundingClientRect();
+				if (autoScrollDirection === 'left') {
+					edgeClientX = containerRect.left + edgeZone / 2; // Simulate mouse at mid-edge zone
+				} else {
+					edgeClientX = containerRect.right - edgeZone / 2;
+				}
+				const clickXInVisibleArea = Math.max(0, Math.min(visibleCanvasWidth, edgeClientX - containerRect.left));
+				let newTime = pxToTime(clickXInVisibleArea, actualMediaDuration, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx);
+				const minDuration = 0.1;
+
+				if (draggingHandle === 'trim-left') {
+					const newStartTime = Math.max(0, Math.min(newTime, trimEndTime - minDuration));
+					if (newStartTime !== trimStartTime) dispatch('trimupdate', { startTime: newStartTime, endTime: trimEndTime });
+				} else { // trim-right
+					const newEndTime = Math.min(actualMediaDuration, Math.max(newTime, trimStartTime + minDuration));
+					if (newEndTime !== trimEndTime) dispatch('trimupdate', { startTime: trimStartTime, endTime: newEndTime });
+				}
+				requestRedraw(true);
+			}
+			autoScrollRafId = requestAnimationFrame(scrollLoop);
+		}
+		autoScrollRafId = requestAnimationFrame(scrollLoop);
+	}
+
+	function stopHandleAutoScroll() {
+		if (autoScrollRafId) {
+			cancelAnimationFrame(autoScrollRafId);
+			autoScrollRafId = null;
+		}
+		autoScrollDirection = '';
+	}
 
 	function startEditDrag(handle, event) {
         if (!isEditingSegment || !actualMediaDuration || !segmentWaveformCanvas || isTrimming) { return; }
@@ -731,31 +837,60 @@
     $: if (isMounted) { if (!isEditingSegment && (draggingHandle === 'edit-left' || draggingHandle === 'edit-right')) { handleEditMouseUp(); } }
 
     $: if (isMounted && externalAudioBuffer && externalAudioBuffer !== prevExternalAudioBufferForDuration) {
-        // console.log('[Waveform] externalAudioBuffer prop changed, triggering actualMediaDuration update logic.');
     } else if (isMounted && !externalAudioBuffer && prevExternalAudioBufferForDuration && $transcriptStore.audioBuffer !== prevExternalAudioBufferForDuration) {
-        // console.log('[Waveform] externalAudioBuffer prop removed, currentAudioBuffer will now rely on store.');
     }
+
+	function canDrawWaveform() {
+		return visibleCanvasWidth > 0 && waveformCanvasHeight > 0 && actualMediaDuration > 0 && (currentAudioBuffer || currentAudioPeaks);
+	}
+
+	$: if (fixedHeightPx > 0 && waveformCanvasHeight !== (fixedHeightPx - TIMESCALE_HEIGHT)) {
+		waveformCanvasHeight = fixedHeightPx - TIMESCALE_HEIGHT;
+		requestRedraw(true);
+	}
+
+	// More aggressive redraw trigger for seek bar movement
+	$: if (isMounted && currentPlayTime !== undefined && visibleCanvasWidth > 0 && actualMediaDuration > 0) {
+		// Using a threshold slightly larger than typical frame time for smoothness, but small enough for responsiveness.
+		// 0.010 seconds = 10ms. A typical frame is ~16.7ms at 60fps.
+		if (Math.abs(currentPlayTime - lastDrawnTime) > 0.010) {
+			requestRedraw(true);
+		} else if (currentPlayTime === 0 && lastDrawnTime !== 0) { // Ensure redraw if time is reset to 0
+			requestRedraw(true);
+		}
+	}
 </script>
 
-<div class="waveform-container relative flex items-center space-x-1 bg-gray-100 dark:bg-app-bg-dark h-full">
+<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<div
 		bind:this={waveformScrollContainerRef}
-		class="waveform-scroll-container flex-grow bg-white dark:bg-[#3c3c3c] rounded border border-gray-300 dark:border-gray-600 relative overflow-x-scroll overflow-y-hidden h-full"
+		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-700 relative overflow-x-auto overflow-y-hidden h-full"
 		role="region" aria-label="Interactive Waveform Timeline"
 		on:scroll={handleScroll}
 	>
 		<canvas bind:this={timescaleCanvas} class="timescale-canvas" style="height: {TIMESCALE_HEIGHT}px;" aria-hidden="true" />
 		<canvas
 			bind:this={segmentWaveformCanvas}
-			class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment && !isPanning) ? 'cursor-pointer' : (isPanning ? 'cursor-grabbing' : 'cursor-default')}"
+			class="waveform-canvas {(currentAudioBuffer && !isTrimming && !isEditingSegment && !isPanning && showTrimUI) ? 'cursor-pointer' : (isPanning ? 'cursor-grabbing' : 'cursor-default')}"
 			style="height: {waveformCanvasHeight}px; top: {TIMESCALE_HEIGHT}px;"
 			aria-label="Waveform visualization. Click to seek audio."
 			on:click|self={handleCanvasClick}
 			on:mousedown|self={handlePanStart}
-			on:wheel|preventDefault={(e) => { if (e.ctrlKey || e.metaKey) { handleZoom(e.deltaY < 0 ? 'in' : 'out'); } }} />
-		{#if !webAudioApiSupported} <div class="waveform-overlay"><p class="waveform-overlay-text text-red-600">Web Audio API not supported.</p></div> {:else if !currentAudioBuffer} <div class="waveform-overlay"><p class="waveform-overlay-text">Load audio/video media to view waveform.</p></div> {/if}
+			on:wheel|preventDefault={(e) => {
+				if (e.ctrlKey || e.metaKey) {
+					handleZoom(e.deltaY < 0 ? 'in' : 'out');
+				} else {
+					let scrollAmount = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+					// Adjust sensitivity: smaller factor = slower/more controlled scroll per wheel tick
+					// Larger factor = faster scroll. Let's try a base multiplier.
+					const scrollFactor = 1; // Adjust this factor as needed
+					scrollOffsetPx = Math.max(0, Math.min(maxScrollPx, scrollOffsetPx + scrollAmount * scrollFactor));
+					requestRedraw(true);
+				}
+			}} />
+		{#if !webAudioApiSupported && isMounted} <div class="overlay-message"><p>Web Audio API not supported.</p></div> {:else if (!currentAudioBuffer && !currentAudioPeaks) && isMounted} <div class="overlay-message"><p>Load audio/video media to view waveform.</p></div> {/if}
 
-		{#if isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
+		{#if showTrimUI && isTrimming && visibleCanvasWidth > 0 && actualMediaDuration > 0}
 			{@const trimStartPx = timeToVisiblePx(trimStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			{@const trimEndPx = timeToVisiblePx(trimEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 left-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]" style:width="{Math.max(0, trimStartPx)}px"></div>
@@ -764,7 +899,7 @@
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimEndPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-right', e)} role="slider" aria-label="Trim end time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimEndTime}> <div class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimEndTime)} </div> </div>
 		{/if}
 
-		{#if isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
+		{#if showTrimUI && isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
 			{@const editStartPx = timeToVisiblePx(editSegmentStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			{@const editEndPx = timeToVisiblePx(editSegmentEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30" style:left="{editStartPx}px" on:mousedown|preventDefault={(e) => startEditDrag('edit-left', e)} role="slider" aria-label="Segment start time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={editSegmentStartTime}>
@@ -777,29 +912,68 @@
             </div>
 		{/if}
 	</div>
-
-	<div class="flex flex-col space-y-1 flex-shrink-0">
-		<button class="ui-button-icon" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || !currentAudioBuffer || visibleCanvasWidth <= 0}" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" /> </svg> </button>
-		<button class="ui-button-icon" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || !currentAudioBuffer || visibleCanvasWidth <= 0}" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" /> </svg> </button>
-   </div>
+	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+		<button class="ui-button-icon-panelheader" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
+			</svg>
+		</button>
+		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
+			</svg>
+		</button>
+	</div>
 </div>
 
 <style lang="postcss">
-	.waveform-container { }
-	.waveform-scroll-container { scrollbar-width: thin; scrollbar-color: #a0aec0 #e2e8f0; scrollbar-gutter: stable; }
-	.dark .waveform-scroll-container { scrollbar-color: #6b7280 #3c3c3c; }
-	.waveform-scroll-container::-webkit-scrollbar { height: 8px; width: 8px; }
-	.waveform-scroll-container::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 4px; }
-	.dark .waveform-scroll-container::-webkit-scrollbar-track { background: #3c3c3c; }
-	.waveform-scroll-container::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 4px; border: 2px solid #e2e8f0; }
-	.dark .waveform-scroll-container::-webkit-scrollbar-thumb { background-color: #6b7280; border-color: #3c3c3c;}
-	.waveform-scroll-container::-webkit-scrollbar-thumb:hover { background-color: #718096; }
-	.dark .waveform-scroll-container::-webkit-scrollbar-thumb:hover { background-color: #4a5568; }
+	.interactive-waveform-panel {
+	}
+	.waveform-scroll-container {
+		scrollbar-width: thin;
+		scrollbar-color: transparent transparent; /* Default: transparent */
+	}
+	.waveform-scroll-container:hover {
+		scrollbar-color: #a0aec0 #e2e8f0; /* Light mode: gray-400 thumb, gray-200 track */
+	}
+	.dark .waveform-scroll-container:hover {
+		scrollbar-color: #6b7280 #3c3c3c; /* Dark mode: gray-500 thumb, custom dark track */
+	}
+	.waveform-scroll-container::-webkit-scrollbar {
+		height: 8px;
+		width: 8px;
+	}
+	.waveform-scroll-container::-webkit-scrollbar-track {
+		background: transparent; /* Default: transparent */
+	}
+	.waveform-scroll-container:hover::-webkit-scrollbar-track {
+		background: #e2e8f0; /* Light mode: gray-200 */
+	}
+	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
+		background: #3c3c3c; /* Custom dark track */
+	}
+	.waveform-scroll-container::-webkit-scrollbar-thumb {
+		background-color: transparent; /* Default: transparent */
+		border-radius: 4px;
+	}
+	.waveform-scroll-container:hover::-webkit-scrollbar-thumb {
+		background-color: #a0aec0; /* Light mode: gray-400 */
+	}
+	.dark .waveform-scroll-container:hover::-webkit-scrollbar-thumb {
+		background-color: #4a5568; /* Dark mode: gray-600 */
+	}
+
 	.timescale-canvas { position: absolute; top: 0; left: 0; width: 100%; display: block; pointer-events: none; z-index: 5; }
 	.waveform-canvas { position: absolute; left: 0; width: 100%; display: block; }
 	.cursor-grabbing { cursor: grabbing; }
-	.waveform-overlay { @apply absolute inset-0 flex items-center justify-center bg-gray-100/70 dark:bg-gray-700/70 pointer-events-none rounded z-[5]; }
-	.waveform-overlay-text { @apply text-xs p-1 bg-white/80 dark:bg-gray-900/80 rounded shadow-sm font-sans text-center text-gray-600 dark:text-gray-300; }
-	.ui-button-icon { @apply p-1 rounded text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700; }
-	.size-6 { @apply w-6 h-6; }
+	.overlay-message {
+		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 pointer-events-none z-30;
+		text-align: center;
+	}
+	.ui-button-icon-panelheader {
+		@apply p-1 rounded text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700;
+	}
+	.w-5 { width: 1.25rem; }
+	.h-5 { height: 1.25rem; }
+
 </style>

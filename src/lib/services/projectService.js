@@ -82,19 +82,27 @@ import {
     selectMedia, // Ensure selectMedia is imported
     clearTranscriptState,
     markTranscriptAsSaved,
-    prepareForNewTranscription // Import the function
+    prepareForNewTranscription, // Import the function directly
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
+    const currentProject = get(project);
+    const projectId = currentProject.id;
+
     if (!tablePath || !layoutJson) {
         console.error('[ProjectService] saveTableLayoutPrefs: Missing tablePath or layoutJson.');
         throw new Error('Missing tablePath or layoutJson for saving table layout preferences.');
     }
+    if (!projectId) {
+        console.error('[ProjectService] saveTableLayoutPrefs: Missing projectId.');
+        throw new Error('Missing projectId for saving table layout preferences.');
+    }
+
     try {
-        await invoke('save_table_layout_prefs', { tablePath, layoutJson });
+        await invoke('save_table_layout_prefs', { projectId, tablePath, layoutJson });
     } catch (error) {
         console.error(`[ProjectService] Error saving table layout preferences for ${tablePath}:`, error);
         throw error;
@@ -102,12 +110,20 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
 }
 
 export async function loadTableLayoutPrefs(tablePath) {
+    const currentProject = get(project);
+    const projectId = currentProject.id;
+
     if (!tablePath) {
         console.error('[ProjectService] loadTableLayoutPrefs: Missing tablePath.');
         return null;
     }
+    if (!projectId) {
+        console.error('[ProjectService] loadTableLayoutPrefs: Missing projectId.');
+        return null;
+    }
+
     try {
-        const layoutJson = await invoke('load_table_layout_prefs', { tablePath });
+        const layoutJson = await invoke('load_table_layout_prefs', { projectId, tablePath });
         if (layoutJson) {
             return JSON.parse(layoutJson);
         }
@@ -209,7 +225,8 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
-                        relativePath: t.relativePath // Always preserve the original relativePath
+                        relativePath: t.relativePath, // Always preserve the original relativePath
+                        language_code: t.language_code // Pass the language code
                     };
                 });
               }
@@ -337,7 +354,8 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
-                        relativePath: t.relativePath // Always preserve the original relativePath
+                        relativePath: t.relativePath, // Always preserve the original relativePath
+                        language_code: t.language_code // Pass the language code
                     };
                 });
               }
@@ -409,7 +427,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
     }
 }
 
-export async function importMediaFile(importType = null, sourceView = 'unknown') {
+export async function importMediaFile(importType = null) {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
     if (!projectXmlPath) {
@@ -464,26 +482,17 @@ export async function importMediaFile(importType = null, sourceView = 'unknown')
             return;
         }
 
-        // Refresh the main file list in projectStore so all UI components are aware of the new file.
-        await refreshProjectFiles();
+        // Refresh the main file list in projectStore, and select the newly imported file.
+        // This prevents the UI from selecting the first media file by default, which might have transcripts
+        // and cause the UI to hang trying to load them for a file that doesn't have any.
+        await refreshProjectFiles(newlyImportedFileEntry.path);
 
-        // Now that the global list is updated, select the item in the appropriate view.
-        if (sourceView === 'notes') {
-            prepareMediaNoteView(newlyImportedFileEntry.path);
-            console.log(`[ProjectService] Media imported for Notes view. Path: ${newlyImportedFileEntry.path}`);
-        } else { // Default to 'transcriptions' or if sourceView is 'unknown'
-            selectMedia(newlyImportedFileEntry); // from transcriptStore
-            console.log(`[ProjectService] Media imported for Transcriptions view. Entry:`, newlyImportedFileEntry);
-        }
+        // Ensure the correct view is active for the newly imported media.
+        prepareMediaNoteView(newlyImportedFileEntry.path);
+        console.log(`[ProjectService] Media imported. The new file has been selected. Path: ${newlyImportedFileEntry.path}`);
 
-        setAssetImportStatus(false, `${filename} imported and selected in ${sourceView} view.`);
-        // Update project store to reflect import is no longer in progress
-        project.update(p => ({
-            ...p,
-            isImportingAsset: false,
-            isLoading: false, // Ensure isLoading is also false
-            error: null
-        }));
+        setAssetImportStatus(false, `${filename} imported successfully.`);
+        return newlyImportedFileEntry.path;
 
     } catch (error) {
         console.error('[ProjectService] Failed to import media file:', error);
@@ -591,7 +600,8 @@ export async function importDocumentFile() {
         });
         await refreshProjectFiles();
         setAssetImportStatus(false, `Document "${sourceFilename}" imported as "${finalJsonName}".`);
-        if (finalJsonPath) prepareDocumentView(finalJsonPath, 'documents');
+        prepareDocumentView(finalJsonPath, 'documents');
+        return finalJsonPath;
 
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
@@ -629,7 +639,8 @@ export async function importTableFile() {
         await refreshProjectFiles();
         const importedTableName = await basename(finalTablePath);
         setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
-        if (finalTablePath) prepareDocumentView(finalTablePath, 'tables');
+        prepareDocumentView(finalTablePath, 'tables');
+        return finalTablePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
         await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
@@ -661,7 +672,8 @@ export async function importImageFile() {
         await refreshProjectFiles();
         const importedImageName = await basename(finalImagePath);
         setAssetImportStatus(false, `Image "${importedImageName}" imported successfully.`);
-        if (finalImagePath) prepareDocumentView(finalImagePath, 'images');
+        prepareDocumentView(finalImagePath, 'images');
+        return finalImagePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
         await message(`Error importing image: ${errorMessage}`, { title: 'Import Error', type: 'error' });
@@ -694,7 +706,8 @@ export async function importTranscriptFile(sourceType = 'msWord') {
             await refreshProjectFiles();
             const importedTranscriptName = await basename(newTranscriptJsonPath);
             setAssetImportStatus(false, `Transcript "${importedTranscriptName}" imported successfully.`);
-            if (newTranscriptJsonPath) prepareImportedTranscriptView(newTranscriptJsonPath);
+            prepareImportedTranscriptView(newTranscriptJsonPath);
+            return newTranscriptJsonPath;
         } else {
             throw new Error(`Unsupported transcript source type: ${sourceType}`);
         }
@@ -713,7 +726,30 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
 export async function loadTableData(tablePath) { if (!tablePath) throw new Error('tablePath is required'); try { const tableData = await invoke('load_table_data', { tablePathStr: tablePath }); if (!Array.isArray(tableData)) throw new Error("Backend returned invalid data format for table."); return tableData; } catch (error) { const errorMessage = error.message || String(error); await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' }); throw error; } }
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
-export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }
+export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || !rowNode.children.length || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }
+
+export async function getAssetMetadata(assetRelativePath) {
+    const currentProject = get(project);
+    const projectId = currentProject.id;
+
+    if (!assetRelativePath) {
+        console.error('[ProjectService] getAssetMetadata: Missing assetRelativePath.');
+        return null;
+    }
+    if (!projectId) {
+        console.error('[ProjectService] getAssetMetadata: Missing projectId.');
+        return null;
+    }
+
+    try {
+        const metadata = await invoke('get_asset_metadata_command', { projectId, assetRelativePath });
+        return metadata;
+    } catch (error) {
+        console.error(`[ProjectService] Error getting asset metadata for ${assetRelativePath}:`, error);
+        return null;
+    }
+}
+
 export async function loadTranscriptFile(transcriptFilePath) {
     if (!transcriptFilePath) {
         project.update(p => ({ ...p, error: "Transcript file path is missing."}));
@@ -727,7 +763,19 @@ export async function loadTranscriptFile(transcriptFilePath) {
         const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
         setTranscriptData(transcriptFilePath, segmentsArray, false);
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        let errorMessage = "Unknown error";
+        if (error && typeof error === 'object') {
+            if (error.__tauriCore__ && typeof error.__tauriCore__.message === 'string') {
+                errorMessage = error.__tauriCore__.message;
+            } else if (typeof error.message === 'string') {
+                errorMessage = error.message;
+            } else {
+                errorMessage = String(error); // Fallback to String(error) if no specific message found
+            }
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        }
+
         project.update(p => ({ ...p, error: `Transcript load failed: ${errorMessage}`, statusMessage: `Error loading transcript ${filename}.`}));
         throw new Error(`Failed to load transcript: ${errorMessage}`);
     }
@@ -749,6 +797,13 @@ export async function saveTranscriptData() {
         const editorForTableAssembly = createHeadlessEditor({ nodes: ALL_EDITOR_NODES, namespace: `table-assembly-editor-${Date.now()}`, onError: (e) => console.error("[TableAssemblyEditor] Error:", e), });
         await editorForTableAssembly.update(() => { const root = _getRoot(); root.clear(); const tableNode = _createTableNode(); const headerRow = _createTableRowNode(); const headers = ["#", "Timestamp", "Speaker", "Text"]; for (const headerText of headers) { const cell = _createTableCellNode({ headerState: 'column' }); const paragraph = _createParagraphNode(); paragraph.append(_createTextNode(headerText)); cell.append(paragraph); headerRow.append(cell); } tableNode.append(headerRow); for (let i = 0; i < transcriptSegments.length; i++) { const segment = transcriptSegments[i]; const dataRow = _createTableRowNode(); const cellNum = _createTableCellNode(); const pNum = _createParagraphNode(); pNum.append(_createTextNode(String(i + 1))); cellNum.append(pNum); dataRow.append(cellNum); const cellTime = _createTableCellNode(); const pTime = _createParagraphNode(); const startTime = formatTimestampHtml(segment.start_time || 0); const endTime = formatTimestampHtml(segment.end_time || 0); pTime.append(_createTextNode(`${startTime} - ${endTime}`)); cellTime.append(pTime); dataRow.append(cellTime); const cellSpeaker = _createTableCellNode(); const pSpeaker = _createParagraphNode(); pSpeaker.append(_createTextNode(segment.speaker || "Unknown")); cellSpeaker.append(pSpeaker); dataRow.append(cellSpeaker); const cellText = _createTableCellNode(); if (segment.text && typeof segment.text === 'string') { let parsedSegmentState; try { parsedSegmentState = JSON.parse(segment.text); } catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Malformed cell JSON]")); cellText.append(pError); dataRow.append(cellText); tableNode.append(dataRow); continue; } function flattenNodes(nodes) { return nodes.flatMap(n => n.type === 'root' && Array.isArray(n.children) ? flattenNodes(n.children) : [n]); } const rawChildren = parsedSegmentState?.root?.children || []; const serializedChildNodes = flattenNodes(rawChildren); if (serializedChildNodes.length > 0) { serializedChildNodes.forEach(serializedNodeObject => { if (typeof serializedNodeObject !== 'object' || serializedNodeObject === null) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Invalid node object found]")); cellText.append(pError); return; } try { const liveNode = _parseSerializedNode(serializedNodeObject); if (liveNode) { if (typeof liveNode.clone === 'function') cellText.append(liveNode.clone()); else if (typeof liveNode.constructor?.clone === 'function') cellText.append(liveNode.constructor.clone(liveNode)); else { const pError = _createParagraphNode(); pError.append(_createTextNode(`[Error V6: Clone totally failed on type ${liveNode.getType()}]`)); cellText.append(pError);}} else { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: Parsed node is null before clone attempt]")); cellText.append(pError);}} catch (e) { const pError = _createParagraphNode(); pError.append(_createTextNode("[Error V6: _parseSerializedNode exception]")); cellText.append(pError);}}); } else cellText.append(_createParagraphNode()); } else cellText.append(_createParagraphNode()); dataRow.append(cellText); tableNode.append(dataRow); } root.append(tableNode); root.append(_createParagraphNode()); });
         fullLexicalTableJsonString = JSON.stringify(editorForTableAssembly.getEditorState().toJSON());
+
+        // Add validation here
+        const parsedJson = JSON.parse(fullLexicalTableJsonString);
+        if (!parsedJson || !parsedJson.root || !Array.isArray(parsedJson.root.children)) {
+            throw new Error("Generated Lexical JSON is invalid: missing root or children.");
+        }
+
     } catch (assemblyError) {
         project.update(p => ({ ...p, error: `Save failed: Error preparing data. ${assemblyError.message}`, statusMessage: `Error saving transcript.` }));
         throw new Error(`Failed to prepare transcript data for saving: ${assemblyError.message}`);
@@ -805,13 +860,24 @@ export async function requestTranscription() {
         toggleTranscribeModal(true);
         return;
     }
-    prepareForNewTranscription(); // Call the imported function directly
+    prepareForNewTranscription(); // Call the function directly
+    toggleTranscribeModal(true); // Ensure modal is shown after preparing for new transcription
 }
-export async function handleConfirmStartTranscription() {
+export async function handleConfirmStartTranscription(transcriptionMode) {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
-    // const jobId = uuidv4(); // Removed: Will use backend-generated job_id
-    const translateToEnglish = currentTs.translateToEnglish; // Add this line
+    // const jobId = uuidv4();
+    const translateToEnglish = currentTs.translateToEnglish;
+    const diarize = currentTs.diarizationEnabledForNextJob;
+
+    let numSpeakersForPayload = 0;
+    if (diarize) {
+        if (currentTs.speakers.count > 0) {
+            numSpeakersForPayload = currentTs.speakers.count;
+        } else {
+            numSpeakersForPayload = 2; // Default to 2 speakers if diarize is checked but no count is set
+        }
+    }
     
     const mediaPathForJob = currentTs.selectedMediaFile?.path;
     const modelNameForJob = currentTs.selectedModelName; // This is the one selected in UI
@@ -836,13 +902,13 @@ export async function handleConfirmStartTranscription() {
     const payload = {
         project_xml_path: currentProj.xmlPath,
         media_path_str: mediaPathForJob,
-        num_speakers: currentTs.speakers.count,
+        num_speakers: numSpeakersForPayload, // Use the adjusted num_speakers value
         language_code: (currentTs.selectedLanguage === 'auto' || !currentTs.selectedLanguage) ? null : currentTs.selectedLanguage,
         model_name: modelNameForJob,
-        translate_to_english: currentTs.translateToEnglish,
+        translate_to_english: translateToEnglish, // Use variable defined above
         speaker_names: currentTs.speakers.names || [],
-        // Add translated_speaker_names if translation is enabled
-        translated_speaker_names: currentTs.translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
+        translated_speaker_names: translateToEnglish ? (currentTs.speakers.translatedNames || []) : [],
+        transcription_mode: transcriptionMode,
     };
 
     // Step 1: Set status to 'initiating'. JobId is null at this point.

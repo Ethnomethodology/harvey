@@ -70,14 +70,12 @@ const initialState = {
     selectedMediaNotePath: null,
     currentMediaNoteTranscriptJson: null,
     initialMediaNoteTranscriptJson: null,
-    isMediaNoteTranscriptDirty: false, // Key change: ensure this is false if file not found
+    isMediaNoteTranscriptDirty: false,
     isMediaNoteTranscriptLoading: false,
     mediaNoteTranscriptError: null,
     activeMediaNoteEditorRef: null,
 
     autosaveEnabled: true,
-    // transcriptUndoStack: [], // Moved to transcriptStore
-    // transcriptRedoStack: [], // Moved to transcriptStore
 
     showUnsavedChangesModal: false,
     unsavedItemName: '',
@@ -94,7 +92,9 @@ const initialState = {
     onConversionCancel: () => {},
 
     selectedGroupId: null,
-    selectedGroupData: null, // Will store GroupData { id, project_id, name, description }
+    selectedGroupData: null,
+
+    activeTranscriptPathInDataTab: null,
 };
 
 export const project = writable({ ...initialState });
@@ -111,24 +111,17 @@ export async function updateProjectGroupsList(projectId) {
     }
     try {
         console.log(`[projectStore] Fetching groups for project: ${projectId}`);
-        // Ensure invoke is available in this scope, or this function needs to be part of a component/service that has it.
-        // For a store, it might be better to have this logic in a service that then calls currentProjectGroupsList.set().
-        // Assuming invoke is accessible globally or via an import if this were a .ts file with setup.
-        // If invoke is not directly available, this will be a runtime error.
-        // Consider moving this to projectService.js if invoke is not setup for standalone .js stores.
-        const { invoke } = await import('@tauri-apps/api/core'); // Dynamic import for invoke
+        const { invoke } = await import('@tauri-apps/api/core');
         const groups = await invoke('get_project_groups', { projectId });
         const sortedGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
         currentProjectGroupsList.set(sortedGroups);
         console.log(`[projectStore] Updated currentProjectGroupsList with ${sortedGroups.length} groups.`);
     } catch (error) {
         console.error('[projectStore] Error fetching project groups:', error);
-        currentProjectGroupsList.set([]); // Set to empty on error
-        // Optionally dispatch a global error notification or update an error state in the store
+        currentProjectGroupsList.set([]);
     }
 }
 
-// Action to clear selected group state
 export function clearSelectedGroup() {
     project.update(p => ({
         ...p,
@@ -137,13 +130,11 @@ export function clearSelectedGroup() {
     }));
 }
 
-// Action to set the selected group and clear other selections
 export function setSelectedGroup(groupId, groupData) {
     project.update(p => ({
         ...p,
         selectedGroupId: groupId,
         selectedGroupData: groupData,
-        // Clear other potentially selected items
         selectedDocumentPath: null,
         currentDocumentJson: null,
         initialDocumentJson: null,
@@ -165,16 +156,13 @@ export function setSelectedGroup(groupId, groupData) {
         isMediaNoteTranscriptLoading: false,
         mediaNoteTranscriptError: null,
         activeMediaNoteEditorRef: null,
-        // TODO: Consider if transcriptStore's active media/transcript also needs clearing here
-        // For now, focusing on projectStore's direct "selected item" fields
         statusMessage: groupData ? `Viewing group: ${groupData.name}` : 'Group selection cleared.',
     }));
 }
 
 
 export function prepareDocumentView(filePath, itemType = 'document') {
-    console.debug(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`); // DEBUG
-    clearSelectedGroup(); // Clear group selection
+    console.debug(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`);
     const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables';
     const isImage = itemType === 'images';
@@ -185,12 +173,21 @@ export function prepareDocumentView(filePath, itemType = 'document') {
     };
 
     project.update(p => {
-        const selectingSamePath = p.selectedDocumentPath === filePath;
-        const newIsDocumentLoading = isJsonDocument && (!selectingSamePath || !p.currentDocumentJson) ||
-                                   isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations) );
+        const selectingSamePath = p.selectedDocumentPath === filePath && filePath !== null; // Ensure filePath is not null for same path check
+
+        // Determine if loading is needed only if filePath is valid
+        let newIsDocumentLoading = false;
+        if (filePath) {
+            newIsDocumentLoading = (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) ||
+                                  (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations)));
+        }
 
         return {
             ...p,
+            // Clear group selection only if a file path is being actively set
+            selectedGroupId: filePath ? null : p.selectedGroupId,
+            selectedGroupData: filePath ? null : p.selectedGroupData,
+
             selectedDocumentPath: filePath,
             currentDocumentJson: (isJsonDocument && selectingSamePath) ? p.currentDocumentJson : (isJsonDocument ? null : null),
             initialDocumentJson: (isJsonDocument && selectingSamePath) ? p.initialDocumentJson : (isJsonDocument ? null : null),
@@ -202,11 +199,13 @@ export function prepareDocumentView(filePath, itemType = 'document') {
             currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [],
             initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [],
             isPdfAnnotationsDirty: (isPdf && selectingSamePath) ? p.isPdfAnnotationsDirty : false,
-            isDocumentLoading: newIsDocumentLoading,
+
+            isDocumentLoading: newIsDocumentLoading, // This is now correctly conditional on filePath
             documentError: null,
             statusMessage: filePath ? `Loading ${itemType}: ${filePath.split(/[\\/]/).pop()}` : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} selection cleared.`,
-            isLoading: newIsDocumentLoading || p.isLoading, // If specific document starts loading, global isLoading should reflect this or stay true
+            isLoading: newIsDocumentLoading, // Global isLoading reflects specific loading
 
+            // Clear other view states
             currentImportedTranscriptPath: null,
             currentImportedTranscriptLexicalJson: null,
             initialImportedTranscriptLexicalJson: null,
@@ -225,164 +224,165 @@ export function prepareDocumentView(filePath, itemType = 'document') {
         };
     });
 
-    if (isJsonDocument && filePath) {
-        import('$lib/services/projectService.js').then(async service => {
-            if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
-            else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
-            if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(filePath); project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
-        }).catch(err => project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
-    } else if (isPdf && filePath) {
-         import('$lib/services/projectService.js').then(async service => {
-            if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(filePath);
-            else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-         }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
-    } else if (filePath && (isTable || isImage)) {
-         project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false })); // No specific loading, so turn off global too
-    } else if (!filePath) {
+    if (filePath) { // Only proceed with async loading if filePath is valid
+        if (isJsonDocument) {
+            import('$lib/services/projectService.js').then(async service => {
+                if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
+                else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
+                if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(filePath); project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
+            }).catch(err => project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+        } else if (isPdf) {
+             import('$lib/services/projectService.js').then(async service => {
+                if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(filePath);
+                else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
+             }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+        } else if (isTable || isImage) {
+             project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
+        }
+    } else { // If filePath is null (clearing selection)
          project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
     }
 }
-export function setLoadedDocumentData(filePath, jsonContent) { console.info(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); } // INFO
-export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, isLoading: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; }); } // ERROR
+export function setLoadedDocumentData(filePath, jsonContent) { console.info(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); }
+export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, isLoading: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; }); }
 export function setDocumentEditorContent(newJsonContent) { project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { const initial = p.initialDocumentJson; const current = p.currentDocumentJson; const isNewDifferentFromInitial = initial !== newJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newJsonContent || p.isDocumentDirty !== newDirtyState) { return { ...p, currentDocumentJson: newJsonContent, isDocumentDirty: newDirtyState, }; } } return p; }); }
-export function markDocumentAsSaved(savedJsonContent) { console.info('[ProjectStore] Marking document as saved (JSON).'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); } // INFO
-export function markDocumentChangesDiscarded() { console.info('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); } // INFO
-export function clearDocumentEditorState() { console.info('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); } // INFO
+export function markDocumentAsSaved(savedJsonContent) { console.info('[ProjectStore] Marking document as saved (JSON).'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); }
+export function markDocumentChangesDiscarded() { console.info('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); }
+export function clearDocumentEditorState() { console.info('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; console.debug(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`); } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); console.debug(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; console.debug(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`); } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); } // DEBUG for highlight ops
-export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.info('[ProjectStore] Marking Lexical document metadata as saved.'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isDocumentMetadataDirty: false, currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata }; } return p; }); } // INFO
-export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } if(annotationChanged) console.debug(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`); } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; console.debug(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`); } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true; console.debug(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`); } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); } // DEBUG for annotation ops
+export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; console.debug(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`); } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); console.debug(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; console.debug(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`); } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
+export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.info('[ProjectStore] Marking Lexical document metadata as saved.'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isDocumentMetadataDirty: false, currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata }; } return p; }); }
+export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } if(annotationChanged) console.debug(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`); } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; console.debug(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`); } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true; console.debug(`[ProjectStore] PDF Annotation UPDATED: ID=${id}`); } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); }
 export function markPdfAnnotationsDirty(updatedAnnotations = null) { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: true, isDocumentDirty: false, currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations }; } return p; }); }
-export function markPdfAnnotationsAsSaved() { console.info('[ProjectStore] Marking PDF annotations as saved.'); project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); } // INFO
-export function setLoadedPdfAnnotations(annotationsArray) { console.info(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));} // INFO
-export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`, isLoading: false }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false, isLoading:false }; } return p; }); } // ERROR, WARN
+export function markPdfAnnotationsAsSaved() { console.info('[ProjectStore] Marking PDF annotations as saved.'); project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
+export function setLoadedPdfAnnotations(annotationsArray) { console.info(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));}
+export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`, isLoading: false }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false, isLoading:false }; } return p; }); }
 
 export function prepareImportedTranscriptView(filePath) {
-    console.debug(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`); // DEBUG
+    console.debug(`[ProjectStore] prepareImportedTranscriptView called for path: ${filePath}`);
     project.update(p => {
-        clearSelectedGroup(); // Clear group selection when preparing imported transcript view
-        // Determine if the exact same path is being re-selected and if its data is already loaded.
-        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath &&
-                                           !!filePath && // Ensures filePath is not null/empty
-                                           !!p.currentImportedTranscriptLexicalJson;
+        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath && !!filePath && !!p.currentImportedTranscriptLexicalJson;
+        let finalIsImportedTranscriptLoading = false;
+        let finalIsGlobalLoading = p.isLoading; // Preserve current global loading unless changed by this action
+        let finalStatusMessage = p.statusMessage;
 
-        let finalIsImportedTranscriptLoading;
-        let finalIsGlobalLoading;
-        let finalStatusMessage;
-
-        if (!filePath) { // Case 1: Selection is cleared
-            finalIsImportedTranscriptLoading = false;
+        if (!filePath) {
             finalStatusMessage = 'Imported transcript selection cleared.';
-            finalIsGlobalLoading = false; // If clearing selection, this view isn't loading.
-        } else if (isReselectingSameLoadedPath) { // Case 2: Same path re-selected, data already loaded
-            finalIsImportedTranscriptLoading = false;
+            finalIsGlobalLoading = false;
+        } else if (isReselectingSameLoadedPath) {
             finalStatusMessage = `Viewing imported transcript: ${filePath.split(/[\/]/).pop()}`;
-            finalIsGlobalLoading = false; // Explicitly stop loading for this case.
-        } else { // Case 3: New path, or same path but data needs re-loading (e.g. was null)
+            finalIsGlobalLoading = false;
+        } else {
             finalIsImportedTranscriptLoading = true;
             finalStatusMessage = `Loading imported transcript: ${filePath.split(/[\/]/).pop()}`;
-            finalIsGlobalLoading = true; // This action will trigger a load.
+            finalIsGlobalLoading = true;
         }
 
         return {
             ...p,
+            // Clear group selection if a transcript path is being set
+            selectedGroupId: filePath ? null : p.selectedGroupId,
+            selectedGroupData: filePath ? null : p.selectedGroupData,
+
             currentImportedTranscriptPath: filePath,
             currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
             initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
             isImportedTranscriptDirty: isReselectingSameLoadedPath ? p.isImportedTranscriptDirty : false,
-
             isImportedTranscriptLoading: finalIsImportedTranscriptLoading,
             importedTranscriptError: null,
             activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
-
             statusMessage: finalStatusMessage,
             isLoading: finalIsGlobalLoading,
 
-            // Clear other view states to ensure focus on the imported transcript view
-            selectedDocumentPath: null,
-            currentDocumentJson: null,
-            initialDocumentJson: null,
-            isDocumentDirty: false,
-            isDocumentLoading: false,
-            documentError: null,
-            activeDocumentEditorRef: null,
-            currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
-            currentDocumentHighlights: [],
-            isDocumentMetadataDirty: false,
-            currentPdfAnnotations: [],
-            initialPdfAnnotations: [],
-            isPdfAnnotationsDirty: false,
-
-            selectedMediaNotePath: null,
-            currentMediaNoteTranscriptJson: null,
-            initialMediaNoteTranscriptJson: null,
-            isMediaNoteTranscriptDirty: false,
-            mediaNoteTranscriptError: null,
-            isMediaNoteTranscriptLoading: false,
-            activeMediaNoteEditorRef: null,
+            // Clear other view states
+            selectedDocumentPath: null, /* ... other document fields ... */
+            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+            selectedMediaNotePath: null, /* ... other media note fields ... */
+            currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, mediaNoteTranscriptError: null, isMediaNoteTranscriptLoading: false, activeMediaNoteEditorRef: null,
         };
     });
 }
-export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.info(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); } // INFO
-export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); } // ERROR
+export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.info(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
+export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
-export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) { console.info(`[ProjectStore] Marking imported transcript as saved: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` }; } return p; }); } // INFO
-export function markImportedTranscriptChangesDiscarded(filePath) { console.info(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); } // INFO
+export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) { console.info(`[ProjectStore] Marking imported transcript as saved: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` }; } return p; }); }
+export function markImportedTranscriptChangesDiscarded(filePath) { console.info(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); }
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
 export function prepareMediaNoteView(mediaPath) {
     const normalizedMediaPath = mediaPath ? mediaPath.replace(/\\/g, '/') : null;
-    console.debug(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}, normalized to: ${normalizedMediaPath}`); // DEBUG
-    clearSelectedGroup(); // Clear group selection
-    const newIsMediaNoteLoading = !!normalizedMediaPath;
+    console.debug(`[ProjectStore] prepareMediaNoteView called for mediaPath: ${mediaPath}, normalized to: ${normalizedMediaPath}`);
+
     project.update(p => {
-        const otherFieldnotesStatesToClear = {
-            selectedDocumentPath: null,
-            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false,
-            isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
-            currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
-            currentDocumentHighlights: [], isDocumentMetadataDirty: false,
-            currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+        const newIsMediaNoteLoading = !!normalizedMediaPath && (p.selectedMediaNotePath !== normalizedMediaPath || !p.currentMediaNoteTranscriptJson);
+        let finalIsGlobalLoading = p.isLoading;
+        if (newIsMediaNoteLoading) finalIsGlobalLoading = true;
+        else if (!normalizedMediaPath) finalIsGlobalLoading = false;
 
-            currentImportedTranscriptPath: null,
-            currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null,
-            isImportedTranscriptDirty: false, isImportedTranscriptLoading: false,
-            importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
-        };
 
-        if (p.selectedMediaNotePath !== normalizedMediaPath || !p.selectedMediaNotePath) {
-            return {
-                ...p,
-                ...otherFieldnotesStatesToClear,
-                selectedMediaNotePath: normalizedMediaPath,
-                isMediaNoteTranscriptLoading: newIsMediaNoteLoading,
-                mediaNoteTranscriptError: null,
-                isMediaNoteTranscriptDirty: false, // Explicitly false when preparing a new/different view
-                currentMediaNoteTranscriptJson: null,
-                initialMediaNoteTranscriptJson: null,
-                activeMediaNoteEditorRef: null,
-                statusMessage: normalizedMediaPath ? `Loading notes for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media note selection cleared.',
-                isLoading: newIsMediaNoteLoading || p.isLoading,
-            };
-        }
-        // If re-selecting the same, just ensure other fieldnotes are clear
         return {
             ...p,
-            ...otherFieldnotesStatesToClear,
+            // Clear group selection if a media path is being set
+            selectedGroupId: normalizedMediaPath ? null : p.selectedGroupId,
+            selectedGroupData: normalizedMediaPath ? null : p.selectedGroupData,
+
             selectedMediaNotePath: normalizedMediaPath,
-            statusMessage: `Viewing notes for media: ${normalizedMediaPath.split(/[\\/]/).pop()}`,
-            isMediaNoteTranscriptLoading: p.selectedMediaNotePath !== normalizedMediaPath ? newIsMediaNoteLoading : p.isMediaNoteTranscriptLoading, // Re-trigger loading if path changed
+            currentMediaNoteTranscriptJson: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.currentMediaNoteTranscriptJson : null,
+            initialMediaNoteTranscriptJson: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.initialMediaNoteTranscriptJson : null,
+            isMediaNoteTranscriptDirty: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.isMediaNoteTranscriptDirty : false,
+            isMediaNoteTranscriptLoading: newIsMediaNoteLoading,
+            mediaNoteTranscriptError: null,
+            activeMediaNoteEditorRef: (p.selectedMediaNotePath === normalizedMediaPath && !newIsMediaNoteLoading) ? p.activeMediaNoteEditorRef : null,
+
+            statusMessage: normalizedMediaPath ? `Loading data for media: ${normalizedMediaPath.split(/[\\/]/).pop()}` : 'Media data selection cleared.',
+            isLoading: finalIsGlobalLoading,
+
+            // Clear other fieldnotes states
+            selectedDocumentPath: null, /* ... */
+            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+            currentImportedTranscriptPath: null, /* ... */
+            currentImportedTranscriptLexicalJson: null, initialImportedTranscriptLexicalJson: null, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: null, activeImportedTranscriptEditorRef: null,
+            activeTranscriptPathInDataTab: null, // Clear active transcript when switching to other views
         };
     });
-    if (!normalizedMediaPath) {
-        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false }));
+
+    if (normalizedMediaPath) {
+        // Find the media file in the files tree to get its associated transcripts
+        const currentProjectState = get(project);
+        function findMediaFileInTree(nodes, path) {
+            if (!Array.isArray(nodes)) return null;
+            for (const node of nodes) {
+                if (node.path === path && node.file_type === 'media') {
+                    return node;
+                }
+                if (node.children) {
+                    const found = findMediaFileInTree(node.children, path);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        const mediaFileNode = findMediaFileInTree(currentProjectState.files, normalizedMediaPath);
+        const firstTranscriptPath = mediaFileNode?.associated_transcripts?.[0]?.path || null;
+
+        project.update(p => ({
+            ...p,
+            activeTranscriptPathInDataTab: firstTranscriptPath,
+            // If no transcript, set error state to display "No Transcription Yet"
+            mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
+            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false, // Only load if there's a transcript
+            isLoading: firstTranscriptPath ? true : false, // Global loading
+        }));
+    } else { // If clearing selection, ensure global loading is false
+        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null }));
     }
 }
 
 export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
-    console.info(`[ProjectStore] Setting loaded media note transcript data for media: ${mediaPath}`); // INFO
+    console.info(`[ProjectStore] Setting loaded media note transcript data for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             const content = jsonString || defaultEmptyJson;
@@ -390,31 +390,79 @@ export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
                 ...p,
                 currentMediaNoteTranscriptJson: content,
                 initialMediaNoteTranscriptJson: content,
-                isMediaNoteTranscriptDirty: false, // Not dirty on fresh load
+                isMediaNoteTranscriptDirty: false,
                 isMediaNoteTranscriptLoading: false,
                 mediaNoteTranscriptError: null,
-                statusMessage: `Loaded notes for media: ${mediaPath.split(/[\\/]/).pop()}`,
-                isLoading: false, // Turn off general loading indicator
+                statusMessage: `Loaded data for media: ${mediaPath.split(/[\\/]/).pop()}`,
+                isLoading: false,
             };
         }
         return p;
     });
 }
 
+export async function switchTranscriptInDataTab(newTranscriptPath) {
+    const proj = get(project);
+    if (proj.isMediaNoteTranscriptDirty) {
+        const { confirm } = await import('@tauri-apps/plugin-dialog');
+        const userConfirmed = await confirm('You have unsaved changes. Do you want to discard them and switch transcripts?', {
+            title: 'Unsaved Changes',
+            type: 'warning',
+        });
+        if (!userConfirmed) {
+            return;
+        }
+    }
+
+    project.update(p => {
+        // Find the media file associated with the newTranscriptPath
+        // This assumes that the media file entry contains associated_transcripts with their paths
+        let mediaFileForNewTranscript = null;
+        function findMediaFileByTranscriptPath(nodes, transcriptPath) {
+            if (!Array.isArray(nodes)) return null;
+            for (const node of nodes) {
+                if (node.file_type === 'media' && node.associated_transcripts) {
+                    if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
+                        return node;
+                    }
+                }
+                if (node.children) {
+                    const found = findMediaFileByTranscriptPath(node.children, transcriptPath);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+
+        mediaFileForNewTranscript = findMediaFileByTranscriptPath(p.files, newTranscriptPath);
+
+        return {
+            ...p,
+            activeTranscriptPathInDataTab: newTranscriptPath,
+            // Update selectedMediaNotePath to trigger MediaEditorPanel to load the correct media
+            selectedMediaNotePath: mediaFileForNewTranscript ? mediaFileForNewTranscript.path : p.selectedMediaNotePath,
+            isMediaNoteTranscriptLoading: true,
+            mediaNoteTranscriptError: null,
+        };
+    });
+
+    // This will trigger the load in MediaEditorPanel
+}
+
 export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg, isFileNotFound = false) {
-    console.error(`[ProjectStore] Media note transcript load failed for media: ${mediaPath}`, errorMsg); // Keep error
+    console.error(`[ProjectStore] Media note transcript load failed for media: ${mediaPath}`, errorMsg);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             return {
                 ...p,
                 currentMediaNoteTranscriptJson: defaultEmptyJson,
                 initialMediaNoteTranscriptJson: defaultEmptyJson,
-                isMediaNoteTranscriptDirty: false, // Not dirty if load failed or file not found
+                isMediaNoteTranscriptDirty: false,
                 isMediaNoteTranscriptLoading: false,
-                mediaNoteTranscriptError: isFileNotFound ? "INFO:FILE_NOT_FOUND" : `Failed to load notes: ${errorMsg}`,
-                statusMessage: isFileNotFound ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.` : `Error loading notes for ${mediaPath.split(/[\\/]/).pop()}.`,
+                mediaNoteTranscriptError: isFileNotFound ? "INFO:FILE_NOT_FOUND" : `Failed to load data: ${errorMsg}`,
+                statusMessage: isFileNotFound ? `No data/transcription found for ${mediaPath.split(/[\\/]/).pop()}.` : `Error loading data for ${mediaPath.split(/[\\/]/).pop()}.`,
                 activeMediaNoteEditorRef: null,
-                isLoading: false, // Turn off general loading indicator
+                isLoading: false,
             };
         }
         return p;
@@ -426,7 +474,6 @@ export function setMediaNoteTranscriptEditorContent(mediaPath, newJsonContent) {
         if (p.selectedMediaNotePath === mediaPath) {
             const initial = p.initialMediaNoteTranscriptJson;
             const current = p.currentMediaNoteTranscriptJson;
-            // A new file (initially defaultEmptyJson) becomes dirty as soon as user types *anything* different.
             const isNewDifferentFromInitial = initial !== newJsonContent;
             const newDirtyState = isNewDifferentFromInitial;
 
@@ -443,7 +490,7 @@ export function setMediaNoteTranscriptEditorContent(mediaPath, newJsonContent) {
 }
 
 export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
-    console.info(`[ProjectStore] Marking media note transcript as saved for media: ${mediaPath}`); // INFO
+    console.info(`[ProjectStore] Marking media note transcript as saved for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             return {
@@ -452,7 +499,7 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
                 currentMediaNoteTranscriptJson: savedJsonContent,
                 isMediaNoteTranscriptDirty: false,
                 mediaNoteTranscriptError: null,
-                statusMessage: `Notes for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
+                statusMessage: `Data for media ${mediaPath.split(/[\\/]/).pop()} saved.`,
             };
         }
         return p;
@@ -460,20 +507,19 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
 }
 
 export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
-    console.info(`[ProjectStore] Marking media note transcript changes as discarded for media: ${mediaPath}`); // INFO
+    console.info(`[ProjectStore] Marking media note transcript changes as discarded for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
-            // If the initial state was "file not found", discarding means resetting to that state.
             const errorToKeep = p.initialMediaNoteTranscriptJson === defaultEmptyJson && p.mediaNoteTranscriptError === "INFO:FILE_NOT_FOUND"
                 ? "INFO:FILE_NOT_FOUND"
                 : null;
             const statusToKeep = errorToKeep === "INFO:FILE_NOT_FOUND"
-                ? `No notes/transcription found for ${mediaPath.split(/[\\/]/).pop()}.`
-                : `Changes to notes for media ${mediaPath.split(/[\\/]/).pop()} discarded.`;
+                ? `No data/transcription found for ${mediaPath.split(/[\\/]/).pop()}.`
+                : `Changes to data for media ${mediaPath.split(/[\\/]/).pop()} discarded.`;
 
             return {
                 ...p,
-                currentMediaNoteTranscriptJson: p.initialMediaNoteTranscriptJson, // Revert to initial content (which might be defaultEmptyJson)
+                currentMediaNoteTranscriptJson: p.initialMediaNoteTranscriptJson,
                 isMediaNoteTranscriptDirty: false,
                 mediaNoteTranscriptError: errorToKeep,
                 statusMessage: statusToKeep,
@@ -502,16 +548,16 @@ export function clearActiveMediaNoteEditorRef() {
     });
 }
 
-export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; console.info(`[ProjectStore] Toggling autosave to: ${newState}`); return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); } // INFO
-export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { console.info(`[ProjectStore] Showing unsaved changes prompt for: ${itemName} (type: ${itemType})`); project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); } // INFO
-export function hideUnsavedChangesPrompt() { console.info('[ProjectStore] Hiding unsaved changes prompt.'); project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); } // INFO
-export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting })); } // isLoading also true during import
-export function showConversionPrompt(fileName, onConfirm, onCancel) { console.info(`[ProjectStore] Showing conversion prompt for: ${fileName}`); project.update(p => ({ ...p, showConfirmConversionModal: true, conversionFileName: fileName, onConversionConfirm: onConfirm, onConversionCancel: onCancel, })); } // INFO
-export function hideConversionPrompt() { console.info('[ProjectStore] Hiding conversion prompt.'); project.update(p => ({ ...p, showConfirmConversionModal: false, conversionFileName: '', onConversionConfirm: () => {}, onConversionCancel: () => {}, })); } // INFO
+export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; console.info(`[ProjectStore] Toggling autosave to: ${newState}`); return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
+export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { console.info(`[ProjectStore] Showing unsaved changes prompt for: ${itemName} (type: ${itemType})`); project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
+export function hideUnsavedChangesPrompt() { console.info('[ProjectStore] Hiding unsaved changes prompt.'); project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
+export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting ? true : p.isLoading })); }
+export function showConversionPrompt(fileName, onConfirm, onCancel) { console.info(`[ProjectStore] Showing conversion prompt for: ${fileName}`); project.update(p => ({ ...p, showConfirmConversionModal: true, conversionFileName: fileName, onConversionConfirm: onConfirm, onConversionCancel: onCancel, })); }
+export function hideConversionPrompt() { console.info('[ProjectStore] Hiding conversion prompt.'); project.update(p => ({ ...p, showConfirmConversionModal: false, conversionFileName: '', onConversionConfirm: () => {}, onConversionCancel: () => {}, })); }
 
 // Listen for media rename events from the backend
 listen('media_renamed', (event) => {
-    console.info('[ProjectStore] Received media_renamed event:', event.payload); // INFO
+    console.info('[ProjectStore] Received media_renamed event:', event.payload);
     if (!event.payload) return;
 
     const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
@@ -520,21 +566,19 @@ listen('media_renamed', (event) => {
         let updatedState = { ...p };
         let stateChanged = false;
 
-        // Update selectedMediaNotePath (for Notes tab player)
         if (p.selectedMediaNotePath) {
             const currentNoteFileNameWithExt = p.selectedMediaNotePath.split(/[\/]/).pop();
             const currentNoteStem = currentNoteFileNameWithExt.substring(0, currentNoteFileNameWithExt.lastIndexOf('.'));
             const pathParts = p.selectedMediaNotePath.split(/[\/]/);
-            const parentFolderForNote = pathParts.length > 2 ? pathParts[pathParts.length - 3] : null; // e.g. {OldStem}/Media/OldStem.mp4 -> OldStem
+            const parentFolderForNote = pathParts.length > 2 ? pathParts[pathParts.length - 3] : null;
 
             if (currentNoteStem === old_media_stem && parentFolderForNote === old_media_stem) {
-                updatedState.selectedMediaNotePath = new_absolute_path; // The event payload gives the new media path directly
+                updatedState.selectedMediaNotePath = new_absolute_path;
                 stateChanged = true;
-                console.debug('[ProjectStore] Updated selectedMediaNotePath due to rename (stem and folder match).'); // DEBUG
+                console.debug('[ProjectStore] Updated selectedMediaNotePath due to rename (stem and folder match).');
             }
         }
 
-        // Update the main 'files' array (file tree)
         function updateFileEntriesRecursive(nodes, oldStem, newStem, newAbsMediaPath, newRelMediaPath, baseDir) {
             if (!Array.isArray(nodes)) return { updatedNodes: nodes, changed: false };
 
@@ -549,7 +593,6 @@ listen('media_renamed', (event) => {
 
                     if (updatedNode.file_type === 'directory_media_stem') {
                         updatedNode.name = newStem;
-                        // Path of the new stem folder, e.g., /app/project/.harvey_files/Media/NewStem
                         const mediaFileParentDir = newAbsMediaPath.substring(0, newAbsMediaPath.lastIndexOf('/'));
                         const newStemFolderPath = mediaFileParentDir.substring(0, mediaFileParentDir.lastIndexOf('/'));
 
@@ -557,15 +600,14 @@ listen('media_renamed', (event) => {
                         if (baseDir && newStemFolderPath.startsWith(baseDir)) {
                             updatedNode.relative_path = newStemFolderPath.substring(baseDir.length + 1).replace(/\\/g, '/');
                         } else {
-                            updatedNode.relative_path = newStemFolderPath.replace(/\\/g, '/'); // Fallback if baseDir is not applicable
+                            updatedNode.relative_path = newStemFolderPath.replace(/\\/g, '/');
                         }
                         nodeChanged = true;
                     } else if (updatedNode.file_type === MEDIA_SUBDIR || updatedNode.file_type === TRANSCRIPTS_SUBDIR || (updatedNode.is_directory && updatedNode.name === MEDIA_SUBDIR) || (updatedNode.is_directory && updatedNode.name === TRANSCRIPTS_SUBDIR)) {
-                        // These are the "media" and "transcripts" subfolders inside the stem folder
-                        const oldStemFolderPath = updatedNode.path.substring(0, updatedNode.path.lastIndexOf('/')); // .../OldStem
-                        const newStemFolderPath = oldStemFolderPath.replace(oldStem, newStem); // .../NewStem
+                        const oldStemFolderPath = updatedNode.path.substring(0, updatedNode.path.lastIndexOf('/'));
+                        const newStemFolderPath = oldStemFolderPath.replace(oldStem, newStem);
                         updatedNode.path = updatedNode.path.replace(oldStemFolderPath, newStemFolderPath);
-                        updatedNode.relative_path = updatedNode.relative_path.replace(oldStem, newStem); // Simpler replacement for relative path
+                        updatedNode.relative_path = updatedNode.relative_path.replace(oldStem, newStem);
                         nodeChanged = true;
                     } else if (updatedNode.file_type === 'media' && updatedNode.path.includes(`/${oldStem}/`)) {
                         updatedNode.name = newAbsMediaPath.split(/[\/]/).pop();
@@ -603,16 +645,15 @@ listen('media_renamed', (event) => {
         if (filesUpdateResult.changed) {
             updatedState.files = filesUpdateResult.updatedNodes;
             stateChanged = true;
-            console.debug('[ProjectStore] Updated main files tree due to media rename.'); // DEBUG
+            console.debug('[ProjectStore] Updated main files tree due to media rename.');
         }
 
         return stateChanged ? updatedState : p;
     });
 });
 
-// Listen for item rename events from the backend
 listen('item_renamed', (event) => {
-    console.info('[ProjectStore] Received item_renamed event:', event.payload); // INFO
+    console.info('[ProjectStore] Received item_renamed event:', event.payload);
     if (!event.payload) return;
 
     const { old_path, new_path, new_name, item_type, project_xml_path, base_directory } = event.payload;
@@ -624,40 +665,32 @@ listen('item_renamed', (event) => {
         const normalized_old_path = old_path.replace(/\\/g, '/');
         const normalized_new_path = new_path.replace(/\\/g, '/');
 
-        // Update Selected Path
         if (item_type === 'doc' && p.selectedDocumentPath === normalized_old_path) {
             updatedState.selectedDocumentPath = normalized_new_path;
             stateChanged = true;
-            console.debug('[ProjectStore item_renamed] Updated selectedDocumentPath.'); // DEBUG
+            console.debug('[ProjectStore item_renamed] Updated selectedDocumentPath.');
         } else if (item_type === 'imported_transcript' && p.currentImportedTranscriptPath === normalized_old_path) {
             updatedState.currentImportedTranscriptPath = normalized_new_path;
             stateChanged = true;
-            console.debug('[ProjectStore item_renamed] Updated currentImportedTranscriptPath.'); // DEBUG
+            console.debug('[ProjectStore item_renamed] Updated currentImportedTranscriptPath.');
         } else if (item_type === 'media' && p.selectedMediaNotePath === normalized_old_path) {
             updatedState.selectedMediaNotePath = normalized_new_path;
             stateChanged = true;
-            console.debug('[ProjectStore item_renamed] Updated selectedMediaNotePath.'); // DEBUG
+            console.debug('[ProjectStore item_renamed] Updated selectedMediaNotePath.');
         }
-        // TODO: Add checks for table and image if dedicated selected path variables are introduced.
-        // For now, if a table or image was selected via selectedDocumentPath, it will be handled by the 'doc' case
-        // if the item_type was misidentified or if they share the selection variable.
-        // However, the backend sends specific item_types, so this should be accurate.
-        // If a 'table' or 'image' type item was viewed using selectedDocumentPath, and that path matches, it should also update.
-        // This logic might need refinement if tables/images get their own distinct selected paths in the store.
         else if ((item_type === 'table' || item_type === 'image') && p.selectedDocumentPath === normalized_old_path) {
-            updatedState.selectedDocumentPath = normalized_new_path; // Assuming they use selectedDocumentPath
+            updatedState.selectedDocumentPath = normalized_new_path;
             stateChanged = true;
-            console.debug(`[ProjectStore item_renamed] Updated selectedDocumentPath for ${item_type}.`); // DEBUG
+            console.debug(`[ProjectStore item_renamed] Updated selectedDocumentPath for ${item_type}.`);
         }
 
 
-        // Update File Lists
         let new_relative_path = '';
         if (base_directory && normalized_new_path.startsWith(base_directory)) {
             new_relative_path = normalized_new_path.substring(base_directory.length + 1).replace(/\\/g, '/');
         } else {
-            new_relative_path = normalized_new_path.replace(/\\/g, '/'); // Fallback
-            console.warn('[ProjectStore item_renamed] new_path did not start with base_directory. Base:', base_directory, 'NewPath:', normalized_new_path); // WARN
+            new_relative_path = normalized_new_path.replace(/\\/g, '/');
+            console.warn('[ProjectStore item_renamed] new_path did not start with base_directory. Base:', base_directory, 'NewPath:', normalized_new_path);
         }
 
         if (item_type === 'doc') {
@@ -668,7 +701,7 @@ listen('item_renamed', (event) => {
                 updatedState.documentFiles[docIndex].relativePath = new_relative_path;
                 updatedState.documentFiles.sort((a, b) => a.name.localeCompare(b.name));
                 stateChanged = true;
-                console.debug('[ProjectStore item_renamed] Updated documentFiles entry.'); // DEBUG
+                console.debug('[ProjectStore item_renamed] Updated documentFiles entry.');
             }
         } else if (item_type === 'table') {
             const tableIndex = updatedState.tableFiles.findIndex(table => table.path === normalized_old_path || (p.baseDirectory + '/' + table.relativePath).replace(/\\/g, '/') === normalized_old_path);
@@ -678,7 +711,7 @@ listen('item_renamed', (event) => {
                 updatedState.tableFiles[tableIndex].relativePath = new_relative_path;
                 updatedState.tableFiles.sort((a, b) => a.name.localeCompare(b.name));
                 stateChanged = true;
-                console.debug('[ProjectStore item_renamed] Updated tableFiles entry.'); // DEBUG
+                console.debug('[ProjectStore item_renamed] Updated tableFiles entry.');
             }
         } else if (item_type === 'image') {
             const imageIndex = updatedState.imageFiles.findIndex(img => img.path === normalized_old_path || (p.baseDirectory + '/' + img.relativePath).replace(/\\/g, '/') === normalized_old_path);
@@ -688,7 +721,7 @@ listen('item_renamed', (event) => {
                 updatedState.imageFiles[imageIndex].relativePath = new_relative_path;
                 updatedState.imageFiles.sort((a, b) => a.name.localeCompare(b.name));
                 stateChanged = true;
-                console.debug('[ProjectStore item_renamed] Updated imageFiles entry.'); // DEBUG
+                console.debug('[ProjectStore item_renamed] Updated imageFiles entry.');
             }
         } else if (item_type === 'imported_transcript') {
             const importedIndex = updatedState.importedTranscriptFiles.findIndex(it => it.path === normalized_old_path || (p.baseDirectory + '/' + it.relativePath).replace(/\\/g, '/') === normalized_old_path);
@@ -698,10 +731,9 @@ listen('item_renamed', (event) => {
                 updatedState.importedTranscriptFiles[importedIndex].relativePath = new_relative_path;
                 updatedState.importedTranscriptFiles.sort((a, b) => a.name.localeCompare(b.name));
                 stateChanged = true;
-                console.debug('[ProjectStore item_renamed] Updated importedTranscriptFiles entry.'); // DEBUG
+                console.debug('[ProjectStore item_renamed] Updated importedTranscriptFiles entry.');
             }
         } else if (item_type === 'transcript') {
-            // This is a media-associated transcript. Needs to update within the main `files` tree.
             function updateTranscriptInTreeRecursive(nodes) {
                 if (!Array.isArray(nodes)) return { updatedNodes: nodes, changed: false };
                 let overallChanged = false;
@@ -721,15 +753,14 @@ listen('item_renamed', (event) => {
                         const result = updateTranscriptInTreeRecursive(updatedNode.children);
                         if (result.changed) {
                             updatedNode.children = result.updatedNodes;
-                            nodeChanged = true; // Propagate change upwards
+                            nodeChanged = true;
                         }
                     }
                     if (nodeChanged) overallChanged = true;
                     return updatedNode;
                 });
-                 if (overallChanged && nodes.some(n => n.file_type === 'transcript')) { // Only sort if a transcript list was modified
+                 if (overallChanged && nodes.some(n => n.file_type === 'transcript')) {
                     updatedNodes.sort((a, b) => {
-                        // Keep directory structure, sort transcripts by name
                         if (a.is_directory && !b.is_directory) return -1;
                         if (!a.is_directory && b.is_directory) return 1;
                         return a.name.localeCompare(b.name);

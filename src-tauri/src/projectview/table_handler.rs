@@ -18,39 +18,7 @@ use csv;
 use calamine::{Reader, Xlsx, open_workbook, Data};
 
 // StandardAssetMetadata import removed, FileMetadata is already in shared_types::*
-// Helper to get a unique path in the Tables directory (Unchanged)
-fn get_unique_table_path(
-    project_base_dir: &Path,
-    base_name: &str,
-    extension: &str,
-) -> Result<PathBuf, CommandError> {
-    let target_dir = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
 
-    if !target_dir.exists() {
-        warn!("Target tables directory {} not found. Attempting to create.", target_dir.display());
-        fs::create_dir_all(&target_dir)?;
-        info!("Created tables directory: {}", target_dir.display());
-    }
-
-    let mut counter = 0;
-    loop {
-        let file_name = if counter == 0 {
-            format!("{}.{}", base_name, extension)
-        } else {
-            format!("{}_{}.{}", base_name, counter, extension)
-        };
-        let target_path = target_dir.join(&file_name);
-
-        if !target_path.exists() {
-            debug!("Found unique table path: {}", target_path.display());
-            return Ok(target_path);
-        }
-        counter += 1;
-        if counter > 1000 {
-            return Err(CommandError::from(format!("Could not find unique filename for table base '{}' after {} attempts.", base_name, counter)));
-        }
-    }
-}
 
 
 // Import command (Modified)
@@ -157,6 +125,7 @@ pub async fn import_table_file(
     let new_table_entry = TableEntryXml {
         name: final_table_name.clone(), // XML name is the final (potentially suffixed) truncated filename
         relative_path: relative_path_for_xml.clone(),
+        language_code: None,
     };
 
     if project_data.table_files.files.iter().any(|f| f.relative_path == relative_path_for_xml) {
@@ -190,6 +159,7 @@ pub async fn import_table_file(
         created_at: Some(Utc::now().to_rfc3339()),
                 original_import_path: Some(source_path_str.clone()),
                 speaker_names: None,
+                waveform_data: None,
     };
 
     // relative_path_for_xml is already calculated and is the correct key for the DB

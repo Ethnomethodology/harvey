@@ -1,11 +1,50 @@
-<!-- src/lib/components/projectview/notes/NotesTopBar.svelte -->
+<!-- src/lib/components/projectview/data/DataTopBar.svelte -->
 <script>
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
-    import { project, toggleAutosave } from '$lib/stores/projectStore.js';
-    import { get } from 'svelte/store';
-    import { basename } from '@tauri-apps/api/path'; 
-  
+    import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
+    import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
+    import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { get, derived } from 'svelte/store';
+    import { basename } from '@tauri-apps/api/path';
+    import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+
+    function getLanguageLabel(langCode) {
+		if (!langCode || langCode === 'original') return 'Original';
+		const option = languageOptions.find(opt => opt.value === langCode);
+		return option ? option.label : langCode; // Fallback to code if not found
+	}
+
+    // --- Transcript Dropdown Logic ---
+    const activeMediaFile = derived(project, ($project) => {
+        if (!$project.selectedMediaNotePath || !$project.files) return null;
+
+        // Helper to search the file tree
+        function findFileInTree(nodes, path) {
+            for (const node of nodes) {
+                if (node.path === path) return node;
+                if (node.children) {
+                    const found = findFileInTree(node.children, path);
+                    if (found) return found;
+                }
+            }
+            return null;
+        }
+        return findFileInTree($project.files, $project.selectedMediaNotePath);
+    });
+
+    const displayedTranscripts = derived(activeMediaFile, ($activeMediaFile) => {
+        const transcripts = $activeMediaFile?.associated_transcripts;
+        if (!transcripts || transcripts.length === 0) return [];
+
+        const withLabels = transcripts.map(t => {
+            const langLabel = getLanguageLabel(t.language_code || 'original');            let fileName = t.name;            if (!fileName && t.path) {                try {                    const pathParts = t.path.split(/[\\/]/);                    fileName = pathParts[pathParts.length - 1];                    if (fileName.toLowerCase().endsWith('.json')) {                        fileName = fileName.substring(0, fileName.length - 5);                    }                } catch (e) {                    console.error("Error extracting filename from path:", e);                    fileName = '';                }            }            const fileNamePart = fileName ? ` (${fileName})` : '';            const displayLabel = `${langLabel}${fileNamePart}`;            return { ...t, displayLabel };
+        });
+
+        return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+    });
+
     // --- Theme Icons ---
 	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
 	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
@@ -17,9 +56,9 @@
                      : $themePreference === 'dark' ? 'System'
                      : 'Light';
     $: themeTitle = `Switch to ${nextThemeName} Mode`;
-  
+
     const SAVE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 0 1 9 9v.375M10.125 2.25A3.375 3.375 0 0 1 13.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 0 1 3.375 3.375M9 15l2.25 2.25L15 12" /></svg>`;
-  
+
     let autosaveEnabled = true;
     let isDocumentDirty = false;
     let isImportedTranscriptDirty = false;
@@ -31,6 +70,7 @@
     let isAnythingDirty = false;
     let canSave = false;
     let showDirtyIndicator = false;
+    let isLayoutSettingsModalOpen = false;
 
     let displayTitle = '';
   
@@ -69,6 +109,10 @@
                     } else {
                         displayTitle = $project.name;
                     }
+                    // Add a colon if a file name is present and it's a media file (which has a dropdown)
+                    if ($project.selectedMediaNotePath) {
+                        displayTitle += " :";
+                    }
                 }).catch(err => {
                     console.error("Error getting basename for top bar:", err);
                     displayTitle = $project.name; // Fallback
@@ -81,40 +125,52 @@
         }
     }
   
+    function openLayoutSettingsModal() {
+		isLayoutSettingsModalOpen = true;
+	}
+
+	function handleLayoutSelected(event) {
+		const newLayoutKey = event.detail;
+		activeLayout.setLayout(newLayoutKey);
+		// Modal closes itself on selection
+	}
+
+    const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
+
     async function handleManualSave() {
         const projState = get(project);
         const currentCanSave = !projState.autosaveEnabled && 
                                (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
         
         if (!currentCanSave) { 
-            console.warn("[NotesTopBar] Manual save clicked but conditions not met."); 
+            console.warn("[DataTopBar] Manual save clicked but conditions not met."); 
             return; 
         }
-        console.log("[NotesTopBar] Manual save proceeding...");
+        console.log("[DataTopBar] Manual save proceeding...");
 
         if ((projState.isDocumentDirty || projState.isDocumentMetadataDirty) && projState.selectedDocumentPath && projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
-            console.log("[NotesTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
-            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[NotesTopBar] Document manual save successful."); } 
-            catch (error) { console.error("[NotesTopBar] Document manual save via editor ref failed:", error); }
+            console.log("[DataTopBar] Manual save triggered for DOCUMENT via editor ref:", projState.selectedDocumentPath);
+            try { await projState.activeDocumentEditorRef.ref.save(); console.log("[DataTopBar] Document manual save successful."); } 
+            catch (error) { console.error("[DataTopBar] Document manual save via editor ref failed:", error); }
         } else if (projState.isPdfAnnotationsDirty && projState.selectedDocumentPath && projState.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
-            console.log("[NotesTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
+            console.log("[DataTopBar] Manual save triggered for PDF ANNOTATIONS:", projState.selectedDocumentPath);
             try { 
                 // PDF Annotations save might be handled differently, e.g. a direct service call if no 'ref.save'
                 // Assuming there's a service for this like `saveCurrentPdfAnnotations`
                 const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
                 await saveCurrentPdfAnnotations();
-                console.log("[NotesTopBar] PDF Annotations manual save successful."); 
-            } catch (error) { console.error("[NotesTopBar] PDF Annotations manual save failed:", error); }
+                console.log("[DataTopBar] PDF Annotations manual save successful."); 
+            } catch (error) { console.error("[DataTopBar] PDF Annotations manual save failed:", error); }
         } else if (projState.isImportedTranscriptDirty && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
-             console.log("[NotesTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
-            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[NotesTopBar] Imported Transcript manual save successful."); } 
-            catch (error) { console.error("[NotesTopBar] Imported Transcript manual save via editor ref failed:", error); }
+             console.log("[DataTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
+            try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); } 
+            catch (error) { console.error("[DataTopBar] Imported Transcript manual save via editor ref failed:", error); }
         } else if (projState.isMediaNoteTranscriptDirty && projState.selectedMediaNotePath && projState.activeMediaNoteEditorRef?.ref && typeof projState.activeMediaNoteEditorRef.ref.save === 'function') {
-            console.log("[NotesTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
-            try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[NotesTopBar] Media Note Transcript manual save successful."); }
-            catch (error) { console.error("[NotesTopBar] Media Note Transcript manual save via editor ref failed:", error); }
+            console.log("[DataTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
+            try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[DataTopBar] Media Note Transcript manual save successful."); }
+            catch (error) { console.error("[DataTopBar] Media Note Transcript manual save via editor ref failed:", error); }
         } else { 
-            console.warn("[NotesTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
+            console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
         }
     }
   
@@ -134,24 +190,24 @@
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeDocumentEditorRef.ref;
                 saveAction = 'document';
-                console.log(`[NotesTopBar Autosave Watch] Document ${p.selectedDocumentPath} is dirty.`);
+                console.log(`[DataTopBar Autosave Watch] Document ${p.selectedDocumentPath} is dirty.`);
             } else if (p.isPdfAnnotationsDirty && p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
                 shouldAutosave = true;
                 // No direct editorRef.save() for PDF annotations usually, service call is direct
                 saveAction = 'pdfAnnotations';
-                console.log(`[NotesTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
+                console.log(`[DataTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
             } else if (p.isImportedTranscriptDirty && p.currentImportedTranscriptPath && p.activeImportedTranscriptEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeImportedTranscriptEditorRef.ref;
                 saveAction = 'importedTranscript';
-                 console.log(`[NotesTopBar Autosave Watch] Imported Transcript ${p.currentImportedTranscriptPath} is dirty.`);
+                 console.log(`[DataTopBar Autosave Watch] Imported Transcript ${p.currentImportedTranscriptPath} is dirty.`);
             } else if (p.isMediaNoteTranscriptDirty && p.selectedMediaNotePath && p.activeMediaNoteEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeMediaNoteEditorRef.ref;
                 saveAction = 'mediaNoteTranscript';
-                console.log(`[NotesTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`);
+                console.log(`[DataTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`);
             } else {
-                // console.log(`[NotesTopBar Autosave Watch] Conditions not met.`);
+                // console.log(`[DataTopBar Autosave Watch] Conditions not met.`);
             }
         }
 
@@ -159,7 +215,7 @@
         clearTimeout(autosaveTimeout);
         if (shouldAutosave) {
             autosaveTimeout = setTimeout(async () => {
-                console.log("[NotesTopBar] Autosave timer fired. Attempting save...");
+                console.log("[DataTopBar] Autosave timer fired. Attempting save...");
                 const currentProjState = get(project); // Re-fetch current state
                 let editorStillActiveAndDirty = false;
 
@@ -174,7 +230,7 @@
                 }
 
                 if (editorStillActiveAndDirty) {
-                     console.log(`[NotesTopBar] Autosaving (Action: ${saveAction})...`);
+                     console.log(`[DataTopBar] Autosaving (Action: ${saveAction})...`);
                      try { 
                         if (saveAction === 'pdfAnnotations') {
                             const { saveCurrentPdfAnnotations } = await import('$lib/services/projectService.js');
@@ -182,13 +238,13 @@
                         } else if (activeEditorRefToSave && typeof activeEditorRefToSave.save === 'function') {
                             await activeEditorRefToSave.save(); 
                         } else {
-                            console.warn(`[NotesTopBar Autosave] No valid save method for action ${saveAction}`);
+                            console.warn(`[DataTopBar Autosave] No valid save method for action ${saveAction}`);
                         }
-                        console.log(`[NotesTopBar] Autosave successful for ${saveAction}.`); 
+                        console.log(`[DataTopBar] Autosave successful for ${saveAction}.`); 
                     }
-                     catch (error) { console.error(`[NotesTopBar] Autosave failed for ${saveAction}:`, error); }
+                     catch (error) { console.error(`[DataTopBar] Autosave failed for ${saveAction}:`, error); }
                 } else { 
-                    console.log(`[NotesTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`); 
+                    console.log(`[DataTopBar] Autosave timer fired, but conditions no longer met (Action: ${saveAction}, StillDirty: ${editorStillActiveAndDirty}). Save skipped.`); 
                 }
             }, 3000); 
         }
@@ -202,6 +258,34 @@
   >
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
+        <!-- Transcript Dropdown -->
+        {#if $activeMediaFile}
+            <div class="relative inline-block ml-2"> <!-- Added ml-2 for spacing -->
+                <select
+                    class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                           max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
+                    value={$project.activeTranscriptPathInDataTab || ''}
+                    on:change={(e) => switchTranscriptInDataTab(e.target.value)}
+                    title="Switch between available transcripts for this media file"
+                >
+                    {#if $displayedTranscripts.length === 0}
+                        <option value="" disabled>No Transcripts</option>
+                    {:else}
+                        {#each $displayedTranscripts as transcript (transcript.path)}
+                            <option value={transcript.path}>
+                                {transcript.displayLabel}
+                            </option>
+                        {/each}
+                    {/if}
+                </select>
+                <!-- Custom Chevron Icon -->
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            </div>
+        {/if}
     </div>
   
     <div class="flex items-center space-x-2 flex-shrink-0">
@@ -247,6 +331,15 @@
             {@html themeIconHtml}
          </button> -->
     <div class="flex-shrink-0">
+        {#if $isMediaEditorOpen}
+        <button
+            on:click="{openLayoutSettingsModal}"
+            class="ui-button-icon p-1.5"
+            title="Change Transcript View Layout"
+        >
+            {@html LAYOUT_ICON_SVG}
+        </button>
+        {/if}
 		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
@@ -297,3 +390,11 @@
      }
   
   </style>
+
+			<LayoutSettingsModal
+				bind:showModal="{isLayoutSettingsModalOpen}"
+				currentLayoutKey="{$activeLayout}"
+				on:selectLayout="{handleLayoutSelected}"
+				on:close="{() => isLayoutSettingsModalOpen = false}"
+				hideWaveformOptions={true}
+			/>

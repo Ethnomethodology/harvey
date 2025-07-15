@@ -48,6 +48,8 @@ pub struct FileMetadata {
     pub original_import_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker_names: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waveform_data: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -286,6 +288,8 @@ pub struct TranscriptEntryXml {
     pub name: String,
     #[serde(rename = "relativePath")]
     pub relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -294,6 +298,8 @@ pub struct DocumentEntryXml {
     pub name: String,
     #[serde(rename = "relativePath")]
     pub relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -302,6 +308,8 @@ pub struct TableEntryXml {
     pub name: String,
     #[serde(rename = "relativePath")]
     pub relative_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -568,6 +576,7 @@ impl Default for FileMetadata {
             created_at: None, // Renamed from creation_time
             original_import_path: None, // New field
             speaker_names: None,        // New field
+            waveform_data: None,
         }
     }
 }
@@ -578,7 +587,7 @@ pub struct AssociatedFile {
     pub relative_path: String, // Relative to project base_directory
     pub full_path: String,     // Absolute path
     pub file_type: String,     // e.g., "audio", "video", "document", "image", "table", "imported_transcript", "other"
-    pub media_xml_identifier: Option<String>, // For media files, to link to notes, etc.
+    pub media_xml_identifier: Option<String>, // For media files, to link to data, etc.
 }
 
 // This struct is primarily for backend use when fetching from DB,

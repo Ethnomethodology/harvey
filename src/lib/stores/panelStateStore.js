@@ -2,31 +2,56 @@
 import { writable } from 'svelte/store';
 
 const initialPanelState = {
-    leftCollapsed: false,
-    rightCollapsed: false,
-    notesLeftPanelCollapsed: false,
+    dataLeftPanelCollapsed: false, // For the main data/file list panel in DataView
+    // leftCollapsed: false, // REMOVED - old state for LeftInfoPanel in specific views
+    // rightCollapsed: true, // REMOVED - old state for RightInfoPanel in specific views
+    infoPanelCollapsed: false, // NEW - For the new combined InfoPanel, false = expanded by default
+    activeInfoPanelTab: 'metadata', // NEW - Default active tab for the new InfoPanel/RightBar
+    transcriptionPanelCollapsed: false, // For the main transcription settings/info panel in TranscriptionsView
+    // Add other panel states here as needed
 };
 
-const panelState = writable(initialPanelState);
+const panelStateStore = writable(initialPanelState);
 
-function toggleLeftPanel() {
-    panelState.update(state => ({ ...state, leftCollapsed: !state.leftCollapsed }));
+// Function to toggle the Data Left Panel (main data list)
+function toggleDataLeftPanel() {
+    panelStateStore.update(state => ({
+        ...state,
+        dataLeftPanelCollapsed: !state.dataLeftPanelCollapsed
+    }));
 }
 
-function toggleRightPanel() {
-    panelState.update(state => ({ ...state, rightCollapsed: !state.rightCollapsed }));
+// NEW: Function to toggle the new InfoPanel
+function toggleInfoPanel() {
+    panelStateStore.update(state => ({
+        ...state,
+        infoPanelCollapsed: !state.infoPanelCollapsed
+    }));
 }
 
-function toggleNotesLeftPanel() {
-    panelState.update(state => {
-        console.log('[panelStateStore] Toggling notesLeftPanelCollapsed from', state.notesLeftPanelCollapsed, 'to', !state.notesLeftPanelCollapsed);
-        return { ...state, notesLeftPanelCollapsed: !state.notesLeftPanelCollapsed };
-    });
+// NEW: Function to set the active tab for the InfoPanel/RightBar
+function setActiveInfoPanelTab(tabName) {
+    panelStateStore.update(state => ({
+        ...state,
+        activeInfoPanelTab: tabName
+    }));
+}
+
+// Function to toggle the Transcription Panel (main settings/info in TranscriptionsView)
+function toggleTranscriptionPanel() {
+    panelStateStore.update(state => ({
+        ...state,
+        transcriptionPanelCollapsed: !state.transcriptionPanelCollapsed
+    }));
 }
 
 export default {
-    subscribe: panelState.subscribe,
-    toggleLeftPanel,
-    toggleRightPanel,
-    toggleNotesLeftPanel
+    subscribe: panelStateStore.subscribe,
+    toggleDataLeftPanel,
+    toggleInfoPanel,
+    setActiveInfoPanelTab,
+    // toggleLeftPanel, // REMOVED
+    // toggleRightPanel, // REMOVED
+    toggleTranscriptionPanel,
+    set: panelStateStore.set
 };
