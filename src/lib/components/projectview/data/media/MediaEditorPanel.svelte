@@ -2,6 +2,7 @@
 <script>
     import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
     import { get } from 'svelte/store';
+    import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import {
         project, // Store, aliased to projectStore below for clarity in functions
         setLoadedMediaNoteTranscriptData,
@@ -21,6 +22,7 @@
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
 
     export let mediaPath = null;
 
@@ -192,6 +194,7 @@
 
     onMount(() => {
         setActiveMediaNoteEditorRef(mediaPath, self);
+        isMediaEditorOpen.set(true);
         // Initial load is now handled by the reactive blocks
         showDataTrimUI = false;
         currentTrimAudioBuffer = null;
@@ -200,6 +203,7 @@
 	onDestroy(() => {
         const activeRefTuple = get(projectStore).activeMediaNoteEditorRef;
         if (activeRefTuple && activeRefTuple.path === mediaPath) { clearActiveMediaNoteEditorRef(); }
+        isMediaEditorOpen.set(false);
         unsubscribeProject();
 	});
 
@@ -403,6 +407,7 @@
                         on:change={handleEditorChange}
                         enableSearch={true}
                         toolbarConfig={mediaToolbarConfig}
+                        activeLayout={$activeLayout}
                     />
                 {/key}
             </div>

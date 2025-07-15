@@ -3,6 +3,9 @@
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
     import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
+    import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
+    import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
@@ -67,6 +70,7 @@
     let isAnythingDirty = false;
     let canSave = false;
     let showDirtyIndicator = false;
+    let isLayoutSettingsModalOpen = false;
 
     let displayTitle = '';
   
@@ -121,6 +125,18 @@
         }
     }
   
+    function openLayoutSettingsModal() {
+		isLayoutSettingsModalOpen = true;
+	}
+
+	function handleLayoutSelected(event) {
+		const newLayoutKey = event.detail;
+		activeLayout.setLayout(newLayoutKey);
+		// Modal closes itself on selection
+	}
+
+    const LAYOUT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-wtf" viewBox="0 0 16 16"><path d="M5 1v8H1V1zM1 0a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm13 2v5H9V2zM9 1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM5 13v2H3v-2zm-2-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1zm12-1v2H9v-2zm-6-1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></svg>`;
+
     async function handleManualSave() {
         const projState = get(project);
         const currentCanSave = !projState.autosaveEnabled && 
@@ -315,6 +331,15 @@
             {@html themeIconHtml}
          </button> -->
     <div class="flex-shrink-0">
+        {#if $isMediaEditorOpen}
+        <button
+            on:click="{openLayoutSettingsModal}"
+            class="ui-button-icon p-1.5"
+            title="Change Transcript View Layout"
+        >
+            {@html LAYOUT_ICON_SVG}
+        </button>
+        {/if}
 		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
@@ -365,3 +390,11 @@
      }
   
   </style>
+
+			<LayoutSettingsModal
+				bind:showModal="{isLayoutSettingsModalOpen}"
+				currentLayoutKey="{$activeLayout}"
+				on:selectLayout="{handleLayoutSelected}"
+				on:close="{() => isLayoutSettingsModalOpen = false}"
+				hideWaveformOptions={true}
+			/>

@@ -6,6 +6,7 @@
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
+	export let hideWaveformOptions = false; // New prop to control waveform options visibility
 
 	const dispatch = createEventDispatcher();
 
@@ -78,6 +79,7 @@
 				View Settings
 			</h2>
 
+			{#if !hideWaveformOptions}
 			<!-- Waveform Display Section -->
 			<div class="mb-6">
 				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Waveform Display</h3>
@@ -95,6 +97,7 @@
 					{/each}
 				</select>
 			</div>
+			{/if}
 
 			<!-- DOCX Export Layout Section -->
 			<div>

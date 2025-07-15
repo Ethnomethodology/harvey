@@ -77,6 +77,7 @@
     $isExtendedTextNode as _isExtendedTextNode
   } from '$lib/nodes/ExtendedTextNode.js';
 
+  import { DOCX_LAYOUT_COLUMN_CONFIGS } from '$lib/constants/exportLayouts.js';
 
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
@@ -85,6 +86,7 @@
   export let initialJson = null;
   export let editable = true;
   export let placeholder = 'Enter text...';
+  export let activeLayout = 'Layout1'; // New prop
   export let toolbarConfig = {
     undo: true,
     redo: true,
@@ -307,8 +309,8 @@
     h1:        `<span class="inline-block w-4 text-xs font-semibold">H1</span>`,
     h2:        `<span class="inline-block w-4 text-xs font-semibold">H2</span>`,
     h3:        `<span class="inline-block w-4 text-xs font-semibold">H3</span>`,
-    ul:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 5h2v2H4V5zM8 5h8v2H8V5zM4 9h2v2H4V9zM8 9h8v2H8V9zM4 13h2v2H4v-2zM8 13h8v2H8v-2z"/></svg>`,
-    ol:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h2v2H3V5zM8 5h8v2H8V5zM3 9h2v2H3V9zM8 9h8v2H8V9zM3 13h2v2H3v-2zM8 13h8v2H8v-2z"/></svg>`,
+    ul:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 5h2v2H4V5zM8 5h8v2H8V5zM4 9h2v2H4V9zM8 9h8v2H8V9zM4 13h2v2H4V13zM8 13h8v2H8V13z"/></svg>`,
+    ol:        `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h2v2H3V5zM8 5h8v2H8V5zM3 9h2v2H3V9zM8 9h8v2H8V9zM3 13h2v2H3V13zM8 13h8v2H8V13z"/></svg>`,
     check:     `<span class="inline-block w-4 text-xs">☑</span>`,
     quote:     `<span class="inline-block w-4 text-xs">❝</span>`,
     code:      `<span class="inline-block w-4 text-xs"></></span>`
@@ -866,7 +868,7 @@
             if (_isElementNode(formatElement) && typeof formatElement.getFormatType === 'function') {
                 selectedAlignment = formatElement.getFormatType() || 'left';
             } else { selectedAlignment = 'left'; }
-          } else { blockType = 'paragraph'; selectedAlignment = 'left'; }
+          } else { blockType = 'paragraph'; selectedAlignment = 'left'; isLink = false; }
 
           const nodeForLinkCheck = selection.isCollapsed() ? anchorNode : selection.anchor.getNode();
           const parentForLinkCheck = nodeForLinkCheck ? nodeForLinkCheck.getParent() : null;
@@ -1302,13 +1304,6 @@
       };
       const tableRect = tableElement.getBoundingClientRect();
 
-      const relativeX = currentX - (containerRect.left / zoom);
-      const relativeY = currentY - (containerRect.top / zoom);
-      const tableRelativeTop = tableRect.top / zoom - containerRect.top / zoom;
-      const tableRelativeLeft = tableRect.left / zoom - containerRect.left / zoom;
-      const tableRelativeHeight = tableRect.height / zoom;
-      const tableRelativeWidth = tableRect.width / zoom;
-
 
       if (resizeDirection === 'col') {
           const left = Math.max(tableRelativeLeft, relativeX);
@@ -1526,7 +1521,7 @@ function navigateToResult(index) {
     //   currentSearchHighlight.remove();
     //   currentSearchHighlight = null;
     // }
-    dispatch('searchindexchanged', { currentIndex: currentSearchResultIndex, currentResult: null });
+    dispatch('searchindexchanged', { currentIndex: -1, currentResult: null });
     return;
   }
 
@@ -1605,6 +1600,41 @@ function navigateToNextResult() {
   }
   currentSearchResultIndex++;
   navigateToResult(currentSearchResultIndex);
+}
+
+$: if (editor && activeLayout) {
+    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
+    if (layoutConfig && layoutConfig.colgroup) {
+        const colgroup = layoutConfig.colgroup;
+        editor.update(() => {
+            const root = _getRoot();
+            // Recursively find all TableNodes in the editor state
+            const findTableNodes = (node, foundTables) => {
+                if (_isTableNode(node)) {
+                    foundTables.push(node);
+                }
+                for (const child of node.getChildren()) {
+                    findTableNodes(child, foundTables);
+                }
+            };
+
+            const allTableNodes = [];
+            findTableNodes(root, allTableNodes);
+
+            allTableNodes.forEach(tableNode => {
+                const newColWidths = [];
+                // Determine the number of columns in the current table
+                const firstRow = tableNode.getChildren()[0];
+                const currentTableColCount = firstRow ? firstRow.getChildren().length : 0;
+
+                for (let i = 0; i < currentTableColCount; i++) {
+                    // Use the width from the layout config if available, otherwise default to 'auto'
+                    newColWidths.push(colgroup[i] || 'auto');
+                }
+                tableNode.setColWidths(newColWidths);
+            });
+        });
+    }
 }
 </script>
 
@@ -1920,7 +1950,10 @@ function navigateToNextResult() {
     </div>
   {/if}
 
-  <div class="lexical-wrapper flex-grow min-h-0 overflow-y-auto p-2 relative" bind:this={editorWrapper}>
+  <div
+    class="lexical-wrapper flex-grow min-h-0 overflow-y-auto p-2 relative"
+    bind:this={editorWrapper}
+  >
     <div
         bind:this={editorContainer}
         class="lexical-content focus:outline-none min-h-full h-auto relative"
@@ -1999,124 +2032,21 @@ function navigateToNextResult() {
   html.dark .indent-outdent-icon {
       color: theme('colors.white');
   }
-  .separator {
-      @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle;
-  }
 
-  .lexical-wrapper {
-      position: relative;
-  }
-  .lexical-content {
-      outline: none;
-      caret-color: currentcolor;
-      min-height: 100px;
-      height: auto;
-      position: relative;
-      padding: 8px;
-      font-family: Arial, sans-serif;
-      font-size: 12pt;
-      line-height: 1;
-  }
-
-  :global(.lexical-content p) {
-    margin: 0 0 8pt 0;
-    font-family: Arial, sans-serif;
-    font-size: 12pt;
-    line-height: 1;
-  }
-
-  :global(.lexical-content p span) {
-    line-height: 1.5;
-  }
-
-  :global(.lexical-content .editor-table-cell) {
-      font-family: Arial, sans-serif;
-      font-size: 12pt;
-      line-height: 1;
-  }
-
-  .lexical-content :global(.font-bold) { font-weight: bold; }
-  .lexical-content :global(.italic) { font-style: italic; }
-  .lexical-content :global(.underline) { text-decoration: underline; }
-  .lexical-content :global(.line-through) { text-decoration: line-through; }
-  .lexical-content :global(.underline.line-through) {
-      text-decoration-line: underline line-through;
-  }
-
-  .lexical-content :global(.text-left) { text-align: left; }
-  .lexical-content :global(.text-center) { text-align: center; }
-  .lexical-content :global(.text-right) { text-align: right; }
-  .lexical-content :global(.text-justify) { text-align: justify; }
-
-  .lexical-wrapper::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
-  .lexical-wrapper::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-800 rounded-lg; }
-  .lexical-wrapper::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-500 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-800 bg-clip-content; }
-  .lexical-wrapper::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-400; }
-  .lexical-wrapper { scrollbar-width: thin; scrollbar-color: theme('colors.gray.400') theme('colors.gray.100'); scrollbar-gutter: stable; }
-
-  :global(.lexical-content ul[data-lexical-list-type="bullet"]) {
-      list-style: disc inside !important;
-      margin-bottom: 0.25rem !important;
-      padding-left: 1rem !important;
-  }
-  :global(.lexical-content ul[data-lexical-list-type="bullet"] > li) {
-      display: list-item !important;
-  }
-  :global(.lexical-content ol) {
-      list-style: decimal inside !important;
-      margin-bottom: 0.25rem !important;
-      padding-left: 1rem !important;
-  }
-  :global(.lexical-content ol > li) {
-      display: list-item !important;
-  }
-
-  html.dark .lexical-wrapper { scrollbar-color: theme('colors.gray.500') theme('colors.gray.800'); }
-
-
-  :global(.lexical-content .editor-table) {
-      overflow: hidden;
-  }
-  :global(.lexical-content .editor-table-cell) {
-      position: relative;
-      word-break: break-word;
-  }
-  :global(.lexical-content .editor-table-cell::before),
-  :global(.lexical-content .editor-table-cell::after) {
-      content: ''; position: absolute; z-index: 10;
-      width: 10px; height: 10px;
-  }
-  :global(.lexical-content .editor-table-cell::before) {
-      top: 0; right: -5px; height: 100%; cursor: col-resize;
-  }
-    :global(.lexical-content .editor-table-cell::after) {
-      left: 0; bottom: -5px; width: 100%; cursor: row-resize;
-  }
-    :global(.lexical-content .editor-table-cell[colspan]:not([colspan='1'])::before) {
-      cursor: default; pointer-events: none;
-  }
-    :global(.lexical-content .editor-table-cell[rowspan]:not([rowspan='1'])::after) {
-      cursor: default; pointer-events: none;
-  }
-  :global(.lexical-content .editor-table-cell-header) {}
-  :global(.lexical-content .editor-table-row) {}
-  :global(.lexical-content .editor-table-cell[style*="vertical-align: top"]) { vertical-align: top; }
-  :global(.lexical-content .editor-table-cell[style*="vertical-align: middle"]) { vertical-align: middle; }
-  :global(.lexical-content .editor-table-cell[style*="vertical-align: bottom"]) { vertical-align: bottom; }
-
-  .lexical-content[contenteditable="true"]::before {
-      content: attr(data-placeholder);
-      position: absolute; top: 8px; left: 8px;
-      color: theme('colors.gray.400');
-      pointer-events: none; display: none; opacity: 0.6;
-  }
-  html.dark .lexical-content[contenteditable="true"]::before {
-      color: theme('colors.gray.500');
-  }
-  .lexical-content[contenteditable="true"] p:first-child:last-child:empty::before {
-      display: block;
-  }
-  .lexical-content[contenteditable="true"] > *:not(p:first-child:last-child:empty)::before {
-      display: none;
-  }
+  .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
+        width: 5%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
+        width: 65%;
+    }
 </style>
