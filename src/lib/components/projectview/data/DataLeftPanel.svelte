@@ -719,39 +719,6 @@
                     }
                 }
 
-            
-
-            
-
-            
-
-            
-
-            function handleSearchClick(event) {
-              event.stopPropagation();
-              showSearchBox.set(true);
-              setTimeout(() => document.getElementById('data-search-input')?.focus(), 0);
-            }
-
-            function handleSearchClear(event) {
-              event.stopPropagation();
-              searchQuery.set('');
-              setTimeout(() => document.getElementById('data-search-input')?.focus(), 0);
-            }
-
-            onMount(() => {
-              const listener = (e) => {
-                const input = document.getElementById('data-search-input');
-                if (!$showSearchBox) return;
-                if (input && (e.target === input || input.contains(e.target))) return;
-                if ($searchQuery.trim() === '') {
-                  showSearchBox.set(false);
-                }
-              };
-              document.addEventListener('click', listener);
-              return () => document.removeEventListener('click', listener);
-            });
-
             function showTooltip(event, category) {
                 const buttonRect = event.currentTarget.getBoundingClientRect();
                 const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
@@ -804,203 +771,234 @@
             }
         }
     }
+
+    function handleSearchClick(event) {
+        event.stopPropagation();
+        showSearchBox.set(true);
+        setTimeout(() => {
+            const input = document.getElementById('data-search-input');
+            input?.focus();
+            input?.select();
+        }, 50);
+    }
+
+    function handleSearchClear(event) {
+        event.stopPropagation();
+        searchQuery.set('');
+        showSearchBox.set(false);
+    }
+
+    onMount(() => {
+        const listener = (e) => {
+            if (!$showSearchBox) return;
+            const searchContainer = document.getElementById('data-search-container');
+            if (searchContainer && !searchContainer.contains(e.target)) {
+                if ($searchQuery.trim() === '') {
+                    showSearchBox.set(false);
+                }
+            }
+        };
+        document.addEventListener('click', listener, { capture: true });
+        return () => document.removeEventListener('click', listener, { capture: true });
+    });
 </script>
 
 <div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
-	<h2 class="relative flex items-center text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
-        class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
-        class:mb-0={$panelStateStore.dataLeftPanelCollapsed}
-        class:justify-between={!$panelStateStore.dataLeftPanelCollapsed && !$showSearchBox}
-        class:justify-center={$panelStateStore.dataLeftPanelCollapsed || $showSearchBox}>
-    {#if !$showSearchBox}
-        <div class="flex items-center space-x-2">
-            <button
-                type="button"
-                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 z-20"
-                on:click={handleToggleDataLeftPanel}
-                                title={$panelStateStore.dataLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}
-            >
-                {@html JOURNAL_ICON_SVG}
-            </button>
-            {#if !$panelStateStore.dataLeftPanelCollapsed}
+    {#if !$panelStateStore.dataLeftPanelCollapsed}
+        <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
+            class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
+            class:mb-0={$panelStateStore.dataLeftPanelCollapsed}>
+
+            <!-- Normal Header Content -->
+            <div class="flex items-center space-x-2 transition-opacity duration-200"
+                 class:opacity-0={$showSearchBox}
+                 class:pointer-events-none={$showSearchBox}>
+                <button
+                    type="button"
+                    class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    on:click={handleToggleDataLeftPanel}
+                    title={$panelStateStore.dataLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}>
+                    {@html JOURNAL_ICON_SVG}
+                </button>
                 <span>Data</span>
-            {/if}
-        </div>
-    {/if}
-        {#if !$panelStateStore.dataLeftPanelCollapsed}
-            {#if !showSearchBox}
+            </div>
             <button
                 type="button"
-                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                on:click|stopPropagation={handleSearchClick}
-                title="Search Data"
-            >
+                class="p-1 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-opacity duration-200"
+                class:opacity-0={$showSearchBox}
+                class:pointer-events-none={$showSearchBox}
+                on:click={handleSearchClick}
+                title="Search Data">
                 {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`}
             </button>
-            {:else}
-            {#if $searchQuery.trim() !== ''}
-                <button
-                type="button"
-                class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-20 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                on:click|stopPropagation={handleSearchClear}
-                title="Clear Search"
-                >
-                {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>`}
-                </button>
-            {/if}
-            {/if}
-            <input
-            id="data-search-input"
-            bind:value={$searchQuery}
-            type="text"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-            placeholder="Search..."
-            class="absolute inset-y-0 left-0 right-0 z-10 transition-all duration-300 ease-out border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm {$showSearchBox ? 'opacity-100 w-full pl-2 pr-10 py-0.5' : 'opacity-0 w-0 pl-12 pr-10 py-0.5'}"
-            />
-        {/if}
-	</h2>
 
-            {#if !$panelStateStore.dataLeftPanelCollapsed}
-    <div class="flex flex-col flex-grow overflow-hidden">
-        <!-- Top 2/3 for Categories -->
-        <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: 66.66%;">
-            <ul class="space-y-2 text-xs">
-                {#each filteredCategories as category (category.type)}
-                    <li>
-                        <div
-                            class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
-                            on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
-                            <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
-                                <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
-                                <span class="flex-shrink-0">{@html category.icon}</span>
-                                <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
-                            </div>
-                            <button
-                              type="button"
-                              class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
-                              title="Options"
-                              on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
-                              disabled={!category.importEnabled}
-                            >
-                              {@html CONTEXT_MENU_ICON_SVG}
-                            </button>
-                        </div>
-
-                        {#if categoryOpenState[category.type]}
-                            <div id={`category-content-${category.type}`} role="region">
-                                {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
-                                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
-                                        {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
-                                            <li class="group">
-                                                <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
-                                                     on:click={() => handleItemClick(fileItem) }
-                                                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
-                                                    <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
-                                                        <span>{fileItem.name}</span>
-                                                    </span>
-                                                    <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
-                                                </div>
-                                            </li>
-                                        {/each}
-                                    </ul>
-                                {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
-                                    <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
-                                {:else}
-                                     <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
-                                {/if}
-                             </div>
-                        {/if}
-                    </li>
-                    <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} -->
-                {/each}
-            </ul>
-            {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
-        </div>
-
-        <!-- Separator 1: Below Data section -->
-        <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
-
-        <!-- Bottom 1/3 for Groups -->
-        <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
-            <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
-                <span class="mr-1.5 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
-                        <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-                    </svg>
-                </span>
-                Groups
-            </h3>
-            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs">
-                {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
-                    {#each $currentProjectGroupsList as group (group.id)}
-                        <li class="group">
-                            <div
-                                class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
-                                class:bg-blue-100={$project.selectedGroupId === group.id}
-                                class:dark:bg-blue-800={$project.selectedGroupId === group.id}
-                                on:click={() => handleGroupSelected(group)}
-                                role="button"
-                                tabindex="0"
-                                on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
-                                title={group.name}
-                            >
-                                <span class="flex items-center text-gray-800 dark:text-gray-200 truncate"
-                                    class:!text-blue-700={$project.selectedGroupId === group.id}
-                                    class:dark:!text-blue-200={$project.selectedGroupId === group.id}
-                                >
-                                    <!-- Icon span removed -->
-                                    <span>{group.name}</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                                    title="Options for {group.name}"
-                                    on:click|stopPropagation={(e) => handleGroupItemContextMenu(e, group)}
-                                >
-                                    {@html CONTEXT_MENU_ICON_SVG}
-                                </button>
-                            </div>
-                        </li>
-                    {/each}
-                {:else}
-                    <p class="ml-2.5 text-xs text-gray-400 dark:text-gray-500 italic py-1">No groups created yet.</p>
+            <!-- Search Input Overlay -->
+            <div id="data-search-container"
+                 class="absolute inset-0 flex items-center bg-white dark:bg-gray-800 transition-opacity duration-300 ease-out"
+                 class:opacity-100={$showSearchBox}
+                 class:opacity-0={!$showSearchBox}
+                 class:pointer-events-auto={$showSearchBox}
+                 class:pointer-events-none={!$showSearchBox}>
+                <input
+                    id="data-search-input"
+                    bind:value={$searchQuery}
+                    type="text"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="Search..."
+                    class="w-full h-full bg-transparent border-none focus:ring-0 text-sm pl-2 pr-8 text-gray-900 dark:text-gray-100"
+                />
+                {#if $searchQuery.trim() !== ''}
+                    <button
+                        type="button"
+                        class="absolute inset-y-0 right-0 p-1 flex items-center justify-center z-10 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        on:click={handleSearchClear}
+                        title="Clear Search">
+                        {@html `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-circle-fill" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293z"/></svg>`}
+                    </button>
                 {/if}
-            </ul>
+            </div>
+        </h2>
+
+            <div class="flex flex-col flex-grow overflow-hidden">
+                <!-- Top 2/3 for Categories -->
+                <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: 66.66%;">
+                    <ul class="space-y-2 text-xs">
+                        {#each filteredCategories as category (category.type)}
+                            <li>
+                                <div
+                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                                    on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
+                                    <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
+                                        <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
+                                        <span class="flex-shrink-0">{@html category.icon}</span>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">{category.name}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
+                                      title="Options"
+                                      on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
+                                      disabled={!category.importEnabled}
+                                    >
+                                      {@html CONTEXT_MENU_ICON_SVG}
+                                    </button>
+                                </div>
+
+                                {#if categoryOpenState[category.type]}
+                                    <div id={`category-content-${category.type}`} role="region">
+                                        {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
+                                            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
+                                                {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
+                                                    <li class="group">
+                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                             on:click={() => handleItemClick(fileItem) }
+                                                             on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
+                                                            <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
+                                                                <span>{fileItem.name}</span>
+                                                            </span>
+                                                            <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
+                                                        </div>
+                                                    </li>
+                                                {/each}
+                                            </ul>
+                                        {:else if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript')}
+                                            <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No {category.name.toLowerCase()} found.</p>
+                                        {:else}
+                                             <p class="ml-9 text-xs text-gray-400 dark:text-gray-500 italic py-1">No files in this category.</p>
+                                        {/if}
+                                     </div>
+                                {/if}
+                            </li>
+                            <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} -->
+                        {/each}
+                    </ul>
+                    {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
+                </div>
+
+                <!-- Separator 1: Below Data section -->
+                <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
+
+                <!-- Bottom 1/3 for Groups -->
+                <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
+                    <h3 class="flex items-center text-xs font-semibold text-gray-500 dark:text-gray-400 px-1 mb-1.5">
+                        <span class="mr-1.5 flex-shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-collection w-3.5 h-3.5" viewBox="0 0 16 16">
+                                <path d="M2.5 3.5a.5.5 0 0 1 0-1h11a.5.5 0 0 1 0 1zm2-2a.5.5 0 0 1 0-1h7a.5.5 0 0 1 0 1zM0 13a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 16 13V6a1.5 1.5 0 0 0-1.5-1.5h-13A1.5 1.5 0 0 0 0 6zm1.5.5A.5.5 0 0 1 1 13V6a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
+                            </svg>
+                        </span>
+                        Groups
+                    </h3>
+                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs">
+                        {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
+                            {#each $currentProjectGroupsList as group (group.id)}
+                                <li class="group">
+                                    <div
+                                        class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                        class:bg-blue-100={$project.selectedGroupId === group.id}
+                                        class:dark:bg-blue-800={$project.selectedGroupId === group.id}
+                                        on:click={() => handleGroupSelected(group)}
+                                        role="button"
+                                        tabindex="0"
+                                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleGroupSelected(group); }}
+                                        title={group.name}
+                                    >
+                                        <span class="flex items-center text-gray-800 dark:text-gray-200 truncate"
+                                            class:!text-blue-700={$project.selectedGroupId === group.id}
+                                            class:dark:!text-blue-200={$project.selectedGroupId === group.id}
+                                        >
+                                            <!-- Icon span removed -->
+                                            <span>{group.name}</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                            title="Options for {group.name}"
+                                            on:click|stopPropagation={(e) => handleGroupItemContextMenu(e, group)}
+                                        >
+                                            {@html CONTEXT_MENU_ICON_SVG}
+                                        </button>
+                                    </div>
+                                </li>
+                            {/each}
+                        {:else}
+                            <p class="ml-2.5 text-xs text-gray-400 dark:text-gray-500 italic py-1">No groups created yet.</p>
+                        {/if}
+                    </ul>
+                </div>
+            </div>
+            {:else}
+        <!-- Collapsed Content (Vertical Icons) -->
+        <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
+            {#each CATEGORIES_BASE as category (category.type)}
+                <button
+                    type="button"
+                    class="p-1.5 rounded-md focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
+                    class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
+                    class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
+                    class:focus:ring-2={category.type !== activeCollapsedCategoryType}
+                    class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
+                    class:bg-blue-200={category.type === activeCollapsedCategoryType}
+                    class:dark:bg-blue-700={category.type === activeCollapsedCategoryType}
+                    class:text-gray-500={category.type !== activeCollapsedCategoryType}
+                    class:dark:text-gray-400={category.type !== activeCollapsedCategoryType}
+                    class:text-blue-600={category.type === activeCollapsedCategoryType}
+                    class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
+                    class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
+                    class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
+                    on:click={handleToggleDataLeftPanel}
+                    on:mouseenter={(event) => showTooltip(event, category)}
+                    on:mouseleave={hideTooltip}
+                    on:focus={(event) => showTooltip(event, category)}
+                    on:blur={hideTooltip}
+                >
+                    {@html category.icon}
+                </button>
+            {/each}
         </div>
-    </div>
-{:else}
-    <!-- Collapsed Content (Vertical Icons) -->
-    <div class="flex flex-col items-center space-y-2 pt-2 flex-grow overflow-y-auto min-h-0">
-        {#each CATEGORIES_BASE as category (category.type)}
-            <button
-                type="button"
-                class="p-1.5 rounded-md focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
-                class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
-                class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
-                class:focus:ring-2={category.type !== activeCollapsedCategoryType}
-                class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
-                class:bg-blue-200={category.type === activeCollapsedCategoryType}
-                class:dark:bg-blue-700={category.type === activeCollapsedCategoryType}
-                class:text-gray-500={category.type !== activeCollapsedCategoryType}
-                class:dark:text-gray-400={category.type !== activeCollapsedCategoryType}
-                class:text-blue-600={category.type === activeCollapsedCategoryType}
-                class:dark:text-blue-400={category.type === activeCollapsedCategoryType}
-                class:hover:bg-blue-300={category.type === activeCollapsedCategoryType}
-                class:dark:hover:bg-blue-600={category.type === activeCollapsedCategoryType}
-                on:click={handleToggleDataLeftPanel}
-                on:mouseenter={(event) => showTooltip(event, category)}
-                on:mouseleave={hideTooltip}
-                on:focus={(event) => showTooltip(event, category)}
-                on:blur={hideTooltip}
-            >
-                {@html category.icon}
-            </button>
-        {/each}
-    </div>
-{/if}
+    {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
 		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
