@@ -5,6 +5,9 @@
     import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+    import ExportModal from '../modals/ExportModal.svelte';
+    import { transcriptStore } from '$lib/stores/transcriptStore.js';
+    import { exportTranscript } from '$lib/services/configureActions.js';
     import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
@@ -74,6 +77,7 @@
     let canSave = false;
     let showDirtyIndicator = false;
     let isLayoutSettingsModalOpen = false;
+    let isExportModalOpen = false;
 
     let displayTitle = '';
   
@@ -248,6 +252,20 @@
             }, 3000); 
         }
     }
+    async function handleExportConfirm(event) {
+		const { filePath, format, layoutChoice } = event.detail;
+		const segmentsToExport = $transcriptStore.segments;
+		if (!segmentsToExport || segmentsToExport.length === 0) {
+			message("No transcript data available to export.", { title: "Export Failed", type: "error" });
+			return;
+		}
+		try {
+			await exportTranscript(filePath, format, segmentsToExport, $project.activeTranscriptPathInDataTab, layoutChoice);
+			message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
+		} catch (error) {
+			message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
+		}
+	}
   
   </script>
   
@@ -346,6 +364,10 @@
         >
             {@html LAYOUT_ICON_SVG}
         </button>
+        <button class="ui-button-icon flex items-center space-x-0.5" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+            <span class="text-xs">Export</span>
+        </button>
         {/if}
 		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
 			{@html themeIconHtml}
@@ -405,3 +427,9 @@
 				on:close="{() => isLayoutSettingsModalOpen = false}"
 				hideWaveformOptions={true}
 			/>
+<ExportModal
+    bind:showModal={isExportModalOpen}
+    transcriptPath={$project.activeTranscriptPathInDataTab}
+    on:confirm={handleExportConfirm}
+    on:close={() => isExportModalOpen = false}
+/>
