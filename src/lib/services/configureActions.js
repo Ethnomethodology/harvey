@@ -169,6 +169,11 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 	if (format !== 'docx' && (!segments || segments.length === 0)) { // Segments not needed upfront for docx if using transcriptJsonPath
 		throw new Error("No transcript segments available to export.");
 	}
+
+    const { activeTranscript } = get(transcriptStore);
+    if (activeTranscript && activeTranscript.path === transcriptJsonPath) {
+        segments = activeTranscript.segments;
+    }
 	if (!filePath || filePath.trim() === '') {
 		throw new Error("Export file path is missing.");
 	}
