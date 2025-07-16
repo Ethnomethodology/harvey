@@ -149,6 +149,22 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
+    // If the new file entry has the same path as the current one, only update transcripts.
+    if (fileEntry && currentSelectedPath === fileEntry.path) {
+        const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
+        if (transcriptsChanged) {
+            transcriptStore.update(ts => ({
+                ...ts,
+                selectedMediaFile: { ...ts.selectedMediaFile, associated_transcripts: fileEntry.associated_transcripts }
+            }));
+            loadInitialTranscript(fileEntry, transcriptPathToPrioritize);
+        } else if (transcriptPathToPrioritize && get(transcriptStore).currentTranscriptPath !== transcriptPathToPrioritize) {
+            // If the transcript path is different, just switch to it without a full reload.
+            switchTranscript(transcriptPathToPrioritize);
+        }
+        return; // Exit early
+    }
+
     const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
     const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
 
@@ -659,13 +675,11 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
         });
 }
 
-export function setAudioBuffer(buffer, peaks = null) {
+export function setAudioBuffer(buffer, peaks) {
     transcriptStore.update((ts) => ({ ...ts, audioBuffer: buffer, audioBufferPeaks: peaks }));
 }
 
-export function setWaveformData(peaks) {
-    transcriptStore.update((ts) => ({ ...ts, audioBufferPeaks: peaks }));
-}
+
 
 export function toggleTranscribeModal(show) {
     transcriptStore.update((ts) => ({ ...ts, showTranscribeModal: !!show }));
@@ -1118,5 +1132,3 @@ export function setTranslateToEnglish(value) {
 export function setDiarizationPreference(value) {
     transcriptStore.update(ts => ({ ...ts, diarizationEnabledForNextJob: !!value }));
 }
-
-

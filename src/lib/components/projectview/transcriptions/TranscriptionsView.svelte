@@ -518,7 +518,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     />
                 {:else if $transcriptStore.selectedMediaFile}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                        Waveform still loading.
+                        Waveform still loading...
                     </div>
                 {:else}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
@@ -568,7 +568,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 />
             {:else if $transcriptStore.selectedMediaFile}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                    Waveform still loading.
+                    Waveform still loading...
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
