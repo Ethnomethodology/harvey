@@ -148,7 +148,7 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<DataTopBar />
+	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} />
 
 	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
         <!-- Far Left Panel (File/Data Browser) -->
