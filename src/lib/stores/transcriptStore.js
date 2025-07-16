@@ -245,6 +245,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 transcriptRedoStack: [],
             };
         });
+        get(transcriptStore).segments = [];
 
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 

@@ -313,6 +313,10 @@
                     </svg>
                 </div>
             </div>
+            <button class="ui-button-icon flex items-center space-x-0.5" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+                <span class="text-xs">Export</span>
+            </button>
         {/if}
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
@@ -363,10 +367,6 @@
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
-        </button>
-        <button class="ui-button-icon flex items-center space-x-0.5" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
-            <span class="text-xs">Export</span>
         </button>
         {/if}
 		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
