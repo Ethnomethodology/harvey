@@ -3,6 +3,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { get } from 'svelte/store';
 import { project } from '$lib/stores/projectStore.js';
+import { transcriptStore } from '$lib/stores/transcriptStore.js';
 import { $getRoot, $createParagraphNode, $createTextNode, $parseSerializedNode } from 'lexical';
 import { createHeadlessEditor } from '@lexical/headless';
 // --- REVISED IMPORT: Try importing writeTextFile specifically ---
