@@ -855,7 +855,6 @@ export async function requestTranscription() {
     const currentTs = get(transcriptStore);
     const currentProj = get(project);
     if (!currentTs.selectedMediaFile?.path) { await message('Please select a media file first.', { title: 'Transcription Request', type: 'info'}); return; }
-    if (!currentTs.selectedModelName) { await message('Please select a transcription model first.', { title: 'Transcription Request', type: 'info'}); return; }
     if (storeState.isTranscribing) {
         toggleTranscribeModal(true);
         return;
