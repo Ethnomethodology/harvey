@@ -2,6 +2,7 @@
 <script>
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
+    import { invoke } from '@tauri-apps/api/core';
     import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
@@ -253,19 +254,99 @@
         }
     }
     async function handleExportConfirm(event) {
-		const { filePath, format, layoutChoice } = event.detail;
-		const segmentsToExport = $transcriptStore.segments;
-		if (!segmentsToExport || segmentsToExport.length === 0) {
-			message("No transcript data available to export.", { title: "Export Failed", type: "error" });
-			return;
-		}
-		try {
-			await exportTranscript(filePath, format, segmentsToExport, $project.activeTranscriptPathInDataTab, layoutChoice);
-			message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
-		} catch (error) {
-			message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
-		}
-	}
+        const { filePath, format, layoutChoice } = event.detail;
+        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
+
+        if (!activeTranscriptPath) {
+            message("No active transcript selected to export.", { title: "Export Failed", type: "error" });
+            return;
+        }
+
+        try {
+            const jsonContent = await invoke('load_transcript_json', { transcriptPath: activeTranscriptPath });
+            if (!jsonContent) {
+                throw new Error("Transcript file is empty or could not be read.");
+            }
+
+            const transcriptData = JSON.parse(jsonContent);
+            const segmentsToExport = [];
+
+            const getTextFromLexicalNode = (node) => {
+                if (!node) return '';
+                if (node.type === 'text' || node.type === 'extended-text') {
+                    return node.text || '';
+                }
+                let text = '';
+                if (node.children && Array.isArray(node.children)) {
+                    for (const child of node.children) {
+                        text += getTextFromLexicalNode(child);
+                    }
+                }
+                return text;
+            };
+
+            const parseTimestamp = (tsStr) => {
+                if (!tsStr) return 0;
+                // Handles HH:MM:SS.mmm, MM:SS.mmm, SS.mmm
+                const parts = tsStr.split(':').reverse(); // [SS.mmm, MM, HH]
+                let seconds = 0;
+                if (parts[0]) seconds += parseFloat(parts[0]);
+                if (parts[1]) seconds += parseInt(parts[1], 10) * 60;
+                if (parts[2]) seconds += parseInt(parts[2], 10) * 3600;
+                return isNaN(seconds) ? 0 : seconds;
+            };
+
+            const tableNode = transcriptData?.root?.children?.find(c => c.type === 'table');
+
+            if (tableNode && tableNode.children) {
+                // Skip header row (i=0)
+                for (let i = 1; i < tableNode.children.length; i++) {
+                    const rowNode = tableNode.children[i];
+                    if (rowNode.type !== 'tablerow' || !rowNode.children || rowNode.children.length < 4) continue;
+
+                    const cells = rowNode.children;
+                    const timestampText = getTextFromLexicalNode(cells[1]);
+                    const [startStr, endStr] = timestampText.split(' - ').map(s => s.trim());
+                    
+                    const startTime = parseTimestamp(startStr);
+                    const endTime = parseTimestamp(endStr);
+                    const speaker = getTextFromLexicalNode(cells[2]);
+                    const cellContentNode = cells[3];
+
+                    // Re-wrap the cell's content into a valid Lexical root structure for export
+                    const textJson = JSON.stringify({
+                        root: {
+                            children: cellContentNode.children || [],
+                            direction: 'ltr',
+                            format: '',
+                            indent: 0,
+                            type: 'root',
+                            version: 1
+                        }
+                    });
+
+                    segmentsToExport.push({
+                        start_time: startTime,
+                        end_time: endTime,
+                        speaker: speaker,
+                        text: textJson,
+                    });
+                }
+            }
+
+            if (segmentsToExport.length === 0) {
+                message("No transcript data available to export.", { title: "Export Failed", type: "error" });
+                return;
+            }
+
+            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice);
+            message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
+        }
+    }
   
   </script>
   
