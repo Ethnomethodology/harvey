@@ -16,6 +16,7 @@ export let compactMode = false; // New prop, defaults to false
 	export let editSegmentEndTime = 0;
 
 	export let externalAudioBuffer = null;
+	export let externalPeaks = null;
 	export let externalCurrentTime = null;
 	export let externalDuration = null;
 	export let externalIsPlaying = null;
@@ -74,7 +75,7 @@ export let compactMode = false; // New prop, defaults to false
 	let autoScrollDirection = ''; // 'left' or 'right'
 
 	$: currentAudioBuffer = externalAudioBuffer ?? $transcriptStore.audioBuffer;
-	$: currentAudioPeaks = externalAudioBuffer ? null : $transcriptStore.audioBufferPeaks;
+	$: currentAudioPeaks = externalPeaks ?? $transcriptStore.audioBufferPeaks;
 	$: currentPlayTime = externalCurrentTime ?? $transcriptStore.player.currentTime;
 	$: currentIsPlaying = externalIsPlaying ?? $transcriptStore.player.isPlaying;
 	$: currentSegmentsToDisplay = externalSegments ?? $transcriptStore.segments;
@@ -463,15 +464,7 @@ export let compactMode = false; // New prop, defaults to false
 	onMount(() => {
 		isMounted = true;
 		webAudioApiSupported = typeof window.AudioContext !== 'undefined' || typeof window.webkitAudioContext !== 'undefined';
-		unsubscribeAudioBuffer = transcriptStore.subscribe(ts => {
-			if (externalAudioBuffer === null) {
-				const newAudioBuffer = ts.audioBuffer;
-				if (newAudioBuffer && newAudioBuffer !== currentAudioBuffer) {
-				} else if (!newAudioBuffer && currentAudioBuffer && !externalAudioBuffer) {
-                    actualMediaDuration = 0;
-                }
-			}
-		});
+		unsubscribeAudioBuffer = transcriptStore.subscribe(ts => {});
 		unsubscribePlayer = transcriptStore.subscribe(ts => { });
 		unsubscribeSegments = transcriptStore.subscribe(ts => { });
 
@@ -603,7 +596,6 @@ export let compactMode = false; // New prop, defaults to false
             requestRedraw(true);
         }
 	}
-	$: if (waveformScrollContainerRef && !isObserverSetup && isMounted) { setupResizeObserver(); }
 
 	function handleScroll(event) {
 

@@ -214,7 +214,6 @@
     export async function handleToggleEditMode() {
         console.log("[TranscriptionsView] handleToggleEditMode called. Current panelEditModeActive:", panelEditModeActive);
         const wasEditing = panelEditModeActive;
-        const isDirty = get(transcriptStore).transcriptDirty;
 
         // If currently editing, commit any pending edits from EditableTranscript before proceeding
         if (wasEditing && editableTranscriptRef) {
@@ -236,6 +235,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     // transcriptDirty, transcriptUndoStack, transcriptRedoStack are in transcriptStore now
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
                     editableTranscriptRef?.forceReloadFromStore?.();
+                 } else {
+                    return; // Keep editing
                  }
             }
             panelEditModeActive = false; // Always exit edit mode after attempting save or discarding
@@ -517,7 +518,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     />
                 {:else if $transcriptStore.selectedMediaFile}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                        Waveform still loading.
+                        Waveform still loading...
                     </div>
                 {:else}
                     <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
@@ -567,7 +568,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                 />
             {:else if $transcriptStore.selectedMediaFile}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">
-                    Waveform still loading.
+                    Waveform still loading...
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 rounded-md shadow p-1">

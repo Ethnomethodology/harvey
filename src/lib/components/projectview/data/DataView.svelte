@@ -93,6 +93,12 @@
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
+        // If the requested path and type are already active, do nothing.
+        if (pathForView === activeItemPath && typeForView === activeViewType) {
+            console.debug(`[DataView] Requested view change to already active item. Path: ${pathForView}, Type: ${typeForView}. Aborting redundant action.`);
+            return;
+        }
+
         if (!pathForView || !typeForView || typeForView === 'placeholder') {
             console.error(`[DataView] ABORTING: Invalid path or type. Path: '${pathForView}', Type: '${typeForView}'.`);
             prepareDocumentView(null, 'placeholder');
@@ -142,7 +148,7 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<DataTopBar />
+	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} />
 
 	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
         <!-- Far Left Panel (File/Data Browser) -->

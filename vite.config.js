@@ -12,6 +12,22 @@ export default defineConfig(async () => ({
     sveltekit()
   ],
 
+  worker: {
+    format: 'es'
+  },
+
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('src/lib/workers/waveformWorker.js')) {
+            return 'waveformWorker';
+          }
+        }
+      }
+    }
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent vite from obscuring rust errors
@@ -33,4 +49,5 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  
 }));

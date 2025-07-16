@@ -112,10 +112,7 @@
 			message("Please select a media file first.", { title: "No Media Selected", type: "warning" });
 			return;
 		}
-		if (!$transcriptStore.selectedModelName) {
-			message("Please select a transcription model first.", { title: "No Model Selected", type: "warning" });
-			return;
-		}
+		
 		if (!$transcriptStore.selectedLanguage) {
 			message("Please select the audio language first.", { title: "No Language Selected", type: "warning" });
 			return;

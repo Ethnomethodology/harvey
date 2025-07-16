@@ -475,6 +475,18 @@ async function onConfirmTranscriptionStart(event) {
             return;
         }
 
+        // If already on the data tab and the requested path is the currently active one, do nothing.
+        // This prevents the loading spinner from getting stuck when clicking the same file.
+        const currentProjectState = get(project);
+        if (selectedTab === 'data' && path) {
+            if (path === currentProjectState.selectedDocumentPath ||
+                path === currentProjectState.currentImportedTranscriptPath ||
+                path === currentProjectState.selectedMediaNotePath) {
+                project.update(p => ({ ...p, isLoading: false, statusMessage: `Already viewing ${itemLogName}.` }));
+                return;
+            }
+        }
+
         let canProceed = true;
         let actionContext = path ? `loading item '${itemLogName}'` : "switching tabs";
 

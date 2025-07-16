@@ -8,7 +8,7 @@
 		setPlayerDuration,
 		togglePlayerPlaying,
 		setAudioBuffer, // This will be used to set both buffer and peaks
-		setWaveformData
+		
 	} from '$lib/stores/transcriptStore.js';
 	import { get } from 'svelte/store'; // Ensure get is imported
 	import { readFile } from '@tauri-apps/plugin-fs';
@@ -16,6 +16,85 @@
 	import { listen } from '@tauri-apps/api/event'; // Restored listener
 	import { onMount, onDestroy, tick, createEventDispatcher } from 'svelte';
 	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
+	let waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
+	let currentWaveformLoadId = 0;
+	let _tempDecodedAudioBuffer = null; // New variable to store the decoded audio buffer temporarily
+
+	function initializeWaveformWorker() {
+		waveformWorker.onmessage = async (event) => {
+			const { type, payload, id } = event.data;
+			if (id !== currentWaveformLoadId) {
+				console.log(`[MediaPlayer] Discarding old waveform data (ID: ${id}, current: ${currentWaveformLoadId})`);
+				return; // Ignore old responses
+			}
+
+			if (type === 'DECODE_AUDIO_COMPLETE') {
+				const { peaks } = payload;
+				const audioBuffer = _tempDecodedAudioBuffer; // Use the stored audioBuffer
+				localAudioBuffer = audioBuffer; // Set local buffer for this component instance
+				if (!explicitMediaPath) {
+					// For the main player, we proceed to handle global state and caching.
+					const currentProject = get(project);
+					const projectId = currentProject.id;
+					const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+					// Step 2: Check for cached waveform data.
+					if (projectId && assetRelativePath) {
+						try {
+							const metadata = await getAssetMetadata(assetRelativePath);
+							if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
+								const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+								setAudioBuffer(audioBuffer, cachedPeaks); // Set both buffer and cached peaks
+								console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
+								return; // Successfully loaded from cache
+							}
+						} catch (e) {
+							console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+						}
+					}
+
+					// Step 3: If no cached data, use generated peaks, set in store, and save to DB.
+					console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Using newly generated peaks.`);
+					setAudioBuffer(audioBuffer, peaks ? new Float32Array(peaks) : null); // Set buffer and newly generated peaks
+
+					if (projectId && assetRelativePath && currentProject.xmlPath && peaks) {
+						try {
+							const u8_peaks = new Uint8Array(new Float32Array(peaks).buffer);
+							const s = $transcriptStore.selectedMediaFile;
+							const metadataPayload = {
+								...s,
+								file_name: s.name,
+								file_path: s.path,
+								last_modified: new Date().toISOString(),
+								waveform_data: Array.from(u8_peaks)
+							};
+
+							await invoke('update_asset_metadata_command', {
+								projectXmlPathStr: currentProject.xmlPath,
+								assetRelativePath: assetRelativePath,
+								metadataPayload: metadataPayload,
+								customFieldsPayload: null,
+								assetType: 'media'
+							});
+						} catch (error) {
+							console.error(`[MediaPlayer] Failed to save generated waveform to DB:`, error);
+						}
+					}
+				}
+				_tempDecodedAudioBuffer = null; // Clear the temporary storage
+			} else if (type === 'DECODE_AUDIO_ERROR') {
+				console.error(`[MediaPlayer] Error from waveform worker (ID: ${id}):`, payload.error);
+				// Handle error, e.g., clear waveform, show message
+				localAudioBuffer = null;
+				if (!explicitMediaPath) setAudioBuffer(null, null);
+			}
+		};
+		waveformWorker.onerror = (error) => {
+			console.error('[MediaPlayer] Waveform worker error:', error);
+			// Handle worker errors
+		};
+	}
+	
 	// import { register, unregisterAll } from '@tauri-apps/plugin-global-shortcut'; // Removed JS API
 
 	const dispatch = createEventDispatcher();
@@ -386,20 +465,13 @@
 		seekTo(newTime);
 	}
 
-	// --- Audio Context State ---
-	let audioContext = null;
-	let webAudioApiSupported = true;
+	
 
 	let unlistenShortcutFn; // Renamed from unlistenShortcut
 
 	onMount(async () => {
-        try {
-            if (!audioContext || audioContext.state === 'closed') {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-        } catch (e) {
-            webAudioApiSupported = false;
-        }
+		initializeWaveformWorker();
+
 		document.addEventListener('click', handleClickOutsideSubtitleMenu, true);
 		document.addEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
 
@@ -427,9 +499,10 @@
 		setupShortcutListener();
 
         return () => {
-            if (audioContext && audioContext.state !== 'closed') {
-                audioContext.close().catch(console.error);
-            }
+			if (waveformWorker) {
+				waveformWorker.terminate();
+				waveformWorker = null;
+			}
 			document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 			document.removeEventListener('click', handleClickOutsidePlaybackSpeedMenu, true);
 			if (unlistenShortcutFn) { // Use renamed variable
@@ -439,10 +512,11 @@
         };
     });
 
-	onDestroy(() => { // Made onDestroy synchronous as unregisterAll is removed
-        if (audioContext && audioContext.state !== 'closed') {
-            audioContext.close().catch(console.error);
-        }
+	onDestroy(() => {
+		if (waveformWorker) {
+			waveformWorker.terminate();
+			waveformWorker = null;
+		}
 		document.removeEventListener('click', handleClickOutsideSubtitleMenu, true);
 		if (activeSubtitleUrl && activeSubtitleUrl.startsWith('blob:')) {
 			URL.revokeObjectURL(activeSubtitleUrl);
@@ -483,6 +557,15 @@
             if (isLoadingMedia || path === loadedPathFromProp) {
                 return;
             }
+
+            // Aggressively terminate any ongoing worker process
+            if (waveformWorker) {
+                waveformWorker.terminate();
+                // Re-initialize the worker for the next job
+                waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
+                initializeWaveformWorker(); // Re-attach listeners
+            }
+            currentWaveformLoadId++; // Invalidate any pending messages from the old worker
 
             isLoadingMedia = true;
             if (isTrimming && !explicitMediaPath) cancelTrimMode();
@@ -617,7 +700,7 @@
 			if (!explicitMediaPath) updatePlayerTime(currentTime); // Update global for main player
 		}
 	}
-	function onLoadedMetadata(event) {
+	async function onLoadedMetadata(event) {
         if (event.target && typeof event.target.duration === 'number' && !isNaN(event.target.duration)) {
             const duration = event.target.duration;
             isMediaReadyForProcessing = true;
@@ -677,73 +760,41 @@
 	 }
 
     async function decodeAudioForWaveform() {
-        if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
+        if (!loadedPathFromProp) {
             return;
         }
 
-        // Step 1: Always decode the audio file for playback and to have the buffer ready.
-        let decodedBuffer;
+        // Increment ID for new request
+        currentWaveformLoadId++;
+        const loadId = currentWaveformLoadId;
+
         try {
             const fileData = await readFile(loadedPathFromProp);
-            const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            localAudioBuffer = decodedBuffer; // Set local buffer for this component instance
+            const arrayBuffer = fileData.buffer; // Get the underlying ArrayBuffer
+
+            // Decode audio on the main thread
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // Extract channel data and transfer to worker
+            const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
+            const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
+            waveformWorker.postMessage({
+                type: 'GENERATE_PEAKS',
+                payload: {
+                    channelData: transferableChannelData,
+                    sampleRate: decodedAudioBuffer.sampleRate,
+                    filePath: loadedPathFromProp
+                },
+                id: loadId
+            }, [transferableChannelData.buffer]); // Transfer the buffer of the new Float32Array
+
+            // Store decodedAudioBuffer locally for use in onmessage handler
+            _tempDecodedAudioBuffer = decodedAudioBuffer;
         } catch (error) {
-            console.error(`[MediaPlayer] Critical error decoding audio file:`, error);
-            // Dispatch an error or update a store to indicate failure
-            return; // Stop execution if we can't even decode the audio
-        }
-
-        // For the main player, we proceed to handle global state and caching.
-        if (!explicitMediaPath) {
-            const currentProject = get(project);
-            const projectId = currentProject.id;
-            const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
-
-            // Step 2: Check for cached waveform data.
-            if (projectId && assetRelativePath) {
-                try {
-                    const metadata = await getAssetMetadata(assetRelativePath);
-                    if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
-                        const peaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
-                        setAudioBuffer(decodedBuffer, peaks); // Set both buffer and cached peaks
-                        return; // Successfully loaded from cache
-                    }
-                } catch (e) {
-                    console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
-                }
-            }
-
-            // Step 3: If no cached data, generate, set in store, and save to DB.
-            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Generating new peaks.`);
-            const peaksData = generateAudioPeaks(decodedBuffer, 512);
-            setAudioBuffer(decodedBuffer, peaksData); // Set buffer and newly generated peaks
-
-            if (projectId && assetRelativePath && currentProject.xmlPath) {
-                try {
-                    const u8_peaks = new Uint8Array(peaksData.buffer);
-                    const s = $transcriptStore.selectedMediaFile;
-                    const metadataPayload = {
-                        ...s,
-                        file_name: s.name,
-                        file_path: s.path,
-                        last_modified: new Date().toISOString(),
-                        waveform_data: Array.from(u8_peaks)
-                    };
-
-                    await invoke('update_asset_metadata_command', {
-                        projectXmlPathStr: currentProject.xmlPath,
-                        assetRelativePath: assetRelativePath,
-                        metadataPayload: metadataPayload,
-                        customFieldsPayload: null,
-                        assetType: 'media'
-                    });
-                } catch (error) {
-                    console.error(`[MediaPlayer] Failed to save generated waveform to DB:`, error);
-                }
+            console.error(`[MediaPlayer] Error reading audio file for waveform:`, error);
+            if (!explicitMediaPath) {
+                setAudioBuffer(null, null);
             }
         }
     }
@@ -939,18 +990,51 @@
 
         if (!buffer) {
             
-            if (!loadedPathFromProp || !webAudioApiSupported || !audioContext) {
+            if (!loadedPathFromProp) {
                 dispatch('mediaLoadError', { path: explicitMediaPath, error: 'Cannot process audio for trimming.' });
                 return;
             }
             try {
                 isLoadingMedia = true;
+                // Post message to worker to decode audio for trimming
+                currentWaveformLoadId++;
+                const loadId = currentWaveformLoadId;
                 const fileData = await readFile(loadedPathFromProp);
-                const arrayBuffer = fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength);
-                if (audioContext.state === 'suspended') await audioContext.resume();
-                const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                localAudioBuffer = decodedBuffer;
-                buffer = decodedBuffer;
+                const arrayBuffer = fileData.buffer;
+
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
+                const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
+
+                waveformWorker.postMessage({
+                    type: 'GENERATE_PEAKS',
+                    payload: {
+                        channelData: transferableChannelData,
+                        sampleRate: decodedAudioBuffer.sampleRate,
+                        filePath: loadedPathFromProp
+                    },
+                    id: loadId
+                }, [transferableChannelData.buffer]);
+
+                const workerResponse = await new Promise((resolve, reject) => {
+                    const handleWorkerMessage = (event) => {
+                        if (event.data.id === loadId) {
+                            waveformWorker.removeEventListener('message', handleWorkerMessage);
+                            if (event.data.type === 'DECODE_AUDIO_COMPLETE') {
+                                // The worker now sends back null for audioBuffer, as it doesn't have the full AudioBuffer
+                                // We need to use the decodedAudioBuffer from the main thread.
+                                resolve(decodedAudioBuffer);
+                            } else {
+                                reject(new Error(event.data.payload.error || 'Worker decoding failed'));
+                            }
+                        }
+                    };
+                    waveformWorker.addEventListener('message', handleWorkerMessage);
+                });
+
+                localAudioBuffer = workerResponse;
+                buffer = workerResponse;
                 ready = true;
                 isMediaReadyForProcessing = true;
                 
@@ -976,41 +1060,7 @@
     $: displayDuration = explicitMediaPath ? localDuration : ($transcriptStore.player.duration || 0);
     $: displayIsPlaying = explicitMediaPath ? localIsPlaying : $transcriptStore.player.isPlaying;
 
-    function generateAudioPeaks(audioBuffer, blockSize) {
-        if (!audioBuffer) return null;
-        const numberOfChannels = audioBuffer.numberOfChannels;
-        const length = audioBuffer.length;
-        const peaks = [];
-
-        for (let c = 0; c < numberOfChannels; c++) { // Typically we'll use the first channel or an average
-            const channelData = audioBuffer.getChannelData(c);
-            const numBlocks = Math.ceil(length / blockSize);
-            const channelPeaks = new Float32Array(numBlocks * 2); // min, max per block
-
-            for (let i = 0; i < numBlocks; i++) {
-                const blockStart = i * blockSize;
-                const blockEnd = Math.min(blockStart + blockSize, length);
-                let min = 0.0;
-                let max = 0.0;
-
-                if (blockStart < blockEnd) { // Ensure there's at least one sample
-                    min = channelData[blockStart];
-                    max = channelData[blockStart];
-                    for (let j = blockStart + 1; j < blockEnd; j++) {
-                        const sample = channelData[j];
-                        if (sample < min) min = sample;
-                        if (sample > max) max = sample;
-                    }
-                }
-                channelPeaks[i * 2] = min;
-                channelPeaks[i * 2 + 1] = max;
-            }
-            peaks.push(channelPeaks); // For now, storing each channel's peaks separately
-                                      // InteractiveWaveform typically uses mono (channel 0)
-        }
-        // For simplicity, returning peaks for the first channel if available
-        return peaks.length > 0 ? peaks[0] : null;
-    }
+    
 
 </script>
 

@@ -9,6 +9,9 @@
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+    import { createEventDispatcher } from 'svelte';
+
+    const dispatch = createEventDispatcher();
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -108,10 +111,6 @@
                         displayTitle = `${$project.name} : ${currentFileName}`;
                     } else {
                         displayTitle = $project.name;
-                    }
-                    // Add a colon if a file name is present and it's a media file (which has a dropdown)
-                    if ($project.selectedMediaNotePath) {
-                        displayTitle += " :";
                     }
                 }).catch(err => {
                     console.error("Error getting basename for top bar:", err);
@@ -255,12 +254,23 @@
   <div
     class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
     data-tauri-drag-region
+    on:requestTranscriptionTabWithMediaAndDialog
   >
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
+        {#if $activeMediaFile}
+        <button class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs ml-2"
+            on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
+        >
+            Transcribe
+        </button>
+        {/if}
+    </div>
+  
+    <div class="flex items-center space-x-2 flex-shrink-0">
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <div class="relative inline-block ml-2"> <!-- Added ml-2 for spacing -->
+            <div class="relative inline-block mr-2"> <!-- Added mr-2 for spacing -->
                 <select
                     class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                            max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
@@ -286,9 +296,6 @@
                 </div>
             </div>
         {/if}
-    </div>
-  
-    <div class="flex items-center space-x-2 flex-shrink-0">
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
             title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
