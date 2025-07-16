@@ -18,7 +18,7 @@
 	let exportFileName = '';
 	let exportFormat = 'csv'; // Default to CSV
 	// Initialize with active layout, fallback to the first option in DOCX_LAYOUT_OPTIONS or 'Layout1' if store is undefined initially
-	let selectedDocxLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
+	let selectedDocxLayout;
 	let exportDirectory = '';
 	let modalElement; // Ref to the modal container
 	let modalTitle = 'Export Transcript'; // Title state
@@ -97,6 +97,7 @@
 
 		// Reset format to default
 		exportFormat = 'csv';
+		selectedDocxLayout = get(activeLayout) || (DOCX_LAYOUT_OPTIONS.length > 0 ? DOCX_LAYOUT_OPTIONS[0].rustLayoutKey : 'Layout1');
 
 		console.log('[ExportModal] Modal state initialized.', { exportFileName, exportDirectory, modalTitle });
 	}

@@ -2,9 +2,13 @@
 <script>
     import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
     import { message } from '@tauri-apps/plugin-dialog';
+    import { invoke } from '@tauri-apps/api/core';
     import { project, toggleAutosave, switchTranscriptInDataTab } from '$lib/stores/projectStore.js';
     import { isMediaEditorOpen } from '$lib/stores/mediaEditorStore.js';
     import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
+    import ExportModal from '../modals/ExportModal.svelte';
+    import { transcriptStore } from '$lib/stores/transcriptStore.js';
+    import { exportTranscript } from '$lib/services/configureActions.js';
     import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
@@ -74,6 +78,7 @@
     let canSave = false;
     let showDirtyIndicator = false;
     let isLayoutSettingsModalOpen = false;
+    let isExportModalOpen = false;
 
     let displayTitle = '';
   
@@ -248,6 +253,100 @@
             }, 3000); 
         }
     }
+    async function handleExportConfirm(event) {
+        const { filePath, format, layoutChoice } = event.detail;
+        const activeTranscriptPath = get(project).activeTranscriptPathInDataTab;
+
+        if (!activeTranscriptPath) {
+            message("No active transcript selected to export.", { title: "Export Failed", type: "error" });
+            return;
+        }
+
+        try {
+            const jsonContent = await invoke('load_transcript_json', { transcriptPath: activeTranscriptPath });
+            if (!jsonContent) {
+                throw new Error("Transcript file is empty or could not be read.");
+            }
+
+            const transcriptData = JSON.parse(jsonContent);
+            const segmentsToExport = [];
+
+            const getTextFromLexicalNode = (node) => {
+                if (!node) return '';
+                if (node.type === 'text' || node.type === 'extended-text') {
+                    return node.text || '';
+                }
+                let text = '';
+                if (node.children && Array.isArray(node.children)) {
+                    for (const child of node.children) {
+                        text += getTextFromLexicalNode(child);
+                    }
+                }
+                return text;
+            };
+
+            const parseTimestamp = (tsStr) => {
+                if (!tsStr) return 0;
+                // Handles HH:MM:SS.mmm, MM:SS.mmm, SS.mmm
+                const parts = tsStr.split(':').reverse(); // [SS.mmm, MM, HH]
+                let seconds = 0;
+                if (parts[0]) seconds += parseFloat(parts[0]);
+                if (parts[1]) seconds += parseInt(parts[1], 10) * 60;
+                if (parts[2]) seconds += parseInt(parts[2], 10) * 3600;
+                return isNaN(seconds) ? 0 : seconds;
+            };
+
+            const tableNode = transcriptData?.root?.children?.find(c => c.type === 'table');
+
+            if (tableNode && tableNode.children) {
+                // Skip header row (i=0)
+                for (let i = 1; i < tableNode.children.length; i++) {
+                    const rowNode = tableNode.children[i];
+                    if (rowNode.type !== 'tablerow' || !rowNode.children || rowNode.children.length < 4) continue;
+
+                    const cells = rowNode.children;
+                    const timestampText = getTextFromLexicalNode(cells[1]);
+                    const [startStr, endStr] = timestampText.split(' - ').map(s => s.trim());
+                    
+                    const startTime = parseTimestamp(startStr);
+                    const endTime = parseTimestamp(endStr);
+                    const speaker = getTextFromLexicalNode(cells[2]);
+                    const cellContentNode = cells[3];
+
+                    // Re-wrap the cell's content into a valid Lexical root structure for export
+                    const textJson = JSON.stringify({
+                        root: {
+                            children: cellContentNode.children || [],
+                            direction: 'ltr',
+                            format: '',
+                            indent: 0,
+                            type: 'root',
+                            version: 1
+                        }
+                    });
+
+                    segmentsToExport.push({
+                        start_time: startTime,
+                        end_time: endTime,
+                        speaker: speaker,
+                        text: textJson,
+                    });
+                }
+            }
+
+            if (segmentsToExport.length === 0) {
+                message("No transcript data available to export.", { title: "Export Failed", type: "error" });
+                return;
+            }
+
+            await exportTranscript(filePath, format, segmentsToExport, activeTranscriptPath, layoutChoice);
+            message(`Transcript successfully exported to ${filePath}`, { title: "Export Successful", type: "info" });
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
+        }
+    }
   
   </script>
   
@@ -295,6 +394,10 @@
                     </svg>
                 </div>
             </div>
+            <button class="ui-button-icon flex items-center space-x-0.5" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
+                <span class="text-xs">Export</span>
+            </button>
         {/if}
         <button
             class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
@@ -405,3 +508,9 @@
 				on:close="{() => isLayoutSettingsModalOpen = false}"
 				hideWaveformOptions={true}
 			/>
+<ExportModal
+    bind:showModal={isExportModalOpen}
+    transcriptPath={$project.activeTranscriptPathInDataTab}
+    on:confirm={handleExportConfirm}
+    on:close={() => isExportModalOpen = false}
+/>

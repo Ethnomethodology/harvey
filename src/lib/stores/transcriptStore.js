@@ -245,7 +245,6 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 transcriptRedoStack: [],
             };
         });
-
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
 
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
@@ -841,6 +840,7 @@ export function setRanInBackground(value) {
 export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrioritize = null) {
     transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: true, segments: [], activeTranscript: null, currentTranscriptPath: null, transcriptDirty: false }));
     updateProjectStoreState({ statusMessage: `Loading transcripts for ${mediaFileEntry.name}...` });
+    get(transcriptStore).segments = [];
 
     const associatedTranscripts = mediaFileEntry.associated_transcripts || [];
     console.log('[TranscriptStore loadInitialTranscript] mediaFileEntry.associated_transcripts:', associatedTranscripts);
