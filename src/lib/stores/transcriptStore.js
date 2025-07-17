@@ -243,6 +243,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 isTranscriptLoading: false,
                 transcriptUndoStack: [],
                 transcriptRedoStack: [],
+                transcriptDirty: false,
             };
         });
         const newlySelectedMedia = get(transcriptStore).selectedMediaFile;

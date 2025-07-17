@@ -235,6 +235,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             // This covers new transcript loads, undo/redo, segment insert/delete.
             if (segmentsArrayReferenceChanged || segmentsLengthChanged) {
                 console.log(`[EditableTranscript Sub] Structural change detected. New length: ${newSegments.length}, StoreIdx: ${currentStoreIndex}`);
+                // If segments become empty, ensure transcript is not dirty.
+                if (newSegments.length === 0) {
+                    transcriptStore.update(ts => ({ ...ts, transcriptDirty: false }));
+                }
                 // Force re-render of the current segment based on the store's current index.
                 // This ensures the editor reflects the latest state after a structural modification.
                 renderSegmentUI(currentStoreIndex);
