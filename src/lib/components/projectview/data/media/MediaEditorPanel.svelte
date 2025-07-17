@@ -472,22 +472,9 @@
         @apply mt-0 mb-0;
     }
 
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
-        display: none;
-    }
-
+    /* =================================================================== */
+    /* STYLES FOR LAYOUT 1 (DEFAULT)                                       */
+    /* =================================================================== */
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table th:nth-child(1)),
     .lexical-editor-wrapper-style.layout-Layout1 :global(.lexical-content table td:nth-child(1)) {
         width: 5%;
@@ -505,42 +492,141 @@
         width: 65%;
     }
 
+    /* =================================================================== */
+    /* STYLES FOR LAYOUT 2                                                 */
+    /* =================================================================== */
     .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table) {
-        display: grid;
-        grid-template-columns: 1fr 3fr;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content tr) {
-        display: contents;
-    }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content td) {
+        table-layout: auto;
         border: none;
-        padding: 0;
     }
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content th) {
-        display: none;
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th),
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(odd)),
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(odd)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(even)),
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(even)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(n+3)) {
+        margin-top: -1px;
     }
 
+    /* =================================================================== */
+    /* STYLES FOR LAYOUT 3                                                 */
+    /* =================================================================== */
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: wrap;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(1)) {
+        display: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(n+2)),
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(n+2)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
-        display: none;
+        flex: 1 0 50%;
     }
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
-        display: none;
+        flex: 1 0 50%;
+        margin-left: -1px;
+    }
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        margin-top: -1px;
     }
 
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(1)) {
+    /* =================================================================== */
+    /* STYLES FOR LAYOUT 4                                                 */
+    /* =================================================================== */
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(-n+2)),
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(-n+2)) {
         display: none;
     }
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(2)) {
-        display: none;
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(n+3)),
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(n+3)) {
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
     }
     .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(3)),
     .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(3)) {
+        flex: 1 0 25%;
+    }
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 75%;
+        margin-left: -1px;
+    }
+
+    /* =================================================================== */
+    /* STYLES FOR LAYOUT 5                                                 */
+    /* =================================================================== */
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table) {
+        table-layout: auto;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table tr) {
+        display: flex;
+        flex-wrap: nowrap;
+        border: none;
+    }
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table th:nth-child(-n+3)),
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table td:nth-child(-n+3)) {
         display: none;
     }
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table th:nth-child(4)),
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table td:nth-child(4)) {
+        flex: 1 0 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #ccc;
+    }
+
+    /* =================================================================== */
+    /* COMMON RULE TO COLLAPSE ROWS VERTICALLY                             */
+    /* =================================================================== */
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table tr + tr),
+    .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table tr + tr),
+    .lexical-editor-wrapper-style.layout-Layout4 :global(.lexical-content table tr + tr),
+    .lexical-editor-wrapper-style.layout-Layout5 :global(.lexical-content table tr + tr) {
+        margin-top: -1px;
+    }
+
 
     .lexical-editor-wrapper-style-placeholder {
         display: flex;
