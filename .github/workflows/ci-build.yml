@@ -103,24 +103,42 @@ jobs:
           echo "Verifying checksums for downloaded sidecars in ./sidecar..."
           cd ./sidecar || { echo "Failed to change directory to ./sidecar"; exit 1; }
 
-          # Add Git's binary path to the PATH environment variable if on Windows
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            GIT_BIN_PATH="/c/Program Files/Git/usr/bin"
-            if [ -d "$GIT_BIN_PATH" ]; then
-              export PATH="$GIT_BIN_PATH:$PATH"
-            else
-              echo "Git bin directory not found at $GIT_BIN_PATH. You might need to update this path."
-            fi
-          fi
-
-          # Loop through all .sha256 files and verify the checksums
           for checksum_file in *.sha256; do
-            if [ -f "$checksum_file" ]; then
-              echo "Verifying checksum for $checksum_file..."
-              shasum -a 256 -c "$checksum_file"
-            else
+            if [ ! -f "$checksum_file" ]; then
               echo "No .sha256 files found to verify."
               break
+            fi
+
+            echo "Verifying checksum for $checksum_file..."
+            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+              # Windows: Use certutil
+              # Extract the expected checksum and the filename from the .sha256 file
+              read expected_checksum binary_file < "$checksum_file"
+
+              # In case the binary file name in the checksum file has a leading '*'
+              binary_file=${binary_file#\*}
+
+              if [ ! -f "$binary_file" ]; then
+                echo "Error: Binary file '$binary_file' not found for checksum verification."
+                exit 1
+              fi
+
+              # Calculate the actual checksum
+              actual_checksum=$(certutil -hashfile "$binary_file" SHA256 | head -n 2 | tail -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              expected_checksum=$(echo "$expected_checksum" | tr '[:upper:]' '[:lower:]')
+
+              # Compare the checksums
+              if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+                echo "Error: Checksum mismatch for $binary_file."
+                echo "Expected: $expected_checksum"
+                echo "Actual:   $actual_checksum"
+                exit 1
+              else
+                echo "Checksum verified for $binary_file"
+              fi
+            else
+              # macOS: Use shasum
+              shasum -a 256 -c "$checksum_file"
             fi
           done
 
