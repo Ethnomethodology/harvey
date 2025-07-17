@@ -505,8 +505,16 @@
         width: 65%;
     }
 
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content table td:nth-child(3)) {
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content tr) {
+        display: block;
+        margin-bottom: 1em;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content td) {
+        display: inline-block;
+        border: none;
+        padding: 0;
+    }
+    .lexical-editor-wrapper-style.layout-Layout2 :global(.lexical-content th) {
         display: none;
     }
 
