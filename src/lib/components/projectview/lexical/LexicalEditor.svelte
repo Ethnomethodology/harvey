@@ -1639,7 +1639,8 @@ $: if (editor && activeLayout) {
     }
 }
 
-$: if (editor && activeLayout) {
+function syncLayout() {
+    if (!editor) return;
     const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
     if (layoutConfig) {
         editor.update(() => {
@@ -1706,9 +1707,34 @@ $: if (editor && activeLayout) {
             allTableNodes.forEach(tableNode => {
                 const newColWidths = layoutConfig.colgroup || [];
                 tableNode.setColWidths(newColWidths);
+
+                const rows = tableNode.getChildren();
+                rows.forEach(row => {
+                    if (_isTableRowNode(row)) {
+                        const cells = row.getChildren();
+                        cells.forEach((cell, i) => {
+                            if (_isTableCellNode(cell)) {
+                                const shouldHide = layoutConfig.hiddenColumns?.includes(i);
+                                if (shouldHide) {
+                                    if (cell.getStyle() !== 'display: none;') {
+                                        cell.setStyle('display: none;');
+                                    }
+                                } else {
+                                    if (cell.getStyle() === 'display: none;') {
+                                        cell.setStyle('');
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
             });
         });
     }
+}
+
+$: if (editor && activeLayout) {
+    syncLayout();
 }
 </script>
 
