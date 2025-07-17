@@ -1659,6 +1659,9 @@ $: if (editor && activeLayout) {
             findTableNodes(root, allTableNodes);
 
             allTableNodes.forEach(tableNode => {
+                const newColWidths = layoutConfig.colgroup || [];
+                tableNode.setColWidths(newColWidths);
+
                 const rows = tableNode.getChildren();
                 rows.forEach(row => {
                     if (_isTableRowNode(row)) {
@@ -1666,12 +1669,13 @@ $: if (editor && activeLayout) {
                         cells.forEach((cell, i) => {
                             if (_isTableCellNode(cell)) {
                                 const shouldHide = layoutConfig.hiddenColumns?.includes(i);
-                                const cellElement = editor.getElementByKey(cell.getKey());
-                                if (cellElement) {
-                                    if (shouldHide) {
-                                        cellElement.classList.add('layout-hidden');
-                                    } else {
-                                        cellElement.classList.remove('layout-hidden');
+                                if (shouldHide) {
+                                    if (cell.getStyle() !== 'display: none;') {
+                                        cell.setStyle('display: none;');
+                                    }
+                                } else {
+                                    if (cell.getStyle() === 'display: none;') {
+                                        cell.setStyle('');
                                     }
                                 }
                             }
