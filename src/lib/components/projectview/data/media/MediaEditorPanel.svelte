@@ -23,6 +23,7 @@
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
+    import '$lib/styles/layouts.css';
 
     export let mediaPath = null;
 
@@ -397,7 +398,7 @@
                 Select an audio or video file from the Data panel to view its player and data.
             </div>
         {:else}
-            <div class="lexical-editor-wrapper-style w-full h-full dark:text-gray-100">
+            <div class="lexical-editor-wrapper-style w-full h-full dark:text-gray-100" class:layout-{$activeLayout}={true}>
                 {#key mediaPath}
                     <LexicalEditor
                         bind:this={lexicalEditorRef}
@@ -472,18 +473,6 @@
         @apply mt-0 mb-0;
     }
 
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
-    }
     .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
         display: none;
     }
