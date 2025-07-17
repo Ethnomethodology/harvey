@@ -358,10 +358,10 @@
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
-        <button class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs ml-2"
+        <button class="ui-button-icon flex items-center ml-2"
             on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
         >
-            Transcribe
+            <span class="text-xs">Transcribe</span>
         </button>
         {/if}
     </div>
