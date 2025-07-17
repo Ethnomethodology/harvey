@@ -476,10 +476,7 @@
 	/* ---------------- interactions ---------------- */
 	function handleSegmentClick(idx) {
         // idx here is the original segmentIndex from processedSegments, not the index in visibleSegments
-        if (!previewEditMode) {
-            dispatch('segmentclick', idx);
-        } else {
-        }
+        dispatch('segmentclick', idx);
     }
 	function handleToggleEdit() { dispatch('toggleedit'); }
 
@@ -685,14 +682,13 @@
                     class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
                     class:bg-white={seg.segmentIndex !== activeSegmentIndex}
                     class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex}
-                    class:preview-interaction-disabled={previewEditMode}
-                    class:hover:bg-blue-50={!previewEditMode}
-                    class:dark:hover:bg-blue-900={!previewEditMode}
-                    class:cursor-pointer={!previewEditMode}
+                    class:hover:bg-blue-50={true}
+                    class:dark:hover:bg-blue-900={true}
+                    class:cursor-pointer={true}
                     on:click={() => handleSegmentClick(seg.segmentIndex)}
-                    tabindex={previewEditMode ? -1 : 0}
-                    on:keydown={(e) => { if (!previewEditMode && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }}
-                    role={previewEditMode ? 'listitem' : 'button'}
+                    tabindex={0}
+                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSegmentClick(seg.segmentIndex); } }}
+                    role="button"
                     aria-pressed={seg.segmentIndex === activeSegmentIndex}
                     aria-label={`Segment ${seg.segmentIndex + 1}, Speaker ${seg.speaker}, Time ${seg.startTime} to ${seg.endTime}`}
                 >

@@ -129,7 +129,6 @@
     }
 
     async function handleSegmentClick(event) {
-        if (panelEditModeActive) return;
         const index = event.detail;
         const segment = get(transcriptStore).segments?.[index];
         if (segment && typeof segment.start_time === 'number') {
