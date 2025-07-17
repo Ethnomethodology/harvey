@@ -9,7 +9,7 @@
     import ExportModal from '../modals/ExportModal.svelte';
     import { transcriptStore } from '$lib/stores/transcriptStore.js';
     import { exportTranscript } from '$lib/services/configureActions.js';
-    import { activeLayout } from '$lib/stores/layoutViewStore.js';
+    import { activeLayout } from '$lib/stores/layoutStore.js';
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
