@@ -103,6 +103,16 @@ jobs:
           echo "Verifying checksums for downloaded sidecars in ./sidecar..."
           cd ./sidecar || { echo "Failed to change directory to ./sidecar"; exit 1; }
 
+          # Add Git's binary path to the PATH environment variable if on Windows
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            GIT_BIN_PATH="/c/Program Files/Git/usr/bin"
+            if [ -d "$GIT_BIN_PATH" ]; then
+              export PATH="$GIT_BIN_PATH:$PATH"
+            else
+              echo "Git bin directory not found at $GIT_BIN_PATH. You might need to update this path."
+            fi
+          fi
+
           # Loop through all .sha256 files and verify the checksums
           for checksum_file in *.sha256; do
             if [ -f "$checksum_file" ]; then
