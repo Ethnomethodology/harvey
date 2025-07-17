@@ -1602,91 +1602,59 @@ function navigateToNextResult() {
   navigateToResult(currentSearchResultIndex);
 }
 
-$: if (editor && activeLayout) {
-    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
-    if (layoutConfig && layoutConfig.colgroup) {
-        const colgroup = layoutConfig.colgroup;
-        editor.update(() => {
-            const root = _getRoot();
-            // Recursively find all TableNodes in the editor state
-            const findTableNodes = (node, foundTables) => {
-                if (_isTableNode(node)) {
-                    foundTables.push(node);
-                }
-                if (typeof node.getChildren === 'function') {
-                    for (const child of node.getChildren()) {
-                        findTableNodes(child, foundTables);
-                    }
-                }
-            };
-
-            const allTableNodes = [];
-            findTableNodes(root, allTableNodes);
-
-            allTableNodes.forEach(tableNode => {
-                const newColWidths = [];
-                // Determine the number of columns in the current table
-                const firstRow = tableNode.getChildren()[0];
-                const currentTableColCount = firstRow ? firstRow.getChildren().length : 0;
-
-                for (let i = 0; i < currentTableColCount; i++) {
-                    // Use the width from the layout config if available, otherwise default to 'auto'
-                    newColWidths.push(colgroup[i] || 'auto');
-                }
-                tableNode.setColWidths(newColWidths);
-            });
-        });
-    }
-}
-
 function syncLayout() {
     if (!editor) return;
     const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
-    if (layoutConfig) {
-        editor.update(() => {
-            const root = _getRoot();
-            const findTableNodes = (node, foundTables) => {
-                if (_isTableNode(node)) {
-                    foundTables.push(node);
-                }
-                if (typeof node.getChildren === 'function') {
-                    for (const child of node.getChildren()) {
-                        findTableNodes(child, foundTables);
-                    }
-                }
-            };
+    if (!layoutConfig) return;
 
-            const allTableNodes = [];
-            findTableNodes(root, allTableNodes);
+    editor.update(() => {
+        const root = _getRoot();
+        const findTableNodes = (node, foundTables) => {
+            if (_isTableNode(node)) {
+                foundTables.push(node);
+            }
+            if (typeof node.getChildren === 'function') {
+                for (const child of node.getChildren()) {
+                    findTableNodes(child, foundTables);
+                }
+            }
+        };
 
-            allTableNodes.forEach(tableNode => {
-                const newColWidths = layoutConfig.colgroup || [];
+        const allTableNodes = [];
+        findTableNodes(root, allTableNodes);
+
+        allTableNodes.forEach(tableNode => {
+            // Set column widths
+            if (layoutConfig.colgroup) {
+                const newColWidths = layoutConfig.colgroup;
                 tableNode.setColWidths(newColWidths);
+            }
 
-                const rows = tableNode.getChildren();
-                rows.forEach(row => {
-                    if (_isTableRowNode(row)) {
-                        const cells = row.getChildren();
-                        cells.forEach((cell, i) => {
-                            if (_isTableCellNode(cell)) {
-                                const shouldHide = layoutConfig.hiddenColumns?.includes(i);
-                                const cellStyle = cell.getStyle() || '';
-                                let newStyle = cellStyle.replace(/display:\s*none\s*;?/, '');
+            // Hide columns
+            const rows = tableNode.getChildren();
+            rows.forEach(row => {
+                if (_isTableRowNode(row)) {
+                    const cells = row.getChildren();
+                    cells.forEach((cell, i) => {
+                        if (_isTableCellNode(cell)) {
+                            const shouldHide = layoutConfig.hiddenColumns?.includes(i);
+                            const cellStyle = cell.getStyle() || '';
+                            let newStyle = cellStyle.replace(/display:\s*none\s*;?/, '').trim();
 
-                                if (shouldHide) {
-                                    newStyle += ' display: none;';
-                                }
-
-                                if (newStyle.trim() !== cellStyle.trim()) {
-                                    cell.setStyle(newStyle.trim());
-                                }
+                            if (shouldHide) {
+                                if (!newStyle.endsWith(';')) newStyle += ';';
+                                newStyle += ' display: none;';
                             }
-                        });
-                    }
-                });
+
+                            if (newStyle.trim() !== cellStyle.trim()) {
+                                cell.setStyle(newStyle.trim());
+                            }
+                        }
+                    });
+                }
             });
         });
-    }
+    });
 }
 
 
