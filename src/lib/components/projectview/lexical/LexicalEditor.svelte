@@ -1638,6 +1638,50 @@ $: if (editor && activeLayout) {
         });
     }
 }
+
+$: if (editor && activeLayout) {
+    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
+    if (layoutConfig) {
+        editor.update(() => {
+            const root = _getRoot();
+            const findTableNodes = (node, foundTables) => {
+                if (_isTableNode(node)) {
+                    foundTables.push(node);
+                }
+                if (typeof node.getChildren === 'function') {
+                    for (const child of node.getChildren()) {
+                        findTableNodes(child, foundTables);
+                    }
+                }
+            };
+
+            const allTableNodes = [];
+            findTableNodes(root, allTableNodes);
+
+            allTableNodes.forEach(tableNode => {
+                const rows = tableNode.getChildren();
+                rows.forEach(row => {
+                    if (_isTableRowNode(row)) {
+                        const cells = row.getChildren();
+                        cells.forEach((cell, i) => {
+                            if (_isTableCellNode(cell)) {
+                                const shouldHide = layoutConfig.hiddenColumns?.includes(i);
+                                const cellElement = editor.getElementByKey(cell.getKey());
+                                if (cellElement) {
+                                    if (shouldHide) {
+                                        cellElement.classList.add('layout-hidden');
+                                    } else {
+                                        cellElement.classList.remove('layout-hidden');
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    }
+}
 </script>
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -2035,20 +2079,7 @@ $: if (editor && activeLayout) {
       color: theme('colors.white');
   }
 
-  .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
-    }
+  .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
+    display: none;
+  }
 </style>

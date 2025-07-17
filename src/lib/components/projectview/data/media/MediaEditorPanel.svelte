@@ -22,7 +22,7 @@
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
-    import { activeLayout } from '$lib/stores/layoutStore.js';
+    import { activeLayout } from '$lib/stores/layoutViewStore.js';
 
     export let mediaPath = null;
 
