@@ -1,15 +1,14 @@
 // src/lib/stores/layoutViewStore.js
 import { writable } from 'svelte/store';
 
-const LOCAL_STORAGE_KEY = 'transcriptLayout'; // Key for local storage
+const LAYOUT_STORAGE_KEY = 'transcriptLayout'; // Key for local storage
 const DEFAULT_LAYOUT_KEY = 'Layout1'; // Default layout
 
-// Load layout from local storage
+// --- Active Layout Store ---
 function loadLayout() {
 	if (typeof window === 'undefined') return DEFAULT_LAYOUT_KEY;
-
 	try {
-		const storedLayout = localStorage.getItem(LOCAL_STORAGE_KEY);
+		const storedLayout = localStorage.getItem(LAYOUT_STORAGE_KEY);
 		return storedLayout || DEFAULT_LAYOUT_KEY;
 	} catch (error) {
 		console.error('[LayoutViewStore] Error loading layout from localStorage:', error);
@@ -17,25 +16,67 @@ function loadLayout() {
 	}
 }
 
-const { subscribe, set, update } = writable(loadLayout());
+const { subscribe: layoutSubscribe, set: layoutSet } = writable(loadLayout());
 
-// Save layout to local storage
 function saveLayout(layoutKey) {
 	if (typeof window === 'undefined') return;
-
 	try {
-		localStorage.setItem(LOCAL_STORAGE_KEY, layoutKey);
+		localStorage.setItem(LAYOUT_STORAGE_KEY, layoutKey);
 	} catch (error) {
 		console.error('[LayoutViewStore] Error saving layout to localStorage:', error);
 	}
 }
 
 export const activeLayout = {
-	subscribe,
+	subscribe: layoutSubscribe,
 	setLayout: (layoutKey) => {
 		saveLayout(layoutKey);
-		set(layoutKey);
+		layoutSet(layoutKey);
 	},
 };
 
-subscribe(saveLayout);
+layoutSubscribe(saveLayout);
+
+
+// --- Left Panel Visibility Store ---
+const PANEL_VISIBILITY_KEY = 'leftPanelVisible';
+const DEFAULT_PANEL_VISIBLE = true;
+
+function loadPanelVisibility() {
+    if (typeof window === 'undefined') return DEFAULT_PANEL_VISIBLE;
+    try {
+        const storedValue = localStorage.getItem(PANEL_VISIBILITY_KEY);
+        return storedValue !== null ? JSON.parse(storedValue) : DEFAULT_PANEL_VISIBLE;
+    } catch (error) {
+        console.error('[LayoutViewStore] Error loading panel visibility:', error);
+        return DEFAULT_PANEL_VISIBLE;
+    }
+}
+
+const { subscribe: visibilitySubscribe, set: visibilitySet, update: visibilityUpdate } = writable(loadPanelVisibility());
+
+function savePanelVisibility(isVisible) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(isVisible));
+    } catch (error) {
+        console.error('[LayoutViewStore] Error saving panel visibility:', error);
+    }
+}
+
+export const leftPanelVisible = {
+    subscribe: visibilitySubscribe,
+    set: (value) => {
+        savePanelVisibility(value);
+        visibilitySet(value);
+    },
+    toggle: () => {
+        visibilityUpdate(currentValue => {
+            const newValue = !currentValue;
+            savePanelVisibility(newValue);
+            return newValue;
+        });
+    }
+};
+
+visibilitySubscribe(savePanelVisibility);
