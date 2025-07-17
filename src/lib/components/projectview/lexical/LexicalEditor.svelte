@@ -1660,51 +1660,6 @@ function syncLayout() {
             findTableNodes(root, allTableNodes);
 
             allTableNodes.forEach(tableNode => {
-                const rows = tableNode.getChildren();
-                rows.forEach(row => {
-                    if (_isTableRowNode(row)) {
-                        const cells = row.getChildren();
-                        cells.forEach((cell, i) => {
-                            if (_isTableCellNode(cell)) {
-                                const shouldHide = layoutConfig.hiddenColumns?.includes(i);
-                                if (shouldHide) {
-                                    if (cell.getStyle() !== 'display: none;') {
-                                        cell.setStyle('display: none;');
-                                    }
-                                } else {
-                                    if (cell.getStyle() === 'display: none;') {
-                                        cell.setStyle('');
-                                    }
-                                }
-                            }
-                        });
-                    }
-                });
-            });
-        });
-    }
-}
-
-$: if (editor && activeLayout) {
-    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
-    if (layoutConfig) {
-        editor.update(() => {
-            const root = _getRoot();
-            const findTableNodes = (node, foundTables) => {
-                if (_isTableNode(node)) {
-                    foundTables.push(node);
-                }
-                if (typeof node.getChildren === 'function') {
-                    for (const child of node.getChildren()) {
-                        findTableNodes(child, foundTables);
-                    }
-                }
-            };
-
-            const allTableNodes = [];
-            findTableNodes(root, allTableNodes);
-
-            allTableNodes.forEach(tableNode => {
                 const newColWidths = layoutConfig.colgroup || [];
                 tableNode.setColWidths(newColWidths);
 
@@ -1715,14 +1670,15 @@ $: if (editor && activeLayout) {
                         cells.forEach((cell, i) => {
                             if (_isTableCellNode(cell)) {
                                 const shouldHide = layoutConfig.hiddenColumns?.includes(i);
+                                const cellStyle = cell.getStyle() || '';
+                                let newStyle = cellStyle.replace(/display:\s*none\s*;?/, '');
+
                                 if (shouldHide) {
-                                    if (cell.getStyle() !== 'display: none;') {
-                                        cell.setStyle('display: none;');
-                                    }
-                                } else {
-                                    if (cell.getStyle() === 'display: none;') {
-                                        cell.setStyle('');
-                                    }
+                                    newStyle += ' display: none;';
+                                }
+
+                                if (newStyle.trim() !== cellStyle.trim()) {
+                                    cell.setStyle(newStyle.trim());
                                 }
                             }
                         });
@@ -1732,6 +1688,7 @@ $: if (editor && activeLayout) {
         });
     }
 }
+
 
 $: if (editor && activeLayout) {
     syncLayout();
