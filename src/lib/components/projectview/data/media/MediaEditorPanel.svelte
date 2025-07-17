@@ -405,7 +405,6 @@
                         editable={true}
                         placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
-                        enableSearch={true}
                         toolbarConfig={mediaToolbarConfig}
                         activeLayout={$activeLayout}
                     />
