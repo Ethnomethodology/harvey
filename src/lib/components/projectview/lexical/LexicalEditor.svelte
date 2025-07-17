@@ -1659,9 +1659,6 @@ $: if (editor && activeLayout) {
             findTableNodes(root, allTableNodes);
 
             allTableNodes.forEach(tableNode => {
-                const newColWidths = layoutConfig.colgroup || [];
-                tableNode.setColWidths(newColWidths);
-
                 const rows = tableNode.getChildren();
                 rows.forEach(row => {
                     if (_isTableRowNode(row)) {
@@ -1682,6 +1679,33 @@ $: if (editor && activeLayout) {
                         });
                     }
                 });
+            });
+        });
+    }
+}
+
+$: if (editor && activeLayout) {
+    const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
+    if (layoutConfig) {
+        editor.update(() => {
+            const root = _getRoot();
+            const findTableNodes = (node, foundTables) => {
+                if (_isTableNode(node)) {
+                    foundTables.push(node);
+                }
+                if (typeof node.getChildren === 'function') {
+                    for (const child of node.getChildren()) {
+                        findTableNodes(child, foundTables);
+                    }
+                }
+            };
+
+            const allTableNodes = [];
+            findTableNodes(root, allTableNodes);
+
+            allTableNodes.forEach(tableNode => {
+                const newColWidths = layoutConfig.colgroup || [];
+                tableNode.setColWidths(newColWidths);
             });
         });
     }

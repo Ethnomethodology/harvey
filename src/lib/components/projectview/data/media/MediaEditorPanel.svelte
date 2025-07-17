@@ -485,9 +485,8 @@
     .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
         width: 15%;
     }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
+    .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
+        display: none;
     }
 
     .lexical-editor-wrapper-style-placeholder {
