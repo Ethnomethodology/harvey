@@ -472,6 +472,10 @@
         @apply mt-0 mb-0;
     }
 
+    .lexical-editor-wrapper-style :global(table.editor-table tr.editor-table-row:nth-child(2)) {
+    background-color: #f2f2f2;
+}
+
     /* =================================================================== */
     /* STYLES FOR LAYOUT 1 (DEFAULT)                                       */
     /* =================================================================== */
@@ -548,11 +552,11 @@
     }
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(2)),
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(2)) {
-        flex: 1 0 50%;
+        flex: 1 0 25%;
     }
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(3)),
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table td:nth-child(3)) {
-        flex: 1 0 50%;
+        flex: 1 0 75%;
         margin-left: -1px;
     }
     .lexical-editor-wrapper-style.layout-Layout3 :global(.lexical-content table th:nth-child(4)),
