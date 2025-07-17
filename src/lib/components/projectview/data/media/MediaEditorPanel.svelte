@@ -23,7 +23,6 @@
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
-    import '$lib/styles/layouts.css';
 
     export let mediaPath = null;
 
@@ -473,7 +472,63 @@
         @apply mt-0 mb-0;
     }
 
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
+        width: 5%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
+        width: 15%;
+    }
+    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
+    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
+        width: 15%;
+    }
     .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
+        display: none;
+    }
+
+    :global(.layout-Layout1 .lexical-content table th:nth-child(1)),
+    :global(.layout-Layout1 .lexical-content table td:nth-child(1)) {
+        width: 5%;
+    }
+    :global(.layout-Layout1 .lexical-content table th:nth-child(2)),
+    :global(.layout-Layout1 .lexical-content table td:nth-child(2)) {
+        width: 15%;
+    }
+    :global(.layout-Layout1 .lexical-content table th:nth-child(3)),
+    :global(.layout-Layout1 .lexical-content table td:nth-child(3)) {
+        width: 15%;
+    }
+    :global(.layout-Layout1 .lexical-content table th:nth-child(4)),
+    :global(.layout-Layout1 .lexical-content table td:nth-child(4)) {
+        width: 65%;
+    }
+
+    :global(.layout-Layout2 .lexical-content table th:nth-child(3)),
+    :global(.layout-Layout2 .lexical-content table td:nth-child(3)) {
+        display: none;
+    }
+
+    :global(.layout-Layout3 .lexical-content table th:nth-child(2)),
+    :global(.layout-Layout3 .lexical-content table td:nth-child(2)) {
+        display: none;
+    }
+    :global(.layout-Layout3 .lexical-content table th:nth-child(3)),
+    :global(.layout-Layout3 .lexical-content table td:nth-child(3)) {
+        display: none;
+    }
+
+    :global(.layout-Layout4 .lexical-content table th:nth-child(1)),
+    :global(.layout-Layout4 .lexical-content table td:nth-child(1)) {
+        display: none;
+    }
+    :global(.layout-Layout4 .lexical-content table th:nth-child(2)),
+    :global(.layout-Layout4 .lexical-content table td:nth-child(2)) {
+        display: none;
+    }
+    :global(.layout-Layout4 .lexical-content table th:nth-child(3)),
+    :global(.layout-Layout4 .lexical-content table td:nth-child(3)) {
         display: none;
     }
 
