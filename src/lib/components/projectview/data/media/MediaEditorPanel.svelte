@@ -472,18 +472,6 @@
         @apply mt-0 mb-0;
     }
 
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
-    }
     .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
         display: none;
     }
