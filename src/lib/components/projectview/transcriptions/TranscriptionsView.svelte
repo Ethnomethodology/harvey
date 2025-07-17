@@ -23,7 +23,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
-    import { leftPanelVisible } from '$lib/stores/layoutViewStore.js';
+    import { leftPanelVisible } from '$lib/stores/layoutStore.js';
     import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Added
     import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Added for horizontal waveform

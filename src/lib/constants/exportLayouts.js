@@ -67,9 +67,9 @@ export const DOCX_LAYOUT_OPTIONS = [
 ];
 
 export const DOCX_LAYOUT_COLUMN_CONFIGS = {
-	Layout1: { colgroup: ["5%", "15%", "15%", "65%"] },
-	Layout2: { colgroup: ["5%", "15%", "25%", "75%"] }, // Updated for 2x2 logical layout: No, Timestamp, Speaker, Text
-	Layout3: { colgroup: ["100%"] }, // Single column for both rows
-	Layout4: { colgroup: ["25%", "75%"] },
-	Layout5: { colgroup: ["100%"] },
+	Layout1: { colgroup: ["5%", "15%", "15%", "65%"], hiddenColumns: [] },
+	Layout2: { colgroup: ["5%", "15%", "25%", "75%"], hiddenColumns: [] }, // Updated for 2x2 logical layout: No, Timestamp, Speaker, Text
+	Layout3: { colgroup: ["100%"], hiddenColumns: [0, 1, 2] }, // Single column for both rows
+	Layout4: { colgroup: ["25%", "75%"], hiddenColumns: [0, 1] },
+	Layout5: { colgroup: ["100%"], hiddenColumns: [0, 1, 2] },
 };

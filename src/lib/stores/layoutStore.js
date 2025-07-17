@@ -1,62 +1,82 @@
 // src/lib/stores/layoutStore.js
 import { writable } from 'svelte/store';
 
-const LOCAL_STORAGE_KEY = 'transcriptLayout'; // Global key
-const DEFAULT_LAYOUT_KEY = 'Layout1'; // Default to 'Detailed Table'
+const LAYOUT_STORAGE_KEY = 'transcriptLayout'; // Key for local storage
+const DEFAULT_LAYOUT_KEY = 'Layout1'; // Default layout
 
-// Function to load layout from local storage
+// --- Active Layout Store ---
 function loadLayout() {
-	if (typeof window === 'undefined') return DEFAULT_LAYOUT_KEY; // SSR guard
-
+	if (typeof window === 'undefined') return DEFAULT_LAYOUT_KEY;
 	try {
-		const storedLayout = localStorage.getItem(LOCAL_STORAGE_KEY);
-		if (storedLayout) {
-			console.log(`[LayoutStore] Loaded global layout '${storedLayout}'`);
-			return storedLayout;
-		} else {
-			console.log(`[LayoutStore] No global layout stored. Using default.`);
-			return DEFAULT_LAYOUT_KEY;
-		}
+		const storedLayout = localStorage.getItem(LAYOUT_STORAGE_KEY);
+		return storedLayout || DEFAULT_LAYOUT_KEY;
 	} catch (error) {
 		console.error('[LayoutStore] Error loading layout from localStorage:', error);
-		return DEFAULT_LAYOUT_KEY; // Fallback on error
+		return DEFAULT_LAYOUT_KEY;
 	}
 }
 
-// Create the writable store with the initial value loaded from local storage
-const { subscribe, set, update } = writable(loadLayout());
+const { subscribe: layoutSubscribe, set: layoutSet } = writable(loadLayout());
 
-// Function to save layout to local storage
 function saveLayout(layoutKey) {
-	if (typeof window === 'undefined') return; // SSR guard
-
+	if (typeof window === 'undefined') return;
 	try {
-		localStorage.setItem(LOCAL_STORAGE_KEY, layoutKey);
-		console.log(`[LayoutStore] Saved global layout '${layoutKey}'`);
+		localStorage.setItem(LAYOUT_STORAGE_KEY, layoutKey);
 	} catch (error) {
 		console.error('[LayoutStore] Error saving layout to localStorage:', error);
 	}
 }
 
-// Custom store with methods
 export const activeLayout = {
-	subscribe,
+	subscribe: layoutSubscribe,
 	setLayout: (layoutKey) => {
 		saveLayout(layoutKey);
-		set(layoutKey);
+		layoutSet(layoutKey);
 	},
-	// No explicit init needed as the store is initialized with loadLayout()
-	// and setLayout handles saving on change.
 };
 
-// Subscribe to store changes to persist the value to local storage
-subscribe(value => {
-    saveLayout(value);
-});
+layoutSubscribe(saveLayout);
 
-// Log store value changes for debugging (optional)
-/*
-activeLayout.subscribe(value => {
-	console.log('[LayoutStore] Active layout changed to:', value);
-});
-*/
+
+// --- Left Panel Visibility Store ---
+const PANEL_VISIBILITY_KEY = 'leftPanelVisible';
+const DEFAULT_PANEL_VISIBLE = true;
+
+function loadPanelVisibility() {
+    if (typeof window === 'undefined') return DEFAULT_PANEL_VISIBLE;
+    try {
+        const storedValue = localStorage.getItem(PANEL_VISIBILITY_KEY);
+        return storedValue !== null ? JSON.parse(storedValue) : DEFAULT_PANEL_VISIBLE;
+    } catch (error) {
+        console.error('[LayoutStore] Error loading panel visibility:', error);
+        return DEFAULT_PANEL_VISIBLE;
+    }
+}
+
+const { subscribe: visibilitySubscribe, set: visibilitySet, update: visibilityUpdate } = writable(loadPanelVisibility());
+
+function savePanelVisibility(isVisible) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(PANEL_VISIBILITY_KEY, JSON.stringify(isVisible));
+    } catch (error) {
+        console.error('[LayoutStore] Error saving panel visibility:', error);
+    }
+}
+
+export const leftPanelVisible = {
+    subscribe: visibilitySubscribe,
+    set: (value) => {
+        savePanelVisibility(value);
+        visibilitySet(value);
+    },
+    toggle: () => {
+        visibilityUpdate(currentValue => {
+            const newValue = !currentValue;
+            savePanelVisibility(newValue);
+            return newValue;
+        });
+    }
+};
+
+visibilitySubscribe(savePanelVisibility);

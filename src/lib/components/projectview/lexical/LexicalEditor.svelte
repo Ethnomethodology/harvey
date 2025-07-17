@@ -1602,41 +1602,64 @@ function navigateToNextResult() {
   navigateToResult(currentSearchResultIndex);
 }
 
-$: if (editor && activeLayout) {
+function syncLayout() {
+    if (!editor) return;
     const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
-    if (layoutConfig && layoutConfig.colgroup) {
-        const colgroup = layoutConfig.colgroup;
-        editor.update(() => {
-            const root = _getRoot();
-            // Recursively find all TableNodes in the editor state
-            const findTableNodes = (node, foundTables) => {
-                if (_isTableNode(node)) {
-                    foundTables.push(node);
-                }
-                if (typeof node.getChildren === 'function') {
-                    for (const child of node.getChildren()) {
-                        findTableNodes(child, foundTables);
-                    }
-                }
-            };
+    if (!layoutConfig) return;
 
-            const allTableNodes = [];
-            findTableNodes(root, allTableNodes);
-
-            allTableNodes.forEach(tableNode => {
-                const newColWidths = [];
-                // Determine the number of columns in the current table
-                const firstRow = tableNode.getChildren()[0];
-                const currentTableColCount = firstRow ? firstRow.getChildren().length : 0;
-
-                for (let i = 0; i < currentTableColCount; i++) {
-                    // Use the width from the layout config if available, otherwise default to 'auto'
-                    newColWidths.push(colgroup[i] || 'auto');
+    editor.update(() => {
+        const root = _getRoot();
+        const findTableNodes = (node, foundTables) => {
+            if (_isTableNode(node)) {
+                foundTables.push(node);
+            }
+            if (typeof node.getChildren === 'function') {
+                for (const child of node.getChildren()) {
+                    findTableNodes(child, foundTables);
                 }
+            }
+        };
+
+        const allTableNodes = [];
+        findTableNodes(root, allTableNodes);
+
+        allTableNodes.forEach(tableNode => {
+            // Set column widths
+            if (layoutConfig.colgroup) {
+                const newColWidths = layoutConfig.colgroup;
                 tableNode.setColWidths(newColWidths);
+            }
+
+            // Hide columns
+            const rows = tableNode.getChildren();
+            rows.forEach(row => {
+                if (_isTableRowNode(row)) {
+                    const cells = row.getChildren();
+                    cells.forEach((cell, i) => {
+                        if (_isTableCellNode(cell)) {
+                            const shouldHide = layoutConfig.hiddenColumns?.includes(i);
+                            const cellStyle = cell.getStyle() || '';
+                            let newStyle = cellStyle.replace(/display:\s*none\s*;?/, '').trim();
+
+                            if (shouldHide) {
+                                if (!newStyle.endsWith(';')) newStyle += ';';
+                                newStyle += ' display: none;';
+                            }
+
+                            if (newStyle.trim() !== cellStyle.trim()) {
+                                cell.setStyle(newStyle.trim());
+                            }
+                        }
+                    });
+                }
             });
         });
-    }
+    });
+}
+
+
+$: if (editor && activeLayout) {
+    syncLayout();
 }
 </script>
 
@@ -1868,87 +1891,6 @@ $: if (editor && activeLayout) {
       {#if toolbarConfig.clearFormatting && toolbarConfig.search}
         <div class="separator"></div>
       {/if}
-      {#if enableSearch && toolbarConfig.search}
-        <button
-          bind:this={searchToggleButtonElement}
-          class="mini-toolbar-button"
-          on:click={() => {
-            showSearchBox = !showSearchBox;
-            console.log('[Search Toggle Button] Clicked. New showSearchBox state:', showSearchBox);
-            if (showSearchBox) {
-              tick().then(() => { // Ensure UI is rendered before focusing
-                const inputField = searchUiContainerElement?.querySelector('input[type="text"]');
-                inputField?.focus();
-                console.log('[Search Toggle Button] Search box shown, attempting to focus input.');
-                if (searchUiContainerElement) {
-                  const styles = window.getComputedStyle(searchUiContainerElement);
-                  console.log('[Search Toggle Button] Search UI computed styles - position:', styles.position, 'z-index:', styles.zIndex, 'top:', styles.top, 'right:', styles.right, 'display:', styles.display);
-                }
-              });
-            }
-          }}
-          class:active={showSearchBox}
-          title="Search Document"
-          disabled={!editable}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-          </svg>
-        </button>
-        <!-- MOVED SEARCH UI BLOCK HERE -->
-        {#if showSearchBox}
-          <div
-            bind:this={searchUiContainerElement}
-            class="search-ui-container absolute top-full right-0 mt-1 p-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-800 rounded-md shadow-lg flex items-center gap-1 z-20"
-            style="max-width: 24rem; min-width: 20rem;"
-          >
-            <div class="relative flex-grow">
-              <input
-                type="text"
-                bind:value={searchTerm}
-                placeholder="Search..."
-                class="w-full px-2 py-1 pr-8 text-sm border border-gray-300 dark:border-gray-500 rounded-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                on:keydown={handleSearchInputKeydown}
-                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-              />
-              {#if searchTerm}
-                <button
-                  on:click={clearSearchTermInput}
-                  title="Clear Search"
-                  aria-label="Clear search input"
-                  class="absolute inset-y-0 right-0 flex items-center justify-center p-1 w-7 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
-                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                  </svg>
-                </button>
-              {/if}
-            </div>
-            <button
-              on:click={navigateToPreviousResult}
-              disabled={searchResults.length === 0 || currentSearchResultIndex <= 0}
-              title="Previous Match"
-              aria-label="Previous search match"
-              class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-              </svg>
-            </button>
-            <button
-              on:click={navigateToNextResult}
-              disabled={searchResults.length === 0 || currentSearchResultIndex >= searchResults.length - 1}
-              title="Next Match"
-              aria-label="Next search match"
-              class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-700 dark:text-gray-300 disabled:opacity-50"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-              </svg>
-            </button>
-          </div>
-        {/if}
-      {/if}
     </div>
   {/if}
 
@@ -2035,20 +1977,7 @@ $: if (editor && activeLayout) {
       color: theme('colors.white');
   }
 
-  .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(1)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(1)) {
-        width: 5%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(2)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(2)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(3)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(3)) {
-        width: 15%;
-    }
-    .lexical-editor-wrapper-style :global(.lexical-content table th:nth-child(4)),
-    .lexical-editor-wrapper-style :global(.lexical-content table td:nth-child(4)) {
-        width: 65%;
-    }
+  .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
+    display: none;
+  }
 </style>
