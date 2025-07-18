@@ -282,3 +282,34 @@ pub fn get_document_metadata_path(
     let metadata_filename = format!(".{}.{}", doc_stem, METADATA_FILE_SUFFIX);
     Ok(doc_parent_dir.join(metadata_filename))
 }
+
+#[tauri::command]
+pub async fn create_new_document(
+    project_xml_path: String,
+    document_name: String,
+) -> Result<String, CommandError> {
+    info!("[create_new_document] Creating new document named: {}", document_name);
+    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+    let project_base_dir = project_xml_path_buf
+        .parent()
+        .ok_or_else(|| CommandError::from("Could not get project base dir from XML path"))?;
+
+    let unique_path_str = get_unique_document_path(
+        project_base_dir.to_string_lossy().to_string(),
+        document_name.clone(),
+        "json".to_string(),
+    )?;
+
+    let initial_content = "{\"root\":{\"children\":[{\"children\":[],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"paragraph\",\"version\":1}],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"root\",\"version\":1}}";
+
+    save_document_and_update_xml(
+        project_xml_path.clone(),
+        unique_path_str.clone(),
+        document_name,
+        initial_content.to_string(),
+    )
+    .await?;
+
+    info!("[create_new_document] Successfully created new document at: {}", unique_path_str);
+    Ok(unique_path_str)
+}

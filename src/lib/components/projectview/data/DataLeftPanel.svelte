@@ -1123,7 +1123,12 @@
           <button
             on:click|stopPropagation={() => {
                 if (categoryContextMenuType === 'document') {
-                    createNewDocument();
+                    const currentProject = get(project);
+                    if (currentProject && currentProject.xmlPath) {
+                        createNewDocument(currentProject.xmlPath);
+                    } else {
+                        message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
+                    }
                 }
                 closeCategoryContextMenu();
             }}
