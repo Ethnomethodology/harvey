@@ -1,8 +1,9 @@
 // src-tauri/src/projectview/document_commands.rs
 use super::shared_types::*;
 use super::shared_utils::*;
-use crate::welcome::config::CommandError; 
+use crate::welcome::config::CommandError;
 use log::{info, warn, error, debug};
+use serde::Serialize;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -11,6 +12,74 @@ use quick_xml;
 use serde_json;
 
 // --- save_note_json Command ---
+#[derive(Debug, Serialize)]
+pub struct NewDocument {
+    path: String,
+    name: String,
+}
+
+#[tauri::command]
+pub async fn create_new_document(project_xml_path_str: String) -> Result<NewDocument, CommandError> {
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_base_dir = project_xml_path.parent().ok_or_else(|| CommandError::from("Invalid project path"))?;
+    let docs_dir = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
+
+    fs::create_dir_all(&docs_dir)?;
+
+    let mut file_name;
+    let mut file_path;
+    let mut i = 1;
+    loop {
+        file_name = format!("Untitled {}.json", i);
+        file_path = docs_dir.join(&file_name);
+        if !file_path.exists() {
+            break;
+        }
+        i += 1;
+    }
+
+    let empty_lexical_json = serde_json::json!({
+        "root": {
+            "children": [
+                {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1
+                }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+        }
+    });
+
+    let json_content = serde_json::to_string(&empty_lexical_json)?;
+    fs::write(&file_path, &json_content)?;
+
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&project_xml_path)?)?;
+
+    let relative_path = file_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+    project_data.document_files.files.push(DocumentEntryXml {
+        name: file_name.clone(),
+        relative_path: relative_path.to_string(),
+        language_code: None,
+    });
+    project_data.document_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+
+    save_project_xml(&project_xml_path, &project_data)?;
+
+    Ok(NewDocument {
+        path: file_path.to_string_lossy().to_string(),
+        name: file_name,
+    })
+}
+
 #[tauri::command]
 pub async fn save_note_json(target_path: String, json_content: String) -> Result<(), String> {
     info!("Saving JSON content to: {}", target_path);

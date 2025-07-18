@@ -3,7 +3,7 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
+	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
     import CreateGroupModal from '../modals/CreateGroupModal.svelte';
@@ -1121,7 +1121,12 @@
       >
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
           <button
-            on:click|stopPropagation={() => {}}
+            on:click|stopPropagation={() => {
+                if (categoryContextMenuType === 'document') {
+                    createNewDocument();
+                }
+                closeCategoryContextMenu();
+            }}
             class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
             title="Create New"
           >

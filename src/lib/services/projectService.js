@@ -109,6 +109,29 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+export async function createNewDocument() {
+    const currentProject = get(project);
+    const projectXmlPath = currentProject.xmlPath;
+    const projectBaseDir = currentProject.baseDirectory;
+
+    if (!projectXmlPath || !projectBaseDir) {
+        console.error('[ProjectService] Cannot create document: Project data not fully loaded.');
+        await message('Project data is not fully loaded. Cannot create documents.', { title: 'Create Error', type: 'error' });
+        return;
+    }
+
+    try {
+        const newDocument = await invoke('create_new_document', { projectXmlPathStr: projectXmlPath });
+
+        await refreshProjectFiles();
+
+        prepareDocumentView(newDocument.path, 'documents');
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        await message(`Error creating document: ${errorMessage}`, { title: 'Create Error', type: 'error' });
+    }
+}
+
 export async function loadTableLayoutPrefs(tablePath) {
     const currentProject = get(project);
     const projectId = currentProject.id;
