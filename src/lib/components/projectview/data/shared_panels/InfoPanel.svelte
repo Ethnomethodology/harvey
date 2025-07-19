@@ -247,7 +247,7 @@
                 let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : itemType;
 
                 try {
-                    await renameProjectItem(assetRelativePath, nameToSend, effectiveItemTypeForRename);
+                    await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
                     isEditing = false; renameProcessed = true;
                     project.update(p => ({...p, isDocumentMetadataDirty: false, isMediaNoteMetadataDirty: false}));
                     // Rely on itemPath prop change from ProjectView/NotesView to trigger full reload if name change affects path
