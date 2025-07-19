@@ -308,7 +308,7 @@ pub async fn create_new_document(
     save_document_and_update_xml(
         project_xml_path.clone(),
         unique_path_str.clone(),
-        "Untitled".to_string(),
+        "Untitled.json".to_string(),
         initial_content.to_string(),
     )
     .await?;
