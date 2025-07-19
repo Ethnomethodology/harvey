@@ -1,6 +1,7 @@
 // src/lib/stores/projectStore.js
 import { writable, get } from 'svelte/store';
-import { listen } from '@tauri-apps/api/event'; // Added for media_renamed event
+import { listen } from '@tauri-apps/api/event';
+import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
 
 export const groupContentNotification = writable(null);
 
@@ -734,46 +735,18 @@ listen('item_renamed', (event) => {
                 console.debug('[ProjectStore item_renamed] Updated importedTranscriptFiles entry.');
             }
         } else if (item_type === 'transcript') {
-            function updateTranscriptInTreeRecursive(nodes) {
-                if (!Array.isArray(nodes)) return { updatedNodes: nodes, changed: false };
-                let overallChanged = false;
-                const updatedNodes = nodes.map(node => {
-                    let nodeChanged = false;
-                    let updatedNode = { ...node };
+            // For transcripts, the media_renamed event handles the tree update.
+            // We still need to refresh the project files to ensure the UI is consistent.
+            // The `refreshProjectFiles` function will handle selecting the correct media.
+            console.debug('[ProjectStore item_renamed] Triggering full project refresh for transcript rename.');
+            refreshProjectFiles(normalized_new_path); // Pass the new path to select it after refresh
+        }
 
-                    if (updatedNode.file_type === 'transcript' && updatedNode.path === normalized_old_path) {
-                        updatedNode.name = new_name;
-                        updatedNode.path = normalized_new_path;
-                        updatedNode.relative_path = new_relative_path;
-                        nodeChanged = true;
-                        console.log('[ProjectStore item_renamed] Updated transcript entry in main files tree.');
-                    }
-
-                    if (updatedNode.children && updatedNode.children.length > 0) {
-                        const result = updateTranscriptInTreeRecursive(updatedNode.children);
-                        if (result.changed) {
-                            updatedNode.children = result.updatedNodes;
-                            nodeChanged = true;
-                        }
-                    }
-                    if (nodeChanged) overallChanged = true;
-                    return updatedNode;
-                });
-                 if (overallChanged && nodes.some(n => n.file_type === 'transcript')) {
-                    updatedNodes.sort((a, b) => {
-                        if (a.is_directory && !b.is_directory) return -1;
-                        if (!a.is_directory && b.is_directory) return 1;
-                        return a.name.localeCompare(b.name);
-                    });
-                }
-                return { updatedNodes, changed: overallChanged };
-            }
-
-            const transcriptTreeUpdateResult = updateTranscriptInTreeRecursive(updatedState.files);
-            if (transcriptTreeUpdateResult.changed) {
-                updatedState.files = transcriptTreeUpdateResult.updatedNodes;
-                stateChanged = true;
-            }
+        // For all other item types, a full refresh is needed to update the file tree
+        // and ensure the correct item is selected/displayed.
+        if (stateChanged) {
+            console.debug('[ProjectStore item_renamed] State changed, triggering full project refresh.');
+            refreshProjectFiles(normalized_new_path); // Pass the new path to select it after refresh
         }
 
         return stateChanged ? updatedState : p;

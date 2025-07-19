@@ -1552,49 +1552,111 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
 
 fn rename_asset_with_folder(
     app_handle: &tauri::AppHandle,
-    item_path: &Path,
-    new_name: &str,
+    item_path: &Path, // This is the path to the actual file, e.g., .../STEM/media/file.mp4
+    new_name_input: &str, // This is the new stem name, e.g., "new_video_stem" - RENAMED PARAMETER
     project_xml_path: &Path,
     project_base_dir: &Path,
     project_id_for_db: &str,
     item_type: &str,
 ) -> Result<(), CommandError> {
-    let parent_dir = item_path.parent().ok_or_else(|| CommandError::from("Could not get parent directory"))?;
-    let old_stem = parent_dir.file_name().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Could not get old stem"))?;
-    let new_stem = new_name;
+    let old_stem_name;
+    let new_item_path;
+    let old_relative_path;
+    let new_relative_path;
+    let new_filename;
 
-    if old_stem == new_stem {
-        return Ok(());
+    // Apply truncation to the new name input for consistency with import
+    let new_name = truncate_filename_stem(new_name_input, MAX_FILENAME_STEM_LENGTH); // NEW LINE
+
+    // Determine old_stem_name and construct new_item_path based on item_type
+    match item_type {
+        "media" => {
+            // For media, item_path is like .../HARVEY_FILES_DIR/MEDIA_DIR/OLD_STEM/MEDIA_SUBDIR/file.ext
+            old_stem_name = item_path.parent() // .../OLD_STEM/MEDIA_SUBDIR
+                                .and_then(|p| p.parent()) // .../OLD_STEM
+                                .and_then(|p| p.file_name())
+                                .and_then(|s| s.to_str())
+                                .ok_or_else(|| CommandError::from("Could not get old media stem directory name"))?;
+
+            let media_sub_dir_name = item_path.parent()
+                                        .and_then(|p| p.file_name())
+                                        .and_then(|s| s.to_str())
+                                        .ok_or_else(|| CommandError::from("Could not get media sub directory name"))?; // This should be "media"
+
+            let old_filename_os = item_path.file_name().ok_or_else(|| CommandError::from("Could not get old filename"))?;
+            let extension = item_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            new_filename = format!("{}.{}", new_name, extension); // Use the now truncated 'new_name'
+
+            // Construct the new full path for the media file
+            let new_stem_base_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(&new_name); // Use the now truncated 'new_name'
+            let new_media_subfolder_path = new_stem_base_path.join(media_sub_dir_name); // Re-use "media"
+            new_item_path = new_media_subfolder_path.join(&new_filename);
+
+            // Construct old and new relative paths for DB and XML updates
+            old_relative_path = item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+            new_relative_path = new_item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+            // Perform folder rename (renaming the STEM directory)
+            let old_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(old_stem_name);
+            let new_stem_dir_path = project_base_dir.join(HARVEY_FILES_DIR).join(MEDIA_DIR).join(&new_name); // Use the now truncated 'new_name'
+
+            if old_stem_dir_path == new_stem_dir_path {
+                info!("[Backend Rename] Old and new media stem paths are identical. No folder rename needed.");
+            } else {
+                if new_stem_dir_path.exists() {
+                    return Err(CommandError::from(format!("A folder named '{}' already exists for media.", new_name))); // Use the now truncated 'new_name'
+                }
+                fs::rename(&old_stem_dir_path, &new_stem_dir_path)?;
+                info!("[Backend Rename] Renamed media stem directory from {} to {}", old_stem_dir_path.display(), new_stem_dir_path.display());
+            }
+
+            // Rename the actual media file inside the newly moved folder
+            let old_media_file_path_in_new_folder = new_media_subfolder_path.join(old_filename_os);
+            if old_media_file_path_in_new_folder.exists() {
+                fs::rename(&old_media_file_path_in_new_folder, &new_item_path)?;
+                info!("[Backend Rename] Renamed media file from {} to {}", old_media_file_path_in_new_folder.display(), new_item_path.display());
+            } else {
+                warn!("[Backend Rename] Old media file path in new folder not found: {}. Skipping file rename.", old_media_file_path_in_new_folder.display());
+            }
+        },
+        _ => {
+            // Existing logic for doc, image, table, etc.
+            // For these, new_name is already the stem, and it's used for folder and filename.
+            // If these also need truncation, similar logic would apply here.
+            // Based on the problem description, the issue is with media files.
+            let parent_dir = item_path.parent().ok_or_else(|| CommandError::from("Could not get parent directory"))?;
+            old_stem_name = parent_dir.file_name().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Could not get old stem"))?;
+
+            let asset_dir = parent_dir.parent().ok_or_else(|| CommandError::from("Could not get asset directory"))?;
+            let new_folder_path = asset_dir.join(&new_name); // Use the now truncated 'new_name'
+
+            if new_folder_path.exists() {
+                return Err(CommandError::from(format!("A folder named '{}' already exists.", new_name))); // Use the now truncated 'new_name'
+            }
+            fs::rename(parent_dir, &new_folder_path)?;
+
+            let old_filename = item_path.file_name().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Could not get old filename"))?;
+            let extension = item_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            new_filename = format!("{}.{}", new_name, extension); // Use the now truncated 'new_name'
+            new_item_path = new_folder_path.join(&new_filename);
+
+            let old_item_path_in_new_folder = new_folder_path.join(old_filename);
+            if old_item_path_in_new_folder.exists() {
+                fs::rename(old_item_path_in_new_folder, &new_item_path)?;
+            }
+
+            old_relative_path = item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+            new_relative_path = new_item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+        }
     }
 
-    let asset_dir = parent_dir.parent().ok_or_else(|| CommandError::from("Could not get asset directory"))?;
-    let new_folder_path = asset_dir.join(new_stem);
-
-    if new_folder_path.exists() {
-        return Err(CommandError::from(format!("A folder named '{}' already exists.", new_stem)));
-    }
-
-    fs::rename(parent_dir, &new_folder_path)?;
-
-    let old_filename = item_path.file_name().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from("Could not get old filename"))?;
-    let extension = item_path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let new_filename = format!("{}.{}", new_stem, extension);
-    let new_item_path = new_folder_path.join(&new_filename);
-
-    let old_item_path_in_new_folder = new_folder_path.join(old_filename);
-    if old_item_path_in_new_folder.exists() {
-        fs::rename(old_item_path_in_new_folder, &new_item_path)?;
-    }
-
-    let old_relative_path = item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-    let new_relative_path = new_item_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
-
+    // Update database entry
     db_handler::rename_asset_metadata_key(
         project_id_for_db,
         &old_relative_path,
         &new_relative_path,
         &new_item_path.to_string_lossy(),
-        &new_filename,
+        &new_filename, // Pass the new filename for the file_name field in DB
     )?;
 
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(project_xml_path)?)?;
@@ -1611,6 +1673,17 @@ fn rename_asset_with_folder(
                 entry.name = new_filename.clone();
                 entry.relative_path = new_relative_path.clone();
             }
+            // Also rename annotations in the database if they exist
+            if let Err(e) = db_handler::rename_annotations_in_db(
+                project_id_for_db,
+                &old_relative_path,
+                &new_relative_path,
+                "image",
+            ) {
+                warn!("[Backend Rename] Failed to rename image annotations in DB for project_id {} from {} to {}: {}", project_id_for_db, old_relative_path, new_relative_path, e);
+            } else {
+                info!("[Backend Rename] Successfully renamed image annotations in DB for project_id {} from {} to {}", project_id_for_db, old_relative_path, new_relative_path);
+            }
         },
         "table" => {
             if let Some(entry) = project_data.table_files.files.iter_mut().find(|f| f.relative_path == old_relative_path) {
@@ -1619,11 +1692,43 @@ fn rename_asset_with_folder(
             }
         },
         "media" => {
-            if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
-                entry.name = new_stem.to_string();
-                if let Some(transcript_entry) = entry.transcripts.iter_mut().find(|f| f.relative_path == old_relative_path) {
-                    transcript_entry.name = new_filename.clone();
-                    transcript_entry.relative_path = new_relative_path.clone();
+            if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem_name) {
+                entry.name = new_name.to_string(); // Update XML entry name to new stem (truncated)
+                entry.relative_path = new_relative_path.clone(); // Update XML entry relative_path to new media file path (truncated)
+
+                // Update associated transcripts' relative paths and names
+                for transcript_entry in entry.transcripts.iter_mut() {
+                    let old_transcript_relative_path = transcript_entry.relative_path.clone();
+                    let transcript_filename = PathBuf::from(&old_transcript_relative_path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    
+                    // Construct new relative path for transcript
+                    let new_transcript_relative_path = Path::new(HARVEY_FILES_DIR)
+                        .join(MEDIA_DIR)
+                        .join(&new_name) // Use new media stem (truncated)
+                        .join(TRANSCRIPTS_SUBDIR)
+                        .join(&transcript_filename)
+                        .to_string_lossy()
+                        .replace("\\", "/");
+
+                    transcript_entry.relative_path = new_transcript_relative_path.clone();
+                    // No need to change transcript_entry.name as it's already the filename
+
+                    // Rename transcript metadata in DB
+                    if let Err(e) = db_handler::rename_asset_metadata_key(
+                        project_id_for_db,
+                        &old_transcript_relative_path,
+                        &new_transcript_relative_path,
+                        &project_base_dir.join(&new_transcript_relative_path).to_string_lossy(), // new full path
+                        &transcript_filename, // new filename
+                    ) {
+                        warn!("[Backend Rename] Failed to rename transcript metadata in DB for project_id {} from {} to {}: {}", project_id_for_db, old_transcript_relative_path, new_transcript_relative_path, e);
+                    } else {
+                        info!("[Backend Rename] Successfully renamed transcript metadata in DB for project_id {} from {} to {}", project_id_for_db, old_transcript_relative_path, new_transcript_relative_path);
+                    }
                 }
             }
         },
