@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, DocumentEntryXml, ImageFileEntryXml, TableFileEntryXml, TranscriptEntryXml};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -865,6 +865,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             parent_relative_path: media_dir_rel_path.clone().replace("\\", "/"),
             depth: 3,
             speakers: media_entry.speakers.clone(),
+            media_xml_identifier: Some(media_stem.clone()),
             associated_transcripts: media_entry.transcripts.clone(), // Populate with transcripts from XML
             children: sub_folders,
         });
@@ -1620,6 +1621,10 @@ fn rename_asset_with_folder(
         "media" => {
             if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
                 entry.name = new_stem.to_string();
+                if let Some(transcript_entry) = entry.transcripts.iter_mut().find(|f| f.relative_path == old_relative_path) {
+                    transcript_entry.name = new_filename.clone();
+                    transcript_entry.relative_path = new_relative_path.clone();
+                }
             }
         },
         _ => return Err(CommandError::from(format!("Unsupported item type for rename: {}", item_type))),
@@ -1639,7 +1644,6 @@ fn rename_asset_with_folder(
 
     Ok(())
 }
-
 
 #[tauri::command]
 pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
@@ -1679,19 +1683,19 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
          warn!("[Backend Rename] Request path '{}' is a directory, but rename should be triggered by media file. Proceeding with media logic.", item_path);
     }
 
-    let (_contains_invalid_chars, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
+    let (item_type, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
     let item_relative_path = item_relative_path_buf.to_string_lossy().replace("\\", "/");
-    info!("[Backend Rename] Item type: '{}', Media Stem: {:?}, Rel Path: '{}'", _contains_invalid_chars, media_stem_opt, item_relative_path);
+    info!("[Backend Rename] Item type: '{}', Media Stem: {:?}, Rel Path: '{}'", item_type, media_stem_opt, item_relative_path);
 
-    let _parent_dir = item_path_buf.parent().ok_or_else(|| CommandError::from(format!("Could not get parent directory for {}", item_path_buf.display())))?;
+    let parent_dir = item_path_buf.parent().ok_or_else(|| CommandError::from(format!("Could not get parent directory for {}", item_path_buf.display())))?;
 
-    match _contains_invalid_chars.as_str() {
+    match item_type.as_str() {
         "media" | "doc" | "image" | "table" => {
-            rename_asset_with_folder(&app_handle, &item_path_buf, new_name_trimmed, &xml_path_buf, project_base_dir, &project_id_for_db, &_contains_invalid_chars)?;
+            rename_asset_with_folder(&app_handle, &item_path_buf, new_name_trimmed, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
         },
         "transcript" => {
             let new_filename_with_ext = new_name_trimmed;
-            let new_path = _parent_dir.join(new_filename_with_ext);
+            let new_path = parent_dir.join(new_filename_with_ext);
 
             if new_filename_with_ext.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New filename contains invalid characters.")); }
             if !new_filename_with_ext.ends_with(".json") { return Err(CommandError::from("Transcript filename must end with .json")); }
@@ -1753,7 +1757,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
         },
         "imported_transcript" => {
             let old_transcript_file_abs_path = &item_path_buf;
-            let old_transcript_folder_abs_path = _parent_dir;
+            let old_transcript_folder_abs_path = parent_dir;
             let old_transcript_relative_path = &item_relative_path; // This is key for DB
 
             let new_transcript_stem_str = new_name_trimmed;
@@ -1874,8 +1878,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // The conditional save based on the flag is removed; save now happens inside the 'if let Some(entry)' block.
         },
         _ => {
-            error!("[Backend Rename] Renaming items of type '{}' is not supported directly: {}", _contains_invalid_chars, item_path);
-            return Err(CommandError::from(format!("Renaming not supported for item type '{}'. Rename the primary associated asset.", _contains_invalid_chars)));
+            error!("[Backend Rename] Renaming items of type '{}' is not supported directly: {}", item_type, item_path);
+            return Err(CommandError::from(format!("Renaming not supported for item type '{}'. Rename the primary associated asset.", item_type)));
         }
     }
 
