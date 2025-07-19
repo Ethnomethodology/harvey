@@ -123,7 +123,7 @@
     let isCreateGroupModalOpen = false;
     let createGroupModalFileToAssign = null;
     let currentAssetRelativePathForGroups = null; // This is originalRelativePath
-    let previousSelectedItemPath = null; // This will store the *originalRelativePath* of the previously processed item
+    let previousProcessedItemPath = null; // This will store the *originalRelativePath* of the previously processed item
 
     async function fetchAllProjectGroups() {
         const currentProjectId = get(project).id;
@@ -163,12 +163,12 @@
     });
 
     async function loadMetadata(assetRelativePathToLoad) {
-        // console.log(`[InfoPanel loadMetadata] Called for: ${assetRelativePathToLoad}. Previous: ${previousSelectedItemPath}`);
+        previousProcessedItemPath = assetRelativePathToLoad; // Update after successful load
         currentFileMetadata = null; // Clear existing before load
 
         const projectStoreState = get(project);
         if (!projectStoreState.id || !assetRelativePathToLoad) {
-            previousSelectedItemPath = assetRelativePathToLoad; // Update to prevent re-loop if path is briefly invalid
+            previousProcessedItemPath = assetRelativePathToLoad; // Update to prevent re-loop if path is briefly invalid
             return;
         }
 
@@ -214,7 +214,7 @@
                 duration_seconds: null, width: null, height: null, frame_rate: null, bit_rate: null, audio_codec: null, video_codec: null, creation_time: null
             };
         }
-        previousSelectedItemPath = assetRelativePathToLoad; // Crucial: update after attempt
+        previousProcessedItemPath = assetRelativePathToLoad; // Crucial: update after attempt
     }
 
     function toggleEditMode() {
@@ -244,7 +244,7 @@
                     ? editedFileNameStem
                     : (currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem);
 
-                let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : itemType;
+                let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'transcript' : itemType);
 
                 try {
                     await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
@@ -302,13 +302,23 @@
     export let itemType = null;
 
     $: {
+        if ($project.fileRenamed && $project.fileRenamed.newPath) {
+            // This is a temporary solution to force a reload of the metadata.
+            // A better solution would be to have a more robust event system.
+            if (itemPath === $project.fileRenamed.oldPath) {
+                itemPath = $project.fileRenamed.newPath;
+            }
+        }
+    }
+
+    $: {
         (async () => {
             const currentProjectStoreState = get(project);
             if (itemPath && itemType && currentProjectStoreState?.baseDirectory) {
                 const newOriginalDetails = await getOriginalAssetDetails(itemPath, currentProjectStoreState);
                 const newDerivedRelativePath = newOriginalDetails?.originalRelativePath;
 
-                if (newDerivedRelativePath && newDerivedRelativePath !== previousSelectedItemPath) {
+                if (newDerivedRelativePath && newDerivedRelativePath !== previousProcessedItemPath) {
                     isEditing = false;
                     currentOriginalAssetDetails = newOriginalDetails; // Store details
                     currentAssetRelativePathForGroups = newDerivedRelativePath;
@@ -328,10 +338,10 @@
                     currentOriginalAssetDetails = null;
                     currentAssetRelativePathForGroups = null;
                     fileAssignedGroups = [];
-                    previousSelectedItemPath = null; // Explicitly clear if itemPath prop becomes null
+                    previousProcessedItemPath = null; // Explicitly clear if itemPath prop becomes null
                     if(isEditing) isEditing = false;
                 }
-                // If newDerivedRelativePath === previousSelectedItemPath, we do nothing to prevent reloads for the same item.
+                // If newDerivedRelativePath === previousProcessedItemPath, we do nothing to prevent reloads for the same item.
             } else {
                 // itemPath, itemType, or project details missing. Clear everything.
                 currentFileMetadata = null;
@@ -339,7 +349,7 @@
                 currentAssetRelativePathForGroups = null;
                 fileAssignedGroups = [];
                 if (itemPath === null) { // Only clear previous if itemPath is definitively null
-                    previousSelectedItemPath = null;
+                    previousProcessedItemPath = null;
                 }
                 if(isEditing) isEditing = false;
             }

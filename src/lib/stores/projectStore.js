@@ -96,6 +96,7 @@ const initialState = {
     selectedGroupData: null,
 
     activeTranscriptPathInDataTab: null,
+    fileRenamed: null,
 };
 
 export const project = writable({ ...initialState });
@@ -560,9 +561,19 @@ export function hideConversionPrompt() { project.update(p => ({ ...p, showConfir
 listen('media_renamed', (event) => {
     const { old_media_stem, new_media_stem, new_media_file_relative_path, new_absolute_path } = event.payload;
 
+    let wasDocumentPathChanged = false;
+    let newDocumentPath = null;
+
     project.update(p => {
         let updatedState = { ...p };
         let stateChanged = false;
+
+        if (p.selectedDocumentPath && p.selectedDocumentPath.includes(`/${old_media_stem}/`)) {
+            newDocumentPath = p.selectedDocumentPath.replace(`/${old_media_stem}/`, `/${new_media_stem}/`);
+            updatedState.selectedDocumentPath = newDocumentPath;
+            wasDocumentPathChanged = true;
+            stateChanged = true;
+        }
 
         if (p.selectedMediaNotePath) {
             const currentNoteFileNameWithExt = p.selectedMediaNotePath.split(/[/]/).pop();
@@ -646,4 +657,8 @@ listen('media_renamed', (event) => {
 
         return stateChanged ? updatedState : p;
     });
+
+    if (wasDocumentPathChanged && newDocumentPath) {
+        prepareDocumentView(newDocumentPath, 'documents');
+    }
 });

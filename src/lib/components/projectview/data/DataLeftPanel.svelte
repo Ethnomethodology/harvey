@@ -250,9 +250,6 @@
                 case 'Open': 
                     dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
                     break;
-                case 'Import':
-                    handleImportClick('imported_transcript');
-                    break;
                 case 'Rename': 
                     const nameWithoutExt = item.name.toLowerCase().endsWith('.json') ? item.name.slice(0, -5) : item.name;
                     itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
@@ -390,7 +387,7 @@
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[DataLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
-            const nameForBackend = finalNewNameFromModal; 
+            const nameForBackend = finalNewNameFromModal.endsWith('.json') ? finalNewNameFromModal : `${finalNewNameFromModal}.json`;
             try { await renameProjectItem(item.path, nameForBackend, item.file_type); }
             catch (err) { console.error(`[DataLeftPanel] Rename failed for imported transcript ${item.name}:`, err); } 
             finally { itemToRename = null; }
@@ -1078,7 +1075,6 @@
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-                 <button on:click|stopPropagation={() => { handleContextMenuAction('Import'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Import</button>
                 <button
                     on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:mouseleave={handleLeaveAddToGroupButton}

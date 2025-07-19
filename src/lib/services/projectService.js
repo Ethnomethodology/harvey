@@ -841,9 +841,9 @@ export async function saveTranscriptData() {
 
 export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
 export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
-    await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath });
+    const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
     await refreshProjectFiles(); // Refresh the file list after rename
-    project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.` }));
+    project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.`, fileRenamed: { oldPath: itemPath, newPath: newPath } }));
 } catch (error) {
     const errorMessage = error?.message || String(error);
     await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' });

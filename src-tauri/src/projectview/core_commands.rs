@@ -1558,7 +1558,7 @@ fn rename_asset_with_folder(
     project_base_dir: &Path,
     project_id_for_db: &str,
     item_type: &str,
-) -> Result<(), CommandError> {
+) -> Result<PathBuf, CommandError> {
     let old_stem_name;
     let new_item_path;
     let old_relative_path;
@@ -1747,11 +1747,11 @@ fn rename_asset_with_folder(
     };
     app_handle.emit("item_renamed", payload).map_err(|e| CommandError::from(format!("Failed to emit event: {}", e)))?;
 
-    Ok(())
+    Ok(new_item_path)
 }
 
 #[tauri::command]
-pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
+pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<String, CommandError> {
     info!("[Backend Rename] Request: Item='{}', NewNameParam='{}'", item_path, new_name);
     let item_path_buf = PathBuf::from(&item_path);
     let xml_path_buf = PathBuf::from(&project_xml_path);
@@ -1794,6 +1794,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
     let parent_dir = item_path_buf.parent().ok_or_else(|| CommandError::from(format!("Could not get parent directory for {}", item_path_buf.display())))?;
 
+    let final_new_path: PathBuf;
+
     match item_type.as_str() {
         "media" | "doc" | "image" | "table" => {
             let new_name_path_buf = PathBuf::from(new_name_trimmed);
@@ -1803,17 +1805,18 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 .ok_or_else(|| CommandError::from("Could not get stem from new name."))?;
             // For these types, rename_asset_with_folder expects the new_name to be the stem.
             // The original extension will be re-applied by rename_asset_with_folder.
-            rename_asset_with_folder(&app_handle, &item_path_buf, new_stem_from_input, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
+            final_new_path = rename_asset_with_folder(&app_handle, &item_path_buf, new_stem_from_input, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
         },
         "transcript" => {
             let new_filename_with_ext = new_name_trimmed;
             let new_path = parent_dir.join(new_filename_with_ext);
+            final_new_path = new_path.clone();
 
             if new_filename_with_ext.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New filename contains invalid characters.")); }
             if !new_filename_with_ext.ends_with(".json") { return Err(CommandError::from("Transcript filename must end with .json")); }
             if new_filename_with_ext.starts_with('.') { return Err(CommandError::from("Filename cannot start with a dot.")); }
 
-            if item_path_buf == new_path { info!("[Backend Rename] New path is same as old path. No action needed."); return Ok(()); }
+            if item_path_buf == new_path { info!("[Backend Rename] New path is same as old path. No action needed."); return Ok(item_path); }
 
             if new_path.exists() {
                  let canon_old = fs::canonicalize(&item_path_buf).ok();
@@ -1894,7 +1897,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // Check if no effective change
             if *old_transcript_file_abs_path == new_transcript_file_path_in_old_folder && old_transcript_folder_abs_path == &new_transcript_folder_abs_path {
                 info!("[Backend Rename] Imported transcript name and folder name are effectively unchanged. No action needed.");
-                return Ok(());
+                return Ok(item_path);
             }
 
             // Check for conflicts
@@ -1902,6 +1905,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 return Err(CommandError::from(format!("A folder named '{}' already exists for imported transcripts. Cannot rename folder.", new_transcript_stem_str)));
             }
             let final_new_transcript_file_abs_path = new_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
+            final_new_path = final_new_transcript_file_abs_path.clone();
             if final_new_transcript_file_abs_path.exists() {
                 let canon_old_abs = fs::canonicalize(old_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {}", old_transcript_file_abs_path.display(), e)))?;
                 let canon_final_target_abs = fs::canonicalize(&final_new_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {}", final_new_transcript_file_abs_path.display(), e)))?;
@@ -2001,7 +2005,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
     }
 
     info!("[Backend Rename] Success for: {}", item_path);
-    Ok(())
+    Ok(final_new_path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
