@@ -93,7 +93,8 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
     let file_type = match (asset_type_dir, sub_folder, extension.as_str()) {
         // --- Rules for files within dedicated stem folders ---
         // For these, `sub_folder` (components[3]) is the filename itself.
-        (Some(DOCS_DIR), Some(_), ext) if ["json", "pdf", "md", "txt"].contains(&ext) => "doc".to_string(),
+        (Some(DOCS_DIR), _, "json") => "doc".to_string(),
+        (Some(DOCS_DIR), Some(_), ext) if ["pdf", "md", "txt"].contains(&ext) => "doc".to_string(),
         (Some(IMAGES_DIR), Some(_), ext) if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"].contains(&ext) => "image".to_string(),
         (Some(TABLES_DIR), Some(_), ext) if ["csv", "xlsx"].contains(&ext) => "table".to_string(),
         (Some(TRANSCRIPTS_DIR), Some(_), "json") => "imported_transcript".to_string(), // Standalone imported transcripts
