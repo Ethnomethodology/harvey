@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, DocumentEntryXml, ImageEntryXml, TableEntryXml, TranscriptEntryXml};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -1691,7 +1691,14 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 
     match item_type.as_str() {
         "media" | "doc" | "image" | "table" => {
-            rename_asset_with_folder(&app_handle, &item_path_buf, new_name_trimmed, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
+            let new_name_path_buf = PathBuf::from(new_name_trimmed);
+            let new_stem_from_input = new_name_path_buf
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from("Could not get stem from new name."))?;
+            // For these types, rename_asset_with_folder expects the new_name to be the stem.
+            // The original extension will be re-applied by rename_asset_with_folder.
+            rename_asset_with_folder(&app_handle, &item_path_buf, new_stem_from_input, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
         },
         "transcript" => {
             let new_filename_with_ext = new_name_trimmed;
@@ -1760,11 +1767,16 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let old_transcript_folder_abs_path = parent_dir;
             let old_transcript_relative_path = &item_relative_path; // This is key for DB
 
-            let new_transcript_stem_str = new_name_trimmed;
-            if new_transcript_stem_str.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New transcript name contains invalid characters.")); }
-            if new_transcript_stem_str.starts_with('.') { return Err(CommandError::from("Transcript name cannot start with a dot.")); }
+            let new_transcript_filename_with_ext_str = new_name_trimmed; // Use the full name from input
+            if new_transcript_filename_with_ext_str.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New transcript name contains invalid characters.")); }
+            if !new_transcript_filename_with_ext_str.ends_with(".json") { return Err(CommandError::from("Imported transcript filename must end with .json")); }
+            if new_transcript_filename_with_ext_str.starts_with('.') { return Err(CommandError::from("Filename cannot start with a dot.")); }
 
-            let new_transcript_filename_with_ext_str = format!("{}.json", new_transcript_stem_str);
+            let new_transcript_filename_path_buf = PathBuf::from(new_transcript_filename_with_ext_str.clone());
+            let new_transcript_stem_str = new_transcript_filename_path_buf
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| CommandError::from("Could not get stem from new imported transcript name."))?;
             let new_transcript_filename_pathbuf = PathBuf::from(&new_transcript_filename_with_ext_str);
 
             let new_transcript_file_path_in_old_folder = old_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
@@ -1851,7 +1863,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             // Removed: let mut xml_actually_changed_for_imported_transcript = false;
 
             if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
-                entry.name = new_transcript_filename_with_ext_str.clone();
+                entry.name = new_transcript_filename_with_ext_str.to_string();
                 entry.relative_path = new_relative_path_for_xml_and_db.clone();
                 project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
                 // xml_actually_changed_for_imported_transcript = true; // Variable removed
@@ -1862,7 +1874,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
                 let payload = ItemRenamedPayload {
                     old_path: item_path_buf.to_string_lossy().into_owned(),
                     new_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
-                    new_name: new_transcript_filename_with_ext_str.clone(),
+                    new_name: new_transcript_filename_with_ext_str.to_string(),
                     item_type: "imported_transcript".to_string(),
                     project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
                     base_directory: project_base_dir.to_string_lossy().into_owned(),
