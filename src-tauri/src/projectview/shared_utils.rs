@@ -150,6 +150,7 @@ pub fn save_project_xml(xml_path: &Path, project_data: &ProjectXml) -> Result<()
     let xml_string = quick_xml::se::to_string_with_root("project", project_data)
         .map_err(|e| CommandError::from(format!("XML Serialization error: {}", e)))?;
     let final_xml_string = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}", xml_string);
+    info!("[Save XML] XML content being saved to {}:\n{}", xml_path.display(), final_xml_string);
     let file = File::create(xml_path).map_err(|e| CommandError::from(format!("Failed to create/truncate XML file {}: {}", xml_path.display(), e)))?;
     let mut writer = BufWriter::new(file);
     writer.write_all(final_xml_string.as_bytes()).map_err(|e| CommandError::from(format!("Failed to write XML content to {}: {}", xml_path.display(), e)))?;

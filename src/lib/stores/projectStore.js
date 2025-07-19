@@ -605,17 +605,20 @@ listen('media_renamed', (event) => {
                         }
                         nodeChanged = true;
                     } else if (updatedNode.file_type === MEDIA_SUBDIR || updatedNode.file_type === TRANSCRIPTS_SUBDIR || (updatedNode.is_directory && updatedNode.name === MEDIA_SUBDIR) || (updatedNode.is_directory && updatedNode.name === TRANSCRIPTS_SUBDIR)) {
+                        console.log(`[ProjectStore updateFileEntriesRecursive] Updating media/transcript subdir: ${updatedNode.name}`);
                         const oldStemFolderPath = updatedNode.path.substring(0, updatedNode.path.lastIndexOf('/'));
                         const newStemFolderPath = oldStemFolderPath.replace(oldStem, newStem);
                         updatedNode.path = updatedNode.path.replace(oldStemFolderPath, newStemFolderPath);
                         updatedNode.relative_path = updatedNode.relative_path.replace(oldStem, newStem);
                         nodeChanged = true;
                     } else if (updatedNode.file_type === 'media' && updatedNode.path.includes(`/${oldStem}/`)) {
+                        console.log(`[ProjectStore updateFileEntriesRecursive] Updating media file: ${updatedNode.name} -> ${newAbsMediaPath.split(/[\/]/).pop()}`);
                         updatedNode.name = newAbsMediaPath.split(/[\/]/).pop();
                         updatedNode.path = newAbsMediaPath;
                         updatedNode.relative_path = newRelMediaPath;
                         nodeChanged = true;
                     } else if (updatedNode.file_type === 'transcript' && updatedNode.path.includes(`/${oldStem}/`)) {
+                        console.log(`[ProjectStore updateFileEntriesRecursive] Updating transcript file: ${updatedNode.name}`);
                         if (updatedNode.name.startsWith(oldStem)) {
                             updatedNode.name = updatedNode.name.replace(oldStem, newStem);
                         }
@@ -658,6 +661,7 @@ listen('item_renamed', (event) => {
     if (!event.payload) return;
 
     const { old_path, new_path, new_name, item_type, project_xml_path, base_directory } = event.payload;
+    console.log('[ProjectStore item_renamed] Old path:', old_path, 'New path:', new_path);
 
     project.update(p => {
         let updatedState = { ...p };
@@ -746,7 +750,9 @@ listen('item_renamed', (event) => {
         // and ensure the correct item is selected/displayed.
         if (stateChanged) {
             console.debug('[ProjectStore item_renamed] State changed, triggering full project refresh.');
+            console.log('[ProjectStore item_renamed] Files before refresh:', JSON.parse(JSON.stringify(updatedState.files))); // Log before refresh
             refreshProjectFiles(normalized_new_path); // Pass the new path to select it after refresh
+            console.log('[ProjectStore item_renamed] Files after refresh (async, may not be immediate):', JSON.parse(JSON.stringify(get(project).files))); // Log after refresh
         }
 
         return stateChanged ? updatedState : p;

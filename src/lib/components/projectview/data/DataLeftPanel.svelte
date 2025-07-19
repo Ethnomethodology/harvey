@@ -604,6 +604,8 @@
 
     $: displayCategories = (() => {
         const projectFilesTree = $project.files || [];
+        console.log('[DataLeftPanel] RE-EVALUATING displayCategories. projectFilesTree (from $project.files):', JSON.parse(JSON.stringify(projectFilesTree)));
+
         const projectDocumentFiles = $project.documentFiles || [];
         const projectTableFiles = $project.tableFiles || [];
         const projectImageFiles = $project.imageFiles || [];
@@ -652,6 +654,13 @@
         findMediaFilesRecursive(projectFilesTree);
         videos.sort((a, b) => a.name.localeCompare(b.name));
         audios.sort((a, b) => a.name.localeCompare(b.name));
+
+        console.log('[DataLeftPanel] Categorized Videos:', JSON.parse(JSON.stringify(videos)));
+        console.log('[DataLeftPanel] Categorized Audios:', JSON.parse(JSON.stringify(audios)));
+        console.log('[DataLeftPanel] Categorized Documents:', JSON.parse(JSON.stringify(documents)));
+        console.log('[DataLeftPanel] Categorized Tables:', JSON.parse(JSON.stringify(tables)));
+        console.log('[DataLeftPanel] Categorized Images:', JSON.parse(JSON.stringify(images)));
+        console.log('[DataLeftPanel] Categorized Imported Transcripts:', JSON.parse(JSON.stringify(importedTranscripts)));
 
         return CATEGORIES_BASE.map(cat => {
             if (cat.type === 'video') { return { ...cat, files: videos }; }
