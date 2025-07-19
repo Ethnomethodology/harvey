@@ -240,11 +240,16 @@
                     await message('File name (stem) cannot be empty.', { title: 'Invalid File Name', type: 'error' });
                     isEditing = true; return;
                 }
-                let nameToSend = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video' || itemType === 'imported_transcript')
-                    ? editedFileNameStem
-                    : (currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem);
+                let nameToSend;
+                if (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') {
+                    nameToSend = editedFileNameStem;
+                } else if (itemType === 'imported_transcript') {
+                    nameToSend = editedFileNameStem.endsWith('.json') ? editedFileNameStem : `${editedFileNameStem}.json`;
+                } else {
+                    nameToSend = currentFileExtension ? `${editedFileNameStem}.${currentFileExtension}` : editedFileNameStem;
+                }
 
-                let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'transcript' : itemType);
+                let effectiveItemTypeForRename = (itemType === 'media_data' || itemType === 'audio' || itemType === 'video') ? 'media' : (itemType === 'imported_transcript' ? 'imported_transcript' : itemType);
 
                 try {
                     await renameProjectItem(currentFileMetadata.db_absolute_file_path, nameToSend, effectiveItemTypeForRename);
