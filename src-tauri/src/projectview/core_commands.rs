@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, DocumentEntryXml, ImageFileEntryXml, TableFileEntryXml, TranscriptEntryXml};
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, DocumentEntryXml, ImageEntryXml, TableEntryXml, TranscriptEntryXml};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
