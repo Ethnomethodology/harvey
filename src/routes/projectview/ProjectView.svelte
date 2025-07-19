@@ -447,7 +447,7 @@ async function onConfirmTranscriptionStart(event) {
     async function proceedTabSwitch(tabName) {
         selectedTab = tabName;
 
-        project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
+        project.update(p => ({...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false}));
 
         if (selectedTab === 'data') {
             if (!get(project).selectedDocumentPath && !get(project).currentImportedTranscriptPath && !get(project).selectedMediaNotePath) {
@@ -455,6 +455,35 @@ async function onConfirmTranscriptionStart(event) {
             }
         } else if (selectedTab === 'transcriptions') {
             prepareDocumentView(null);
+            // If no media is selected, find and select the first one
+            if (!get(transcriptStore).selectedMediaFile) {
+                const proj = get(project);
+                let firstMediaFile = null;
+
+                function findFirstMediaRecursive(nodes) {
+                    if (!Array.isArray(nodes)) return;
+                    for (const node of nodes) {
+                        if (node.file_type === 'media' && !node.is_directory) {
+                            firstMediaFile = node;
+                            return;
+                        }
+                        if (node.children && node.children.length > 0) {
+                            findFirstMediaRecursive(node.children);
+                            if (firstMediaFile) return;
+                        }
+                    }
+                }
+
+                findFirstMediaRecursive(proj.files);
+
+                if (firstMediaFile) {
+                    console.log(`[ProjectView] No media selected on transcriptions tab switch. Auto-selecting first media:`, firstMediaFile.path);
+                    // Use a timeout to ensure the UI has updated before selecting the media
+                    setTimeout(() => {
+                        handleRequestMediaSelection({ detail: { mediaPath: firstMediaFile.path } });
+                    }, 0);
+                }
+            }
         }
 
         if (tabName !== 'transcriptions' && transcriptionsViewRef?.mediaPlayerRef?.videoElement && !transcriptionsViewRef.mediaPlayerRef.videoElement.paused) {
