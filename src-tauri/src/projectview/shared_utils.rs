@@ -111,7 +111,6 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
         // --- Legacy/Fallback rules for files directly under asset type dirs (NO dedicated stem folder) ---
         // For these, `sub_folder` (components[3]) would be None.
         (Some(IMAGES_DIR), None, ext) if ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"].contains(&ext) => "image".to_string(),
-        (Some(DOCS_DIR), None, "json") => "doc".to_string(),
         (Some(DOCS_DIR), None, "pdf") => "doc".to_string(),
         (Some(DOCS_DIR), None, "md") => "doc".to_string(),
         (Some(DOCS_DIR), None, "txt") => "doc".to_string(),

@@ -1,5 +1,5 @@
 // src-tauri/src/projectview/core_commands.rs
-use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata, StandardAssetMetadata}; // StandardAssetMetadata might be removable if not used by media/docs
+use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata};
 use super::shared_utils::*;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
@@ -16,11 +16,7 @@ use tauri_plugin_os::platform; // For OS detection
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
-// Ensure db_handler is appropriately used or imported.
-// If db_handler is already imported as `super::db_handler`, then specific functions might need to be brought into scope if not covered by `self`.
-// However, the new commands will call `db_handler::function_name`, so a general `use crate::projectview::db_handler;` or `use super::db_handler;` is sufficient.
-// The existing line `use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};` should be fine.
-use super::db_handler::{self, delete_annotations_from_db, rename_annotations_in_db};
+use super::db_handler::{self, delete_annotations_from_db};
 use super::shared_types::GroupData; // Added for group commands
 use rusqlite::Connection; // Added for opening DB connection in commands
 use tauri::Emitter;
@@ -869,7 +865,6 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             parent_relative_path: media_dir_rel_path.clone().replace("\\", "/"),
             depth: 3,
             speakers: media_entry.speakers.clone(),
-            media_xml_identifier: Some(media_stem.clone()),
             associated_transcripts: media_entry.transcripts.clone(), // Populate with transcripts from XML
             children: sub_folders,
         });
@@ -1603,24 +1598,32 @@ fn rename_asset_with_folder(
 
     let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(project_xml_path)?)?;
 
-    let files: &mut Vec<FileEntryXml> = match item_type {
-        "doc" => &mut project_data.document_files.files,
-        "image" => &mut project_data.image_files.files,
-        "table" => &mut project_data.table_files.files,
-        "media" => &mut project_data.media_files.files.iter_mut().find(|f| f.name == old_stem).unwrap().transcripts,
+    match item_type {
+        "doc" => {
+            if let Some(entry) = project_data.document_files.files.iter_mut().find(|f| f.relative_path == old_relative_path) {
+                entry.name = new_filename.clone();
+                entry.relative_path = new_relative_path.clone();
+            }
+        },
+        "image" => {
+            if let Some(entry) = project_data.image_files.files.iter_mut().find(|f| f.relative_path == old_relative_path) {
+                entry.name = new_filename.clone();
+                entry.relative_path = new_relative_path.clone();
+            }
+        },
+        "table" => {
+            if let Some(entry) = project_data.table_files.files.iter_mut().find(|f| f.relative_path == old_relative_path) {
+                entry.name = new_filename.clone();
+                entry.relative_path = new_relative_path.clone();
+            }
+        },
+        "media" => {
+            if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
+                entry.name = new_stem.to_string();
+            }
+        },
         _ => return Err(CommandError::from(format!("Unsupported item type for rename: {}", item_type))),
     };
-
-    if let Some(entry) = files.iter_mut().find(|f| f.relative_path == old_relative_path) {
-        entry.name = new_filename.clone();
-        entry.relative_path = new_relative_path.clone();
-    }
-
-    if item_type == "media" {
-        if let Some(entry) = project_data.media_files.files.iter_mut().find(|f| f.name == old_stem) {
-            entry.name = new_stem.to_string();
-        }
-    }
 
     save_project_xml(project_xml_path, &project_data)?;
 
@@ -1636,6 +1639,7 @@ fn rename_asset_with_folder(
 
     Ok(())
 }
+
 
 #[tauri::command]
 pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: String, new_name: String, project_xml_path: String) -> Result<(), CommandError> {
@@ -1675,20 +1679,203 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
          warn!("[Backend Rename] Request path '{}' is a directory, but rename should be triggered by media file. Proceeding with media logic.", item_path);
     }
 
-    let contains_invalid_chars = |name: &str| name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']);
-    let (item_type, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
+    let (_contains_invalid_chars, media_stem_opt, item_relative_path_buf) = get_item_details(&item_path_buf, project_base_dir)?;
     let item_relative_path = item_relative_path_buf.to_string_lossy().replace("\\", "/");
-    info!("[Backend Rename] Item type: '{}', Media Stem: {:?}, Rel Path: '{}'", item_type, media_stem_opt, item_relative_path);
+    info!("[Backend Rename] Item type: '{}', Media Stem: {:?}, Rel Path: '{}'", _contains_invalid_chars, media_stem_opt, item_relative_path);
 
-    let parent_dir = item_path_buf.parent().ok_or_else(|| CommandError::from(format!("Could not get parent directory for {}", item_path_buf.display())))?;
+    let _parent_dir = item_path_buf.parent().ok_or_else(|| CommandError::from(format!("Could not get parent directory for {}", item_path_buf.display())))?;
 
-    match item_type.as_str() {
+    match _contains_invalid_chars.as_str() {
         "media" | "doc" | "image" | "table" => {
-            rename_asset_with_folder(&app_handle, &item_path_buf, new_name_trimmed, &xml_path_buf, project_base_dir, &project_id_for_db, &item_type)?;
+            rename_asset_with_folder(&app_handle, &item_path_buf, new_name_trimmed, &xml_path_buf, project_base_dir, &project_id_for_db, &_contains_invalid_chars)?;
+        },
+        "transcript" => {
+            let new_filename_with_ext = new_name_trimmed;
+            let new_path = _parent_dir.join(new_filename_with_ext);
+
+            if new_filename_with_ext.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New filename contains invalid characters.")); }
+            if !new_filename_with_ext.ends_with(".json") { return Err(CommandError::from("Transcript filename must end with .json")); }
+            if new_filename_with_ext.starts_with('.') { return Err(CommandError::from("Filename cannot start with a dot.")); }
+
+            if item_path_buf == new_path { info!("[Backend Rename] New path is same as old path. No action needed."); return Ok(()); }
+
+            if new_path.exists() {
+                 let canon_old = fs::canonicalize(&item_path_buf).ok();
+                 let canon_new = fs::canonicalize(&new_path).ok();
+                 if canon_old.is_some() && canon_new.is_some() && canon_old != canon_new {
+                     return Err(CommandError::from(format!("File named '{}' already exists.", new_filename_with_ext)));
+                 } else {
+                     debug!("[Backend Rename] Target path exists but might be same file (case change?). Allowing rename attempt.");
+                 }
+            }
+
+            info!("[Backend Rename] Renaming transcript file {} -> {}", item_path_buf.display(), new_path.display());
+            fs::rename(&item_path_buf, &new_path).map_err(|e| CommandError::from(format!("Failed to rename file: {}", e)))?;
+
+            let media_identifier = media_stem_opt.ok_or_else(|| CommandError::from("Could not determine media stem for transcript rename."))?;
+            let new_relative_path_buf = new_path.strip_prefix(project_base_dir)?;
+            let new_relative_path = new_relative_path_buf.to_string_lossy().replace("\\", "/");
+
+            info!("[Backend Rename] Updating XML for media '{}': Path '{}' -> '{}', name -> '{}'", media_identifier, item_relative_path, new_relative_path, new_filename_with_ext);
+            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            let mut xml_changed = false;
+
+            if let Some(media_entry) = project_data.media_files.files.iter_mut().find(|f| f.name == media_identifier) {
+                if let Some(transcript_entry) = media_entry.transcripts.iter_mut().find(|t| t.relative_path == item_relative_path) {
+                    transcript_entry.name = new_filename_with_ext.to_string();
+                    transcript_entry.relative_path = new_relative_path;
+                    media_entry.transcripts.sort_by(|a,b| a.name.cmp(&b.name));
+                    xml_changed = true;
+                    info!("[Backend Rename] XML transcript entry updated.");
+                } else {
+                    warn!("[Backend Rename] Renamed transcript file, but could not find matching path '{}' in XML under media '{}'.", item_relative_path, media_identifier);
+                }
+            } else {
+                warn!("[Backend Rename] Renamed transcript file, but could not find media ID '{}' in XML.", media_identifier);
+            }
+
+            if xml_changed {
+                save_project_xml(&xml_path_buf, &project_data)?;
+                info!("[Backend Rename] XML saved.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: new_path.to_string_lossy().into_owned(),
+                    new_name: new_filename_with_ext.to_string(),
+                    item_type: "transcript".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for transcript: {}", e);
+                }
+            }
+        },
+        "imported_transcript" => {
+            let old_transcript_file_abs_path = &item_path_buf;
+            let old_transcript_folder_abs_path = _parent_dir;
+            let old_transcript_relative_path = &item_relative_path; // This is key for DB
+
+            let new_transcript_stem_str = new_name_trimmed;
+            if new_transcript_stem_str.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) { return Err(CommandError::from("New transcript name contains invalid characters.")); }
+            if new_transcript_stem_str.starts_with('.') { return Err(CommandError::from("Transcript name cannot start with a dot.")); }
+
+            let new_transcript_filename_with_ext_str = format!("{}.json", new_transcript_stem_str);
+            let new_transcript_filename_pathbuf = PathBuf::from(&new_transcript_filename_with_ext_str);
+
+            let new_transcript_file_path_in_old_folder = old_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
+
+            let transcripts_root_abs_path = old_transcript_folder_abs_path.parent()
+                .ok_or_else(|| CommandError::from(format!("Could not get Transcripts root from {}", old_transcript_folder_abs_path.display())))?;
+
+            let new_transcript_folder_abs_path = transcripts_root_abs_path.join(new_transcript_stem_str);
+
+            // Check if no effective change
+            if *old_transcript_file_abs_path == new_transcript_file_path_in_old_folder && old_transcript_folder_abs_path == &new_transcript_folder_abs_path {
+                info!("[Backend Rename] Imported transcript name and folder name are effectively unchanged. No action needed.");
+                return Ok(());
+            }
+
+            // Check for conflicts
+            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path && new_transcript_folder_abs_path.exists() {
+                return Err(CommandError::from(format!("A folder named '{}' already exists for imported transcripts. Cannot rename folder.", new_transcript_stem_str)));
+            }
+            let final_new_transcript_file_abs_path = new_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
+            if final_new_transcript_file_abs_path.exists() {
+                let canon_old_abs = fs::canonicalize(old_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {}", old_transcript_file_abs_path.display(), e)))?;
+                let canon_final_target_abs = fs::canonicalize(&final_new_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {}", final_new_transcript_file_abs_path.display(), e)))?;
+                if canon_final_target_abs != canon_old_abs {
+                    return Err(CommandError::from(format!("An imported transcript file named '{}' already exists in the target location '{}'.", new_transcript_filename_with_ext_str, new_transcript_folder_abs_path.display())));
+                 }
+            }
+
+            // 1. Rename the main transcript file (if its name changes within the folder)
+            if old_transcript_file_abs_path != &new_transcript_file_path_in_old_folder {
+                info!("[Backend Rename] Renaming imported transcript file {} -> {}", old_transcript_file_abs_path.display(), new_transcript_file_path_in_old_folder.display());
+                fs::rename(old_transcript_file_abs_path, &new_transcript_file_path_in_old_folder)
+                    .map_err(|e| CommandError::from(format!("Failed to rename imported transcript file: {}", e)))?;
+            }
+
+            // Current path of the transcript file after potential rename, still in old folder if folder name changes
+            let current_transcript_path_before_folder_rename = new_transcript_file_path_in_old_folder.clone();
+
+            // 2. Rename the folder (if stem changes)
+            if old_transcript_folder_abs_path != &new_transcript_folder_abs_path {
+                info!("[Backend Rename] Renaming imported transcript folder {} -> {}", old_transcript_folder_abs_path.display(), new_transcript_folder_abs_path.display());
+                if let Err(e) = fs::rename(old_transcript_folder_abs_path, &new_transcript_folder_abs_path) {
+                    warn!("[Backend Rename] Failed to rename imported transcript folder: {}. Attempting to revert file rename.", e);
+                    if old_transcript_file_abs_path != &current_transcript_path_before_folder_rename && current_transcript_path_before_folder_rename.exists() {
+                        let _ = fs::rename(&current_transcript_path_before_folder_rename, old_transcript_file_abs_path);
+                    }
+                    return Err(CommandError::from(format!("Failed to rename imported transcript folder: {}", e)));
+                }
+            }
+
+            // final_new_transcript_file_abs_path is the ultimate new absolute path
+            // new_transcript_filename_with_ext_str is the new filename "new_stem.json"
+            let new_relative_path_for_xml_and_db = final_new_transcript_file_abs_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+            // 3. Update database entry
+            if let Err(e) = db_handler::rename_asset_metadata_key(
+                &project_id_for_db,
+                old_transcript_relative_path, // old key
+                &new_relative_path_for_xml_and_db, // new key
+                &final_new_transcript_file_abs_path.to_string_lossy(), // new full file_path field value
+                &new_transcript_filename_with_ext_str, // new file_name field value
+            ) {
+                warn!("[Backend Rename] Failed to rename/update asset metadata in DB for project_id {}, imported transcript {} -> {}: {}. File system changes were successful. Attempting to revert FS changes.", project_id_for_db, old_transcript_relative_path, new_relative_path_for_xml_and_db, e);
+                // Attempt to revert FS operations (best effort)
+                if old_transcript_folder_abs_path != &new_transcript_folder_abs_path && new_transcript_folder_abs_path.exists() { // if folder was renamed
+                    let _ = fs::rename(&new_transcript_folder_abs_path, old_transcript_folder_abs_path); // revert folder rename
+                     // After folder revert, the file is at old_transcript_folder_abs_path.join(new_transcript_filename_pathbuf) if it was renamed
+                    let path_after_folder_revert = old_transcript_folder_abs_path.join(new_transcript_filename_pathbuf);
+                    if path_after_folder_revert.exists() && path_after_folder_revert != *old_transcript_file_abs_path {
+                         let _ = fs::rename(path_after_folder_revert, old_transcript_file_abs_path); // revert file rename
+                    }
+                } else if old_transcript_file_abs_path != &current_transcript_path_before_folder_rename && current_transcript_path_before_folder_rename.exists() { // if only file was renamed
+                     let _ = fs::rename(&current_transcript_path_before_folder_rename, old_transcript_file_abs_path); // revert file rename
+                }
+                return Err(CommandError::from(format!("Failed to update transcript metadata in DB: {}. File system changes attempted to be reverted.", e)));
+            } else {
+                info!("[Backend Rename] Successfully renamed/updated asset metadata in DB for imported transcript {} -> {}", old_transcript_relative_path, new_relative_path_for_xml_and_db);
+            }
+
+            // 4. Update Project XML
+            // The .metadata.json file is no longer managed in XML, so no need to update DocumentMetadataEntryXml.
+            info!("[Backend Rename] Updating XML for imported transcript: OldRelPath '{}', NewRelPath '{}', NewName '{}'", item_relative_path, new_relative_path_for_xml_and_db, new_transcript_filename_with_ext_str);
+            let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
+            // Removed: let mut xml_actually_changed_for_imported_transcript = false;
+
+            if let Some(entry) = project_data.imported_transcript_files.files.iter_mut().find(|t| t.relative_path == *old_transcript_relative_path) {
+                entry.name = new_transcript_filename_with_ext_str.clone();
+                entry.relative_path = new_relative_path_for_xml_and_db.clone();
+                project_data.imported_transcript_files.files.sort_by(|a,b| a.name.cmp(&b.name));
+                // xml_actually_changed_for_imported_transcript = true; // Variable removed
+                info!("[Backend Rename] XML imported transcript entry updated. Saving XML.");
+                save_project_xml(&xml_path_buf, &project_data)?;
+                info!("[Backend Rename] XML saved for imported transcript rename.");
+
+                let payload = ItemRenamedPayload {
+                    old_path: item_path_buf.to_string_lossy().into_owned(),
+                    new_path: final_new_transcript_file_abs_path.to_string_lossy().into_owned(),
+                    new_name: new_transcript_filename_with_ext_str.clone(),
+                    item_type: "imported_transcript".to_string(),
+                    project_xml_path: xml_path_buf.to_string_lossy().into_owned(),
+                    base_directory: project_base_dir.to_string_lossy().into_owned(),
+                };
+                if let Err(e) = app_handle.emit("item_renamed", payload) {
+                    warn!("[Backend Rename] Failed to emit item_renamed event for imported_transcript: {}", e);
+                }
+            } else {
+                // This should ideally not happen if DB update was successful, as it means XML was out of sync.
+                warn!("[Backend Rename] Renamed imported transcript (FS & DB), but could not find matching old relative path '{}' in XML. XML not saved.", old_transcript_relative_path);
+            }
+            // Logic for updating project_data.document_metadata_files.files is REMOVED.
+            // The conditional save based on the flag is removed; save now happens inside the 'if let Some(entry)' block.
         },
         _ => {
-            error!("[Backend Rename] Renaming items of type '{}' is not supported directly: {}", item_type, item_path);
-            return Err(CommandError::from(format!("Renaming not supported for item type '{}'. Rename the primary associated asset.", item_type)));
+            error!("[Backend Rename] Renaming items of type '{}' is not supported directly: {}", _contains_invalid_chars, item_path);
+            return Err(CommandError::from(format!("Renaming not supported for item type '{}'. Rename the primary associated asset.", _contains_invalid_chars)));
         }
     }
 
