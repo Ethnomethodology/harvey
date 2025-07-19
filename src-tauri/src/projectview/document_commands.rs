@@ -228,12 +228,11 @@ pub async fn delete_temporary_file(path: String) -> Result<(), CommandError> {
 
 #[tauri::command]
 pub fn get_unique_document_path(
-    project_base_dir_str: String,
+    target_dir_str: String,
     base_name: String,
     extension: String
 ) -> Result<String, CommandError> {
-    let project_base_dir = PathBuf::from(project_base_dir_str);
-    let target_dir = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR);
+    let target_dir = PathBuf::from(target_dir_str);
 
     if !target_dir.exists() {
          warn!("Target documents directory {} not found. Attempting to create.", target_dir.display());
@@ -294,9 +293,13 @@ pub async fn create_new_document(
         .parent()
         .ok_or_else(|| CommandError::from("Could not get project base dir from XML path"))?;
 
+    // Create a directory for the new document
+    let doc_folder = project_base_dir.join(HARVEY_FILES_DIR).join(DOCS_DIR).join("Untitled");
+    fs::create_dir_all(&doc_folder)?;
+
     let unique_path_str = get_unique_document_path(
-        project_base_dir.to_string_lossy().to_string(),
-        document_name.clone(),
+        doc_folder.to_string_lossy().to_string(),
+        "Untitled".to_string(),
         "json".to_string(),
     )?;
 
@@ -305,7 +308,7 @@ pub async fn create_new_document(
     save_document_and_update_xml(
         project_xml_path.clone(),
         unique_path_str.clone(),
-        document_name,
+        "Untitled".to_string(),
         initial_content.to_string(),
     )
     .await?;

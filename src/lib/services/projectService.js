@@ -119,7 +119,7 @@ export async function createNewDocument(projectXmlPath) {
     try {
         const newDocument = await invoke('create_new_document', {
             projectXmlPath: projectXmlPath,
-            documentName: "Untitled Document"
+            documentName: "Untitled"
         });
 
         await refreshProjectFiles();
