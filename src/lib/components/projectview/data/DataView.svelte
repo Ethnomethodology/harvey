@@ -141,7 +141,6 @@
     }
 
 	onMount(() => {
-		console.debug('[DataView] Component container mounted.');
 	});
 
 </script>

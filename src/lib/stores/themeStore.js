@@ -125,13 +125,11 @@ export async function loadThemePreferenceFromBackend() {
             // Update localStorage as well to keep it synced with the backend (source of truth)
             localStorage.setItem(THEME_STORAGE_KEY, backendPreference);
         } else {
-             console.log('[ThemeStore] No valid theme preference found in backend, using localStorage/default value.');
+             
              // No need to set the store here, it already has the localStorage/default value
         }
     } catch (error) {
         console.error('[ThemeStore] Failed to load theme preference from backend:', error);
-        // Fallback to localStorage/default if backend fails, store is already initialized with this
-        console.log('[ThemeStore] Falling back to localStorage/default theme preference due to backend error.');
-    }
+}
 }
 // -----------------------------------------

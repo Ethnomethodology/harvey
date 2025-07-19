@@ -69,7 +69,7 @@
           // project.update(p => ({ ...p, isLoading: false, error: null, xmlPath: null, selectedMediaFile: null, /* etc */ }));
       }
   
-      console.debug('[+layout.svelte] onMount finished.'); // DEBUG
+      
     });
   
   </script>

@@ -220,7 +220,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
     }
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
-        console.log('[ProjectService] Loaded data from backend:', JSON.stringify(loadedData.files, null, 2));
+        
 
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
@@ -330,10 +330,9 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
 
         if (mediaFileToSelect) {
-            console.log('[ProjectService] Calling selectMedia with mediaFileToSelect:', JSON.stringify(mediaFileToSelect, null, 2));
+            
             selectMedia(mediaFileToSelect);
-        } else {
-            console.log('[ProjectService] Calling selectMedia with null (no media selected).');
+        
             selectMedia(null);
         }
     } catch (error) {
