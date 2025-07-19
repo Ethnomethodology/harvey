@@ -84,7 +84,11 @@ pub fn get_item_details( item_path: &Path, project_base_dir: &Path,) -> Result<(
     let _filename_comp = components.last().copied();
     let extension = item_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
 
-    let media_stem_identifier = if asset_type_dir == Some(MEDIA_DIR) {
+    let media_stem_identifier = if asset_type_dir == Some(MEDIA_DIR)
+        || asset_type_dir == Some(IMAGES_DIR)
+        || asset_type_dir == Some(DOCS_DIR)
+        || asset_type_dir == Some(TABLES_DIR)
+    {
         media_stem.map(|s| s.to_string())
     } else {
         None
