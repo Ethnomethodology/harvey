@@ -539,6 +539,15 @@
     :global(#image-annotation-toolbar-container .a9s-toolbar button.a9s-selected svg) {
         @apply text-blue-500 dark:text-blue-400;
     }
+    :global(#image-annotation-toolbar-container .a9s-toolbar button.active) {
+        @apply bg-blue-100 dark:bg-blue-900; /* Light blue highlight for active button */
+    }
+    :global(#image-annotation-toolbar-container .a9s-toolbar button.active svg g,
+            #image-annotation-toolbar-container .a9s-toolbar button.active svg rect,
+            #image-annotation-toolbar-container .a9s-toolbar button.active svg circle,
+            #image-annotation-toolbar-container .a9s-toolbar button.active svg path) {
+        stroke: theme('colors.blue.500') !important; /* Deeper blue stroke for active SVG elements */
+    }
     :global(.openseadragon-container .openseadragon-canvas) {
         outline: none !important;
     }
