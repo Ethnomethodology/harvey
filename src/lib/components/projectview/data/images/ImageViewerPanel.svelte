@@ -196,6 +196,7 @@
                 zoomPerScroll: 1.2,
                 gestureSettingsMouse: { scrollToZoom: true, clickToZoom: false, dblClickToZoom: false, pinchToZoom: true },
                 showNavigator: false,
+                showNavigationControl: false,
             });
 
             osdViewer.addHandler('open', async () => {
