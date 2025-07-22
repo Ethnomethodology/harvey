@@ -312,24 +312,23 @@
         const { title, description, color } = event.detail;
         if (annotationBeingCreated) {
             const newBody = [];
-            if (title) {
-                newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
-            }
-            if (description) {
-                newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
-            }
+            if (title) newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
+            if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
             newBody.push({ type: 'Color', value: color, purpose: 'highlighting' });
 
             const annotationToSave = {
                 ...annotationBeingCreated,
+                type: 'Annotation',
                 body: newBody
             };
 
-            // Add the annotation to Annotorious
             anno.addAnnotation(annotationToSave);
-            // Annotorious's 'createAnnotation' event listener will handle saving to DB
 
-            // Clear the temporary selection and hide the dialog
+            // Crucially, update our local cache from the source of truth
+            currentAnnotations = anno.getAnnotations().map(a => JSON.parse(JSON.stringify(a)));
+
+            await saveAnnotationsForImage();
+
             annotationBeingCreated = null;
             showAnnotationCreationDialog = false;
         }
