@@ -19,42 +19,20 @@
     let error = null;
     let currentLoadedPath = null;
 
-    const highlightOptions = [
-        { value: 'rgba(255, 242, 117, 0.5)', label: 'Yellow' },
-        { value: 'rgba(168, 255, 158, 0.5)', label: 'Green' },
-        { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
-        { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
-        { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
-        { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
-    ];
-    const DEFAULT_HIGHLIGHT_COLOR = highlightOptions[0].value;
+    
 
-    let showAnnotationPopup = false;
-    let popupStyle = '';
-    let selectedAnnotation = null;
-    let currentAnnotationColor = DEFAULT_HIGHLIGHT_COLOR;
+    import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
+
+    let showAnnotationCreationDialog = false;
+    let dialogX = 0;
+    let dialogY = 0;
+    let annotationBeingCreated = null; // Stores the annotation data before it's formally added
 
     let currentAnnotations = [];
 
     const DELETE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5m2.5 3a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>`;
 
-    // async function getMetadataPathForImage(imgPath) {
-    //     if (!imgPath) return null;
-    //     try {
-    //         const dir = await dirname(imgPath);
-    //         let filename = imgPath.substring(dir.length + (dir.endsWith('/') || dir.endsWith('\\') ? 0 : 1));
-    //         const lastDot = filename.lastIndexOf('.');
-    //         const baseName = lastDot === -1 ? filename : filename.substring(0, lastDot);
-    //         const metadataFilename = `.${baseName}.annotations.json`;
-    //         return await join(dir, metadataFilename);
-    //     } catch (e) {
-    //         console.error("[ImageViewerPanel] Error constructing metadata path:", e);
-    //         return null;
-    //     }
-    // }
-
     async function loadAnnotationsForImage(imgPath) {
-        // console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for ${imgPath}`);
         if (!anno) {
             console.warn("[ImageViewerPanel loadAnnotationsForImage] Annotorious not initialized.");
             currentAnnotations = [];
@@ -64,16 +42,14 @@
         currentAnnotations = [];
 
         const currentProj = get(project);
-        // Ensure $project.id is valid before proceeding
         if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
             console.error('[ImageViewerPanel loadAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
-            // Handle error appropriately, e.g., clear annotations, show message
             return;
         }
-        const projectId = currentProj.id; // Use the validated project.id
+        const projectId = currentProj.id;
 
         const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = imgPath; // imgPath is the absolute path to the image
+        let relativeImagePath = imgPath;
 
         if (projectBaseDir && imgPath.startsWith(projectBaseDir)) {
             relativeImagePath = imgPath.substring(projectBaseDir.length);
@@ -83,20 +59,20 @@
         } else {
             console.warn(`[ImageViewerPanel loadAnnotationsForImage] imgPath "${imgPath}" may not be within projectBaseDir "${projectBaseDir}". Using path as is for DB key, this might fail if not truly relative.`);
         }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
         console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for project ${projectId} (from $project.id), image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
 
         try {
             const annotationsJsonString = await invoke('load_image_annotations', {
-                projectId: projectId, // Ensure this uses the projectId from currentProj.id
+                projectId: projectId,
                 imageRelativePathStr: relativeImagePath
             });
             if (annotationsJsonString && typeof annotationsJsonString === 'string') {
                 const loaded = JSON.parse(annotationsJsonString);
                 if (Array.isArray(loaded)) {
                     anno.setAnnotations(loaded);
-                    currentAnnotations = JSON.parse(JSON.stringify(loaded)); // Ensure deep copy for local cache
+                    currentAnnotations = JSON.parse(JSON.stringify(loaded));
                     console.log(`[ImageViewerPanel loadAnnotationsForImage] Loaded ${loaded.length} annotations for ${relativeImagePath}.`);
                 } else {
                     console.warn(`[ImageViewerPanel loadAnnotationsForImage] Loaded data for ${relativeImagePath} is not an array.`);
@@ -115,22 +91,16 @@
             console.warn("[ImageViewerPanel saveAnnotationsForImage] No image path, cannot save.");
             return;
         }
-        // const metadataPath = await getMetadataPathForImage(currentLoadedPath);
-        // if (!metadataPath) {
-        //     console.error(`[ImageViewerPanel saveAnnotationsForImage] Could not determine metadata path for ${currentLoadedPath}.`);
-        //     return;
-        // }
         const currentProj = get(project);
-        // Ensure $project.id is valid before proceeding
         if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
             console.error('[ImageViewerPanel saveAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
             await message('Cannot save image annotations: Project identifier is missing or invalid.', { title: 'Save Error', type: 'error' });
             return;
         }
-        const projectId = currentProj.id; // Use the validated project.id
+        const projectId = currentProj.id;
 
         const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = currentLoadedPath; // currentLoadedPath is the absolute path
+        let relativeImagePath = currentLoadedPath;
 
         if (projectBaseDir && currentLoadedPath.startsWith(projectBaseDir)) {
             relativeImagePath = currentLoadedPath.substring(projectBaseDir.length);
@@ -141,13 +111,13 @@
             console.error(`[ImageViewerPanel saveAnnotationsForImage] Cannot determine relative path for ${currentLoadedPath} using base ${projectBaseDir}. Cannot save.`);
             return;
         }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
         console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for project ${projectId} (from $project.id), image relative path: ${relativeImagePath}`);
 
         try {
             await invoke('save_image_annotations', {
-                projectId: projectId, // Ensure this uses the projectId from currentProj.id
+                projectId: projectId,
                 imageRelativePathStr: relativeImagePath,
                 annotationsJsonString: JSON.stringify(currentAnnotations, null, 2)
             });
@@ -166,7 +136,7 @@
         }
 
         console.log(`[ImageViewerPanel initializeViewer] Proceeding with initialization for: ${pathForImage}`);
-        currentLoadedPath = pathForImage; isLoading = true; error = null; showAnnotationPopup = false;
+        currentLoadedPath = pathForImage; isLoading = true; error = null;
         currentAnnotations = [];
 
         if (anno) { try { anno.destroy(); console.log("Previous Annotorious instance destroyed."); } catch (e) { console.warn("Error destroying previous Annotorious instance:", e); } anno = null; }
@@ -208,7 +178,7 @@
                     error = "Annotorious library component failed to load."; isLoading = false; return;
                 }
                 anno = OpenSeadragonAnnotator(osdViewer, {
-                    disableEditor: true,
+                    disableEditor: true, // Disable the default Annotorious editor
                     allowEmpty: true,
                     formatter: (annotation) => {
                         if (annotation.body) {
@@ -217,7 +187,7 @@
                                 return { 'style': `stroke-width:2; stroke: ${adjustOpacity(colorBody.value, 1)}; fill: ${colorBody.value}` };
                             }
                         }
-                        return { 'style': `stroke-width:2; stroke: ${adjustOpacity(DEFAULT_HIGHLIGHT_COLOR, 1)}; fill: ${DEFAULT_HIGHLIGHT_COLOR}` };
+                        return { 'style': `stroke-width:2; stroke: ${adjustOpacity('rgba(255, 242, 117, 0.5)', 1)}; fill: rgba(255, 242, 117, 0.5)` }; // Default yellow // Default yellow
                     }
                 });
                 if (!anno) { error = "Failed to initialize Annotorious."; isLoading = false; return; }
@@ -265,67 +235,56 @@
         console.log("[ImageViewerPanel] Setting up annotation events.");
         anno.off('createAnnotation'); anno.off('selectAnnotation'); anno.off('cancelSelected');
         anno.off('updateAnnotation'); anno.off('deleteAnnotation');
+        anno.off('createSelection'); // Ensure this is off to prevent multiple listeners
 
-        anno.on('createAnnotation', async (createdAnnotation) => {
-            console.log('[ImageViewerPanel createAnnotation] Event fired. Original annotation:', JSON.parse(JSON.stringify(createdAnnotation)));
+        anno.on('createSelection', (selection) => {
+            console.log('[ImageViewerPanel createSelection] Event fired. Selection:', JSON.parse(JSON.stringify(selection)));
+            // Store the selection temporarily
+            annotationBeingCreated = selection;
 
-            let annotationForStorage = JSON.parse(JSON.stringify(createdAnnotation)); 
-
-            if (!Array.isArray(annotationForStorage.body)) {
-                annotationForStorage.body = [];
-            }
-
-            const existingColorBody = annotationForStorage.body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-            if (!existingColorBody) {
-                annotationForStorage.body.push({ type: 'Color', purpose: 'highlighting', value: DEFAULT_HIGHLIGHT_COLOR });
-                console.log('[ImageViewerPanel createAnnotation] Added default color body to stored version.');
-            }
-            annotationForStorage.body = annotationForStorage.body.filter(b => b.purpose !== 'editing');
-
-            const index = currentAnnotations.findIndex(a => a.id === annotationForStorage.id);
-            if (index > -1) {
-                console.warn("[ImageViewerPanel createAnnotation] Annotation ID already exists in local store. Updating.", annotationForStorage.id);
-                currentAnnotations[index] = annotationForStorage;
+            // Get the coordinates for the dialog.
+            // For rectangles, use the end of the drag. For polygons, use the last double-click point.
+            // Annotorious selection provides screen coordinates in .rendered.
+            let clientX, clientY;
+            if (selection.rendered && selection.rendered.geometry) {
+                if (selection.target.selector.type === 'FragmentSelector') { // Rectangle
+                    const rect = selection.rendered.geometry;
+                    clientX = rect.x + rect.width;
+                    clientY = rect.y + rect.height;
+                } else if (selection.target.selector.type === 'SvgSelector') { // Polygon
+                    const points = selection.rendered.geometry.points;
+                    if (points && points.length > 0) {
+                        let sumX = 0, sumY = 0;
+                        for (const p of points) {
+                            sumX += p.x;
+                            sumY += p.y;
+                        }
+                        clientX = sumX / points.length;
+                        clientY = sumY / points.length;
+                    } else {
+                        clientX = osdViewerElement.clientWidth / 2;
+                        clientY = osdViewerElement.clientHeight / 2;
+                    }
+                } else {
+                    clientX = osdViewerElement.clientWidth / 2;
+                    clientY = osdViewerElement.clientHeight / 2;
+                }
             } else {
-                currentAnnotations.push(annotationForStorage);
+                // Fallback if rendered geometry is not immediately available
+                console.warn("Selection rendered geometry not available at createSelection event. Using fallback dialog position.");
+                clientX = osdViewerElement.clientWidth / 2;
+                clientY = osdViewerElement.clientHeight / 2;
             }
-            console.log('[ImageViewerPanel createAnnotation] currentAnnotations updated. Count:', currentAnnotations.length);
 
-            await saveAnnotationsForImage();
-            
-            console.log("[ImageViewerPanel createAnnotation] All annotations in Annotorious after creation:", anno.getAnnotations());
+            // Convert client coordinates to coordinates relative to the osdViewerElement
+            const osdRect = osdViewerElement.getBoundingClientRect();
+            dialogX = clientX - osdRect.left;
+            dialogY = clientY - osdRect.top;
+
+            showAnnotationCreationDialog = true;
         });
 
-        anno.on('selectAnnotation', (annotation, element) => {
-            console.log('[ImageViewerPanel selectAnnotation] Annotation selected:', JSON.parse(JSON.stringify(annotation)));
-            selectedAnnotation = anno.getAnnotationById(annotation.id);
-            if (!selectedAnnotation) { console.warn("[ImageViewerPanel selectAnnotation] Could not get selected annotation by ID from Annotorious store."); return; }
-
-            const colorBody = selectedAnnotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-            currentAnnotationColor = colorBody ? colorBody.value : DEFAULT_HIGHLIGHT_COLOR;
-
-            if (element && osdViewerElement) {
-                const elRect = element.getBoundingClientRect();
-                const containerRect = osdViewerElement.getBoundingClientRect();
-                let top = elRect.bottom - containerRect.top + 5;
-                let left = elRect.left - containerRect.left + (elRect.width / 2) - (95); // Centered for ~190px popup
-                const popupWidth = 190; const popupHeight = 40;
-                if (left < 5) left = 5;
-                if (left + popupWidth > containerRect.width) left = containerRect.width - popupWidth - 5;
-                if (top + popupHeight > containerRect.height && elRect.top - containerRect.top - popupHeight - 5 > 0) {
-                     top = elRect.top - containerRect.top - popupHeight - 5;
-                } else if (top + popupHeight > containerRect.height) { top = 5; }
-                if (top < 5) top = 5;
-                popupStyle = `top: ${top}px; left: ${left}px;`;
-                showAnnotationPopup = true;
-                tick();
-            } else { console.warn("[ImageViewerPanel selectAnnotation] Could not get element or osdViewerElement for popup positioning."); }
-        });
-
-        anno.on('cancelSelected', () => {
-            console.log('[ImageViewerPanel cancelSelected] Selection cancelled.');
-            selectedAnnotation = null; showAnnotationPopup = false;
-        });
+        
 
         anno.on('updateAnnotation', async (annotation, _previous) => {
             console.log('[ImageViewerPanel updateAnnotation] Annotation updated:', JSON.parse(JSON.stringify(annotation)));
@@ -344,89 +303,56 @@
             console.log('[ImageViewerPanel deleteAnnotation] Annotation deleted:', JSON.parse(JSON.stringify(annotation)));
             currentAnnotations = currentAnnotations.filter(a => a.id !== annotation.id);
             await saveAnnotationsForImage();
-            if (selectedAnnotation && selectedAnnotation.id === annotation.id) {
-                showAnnotationPopup = false;
-                selectedAnnotation = null;
-            }
-        });
+            });
     }
 
     function fitToViewer() { if (osdViewer) { osdViewer.viewport.goHome(false); } }
 
-    async function handleChangeAnnotationColor(newColor) {
-        if (selectedAnnotation && anno) {
-            const liveAnnotation = anno.getAnnotationById(selectedAnnotation.id);
-            if (!liveAnnotation) {
-                console.warn("[ImageViewerPanel handleChangeAnnotationColor] Selected annotation not found in Annotorious store.");
-                return;
+    async function handleAnnotationDialogSave(event) {
+        const { title, description, color } = event.detail;
+        if (annotationBeingCreated) {
+            const newBody = [];
+            if (title) {
+                newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
             }
+            if (description) {
+                newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
+            }
+            newBody.push({ type: 'Color', value: color, purpose: 'highlighting' });
 
-            const newColorBody = { type: 'Color', purpose: 'highlighting', value: newColor };
-            const updatedAnnotation = {
-                ...liveAnnotation,
-                body: [
-                    ...(liveAnnotation.body || []).filter(b => !(b.purpose === 'highlighting' && b.type === 'Color')),
-                    newColorBody
-                ]
+            const annotationToSave = {
+                ...annotationBeingCreated,
+                body: newBody
             };
 
-            anno.removeAnnotation(liveAnnotation.id);
-            anno.addAnnotation(updatedAnnotation);
-            anno.selectAnnotation(updatedAnnotation.id); 
+            // Add the annotation to Annotorious
+            anno.addAnnotation(annotationToSave);
+            // Annotorious's 'createAnnotation' event listener will handle saving to DB
 
-            currentAnnotationColor = newColor;
-            selectedAnnotation = JSON.parse(JSON.stringify(updatedAnnotation));
-
-            const idx = currentAnnotations.findIndex(a => a.id === updatedAnnotation.id);
-            if (idx > -1) {
-                currentAnnotations[idx] = JSON.parse(JSON.stringify(updatedAnnotation));
-            } else {
-                currentAnnotations.push(JSON.parse(JSON.stringify(updatedAnnotation)));
-            }
-
-            await saveAnnotationsForImage();
+            // Clear the temporary selection and hide the dialog
+            annotationBeingCreated = null;
+            showAnnotationCreationDialog = false;
         }
     }
 
-    async function handleDeleteSelectedAnnotation() {
-        if (selectedAnnotation && anno) {
-            anno.removeAnnotation(selectedAnnotation.id);
-            await tick();
-            currentAnnotations = anno.getAnnotations().map(a => JSON.parse(JSON.stringify(a)));
-            await saveAnnotationsForImage();
-        }
-        showAnnotationPopup = false;
+    function handleAnnotationDialogCancel() {
+        // Clear the temporary selection and hide the dialog
+        annotationBeingCreated = null;
+        showAnnotationCreationDialog = false;
+        // If the user cancels, we might want to clear the drawing tool selection
+        // or reset the state in Annotorious, depending on desired UX.
+        // For now, just hide the dialog.
     }
 
-    function handlePopupClickOutside(event) {
-        const popupElement = document.getElementById('annotation-popup');
-        if (popupElement && popupElement.contains(event.target)) {
-            return; 
-        }
+    
 
-        if (event.target.closest('.a9s-editor, .a9s-annotation, .a9s-toolbar, #image-annotation-toolbar-container')) {
-            return; 
-        }
-        if (anno && anno.getSelected()) {
-            anno.cancelSelected(); 
-        } else {
-            showAnnotationPopup = false;
-            selectedAnnotation = null;
-        }
-    }
+    
 
     onMount(() => {
         console.log('[ImageViewerPanel] Mounted. Initial Path:', imagePath);
         if (imagePath && osdViewerElement) { initializeViewer(imagePath); }
         else { isLoading = false; console.log("[ImageViewerPanel onMount] No imagePath or osdViewerElement, not initializing."); }
-        document.addEventListener('click', handlePopupClickOutside, true);
-        return () => {
-            console.log("[ImageViewerPanel onDestroy] Cleaning up...");
-            if (anno) { try { anno.destroy(); } catch(e){console.warn("Error destroying anno", e)} anno = null; }
-            if (toolbar) { try { toolbar.destroy(); } catch(e){console.warn("Error destroying toolbar", e)} toolbar = null; }
-            if (osdViewer) { try { osdViewer.destroy(); } catch(e){console.warn("Error destroying osdViewer", e)} osdViewer = null; }
-            document.removeEventListener('click', handlePopupClickOutside, true);
-        };
+        
     });
 
     $: {
@@ -441,8 +367,8 @@
             console.log(`[ImageViewerPanel reactive] imagePath cleared, destroying viewer and annotorious instances.`);
             if (anno) { try { anno.destroy(); } catch(e){console.warn("Error destroying anno on path clear", e)} anno = null; }
             if (toolbar) { try { toolbar.destroy(); } catch(e){console.warn("Error destroying toolbar on path clear", e)} toolbar = null; }
-            if (osdViewer) { try { osdViewer.destroy(); } catch(e){console.warn("Error destroying osd on path clear", e)} osdViewer = null; }
-            isLoading = false; error = null; currentLoadedPath = null; showAnnotationPopup = false;
+            if (osdViewer) { try { osdViewer.destroy(); } catch(e){console.warn("Error destroying osdViewer", e)} osdViewer = null; }
+                        isLoading = false; error = null; currentLoadedPath = null;
             currentAnnotations = [];
         }
     }
@@ -474,31 +400,16 @@
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
         </div>
 
-        {#if showAnnotationPopup && selectedAnnotation}
-            <div
-                id="annotation-popup"
-                class="absolute z-[1000] bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl p-1.5 flex items-center space-x-1"
-                style={popupStyle}>
-                {#each highlightOptions as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-400 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-1 dark:focus:ring-offset-gray-700"
-                        class:ring-blue-500={currentAnnotationColor === option.value}
-                        class:dark:ring-blue-400={currentAnnotationColor === option.value}
-                        class:ring-2={currentAnnotationColor === option.value}
-                        style:background-color={option.value}
-                        on:click|stopPropagation={() => handleChangeAnnotationColor(option.value)}>
-                    </button>
-                {/each}
-                <div class="w-px h-5 bg-gray-300 dark:bg-gray-500 mx-1"></div>
-                <button
-                    title="Delete annotation"
-                    class="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-800 text-red-600 dark:text-red-400 focus:outline-none focus:ring-1 focus:ring-red-500"
-                    on:click|stopPropagation={handleDeleteSelectedAnnotation}>
-                    {@html DELETE_ICON_SVG}
-                </button>
-            </div>
+        {#if showAnnotationCreationDialog}
+            <AnnotationCreationDialog
+                x={dialogX}
+                y={dialogY}
+                on:save={handleAnnotationDialogSave}
+                on:cancel={handleAnnotationDialogCancel}
+            />
         {/if}
+
+        
     </div>
 </div>
 
