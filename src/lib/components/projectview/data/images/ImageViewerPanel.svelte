@@ -26,10 +26,14 @@
 
     let currentAnnotations = []; // This will hold our annotation data
 
+    // State for drawing mode: 'rectangle', 'circle', or null (no drawing active)
+    let activeDrawingTool = null;
+
     // Variables for drawing
     let isDrawing = false;
     let startPoint = null;
-    let currentRect = null; // { x, y, width, height } in viewport coordinates
+    let currentRect = null; // { x, y, width, height } in viewport coordinates for rectangle
+    let currentCircle = null; // { cx, cy, r } in viewport coordinates for circle
     let svgOverlay; // Reference to the SVG element
 
     async function loadAnnotationsForImage(imgPath) {
@@ -207,30 +211,44 @@
     let startViewportPoint = null; // Stores the starting viewport point for drawing
 
     function onMouseDown(event) {
+        if (!activeDrawingTool) return; // Only draw if a drawing tool is active
         if (event.originalEvent.button !== 0) return; // Only left click
         isDrawing = true;
         startViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
-        currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
+        if (activeDrawingTool === 'rectangle') {
+            currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
+        } else if (activeDrawingTool === 'circle') {
+            currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
+        }
         event.preventDefaultAction = true; // Prevent OSD from panning/zooming
     }
 
     function onMouseMove(event) {
-        if (!isDrawing) return;
+        if (!isDrawing || !activeDrawingTool) return; // Only draw if a drawing tool is active
 
         const currentViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
-        const x = Math.min(startViewportPoint.x, currentViewportPoint.x);
-        const y = Math.min(startViewportPoint.y, currentViewportPoint.y);
-        const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
-        const height = Math.abs(startViewportPoint.y - currentViewportPoint.y);
-
-        currentRect = { x, y, width, height };
-        console.log('Drawing rect (viewport coords):', currentRect); // Debugging log
+        if (activeDrawingTool === 'rectangle') {
+            const x = Math.min(startViewportPoint.x, currentViewportPoint.x);
+            const y = Math.min(startViewportPoint.y, currentViewportPoint.y);
+            const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
+            const height = Math.abs(startViewportPoint.y - currentViewportPoint.y);
+            currentRect = { x, y, width, height };
+            console.log('Drawing rect (viewport coords):', currentRect); // Debugging log
+        } else if (activeDrawingTool === 'circle') {
+            const dx = currentViewportPoint.x - startViewportPoint.x;
+            const dy = currentViewportPoint.y - startViewportPoint.y;
+            const r = Math.sqrt(dx * dx + dy * dy) / 2;
+            const cx = startViewportPoint.x + dx / 2;
+            const cy = startViewportPoint.y + dy / 2;
+            currentCircle = { cx, cy, r };
+            console.log('Drawing circle (viewport coords):', currentCircle); // Debugging log
+        }
         event.preventDefaultAction = true;
     }
 
     async function onMouseUp(event) {
-        if (!isDrawing) return;
+        if (!isDrawing || !activeDrawingTool) return; // Only draw if a drawing tool is active
         isDrawing = false;
         event.preventDefaultAction = true;
 
@@ -238,34 +256,69 @@
 
         const endViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
-        const viewportRect = new OpenSeadragon.Rect(
-            Math.min(startViewportPoint.x, endViewportPoint.x),
-            Math.min(startViewportPoint.y, endViewportPoint.y),
-            Math.abs(startViewportPoint.x - endViewportPoint.x),
-            Math.abs(startViewportPoint.y - endViewportPoint.y)
-        );
+        let newAnnotation = null;
 
-        // Only create annotation if a meaningful rectangle was drawn
-        if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
-            const newAnnotation = {
-                id: uuidv4(),
-                type: 'Annotation',
-                target: {
-                    selector: {
-                        type: 'FragmentSelector',
-                        value: {
-                            x: viewportRect.x,
-                            y: viewportRect.y,
-                            width: viewportRect.width,
-                            height: viewportRect.height
+        if (activeDrawingTool === 'rectangle') {
+            const viewportRect = new OpenSeadragon.Rect(
+                Math.min(startViewportPoint.x, endViewportPoint.x),
+                Math.min(startViewportPoint.y, endViewportPoint.y),
+                Math.abs(startViewportPoint.x - endViewportPoint.x),
+                Math.abs(startViewportPoint.y - endViewportPoint.y)
+            );
+
+            // Only create annotation if a meaningful rectangle was drawn
+            if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
+                newAnnotation = {
+                    id: uuidv4(),
+                    type: 'Annotation',
+                    target: {
+                        selector: {
+                            type: 'FragmentSelector',
+                            value: {
+                                x: viewportRect.x,
+                                y: viewportRect.y,
+                                width: viewportRect.width,
+                                height: viewportRect.height,
+                                shape: 'rectangle' // Add shape type
+                            }
                         }
-                    }
-                },
-                body: [
-                    { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' } // Default yellow
-                ]
-            };
+                    },
+                    body: [
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' } // Default yellow
+                    ]
+                };
+            }
+        } else if (activeDrawingTool === 'circle') {
+            const dx = endViewportPoint.x - startViewportPoint.x;
+            const dy = endViewportPoint.y - startViewportPoint.y;
+            const r = Math.sqrt(dx * dx + dy * dy) / 2;
+            const cx = startViewportPoint.x + dx / 2;
+            const cy = startViewportPoint.y + dy / 2;
 
+            // Only create annotation if a meaningful circle was drawn
+            if (r > 0.0005) { // Small radius threshold
+                newAnnotation = {
+                    id: uuidv4(),
+                    type: 'Annotation',
+                    target: {
+                        selector: {
+                            type: 'FragmentSelector',
+                            value: {
+                                cx: cx,
+                                cy: cy,
+                                r: r,
+                                shape: 'circle' // Add shape type
+                            }
+                        }
+                    },
+                    body: [
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' } // Default yellow
+                    ]
+                };
+            }
+        }
+
+        if (newAnnotation) {
             currentAnnotations = [...currentAnnotations, newAnnotation];
             await saveAnnotationsForImage();
 
@@ -278,6 +331,7 @@
             showAnnotationCreationDialog = true;
         }
         currentRect = null;
+        currentCircle = null;
     }
 
     function updateAnnotationPositions() {
@@ -410,15 +464,24 @@
             <span class="text-xs font-medium pr-1">Highlight:</span>
             <button
                 class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800
-                       text-gray-700 dark:text-gray-300 text-xs rounded-md
-                       hover:bg-gray-100 dark:hover:bg-gray-700
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
-                on:click={() => { /* No specific drawing mode toggle needed for simple rect drawing */ }}
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'rectangle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M0 1.5A1.5 1.5 0 0 1 1.5 0h13A1.5 1.5 0 0 1 16 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5zM1.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5v-13a.5.5 0 0 0-.5-.5z"/>
-                    <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/>
+                    <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                </svg>
+            </button>
+            <button
+                class="inline-flex items-center justify-center px-2 py-1 border
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'circle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
                 </svg>
             </button>
         </div>
@@ -432,26 +495,43 @@
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
             <!-- SVG overlay for drawing and displaying annotations -->
-            <svg bind:this={svgOverlay} class="pointer-events-none z-20" viewBox="0 0 1 1">
+            <svg bind:this={svgOverlay} class="pointer-events-none z-20" viewBox="0 0 1 1"
+                 class:cursor-draw={activeDrawingTool !== null}
+                 class:cursor-pan={activeDrawingTool === null}>
                 {#each currentAnnotations as annotation (annotation.id)}
-                    {@const viewportRect = annotation.target.selector.value}
+                    {@const shapeData = annotation.target.selector.value}
                     {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
                     {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
                     {@const strokeColor = adjustOpacity(fillColor, 1)}
-                    <rect
-                        x={viewportRect.x}
-                        y={viewportRect.y}
-                        width={viewportRect.width}
-                        height={viewportRect.height}
-                        fill={fillColor}
-                        stroke={strokeColor}
-                        stroke-width="0.002"
-                        vector-effect="non-scaling-stroke"
-                        class="pointer-events-auto cursor-pointer"
-                        on:click={(e) => handleAnnotationClick(e, annotation)}
-                    />
+
+                    {#if shapeData.shape === 'rectangle'}
+                        <rect
+                            x={shapeData.x}
+                            y={shapeData.y}
+                            width={shapeData.width}
+                            height={shapeData.height}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="0.002"
+                            vector-effect="non-scaling-stroke"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click={(e) => handleAnnotationClick(e, annotation)}
+                        />
+                    {:else if shapeData.shape === 'circle'}
+                        <circle
+                            cx={shapeData.cx}
+                            cy={shapeData.cy}
+                            r={shapeData.r}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="0.002"
+                            vector-effect="non-scaling-stroke"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click={(e) => handleAnnotationClick(e, annotation)}
+                        />
+                    {/if}
                 {/each}
-                {#if isDrawing && currentRect}
+                {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
                     <rect
                         x={currentRect.x}
                         y={currentRect.y}
@@ -461,7 +541,16 @@
                         stroke="rgba(255, 242, 117, 1)"
                         stroke-width="0.002"
                         vector-effect="non-scaling-stroke"
-                        stroke-dasharray="0.004"
+                    />
+                {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
+                    <circle
+                        cx={currentCircle.cx}
+                        cy={currentCircle.cy}
+                        r={currentCircle.r}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="0.002"
+                        vector-effect="non-scaling-stroke"
                     />
                 {/if}
             </svg>
@@ -492,6 +581,16 @@
         background-color: theme('colors.gray.700');
     }
     .opacity-0 { opacity: 0; }
+
+    .cursor-pan {
+        cursor: grab;
+    }
+    .cursor-pan:active {
+        cursor: grabbing;
+    }
+    .cursor-draw {
+        cursor: crosshair;
+    }
 
     #image-annotation-toolbar-container:empty {
     }
