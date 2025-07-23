@@ -277,7 +277,6 @@
             dialogY = event.position.y - osdRect.top;
             showAnnotationCreationDialog = true;
         }
-        startPixel = null; // Reset startPixel
         currentRect = null;
     }
 
