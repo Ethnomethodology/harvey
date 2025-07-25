@@ -26,14 +26,15 @@
 
     let currentAnnotations = []; // This will hold our annotation data
 
-    // State for drawing mode: 'rectangle', 'circle', or null (no drawing active)
+    // State for drawing mode: 'rectangle', 'circle', 'polygon', or null
     let activeDrawingTool = null;
 
     // Variables for drawing
     let isDrawing = false;
     let startPoint = null;
-    let currentRect = null; // { x, y, width, height } in viewport coordinates for rectangle
-    let currentCircle = null; // { cx, cy, r } in viewport coordinates for circle
+    let currentRect = null; // { x, y, width, height } for rectangle
+    let currentCircle = null; // { cx, cy, r } for circle
+    let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
     let svgOverlay; // Reference to the SVG element
 
     async function loadAnnotationsForImage(imgPath) {
@@ -205,26 +206,52 @@
         osdViewer.addHandler('canvas-press', onMouseDown);
         osdViewer.addHandler('canvas-drag', onMouseMove);
         osdViewer.addHandler('canvas-release', onMouseUp);
+        osdViewer.addHandler('canvas-double-click', onDoubleClick);
         osdViewer.addHandler('update-viewport', updateAnnotationPositions);
     }
 
     let startViewportPoint = null; // Stores the starting viewport point for drawing
 
     function onMouseDown(event) {
-        if (!activeDrawingTool) return; // Only draw if a drawing tool is active
+        if (!activeDrawingTool) return;
         if (event.originalEvent.button !== 0) return; // Only left click
-        isDrawing = true;
-        startViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
-        if (activeDrawingTool === 'rectangle') {
-            currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
-        } else if (activeDrawingTool === 'circle') {
-            currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
+
+        const viewportPoint = osdViewer.viewport.pointFromPixel(event.position);
+
+        if (activeDrawingTool === 'polygon') {
+            if (!isDrawing) {
+                isDrawing = true;
+                currentPolygon.points = [viewportPoint];
+            } else {
+                currentPolygon.points = [...currentPolygon.points, viewportPoint];
+            }
+        } else {
+            isDrawing = true;
+            startViewportPoint = viewportPoint;
+            if (activeDrawingTool === 'rectangle') {
+                currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
+            } else if (activeDrawingTool === 'circle') {
+                currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
+            }
         }
-        event.preventDefaultAction = true; // Prevent OSD from panning/zooming
+        event.preventDefaultAction = true;
+    }
+
+        function drawPreviewLines(currentPoint) {
+        if (currentPolygon.points.length > 0) {
+            const lastPoint = currentPolygon.points[currentPolygon.points.length - 1];
+            const previewLine = { x1: lastPoint.x, y1: lastPoint.y, x2: currentPoint.x, y2: currentPoint.y };
+            let closingPreviewLine = null;
+            if (currentPolygon.points.length > 1) {
+                const firstPoint = currentPolygon.points[0];
+                closingPreviewLine = { x1: currentPoint.x, y1: currentPoint.y, x2: firstPoint.x, y2: firstPoint.y };
+            }
+            currentPolygon = { ...currentPolygon, previewLine, closingPreviewLine };
+        }
     }
 
     function onMouseMove(event) {
-        if (!isDrawing || !activeDrawingTool) return; // Only draw if a drawing tool is active
+        if (!isDrawing || !activeDrawingTool) return;
 
         const currentViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
@@ -234,7 +261,6 @@
             const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
             const height = Math.abs(startViewportPoint.y - currentViewportPoint.y);
             currentRect = { x, y, width, height };
-            console.log('Drawing rect (viewport coords):', currentRect); // Debugging log
         } else if (activeDrawingTool === 'circle') {
             const dx = currentViewportPoint.x - startViewportPoint.x;
             const dy = currentViewportPoint.y - startViewportPoint.y;
@@ -242,15 +268,17 @@
             const cx = startViewportPoint.x + dx / 2;
             const cy = startViewportPoint.y + dy / 2;
             currentCircle = { cx, cy, r };
-            console.log('Drawing circle (viewport coords):', currentCircle); // Debugging log
+        } else if (activeDrawingTool === 'polygon') {
+            drawPreviewLines(currentViewportPoint);
         }
         event.preventDefaultAction = true;
     }
 
     async function onMouseUp(event) {
-        if (!isDrawing || !activeDrawingTool) return; // Only draw if a drawing tool is active
-        isDrawing = false;
-        event.preventDefaultAction = true;
+        if (activeDrawingTool !== 'polygon') {
+            if (!isDrawing) return;
+            isDrawing = false;
+        }
 
         if (!startViewportPoint) return;
 
@@ -266,7 +294,6 @@
                 Math.abs(startViewportPoint.y - endViewportPoint.y)
             );
 
-            // Only create annotation if a meaningful rectangle was drawn
             if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
                 newAnnotation = {
                     id: uuidv4(),
@@ -279,12 +306,12 @@
                                 y: viewportRect.y,
                                 width: viewportRect.width,
                                 height: viewportRect.height,
-                                shape: 'rectangle' // Add shape type
+                                shape: 'rectangle'
                             }
                         }
                     },
                     body: [
-                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' } // Default yellow
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
                     ]
                 };
             }
@@ -295,8 +322,7 @@
             const cx = startViewportPoint.x + dx / 2;
             const cy = startViewportPoint.y + dy / 2;
 
-            // Only create annotation if a meaningful circle was drawn
-            if (r > 0.0005) { // Small radius threshold
+            if (r > 0.0005) {
                 newAnnotation = {
                     id: uuidv4(),
                     type: 'Annotation',
@@ -307,12 +333,12 @@
                                 cx: cx,
                                 cy: cy,
                                 r: r,
-                                shape: 'circle' // Add shape type
+                                shape: 'circle'
                             }
                         }
                     },
                     body: [
-                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' } // Default yellow
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
                     ]
                 };
             }
@@ -322,9 +348,8 @@
             currentAnnotations = [...currentAnnotations, newAnnotation];
             await saveAnnotationsForImage();
 
-            // Open dialog for the newly created annotation
             annotationBeingEdited = newAnnotation;
-            isEditingExisting = false; // It's a new annotation
+            isEditingExisting = false;
             const osdRect = osdViewerElement.getBoundingClientRect();
             dialogX = event.position.x - osdRect.left;
             dialogY = event.position.y - osdRect.top;
@@ -332,6 +357,38 @@
         }
         currentRect = null;
         currentCircle = null;
+    }
+
+    function onDoubleClick(event) {
+        if (activeDrawingTool !== 'polygon' || !isDrawing) {
+            return;
+        }
+        event.preventDefaultAction = true;
+
+        const newAnnotation = {
+            id: uuidv4(),
+            type: 'Annotation',
+            target: {
+                selector: {
+                    type: 'FragmentSelector',
+                    value: {
+                        shape: 'polygon',
+                        points: currentPolygon.points
+                    }
+                }
+            },
+            body: [
+                { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
+            ]
+        };
+
+        currentAnnotations = [...currentAnnotations, newAnnotation];
+        saveAnnotationsForImage();
+
+        // Reset drawing state
+        isDrawing = false;
+        currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
+        activeDrawingTool = null;
     }
 
     function updateAnnotationPositions() {
@@ -411,6 +468,7 @@
             osdViewer.removeHandler('canvas-press', onMouseDown);
             osdViewer.removeHandler('canvas-drag', onMouseMove);
             osdViewer.removeHandler('canvas-release', onMouseUp);
+            osdViewer.removeHandler('canvas-double-click', onDoubleClick);
             osdViewer.removeHandler('update-viewport', updateAnnotationPositions);
             // Remove the SVG overlay when component is destroyed
             if (svgOverlay) { // Removed hasOverlay check
@@ -484,6 +542,17 @@
                     <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
                 </svg>
             </button>
+            <button
+                class="inline-flex items-center justify-center px-2 py-1 border
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'polygon' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 .5a.5.5 0 0 1 .5.5v4.293l3.146-3.147a.5.5 0 1 1 .708.708L9.207 6H13.5a.5.5 0 0 1 .5.5v3.793l3.146-3.147a.5.5 0 1 1 .708.708L14.207 10H16a.5.5 0 0 1 .5.5v.207l-3.146 3.147a.5.5 0 1 1-.708-.708L15.293 11H11.5a.5.5 0 0 1-.5-.5V6.707l-3.146 3.147a.5.5 0 1 1-.708-.708L9.793 7H5.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5h.207L2.354.146a.5.5 0 1 1 .708.708L5.207 3H8.5a.5.5 0 0 1 .5.5v3.793l-3.146-3.147a.5.5 0 1 1-.708.708L6.793 7H3.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5H8z"/>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -529,6 +598,15 @@
                             class="pointer-events-auto cursor-pointer"
                             on:click={(e) => handleAnnotationClick(e, annotation)}
                         />
+                    {:else if shapeData.shape === 'polygon'}
+                        <polygon
+                            points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="0.002"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                        />
                     {/if}
                 {/each}
                 {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
@@ -552,6 +630,37 @@
                         stroke-width="0.002"
                         vector-effect="non-scaling-stroke"
                     />
+                {:else if isDrawing && activeDrawingTool === 'polygon' && currentPolygon.points.length > 0}
+                    <polygon
+                        points={currentPolygon.points.map(p => `${p.x},${p.y}`).join(' ')}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="0.002"
+                        vector-effect="non-scaling-stroke"
+                    />
+                    {#if currentPolygon.previewLine}
+                        <line
+                            x1={currentPolygon.previewLine.x1}
+                            y1={currentPolygon.previewLine.y1}
+                            x2={currentPolygon.previewLine.x2}
+                            y2={currentPolygon.previewLine.y2}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="0.002"
+                            stroke-dasharray="0.01, 0.01"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
+                    {#if currentPolygon.closingPreviewLine}
+                        <line
+                            x1={currentPolygon.closingPreviewLine.x1}
+                            y1={currentPolygon.closingPreviewLine.y1}
+                            x2={currentPolygon.closingPreviewLine.x2}
+                            y2={currentPolygon.closingPreviewLine.y2}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-dasharray="0.01, 0.01"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
                 {/if}
             </svg>
         </div>
