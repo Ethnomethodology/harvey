@@ -9,6 +9,7 @@
     export let initialTitle = '';
     export let initialDescription = '';
     export let isEditing = false; // New prop to indicate if we are editing an existing annotation
+    export let panelBounds = null; // New prop to receive the bounding rectangle of the parent panel
 
     let title = initialTitle;
     let description = initialDescription;
@@ -40,29 +41,40 @@
     let dialogWidth = 250; // Approximate width
     let dialogHeight = 250; // Approximate height
 
-    $: if (dialogElement) {
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
+    $: if (dialogElement && panelBounds) {
         let newX = x;
         let newY = y;
 
-        // Prevent going off right edge
-        if (newX + dialogWidth > viewportWidth - 20) {
-            newX = viewportWidth - dialogWidth - 20;
+        // Calculate dialog dimensions (approximate or get from dialogElement.getBoundingClientRect() if rendered)
+        // For now, using fixed approximate values as dialogElement might not be fully rendered yet
+        // when this reactive statement first runs.
+        const currentDialogRect = dialogElement.getBoundingClientRect();
+        const actualDialogWidth = currentDialogRect.width > 0 ? currentDialogRect.width : dialogWidth;
+        const actualDialogHeight = currentDialogRect.height > 0 ? currentDialogRect.height : dialogHeight;
+
+        // Adjust X position
+        // If dialog goes past right edge of panel
+        if (newX + actualDialogWidth > panelBounds.width) {
+            newX = panelBounds.width - actualDialogWidth - 10; // 10px padding from right
         }
-        // Prevent going off bottom edge
-        if (newY + dialogHeight > viewportHeight - 20) {
-            newY = viewportHeight - dialogHeight - 20;
+        // If dialog goes past left edge of panel
+        if (newX < 0) {
+            newX = 10; // 10px padding from left
         }
-        // Prevent going off left edge
-        if (newX < 20) {
-            newX = 20;
+
+        // Adjust Y position
+        // If dialog goes past bottom edge of panel
+        if (newY + actualDialogHeight > panelBounds.height) {
+            newY = panelBounds.height - actualDialogHeight - 10; // 10px padding from bottom
         }
-        // Prevent going off top edge
-        if (newY < 20) {
-            newY = 20;
+        // If dialog goes past top edge of panel
+        if (newY < 0) {
+            newY = 10; // 10px padding from top
         }
+
+        // Ensure dialog is within the panel's coordinate system (relative to panel's top-left)
+        // The x and y passed are already relative to the OSD viewer element, which is the panel.
+        // So, we just need to ensure it doesn't go outside its own bounds (0 to width/height).
 
         dialogElement.style.left = `${newX}px`;
         dialogElement.style.top = `${newY}px`;

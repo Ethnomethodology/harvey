@@ -682,6 +682,7 @@
                 initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
                 initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
                 isEditing={isEditingExisting}
+                panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
                 on:save={handleAnnotationDialogSave}
                 on:cancel={handleAnnotationDialogCancel}
                 on:delete={handleAnnotationDialogDelete}
