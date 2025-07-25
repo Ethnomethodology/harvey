@@ -553,7 +553,12 @@
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 .5a.5.5 0 0 1 .5.5v4.293l3.146-3.147a.5.5 0 1 1 .708.708L9.207 6H13.5a.5.5 0 0 1 .5.5v3.793l3.146-3.147a.5.5 0 1 1 .708.708L14.207 10H16a.5.5 0 0 1 .5.5v.207l-3.146 3.147a.5.5 0 1 1-.708-.708L15.293 11H11.5a.5.5 0 0 1-.5-.5V6.707l-3.146 3.147a.5.5 0 1 1-.708-.708L9.793 7H5.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5h.207L2.354.146a.5.5 0 1 1 .708.708L5.207 3H8.5a.5.5 0 0 1 .5.5v3.793l-3.146-3.147a.5.5 0 1 1-.708.708L6.793 7H3.5a.5.5 0 0 1-.5-.5v-4a.5.5 0 0 1 .5-.5H8z"/>
+                    <polygon 
+                        points="2,2 14,4 12,14 4,12 6,7" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        stroke-width="1" 
+                    />
                 </svg>
             </button>
         </div>

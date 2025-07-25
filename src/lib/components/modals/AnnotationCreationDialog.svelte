@@ -77,7 +77,7 @@
     <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">{isEditing ? 'Edit Annotation' : 'New Annotation'}</h3>
 
     <div class="mb-3">
-        <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title (Optional)</label>
+        <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
         <input
             type="text"
             id="annotation-title"
@@ -88,7 +88,7 @@
     </div>
 
     <div class="mb-3">
-        <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description (Optional)</label>
+        <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
         <textarea
             id="annotation-description"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
