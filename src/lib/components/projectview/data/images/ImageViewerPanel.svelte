@@ -522,7 +522,6 @@
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
     <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
         <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
-            <span class="text-xs font-medium pr-1">Highlight:</span>
             <button
                 class="inline-flex items-center justify-center px-2 py-1 border
                        border-gray-300 dark:border-gray-600 text-xs rounded-md
