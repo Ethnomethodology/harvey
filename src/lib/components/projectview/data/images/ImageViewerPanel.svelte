@@ -35,6 +35,7 @@
     let currentRect = null; // { x, y, width, height } for rectangle
     let currentCircle = null; // { cx, cy, r } for circle
     let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
+    let currentPreviewPolygonPoints = []; // For filled polygon preview
     let svgOverlay; // Reference to the SVG element
 
     async function loadAnnotationsForImage(imgPath) {
@@ -270,6 +271,7 @@
             currentCircle = { cx, cy, r };
         } else if (activeDrawingTool === 'polygon') {
             drawPreviewLines(currentViewportPoint);
+            currentPreviewPolygonPoints = [...currentPolygon.points, currentViewportPoint];
         }
         event.preventDefaultAction = true;
     }
@@ -388,6 +390,7 @@
         // Reset drawing state
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
+        currentPreviewPolygonPoints = [];
         activeDrawingTool = null;
     }
 
@@ -581,7 +584,7 @@
                             height={shapeData.height}
                             fill={fillColor}
                             stroke={strokeColor}
-                            stroke-width="0.002"
+                            stroke-width="1px"
                             vector-effect="non-scaling-stroke"
                             class="pointer-events-auto cursor-pointer"
                             on:click={(e) => handleAnnotationClick(e, annotation)}
@@ -593,7 +596,7 @@
                             r={shapeData.r}
                             fill={fillColor}
                             stroke={strokeColor}
-                            stroke-width="0.002"
+                            stroke-width="1px"
                             vector-effect="non-scaling-stroke"
                             class="pointer-events-auto cursor-pointer"
                             on:click={(e) => handleAnnotationClick(e, annotation)}
@@ -617,7 +620,7 @@
                         height={currentRect.height}
                         fill="rgba(255, 242, 117, 0.5)"
                         stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="0.002"
+                        stroke-width="1px"
                         vector-effect="non-scaling-stroke"
                     />
                 {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
@@ -627,12 +630,12 @@
                         r={currentCircle.r}
                         fill="rgba(255, 242, 117, 0.5)"
                         stroke="rgba(255, 242, 117, 1)"
-                        stroke-width="0.002"
+                        stroke-width="1px"
                         vector-effect="non-scaling-stroke"
                     />
-                {:else if isDrawing && activeDrawingTool === 'polygon' && currentPolygon.points.length > 0}
+                {:else if isDrawing && activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
                     <polygon
-                        points={currentPolygon.points.map(p => `${p.x},${p.y}`).join(' ')}
+                        points={currentPreviewPolygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
                         fill="rgba(255, 242, 117, 0.5)"
                         stroke="rgba(255, 242, 117, 1)"
                         stroke-width="0.002"
@@ -645,7 +648,7 @@
                             x2={currentPolygon.previewLine.x2}
                             y2={currentPolygon.previewLine.y2}
                             stroke="rgba(255, 242, 117, 1)"
-                            stroke-width="0.002"
+                            stroke-width="1px"
                             stroke-dasharray="0.01, 0.01"
                             vector-effect="non-scaling-stroke"
                         />
@@ -657,6 +660,7 @@
                             x2={currentPolygon.closingPreviewLine.x2}
                             y2={currentPolygon.closingPreviewLine.y2}
                             stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="1px"
                             stroke-dasharray="0.01, 0.01"
                             vector-effect="non-scaling-stroke"
                         />
