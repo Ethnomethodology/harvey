@@ -188,10 +188,8 @@
                 columnDefaults: { // Add this section
                     minWidth: 50, // Set a minimum width for all columns (in pixels)
                 },
-                // Pagination options
-                pagination: true,
-                paginationSize: 20,
-                paginationMode: 'local',
+                
+                
             });
 
             const saveCurrentTableLayout = debounce(async () => {
@@ -587,19 +585,7 @@
     padding-left: 0px !important;
 }
 
-:global(.tabulator-footer .tabulator-paginator .tabulator-page.active) {
-    background-color: #0d6efd !important; /* Using a common Bootstrap primary blue */
-    color: white !important;
-    font-weight: bold !important;
-    border-color: #0d6efd !important; /* Ensure border matches */
-}
 
-:global(.tabulator-footer .tabulator-paginator .tabulator-page[aria-current="page"]) {
-    background-color: #0d6efd !important; /* Using a common Bootstrap primary blue */
-    color: white !important;
-    font-weight: bold !important;
-    border-color: #0d6efd !important; /* Ensure border matches */
-}
 
         :global(.tabulator-cell) {
             overflow: hidden; /* Prevent cell itself from showing overflow if textarea somehow fails */
