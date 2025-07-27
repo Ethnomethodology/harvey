@@ -24,8 +24,10 @@ use uuid::Uuid; // Added for UUID generation
 
 // --- Table Layout Preferences Commands ---
 #[tauri::command]
-pub async fn save_table_layout_prefs(project_id: String, table_path: String, layout_json: String) -> Result<(), String> {
-    db_handler::save_table_layout_preferences(&project_id, &table_path, &layout_json)
+pub async fn save_table_layout_prefs(project_id: String, table_path: String, layout_json: serde_json::Value) -> Result<(), String> {
+    let layout_json_string = serde_json::to_string(&layout_json)
+        .map_err(|e| format!("Failed to serialize layout JSON: {}", e))?;
+    db_handler::save_table_layout_preferences(&project_id, &table_path, &layout_json_string)
         .map_err(|e| {
             log::error!("Failed to save table layout prefs for project_id {} table {}: {}", project_id, table_path, e);
             e.to_string()

@@ -404,27 +404,27 @@ fn load_xlsx_data(path: &Path) -> Result<Value, CommandError> {
             let mut map = serde_json::Map::new();
             let mut row_has_data = false;
             for (col_idx, cell) in row.iter().enumerate() {
-                let header = headers.get(col_idx).cloned().unwrap_or_else(|| format!("Column_{}", col_idx + 1));
-                let value_json = match cell {
-                    Data::String(s) => { row_has_data = true; json!(s.trim()) },
-                    Data::Float(f) => { row_has_data = true; json!(f) },
-                    Data::Int(i) => { row_has_data = true; json!(i) },
-                    Data::Bool(b) => { row_has_data = true; json!(b) },
-                    Data::DateTime(excel_dt_struct) => {
-                        row_has_data = true;
-                        // Try full datetime first, then fallback to raw serial number
-                        if let Some(dt) = excel_dt_struct.as_datetime() {
-                            json!(dt.to_string())
-                        } else {
-                            json!(excel_dt_struct.as_f64())
+                if let Some(header) = headers.get(col_idx) {
+                    let value_json = match cell {
+                        Data::String(s) => { row_has_data = true; json!(s.trim()) },
+                        Data::Float(f) => { row_has_data = true; json!(f) },
+                        Data::Int(i) => { row_has_data = true; json!(i) },
+                        Data::Bool(b) => { row_has_data = true; json!(b) },
+                        Data::DateTime(excel_dt_struct) => {
+                            row_has_data = true;
+                            if let Some(dt) = excel_dt_struct.as_datetime() {
+                                json!(dt.to_string())
+                            } else {
+                                json!(excel_dt_struct.as_f64())
+                            }
                         }
-                    }
-                    Data::DateTimeIso(s) => { row_has_data = true; json!(s) },
-                    Data::DurationIso(s) => { row_has_data = true; json!(s) },
-                    Data::Error(_) => json!(null),
-                    Data::Empty => json!(null),
-                };
-                map.insert(header, value_json);
+                        Data::DateTimeIso(s) => { row_has_data = true; json!(s) },
+                        Data::DurationIso(s) => { row_has_data = true; json!(s) },
+                        Data::Error(_) => json!(null),
+                        Data::Empty => json!(null),
+                    };
+                    map.insert(header.clone(), value_json);
+                }
             }
             if row_has_data {
                  records.push(Value::Object(map));

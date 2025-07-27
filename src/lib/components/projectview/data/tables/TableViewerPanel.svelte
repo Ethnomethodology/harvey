@@ -162,15 +162,15 @@
 
             let savedLayout = null;
             try {
-                savedLayout = await loadTableLayoutPrefs(relativeTablePath);
-                if (savedLayout) {
-                    console.debug(`[TableViewerPanel] Loaded saved layout for ${relativeTablePath}:`, JSON.stringify(savedLayout, null, 2)); // Log the full object
+                const layoutData = await loadTableLayoutPrefs(relativeTablePath);
+                if (layoutData) {
+                    savedLayout = layoutData; // Directly use the object
+                    console.debug(`[TableViewerPanel] Loaded layout for ${relativeTablePath}:`, JSON.stringify(savedLayout, null, 2));
                 } else {
                     console.debug(`[TableViewerPanel] No saved layout found for ${relativeTablePath}.`);
                 }
             } catch (e) {
-                console.error(`[TableViewerPanel] Error loading saved layout for ${relativeTablePath}:`, e); // Corrected path variable for error log
-                // Continue with default layout
+                console.error(`[TableViewerPanel] Error loading layout for ${relativeTablePath}:`, e);
             }
 
             // initialLayoutMode logic removed
@@ -222,8 +222,9 @@
                         layoutToSave.columns[field] = columnSaveData;
                     }
 
-                    console.debug(`[TableViewerPanel saveCurrentTableLayout] Saving layout for ${relativePathForSave}:`, JSON.stringify(layoutToSave, null, 2));
-                    await saveTableLayoutPrefs(relativePathForSave, JSON.stringify(layoutToSave));
+                    // The layout object is now expected to be a JS object directly.
+                    // The backend will handle the stringification when saving.
+                    await saveTableLayoutPrefs(relativePathForSave, layoutToSave);
                     console.info(`[TableViewerPanel] Layout saved for ${relativePathForSave}`);
                 } catch (error) {
                     console.error(`[TableViewerPanel] Failed to save layout for ${relativePathForSave}:`, error);
