@@ -379,39 +379,49 @@
     }
 
     // Function to generate column definitions
-    function generateColumns(data, savedLayoutObj, isFirstLoad) { // Added isFirstLoad
+    function generateColumns(data, savedLayoutObj, isFirstLoad) {
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
-        if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}]; // Return a placeholder if no data
+        if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}];
+
+        // Define the row number column
+        const rowNumColumn = {
+            title: "#",
+            formatter: "rownum",
+            width: 50,
+            minWidth: 30,
+            hozAlign: "center",
+            resizable: false,
+            movable: false,
+            headerSort: false,
+            cssClass: "tabulator-row-number-column"
+        };
+
         const headers = Object.keys(data[0]);
-        let columnDefs = headers.map(header => {
+        let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
                 field: header,
                 headerFilter: "input",
                 sorter: inferSorter(data, header),
-                formatter: "textarea", // Current formatter
-                formatterParams: { // Add this
-                    autoResize: false // Prevent textarea from resizing to content
+                formatter: "textarea",
+                formatterParams: {
+                    autoResize: false
                 }
             };
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
                 const savedCol = savedLayoutObj.columns[header];
                 console.debug(`[TableViewerPanel generateColumns] Applying saved layout for column '${header}': width=${savedCol.width}, order=${savedCol.order}, visible=${savedCol.visible}`);
-                if (typeof savedCol.width === 'number' && savedCol.width > 0) { // Ensure width is positive number
+                if (typeof savedCol.width === 'number' && savedCol.width > 0) {
                     colDef.width = savedCol.width;
                 } else {
                     console.debug(`[TableViewerPanel generateColumns] No valid saved width for column '${header}', default will be used by Tabulator.`);
                 }
-                colDef.visible = savedCol.visible; // Keep this as it was
+                colDef.visible = savedCol.visible;
             } else {
-                // No saved layout for this specific column
                 if (isFirstLoad) {
-                    colDef.width = 200; // REMOVED
-                    // colDef.minWidth = 50; // Default minWidth for first load
-                    console.debug(`[TableViewerPanel generateColumns] First load for column '${header}': Applying minWidth 50px. Width to be determined by layout mode.`);
+                    console.debug(`[TableViewerPanel generateColumns] First load for column '${header}': Width to be determined by layout mode.`);
                 } else {
-                    // New column in an existing layout, let Tabulator's fitDataTable handle it, or set other defaults
                     console.debug(`[TableViewerPanel generateColumns] New column '${header}' in existing layout, will be sized by Tabulator or current layout mode.`);
                 }
             }
@@ -419,29 +429,25 @@
             return colDef;
         });
 
+        // Sort data columns based on saved layout
         if (savedLayoutObj && savedLayoutObj.columns) {
-            columnDefs.sort((a, b) => {
+            dataColumnDefs.sort((a, b) => {
                 const orderA = savedLayoutObj.columns[a.field]?.order ?? Infinity;
                 const orderB = savedLayoutObj.columns[b.field]?.order ?? Infinity;
                 return orderA - orderB;
             });
-             // Apply visibility based on saved layout *after* sorting by order
-            // This is important if Tabulator doesn't automatically hide columns based on `visible: false` in the definition
-            // upon initial load. However, Tabulator usually respects `visible: false` in column definitions.
-            // If direct manipulation is needed:
-            // columnDefs = columnDefs.filter(colDef => {
-            //     const savedCol = savedLayoutObj.columns[colDef.field];
-            //     return savedCol ? savedCol.visible !== false : true; // Default to visible if not in saved layout
-            // });
-            // Or, to set the visible property for Tabulator to interpret:
-            columnDefs.forEach(colDef => {
+            dataColumnDefs.forEach(colDef => {
                 if (savedLayoutObj.columns[colDef.field] && typeof savedLayoutObj.columns[colDef.field].visible === 'boolean') {
                     colDef.visible = savedLayoutObj.columns[colDef.field].visible;
                 }
             });
         }
-        console.debug('[TableViewerPanel generateColumns] Final column definitions after applying layout and sort:', JSON.stringify(columnDefs.map(c => ({ field: c.field, width: c.width, visible: c.visible, order: savedLayoutObj?.columns[c.field]?.order })), null, 2));
-        return columnDefs;
+
+        // Combine the row number column with the data columns
+        let finalColumnDefs = [rowNumColumn].concat(dataColumnDefs);
+
+        console.debug('[TableViewerPanel generateColumns] Final column definitions after applying layout and sort:', JSON.stringify(finalColumnDefs.map(c => ({ field: c.field, width: c.width, visible: c.visible, order: savedLayoutObj?.columns[c.field]?.order })), null, 2));
+        return finalColumnDefs;
     }
 
      // Very basic type inference for better default sorting
@@ -574,6 +580,15 @@
      :global(.tabulator .tabulator-row .tabulator-cell.cell-highlighted-placeholder) {
          background-color: rgba(255, 255, 0, 0.3) !important;
      }
+    :global(.tabulator-row-number-column) {
+         background-color: #f0f0f0; /* Light gray background */
+         font-weight: bold;
+         color: #555;
+         border-right: 1px solid #ddd;
+         padding-right: 5px; /* Adjust padding */
+         text-align: center; /* Center the number */
+     }
+
     .flex-grow {
         position: relative;
     }
