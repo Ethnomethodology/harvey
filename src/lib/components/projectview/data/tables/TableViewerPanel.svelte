@@ -183,7 +183,7 @@
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
-                movableColumns: true,
+                movableColumns: false, // Set to false to disable column reordering
                 resizableColumnFit: false, // Set to false to allow table to expand
                 columnDefaults: { // Add this section
                     minWidth: 50, // Set a minimum width for all columns (in pixels)
@@ -391,7 +391,6 @@
             minWidth: 30,
             hozAlign: "center",
             resizable: false,
-            movable: false,
             headerSort: false,
             cssClass: "tabulator-row-number-column"
         };
