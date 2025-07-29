@@ -3,7 +3,10 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
+	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles } from '$lib/services/projectService.js';
+    
+    import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
+
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
     import CreateGroupModal from '../modals/CreateGroupModal.svelte';
@@ -272,6 +275,8 @@
     }
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
+    let showHeaderConfirmationModal = false;
+    let headerConfirmationData = {};
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -341,13 +346,49 @@
         } else if (categoryType === 'document') {
             try { await importDocumentFile(); } catch (e) { console.error(`[DataLeftPanel] Error importDocumentFile:`, e); }
         } else if (categoryType === 'table') {
-            try { await importTableFile(); } catch (e) { console.error(`[DataLeftPanel] Error importTableFile:`, e); }
+            handleTableImport();
         } else if (categoryType === 'image') {
             try { await importImageFile(); } catch (e) { console.error(`[DataLeftPanel] Error importImageFile:`, e); }
         } else if (categoryType === 'imported_transcript') { 
             showImportTranscriptModal = true;
         } else {
             message(`Specific import for ${categoryInfo.name} not implemented.`, { title: 'Coming Soon', type: 'info' });
+        }
+    }
+
+    async function handleTableImport() {
+        let isLoading = true;
+        try {
+            const importResult = await importTableFile(); // No arguments needed, projectService handles file selection
+            if (importResult) {
+                headerConfirmationData = {
+                    tablePath: importResult.table_path,
+                    previewData: importResult.preview_data,
+                };
+                showHeaderConfirmationModal = true;
+            } else {
+                // If result is null, it means the user cancelled the file selection.
+                // No error, just return.
+                return;
+            }
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error importTableFile:`, e);
+            message(e.message, { title: 'Import Error', type: 'error' });
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    async function handleHeaderConfirmation(event) {
+        const { hasHeaders } = event.detail;
+        const { tablePath } = headerConfirmationData;
+        try {
+            await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+            await refreshProjectFiles();
+            prepareDocumentView(tablePath, 'tables');
+        } catch (error) {
+            console.error(`[DataLeftPanel] Error setting table headers:`, error);
+            await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
         }
     }
 
@@ -1164,6 +1205,12 @@
 />
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
+<HeaderConfirmationModal 
+    bind:showModal={showHeaderConfirmationModal} 
+    tablePath={headerConfirmationData.tablePath} 
+    previewData={headerConfirmationData.previewData}
+    on:confirm={handleHeaderConfirmation}
+/>
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={(event) => handleImportTranscriptConfirm(event)} on:close={() => showImportTranscriptModal = false} />
 <CreateGroupModal
     bind:showModal={showCreateGroupModal}

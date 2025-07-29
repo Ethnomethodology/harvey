@@ -635,54 +635,6 @@ export async function importDocumentFile() {
     }
 }
 
-import { showHeaderConfirmationModal } from '$lib/stores/modalStore.js';
-
-export async function importTableFile() {
-    const currentProject = get(project);
-    const projectXmlPath = currentProject.xmlPath;
-
-    if (!projectXmlPath) {
-        console.error("[ProjectService] Cannot import table: Project data not fully loaded.");
-        await message('Project data is not fully loaded. Cannot import tables.', { title: 'Import Error', type: 'error' });
-        return;
-    }
-    const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a table");
-    if (!canProceedDialog) {
-        setAssetImportStatus(false, 'Table import cancelled by user.'); return;
-    }
-    try {
-        const selected = await open({ multiple: false, directory: false, filters: [tableFilter], title: 'Import Table File (CSV or XLSX)'});
-        if (!selected || typeof selected !== 'string') {
-            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' })); return;
-        }
-        const sourceFilePath = selected;
-        const sourceFilename = await basename(sourceFilePath);
-        
-        const confirmed = await new Promise((resolve) => {
-            showHeaderConfirmationModal(sourceFilePath, null, (path, hasHeaders) => {
-                resolve({ confirmed: true, hasHeaders });
-            });
-        });
-
-        if (!confirmed.confirmed) {
-            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' }));
-            return;
-        }
-
-        setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
-        const finalTablePath = await invoke('import_table_file', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath, hasHeaders: confirmed.hasHeaders });
-        await refreshProjectFiles();
-        const importedTableName = await basename(finalTablePath);
-        setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
-        prepareDocumentView(finalTablePath, 'tables', { hasHeaders: confirmed.hasHeaders });
-        return finalTablePath;
-    } catch (error) {
-        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
-        await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
-    }
-}
-
 export async function importImageFile() {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
@@ -756,6 +708,65 @@ export async function importTranscriptFile(sourceType = 'msWord') {
 export async function deleteImportedTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
+
+export async function importTableFile(hasHeaders) {
+    const currentProject = get(project);
+    const projectXmlPath = currentProject.xmlPath;
+    console.log(`[ProjectService] importTableFile: projectXmlPath = ${projectXmlPath}`);
+
+    if (!projectXmlPath) {
+        console.error('[ProjectService] Cannot import table: Project data not fully loaded.');
+        await message('Project data is not fully loaded. Cannot import tables.', { title: 'Import Error', type: 'error' });
+        return null;
+    }
+
+    const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a table");
+    if (!canProceedDialog) {
+        setAssetImportStatus(false, 'Table import cancelled by user.');
+        return null;
+    }
+
+    try {
+        const selected = await open({
+            multiple: false,
+            directory: false,
+            filters: [tableFilter],
+            title: 'Import Table File'
+        });
+
+        if (!selected || typeof selected !== 'string') {
+            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' }));
+            return null;
+        }
+
+        const sourceFilePath = selected;
+        console.log(`[ProjectService] importTableFile: sourceFilePath = ${sourceFilePath}`);
+        const sourceFilename = await basename(sourceFilePath);
+        setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
+
+        console.log(`[ProjectService] Invoking 'import_table_file' with sourcePathStr: ${sourceFilePath}, projectXmlPathStr: ${projectXmlPath}`);
+        const result = await invoke('import_table_file', {
+            sourcePathStr: sourceFilePath,
+            projectXmlPathStr: projectXmlPath
+        });
+
+        if (result && result.table_path && result.preview_data) {
+            setAssetImportStatus(false, `${sourceFilename} imported successfully.`);
+            return { ...result, filename: sourceFilename };
+        } else {
+            throw new Error('Invalid response from backend during table import.');
+        }
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
+        return null;
+    }
+}
+
+
+
+
 
 
 export async function loadTableData(tablePath, hasHeaders) { 

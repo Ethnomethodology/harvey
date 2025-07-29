@@ -94,6 +94,7 @@ pub enum CommandError {
     AssetMetadataNotFound(String), // New variant
     RusqliteError(String), // Added for rusqlite errors
     JsonProcessing(String),
+    Path(String), // New variant for path-related errors
 }
 
 impl fmt::Display for CommandError {
@@ -111,6 +112,7 @@ impl fmt::Display for CommandError {
             CommandError::AssetMetadataNotFound(msg) => write!(f, "{}", msg),
             CommandError::RusqliteError(msg) => write!(f, "Database Error: {}", msg),
             CommandError::JsonProcessing(msg) => write!(f, "JSON Processing Error: {}", msg),
+            CommandError::Path(msg) => write!(f, "Path Error: {}", msg),
         }
     }
 }

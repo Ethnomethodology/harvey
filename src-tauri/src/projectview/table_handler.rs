@@ -1,5 +1,5 @@
 use super::shared_types::*;
-use super::shared_utils::{save_project_xml, ensure_base_asset_dirs, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH};
+use super::shared_utils::{save_project_xml, ensure_base_asset_dirs, truncate_filename_stem, MAX_FILENAME_STEM_LENGTH, get_project_xml_path_from_item};
 use crate::welcome::config::CommandError;
 use crate::projectview::db_handler;
 use chrono::Utc;
@@ -18,43 +18,63 @@ use calamine::{Reader, Xlsx, open_workbook, Data};
 pub async fn import_table_file(
     source_path_str: String,
     project_xml_path_str: String,
-    _has_headers: bool,
-) -> Result<String, CommandError> {
-    info!("[import_table_file] Importing table from: {}", source_path_str);
+) -> Result<Value, CommandError> {
+    info!("[import_table_file] Importing table from: {}, Project XML Path: {}", source_path_str, project_xml_path_str);
     let source_path = PathBuf::from(&source_path_str);
     let project_xml_path = PathBuf::from(&project_xml_path_str);
 
     if !source_path.exists() || !source_path.is_file() {
+        error!("[import_table_file] Source table file not found: {}", source_path_str);
         return Err(CommandError::from(format!("Source table file not found: {}", source_path_str)));
     }
+    debug!("[import_table_file] Source file exists: {}", source_path_str);
 
     let project_base_dir = project_xml_path.parent()
-        .ok_or_else(|| CommandError::from("Could not get project base directory from XML path"))?;
+        .ok_or_else(|| {
+            error!("[import_table_file] Could not get project base directory from XML path: {}", project_xml_path.display());
+            CommandError::from("Could not get project base directory from XML path")
+        })?;
+    debug!("[import_table_file] Project base directory: {}", project_base_dir.display());
 
     ensure_base_asset_dirs(project_base_dir)?;
+    debug!("[import_table_file] Base asset directories ensured.");
 
     let project_xml_content_for_uuid = fs::read_to_string(&project_xml_path)
-        .map_err(|e| CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+        .map_err(|e| {
+            error!("[import_table_file] Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e);
+            CommandError::Io(format!("Failed to read project XML for UUID from {}: {}", project_xml_path.display(), e))
+        })?;
     let project_data_for_uuid: ProjectXml = quick_xml::de::from_str(&project_xml_content_for_uuid)
-        .map_err(|e| CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e)))?;
+        .map_err(|e| {
+            error!("[import_table_file] Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e);
+            CommandError::XmlDeserialization(format!("Failed to parse project XML for UUID from {}: {}", project_xml_path.display(), e))
+        })?;
+    debug!("[import_table_file] Project XML parsed for UUID.");
 
     let project_id_for_db = project_data_for_uuid.project_uuid;
     if project_id_for_db.is_empty() {
         error!("[import_table_file] Project UUID is empty in XML file: {}. Cannot import table without project_id.", project_xml_path.display());
-        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table import cannot proceed.", project_xml_path.display())));
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table import cannot proceed.", project_xml_path.display())))
     }
+    debug!("[import_table_file] Project ID for DB: {}", project_id_for_db);
 
-    let original_source_filename_with_ext = source_path.file_name()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| CommandError::from("Could not get original table filename with extension"))?
-        .to_string();
+    let original_source_filename_with_ext = match source_path.file_name().and_then(|s| s.to_str()) {
+        Some(s) => s.to_string(),
+        None => {
+            error!("[import_table_file] Could not get original table filename with extension from: {}", source_path.display());
+            return Err(CommandError::from("Could not get original table filename with extension"));
+        }
+    };
+    debug!("[import_table_file] Original source filename: {}", original_source_filename_with_ext);
 
     let original_source_extension = source_path.extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
+    debug!("[import_table_file] Original source extension: {}", original_source_extension);
 
     if original_source_extension != "csv" && original_source_extension != "xlsx" {
+        error!("[import_table_file] Unsupported table file type: .{}", original_source_extension);
         return Err(CommandError::from(format!("Unsupported table file type: .{}", original_source_extension)));
     }
 
@@ -63,13 +83,23 @@ pub async fn import_table_file(
 
     let table_file_stem_truncated = Path::new(&truncated_table_filename_with_ext).file_stem()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| CommandError::from(format!("Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext)))?;
+        .ok_or_else(|| {
+            error!("[import_table_file] Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext);
+            CommandError::from(format!("Could not get stem from truncated table filename: {}", truncated_table_filename_with_ext))
+        })?;
+    debug!("[import_table_file] Truncated table file stem: {}", table_file_stem_truncated);
 
     let tables_base = project_base_dir.join(HARVEY_FILES_DIR).join(TABLES_DIR);
     let folder_path = tables_base.join(table_file_stem_truncated);
+    debug!("[import_table_file] Target folder path: {}", folder_path.display());
 
     if !folder_path.exists() {
-        fs::create_dir_all(&folder_path)?;
+        fs::create_dir_all(&folder_path)
+            .map_err(|e| {
+                error!("[import_table_file] Failed to create directory {}: {}", folder_path.display(), e);
+                CommandError::Io(format!("Failed to create directory {}: {}", folder_path.display(), e))
+            })?;
+        debug!("[import_table_file] Created folder: {}", folder_path.display());
     }
 
     let mut counter = 0;
@@ -81,10 +111,12 @@ pub async fn import_table_file(
         };
         let candidate = folder_path.join(&file_name_to_try);
         if !candidate.exists() {
+            debug!("[import_table_file] Found unique filename: {}", candidate.display());
             break candidate;
         }
         counter += 1;
         if counter > 1000 {
+            error!("[import_table_file] Could not find unique filename for table base '{}' after {} attempts.", table_file_stem_truncated, counter);
             return Err(CommandError::from(format!(
                 "Could not find unique filename for table base '{}' (derived from truncated name) after {} attempts.",
                 table_file_stem_truncated, counter
@@ -93,36 +125,63 @@ pub async fn import_table_file(
     };
 
     let final_table_name = final_table_path.file_name().unwrap().to_string_lossy().into_owned();
+    debug!("[import_table_file] Final table name: {}", final_table_name);
 
     info!("[import_table_file] Copying table from '{}' to '{}'", source_path.display(), final_table_path.display());
-    fs::copy(&source_path, &final_table_path).map_err(|e| CommandError::from(format!("Failed to copy table file: {}", e)))?;
+    fs::copy(&source_path, &final_table_path).map_err(|e| {
+        error!("[import_table_file] Failed to copy table file from {} to {}: {}", source_path.display(), final_table_path.display(), e);
+        CommandError::from(format!("Failed to copy table file: {}", e))
+    })?;
+    debug!("File copied to: {}", final_table_path.display());
 
     info!("[import_table_file] Updating project XML to include table: {}", final_table_name);
-    let xml_content = fs::read_to_string(&project_xml_path)?;
-    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
+    let xml_content = fs::read_to_string(&project_xml_path)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to read project XML for update from {}: {}", project_xml_path.display(), e);
+            CommandError::Io(format!("Failed to read project XML for update from {}: {}", project_xml_path.display(), e))
+        })?;
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to parse project XML for update from {}: {}", project_xml_path.display(), e);
+            CommandError::XmlDeserialization(format!("Failed to parse project XML for update from {}: {}", project_xml_path.display(), e))
+        })?;
+    debug!("[import_table_file] Project XML parsed for update.");
 
     let relative_path_for_xml = final_table_path
-        .strip_prefix(project_base_dir)?
+        .strip_prefix(project_base_dir)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to strip prefix {} from {}: {}", project_base_dir.display(), final_table_path.display(), e);
+            CommandError::Path(format!("Failed to get relative path for XML: {}", e))
+        })?
         .to_string_lossy()
         .replace("\\", "/");
+    debug!("[import_table_file] Relative path for XML: {}", relative_path_for_xml);
 
     let new_table_entry = TableEntryXml {
         name: final_table_name.clone(),
         relative_path: relative_path_for_xml.clone(),
         language_code: None,
+        has_headers: None, // Initially unknown
     };
+    debug!("[import_table_file] New table entry created.");
 
-    if project_data.table_files.files.iter().any(|f| f.relative_path == relative_path_for_xml) {
-        log::warn!("[import_table_file] Table with relative path '{}' already exists in XML. Overwriting name if different.", relative_path_for_xml);
-        if let Some(existing_entry) = project_data.table_files.files.iter_mut().find(|f| f.relative_path == relative_path_for_xml) {
-            existing_entry.name = final_table_name.clone();
+    if project_data.table_files.files.iter().any(|f| f.relative_path == new_table_entry.relative_path) {
+        log::warn!("[import_table_file] Table with relative path '{}' already exists in XML. Overwriting name if different.", new_table_entry.relative_path);
+        if let Some(existing_entry) = project_data.table_files.files.iter_mut().find(|f| f.relative_path == new_table_entry.relative_path) {
+            existing_entry.name = new_table_entry.name.clone();
+            existing_entry.has_headers = new_table_entry.has_headers;
         }
     } else {
         project_data.table_files.files.push(new_table_entry);
     }
     project_data.table_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    debug!("[import_table_file] Project data updated with new table entry.");
 
-    save_project_xml(&project_xml_path, &project_data)?;
+    save_project_xml(&project_xml_path, &project_data)
+        .map_err(|e| {
+            error!("[import_table_file] Failed to save project XML {}: {}", project_xml_path.display(), e);
+            e
+        })?;
     info!("[import_table_file] Project XML updated successfully for table.");
 
     let file_metadata_for_db = FileMetadata {
@@ -144,6 +203,7 @@ pub async fn import_table_file(
         speaker_names: None,
         waveform_data: None,
     };
+    debug!("[import_table_file] File metadata for DB created.");
 
     if let Err(e) = db_handler::save_asset_metadata(
         &project_id_for_db,
@@ -157,23 +217,105 @@ pub async fn import_table_file(
     }
     info!("[import_table_file] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_xml, project_id_for_db);
 
-    Ok(final_table_path.to_string_lossy().to_string())
+    // Always assume headers for the preview, the user will confirm.
+    let preview_data = match original_source_extension.as_str() {
+        "csv" => load_csv_data(&final_table_path, true, Some(5)),
+        "xlsx" => load_xlsx_data(&final_table_path, true, Some(5)),
+        _ => {
+            error!("[import_table_file] Unsupported table extension for preview: {}", original_source_extension);
+            return Err(CommandError::from(format!("Unsupported table extension for preview: {}", original_source_extension)))
+        },
+    }?;
+    debug!("[import_table_file] Preview data loaded.");
+
+    Ok(json!({
+        "table_path": final_table_path.to_string_lossy(),
+        "preview_data": preview_data
+    }))
 }
 
 #[tauri::command]
-pub async fn load_table_data(table_path_str: String, has_headers: bool) -> Result<Value, CommandError> {
+pub async fn set_table_headers(
+    table_path_str: String,
+    has_headers: bool,
+) -> Result<(), CommandError> {
+    info!("[set_table_headers] Setting has_headers={} for table: {}", has_headers, table_path_str);
+    let table_path = PathBuf::from(&table_path_str);
+    let project_xml_path = get_project_xml_path_from_item(&table_path)?;
+
+    if !table_path.exists() {
+        error!("[set_table_headers] Table file does not exist at: {}", table_path.display());
+        return Err(CommandError::from(format!("Table file not found: {}", table_path_str)));
+    }
+    if !project_xml_path.exists() {
+        error!("[set_table_headers] Project XML file does not exist at: {}", project_xml_path.display());
+        return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path.to_string_lossy())));
+    }
+
+    let project_base_dir = project_xml_path.parent()
+        .ok_or_else(|| CommandError::from("Could not get project base directory from XML path"))?;
+
+    let relative_path_for_xml = table_path
+        .strip_prefix(project_base_dir)?
+        .to_string_lossy()
+        .replace("\\", "/");
+
+    let mut project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+
+    if let Some(table_entry) = project_data.table_files.files.iter_mut()
+        .find(|f| f.relative_path == relative_path_for_xml) {
+        table_entry.has_headers = Some(has_headers);
+    } else {
+        return Err(CommandError::from(format!("Table not found in project XML: {}", relative_path_for_xml)));
+    }
+
+    save_project_xml(&project_xml_path, &project_data)?;
+    info!("[set_table_headers] Project XML updated successfully.");
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn load_table_data(table_path_str: String) -> Result<Value, CommandError> {
     info!("[load_table_data] Loading data from: {}", table_path_str);
     let table_path = PathBuf::from(&table_path_str);
 
     if !table_path.exists() || !table_path.is_file() {
+        error!("[load_table_data] Table file not found or is not a file: {}", table_path.display());
         return Err(CommandError::from(format!("Table file not found: {}", table_path_str)));
     }
+
+    let project_xml_path = get_project_xml_path_from_item(&table_path)?;
+    debug!("[load_table_data] Derived project_xml_path: {}", project_xml_path.display());
+
+    if !project_xml_path.exists() || !project_xml_path.is_file() {
+        error!("[import_table_file] Project XML file not found at: {}", project_xml_path.display());
+        return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path.to_string_lossy())));
+    }
+
+    let relative_path_for_xml = table_path
+        .strip_prefix(project_xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base directory from project XML path"))?)?
+        .to_string_lossy()
+        .replace("\\", "/");
+
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+
+    let has_headers = project_data.table_files.files.iter()
+        .find(|f| f.relative_path == relative_path_for_xml)
+        .and_then(|f| f.has_headers)
+        .unwrap_or(true); // Default to true if not specified
 
     let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
     let data = match extension.as_str() {
-        "csv" => load_csv_data(&table_path, has_headers),
-        "xlsx" => load_xlsx_data(&table_path, has_headers),
+        "csv" => load_csv_data(&table_path, has_headers, None),
+        "xlsx" => load_xlsx_data(&table_path, has_headers, None),
         _ => Err(CommandError::from(format!("Unsupported table extension for loading: {}", extension))),
     }?;
 
@@ -181,7 +323,11 @@ pub async fn load_table_data(table_path_str: String, has_headers: bool) -> Resul
     Ok(data)
 }
 
-fn load_csv_data(path: &Path, has_headers: bool) -> Result<Value, CommandError> {
+fn to_json_response(headers: Vec<String>, records: Vec<Value>) -> Result<Value, CommandError> {
+    Ok(json!(records))
+}
+
+fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(has_headers)
         .from_path(path)
@@ -230,7 +376,14 @@ fn load_csv_data(path: &Path, has_headers: bool) -> Result<Value, CommandError> 
         }
     }
 
-    for result in rdr.records() {
+    let records_iterator = rdr.records();
+    let records_to_process = if let Some(l) = limit {
+        records_iterator.take(l)
+    } else {
+        records_iterator.take(usize::MAX) // Effectively no limit
+    };
+
+    for result in records_to_process {
         let record = result.map_err(|e| CommandError::from(format!("Failed to read CSV record '{}': {}", path.display(), e)))?;
         let mut map = serde_json::Map::new();
         for (i, header) in headers.iter().enumerate() {
@@ -247,10 +400,10 @@ fn load_csv_data(path: &Path, has_headers: bool) -> Result<Value, CommandError> 
         records.push(Value::Object(map));
     }
 
-    Ok(Value::Array(records))
+    to_json_response(headers, records)
 }
 
-fn load_xlsx_data(path: &Path, has_headers: bool) -> Result<Value, CommandError> {
+fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
     let mut workbook: Xlsx<_> = open_workbook(path)
         .map_err(|e| CommandError::from(format!("Failed to open XLSX '{}': {}", path.display(), e)))?;
 
@@ -309,7 +462,14 @@ fn load_xlsx_data(path: &Path, has_headers: bool) -> Result<Value, CommandError>
         }
     }
 
-    for row in data_rows {
+    let data_rows_iterator = range.rows();
+    let data_rows_to_process = if let Some(l) = limit {
+        data_rows_iterator.skip(if has_headers { 1 } else { 0 }).take(l)
+    } else {
+        data_rows_iterator.skip(if has_headers { 1 } else { 0 }).take(usize::MAX)
+    };
+
+    for row in data_rows_to_process {
         let mut map = serde_json::Map::new();
         let mut row_has_data = false;
         for (col_idx, cell) in row.iter().enumerate() {
@@ -339,7 +499,7 @@ fn load_xlsx_data(path: &Path, has_headers: bool) -> Result<Value, CommandError>
              records.push(Value::Object(map));
         }
     }
-    Ok(Value::Array(records))
+    to_json_response(headers, records)
 }
 
 #[cfg(test)]
@@ -406,7 +566,7 @@ mod tests {
         writeln!(source_file, "header1,header2\nval1,val2")?;
         let dummy_table_path_str = dummy_table_path.to_string_lossy().to_string();
 
-        let import_result = import_table_file(dummy_table_path_str.clone(), project_xml_path_str.clone(), true).await;
+        let import_result = import_table_file(dummy_table_path_str.clone()).await;
         assert!(import_result.is_ok(), "import_table_file failed: {:?}", import_result.err());
         let final_table_abs_path_str = import_result.unwrap();
         let final_table_abs_path = PathBuf::from(&final_table_abs_path_str);
