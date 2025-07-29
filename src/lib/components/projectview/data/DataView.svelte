@@ -169,7 +169,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                     <TableView itemPath={activeItemPath} />
+                     <TableView itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
                  {:else if activeViewType === 'images'}
                      <ImageView itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}

@@ -8,6 +8,7 @@
     import { sep } from '@tauri-apps/api/path'; // For path manipulation
 
     export let tablePath = '';
+    export let hasHeaders = true;
 
     let tableContainer;
     let tabulatorInstance = null;
@@ -92,6 +93,8 @@
         };
     }
 
+    
+
     async function initializeTable(pathForTable) {
         if (!pathForTable || !tableContainer) {
             console.debug('[TableViewerPanel initializeTable] Skipping: no path or container.', { pathForTable, tableContainerExists: !!tableContainer }); // DEBUG
@@ -123,7 +126,7 @@
         }
 
         try {
-            tableData = await loadTableData(pathForTable);
+            tableData = await loadTableData(pathForTable, hasHeaders);
 
             if (tableData.length === 0) {
                 console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.'); // WARN

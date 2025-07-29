@@ -635,6 +635,8 @@ export async function importDocumentFile() {
     }
 }
 
+import { showHeaderConfirmationModal } from '$lib/stores/modalStore.js';
+
 export async function importTableFile() {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
@@ -655,12 +657,24 @@ export async function importTableFile() {
         }
         const sourceFilePath = selected;
         const sourceFilename = await basename(sourceFilePath);
+        
+        const confirmed = await new Promise((resolve) => {
+            showHeaderConfirmationModal(sourceFilePath, null, (path, hasHeaders) => {
+                resolve({ confirmed: true, hasHeaders });
+            });
+        });
+
+        if (!confirmed.confirmed) {
+            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' }));
+            return;
+        }
+
         setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
-        const finalTablePath = await invoke('import_table_file', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath });
+        const finalTablePath = await invoke('import_table_file', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath, hasHeaders: confirmed.hasHeaders });
         await refreshProjectFiles();
         const importedTableName = await basename(finalTablePath);
         setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
-        prepareDocumentView(finalTablePath, 'tables');
+        prepareDocumentView(finalTablePath, 'tables', { hasHeaders: confirmed.hasHeaders });
         return finalTablePath;
     } catch (error) {
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
@@ -744,7 +758,21 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
 }
 
 
-export async function loadTableData(tablePath) { if (!tablePath) throw new Error('tablePath is required'); try { const tableData = await invoke('load_table_data', { tablePathStr: tablePath }); if (!Array.isArray(tableData)) throw new Error("Backend returned invalid data format for table."); return tableData; } catch (error) { const errorMessage = error.message || String(error); await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' }); throw error; } }
+export async function loadTableData(tablePath, hasHeaders) { 
+    if (!tablePath) throw new Error('tablePath is required'); 
+    try { 
+        const tableData = await invoke('load_table_data', { 
+            tablePathStr: tablePath, 
+            hasHeaders: hasHeaders 
+        }); 
+        if (!Array.isArray(tableData)) throw new Error("Backend returned invalid data format for table."); 
+        return tableData; 
+    } catch (error) { 
+        const errorMessage = error.message || String(error); 
+        await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' }); 
+        throw error; 
+    } 
+}
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
 export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || !rowNode.children.length || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }

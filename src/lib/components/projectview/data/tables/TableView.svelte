@@ -6,6 +6,7 @@
     import TableViewerPanel from './TableViewerPanel.svelte';
 
     export let itemPath = null; // Receives the full path from DataView
+    export let hasHeaders = true;
 
     const dispatch = createEventDispatcher();
 
@@ -28,7 +29,7 @@
 <div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
     {#key itemPath}
         {#if itemPath}
-            <TableViewerPanel tablePath={itemPath} />
+            <TableViewerPanel tablePath={itemPath} hasHeaders={hasHeaders} />
         {:else}
             <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
                 <span>No table path provided to TableView.</span>

@@ -1882,7 +1882,7 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if !new_transcript_filename_with_ext_str.ends_with(".json") { return Err(CommandError::from("Imported transcript filename must end with .json")); }
             if new_transcript_filename_with_ext_str.starts_with('.') { return Err(CommandError::from("Filename cannot start with a dot.")); }
 
-            let new_transcript_filename_path_buf = PathBuf::from(new_transcript_filename_with_ext_str.clone());
+            let new_transcript_filename_path_buf = PathBuf::from(new_transcript_filename_with_ext_str);
             let new_transcript_stem_str = new_transcript_filename_path_buf
                 .file_stem()
                 .and_then(|s| s.to_str())
