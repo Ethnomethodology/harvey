@@ -385,7 +385,8 @@
         try {
             await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
             await refreshProjectFiles();
-            prepareDocumentView(tablePath, 'tables');
+
+            dispatch('requestviewchange', { viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
         } catch (error) {
             console.error(`[DataLeftPanel] Error setting table headers:`, error);
             await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });

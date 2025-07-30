@@ -90,6 +90,7 @@
     async function handleViewChangeRequest(eventDetailFromDispatch) {
         const pathForView = eventDetailFromDispatch?.itemPath;
         const typeForView = eventDetailFromDispatch?.viewType;
+        const hasHeadersForView = eventDetailFromDispatch?.hasHeaders;
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
@@ -117,7 +118,7 @@
         console.debug(`[DataView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
-            prepareDocumentView(pathForView, typeForView);
+            prepareDocumentView(pathForView, typeForView, hasHeadersForView);
             // activeItemTypeForInfoPanel will be set by the project.subscribe block
         } else if (typeForView === 'imported_transcript') {
             prepareImportedTranscriptView(pathForView);

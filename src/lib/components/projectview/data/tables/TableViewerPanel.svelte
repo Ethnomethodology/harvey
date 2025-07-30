@@ -95,7 +95,10 @@
 
     
 
-    async function initializeTable(pathForTable) {
+    async function initializeTable(pathForTable, newHasHeaders = null) {
+        if (newHasHeaders !== null) {
+            hasHeaders = newHasHeaders;
+        }
         if (!pathForTable || !tableContainer) {
             console.debug('[TableViewerPanel initializeTable] Skipping: no path or container.', { pathForTable, tableContainerExists: !!tableContainer }); // DEBUG
             isLoading = false; // Ensure loading is false if we skip
