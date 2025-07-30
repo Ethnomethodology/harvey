@@ -52,6 +52,7 @@
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { invoke } from '@tauri-apps/api/core';
 
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
