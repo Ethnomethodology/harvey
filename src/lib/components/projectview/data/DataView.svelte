@@ -118,7 +118,7 @@
         console.debug(`[DataView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
-            prepareDocumentView(pathForView, typeForView, hasHeadersForView);
+            prepareDocumentView(pathForView, typeForView, hasHeadersForView !== undefined ? hasHeadersForView : true);
             // activeItemTypeForInfoPanel will be set by the project.subscribe block
         } else if (typeForView === 'imported_transcript') {
             prepareImportedTranscriptView(pathForView);

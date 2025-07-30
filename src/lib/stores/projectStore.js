@@ -163,7 +163,7 @@ export function setSelectedGroup(groupId, groupData) {
 }
 
 
-export function prepareDocumentView(filePath, itemType = 'document', options = {}) {
+export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
     console.debug(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`);
     const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables';
@@ -191,7 +191,7 @@ export function prepareDocumentView(filePath, itemType = 'document', options = {
             selectedGroupData: filePath ? null : p.selectedGroupData,
 
             selectedDocumentPath: filePath,
-            selectedDocumentOptions: isTable ? { hasHeaders: options.hasHeaders } : {},
+            selectedDocumentOptions: isTable ? { hasHeaders: hasHeaders } : {},
             currentDocumentJson: (isJsonDocument && selectingSamePath) ? p.currentDocumentJson : (isJsonDocument ? null : null),
             initialDocumentJson: (isJsonDocument && selectingSamePath) ? p.initialDocumentJson : (isJsonDocument ? null : null),
             isDocumentDirty: (isJsonDocument && selectingSamePath) ? p.isDocumentDirty : false,

@@ -805,7 +805,7 @@ async function onConfirmTranscriptionStart(event) {
 			await refreshProjectFiles();
 			await handleTabClick('data');
 			if (dataViewRef) {
-				dataViewRef.handleViewChangeRequest({ viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
+				await dataViewRef.handleViewChangeRequest({ viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
 			}
 		} catch (error) {
 			console.error(`[ProjectView] Error setting table headers:`, error);
