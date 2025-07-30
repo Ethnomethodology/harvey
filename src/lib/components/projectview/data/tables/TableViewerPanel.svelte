@@ -473,27 +473,28 @@
         } else {
             isLoading = false; // No path on mount, so not loading
         }
+
+		return () => {
+			if (tabulatorInstance) {
+				tabulatorInstance.destroy();
+				tabulatorInstance = null;
+			}
+		}
     });
 
     // React to tablePath changes
-    $: {
-        if (tablePath && tablePath !== currentLoadedPath) {
-            console.debug(`[TableViewerPanel reactive] tablePath changed to '${tablePath}'`); // DEBUG
-            if (tableContainer) {
-                initializeTable(tablePath);
-            } else {
-                console.debug(`[TableViewerPanel reactive] Container not ready, deferring init for ${tablePath}`); // DEBUG
-                if (!isLoading) isLoading = true;
-            }
-        } else if (!tablePath && tabulatorInstance) {
-            console.info(`[TableViewerPanel reactive] tablePath cleared, destroying table`); // INFO
-            tabulatorInstance.destroy();
-            tabulatorInstance = null;
-            tableData = [];
-            isLoading = false;
-            error = null;
-            currentLoadedPath = null;
+    $: if (tablePath && tableContainer) {
+        if (tablePath !== currentLoadedPath) {
+            initializeTable(tablePath);
         }
+    } else if (!tablePath && tabulatorInstance) {
+        console.info(`[TableViewerPanel reactive] tablePath cleared, destroying table`); // INFO
+        tabulatorInstance.destroy();
+        tabulatorInstance = null;
+        tableData = [];
+        isLoading = false;
+        error = null;
+        currentLoadedPath = null;
     }
 
     onDestroy(() => {
