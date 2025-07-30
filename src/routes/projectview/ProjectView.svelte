@@ -59,6 +59,7 @@
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
     import ConfirmConversionModal from '$lib/components/projectview/modals/ConfirmConversionModal.svelte';
     import ImportTranscriptSourceModal from '$lib/components/projectview/modals/ImportTranscriptSourceModal.svelte';
+	import HeaderConfirmationModal from '$lib/components/projectview/modals/HeaderConfirmationModal.svelte';
 	import DataView from '$lib/components/projectview/data/DataView.svelte';
     import TranscriptionsView from '$lib/components/projectview/transcriptions/TranscriptionsView.svelte';
     import { Loader } from 'lucide-svelte';
@@ -76,6 +77,8 @@
     let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
+	let showHeaderConfirmationModal = false;
+	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
 
@@ -745,10 +748,13 @@ async function onConfirmTranscriptionStart(event) {
                 }
             }
             else if (actionType === 'table') {
-                const importedPath = await importTableFile();
-                if (importedPath) {
-                    await handleTabClick('data');
-                    prepareDocumentView(importedPath, 'tables');
+				const importResult = await importTableFile();
+                if (importResult) {
+					headerConfirmationData = {
+						tablePath: importResult.table_path,
+						previewData: importResult.preview_data,
+					};
+					showHeaderConfirmationModal = true;
                 }
             }
             else if (actionType === 'image') {
@@ -789,6 +795,20 @@ async function onConfirmTranscriptionStart(event) {
         closeImportMenu(); 
         triggerMediaImport(actionType); 
     }
+
+	async function handleHeaderConfirmation(event) {
+		const { hasHeaders } = event.detail;
+		const { tablePath } = headerConfirmationData;
+		try {
+			await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+			await refreshProjectFiles();
+			await handleTabClick('data');
+			prepareDocumentView(tablePath, 'tables');
+		} catch (error) {
+			console.error(`[DataLeftPanel] Error setting table headers:`, error);
+			await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
+		}
+	}
 
     $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
@@ -854,6 +874,12 @@ async function onConfirmTranscriptionStart(event) {
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>
+	<HeaderConfirmationModal
+		bind:showModal={showHeaderConfirmationModal}
+		tablePath={headerConfirmationData.tablePath}
+		previewData={headerConfirmationData.previewData}
+		on:confirm={handleHeaderConfirmation}
+	/>
 
 
     {#if importMenuVisible}
