@@ -501,12 +501,19 @@ pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>) -> 
 fn save_csv_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
     let mut wtr = csv::Writer::from_path(path)?;
     if let Some(first_row) = data.get(0).and_then(|v| v.as_object()) {
-        let headers = first_row.keys().cloned().collect::<Vec<String>>();
+        let mut headers = first_row.keys().cloned().collect::<Vec<String>>();
+        headers.sort(); // Sort headers to ensure consistent order
         wtr.write_record(&headers)?;
         for row_value in data {
             if let Some(row_map) = row_value.as_object() {
                 let row: Vec<String> = headers.iter().map(|h| {
-                    row_map.get(h).and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    row_map.get(h).and_then(|v| {
+                        if v.is_string() {
+                            v.as_str().map(|s| s.to_string())
+                        } else {
+                            Some(v.to_string())
+                        }
+                    }).unwrap_or("".to_string())
                 }).collect();
                 wtr.write_record(&row)?;
             }
