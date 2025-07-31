@@ -13,7 +13,7 @@ use quick_xml;
 use serde_json::{Value, json};
 use csv;
 use calamine::{Reader, Xlsx, open_workbook, Data};
-use rust_xlsxwriter::{Workbook, Worksheet, XlsxError};
+use rust_xlsxwriter::Workbook;
 
 #[tauri::command]
 pub async fn import_table_file(
@@ -324,7 +324,7 @@ pub async fn load_table_data(table_path_str: String) -> Result<Value, CommandErr
     Ok(data)
 }
 
-fn to_json_response(headers: Vec<String>, records: Vec<Value>) -> Result<Value, CommandError> {
+fn to_json_response(_headers: Vec<String>, records: Vec<Value>) -> Result<Value, CommandError> {
     Ok(json!(records))
 }
 
@@ -483,7 +483,7 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
     to_json_response(headers, records)
 }
 
-fn records_to_json(headers: &[String], records: Vec<serde_json::Map<String, Value>>) -> Result<Value, CommandError> {
+fn records_to_json(_headers: &[String], records: Vec<serde_json::Map<String, Value>>) -> Result<Value, CommandError> {
     Ok(json!(records))
 }
 
@@ -509,7 +509,7 @@ fn save_xlsx_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
 
         // Write headers
         for (col_num, header) in headers.iter().enumerate() {
-            worksheet.write_string_only(0, col_num as u16, header)?;
+            worksheet.write_string(0, col_num as u16, header)?;
         }
 
         // Write data rows
@@ -519,15 +519,15 @@ fn save_xlsx_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
                     if let Some(cell_value) = row_map.get(header) {
                         match cell_value {
                             Value::String(s) => {
-                                worksheet.write_string_only(row_num as u32 + 1, col_num as u16, s)?;
+                                worksheet.write_string(row_num as u32 + 1, col_num as u16, s)?;
                             },
                             Value::Number(n) => {
                                 if let Some(float_val) = n.as_f64() {
-                                    worksheet.write_number_only(row_num as u32 + 1, col_num as u16, float_val)?;
+                                    worksheet.write_number(row_num as u32 + 1, col_num as u16, float_val)?;
                                 }
                             },
                             Value::Bool(b) => {
-                                worksheet.write_boolean_only(row_num as u32 + 1, col_num as u16, *b)?;
+                                worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
                             },
                             _ => {} // Handles null and other types as blank cells
                         }
