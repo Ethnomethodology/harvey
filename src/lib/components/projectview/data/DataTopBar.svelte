@@ -16,6 +16,7 @@
     import { createEventDispatcher } from 'svelte';
 
     const dispatch = createEventDispatcher();
+    export let tableViewRef = null;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -173,6 +174,10 @@
             console.log("[DataTopBar] Manual save triggered for MEDIA NOTE TRANSCRIPT via editor ref:", projState.selectedMediaNotePath);
             try { await projState.activeMediaNoteEditorRef.ref.save(); console.log("[DataTopBar] Media Note Transcript manual save successful."); }
             catch (error) { console.error("[DataTopBar] Media Note Transcript manual save via editor ref failed:", error); }
+        } else if (projState.isDocumentDirty && projState.selectedTablePath && tableViewRef) {
+            console.log("[DataTopBar] Manual save triggered for TABLE via editor ref:", projState.selectedTablePath);
+            try { await tableViewRef.save(); console.log("[DataTopBar] Table manual save successful."); }
+            catch (error) { console.error("[DataTopBar] Table manual save via editor ref failed:", error); }
         } else { 
             console.warn("[DataTopBar] Manual save triggered but no specific dirty item found with an active editor ref capable of saving, or PDF annotations were not handled by a direct save call."); 
         }
@@ -210,6 +215,11 @@
                 activeEditorRefToSave = p.activeMediaNoteEditorRef.ref;
                 saveAction = 'mediaNoteTranscript';
                 console.log(`[DataTopBar Autosave Watch] Media Note Transcript for ${p.selectedMediaNotePath} is dirty.`);
+            } else if (p.isDocumentDirty && p.selectedTablePath && tableViewRef) {
+                shouldAutosave = true;
+                activeEditorRefToSave = tableViewRef;
+                saveAction = 'table';
+                console.log(`[DataTopBar Autosave Watch] Table for ${p.selectedTablePath} is dirty.`);
             } else {
                 // console.log(`[DataTopBar Autosave Watch] Conditions not met.`);
             }
@@ -231,6 +241,8 @@
                     editorStillActiveAndDirty = currentProjState.activeImportedTranscriptEditorRef?.ref === activeEditorRefToSave && currentProjState.isImportedTranscriptDirty;
                 } else if (saveAction === 'mediaNoteTranscript' && activeEditorRefToSave) {
                     editorStillActiveAndDirty = currentProjState.activeMediaNoteEditorRef?.ref === activeEditorRefToSave && currentProjState.isMediaNoteTranscriptDirty;
+                } else if (saveAction === 'table' && activeEditorRefToSave) {
+                    editorStillActiveAndDirty = tableViewRef === activeEditorRefToSave && currentProjState.isDocumentDirty;
                 }
 
                 if (editorStillActiveAndDirty) {

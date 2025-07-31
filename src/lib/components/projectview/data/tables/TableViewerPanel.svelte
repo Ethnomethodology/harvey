@@ -13,6 +13,7 @@
     let tableContainer;
     let tabulatorInstance = null;
     let tableData = [];
+    let isDirty = false;
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
@@ -268,6 +269,15 @@
                  console.debug("Row Clicked:", row.getData()); // DEBUG
             });
 
+            tabulatorInstance.on("cellEdited", function(cell) {
+                const rowIndex = cell.getRow().getPosition() - 1;
+                const field = cell.getField();
+                const newValue = cell.getValue();
+                tableData[rowIndex][field] = newValue;
+                isDirty = true;
+                project.update(p => ({ ...p, isDocumentDirty: true }));
+            });
+
             // Disable macOS autocorrect/autocomplete on column header filters and init snapshot
             tabulatorInstance.on("renderComplete", () => {
                 updateTableLayoutSnapshot(); // Initial snapshot after table is fully rendered
@@ -408,6 +418,7 @@
                 field: header,
                 headerFilter: "input",
                 sorter: inferSorter(data, header),
+                editor: "input",
                 formatter: "textarea",
                 formatterParams: {
                     autoResize: false
@@ -508,6 +519,21 @@
         }
     });
 
+    async function handleSave() {
+        if (!isDirty) return;
+        try {
+            await saveTableData(tablePath, tableData);
+            isDirty = false;
+        } catch (error) {
+            console.error("Failed to save table data:", error);
+        }
+    }
+
+    export function save() {
+        return handleSave();
+    }
+
+    const self = { save };
 </script>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">

@@ -482,6 +482,40 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
     to_json_response(headers, records)
 }
 
+fn records_to_json(headers: &[String], records: Vec<serde_json::Map<String, Value>>) -> Result<Value, CommandError> {
+    Ok(json!(records))
+}
+
+#[tauri::command]
+pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>) -> Result<(), CommandError> {
+    let table_path = Path::new(&table_path_str);
+    let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+    match extension.as_str() {
+        "csv" => save_csv_data(table_path, table_data),
+        "xlsx" => Err(CommandError::from("Saving to XLSX is not supported yet.")),
+        _ => Err(CommandError::from(format!("Unsupported table extension for saving: {}", extension))),
+    }
+}
+
+fn save_csv_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
+    let mut wtr = csv::Writer::from_path(path)?;
+    if let Some(first_row) = data.get(0).and_then(|v| v.as_object()) {
+        let headers = first_row.keys().cloned().collect::<Vec<String>>();
+        wtr.write_record(&headers)?;
+        for row_value in data {
+            if let Some(row_map) = row_value.as_object() {
+                let row: Vec<String> = headers.iter().map(|h| {
+                    row_map.get(h).and_then(|v| v.as_str()).unwrap_or("").to_string()
+                }).collect();
+                wtr.write_record(&row)?;
+            }
+        }
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

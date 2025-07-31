@@ -30,6 +30,7 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
+    let tableViewRef;
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
@@ -148,7 +149,7 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} />
+	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} />
 
 	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
         <!-- Far Left Panel (File/Data Browser) -->
@@ -170,7 +171,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                     <TableView itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
+                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
                  {:else if activeViewType === 'images'}
                      <ImageView itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}
