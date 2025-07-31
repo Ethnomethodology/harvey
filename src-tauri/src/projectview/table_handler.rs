@@ -13,6 +13,7 @@ use quick_xml;
 use serde_json::{Value, json};
 use csv;
 use calamine::{Reader, Xlsx, open_workbook, Data};
+use rust_xlsxwriter::{Workbook, Worksheet, XlsxError};
 
 #[tauri::command]
 pub async fn import_table_file(
@@ -493,9 +494,51 @@ pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>) -> 
 
     match extension.as_str() {
         "csv" => save_csv_data(table_path, table_data),
-        "xlsx" => Err(CommandError::from("Saving to XLSX is not supported yet.")),
+        "xlsx" => save_xlsx_data(table_path, table_data),
         _ => Err(CommandError::from(format!("Unsupported table extension for saving: {}", extension))),
     }
+}
+
+fn save_xlsx_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    if let Some(first_row) = data.get(0).and_then(|v| v.as_object()) {
+        let mut headers = first_row.keys().cloned().collect::<Vec<String>>();
+        headers.sort(); // Sort headers to ensure consistent order
+
+        // Write headers
+        for (col_num, header) in headers.iter().enumerate() {
+            worksheet.write_string_only(0, col_num as u16, header)?;
+        }
+
+        // Write data rows
+        for (row_num, row_value) in data.iter().enumerate() {
+            if let Some(row_map) = row_value.as_object() {
+                for (col_num, header) in headers.iter().enumerate() {
+                    if let Some(cell_value) = row_map.get(header) {
+                        match cell_value {
+                            Value::String(s) => {
+                                worksheet.write_string_only(row_num as u32 + 1, col_num as u16, s)?;
+                            },
+                            Value::Number(n) => {
+                                if let Some(float_val) = n.as_f64() {
+                                    worksheet.write_number_only(row_num as u32 + 1, col_num as u16, float_val)?;
+                                }
+                            },
+                            Value::Bool(b) => {
+                                worksheet.write_boolean_only(row_num as u32 + 1, col_num as u16, *b)?;
+                            },
+                            _ => {} // Handles null and other types as blank cells
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    workbook.save(path).map_err(|e| CommandError::from(e.to_string()))?;
+    Ok(())
 }
 
 fn save_csv_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
