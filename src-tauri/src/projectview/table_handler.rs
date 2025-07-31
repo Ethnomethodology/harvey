@@ -492,45 +492,46 @@ pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>) -> 
     let table_path = Path::new(&table_path_str);
     let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
+    let headers = if let Some(first_row) = table_data.get(0).and_then(|v| v.as_object()) {
+        first_row.keys().cloned().collect::<Vec<String>>()
+    } else {
+        return Ok(()); // No data to save
+    };
+
     match extension.as_str() {
-        "csv" => save_csv_data(table_path, table_data),
-        "xlsx" => save_xlsx_data(table_path, table_data),
+        "csv" => save_csv_data_with_headers(table_path, table_data, &headers),
+        "xlsx" => save_xlsx_data_with_headers(table_path, table_data, &headers),
         _ => Err(CommandError::from(format!("Unsupported table extension for saving: {}", extension))),
     }
 }
 
-fn save_xlsx_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
+fn save_xlsx_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]) -> Result<(), CommandError> {
     let mut workbook = Workbook::new();
     let worksheet = workbook.add_worksheet();
 
-    if let Some(first_row) = data.get(0).and_then(|v| v.as_object()) {
-        let mut headers = first_row.keys().cloned().collect::<Vec<String>>();
-        headers.sort(); // Sort headers to ensure consistent order
+    // Write headers
+    for (col_num, header) in headers.iter().enumerate() {
+        worksheet.write_string(0, col_num as u16, header)?;
+    }
 
-        // Write headers
-        for (col_num, header) in headers.iter().enumerate() {
-            worksheet.write_string(0, col_num as u16, header)?;
-        }
-
-        // Write data rows
-        for (row_num, row_value) in data.iter().enumerate() {
-            if let Some(row_map) = row_value.as_object() {
-                for (col_num, header) in headers.iter().enumerate() {
-                    if let Some(cell_value) = row_map.get(header) {
-                        match cell_value {
-                            Value::String(s) => {
-                                worksheet.write_string(row_num as u32 + 1, col_num as u16, s)?;
-                            },
-                            Value::Number(n) => {
-                                if let Some(float_val) = n.as_f64() {
-                                    worksheet.write_number(row_num as u32 + 1, col_num as u16, float_val)?;
-                                }
-                            },
-                            Value::Bool(b) => {
-                                worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
-                            },
-                            _ => {} // Handles null and other types as blank cells
-                        }
+    // Write data rows
+    for (row_num, row_value) in data.iter().enumerate() {
+        if let Some(row_map) = row_value.as_object() {
+            for (col_num, header) in headers.iter().enumerate() {
+                if let Some(cell_value) = row_map.get(header) {
+                    match cell_value {
+                        Value::String(s) => {
+                            worksheet.write_string(row_num as u32 + 1, col_num as u16, s)?;
+                        },
+                        Value::Number(n) => {
+                            if let Some(float_val) = n.as_f64() {
+                                worksheet.write_number(row_num as u32 + 1, col_num as u16, float_val)?;
+                            }
+                        },
+                        Value::Bool(b) => {
+                            worksheet.write_boolean(row_num as u32 + 1, col_num as u16, *b)?;
+                        },
+                        _ => {} // Handles null and other types as blank cells
                     }
                 }
             }
@@ -541,25 +542,21 @@ fn save_xlsx_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
     Ok(())
 }
 
-fn save_csv_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
+fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String]) -> Result<(), CommandError> {
     let mut wtr = csv::Writer::from_path(path)?;
-    if let Some(first_row) = data.get(0).and_then(|v| v.as_object()) {
-        let mut headers = first_row.keys().cloned().collect::<Vec<String>>();
-        headers.sort(); // Sort headers to ensure consistent order
-        wtr.write_record(&headers)?;
-        for row_value in data {
-            if let Some(row_map) = row_value.as_object() {
-                let row: Vec<String> = headers.iter().map(|h| {
-                    row_map.get(h).and_then(|v| {
-                        if v.is_string() {
-                            v.as_str().map(|s| s.to_string())
-                        } else {
-                            Some(v.to_string())
-                        }
-                    }).unwrap_or("".to_string())
-                }).collect();
-                wtr.write_record(&row)?;
-            }
+    wtr.write_record(headers)?;
+    for row_value in data {
+        if let Some(row_map) = row_value.as_object() {
+            let row: Vec<String> = headers.iter().map(|h| {
+                row_map.get(h).and_then(|v| {
+                    if v.is_string() {
+                        v.as_str().map(|s| s.to_string())
+                    } else {
+                        Some(v.to_string())
+                    }
+                }).unwrap_or("".to_string())
+            }).collect();
+            wtr.write_record(&row)?;
         }
     }
     wtr.flush()?;
@@ -581,6 +578,20 @@ pub async fn rename_table_header(
         _ => return Err(CommandError::from(format!("Unsupported table extension for renaming header: {}", extension))),
     };
 
+    let original_headers = if let Some(first_row) = data_value.as_array().and_then(|arr| arr.get(0)).and_then(|v| v.as_object()) {
+        first_row.keys().cloned().collect::<Vec<String>>()
+    } else {
+        return Err(CommandError::from("Could not read headers from table data."));
+    };
+
+    let new_headers: Vec<String> = original_headers.iter().map(|h| {
+        if h == &old_header {
+            new_header.clone()
+        } else {
+            h.clone()
+        }
+    }).collect();
+
     if let Some(arr) = data_value.as_array_mut() {
         for item in arr {
             if let Some(obj) = item.as_object_mut() {
@@ -594,8 +605,8 @@ pub async fn rename_table_header(
     let data_vec = data_value.as_array().unwrap().to_vec();
 
     match extension.as_str() {
-        "csv" => save_csv_data(&table_path, data_vec),
-        "xlsx" => save_xlsx_data(&table_path, data_vec),
+        "csv" => save_csv_data_with_headers(&table_path, data_vec, &new_headers),
+        "xlsx" => save_xlsx_data_with_headers(&table_path, data_vec, &new_headers),
         _ => unreachable!(),
     }
 }
