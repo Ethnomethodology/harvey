@@ -595,13 +595,13 @@
         <div class="mt-4 flex justify-end space-x-2">
             <button
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md"
-                on:click={() => showEditHeaderModal = false}
+                onclick={() => showEditHeaderModal = false}
             >
                 Cancel
             </button>
             <button
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-                on:click={handleSaveHeader}
+                onclick={handleSaveHeader}
             >
                 Save
             </button>
