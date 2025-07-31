@@ -562,16 +562,8 @@
         try {
             await renameTableHeader(tablePath, editingHeader.oldName, editingHeader.newName);
 
-            // This is a simplified update. A full implementation would need to update
-            // the underlying data array `tableData` as well.
-            await currentColumnComponent.updateDefinition({ title: editingHeader.newName, field: editingHeader.newName });
-
-            // Update the data in the table
-            tableData.forEach(row => {
-                row[editingHeader.newName] = row[editingHeader.oldName];
-                delete row[editingHeader.oldName];
-            });
-            tabulatorInstance.setData(tableData);
+            // Re-initialize the table to reflect the changes from the file
+            await initializeTable(tablePath);
 
         } catch (error) {
             console.error("Failed to rename header:", error);
