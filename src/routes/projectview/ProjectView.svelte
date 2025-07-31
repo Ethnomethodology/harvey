@@ -804,9 +804,7 @@ async function onConfirmTranscriptionStart(event) {
 			await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
 			await refreshProjectFiles();
 			await handleTabClick('data');
-			if (dataViewRef) {
-				await dataViewRef.handleViewChangeRequest({ viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
-			}
+			prepareDocumentView(tablePath, 'tables', hasHeaders);
 		} catch (error) {
 			console.error(`[ProjectView] Error setting table headers:`, error);
 			await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
