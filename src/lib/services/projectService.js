@@ -1361,6 +1361,12 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             const undoStack = get(transcriptStore).transcriptUndoStack;
             transcriptStore.update(ts => ({ ...ts, segments: undoStack.length > 0 ? undoStack[0] : ts.segments, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
         };
+    } else if (projState.selectedTablePath && projState.isDocumentDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedTablePath;
+        itemTypeForPrompt = 'table';
+        saveFunction = async () => saveTableData(itemPath, get(project).tableData);
+        discardFunction = () => {};
     }
 
     if (itemIsDirty && itemPath === newPathToLoad) {

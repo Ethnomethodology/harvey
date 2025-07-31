@@ -275,7 +275,7 @@
                 const newValue = cell.getValue();
                 tableData[rowIndex][field] = newValue;
                 isDirty = true;
-                project.update(p => ({ ...p, isDocumentDirty: true }));
+                project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
             });
 
             // Disable macOS autocorrect/autocomplete on column header filters and init snapshot

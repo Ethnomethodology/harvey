@@ -34,6 +34,7 @@ const initialState = {
     files: [],
     documentFiles: [],
     tableFiles: [],
+    tableData: [],
     imageFiles: [],
     importedTranscriptFiles: [],
     documentMetadataFiles: [],
