@@ -1327,6 +1327,12 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         saveFunction = async () => saveCurrentPdfAnnotations();
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialPdfAnnotations;
+    } else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedDocumentPath;
+        itemTypeForPrompt = 'table';
+        saveFunction = async () => saveTableData(itemPath, projState.tableData);
+        discardFunction = () => {};
     } else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
@@ -1361,12 +1367,6 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
             const undoStack = get(transcriptStore).transcriptUndoStack;
             transcriptStore.update(ts => ({ ...ts, segments: undoStack.length > 0 ? undoStack[0] : ts.segments, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
         };
-    } else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
-        itemIsDirty = true;
-        itemPath = projState.selectedDocumentPath;
-        itemTypeForPrompt = 'table';
-        saveFunction = async () => saveTableData(itemPath, projState.tableData);
-        discardFunction = () => {};
     }
 
     if (itemIsDirty && itemPath === newPathToLoad) {
