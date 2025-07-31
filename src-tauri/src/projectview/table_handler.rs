@@ -340,42 +340,22 @@ fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result
             .map(|h| h.to_string())
             .collect::<Vec<String>>()
     } else {
-        let mut headers_vec = Vec::new();
-        let first_record = rdr.records().next().transpose().map_err(|e| CommandError::from(format!("Failed to read first CSV record '{}': {}", path.display(), e)))?;
-        let num_columns = first_record.as_ref().map_or(0, |r| r.len());
-
-        for i in 0..num_columns {
+        let mut temp_rdr = csv::ReaderBuilder::new().has_headers(false).from_path(path)?;
+        let first_record = temp_rdr.records().next().transpose()?.unwrap_or_default();
+        let num_columns = first_record.len();
+        (0..num_columns).map(|i| {
             let mut col_name = String::new();
             let mut n = i;
-            while n > 0 {
-                col_name.insert(0, ((n % 26) as u8 + b'A') as char);
+            loop {
+                col_name.insert(0, (b'A' + (n % 26) as u8) as char);
+                if n < 26 { break; }
                 n = n / 26 - 1;
             }
-            col_name.insert(0, ((n % 26) as u8 + b'A') as char);
-            headers_vec.push(col_name);
-        }
-        headers_vec
+            col_name
+        }).collect()
     };
 
     let mut records = Vec::new();
-    if !has_headers {
-        if let Some(record) = rdr.records().next().transpose().map_err(|e| CommandError::from(format!("Failed to read CSV record '{}': {}", path.display(), e)))? {
-            let mut map = serde_json::Map::new();
-            for (i, header) in headers.iter().enumerate() {
-                let value_str = record.get(i).unwrap_or("").trim();
-                let value_json = if let Ok(num) = value_str.parse::<f64>() {
-                    json!(num)
-                } else if let Ok(b) = value_str.parse::<bool>() {
-                        json!(b)
-                } else {
-                    json!(value_str)
-                };
-                map.insert(header.clone(), value_json);
-            }
-            records.push(Value::Object(map));
-        }
-    }
-
     let records_iterator = rdr.records();
     let records_to_process = if let Some(l) = limit {
         records_iterator.take(l)
@@ -449,16 +429,16 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
     } else {
         if let Some(first_row) = range.rows().next() {
             let num_columns = first_row.len();
-            for i in 0..num_columns {
+            headers = (0..num_columns).map(|i| {
                 let mut col_name = String::new();
                 let mut n = i;
                 loop {
-                    col_name.insert(0, ((n % 26) as u8 + b'A') as char);
+                    col_name.insert(0, (b'A' + (n % 26) as u8) as char);
                     if n < 26 { break; }
                     n = n / 26 - 1;
                 }
-                headers.push(col_name);
-            }
+                col_name
+            }).collect();
         }
     }
 
