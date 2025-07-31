@@ -44,6 +44,7 @@ const initialState = {
     requestedNoteToLoad: null,
 
     selectedDocumentPath: null,
+    selectedDocumentType: null,
     currentDocumentJson: null,
     initialDocumentJson: null,
     isDocumentDirty: false,
@@ -192,6 +193,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
             selectedGroupData: filePath ? null : p.selectedGroupData,
 
             selectedDocumentPath: filePath,
+            selectedDocumentType: itemType,
             selectedDocumentOptions: isTable ? { hasHeaders: hasHeaders } : {},
             currentDocumentJson: (isJsonDocument && selectingSamePath) ? p.currentDocumentJson : (isJsonDocument ? null : null),
             initialDocumentJson: (isJsonDocument && selectingSamePath) ? p.initialDocumentJson : (isJsonDocument ? null : null),

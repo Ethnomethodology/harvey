@@ -1365,7 +1365,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         itemIsDirty = true;
         itemPath = projState.selectedTablePath;
         itemTypeForPrompt = 'table';
-        saveFunction = async () => saveTableData(itemPath, get(project).tableData);
+        saveFunction = async () => saveTableData(itemPath, projState.tableData);
         discardFunction = () => {};
     }
 
