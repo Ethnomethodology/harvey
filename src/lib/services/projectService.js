@@ -1536,3 +1536,21 @@ export async function clearProjectDataStore() {
     // await emit('project-cleared');
     console.log('[ProjectService] Project data store cleared.');
 }
+
+export async function renameTableHeader(tablePath, oldHeader, newHeader) {
+    if (!tablePath || !oldHeader || !newHeader) {
+        throw new Error("Missing required parameters for renaming table header.");
+    }
+
+    try {
+        await invoke('rename_table_header', {
+            tablePathStr: tablePath,
+            oldHeader: oldHeader,
+            newHeader: newHeader
+        });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error renaming header: ${errorMessage}`, { title: 'Rename Header Error', type: 'error' });
+        throw error;
+    }
+}

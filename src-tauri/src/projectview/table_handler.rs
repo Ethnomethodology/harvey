@@ -566,6 +566,40 @@ fn save_csv_data(path: &Path, data: Vec<Value>) -> Result<(), CommandError> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn rename_table_header(
+    table_path_str: String,
+    old_header: String,
+    new_header: String,
+) -> Result<(), CommandError> {
+    let table_path = PathBuf::from(&table_path_str);
+    let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+    let mut data_value = match extension.as_str() {
+        "csv" => load_csv_data(&table_path, true, None)?,
+        "xlsx" => load_xlsx_data(&table_path, true, None)?,
+        _ => return Err(CommandError::from(format!("Unsupported table extension for renaming header: {}", extension))),
+    };
+
+    if let Some(arr) = data_value.as_array_mut() {
+        for item in arr {
+            if let Some(obj) = item.as_object_mut() {
+                if let Some(value) = obj.remove(&old_header) {
+                    obj.insert(new_header.clone(), value);
+                }
+            }
+        }
+    }
+
+    let data_vec = data_value.as_array().unwrap().to_vec();
+
+    match extension.as_str() {
+        "csv" => save_csv_data(&table_path, data_vec),
+        "xlsx" => save_xlsx_data(&table_path, data_vec),
+        _ => unreachable!(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

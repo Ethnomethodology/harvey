@@ -2,7 +2,7 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
-    import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs } from '$lib/services/projectService.js'; // Added new functions
+    import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
     import { get } from 'svelte/store'; // To read store value
     import { sep } from '@tauri-apps/api/path'; // For path manipulation
@@ -395,6 +395,19 @@
     }
 
     // Function to generate column definitions
+    let showEditHeaderModal = false;
+    let editingHeader = { oldName: '', newName: '' };
+    let currentColumnComponent = null;
+
+    function openHeaderEditor(column) {
+        currentColumnComponent = column;
+        editingHeader = {
+            oldName: column.getDefinition().field,
+            newName: column.getDefinition().field
+        };
+        showEditHeaderModal = true;
+    }
+
     function generateColumns(data, savedLayoutObj, isFirstLoad) {
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}];
@@ -422,7 +435,15 @@
                 formatter: "textarea",
                 formatterParams: {
                     autoResize: false
-                }
+                },
+                headerContextMenu: [
+                    {
+                        label: "Edit Header",
+                        action: function(e, column) {
+                            openHeaderEditor(column);
+                        }
+                    }
+                ]
             };
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
@@ -534,7 +555,60 @@
     }
 
     const self = { save };
+
+    async function handleSaveHeader() {
+        if (!currentColumnComponent || editingHeader.newName.trim() === '') return;
+
+        try {
+            await renameTableHeader(tablePath, editingHeader.oldName, editingHeader.newName);
+
+            // This is a simplified update. A full implementation would need to update
+            // the underlying data array `tableData` as well.
+            await currentColumnComponent.updateDefinition({ title: editingHeader.newName, field: editingHeader.newName });
+
+            // Update the data in the table
+            tableData.forEach(row => {
+                row[editingHeader.newName] = row[editingHeader.oldName];
+                delete row[editingHeader.oldName];
+            });
+            tabulatorInstance.setData(tableData);
+
+        } catch (error) {
+            console.error("Failed to rename header:", error);
+        } finally {
+            showEditHeaderModal = false;
+        }
+    }
 </script>
+
+{#if showEditHeaderModal}
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-700 p-4 rounded-md shadow-lg">
+        <h3 class="text-lg font-bold mb-4">Edit Header</h3>
+        <label for="header-name-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Header Name</label>
+        <input
+            id="header-name-input"
+            type="text"
+            bind:value={editingHeader.newName}
+            class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+        />
+        <div class="mt-4 flex justify-end space-x-2">
+            <button
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md"
+                on:click={() => showEditHeaderModal = false}
+            >
+                Cancel
+            </button>
+            <button
+                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                on:click={handleSaveHeader}
+            >
+                Save
+            </button>
+        </div>
+    </div>
+</div>
+{/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
