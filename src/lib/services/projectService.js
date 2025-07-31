@@ -1206,7 +1206,7 @@ export async function saveTableData(tablePath, tableData) {
     project.update(p => ({ ...p, statusMessage: `Saving table ${filename}...` }));
 
     try {
-        await invoke('save_table_data', { tablePathStr: tablePath, tableData });
+        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData });
         project.update(p => ({ ...p, isDocumentDirty: false, statusMessage: `Table saved: ${filename}` }));
     } catch (error) {
         const errorMessage = error?.message || String(error);
