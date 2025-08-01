@@ -320,12 +320,17 @@ pub async fn load_table_data(table_path_str: String) -> Result<Value, CommandErr
         _ => Err(CommandError::from(format!("Unsupported table extension for loading: {}", extension))),
     }?;
 
-    debug!("[load_table_data] Successfully loaded {} rows.", data.as_array().map_or(0, |a| a.len()));
+    if let Some(data_array) = data.get("data").and_then(|d| d.as_array()) {
+        debug!("[load_table_data] Successfully loaded {} rows.", data_array.len());
+    }
     Ok(data)
 }
 
-fn to_json_response(_headers: Vec<String>, records: Vec<Value>) -> Result<Value, CommandError> {
-    Ok(json!(records))
+fn to_json_response(headers: Vec<String>, records: Vec<Value>) -> Result<Value, CommandError> {
+    Ok(json!({
+        "headers": headers,
+        "data": records
+    }))
 }
 
 fn load_csv_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Result<Value, CommandError> {
@@ -593,11 +598,15 @@ pub async fn rename_table_header(
     let table_path = PathBuf::from(&table_path_str);
     let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
-    let mut data_value = match extension.as_str() {
+    let loaded_value = match extension.as_str() {
         "csv" => load_csv_data(&table_path, true, None)?,
         "xlsx" => load_xlsx_data(&table_path, true, None)?,
         _ => return Err(CommandError::from(format!("Unsupported table extension for renaming header: {}", extension))),
     };
+
+    let mut data_value = loaded_value.get("data")
+        .ok_or_else(|| CommandError::from("Loaded table data is missing 'data' field"))?
+        .clone();
 
     let original_headers = get_headers(&table_path)?;
 
@@ -619,7 +628,9 @@ pub async fn rename_table_header(
         }
     }
 
-    let data_vec = data_value.as_array().unwrap().to_vec();
+    let data_vec = data_value.as_array()
+        .ok_or_else(|| CommandError::from("Data is not an array after processing"))?
+        .to_vec();
 
     match extension.as_str() {
         "csv" => save_csv_data_with_headers(&table_path, data_vec, &new_headers),

@@ -130,7 +130,9 @@
         }
 
         try {
-            tableData = await loadTableData(pathForTable, hasHeaders);
+            const response = await loadTableData(pathForTable, hasHeaders);
+            const tableHeaders = response.headers;
+            tableData = response.data;
 
             if (tableData.length === 0) {
                 console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.'); // WARN
@@ -186,7 +188,7 @@
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 layout: "fitData", // Changed to fitData for Excel-like resizing
-                columns: generateColumns(tableData, savedLayout, !savedLayout), // Pass isFirstLoad
+                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
@@ -408,9 +410,9 @@
         showEditHeaderModal = true;
     }
 
-    function generateColumns(data, savedLayoutObj, isFirstLoad) {
+    function generateColumns(data, headers, savedLayoutObj, isFirstLoad) {
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
-        if (!data || data.length === 0) return [{title: "No Data", field: "placeholder"}];
+        if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
         // Define the row number column
         const rowNumColumn = {
@@ -424,7 +426,6 @@
             cssClass: "tabulator-row-number-column"
         };
 
-        const headers = Object.keys(data[0]);
         let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
@@ -559,8 +560,26 @@
     async function handleSaveHeader() {
         if (!currentColumnComponent || editingHeader.newName.trim() === '') return;
 
+        const oldName = editingHeader.oldName;
+        const newName = editingHeader.newName;
+
         try {
-            await renameTableHeader(tablePath, editingHeader.oldName, editingHeader.newName);
+            await renameTableHeader(tablePath, oldName, newName);
+
+            // Update the saved layout preferences to reflect the header rename
+            const projectBaseDir = get(project)?.baseDirectory;
+            if (projectBaseDir) {
+                const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
+                if (relativeTablePath) {
+                    let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
+                    if (savedLayout && savedLayout.columns && savedLayout.columns[oldName]) {
+                        savedLayout.columns[newName] = savedLayout.columns[oldName];
+                        delete savedLayout.columns[oldName];
+                        await saveTableLayoutPrefs(relativeTablePath, savedLayout);
+                        console.info(`[TableViewerPanel] Migrated layout preferences from '${oldName}' to '${newName}'.`);
+                    }
+                }
+            }
 
             // Re-initialize the table to reflect the changes from the file
             await initializeTable(tablePath);
