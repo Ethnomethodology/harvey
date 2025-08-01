@@ -96,7 +96,7 @@
 
     
 
-    async function initializeTable(pathForTable, newHasHeaders = null) {
+    async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
         if (newHasHeaders !== null) {
             hasHeaders = newHasHeaders;
         }
@@ -111,7 +111,7 @@
             console.debug(`[TableViewerPanel initializeTable] Already loading ${pathForTable}, skipping.`); // DEBUG
             return;
         }
-        if (!isLoading && tabulatorInstance && currentLoadedPath === pathForTable) {
+        if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) {
             console.debug(`[TableViewerPanel initializeTable] Table for ${pathForTable} already initialized and loaded.`); // DEBUG
             return;
         }
@@ -582,7 +582,7 @@
             }
 
             // Re-initialize the table to reflect the changes from the file
-            await initializeTable(tablePath);
+            await initializeTable(tablePath, null, true);
 
         } catch (error) {
             console.error("Failed to rename header:", error);
