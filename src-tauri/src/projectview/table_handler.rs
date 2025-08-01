@@ -598,17 +598,37 @@ pub async fn rename_table_header(
     let table_path = PathBuf::from(&table_path_str);
     let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
+    // Get the has_headers flag from the project XML
+    let project_xml_path = get_project_xml_path_from_item(&table_path)?;
+    let project_base_dir = project_xml_path.parent()
+        .ok_or_else(|| CommandError::from("Could not get project base directory from XML path"))?;
+    let relative_path_for_xml = table_path
+        .strip_prefix(project_base_dir)?
+        .to_string_lossy()
+        .replace("\\", "/");
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+    let has_headers = project_data.table_files.files.iter()
+        .find(|f| f.relative_path == relative_path_for_xml)
+        .and_then(|f| f.has_headers)
+        .unwrap_or(true);
+
     let loaded_value = match extension.as_str() {
-        "csv" => load_csv_data(&table_path, true, None)?,
-        "xlsx" => load_xlsx_data(&table_path, true, None)?,
+        "csv" => load_csv_data(&table_path, has_headers, None)?,
+        "xlsx" => load_xlsx_data(&table_path, has_headers, None)?,
         _ => return Err(CommandError::from(format!("Unsupported table extension for renaming header: {}", extension))),
     };
+
+    let original_headers_val = loaded_value.get("headers")
+        .ok_or_else(|| CommandError::from("Loaded table data is missing 'headers' field"))?;
+    let original_headers: Vec<String> = serde_json::from_value(original_headers_val.clone())
+        .map_err(|e| CommandError::from(format!("Failed to parse headers from loaded data: {}", e)))?;
 
     let mut data_value = loaded_value.get("data")
         .ok_or_else(|| CommandError::from("Loaded table data is missing 'data' field"))?
         .clone();
-
-    let original_headers = get_headers(&table_path)?;
 
     let new_headers: Vec<String> = original_headers.iter().map(|h| {
         if h == &old_header {
