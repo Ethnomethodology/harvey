@@ -576,7 +576,8 @@ fn get_headers(path: &Path) -> Result<Vec<String>, CommandError> {
             let range = workbook.worksheet_range(&sheet_name)?;
             let headers = range.rows().next().map_or(Ok(vec![]), |row| {
                 Ok(row.iter().map(|cell| cell.to_string()).collect())
-            })?;
+            }) as Result<Vec<String>, CommandError>;
+            let headers = headers?;
             Ok(headers)
         }
         _ => Err(CommandError::from(format!("Unsupported table extension for getting headers: {}", extension))),
