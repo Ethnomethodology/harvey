@@ -17,6 +17,7 @@ use csv;
 use tauri_plugin_shell;
 use tauri;
 use rust_xlsxwriter;
+use calamine;
 
 
 pub const CONFIG_DIR_NAME: &str = ".harvey";
@@ -134,6 +135,7 @@ impl From<tauri_plugin_shell::Error> for CommandError { fn from(error: tauri_plu
 impl From<tauri::Error> for CommandError { fn from(error: tauri::Error) -> Self { CommandError::TauriApi(error.to_string()) } }
 impl From<rusqlite::Error> for CommandError { fn from(error: rusqlite::Error) -> Self { CommandError::RusqliteError(error.to_string()) } }
 impl From<rust_xlsxwriter::XlsxError> for CommandError { fn from(error: rust_xlsxwriter::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
+impl From<calamine::XlsxError> for CommandError { fn from(error: calamine::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
 // --- End Error Conversions ---
 
 
