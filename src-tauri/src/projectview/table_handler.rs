@@ -563,6 +563,26 @@ fn save_csv_data_with_headers(path: &Path, data: Vec<Value>, headers: &[String])
     Ok(())
 }
 
+fn get_headers(path: &Path) -> Result<Vec<String>, CommandError> {
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+    match extension.as_str() {
+        "csv" => {
+            let mut rdr = csv::ReaderBuilder::new().has_headers(true).from_path(path)?;
+            Ok(rdr.headers()?.iter().map(|h| h.to_string()).collect())
+        }
+        "xlsx" => {
+            let mut workbook: Xlsx<_> = open_workbook(path)?;
+            let sheet_name = workbook.sheet_names().first().cloned().ok_or_else(|| CommandError::from("XLSX file contains no sheets."))?;
+            let range = workbook.worksheet_range(&sheet_name)?;
+            let headers = range.rows().next().map_or(Ok(vec![]), |row| {
+                Ok(row.iter().map(|cell| cell.to_string()).collect())
+            })?;
+            Ok(headers)
+        }
+        _ => Err(CommandError::from(format!("Unsupported table extension for getting headers: {}", extension))),
+    }
+}
+
 #[tauri::command]
 pub async fn rename_table_header(
     table_path_str: String,
@@ -578,11 +598,7 @@ pub async fn rename_table_header(
         _ => return Err(CommandError::from(format!("Unsupported table extension for renaming header: {}", extension))),
     };
 
-    let original_headers = if let Some(first_row) = data_value.as_array().and_then(|arr| arr.get(0)).and_then(|v| v.as_object()) {
-        first_row.keys().cloned().collect::<Vec<String>>()
-    } else {
-        return Err(CommandError::from("Could not read headers from table data."));
-    };
+    let original_headers = get_headers(&table_path)?;
 
     let new_headers: Vec<String> = original_headers.iter().map(|h| {
         if h == &old_header {
