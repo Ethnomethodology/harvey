@@ -769,20 +769,25 @@ export async function importTableFile(hasHeaders) {
 
 
 
-export async function loadTableData(tablePath, hasHeaders) { 
-    if (!tablePath) throw new Error('tablePath is required'); 
-    try { 
-        const tableData = await invoke('load_table_data', { 
-            tablePathStr: tablePath, 
-            hasHeaders: hasHeaders 
-        }); 
-        if (!Array.isArray(tableData)) throw new Error("Backend returned invalid data format for table."); 
-        return tableData; 
-    } catch (error) { 
-        const errorMessage = error.message || String(error); 
-        await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' }); 
-        throw error; 
-    } 
+export async function loadTableData(tablePath, hasHeaders) {
+    if (!tablePath) throw new Error('tablePath is required');
+    try {
+        const tableData = await invoke('load_table_data', {
+            tablePathStr: tablePath,
+            hasHeaders: hasHeaders
+        });
+
+        // Check if the response is an object with 'headers' and 'data' arrays
+        if (typeof tableData !== 'object' || tableData === null || !Array.isArray(tableData.headers) || !Array.isArray(tableData.data)) {
+            throw new Error("Backend returned invalid data format for table.");
+        }
+
+        return tableData;
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' });
+        throw error;
+    }
 }
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
