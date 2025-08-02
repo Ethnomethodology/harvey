@@ -1,82 +1,144 @@
 // src-tauri/build.rs
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::{Path, PathBuf}, process::Command};
+
+/// Finds a file by name in a directory and its subdirectories.
+fn find_file_in_dir(dir: &Path, file_name: &str) -> Option<PathBuf> {
+    if !dir.is_dir() {
+        return None;
+    }
+    for entry in fs::read_dir(dir).ok()? {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file_in_dir(&path, file_name) {
+                return Some(found);
+            }
+        } else if path.file_name().map_or(false, |name| name == file_name) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn download_file(url: &str, dest_path: &Path) {
+    println!("cargo:info=Downloading from {} to {}...", url, dest_path.display());
+    let status = Command::new("curl")
+        .args(&["-fL", url, "-o", &dest_path.to_string_lossy()])
+        .status()
+        .expect("Failed to start curl command");
+
+    if !status.success() {
+        panic!("Failed to download file from {}. Curl exit code: {}", url, status);
+    }
+}
 
 fn main() {
-    // Get the output directory (e.g., target/debug/build/harvey-1-abcdef/out)
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    // Determine the profile ("debug" or "release") based on opt-level
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-
-    // Find the root target directory (e.g., target/debug or target/release)
-    // This usually is three levels up from OUT_DIR for crate builds.
-    let target_dir = out_dir
-        .ancestors()
-        .nth(3)
-        .expect("Failed to determine target directory from OUT_DIR")
-        .to_path_buf();
-
-    println!("cargo:info=Build script detected target directory: {:?}", target_dir);
-    println!("cargo:info=Build profile: {}", profile);
-
-
-    // Source directory of the models binaries (relative to Cargo.toml)
+    let target = env::var("TARGET").unwrap();
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let models_src_dir = manifest_dir.join("models");
-    println!("cargo:info=models source directory: {:?}", models_src_dir);
+    let sidecar_dir = manifest_dir.join("sidecar");
+    fs::create_dir_all(&sidecar_dir).expect("Failed to create sidecar directory");
 
+    let temp_dir = manifest_dir.join("temp_sidecar_downloads");
+    fs::create_dir_all(&temp_dir).expect("Failed to create temp directory");
 
-    // Destination directory *within* the target directory
-    let models_dest_dir = target_dir.join("models");
-     println!("cargo:info=models destination directory: {:?}", models_dest_dir);
-
-
-    // --- Crucial: Rerun instructions for Cargo ---
-    // Rerun this build script if build.rs itself changes
-    println!("cargo:rerun-if-changed=build.rs");
-    // Rerun this build script if the contents of the models source directory change
-    println!("cargo:rerun-if-changed={}", models_src_dir.display());
-
-
-    // --- Perform the Copy ---
-    if models_src_dir.exists() && models_src_dir.is_dir() {
-        // Ensure destination directory exists
-        if !models_dest_dir.exists() {
-            println!("cargo:info=Creating destination models directory: {:?}", models_dest_dir);
-            fs::create_dir_all(&models_dest_dir)
-                .expect("Failed to create models destination directory in target");
+    let (os_suffix, extension) = match target.as_str() {
+        "aarch64-apple-darwin" => ("macos-arm64", ""),
+        "x86_64-apple-darwin" => ("macos-x86_64", ""),
+        "x86_64-pc-windows-msvc" => ("windows-x86_64", ".exe"),
+        _ => {
+            println!("cargo:warning=Unsupported target for sidecar download: {}. Skipping.", target);
+            tauri_build::build();
+            return;
         }
+    };
 
-        // Copy each file from source to destination
-        match fs::read_dir(&models_src_dir) {
-            Ok(entries) => {
-                println!("cargo:info=Copying models files...");
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let src_path = entry.path();
-                        if src_path.is_file() {
-                            let dest_path = models_dest_dir.join(entry.file_name());
-                            println!("cargo:info=  Copying {:?} -> {:?}", src_path.file_name().unwrap_or_default(), dest_path);
-                            match fs::copy(&src_path, &dest_path) {
-                                Ok(_) => {} // File copied successfully
-                                Err(e) => {
-                                    // Use cargo:warning for non-fatal issues during build
-                                    eprintln!("cargo:warning=Failed to copy models file {:?} to {:?}: {}", src_path, dest_path, e);
-                                }
-                            }
-                        }
-                    }
-                }
-                println!("cargo:info=Finished copying models files.");
-            }
-            Err(e) => {
-                eprintln!("cargo:warning=Failed to read models source directory {:?}: {}", models_src_dir, e);
+    // --- Binaries from harvey-sidecars repo ---
+    let harvey_repo = "dipanjan92/harvey-sidecars";
+    let harvey_tag = "v0.2.0";
+    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cpp"];
+
+    for binary_name in &harvey_binaries {
+        let final_binary_name = format!("{}-{}{}", binary_name, target, extension);
+        let dest_path = sidecar_dir.join(&final_binary_name);
+
+        if !dest_path.exists() {
+            // Specific check for the missing binary
+            if *binary_name == "whisper-cpp" && target == "aarch64-apple-darwin" {
+                println!("cargo:warning=-------------------------------------------------------------------");
+                println!("cargo:warning=Action Required: The \"whisper-cpp-macos-arm64\" binary is missing from the GitHub release.");
+                println!("cargo:warning=Please download it manually and place it in \"src-tauri/sidecar/\" as \"{}\"", final_binary_name);
+                println!("cargo:warning=Creating a placeholder file to allow the build to continue.");
+                println!("cargo:warning=-------------------------------------------------------------------");
+                fs::File::create(&dest_path).expect("Failed to create placeholder file");
+            } else {
+                let asset_name = format!("{}-{}{}", binary_name, os_suffix, extension);
+                let url = format!("https://github.com/{}/releases/download/{}/{}", harvey_repo, harvey_tag, asset_name);
+                download_file(&url, &dest_path);
             }
         }
-    } else {
-         eprintln!("cargo:warning=models source directory not found or is not a directory: {:?}", models_src_dir);
+
+        if !target.contains("windows") {
+            Command::new("chmod").arg("+x").arg(&dest_path).status().expect("Failed to make binary executable");
+        }
     }
 
-    // Finally, let tauri-build do its thing (important!)
+    // --- Pandoc from official repo ---
+    let pandoc_final_name = format!("pandoc-{}{}", target, extension);
+    let pandoc_dest_path = sidecar_dir.join(&pandoc_final_name);
+    if !pandoc_dest_path.exists() {
+        let (pandoc_os, pandoc_arch) = match target.as_str() {
+            "aarch64-apple-darwin" => ("macOS", "arm64-"),
+            "x86_64-apple-darwin" => ("macOS", "x86_64-"),
+            "x86_64-pc-windows-msvc" => ("windows-x86_64", ""),
+            _ => ("", ""),
+        };
+
+        if !pandoc_os.is_empty() {
+            let pandoc_release_url = "https://api.github.com/repos/jgm/pandoc/releases/latest";
+            let pandoc_release_json = Command::new("curl").args(&["-sL", pandoc_release_url]).output().expect("Failed to fetch Pandoc release info");
+            let pandoc_release_str = String::from_utf8_lossy(&pandoc_release_json.stdout);
+            let pandoc_tag = pandoc_release_str
+                .lines()
+                .find(|line| line.contains("\"tag_name\""))
+                .and_then(|line| line.split(':').nth(1))
+                .map(|value| value.trim().trim_matches(|c| c == '"' || c == ','))
+                .unwrap_or("3.2.1"); // Fallback tag
+
+            let pandoc_asset_name = format!("pandoc-{}-{}{}.zip", pandoc_tag, pandoc_arch, pandoc_os);
+            let pandoc_url = format!("https://github.com/jgm/pandoc/releases/download/{}/{}", pandoc_tag, pandoc_asset_name);
+            let archive_path = temp_dir.join(&pandoc_asset_name);
+
+            download_file(&pandoc_url, &archive_path);
+
+            println!("cargo:info=Extracting {}...", archive_path.display());
+            let status = Command::new("unzip")
+                .args(&["-o", &archive_path.to_string_lossy(), "-d", &temp_dir.to_string_lossy()])
+                .status()
+                .expect("Failed to start unzip command");
+            if !status.success() {
+                panic!("Failed to extract pandoc archive: {}. Unzip exit code: {}", archive_path.display(), status);
+            }
+
+            let search_filename = format!("pandoc{}", extension);
+            if let Some(found_path) = find_file_in_dir(&temp_dir, &search_filename) {
+                fs::rename(&found_path, &pandoc_dest_path).expect("Failed to move pandoc binary");
+            } else {
+                println!("cargo:warning=Could not find pandoc in the extracted archive.");
+            }
+        }
+    }
+    
+    if !target.contains("windows") {
+        if pandoc_dest_path.exists() {
+            Command::new("chmod").arg("+x").arg(&pandoc_dest_path).status().expect("Failed to make pandoc executable");
+        }
+    }
+
+
+    // Clean up
+    fs::remove_dir_all(&temp_dir).expect("Failed to remove temp directory");
+
+    // Rerun this build script if build.rs itself changes
+    println!("cargo:rerun-if-changed=build.rs");
     tauri_build::build();
 }
