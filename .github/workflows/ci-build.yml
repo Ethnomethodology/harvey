@@ -22,7 +22,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     env:
-      SIDECAR_REPO: dipanjan92/harvey-sidecars
       APP_NAME: harvey
       # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
       # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
@@ -49,280 +48,13 @@ jobs:
                matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}
           override: true
 
-      - name: Clean project
-        run: cargo clean --manifest-path src-tauri/Cargo.toml
-
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
         with:
           node-version: '24.1.0'
           cache: 'npm'
-
-      - name: Prepare sidecar directory
-        run: mkdir -p ./sidecar
-
-      # macOS arm64 sidecars
-      - name: Download all macos-arm64 sidecars
-        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
-        uses: robinraju/release-downloader@v1.10
-        with:
-          token: ${{ secrets.SIDECAR_TOKEN }}
-          repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0'
-          fileName: "*-macos-arm64*"
-          out-file-path: ./sidecar
-          extract: true
-
-      # macOS x86_64 sidecars
-      - name: Download all macos-x86_64 sidecars
-        if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
-        uses: robinraju/release-downloader@v1.10
-        with:
-          token: ${{ secrets.SIDECAR_TOKEN }}
-          repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0'
-          fileName: "*-macos-x86_64*"
-          out-file-path: ./sidecar
-          extract: true
-
-      # Windows x86_64 sidecars
-      - name: Download all windows-x86_64 sidecars
-        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
-        uses: robinraju/release-downloader@v1.10
-        with:
-          token: ${{ secrets.SIDECAR_TOKEN }}
-          repository: ${{ env.SIDECAR_REPO }}
-          tag: 'v0.2.0'
-          fileName: "*-windows-x86_64*"
-          out-file-path: ./sidecar
-          extract: false
-
-      - name: Verify SHA256 Checksums
-        shell: bash
-        run: |
-          echo "Verifying checksums for downloaded sidecars in ./sidecar..."
-          cd ./sidecar || { echo "Failed to change directory to ./sidecar"; exit 1; }
-
-          for checksum_file in *.sha256; do
-            if [ ! -f "$checksum_file" ]; then
-              echo "No .sha256 files found to verify."
-              break
-            fi
-
-            echo "Verifying checksum for $checksum_file..."
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              # Windows: Use certutil
-              # Extract the expected checksum and the filename from the .sha256 file
-              read expected_checksum binary_file < "$checksum_file"
-
-              # In case the binary file name in the checksum file has a leading '*'
-              binary_file=${binary_file#\*}
-
-              if [ ! -f "$binary_file" ]; then
-                echo "Error: Binary file '$binary_file' not found for checksum verification."
-                exit 1
-              fi
-
-              # Calculate the actual checksum
-              actual_checksum=$(certutil -hashfile "$binary_file" SHA256 | head -n 2 | tail -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-              expected_checksum=$(echo "$expected_checksum" | tr '[:upper:]' '[:lower:]')
-
-              # Compare the checksums
-              if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-                echo "Error: Checksum mismatch for $binary_file."
-                echo "Expected: $expected_checksum"
-                echo "Actual:   $actual_checksum"
-                exit 1
-              else
-                echo "Checksum verified for $binary_file"
-              fi
-            else
-              # macOS: Use shasum
-              shasum -a 256 -c "$checksum_file"
-            fi
-          done
-
-          cd ..
-          echo "All sidecar checksums verified successfully."
-
-      - name: Get Latest Pandoc Release Tag
-        id: get_pandoc_tag
-        run: |
-          LATEST_PANDOC_JSON=$(curl -sL https://api.github.com/repos/jgm/pandoc/releases/latest)
-          TAG_NAME=$(echo "$LATEST_PANDOC_JSON" | jq -r .tag_name)
-          
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" == "null" ] || [ "$TAG_NAME" == "" ]; then
-            echo "Failed to fetch latest Pandoc tag dynamically. API response: $LATEST_PANDOC_JSON"
-            echo "Using a fallback version: 3.7.0.1" 
-            TAG_NAME="3.7.0.1" 
-          fi
-          echo "PANDOC_LATEST_TAG=$TAG_NAME" >> $GITHUB_ENV
-          echo "Using Pandoc Tag: $TAG_NAME"
-        shell: bash
-
-      - name: Download and Extract Pandoc (macOS)
-        if: matrix.os == 'macos-latest'
-        env:
-          PANDOC_TAG_ENV: ${{ env.PANDOC_LATEST_TAG }} # Renamed to avoid confusion with shell var, though not strictly necessary
-        shell: bash
-        run: |
-          # Determine architecture suffix
-          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-            ARCH_DIR_SUFFIX="arm64"
-          else
-            ARCH_DIR_SUFFIX="x86_64"
-          fi
-
-          # Use shell variables for PANDOC_TAG (from env) and ARCH_DIR_SUFFIX (set above)
-          ZIP="pandoc-${PANDOC_TAG_ENV}-${ARCH_DIR_SUFFIX}-macOS.zip"
-          URL="https://github.com/jgm/pandoc/releases/download/${PANDOC_TAG_ENV}/${ZIP}"
-
-          echo "Downloading $ZIP from $URL" # Added URL to echo for better debugging
-          curl -fSL "$URL" -o pandoc_macos.zip
-
-          echo "Extracting pandoc archive..."
-          mkdir -p ./sidecar ./temp_pandoc_extract
-          unzip -q pandoc_macos.zip -d ./temp_pandoc_extract/
-
-          # Find the pandoc binary anywhere under temp_pandoc_extract
-          PANDOC_BIN=$(find ./temp_pandoc_extract -type f -name pandoc | head -n1)
-          if [[ -z "$PANDOC_BIN" ]]; then
-            echo "Error: pandoc binary not found in extraction."
-            ls -R ./temp_pandoc_extract
-            exit 1
-          fi
-
-          echo "Moving pandoc from $PANDOC_BIN to ./sidecar/pandoc"
-          mv "$PANDOC_BIN" ./sidecar/pandoc
-
-          # Clean up
-          rm pandoc_macos.zip
-          rm -rf ./temp_pandoc_extract
-
-      - name: Download and Extract Pandoc (Windows)
-        if: matrix.os == 'windows-latest'
-        env:
-          PANDOC_TAG: ${{ env.PANDOC_LATEST_TAG }}
-        shell: bash
-        run: |
-          PANDOC_ZIP_FILENAME="pandoc-${{env.PANDOC_TAG}}-windows-x86_64.zip"
-          PANDOC_DOWNLOAD_URL="https://github.com/jgm/pandoc/releases/download/${{env.PANDOC_TAG}}/${PANDOC_ZIP_FILENAME}"
-
-          echo "Downloading Pandoc version ${{env.PANDOC_TAG}} for Windows (x86_64)..."
-          echo "Download URL: $PANDOC_DOWNLOAD_URL"
-          mkdir -p ./sidecar ./temp_pandoc_extract
-          
-          curl -fSL "$PANDOC_DOWNLOAD_URL" -o pandoc_windows.zip
-
-          echo "Validating downloaded Pandoc ZIP for Windows..."
-          if ! unzip -tq pandoc_windows.zip > /dev/null; then
-            echo "Error: Downloaded pandoc_windows.zip ($PANDOC_ZIP_FILENAME) is not a valid zip file or is corrupted."
-            exit 1
-          fi
-
-          echo "Extracting all from Pandoc ZIP for Windows to ./temp_pandoc_extract/"
-          unzip -q pandoc_windows.zip -d ./temp_pandoc_extract/
-
-          EXPECTED_PANDOC_PATH="./temp_pandoc_extract/pandoc-${{env.PANDOC_TAG}}/pandoc.exe"
-          echo "Looking for Pandoc binary at: $EXPECTED_PANDOC_PATH"
-          
-          if [ -f "$EXPECTED_PANDOC_PATH" ]; then
-            mv "$EXPECTED_PANDOC_PATH" ./sidecar/pandoc.exe
-          else
-            echo "Error: Pandoc binary not found at $EXPECTED_PANDOC_PATH after extraction."
-            echo "Contents of ./temp_pandoc_extract/:"
-            ls -R ./temp_pandoc_extract/ 
-            exit 1
-          fi
-          
-          rm pandoc_windows.zip
-          rm -rf ./temp_pandoc_extract
-          echo "Pandoc executable for Windows prepared in ./sidecar/pandoc.exe"
-
-      - name: List all downloaded/extracted sidecar files
-        run: |
-          echo "Listing all files in ./sidecar before renaming:"
-          ls -R ./sidecar
-        shell: bash
-
-      - name: Clean target sidecar directory
-        run: |
-          echo "Cleaning src-tauri/sidecar/ directory..."
-          if [ -d "src-tauri/sidecar" ]; then
-            # Remove contents of sidecar directory.
-            # Using find to delete contents to avoid issues if sidecar itself is a symlink or special.
-            find src-tauri/sidecar/ -mindepth 1 -delete
-            echo "src-tauri/sidecar/ cleaned."
-          else
-            echo "src-tauri/sidecar/ directory does not exist, skipping cleanup."
-          fi
-        shell: bash
-
-      - name: Copy and rename sidecars
-        run: |
-          mkdir -p src-tauri/sidecar src-tauri/models
-          echo "Looking for files in ./sidecar to process..."
-          
-          find ./sidecar -type f -print0 | while IFS= read -r -d $'\0' file_path; do
-            file_name=$(basename "$file_path")
-            echo "Processing file: $file_path with basename: $file_name"
-            target_name=""
-            
-            case "${{ matrix.os }}::${{ matrix.arch }}" in
-              "macos-latest::x64") prefix="x86_64-apple-darwin" ;;
-              "macos-latest::arm64") prefix="aarch64-apple-darwin" ;;
-              "windows-latest::x64") prefix="x86_64-pc-windows-msvc" ;;
-            esac
-
-            ext=""
-            if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-              if [[ "$file_name" == *"ffmpeg"* || "$file_name" == *"whisper"* || "$file_name" == *"diarize"* ]]; then
-                 ext=".exe"
-              elif [[ "$file_name" == "pandoc.exe" ]]; then
-                 ext=""
-              fi
-            fi
-            
-            if [[ "$file_name" == "pandoc" || "$file_name" == "pandoc.exe" ]]; then
-              target_name="pandoc-$prefix" 
-              if [[ "$file_name" == "pandoc.exe" ]]; then 
-                target_name="pandoc-$prefix.exe"
-              fi
-            elif [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
-            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cli-$prefix$ext"
-            elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext"
-            fi
-
-            if [[ -n "$target_name" ]]; then
-              echo "Moving $file_path to src-tauri/sidecar/$target_name"
-              mv "$file_path" "src-tauri/sidecar/$target_name"
-            else
-              echo "No matching rule for $file_name (from $file_path)"
-            fi
-          done
-          
-          echo "Contents of src-tauri/sidecar after renaming:"
-          ls -l src-tauri/sidecar
-        shell: bash
-
-      - name: Mark executables (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          echo "Marking executables in src-tauri/sidecar/"
-          if [ -d "src-tauri/sidecar" ] && [ "$(ls -A src-tauri/sidecar)" ]; then
-            chmod +x src-tauri/sidecar/*
-            echo "Clearing extended attributes from sidecars (if any)..."
-            xattr -c src-tauri/sidecar/* || echo "xattr -c: No attributes to clear or command not applicable, continuing."
-          else
-            echo "src-tauri/sidecar directory is empty or does not exist. Skipping."
-          fi
-        shell: bash
-
-      - name: Clean frontend build directory
-        run: rm -rf build/
-        shell: bash
-
-      - name: Build frontend
+      
+      - name: Install frontend dependencies and build
         run: |
           npm ci 
           npm run build
@@ -330,14 +62,12 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      - name: Build Tauri bundle
+      - name: Build Tauri application
         env:
           TAURI_SKIP_SIGNING: "true"
         run: |
-          rustc --version
-          cargo --version
           echo "Building for target: ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}"
-          echo "Signing will be skipped (TAURI_SKIP_SIGNING=true)."
+          echo "The build.rs script will now handle downloading all sidecars..."
           
           cargo tauri build --target ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}
 
@@ -380,7 +110,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         id: find_msi
         run: |
-          msi_path=$(ls src-tauri/target/${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}/release/bundle/msi/*.msi)
+          msi_path=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi)
           msi_name=$(basename "$msi_path")
           echo "msi_path=$msi_path" >> $GITHUB_OUTPUT
           echo "msi_name=$msi_name" >> $GITHUB_OUTPUT
@@ -401,12 +131,11 @@ jobs:
         if: matrix.os == 'windows-latest'
         id: find_nsis
         run: |
-          exe_path=$(ls src-tauri/target/${{ matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}/release/bundle/nsis/*.exe)
+          exe_path=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe)
           exe_name=$(basename "$exe_path")
           echo "nsis_path=$exe_path" >> $GITHUB_OUTPUT
           echo "nsis_name=$exe_name" >> $GITHUB_OUTPUT
         shell: bash
-
 
       - name: Zip Windows NSIS Installer
         if: matrix.os == 'windows-latest'
@@ -461,8 +190,6 @@ jobs:
         run: |
           BUNDLE_DIR="src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle"
           cd "$BUNDLE_DIR"
-          # Use the DMG_NAME environment variable (made available by the 'env:' block above)
-          # with shell parameter expansion.
           zip_name="${DMG_NAME%.dmg}.zip"
           zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
           echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
