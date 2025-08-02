@@ -253,9 +253,32 @@ pub async fn set_table_headers(
         return Err(CommandError::from(format!("Project XML file not found: {}", project_xml_path.to_string_lossy())));
     }
 
+    if !has_headers {
+        // If user says NO to headers, we write generated headers to the file and then treat it as having headers.
+        let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+        let loaded_data = match extension.as_str() {
+            "csv" => load_csv_data(&table_path, false, None)?,
+            "xlsx" => load_xlsx_data(&table_path, false, None)?,
+            _ => return Err(CommandError::from(format!("Unsupported table extension for header generation: {}", extension))),
+        };
+
+        let headers_val = loaded_data.get("headers").ok_or_else(|| CommandError::from("Missing 'headers' in loaded data"))?;
+        let data_val = loaded_data.get("data").ok_or_else(|| CommandError::from("Missing 'data' in loaded data"))?;
+
+        let headers: Vec<String> = serde_json::from_value(headers_val.clone())?;
+        let data: Vec<Value> = serde_json::from_value(data_val.clone())?;
+
+        match extension.as_str() {
+            "csv" => save_csv_data_with_headers(&table_path, data, &headers)?,
+            "xlsx" => save_xlsx_data_with_headers(&table_path, data, &headers)?,
+            _ => unreachable!(),
+        }
+    }
+
+    // Now, update the XML. If the user said "no headers", we've added them, so the file *now* has headers.
+    // So we always set has_headers to true in the XML.
     let project_base_dir = project_xml_path.parent()
         .ok_or_else(|| CommandError::from("Could not get project base directory from XML path"))?;
-
     let relative_path_for_xml = table_path
         .strip_prefix(project_base_dir)?
         .to_string_lossy()
@@ -268,13 +291,13 @@ pub async fn set_table_headers(
 
     if let Some(table_entry) = project_data.table_files.files.iter_mut()
         .find(|f| f.relative_path == relative_path_for_xml) {
-        table_entry.has_headers = Some(has_headers);
+        table_entry.has_headers = Some(true); // Always set to true now
     } else {
         return Err(CommandError::from(format!("Table not found in project XML: {}", relative_path_for_xml)));
     }
 
     save_project_xml(&project_xml_path, &project_data)?;
-    info!("[set_table_headers] Project XML updated successfully.");
+    info!("[set_table_headers] Project XML updated successfully, has_headers set to true.");
 
     Ok(())
 }
