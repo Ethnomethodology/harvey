@@ -404,10 +404,9 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
 
     let mut records = Vec::new();
     let all_rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
-    let mut row_iterator = all_rows.into_iter();
 
     let headers: Vec<String> = if has_headers {
-        if let Some(row_data) = row_iterator.next() {
+        if let Some(row_data) = all_rows.first() {
             row_data.iter()
                 .enumerate()
                 .map(|(col_idx, cell)| {
@@ -434,9 +433,6 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
             vec![]
         }
     } else {
-        // We need to create a new iterator for data processing if we don't consume the header row.
-        // The easiest way is to re-iterate from the collected rows.
-        row_iterator = all_rows.into_iter();
         if let Some(first_row) = all_rows.first() {
             let num_columns = first_row.len();
             (0..num_columns).map(|i| {
@@ -456,6 +452,7 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
 
     debug!("[load_xlsx_data] Headers: {:?}", headers);
 
+    let row_iterator = all_rows.into_iter().skip(if has_headers { 1 } else { 0 });
     let data_rows_to_process = if let Some(l) = limit {
         row_iterator.take(l)
     } else {
