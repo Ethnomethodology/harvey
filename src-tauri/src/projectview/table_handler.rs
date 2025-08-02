@@ -403,33 +403,42 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
         .map_err(|e| CommandError::from(format!("Calamine error reading sheet '{}': {}", sheet_name, e)))?;
 
     let mut records = Vec::new();
+    let all_rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
+    let mut row_iterator = all_rows.into_iter();
+
     let headers: Vec<String> = if has_headers {
-        if range.height() > 0 {
-            range.row(0).unwrap_or(&[]).iter().enumerate().map(|(col_idx, cell)| {
-                match cell {
-                    Data::String(s) => s.trim().to_string(),
-                    Data::Float(f) => f.to_string(),
-                    Data::Int(i) => i.to_string(),
-                    Data::Bool(b) => b.to_string(),
-                    Data::DateTime(excel_dt_struct) => {
-                        if let Some(dt) = excel_dt_struct.as_datetime() {
-                            dt.to_string()
-                        } else {
-                            excel_dt_struct.as_f64().to_string()
+        if let Some(row_data) = row_iterator.next() {
+            row_data.iter()
+                .enumerate()
+                .map(|(col_idx, cell)| {
+                    match cell {
+                        Data::String(s) => s.trim().to_string(),
+                        Data::Float(f) => f.to_string(),
+                        Data::Int(i) => i.to_string(),
+                        Data::Bool(b) => b.to_string(),
+                        Data::DateTime(excel_dt_struct) => {
+                            if let Some(dt) = excel_dt_struct.as_datetime() {
+                                dt.to_string()
+                            } else {
+                                excel_dt_struct.as_f64().to_string()
+                            }
                         }
+                        Data::DateTimeIso(s) => s.clone(),
+                        Data::DurationIso(s) => s.clone(),
+                        Data::Error(e) => format!("Error:{:?}", e),
+                        Data::Empty => format!("Column_{}", col_idx + 1),
                     }
-                    Data::DateTimeIso(s) => s.clone(),
-                    Data::DurationIso(s) => s.clone(),
-                    Data::Error(e) => format!("Error:{:?}", e),
-                    Data::Empty => format!("Column_{}", col_idx + 1),
-                }
-            }).collect()
+                })
+                .collect()
         } else {
             vec![]
         }
     } else {
-        if range.height() > 0 {
-            let num_columns = range.row(0).unwrap_or(&[]).len();
+        // We need to create a new iterator for data processing if we don't consume the header row.
+        // The easiest way is to re-iterate from the collected rows.
+        row_iterator = all_rows.into_iter();
+        if let Some(first_row) = all_rows.first() {
+            let num_columns = first_row.len();
             (0..num_columns).map(|i| {
                 let mut col_name = String::new();
                 let mut n = i;
@@ -447,11 +456,10 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
 
     debug!("[load_xlsx_data] Headers: {:?}", headers);
 
-    let data_rows_iterator = range.rows().skip(if has_headers { 1 } else { 0 });
     let data_rows_to_process = if let Some(l) = limit {
-        data_rows_iterator.take(l)
+        row_iterator.take(l)
     } else {
-        data_rows_iterator.take(usize::MAX)
+        row_iterator.take(usize::MAX)
     };
 
     for row in data_rows_to_process {
