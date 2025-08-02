@@ -55,26 +55,18 @@ fn main() {
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
-    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cpp"];
+    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream"];
 
     for binary_name in &harvey_binaries {
-        let final_binary_name = format!("{}-{}{}", binary_name, target, extension);
+                let final_binary_name = format!("{}-{}{}", binary_name, target, extension);
         let dest_path = sidecar_dir.join(&final_binary_name);
 
         if !dest_path.exists() {
-            // Specific check for the missing binary
-            if *binary_name == "whisper-cpp" && target == "aarch64-apple-darwin" {
-                println!("cargo:warning=-------------------------------------------------------------------");
-                println!("cargo:warning=Action Required: The \"whisper-cpp-macos-arm64\" binary is missing from the GitHub release.");
-                println!("cargo:warning=Please download it manually and place it in \"src-tauri/sidecar/\" as \"{}\"", final_binary_name);
-                println!("cargo:warning=Creating a placeholder file to allow the build to continue.");
-                println!("cargo:warning=-------------------------------------------------------------------");
-                fs::File::create(&dest_path).expect("Failed to create placeholder file");
-            } else {
-                let asset_name = format!("{}-{}{}", binary_name, os_suffix, extension);
-                let url = format!("https://github.com/{}/releases/download/{}/{}", harvey_repo, harvey_tag, asset_name);
-                download_file(&url, &dest_path);
-            }
+            let asset_name = format!("{}-{}{}", binary_name, os_suffix, extension);
+            let temp_path = temp_dir.join(&asset_name);
+            let url = format!("https://github.com/{}/releases/download/{}/{}", harvey_repo, harvey_tag, asset_name);
+            download_file(&url, &temp_path);
+            fs::rename(&temp_path, &dest_path).expect("Failed to move downloaded binary");
         }
 
         if !target.contains("windows") {

@@ -289,7 +289,7 @@ jobs:
                 target_name="pandoc-$prefix.exe"
               fi
             elif [[ "$file_name" == *"ffmpeg"* ]]; then target_name="ffmpeg-$prefix$ext"
-            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cpp-$prefix$ext"
+            elif [[ "$file_name" == *"whisper"* ]]; then target_name="whisper-cli-$prefix$ext"
             elif [[ "$file_name" == *"diarize"* ]]; then target_name="diarize-cli-$prefix$ext"
             fi
 
