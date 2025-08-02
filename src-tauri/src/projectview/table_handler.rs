@@ -403,39 +403,34 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
         .map_err(|e| CommandError::from(format!("Calamine error reading sheet '{}': {}", sheet_name, e)))?;
 
     let mut records = Vec::new();
-    let mut headers: Vec<String> = Vec::new();
-    let mut data_rows = range.rows();
-
-    if has_headers {
-        if let Some(row) = data_rows.next() {
-            headers = row.iter()
-                .enumerate()
-                .map(|(col_idx, cell)| {
-                    match cell {
-                        Data::String(s) => s.trim().to_string(),
-                        Data::Float(f) => f.to_string(),
-                        Data::Int(i) => i.to_string(),
-                        Data::Bool(b) => b.to_string(),
-                        Data::DateTime(excel_dt_struct) => {
-                            if let Some(dt) = excel_dt_struct.as_datetime() {
-                                dt.to_string()
-                            } else {
-                                excel_dt_struct.as_f64().to_string()
-                            }
+    let headers: Vec<String> = if has_headers {
+        if range.height() > 0 {
+            range.row(0).unwrap_or(&[]).iter().enumerate().map(|(col_idx, cell)| {
+                match cell {
+                    Data::String(s) => s.trim().to_string(),
+                    Data::Float(f) => f.to_string(),
+                    Data::Int(i) => i.to_string(),
+                    Data::Bool(b) => b.to_string(),
+                    Data::DateTime(excel_dt_struct) => {
+                        if let Some(dt) = excel_dt_struct.as_datetime() {
+                            dt.to_string()
+                        } else {
+                            excel_dt_struct.as_f64().to_string()
                         }
-                        Data::DateTimeIso(s) => s.clone(),
-                        Data::DurationIso(s) => s.clone(),
-                        Data::Error(e) => format!("Error:{:?}", e),
-                        Data::Empty => format!("Column_{}", col_idx + 1),
                     }
-                })
-                .collect();
-            debug!("[load_xlsx_data] Headers: {:?}", headers);
+                    Data::DateTimeIso(s) => s.clone(),
+                    Data::DurationIso(s) => s.clone(),
+                    Data::Error(e) => format!("Error:{:?}", e),
+                    Data::Empty => format!("Column_{}", col_idx + 1),
+                }
+            }).collect()
+        } else {
+            vec![]
         }
     } else {
-        if let Some(first_row) = range.rows().next() {
-            let num_columns = first_row.len();
-            headers = (0..num_columns).map(|i| {
+        if range.height() > 0 {
+            let num_columns = range.row(0).unwrap_or(&[]).len();
+            (0..num_columns).map(|i| {
                 let mut col_name = String::new();
                 let mut n = i;
                 loop {
@@ -444,15 +439,19 @@ fn load_xlsx_data(path: &Path, has_headers: bool, limit: Option<usize>) -> Resul
                     n = n / 26 - 1;
                 }
                 col_name
-            }).collect();
+            }).collect()
+        } else {
+            vec![]
         }
-    }
+    };
 
-    let data_rows_iterator = range.rows();
+    debug!("[load_xlsx_data] Headers: {:?}", headers);
+
+    let data_rows_iterator = range.rows().skip(if has_headers { 1 } else { 0 });
     let data_rows_to_process = if let Some(l) = limit {
-        data_rows_iterator.skip(if has_headers { 1 } else { 0 }).take(l)
+        data_rows_iterator.take(l)
     } else {
-        data_rows_iterator.skip(if has_headers { 1 } else { 0 }).take(usize::MAX)
+        data_rows_iterator.take(usize::MAX)
     };
 
     for row in data_rows_to_process {
