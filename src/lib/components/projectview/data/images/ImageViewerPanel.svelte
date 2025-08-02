@@ -5,75 +5,51 @@
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
     import OpenSeadragon from 'openseadragon';
-    import OpenSeadragonAnnotator from '@recogito/annotorious-openseadragon';
-    import Toolbar from '@recogito/annotorious-toolbar';
+    import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for annotations
 
     export let imagePath = '';
 
     let osdViewerElement;
     let osdViewer = null;
-    let anno = null;
-    let toolbar = null;
 
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
 
-    const highlightOptions = [
-        { value: 'rgba(255, 242, 117, 0.5)', label: 'Yellow' },
-        { value: 'rgba(168, 255, 158, 0.5)', label: 'Green' },
-        { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
-        { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
-        { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
-        { value: 'rgba(255, 255, 255, 0.5)', label: 'White' },
-    ];
-    const DEFAULT_HIGHLIGHT_COLOR = highlightOptions[0].value;
+    import AnnotationCreationDialog from '$lib/components/modals/AnnotationCreationDialog.svelte';
 
-    let showAnnotationPopup = false;
-    let popupStyle = '';
-    let selectedAnnotation = null;
-    let currentAnnotationColor = DEFAULT_HIGHLIGHT_COLOR;
+    let showAnnotationCreationDialog = false;
+    let dialogX = 0;
+    let dialogY = 0;
+    let annotationBeingEdited = null; // Stores the annotation data when editing
+    let isEditingExisting = false; // Flag to indicate if we are editing or creating
 
-    let currentAnnotations = [];
+    let currentAnnotations = []; // This will hold our annotation data
 
-    const DELETE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5m2.5 3a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>`;
+    // State for drawing mode: 'rectangle', 'circle', 'polygon', or null
+    let activeDrawingTool = null;
 
-    // async function getMetadataPathForImage(imgPath) {
-    //     if (!imgPath) return null;
-    //     try {
-    //         const dir = await dirname(imgPath);
-    //         let filename = imgPath.substring(dir.length + (dir.endsWith('/') || dir.endsWith('\\') ? 0 : 1));
-    //         const lastDot = filename.lastIndexOf('.');
-    //         const baseName = lastDot === -1 ? filename : filename.substring(0, lastDot);
-    //         const metadataFilename = `.${baseName}.annotations.json`;
-    //         return await join(dir, metadataFilename);
-    //     } catch (e) {
-    //         console.error("[ImageViewerPanel] Error constructing metadata path:", e);
-    //         return null;
-    //     }
-    // }
+    // Variables for drawing
+    let isDrawing = false;
+    let startPoint = null;
+    let currentRect = null; // { x, y, width, height } for rectangle
+    let currentCircle = null; // { cx, cy, r } for circle
+    let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
+    let currentPreviewPolygonPoints = []; // For filled polygon preview
+    let svgOverlay; // Reference to the SVG element
 
     async function loadAnnotationsForImage(imgPath) {
-        // console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for ${imgPath}`);
-        if (!anno) {
-            console.warn("[ImageViewerPanel loadAnnotationsForImage] Annotorious not initialized.");
-            currentAnnotations = [];
-            return;
-        }
-        anno.clearAnnotations();
         currentAnnotations = [];
 
         const currentProj = get(project);
-        // Ensure $project.id is valid before proceeding
         if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
             console.error('[ImageViewerPanel loadAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
-            // Handle error appropriately, e.g., clear annotations, show message
             return;
         }
-        const projectId = currentProj.id; // Use the validated project.id
+        const projectId = currentProj.id;
 
         const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = imgPath; // imgPath is the absolute path to the image
+        let relativeImagePath = imgPath;
 
         if (projectBaseDir && imgPath.startsWith(projectBaseDir)) {
             relativeImagePath = imgPath.substring(projectBaseDir.length);
@@ -83,20 +59,19 @@
         } else {
             console.warn(`[ImageViewerPanel loadAnnotationsForImage] imgPath "${imgPath}" may not be within projectBaseDir "${projectBaseDir}". Using path as is for DB key, this might fail if not truly relative.`);
         }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
         console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for project ${projectId} (from $project.id), image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
 
         try {
             const annotationsJsonString = await invoke('load_image_annotations', {
-                projectId: projectId, // Ensure this uses the projectId from currentProj.id
+                projectId: projectId,
                 imageRelativePathStr: relativeImagePath
             });
             if (annotationsJsonString && typeof annotationsJsonString === 'string') {
                 const loaded = JSON.parse(annotationsJsonString);
                 if (Array.isArray(loaded)) {
-                    anno.setAnnotations(loaded);
-                    currentAnnotations = JSON.parse(JSON.stringify(loaded)); // Ensure deep copy for local cache
+                    currentAnnotations = loaded;
                     console.log(`[ImageViewerPanel loadAnnotationsForImage] Loaded ${loaded.length} annotations for ${relativeImagePath}.`);
                 } else {
                     console.warn(`[ImageViewerPanel loadAnnotationsForImage] Loaded data for ${relativeImagePath} is not an array.`);
@@ -115,22 +90,16 @@
             console.warn("[ImageViewerPanel saveAnnotationsForImage] No image path, cannot save.");
             return;
         }
-        // const metadataPath = await getMetadataPathForImage(currentLoadedPath);
-        // if (!metadataPath) {
-        //     console.error(`[ImageViewerPanel saveAnnotationsForImage] Could not determine metadata path for ${currentLoadedPath}.`);
-        //     return;
-        // }
         const currentProj = get(project);
-        // Ensure $project.id is valid before proceeding
         if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
             console.error('[ImageViewerPanel saveAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
-            await message('Cannot save image annotations: Project identifier is missing or invalid.', { title: 'Save Error', type: 'error' });
+            // await message('Cannot save image annotations: Project identifier is missing or invalid.', { title: 'Save Error', type: 'error' });
             return;
         }
-        const projectId = currentProj.id; // Use the validated project.id
+        const projectId = currentProj.id;
 
         const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = currentLoadedPath; // currentLoadedPath is the absolute path
+        let relativeImagePath = currentLoadedPath;
 
         if (projectBaseDir && currentLoadedPath.startsWith(projectBaseDir)) {
             relativeImagePath = currentLoadedPath.substring(projectBaseDir.length);
@@ -141,13 +110,13 @@
             console.error(`[ImageViewerPanel saveAnnotationsForImage] Cannot determine relative path for ${currentLoadedPath} using base ${projectBaseDir}. Cannot save.`);
             return;
         }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/'); // Normalize separators
+        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
         console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for project ${projectId} (from $project.id), image relative path: ${relativeImagePath}`);
 
         try {
             await invoke('save_image_annotations', {
-                projectId: projectId, // Ensure this uses the projectId from currentProj.id
+                projectId: projectId,
                 imageRelativePathStr: relativeImagePath,
                 annotationsJsonString: JSON.stringify(currentAnnotations, null, 2)
             });
@@ -157,6 +126,12 @@
         }
     }
 
+    function adjustOpacity(rgbaColor, newOpacity) {
+        if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
+        const parts = rgbaColor.substring(5, rgbaColor.length - 1).split(',');
+        if (parts.length !== 4) return rgbaColor;
+        return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${newOpacity})`;
+    }
 
     async function initializeViewer(pathForImage) {
         console.log(`[ImageViewerPanel initializeViewer] Attempting for path: ${pathForImage}`);
@@ -166,11 +141,9 @@
         }
 
         console.log(`[ImageViewerPanel initializeViewer] Proceeding with initialization for: ${pathForImage}`);
-        currentLoadedPath = pathForImage; isLoading = true; error = null; showAnnotationPopup = false;
+        currentLoadedPath = pathForImage; isLoading = true; error = null;
         currentAnnotations = [];
 
-        if (anno) { try { anno.destroy(); console.log("Previous Annotorious instance destroyed."); } catch (e) { console.warn("Error destroying previous Annotorious instance:", e); } anno = null; }
-        if (toolbar) { try { toolbar.destroy(); console.log("Previous Toolbar instance destroyed."); } catch(e) { console.warn("Error destroying toolbar", e)} toolbar = null; }
         if (osdViewer) { try { osdViewer.destroy(); console.log("Previous OpenSeadragon instance destroyed."); } catch (e) { console.warn("Error destroying previous OpenSeadragon instance:", e); } osdViewer = null; }
         if(osdViewerElement) osdViewerElement.innerHTML = '';
 
@@ -196,46 +169,21 @@
                 zoomPerScroll: 1.2,
                 gestureSettingsMouse: { scrollToZoom: true, clickToZoom: false, dblClickToZoom: false, pinchToZoom: true },
                 showNavigator: false,
+                showNavigationControl: false,
             });
 
             osdViewer.addHandler('open', async () => {
                 console.log('[ImageViewerPanel OSD Event] "open" event triggered.');
                 isLoading = false;
-
-                if (typeof OpenSeadragonAnnotator === 'undefined') {
-                    console.error("OpenSeadragonAnnotator is undefined! Check import.");
-                    error = "Annotorious library component failed to load."; isLoading = false; return;
+                await tick(); // Ensure SVG element is rendered before adding as overlay
+                // Add SVG overlay after OSD viewer is open
+                if (svgOverlay) {
+                    osdViewer.addOverlay(svgOverlay, new OpenSeadragon.Rect(0, 0, 1, 1)); // Cover entire image viewport
+                    svgOverlay.style.pointerEvents = 'none'; // Allow OSD events to pass through
                 }
-                anno = OpenSeadragonAnnotator(osdViewer, {
-                    disableEditor: true,
-                    allowEmpty: true,
-                    formatter: (annotation) => {
-                        if (annotation.body) {
-                            const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-                            if (colorBody && colorBody.value) {
-                                return { 'style': `stroke-width:2; stroke: ${adjustOpacity(colorBody.value, 1)}; fill: ${colorBody.value}` };
-                            }
-                        }
-                        return { 'style': `stroke-width:2; stroke: ${adjustOpacity(DEFAULT_HIGHLIGHT_COLOR, 1)}; fill: ${DEFAULT_HIGHLIGHT_COLOR}` };
-                    }
-                });
-                if (!anno) { error = "Failed to initialize Annotorious."; isLoading = false; return; }
-
-                const toolbarContainerEl = document.getElementById('image-annotation-toolbar-container');
-                if (toolbarContainerEl) {
-                     if (typeof Toolbar === 'undefined') {
-                        console.error("Toolbar (from @recogito/annotorious-toolbar) is undefined! Check import.");
-                        error = "Annotorious Toolbar library component failed to load."; return;
-                    }
-                    toolbar = new Toolbar(anno, toolbarContainerEl);
-                } else {
-                    console.error("[ImageViewerPanel] CRITICAL: Toolbar container 'image-annotation-toolbar-container' NOT found!");
-                }
-
-                anno.setDrawingTool('rect');
-                setupAnnotationEvents();
+                setupDrawingEvents();
                 await loadAnnotationsForImage(pathForImage);
-                console.log('[ImageViewerPanel] Annotorious setup complete.');
+                console.log('[ImageViewerPanel] OpenSeadragon setup complete.');
             });
 
             osdViewer.addHandler('open-failed', (event) => {
@@ -252,180 +200,286 @@
         }
     }
 
-    function adjustOpacity(rgbaColor, newOpacity) {
-        if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
-        const parts = rgbaColor.substring(5, rgbaColor.length - 1).split(',');
-        if (parts.length !== 4) return rgbaColor;
-        return `rgba(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()}, ${newOpacity})`;
+    function setupDrawingEvents() {
+        if (!osdViewer) { console.warn("setupDrawingEvents: OpenSeadragon viewer not available."); return; }
+        console.log("[ImageViewerPanel] Setting up drawing events.");
+
+        osdViewer.addHandler('canvas-press', onMouseDown);
+        osdViewer.addHandler('canvas-drag', onMouseMove);
+        osdViewer.addHandler('canvas-release', onMouseUp);
+        osdViewer.addHandler('canvas-double-click', onDoubleClick);
+        osdViewer.addHandler('update-viewport', updateAnnotationPositions);
     }
 
-    function setupAnnotationEvents() {
-        if (!anno) { console.warn("setupAnnotationEvents: Annotorious instance not available."); return; }
-        console.log("[ImageViewerPanel] Setting up annotation events.");
-        anno.off('createAnnotation'); anno.off('selectAnnotation'); anno.off('cancelSelected');
-        anno.off('updateAnnotation'); anno.off('deleteAnnotation');
+    let startViewportPoint = null; // Stores the starting viewport point for drawing
 
-        anno.on('createAnnotation', async (createdAnnotation) => {
-            console.log('[ImageViewerPanel createAnnotation] Event fired. Original annotation:', JSON.parse(JSON.stringify(createdAnnotation)));
+    function onMouseDown(event) {
+        if (!activeDrawingTool) return;
+        if (event.originalEvent.button !== 0) return; // Only left click
 
-            let annotationForStorage = JSON.parse(JSON.stringify(createdAnnotation)); 
+        const viewportPoint = osdViewer.viewport.pointFromPixel(event.position);
 
-            if (!Array.isArray(annotationForStorage.body)) {
-                annotationForStorage.body = [];
-            }
-
-            const existingColorBody = annotationForStorage.body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-            if (!existingColorBody) {
-                annotationForStorage.body.push({ type: 'Color', purpose: 'highlighting', value: DEFAULT_HIGHLIGHT_COLOR });
-                console.log('[ImageViewerPanel createAnnotation] Added default color body to stored version.');
-            }
-            annotationForStorage.body = annotationForStorage.body.filter(b => b.purpose !== 'editing');
-
-            const index = currentAnnotations.findIndex(a => a.id === annotationForStorage.id);
-            if (index > -1) {
-                console.warn("[ImageViewerPanel createAnnotation] Annotation ID already exists in local store. Updating.", annotationForStorage.id);
-                currentAnnotations[index] = annotationForStorage;
+        if (activeDrawingTool === 'polygon') {
+            if (!isDrawing) {
+                isDrawing = true;
+                currentPolygon.points = [viewportPoint];
             } else {
-                currentAnnotations.push(annotationForStorage);
+                currentPolygon.points = [...currentPolygon.points, viewportPoint];
             }
-            console.log('[ImageViewerPanel createAnnotation] currentAnnotations updated. Count:', currentAnnotations.length);
-
-            await saveAnnotationsForImage();
-            
-            console.log("[ImageViewerPanel createAnnotation] All annotations in Annotorious after creation:", anno.getAnnotations());
-        });
-
-        anno.on('selectAnnotation', (annotation, element) => {
-            console.log('[ImageViewerPanel selectAnnotation] Annotation selected:', JSON.parse(JSON.stringify(annotation)));
-            selectedAnnotation = anno.getAnnotationById(annotation.id);
-            if (!selectedAnnotation) { console.warn("[ImageViewerPanel selectAnnotation] Could not get selected annotation by ID from Annotorious store."); return; }
-
-            const colorBody = selectedAnnotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color');
-            currentAnnotationColor = colorBody ? colorBody.value : DEFAULT_HIGHLIGHT_COLOR;
-
-            if (element && osdViewerElement) {
-                const elRect = element.getBoundingClientRect();
-                const containerRect = osdViewerElement.getBoundingClientRect();
-                let top = elRect.bottom - containerRect.top + 5;
-                let left = elRect.left - containerRect.left + (elRect.width / 2) - (95); // Centered for ~190px popup
-                const popupWidth = 190; const popupHeight = 40;
-                if (left < 5) left = 5;
-                if (left + popupWidth > containerRect.width) left = containerRect.width - popupWidth - 5;
-                if (top + popupHeight > containerRect.height && elRect.top - containerRect.top - popupHeight - 5 > 0) {
-                     top = elRect.top - containerRect.top - popupHeight - 5;
-                } else if (top + popupHeight > containerRect.height) { top = 5; }
-                if (top < 5) top = 5;
-                popupStyle = `top: ${top}px; left: ${left}px;`;
-                showAnnotationPopup = true;
-                tick();
-            } else { console.warn("[ImageViewerPanel selectAnnotation] Could not get element or osdViewerElement for popup positioning."); }
-        });
-
-        anno.on('cancelSelected', () => {
-            console.log('[ImageViewerPanel cancelSelected] Selection cancelled.');
-            selectedAnnotation = null; showAnnotationPopup = false;
-        });
-
-        anno.on('updateAnnotation', async (annotation, _previous) => {
-            console.log('[ImageViewerPanel updateAnnotation] Annotation updated:', JSON.parse(JSON.stringify(annotation)));
-            const updatedAnnotationData = JSON.parse(JSON.stringify(annotation));
-            const index = currentAnnotations.findIndex(a => a.id === updatedAnnotationData.id);
-            if (index > -1) {
-                currentAnnotations[index] = updatedAnnotationData;
-            } else {
-                console.warn("[ImageViewerPanel updateAnnotation] Updated annotation not found in local cache, adding it. ID:", updatedAnnotationData.id);
-                currentAnnotations.push(updatedAnnotationData);
+        } else {
+            isDrawing = true;
+            startViewportPoint = viewportPoint;
+            if (activeDrawingTool === 'rectangle') {
+                currentRect = { x: startViewportPoint.x, y: startViewportPoint.y, width: 0, height: 0 };
+            } else if (activeDrawingTool === 'circle') {
+                currentCircle = { cx: startViewportPoint.x, cy: startViewportPoint.y, r: 0 };
             }
-            await saveAnnotationsForImage();
-        });
-
-        anno.on('deleteAnnotation', async (annotation) => {
-            console.log('[ImageViewerPanel deleteAnnotation] Annotation deleted:', JSON.parse(JSON.stringify(annotation)));
-            currentAnnotations = currentAnnotations.filter(a => a.id !== annotation.id);
-            await saveAnnotationsForImage();
-            if (selectedAnnotation && selectedAnnotation.id === annotation.id) {
-                showAnnotationPopup = false;
-                selectedAnnotation = null;
-            }
-        });
+        }
+        event.preventDefaultAction = true;
     }
 
-    function fitToViewer() { if (osdViewer) { osdViewer.viewport.goHome(false); } }
-
-    async function handleChangeAnnotationColor(newColor) {
-        if (selectedAnnotation && anno) {
-            const liveAnnotation = anno.getAnnotationById(selectedAnnotation.id);
-            if (!liveAnnotation) {
-                console.warn("[ImageViewerPanel handleChangeAnnotationColor] Selected annotation not found in Annotorious store.");
-                return;
+        function drawPreviewLines(currentPoint) {
+        if (currentPolygon.points.length > 0) {
+            const lastPoint = currentPolygon.points[currentPolygon.points.length - 1];
+            const previewLine = { x1: lastPoint.x, y1: lastPoint.y, x2: currentPoint.x, y2: currentPoint.y };
+            let closingPreviewLine = null;
+            if (currentPolygon.points.length > 1) {
+                const firstPoint = currentPolygon.points[0];
+                closingPreviewLine = { x1: currentPoint.x, y1: currentPoint.y, x2: firstPoint.x, y2: firstPoint.y };
             }
+            currentPolygon = { ...currentPolygon, previewLine, closingPreviewLine };
+        }
+    }
 
-            const newColorBody = { type: 'Color', purpose: 'highlighting', value: newColor };
+    function onMouseMove(event) {
+        if (!isDrawing || !activeDrawingTool) return;
+
+        const currentViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
+
+        if (activeDrawingTool === 'rectangle') {
+            const x = Math.min(startViewportPoint.x, currentViewportPoint.x);
+            const y = Math.min(startViewportPoint.y, currentViewportPoint.y);
+            const width = Math.abs(startViewportPoint.x - currentViewportPoint.x);
+            const height = Math.abs(startViewportPoint.y - currentViewportPoint.y);
+            currentRect = { x, y, width, height };
+        } else if (activeDrawingTool === 'circle') {
+            const dx = currentViewportPoint.x - startViewportPoint.x;
+            const dy = currentViewportPoint.y - startViewportPoint.y;
+            const r = Math.sqrt(dx * dx + dy * dy) / 2;
+            const cx = startViewportPoint.x + dx / 2;
+            const cy = startViewportPoint.y + dy / 2;
+            currentCircle = { cx, cy, r };
+        } else if (activeDrawingTool === 'polygon') {
+            drawPreviewLines(currentViewportPoint);
+            currentPreviewPolygonPoints = [...currentPolygon.points, currentViewportPoint];
+        }
+        event.preventDefaultAction = true;
+    }
+
+    async function onMouseUp(event) {
+        if (activeDrawingTool !== 'polygon') {
+            if (!isDrawing) return;
+            isDrawing = false;
+        }
+
+        if (!startViewportPoint) return;
+
+        const endViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
+
+        let newAnnotation = null;
+
+        if (activeDrawingTool === 'rectangle') {
+            const viewportRect = new OpenSeadragon.Rect(
+                Math.min(startViewportPoint.x, endViewportPoint.x),
+                Math.min(startViewportPoint.y, endViewportPoint.y),
+                Math.abs(startViewportPoint.x - endViewportPoint.x),
+                Math.abs(startViewportPoint.y - endViewportPoint.y)
+            );
+
+            if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
+                newAnnotation = {
+                    id: uuidv4(),
+                    type: 'Annotation',
+                    target: {
+                        selector: {
+                            type: 'FragmentSelector',
+                            value: {
+                                x: viewportRect.x,
+                                y: viewportRect.y,
+                                width: viewportRect.width,
+                                height: viewportRect.height,
+                                shape: 'rectangle'
+                            }
+                        }
+                    },
+                    body: [
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
+                    ]
+                };
+            }
+        } else if (activeDrawingTool === 'circle') {
+            const dx = endViewportPoint.x - startViewportPoint.x;
+            const dy = endViewportPoint.y - startViewportPoint.y;
+            const r = Math.sqrt(dx * dx + dy * dy) / 2;
+            const cx = startViewportPoint.x + dx / 2;
+            const cy = startViewportPoint.y + dy / 2;
+
+            if (r > 0.0005) {
+                newAnnotation = {
+                    id: uuidv4(),
+                    type: 'Annotation',
+                    target: {
+                        selector: {
+                            type: 'FragmentSelector',
+                            value: {
+                                cx: cx,
+                                cy: cy,
+                                r: r,
+                                shape: 'circle'
+                            }
+                        }
+                    },
+                    body: [
+                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
+                    ]
+                };
+            }
+        }
+
+        if (newAnnotation) {
+            currentAnnotations = [...currentAnnotations, newAnnotation];
+            await saveAnnotationsForImage();
+
+            annotationBeingEdited = newAnnotation;
+            isEditingExisting = false;
+            const osdRect = osdViewerElement.getBoundingClientRect();
+            dialogX = event.position.x - osdRect.left;
+            dialogY = event.position.y - osdRect.top;
+            showAnnotationCreationDialog = true;
+        }
+        currentRect = null;
+        currentCircle = null;
+    }
+
+    function onDoubleClick(event) {
+        if (activeDrawingTool !== 'polygon' || !isDrawing) {
+            return;
+        }
+        event.preventDefaultAction = true;
+
+        const newAnnotation = {
+            id: uuidv4(),
+            type: 'Annotation',
+            target: {
+                selector: {
+                    type: 'FragmentSelector',
+                    value: {
+                        shape: 'polygon',
+                        points: currentPolygon.points
+                    }
+                }
+            },
+            body: [
+                { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
+            ]
+        };
+
+        currentAnnotations = [...currentAnnotations, newAnnotation];
+        saveAnnotationsForImage();
+
+        // Reset drawing state
+        isDrawing = false;
+        currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
+        currentPreviewPolygonPoints = [];
+        activeDrawingTool = null;
+    }
+
+    function updateAnnotationPositions() {
+        // This function is called on 'update-viewport' to re-render annotations.
+        // Since the SVG is now an OSD overlay, and rects within it use viewport coordinates,
+        // Svelte's reactivity will automatically re-evaluate the pixel positions of the rects
+        // when the viewport changes. No explicit manual updates are needed here.
+    }
+
+    function handleAnnotationClick(event, annotation) {
+        event.stopPropagation(); // Prevent OSD from handling the click
+        console.log("Annotation clicked:", annotation);
+        annotationBeingEdited = annotation;
+        isEditingExisting = true;
+
+        // Position dialog near the clicked annotation
+        const osdRect = osdViewerElement.getBoundingClientRect();
+        const annotationRect = event.target.getBoundingClientRect();
+        dialogX = annotationRect.left - osdRect.left + annotationRect.width;
+        dialogY = annotationRect.top - osdRect.top + annotationRect.height;
+
+        showAnnotationCreationDialog = true;
+    }
+
+    async function handleAnnotationDialogSave(event) {
+        const { title, description, color } = event.detail;
+        if (annotationBeingEdited) {
+            const newBody = [];
+            if (title) newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
+            if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
+            newBody.push({ type: 'Color', value: color, purpose: 'highlighting' });
+
             const updatedAnnotation = {
-                ...liveAnnotation,
-                body: [
-                    ...(liveAnnotation.body || []).filter(b => !(b.purpose === 'highlighting' && b.type === 'Color')),
-                    newColorBody
-                ]
+                ...annotationBeingEdited,
+                body: newBody
             };
 
-            anno.removeAnnotation(liveAnnotation.id);
-            anno.addAnnotation(updatedAnnotation);
-            anno.selectAnnotation(updatedAnnotation.id); 
-
-            currentAnnotationColor = newColor;
-            selectedAnnotation = JSON.parse(JSON.stringify(updatedAnnotation));
-
-            const idx = currentAnnotations.findIndex(a => a.id === updatedAnnotation.id);
-            if (idx > -1) {
-                currentAnnotations[idx] = JSON.parse(JSON.stringify(updatedAnnotation));
-            } else {
-                currentAnnotations.push(JSON.parse(JSON.stringify(updatedAnnotation)));
-            }
-
+            currentAnnotations = currentAnnotations.map(a =>
+                a.id === updatedAnnotation.id ? updatedAnnotation : a
+            );
             await saveAnnotationsForImage();
         }
+        annotationBeingEdited = null;
+        isEditingExisting = false;
+        showAnnotationCreationDialog = false;
     }
 
-    async function handleDeleteSelectedAnnotation() {
-        if (selectedAnnotation && anno) {
-            anno.removeAnnotation(selectedAnnotation.id);
-            await tick();
-            currentAnnotations = anno.getAnnotations().map(a => JSON.parse(JSON.stringify(a)));
+    async function handleAnnotationDialogCancel() {
+        // If it was a new annotation being created, remove it from the list
+        if (!isEditingExisting && annotationBeingEdited) {
+            currentAnnotations = currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
             await saveAnnotationsForImage();
         }
-        showAnnotationPopup = false;
+        annotationBeingEdited = null;
+        isEditingExisting = false;
+        showAnnotationCreationDialog = false;
     }
 
-    function handlePopupClickOutside(event) {
-        const popupElement = document.getElementById('annotation-popup');
-        if (popupElement && popupElement.contains(event.target)) {
-            return; 
+    async function handleAnnotationDialogDelete() {
+        if (annotationBeingEdited) {
+            currentAnnotations = currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
+            await saveAnnotationsForImage();
         }
-
-        if (event.target.closest('.a9s-editor, .a9s-annotation, .a9s-toolbar, #image-annotation-toolbar-container')) {
-            return; 
-        }
-        if (anno && anno.getSelected()) {
-            anno.cancelSelected(); 
-        } else {
-            showAnnotationPopup = false;
-            selectedAnnotation = null;
-        }
+        annotationBeingEdited = null;
+        isEditingExisting = false;
+        showAnnotationCreationDialog = false;
     }
 
     onMount(() => {
         console.log('[ImageViewerPanel] Mounted. Initial Path:', imagePath);
         if (imagePath && osdViewerElement) { initializeViewer(imagePath); }
         else { isLoading = false; console.log("[ImageViewerPanel onMount] No imagePath or osdViewerElement, not initializing."); }
-        document.addEventListener('click', handlePopupClickOutside, true);
-        return () => {
-            console.log("[ImageViewerPanel onDestroy] Cleaning up...");
-            if (anno) { try { anno.destroy(); } catch(e){console.warn("Error destroying anno", e)} anno = null; }
-            if (toolbar) { try { toolbar.destroy(); } catch(e){console.warn("Error destroying toolbar", e)} toolbar = null; }
-            if (osdViewer) { try { osdViewer.destroy(); } catch(e){console.warn("Error destroying osdViewer", e)} osdViewer = null; }
-            document.removeEventListener('click', handlePopupClickOutside, true);
-        };
+    });
+
+    onDestroy(() => {
+        if (osdViewer) {
+            osdViewer.removeHandler('canvas-press', onMouseDown);
+            osdViewer.removeHandler('canvas-drag', onMouseMove);
+            osdViewer.removeHandler('canvas-release', onMouseUp);
+            osdViewer.removeHandler('canvas-double-click', onDoubleClick);
+            osdViewer.removeHandler('update-viewport', updateAnnotationPositions);
+            // Remove the SVG overlay when component is destroyed
+            if (svgOverlay) { // Removed hasOverlay check
+                osdViewer.removeOverlay(svgOverlay);
+            }
+            osdViewer.destroy();
+            osdViewer = null;
+        }
     });
 
     $: {
@@ -435,32 +489,77 @@
         } else if (imagePath && imagePath !== currentLoadedPath && !osdViewerElement) {
             console.log(`[ImageViewerPanel reactive] imagePath changed to ${imagePath}, but osdViewerElement not ready. Deferring init.`);
             if (!isLoading) isLoading = true;
-        }
-         else if (!imagePath && (osdViewer || anno || toolbar) ) {
-            console.log(`[ImageViewerPanel reactive] imagePath cleared, destroying viewer and annotorious instances.`);
-            if (anno) { try { anno.destroy(); } catch(e){console.warn("Error destroying anno on path clear", e)} anno = null; }
-            if (toolbar) { try { toolbar.destroy(); } catch(e){console.warn("Error destroying toolbar on path clear", e)} toolbar = null; }
-            if (osdViewer) { try { osdViewer.destroy(); } catch(e){console.warn("Error destroying osd on path clear", e)} osdViewer = null; }
-            isLoading = false; error = null; currentLoadedPath = null; showAnnotationPopup = false;
+        } else if (!imagePath && osdViewer) {
+            console.log(`[ImageViewerPanel reactive] imagePath cleared, destroying viewer instance.`);
+            if (osdViewer) {
+                // Remove the SVG overlay before destroying OSD
+                if (svgOverlay) { // Removed hasOverlay check
+                    osdViewer.removeOverlay(svgOverlay);
+                }
+                osdViewer.destroy();
+            }
+            osdViewer = null;
+            isLoading = false; error = null; currentLoadedPath = null;
             currentAnnotations = [];
         }
+    }
+
+    // Reactive statement to update annotation positions when viewport changes
+    // This is crucial for annotations to stay in place during zoom/pan
+    $: if (osdViewer && currentAnnotations) {
+        // Force re-render of annotations when viewport changes
+        // This is a bit of a hack, but ensures Svelte re-evaluates the `rect` calculation
+        // for each annotation. A more performant solution might involve directly manipulating
+        // DOM elements, but for a small number of annotations, this is fine.
+        currentAnnotations = currentAnnotations;
     }
 </script>
 
 <svelte:head>
-    <link href="/annotorious/annotorious.min.css" rel="stylesheet" />
-    <link href="/annotorious/annotorious-toolbar.css" rel="stylesheet" />
+    <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
     <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
         <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
-            <span class="text-xs font-medium pr-1">Highlight:</span>
-            {#if !isLoading && !error && !toolbar && anno}
-                <span class="text-xs text-red-500 italic px-2">Toolbar failed to load but Annotorious might be active.</span>
-            {:else if !isLoading && !error && !toolbar && !anno}
-                <span class="text-xs text-gray-400 italic px-2">Annotation tools unavailable.</span>
-            {/if}
+            <button
+                class="inline-flex items-center justify-center px-2 py-1 border
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'rectangle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
+                </svg>
+            </button>
+            <button
+                class="inline-flex items-center justify-center px-2 py-1 border
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'circle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
+                </svg>
+            </button>
+            <button
+                class="inline-flex items-center justify-center px-2 py-1 border
+                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       {activeDrawingTool === 'polygon' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <polygon 
+                        points="2,2 14,4 12,14 4,12 6,7" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        stroke-width="1" 
+                    />
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -471,32 +570,122 @@
             <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-gray-800/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
+            <!-- SVG overlay for drawing and displaying annotations -->
+            <svg bind:this={svgOverlay} class="pointer-events-none z-20" viewBox="0 0 1 1"
+                 class:cursor-draw={activeDrawingTool !== null}
+                 class:cursor-pan={activeDrawingTool === null}>
+                {#each currentAnnotations as annotation (annotation.id)}
+                    {@const shapeData = annotation.target.selector.value}
+                    {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
+                    {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}
+                    {@const strokeColor = adjustOpacity(fillColor, 1)}
+
+                    {#if shapeData.shape === 'rectangle'}
+                        <rect
+                            x={shapeData.x}
+                            y={shapeData.y}
+                            width={shapeData.width}
+                            height={shapeData.height}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="1px"
+                            vector-effect="non-scaling-stroke"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click={(e) => handleAnnotationClick(e, annotation)}
+                        />
+                    {:else if shapeData.shape === 'circle'}
+                        <circle
+                            cx={shapeData.cx}
+                            cy={shapeData.cy}
+                            r={shapeData.r}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="1px"
+                            vector-effect="non-scaling-stroke"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click={(e) => handleAnnotationClick(e, annotation)}
+                        />
+                    {:else if shapeData.shape === 'polygon'}
+                        <polygon
+                            points={shapeData.points.map(p => `${p.x},${p.y}`).join(' ')}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            stroke-width="0.002"
+                            class="pointer-events-auto cursor-pointer"
+                            on:click|stopPropagation={(e) => handleAnnotationClick(e, annotation)}
+                        />
+                    {/if}
+                {/each}
+                {#if isDrawing && activeDrawingTool === 'rectangle' && currentRect}
+                    <rect
+                        x={currentRect.x}
+                        y={currentRect.y}
+                        width={currentRect.width}
+                        height={currentRect.height}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1px"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {:else if isDrawing && activeDrawingTool === 'circle' && currentCircle}
+                    <circle
+                        cx={currentCircle.cx}
+                        cy={currentCircle.cy}
+                        r={currentCircle.r}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="1px"
+                        vector-effect="non-scaling-stroke"
+                    />
+                {:else if isDrawing && activeDrawingTool === 'polygon' && currentPreviewPolygonPoints.length > 0}
+                    <polygon
+                        points={currentPreviewPolygonPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                        fill="rgba(255, 242, 117, 0.5)"
+                        stroke="rgba(255, 242, 117, 1)"
+                        stroke-width="0.002"
+                        vector-effect="non-scaling-stroke"
+                    />
+                    {#if currentPolygon.previewLine}
+                        <line
+                            x1={currentPolygon.previewLine.x1}
+                            y1={currentPolygon.previewLine.y1}
+                            x2={currentPolygon.previewLine.x2}
+                            y2={currentPolygon.previewLine.y2}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="1px"
+                            stroke-dasharray="0.01, 0.01"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
+                    {#if currentPolygon.closingPreviewLine}
+                        <line
+                            x1={currentPolygon.closingPreviewLine.x1}
+                            y1={currentPolygon.closingPreviewLine.y1}
+                            x2={currentPolygon.closingPreviewLine.x2}
+                            y2={currentPolygon.closingPreviewLine.y2}
+                            stroke="rgba(255, 242, 117, 1)"
+                            stroke-width="1px"
+                            stroke-dasharray="0.01, 0.01"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    {/if}
+                {/if}
+            </svg>
         </div>
 
-        {#if showAnnotationPopup && selectedAnnotation}
-            <div
-                id="annotation-popup"
-                class="absolute z-[1000] bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl p-1.5 flex items-center space-x-1"
-                style={popupStyle}>
-                {#each highlightOptions as option}
-                    <button
-                        title={option.label}
-                        class="w-5 h-5 rounded-full border border-gray-400 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-1 dark:focus:ring-offset-gray-700"
-                        class:ring-blue-500={currentAnnotationColor === option.value}
-                        class:dark:ring-blue-400={currentAnnotationColor === option.value}
-                        class:ring-2={currentAnnotationColor === option.value}
-                        style:background-color={option.value}
-                        on:click|stopPropagation={() => handleChangeAnnotationColor(option.value)}>
-                    </button>
-                {/each}
-                <div class="w-px h-5 bg-gray-300 dark:bg-gray-500 mx-1"></div>
-                <button
-                    title="Delete annotation"
-                    class="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-800 text-red-600 dark:text-red-400 focus:outline-none focus:ring-1 focus:ring-red-500"
-                    on:click|stopPropagation={handleDeleteSelectedAnnotation}>
-                    {@html DELETE_ICON_SVG}
-                </button>
-            </div>
+        {#if showAnnotationCreationDialog}
+            <AnnotationCreationDialog
+                x={dialogX}
+                y={dialogY}
+                initialTitle={annotationBeingEdited?.body?.find(b => b.type === 'Title')?.value || ''}
+                initialDescription={annotationBeingEdited?.body?.find(b => b.type === 'Description')?.value || ''}
+                initialColor={annotationBeingEdited?.body?.find(b => b.type === 'Color')?.value || 'rgba(255, 242, 117, 0.5)'}
+                isEditing={isEditingExisting}
+                panelBounds={osdViewerElement ? osdViewerElement.getBoundingClientRect() : null}
+                on:save={handleAnnotationDialogSave}
+                on:cancel={handleAnnotationDialogCancel}
+                on:delete={handleAnnotationDialogDelete}
+            />
         {/if}
     </div>
 </div>
@@ -511,47 +700,28 @@
     }
     .opacity-0 { opacity: 0; }
 
+    .cursor-pan {
+        cursor: grab;
+    }
+    .cursor-pan:active {
+        cursor: grabbing;
+    }
+    .cursor-draw {
+        cursor: crosshair;
+    }
+
     #image-annotation-toolbar-container:empty {
     }
 
-    :global(#image-annotation-toolbar-container .a9s-toolbar button) {
-        /* Tailwind‑style control button – matches other toolbars */
-        @apply inline-flex items-center justify-center px-2 py-1 border
-                border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800
-                text-gray-700 dark:text-gray-300 text-xs rounded-md
-                hover:bg-gray-100 dark:hover:bg-gray-700
-                focus:outline-none focus:ring-2 focus:ring-blue-500;
-        height: 28px;          
-        min-width: 28px;       
-    }
-    :global(#image-annotation-toolbar-container .a9s-toolbar) {
-        list-style: none; 
-        padding: 0;
-        margin: 0;
-    }
-    :global(#image-annotation-toolbar-container .a9s-toolbar svg) {
-        width: 1rem;
-        height: 1rem;
-        stroke: currentColor;
-        fill: none;
-    }
-    :global(#image-annotation-toolbar-container .a9s-toolbar button.a9s-selected svg) {
-        @apply text-blue-500 dark:text-blue-400;
-    }
+    /* Removed Annotorious specific styles */
     :global(.openseadragon-container .openseadragon-canvas) {
         outline: none !important;
+    }
+    .non-scaling-stroke {
+        vector-effect: non-scaling-stroke;
     }
 
     :global(.openseadragon-container div) {
         box-sizing: content-box;
     }
-  
-  :global(#image-annotation-toolbar-container .a9s-toolbar) {
-      display: inline-flex;
-      flex-direction: row;
-      gap: 0.25rem; 
-  }
-  :global(#image-annotation-toolbar-container .a9s-toolbar li) {
-      margin: 0; 
-  }
 </style>

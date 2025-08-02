@@ -31,17 +31,8 @@ $footerBackgroundColor: #f3f4f6;       // Static for footer background
 $footerTextColor: #374151;             // Static for footer text
 $footerBorderColor: #d1d5db;           // Static for footer border
 
-$paginationButtonColor: #374151;                     // Static for pagination button text
-$paginationButtonDisabledColor: #9ca3af;             // Static for disabled pagination button text (e.g., gray-400)
-$paginationButtonActiveBgColor: #cccccc;              // Static for active pagination button background (generic grey)
-$paginationButtonActiveTextColor: #111827;           // Static for active pagination button text (e.g., gray-900)
-
-// Variables that can remain CSS vars if Tabulator core doesn't use them in functions,
-// or if they are only used in our overrides AFTER the import.
 $rowHoverBackgroundColor: var(--ui-icon-hover-bg);
 $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
-$paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
-// $paginationButtonActiveBgColor is now static above, will be overridden with var() below.
 
 // 2. Import Core Tabulator SCSS
 @import "../../../node_modules/tabulator-tables/src/scss/tabulator";
@@ -142,53 +133,7 @@ $paginationButtonHoverBgColor: var(--ui-icon-hover-bg);
     }
   }
 
-  .tabulator-footer {
-    background-color: var(--ui-optgroup-bg); // Actual theme value
-    color: var(--ui-optgroup-text);
-    border-top: 1px solid var(--ui-select-border); // Actual theme value
-    padding: $paddingSmall;
-    font-size: $fontSize * 0.9;
-
-    .tabulator-paginator {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      .tabulator-page {
-        background-color: transparent;
-        color: var(--ui-optgroup-text); // CHANGED HERE - Actual theme value
-        border: 1px solid var(--ui-select-border); // Actual theme value
-        border-radius: $borderRadius / 2;
-        padding: ($paddingSmall * 0.5) ($paddingSmall * 0.75);
-        margin: 0 $paddingSmall / 4;
-        font-weight: normal;
-        transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
-
-        &:hover:not([disabled]) {
-          background-color: $paginationButtonHoverBgColor; // This is already var(--ui-icon-hover-bg)
-          border-color: var(--ui-select-border); // Actual theme value
-        }
-        &.active {
-          background-color: var(--ui-separator-bg) !important; // Actual theme value for active page background
-          color: var(--ui-separator-text) !important; // Actual theme value for active page text
-          border-color: var(--ui-select-border); // Actual theme value
-          font-weight: 600;
-        }
-        &[disabled] {
-          color: var(--ui-disabled-text); // Actual theme value for disabled text
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-      }
-    }
-    .tabulator-page-size select {
-      background-color: var(--ui-select-bg); // Actual theme value
-      color: var(--ui-text-color);
-      border: 1px solid var(--ui-select-border); // Actual theme value
-      border-radius: $borderRadius / 2;
-      padding: ($paddingSmall * 0.5) ($paddingSmall * 1.5) ($paddingSmall * 0.5) ($paddingSmall * 0.75);
-      font-size: $fontSize;
-    }
-  }
+  
   .tabulator-placeholder {
     display: flex;
     align-items: center;

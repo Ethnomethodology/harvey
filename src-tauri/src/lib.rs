@@ -192,6 +192,7 @@ pub fn run() {
             projectview::document_commands::read_file_content,
             projectview::document_commands::delete_temporary_file,
             projectview::document_commands::get_unique_document_path,
+            projectview::document_commands::create_new_document,
             
             // --- Project view PDF ANNOTATION commands --- ADDED
             projectview::pdf_annotation_handler::load_pdf_annotations,
@@ -216,6 +217,9 @@ pub fn run() {
             // --- Project view TABLE commands ---
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
+            projectview::table_handler::set_table_headers,
+            projectview::table_handler::save_table_data,
+            projectview::table_handler::rename_table_header,
             projectview::core_commands::save_table_layout_prefs,
             projectview::core_commands::load_table_layout_prefs,
 

@@ -251,7 +251,7 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
         if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
             loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
         } else {
-            console.log('[TranscriptStore selectMedia] No associated transcripts found or no path to load for the selected media.');
+            
         }
     }
 }
@@ -1060,7 +1060,7 @@ listen('custom_transcription_job_completed', async (event) => {
                 try {
                     const service = await import('../services/projectService.js');
                     if (service.loadTranscriptFile) {
-                        console.log(`[TranscriptStore] Loading transcript after job completion: ${activePathToLoad}`);
+                        
                         await service.loadTranscriptFile(activePathToLoad);
                     } else {
                         console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
@@ -1103,7 +1103,7 @@ listen('custom_transcription_job_completed', async (event) => {
                     updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
                     if (updatedMediaFile) {
-                        console.log('[TranscriptStore] Found updated media file, dispatching event to re-select it in the transcription tab.');
+                        
                         const { emit } = await import('@tauri-apps/api/event');
                         emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
                     } else {
@@ -1116,7 +1116,7 @@ listen('custom_transcription_job_completed', async (event) => {
         }
 
     } else {
-         console.log('[TranscriptStore] Received job completion for a job not actively tracked or for a different media path:', jobFinishedPath, currentStore.mediaPathForLastJob, `Is transcribing: ${currentStore.isTranscribing}`);
+         
          return;
     }
 });

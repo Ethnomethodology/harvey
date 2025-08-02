@@ -30,6 +30,7 @@
     let activeViewType = 'placeholder';
     let activeItemPath = null;
     let activeItemTypeForInfoPanel = null; // To pass to InfoPanel
+    let tableViewRef;
 
     const IMAGE_EXTENSIONS_SET = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']);
 
@@ -90,6 +91,7 @@
     async function handleViewChangeRequest(eventDetailFromDispatch) {
         const pathForView = eventDetailFromDispatch?.itemPath;
         const typeForView = eventDetailFromDispatch?.viewType;
+        const hasHeadersForView = eventDetailFromDispatch?.hasHeaders;
 
         console.debug(`[DataView] Received requestviewchange. Path: ${pathForView}, Type: ${typeForView}`);
 
@@ -117,7 +119,7 @@
         console.debug(`[DataView] Proceeding with view change - Path: ${pathForView}, Type: ${typeForView}`);
 
         if (typeForView === 'documents' || typeForView === 'tables' || typeForView === 'images') {
-            prepareDocumentView(pathForView, typeForView);
+            prepareDocumentView(pathForView, typeForView, hasHeadersForView !== undefined ? hasHeadersForView : true);
             // activeItemTypeForInfoPanel will be set by the project.subscribe block
         } else if (typeForView === 'imported_transcript') {
             prepareImportedTranscriptView(pathForView);
@@ -141,14 +143,13 @@
     }
 
 	onMount(() => {
-		console.debug('[DataView] Component container mounted.');
 	});
 
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} />
+	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} />
 
 	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
         <!-- Far Left Panel (File/Data Browser) -->
@@ -170,7 +171,7 @@
                 {:else if activeViewType === 'documents'}
                     <DocumentView itemPath={activeItemPath} />
                 {:else if activeViewType === 'tables'}
-                     <TableView itemPath={activeItemPath} />
+                     <TableView bind:this={tableViewRef} itemPath={activeItemPath} hasHeaders={$project.selectedDocumentOptions.hasHeaders} />
                  {:else if activeViewType === 'images'}
                      <ImageView itemPath={activeItemPath} />
                 {:else if activeViewType === 'imported_transcript'}

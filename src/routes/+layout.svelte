@@ -5,6 +5,7 @@
     import '../app.css';
     import '$lib/styles/tabulator-tailwind-theme.scss';
     import ToastNotifications from '$lib/components/projectview/shared/ToastNotifications.svelte';
+    import HeaderConfirmationModal from '$lib/components/modals/HeaderConfirmationModal.svelte';
   
     // --- Import theme store loader ---
     import { loadThemePreferenceFromBackend } from '$lib/stores/themeStore.js';
@@ -69,11 +70,12 @@
           // project.update(p => ({ ...p, isLoading: false, error: null, xmlPath: null, selectedMediaFile: null, /* etc */ }));
       }
   
-      console.debug('[+layout.svelte] onMount finished.'); // DEBUG
+      
     });
   
-  </script>
+</script>
   
   <!-- This slot renders the content of the current page (+page.svelte) -->
   <slot />
   <ToastNotifications />
+<HeaderConfirmationModal />

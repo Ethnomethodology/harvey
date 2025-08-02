@@ -52,6 +52,7 @@
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { invoke } from '@tauri-apps/api/core';
 
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
@@ -59,6 +60,7 @@
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
     import ConfirmConversionModal from '$lib/components/projectview/modals/ConfirmConversionModal.svelte';
     import ImportTranscriptSourceModal from '$lib/components/projectview/modals/ImportTranscriptSourceModal.svelte';
+	import HeaderConfirmationModal from '$lib/components/projectview/modals/HeaderConfirmationModal.svelte';
 	import DataView from '$lib/components/projectview/data/DataView.svelte';
     import TranscriptionsView from '$lib/components/projectview/transcriptions/TranscriptionsView.svelte';
     import { Loader } from 'lucide-svelte';
@@ -76,6 +78,8 @@
     let removeCloseRequestListener = null;
     let handlingCloseRequest = false;
     let showImportTranscriptSourceModal = false;
+	let showHeaderConfirmationModal = false;
+	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
 
@@ -447,7 +451,7 @@ async function onConfirmTranscriptionStart(event) {
     async function proceedTabSwitch(tabName) {
         selectedTab = tabName;
 
-        project.update(p => ({ ...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false }));
+        project.update(p => ({...p, isDocumentLoading: false, isImportedTranscriptLoading: false, isMediaNoteTranscriptLoading: false}));
 
         if (selectedTab === 'data') {
             if (!get(project).selectedDocumentPath && !get(project).currentImportedTranscriptPath && !get(project).selectedMediaNotePath) {
@@ -455,6 +459,35 @@ async function onConfirmTranscriptionStart(event) {
             }
         } else if (selectedTab === 'transcriptions') {
             prepareDocumentView(null);
+            // If no media is selected, find and select the first one
+            if (!get(transcriptStore).selectedMediaFile) {
+                const proj = get(project);
+                let firstMediaFile = null;
+
+                function findFirstMediaRecursive(nodes) {
+                    if (!Array.isArray(nodes)) return;
+                    for (const node of nodes) {
+                        if (node.file_type === 'media' && !node.is_directory) {
+                            firstMediaFile = node;
+                            return;
+                        }
+                        if (node.children && node.children.length > 0) {
+                            findFirstMediaRecursive(node.children);
+                            if (firstMediaFile) return;
+                        }
+                    }
+                }
+
+                findFirstMediaRecursive(proj.files);
+
+                if (firstMediaFile) {
+                    console.log(`[ProjectView] No media selected on transcriptions tab switch. Auto-selecting first media:`, firstMediaFile.path);
+                    // Use a timeout to ensure the UI has updated before selecting the media
+                    setTimeout(() => {
+                        handleRequestMediaSelection({ detail: { mediaPath: firstMediaFile.path } });
+                    }, 0);
+                }
+            }
         }
 
         if (tabName !== 'transcriptions' && transcriptionsViewRef?.mediaPlayerRef?.videoElement && !transcriptionsViewRef.mediaPlayerRef.videoElement.paused) {
@@ -716,10 +749,13 @@ async function onConfirmTranscriptionStart(event) {
                 }
             }
             else if (actionType === 'table') {
-                const importedPath = await importTableFile();
-                if (importedPath) {
-                    await handleTabClick('data');
-                    prepareDocumentView(importedPath, 'tables');
+				const importResult = await importTableFile();
+                if (importResult) {
+					headerConfirmationData = {
+						tablePath: importResult.table_path,
+						previewData: importResult.preview_data,
+					};
+					showHeaderConfirmationModal = true;
                 }
             }
             else if (actionType === 'image') {
@@ -760,6 +796,20 @@ async function onConfirmTranscriptionStart(event) {
         closeImportMenu(); 
         triggerMediaImport(actionType); 
     }
+
+	async function handleHeaderConfirmation(event) {
+		const { hasHeaders } = event.detail;
+		const { tablePath } = headerConfirmationData;
+		try {
+			await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+			await refreshProjectFiles();
+			await handleTabClick('data');
+			prepareDocumentView(tablePath, 'tables', hasHeaders);
+		} catch (error) {
+			console.error(`[ProjectView] Error setting table headers:`, error);
+			await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
+		}
+	}
 
     $: showLoadingOverlay = ($project.isLoading && (get(transcriptStore)?.isTranscribing ?? false)) || $project.isImportingAsset || ($project.selectedDocumentPath && $project.isDocumentLoading) || ($project.currentImportedTranscriptPath && $project.isImportedTranscriptLoading) || ($project.selectedMediaNotePath && $project.isMediaNoteTranscriptLoading);
 
@@ -825,6 +875,12 @@ async function onConfirmTranscriptionStart(event) {
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>
+	<HeaderConfirmationModal
+		bind:showModal={showHeaderConfirmationModal}
+		tablePath={headerConfirmationData.tablePath}
+		previewData={headerConfirmationData.previewData}
+		on:confirm={handleHeaderConfirmation}
+	/>
 
 
     {#if importMenuVisible}

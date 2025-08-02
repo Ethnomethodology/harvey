@@ -3,7 +3,10 @@
 	import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView, setSelectedGroup, currentProjectGroupsList, updateProjectGroupsList } from '$lib/stores/projectStore.js'; // Added setSelectedGroup, currentProjectGroupsList, and updateProjectGroupsList
 	import { get } from 'svelte/store';
 	import panelStateStore from '$lib/stores/panelStateStore.js';
-	import { renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript } from '$lib/services/projectService.js';
+	    import { createNewDocument, renameProjectItem, deleteProjectItem, importMediaFile, importDocumentFile, importTableFile, importImageFile, importTranscriptFile, deleteImportedTranscript, refreshProjectFiles } from '$lib/services/projectService.js';
+    
+    import HeaderConfirmationModal from '../modals/HeaderConfirmationModal.svelte';
+
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import ImportTranscriptSourceModal from '../modals/ImportTranscriptSourceModal.svelte';
     import CreateGroupModal from '../modals/CreateGroupModal.svelte';
@@ -250,9 +253,6 @@
                 case 'Open': 
                     dispatch('requestviewchange', { viewType: 'imported_transcript', itemPath: item.path }); 
                     break;
-                case 'Import':
-                    handleImportClick('imported_transcript');
-                    break;
                 case 'Rename': 
                     const nameWithoutExt = item.name.toLowerCase().endsWith('.json') ? item.name.slice(0, -5) : item.name;
                     itemToRename = { path: item.path, name: nameWithoutExt, file_type: 'imported_transcript', media_xml_identifier: null }; 
@@ -275,6 +275,8 @@
     }
     let prevAutoOpenPath = null;
     let showImportTranscriptModal = false;
+    let showHeaderConfirmationModal = false;
+    let headerConfirmationData = {};
     let categoryContextMenuVisible = false;
     let categoryContextMenuX = 0;
     let categoryContextMenuY = 0;
@@ -344,13 +346,50 @@
         } else if (categoryType === 'document') {
             try { await importDocumentFile(); } catch (e) { console.error(`[DataLeftPanel] Error importDocumentFile:`, e); }
         } else if (categoryType === 'table') {
-            try { await importTableFile(); } catch (e) { console.error(`[DataLeftPanel] Error importTableFile:`, e); }
+            handleTableImport();
         } else if (categoryType === 'image') {
             try { await importImageFile(); } catch (e) { console.error(`[DataLeftPanel] Error importImageFile:`, e); }
         } else if (categoryType === 'imported_transcript') { 
             showImportTranscriptModal = true;
         } else {
             message(`Specific import for ${categoryInfo.name} not implemented.`, { title: 'Coming Soon', type: 'info' });
+        }
+    }
+
+    async function handleTableImport() {
+        let isLoading = true;
+        try {
+            const importResult = await importTableFile(); // No arguments needed, projectService handles file selection
+            if (importResult) {
+                headerConfirmationData = {
+                    tablePath: importResult.table_path,
+                    previewData: importResult.preview_data,
+                };
+                showHeaderConfirmationModal = true;
+            } else {
+                // If result is null, it means the user cancelled the file selection.
+                // No error, just return.
+                return;
+            }
+        } catch (e) {
+            console.error(`[DataLeftPanel] Error importTableFile:`, e);
+            message(e.message, { title: 'Import Error', type: 'error' });
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    async function handleHeaderConfirmation(event) {
+        const { hasHeaders } = event.detail;
+        const { tablePath } = headerConfirmationData;
+        try {
+            await invoke('set_table_headers', { tablePathStr: tablePath, hasHeaders });
+            await refreshProjectFiles();
+
+            dispatch('requestviewchange', { viewType: 'tables', itemPath: tablePath, hasHeaders: hasHeaders });
+        } catch (error) {
+            console.error(`[DataLeftPanel] Error setting table headers:`, error);
+            await message(`Error setting table headers: ${error.message || error}`, { title: 'Error', type: 'error' });
         }
     }
 
@@ -390,7 +429,7 @@
             const newNameWithOriginalExt = `${stemNameFromModal}${originalExtension}`;
             try { await renameProjectItem(item.path, newNameWithOriginalExt, item.file_type); } catch (err) { console.error(`[DataLeftPanel] Rename failed for image ${item.name}:`, err); } finally { itemToRename = null; }
         } else if (item.file_type === 'imported_transcript') { 
-            const nameForBackend = finalNewNameFromModal; 
+            const nameForBackend = finalNewNameFromModal.endsWith('.json') ? finalNewNameFromModal : `${finalNewNameFromModal}.json`;
             try { await renameProjectItem(item.path, nameForBackend, item.file_type); }
             catch (err) { console.error(`[DataLeftPanel] Rename failed for imported transcript ${item.name}:`, err); } 
             finally { itemToRename = null; }
@@ -604,6 +643,8 @@
 
     $: displayCategories = (() => {
         const projectFilesTree = $project.files || [];
+        
+
         const projectDocumentFiles = $project.documentFiles || [];
         const projectTableFiles = $project.tableFiles || [];
         const projectImageFiles = $project.imageFiles || [];
@@ -652,6 +693,13 @@
         findMediaFilesRecursive(projectFilesTree);
         videos.sort((a, b) => a.name.localeCompare(b.name));
         audios.sort((a, b) => a.name.localeCompare(b.name));
+
+        
+        
+        
+        
+        
+        
 
         return CATEGORIES_BASE.map(cat => {
             if (cat.type === 'video') { return { ...cat, files: videos }; }
@@ -711,7 +759,7 @@
                         });
 
                          if (itemCategory && itemCategory.files.some(f => f.path === autoPath)) {
-                            console.log(`[DataLeftPanel] Auto open path ${autoPath} matches category ${itemCategoryType}. NotesView will handle it.`);
+                            
                             prevAutoOpenPath = autoPath;
                         } else {
                             console.warn(`[DataLeftPanel] Auto open path ${autoPath} (type ${itemCategoryType}) NOT FOUND in current displayCategories.`);
@@ -1069,7 +1117,6 @@
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Delete'); }} class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete</button>
             {:else if contextMenuItem.file_type === 'imported_transcript'}
                  <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
-                 <button on:click|stopPropagation={() => { handleContextMenuAction('Import'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Import</button>
                 <button
                     on:mouseenter={(e) => { handleShowAddToGroupSubMenu(e, contextMenuItem); }}
                     on:mouseleave={handleLeaveAddToGroupButton}
@@ -1121,7 +1168,17 @@
       >
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
           <button
-            on:click|stopPropagation={() => {}}
+            on:click|stopPropagation={() => {
+                if (categoryContextMenuType === 'document') {
+                    const currentProject = get(project);
+                    if (currentProject && currentProject.xmlPath) {
+                        createNewDocument(currentProject.xmlPath);
+                    } else {
+                        message('Could not create document: Project path is not available.', { title: 'Error', type: 'error' });
+                    }
+                }
+                closeCategoryContextMenu();
+            }}
             class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
             title="Create New"
           >
@@ -1149,6 +1206,12 @@
 />
 
 <FileRenameModal bind:showModal={showRenameModal} currentName="{itemToRename?.name || ''}" itemType="{itemToRename?.file_type || ''}" isMediaRename="{itemToRename?.file_type === 'media'}" on:confirm={handleRenameConfirm} on:close={handleRenameModalClose} />
+<HeaderConfirmationModal 
+    bind:showModal={showHeaderConfirmationModal} 
+    tablePath={headerConfirmationData.tablePath} 
+    previewData={headerConfirmationData.previewData}
+    on:confirm={handleHeaderConfirmation}
+/>
 <ImportTranscriptSourceModal bind:showModal={showImportTranscriptModal} on:confirm={(event) => handleImportTranscriptConfirm(event)} on:close={() => showImportTranscriptModal = false} />
 <CreateGroupModal
     bind:showModal={showCreateGroupModal}

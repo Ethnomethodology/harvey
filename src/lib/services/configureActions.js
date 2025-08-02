@@ -367,7 +367,7 @@ export async function exportTranscript(filePath, format, segments, transcriptJso
 		await writeTextFile(filePath, csvContent);
 		// --- END ---
 
-		console.log(`[ConfigureActions] CSV Export successful to ${filePath}.`);
+		
 
 	} catch (error) {
 		console.error(`[ConfigureActions] Error during CSV export generation or file writing:`, error);

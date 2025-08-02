@@ -109,6 +109,28 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+export async function createNewDocument(projectXmlPath) {
+    if (!projectXmlPath) {
+        console.error('[ProjectService] Cannot create document: Project XML path is missing.');
+        await message('Project data is not fully loaded. Cannot create documents.', { title: 'Create Error', type: 'error' });
+        return;
+    }
+
+    try {
+        const newDocument = await invoke('create_new_document', {
+            projectXmlPath: projectXmlPath,
+            documentName: "Untitled.json"
+        });
+
+        await refreshProjectFiles();
+
+        prepareDocumentView(newDocument, 'documents');
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        await message(`Error creating document: ${errorMessage}`, { title: 'Create Error', type: 'error' });
+    }
+}
+
 export async function loadTableLayoutPrefs(tablePath) {
     const currentProject = get(project);
     const projectId = currentProject.id;
@@ -196,9 +218,9 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         project.update((current) => ({ ...current, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));
         throw new Error('projectXmlPath is required');
     }
-    project.update((current) => ({ ...current, isLoading: true, error: null, statusMessage: 'Loading project data...' }));
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
+        
 
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
@@ -308,10 +330,9 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         }
 
         if (mediaFileToSelect) {
-            console.log('[ProjectService] Calling selectMedia with mediaFileToSelect:', JSON.stringify(mediaFileToSelect, null, 2));
+            
             selectMedia(mediaFileToSelect);
-        } else {
-            console.log('[ProjectService] Calling selectMedia with null (no media selected).');
+        
             selectMedia(null);
         }
     } catch (error) {
@@ -614,40 +635,6 @@ export async function importDocumentFile() {
     }
 }
 
-export async function importTableFile() {
-    const currentProject = get(project);
-    const projectXmlPath = currentProject.xmlPath;
-
-    if (!projectXmlPath) {
-        console.error("[ProjectService] Cannot import table: Project data not fully loaded.");
-        await message('Project data is not fully loaded. Cannot import tables.', { title: 'Import Error', type: 'error' });
-        return;
-    }
-    const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a table");
-    if (!canProceedDialog) {
-        setAssetImportStatus(false, 'Table import cancelled by user.'); return;
-    }
-    try {
-        const selected = await open({ multiple: false, directory: false, filters: [tableFilter], title: 'Import Table File (CSV or XLSX)'});
-        if (!selected || typeof selected !== 'string') {
-            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' })); return;
-        }
-        const sourceFilePath = selected;
-        const sourceFilename = await basename(sourceFilePath);
-        setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
-        const finalTablePath = await invoke('import_table_file', { sourcePathStr: sourceFilePath, projectXmlPathStr: projectXmlPath });
-        await refreshProjectFiles();
-        const importedTableName = await basename(finalTablePath);
-        setAssetImportStatus(false, `Table "${importedTableName}" imported successfully.`);
-        prepareDocumentView(finalTablePath, 'tables');
-        return finalTablePath;
-    } catch (error) {
-        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
-        await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
-        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
-    }
-}
-
 export async function importImageFile() {
     const currentProject = get(project);
     const projectXmlPath = currentProject.xmlPath;
@@ -722,8 +709,86 @@ export async function deleteImportedTranscript(transcriptAbsolutePath) {
     return deleteProjectItem(transcriptAbsolutePath);
 }
 
+export async function importTableFile(hasHeaders) {
+    const currentProject = get(project);
+    const projectXmlPath = currentProject.xmlPath;
+    console.log(`[ProjectService] importTableFile: projectXmlPath = ${projectXmlPath}`);
 
-export async function loadTableData(tablePath) { if (!tablePath) throw new Error('tablePath is required'); try { const tableData = await invoke('load_table_data', { tablePathStr: tablePath }); if (!Array.isArray(tableData)) throw new Error("Backend returned invalid data format for table."); return tableData; } catch (error) { const errorMessage = error.message || String(error); await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' }); throw error; } }
+    if (!projectXmlPath) {
+        console.error('[ProjectService] Cannot import table: Project data not fully loaded.');
+        await message('Project data is not fully loaded. Cannot import tables.', { title: 'Import Error', type: 'error' });
+        return null;
+    }
+
+    const canProceedDialog = await checkUnsavedChangesThenProceed(null, "importing a table");
+    if (!canProceedDialog) {
+        setAssetImportStatus(false, 'Table import cancelled by user.');
+        return null;
+    }
+
+    try {
+        const selected = await open({
+            multiple: false,
+            directory: false,
+            filters: [tableFilter],
+            title: 'Import Table File'
+        });
+
+        if (!selected || typeof selected !== 'string') {
+            project.update(p => ({ ...p, statusMessage: 'Table import cancelled.' }));
+            return null;
+        }
+
+        const sourceFilePath = selected;
+        console.log(`[ProjectService] importTableFile: sourceFilePath = ${sourceFilePath}`);
+        const sourceFilename = await basename(sourceFilePath);
+        setAssetImportStatus(true, `Importing table ${sourceFilename}...`);
+
+        console.log(`[ProjectService] Invoking 'import_table_file' with sourcePathStr: ${sourceFilePath}, projectXmlPathStr: ${projectXmlPath}`);
+        const result = await invoke('import_table_file', {
+            sourcePathStr: sourceFilePath,
+            projectXmlPathStr: projectXmlPath
+        });
+
+        if (result && result.table_path && result.preview_data) {
+            setAssetImportStatus(false, `${sourceFilename} imported successfully.`);
+            return { ...result, filename: sourceFilename };
+        } else {
+            throw new Error('Invalid response from backend during table import.');
+        }
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        await message(`Error importing table: ${errorMessage}`, { title: 'Import Error', type: 'error' });
+        setAssetImportStatus(false, `Error during table import: ${errorMessage}`);
+        return null;
+    }
+}
+
+
+
+
+
+
+export async function loadTableData(tablePath, hasHeaders) {
+    if (!tablePath) throw new Error('tablePath is required');
+    try {
+        const tableData = await invoke('load_table_data', {
+            tablePathStr: tablePath,
+            hasHeaders: hasHeaders
+        });
+
+        // Check if the response is an object with 'headers' and 'data' arrays
+        if (typeof tableData !== 'object' || tableData === null || !Array.isArray(tableData.headers) || !Array.isArray(tableData.data)) {
+            throw new Error("Backend returned invalid data format for table.");
+        }
+
+        return tableData;
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' });
+        throw error;
+    }
+}
 function parseTimestampStringToSeconds(timestampStr) { if (!timestampStr || typeof timestampStr !== 'string') return 0; const cleanedStr = timestampStr.trim(); const parts = cleanedStr.split(':'); let seconds = 0; try { if (parts.length === 3) { seconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]); } else if (parts.length === 2) { seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]); } else if (parts.length === 1) { seconds = parseFloat(parts[0]); } else { return 0; } } catch (e) { return 0; } return isNaN(seconds) ? 0 : parseFloat(seconds.toFixed(3)); }
 function extractPlainTextFromLexicalNode(node) { if (!node) return ''; if (node.type === 'text' || node.type === 'extended-text') return node.text || ''; let text = ''; if (node.children && Array.isArray(node.children)) { for (const child of node.children) text += extractPlainTextFromLexicalNode(child); } if (node.type === 'linebreak') return '\n'; return text; }
 export function parseLexicalTableToSegments(lexicalTableJsonString) { let parsedFullEditorState; try { parsedFullEditorState = JSON.parse(lexicalTableJsonString); if (!parsedFullEditorState?.root?.children) return []; } catch (error) { return []; } const segmentsArray = []; try { const tableNode = parsedFullEditorState.root.children.find(node => node.type === 'table'); if (!tableNode?.children) return []; for (let i = 1; i < tableNode.children.length; i++) { const rowNode = tableNode.children[i]; if (rowNode.type !== 'tablerow' || !rowNode.children || !rowNode.children.length || rowNode.children.length < 4) continue; try { let startTime = 0, endTime = 0, speakerName = "Unknown", segmentTextJsonString = "{}"; const timestampCellNode = rowNode.children[1]; if (timestampCellNode.type !== 'tablecell') continue; let timestampFullText = ''; if (timestampCellNode.children) timestampCellNode.children.forEach(child => timestampFullText += extractPlainTextFromLexicalNode(child)); const timeParts = timestampFullText.split(' - '); startTime = parseTimestampStringToSeconds(timeParts[0]); endTime = timeParts.length > 1 ? parseTimestampStringToSeconds(timeParts[1]) : startTime; const speakerCellNode = rowNode.children[2]; if (speakerCellNode.type !== 'tablecell') continue; let tempSpeakerName = ''; if (speakerCellNode.children) speakerCellNode.children.forEach(child => tempSpeakerName += extractPlainTextFromLexicalNode(child)); speakerName = tempSpeakerName.trim() || "Unknown"; const textContentCellNode = rowNode.children[3]; if (textContentCellNode.type !== 'tablecell') continue; const deepClonedCellChildren = JSON.parse(JSON.stringify(textContentCellNode.children || [])); segmentTextJsonString = JSON.stringify({ root: { type: 'root', children: deepClonedCellChildren, direction: null, format: '', indent: 0, version: 1 }}); segmentsArray.push({ start_time: startTime, end_time: endTime, speaker: speakerName, text: segmentTextJsonString }); } catch (cellProcessingError) { segmentsArray.push({ start_time: 0, end_time: 0, speaker: "Error Processing Row", text: JSON.stringify({ root: { type: 'root', children:[], direction:null, format:'', indent:0, version:1 } }) }); } } } catch (tableProcessingError) { return []; } return segmentsArray; }
@@ -819,7 +884,16 @@ export async function saveTranscriptData() {
 }
 
 export async function refreshProjectFiles(targetPathToSelect = null) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) return; project.update(p => ({ ...p, statusMessage: 'Refreshing file list...', isLoading: true })); try { await loadProjectDataAndUpdateStore(projectXmlPath, targetPathToSelect); project.update(p => ({ ...p, statusMessage: 'Project refreshed.', isLoading: false })); } catch (error) { const errorMessage = error?.message || String(error); project.update(p => ({ ...p, error: `Refresh failed: ${errorMessage}`, statusMessage: 'Error refreshing file list.', isLoading: false })); } }
-export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try { await invoke('rename_project_item', { itemPath: itemPath, newName: newName, projectXmlPath: projectXmlPath }); project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}. Refreshing...` })); await refreshProjectFiles(); } catch (error) { const errorMessage = error?.message || String(error); await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' }); project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false })); throw error; } }
+export async function renameProjectItem(itemPath, newName, itemType) { const currentProj = get(project); const projectXmlPath = currentProj.xmlPath; if (!projectXmlPath) { await message('Project data not loaded. Cannot rename.', { title: 'Rename Error', type: 'error' }); throw new Error('Project path missing.'); } if (!itemPath || !newName) { await message('Missing item path or new name.', { title: 'Rename Error', type: 'error' }); throw new Error('Missing parameters.'); } const oldFilename = await basename(itemPath); project.update(p => ({ ...p, statusMessage: `Renaming ${oldFilename} to ${newName}...`, isLoading: true })); try {
+    const newPath = await invoke('rename_project_item', { itemPath: itemPath, newName: newName, itemType: itemType, projectXmlPath: projectXmlPath });
+    await refreshProjectFiles(); // Refresh the file list after rename
+    project.update(p => ({ ...p, statusMessage: `Renamed ${oldFilename} to ${newName}.`, fileRenamed: { oldPath: itemPath, newPath: newPath } }));
+} catch (error) {
+    const errorMessage = error?.message || String(error);
+    await message(`Error renaming item: ${errorMessage}`, { title: 'Rename Failed', type: 'error' });
+    project.update(p => ({ ...p, error: `Rename failed: ${errorMessage}`, statusMessage: `Error renaming ${oldFilename}.`, isLoading: false }));
+    throw error;
+} }
 export async function deleteProjectItem(itemPath) {
     const currentProj = get(project);
     const currentTs = get(transcriptStore);
@@ -1125,6 +1199,27 @@ export async function saveCurrentPdfAnnotations() {
         // Do not throw here to avoid unhandled promise rejections if the caller doesn't catch.
     }
 }
+export async function saveTableData(tablePath, tableData) {
+    if (!tablePath) {
+        throw new Error("Cannot save, no table path specified.");
+    }
+    if (!tableData) {
+        throw new Error("Cannot save, no table data provided.");
+    }
+
+    const filename = await basename(tablePath);
+    project.update(p => ({ ...p, statusMessage: `Saving table ${filename}...` }));
+
+    try {
+        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData });
+        project.update(p => ({ ...p, isDocumentDirty: false, statusMessage: `Table saved: ${filename}` }));
+    } catch (error) {
+        const errorMessage = error?.message || String(error);
+        project.update(p => ({ ...p, documentError: `Failed to save table: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+        await message(`Error saving table: ${errorMessage}`, { title: 'Save Table Error', type: 'error' });
+        throw error;
+    }
+}
 export async function saveDocumentContent(filePath, jsonContent) { if (filePath && filePath.toLowerCase().endsWith('.pdf')) { project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'})); throw new Error("PDF content saving is not handled by saveDocumentContent."); } if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); } try { const parsed = JSON.parse(jsonContent); if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure."); } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); } const filename = await basename(filePath); project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` })); let mainContentSaveError = null; try { await invoke('save_note_json', { targetPath: filePath, jsonContent: jsonContent }); markDocumentAsSaved(jsonContent); } catch (error) { mainContentSaveError = error; const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` })); } const projState = get(project); let metadataSaveError = null; if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) { try { await saveDocumentMetadata(filePath); } catch (error) { metadataSaveError = error; } } if (mainContentSaveError) { await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' }); throw mainContentSaveError; } if (metadataSaveError) throw metadataSaveError; }
 export async function loadDocumentMetadata(originalDocumentAbsPath) { const proj = get(project); if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null; let relativePath = ""; const base = proj.baseDirectory; const absPath = originalDocumentAbsPath; if (absPath.startsWith(base)) { relativePath = absPath.substring(base.length); if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length); if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1); } else return null; const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/'); try { const fullMetadataJsonString = await invoke('load_document_metadata', { projectXmlPathStr: proj.xmlPath, originalDocumentRelativePathStr: originalDocumentRelativePathStr }); if (fullMetadataJsonString && typeof fullMetadataJsonString === 'string') { const parsedFullMetadata = JSON.parse(fullMetadataJsonString); if (parsedFullMetadata?.metadata && Array.isArray(parsedFullMetadata.highlights)) return parsedFullMetadata; return null; } return null; } catch (error) { return null; } }
 export async function saveDocumentMetadata(originalDocumentAbsPath) {
@@ -1237,6 +1332,12 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         saveFunction = async () => saveCurrentPdfAnnotations();
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialPdfAnnotations;
+    } else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedDocumentPath;
+        itemTypeForPrompt = 'table';
+        saveFunction = async () => saveTableData(itemPath, projState.tableData);
+        discardFunction = () => {};
     } else if (projState.selectedDocumentPath && (projState.isDocumentDirty || projState.isDocumentMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
@@ -1439,4 +1540,22 @@ export async function clearProjectDataStore() {
     // Optionally, inform other parts of the app that the project has been cleared
     // await emit('project-cleared');
     console.log('[ProjectService] Project data store cleared.');
+}
+
+export async function renameTableHeader(tablePath, oldHeader, newHeader) {
+    if (!tablePath || !oldHeader || !newHeader) {
+        throw new Error("Missing required parameters for renaming table header.");
+    }
+
+    try {
+        await invoke('rename_table_header', {
+            tablePathStr: tablePath,
+            oldHeader: oldHeader,
+            newHeader: newHeader
+        });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error renaming header: ${errorMessage}`, { title: 'Rename Header Error', type: 'error' });
+        throw error;
+    }
 }

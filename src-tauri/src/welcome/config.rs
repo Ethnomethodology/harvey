@@ -16,6 +16,8 @@ use std::{
 use csv;
 use tauri_plugin_shell;
 use tauri;
+use rust_xlsxwriter;
+use calamine;
 
 
 pub const CONFIG_DIR_NAME: &str = ".harvey";
@@ -93,6 +95,8 @@ pub enum CommandError {
     TauriApi(String),
     AssetMetadataNotFound(String), // New variant
     RusqliteError(String), // Added for rusqlite errors
+    JsonProcessing(String),
+    Path(String), // New variant for path-related errors
 }
 
 impl fmt::Display for CommandError {
@@ -109,6 +113,8 @@ impl fmt::Display for CommandError {
             CommandError::TauriApi(msg) => write!(f, "Tauri API Error: {}", msg),
             CommandError::AssetMetadataNotFound(msg) => write!(f, "{}", msg),
             CommandError::RusqliteError(msg) => write!(f, "Database Error: {}", msg),
+            CommandError::JsonProcessing(msg) => write!(f, "JSON Processing Error: {}", msg),
+            CommandError::Path(msg) => write!(f, "Path Error: {}", msg),
         }
     }
 }
@@ -124,9 +130,12 @@ impl From<&str> for CommandError { fn from(message: &str) -> Self { CommandError
 impl From<reqwest::Error> for CommandError { fn from(error: reqwest::Error) -> Self { CommandError::HttpDownload(error.to_string()) } }
 impl From<zip::result::ZipError> for CommandError { fn from(error: zip::result::ZipError) -> Self { CommandError::ZipExtraction(error.to_string()) } }
 impl From<csv::Error> for CommandError { fn from(error: csv::Error) -> Self { CommandError::CsvProcessing(error.to_string()) } }
+impl From<serde_json::Error> for CommandError { fn from(error: serde_json::Error) -> Self { CommandError::JsonProcessing(error.to_string()) } }
 impl From<tauri_plugin_shell::Error> for CommandError { fn from(error: tauri_plugin_shell::Error) -> Self { CommandError::ShellCommand(error.to_string()) } }
 impl From<tauri::Error> for CommandError { fn from(error: tauri::Error) -> Self { CommandError::TauriApi(error.to_string()) } }
 impl From<rusqlite::Error> for CommandError { fn from(error: rusqlite::Error) -> Self { CommandError::RusqliteError(error.to_string()) } }
+impl From<rust_xlsxwriter::XlsxError> for CommandError { fn from(error: rust_xlsxwriter::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
+impl From<calamine::XlsxError> for CommandError { fn from(error: calamine::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
 // --- End Error Conversions ---
 
 
