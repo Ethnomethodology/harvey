@@ -44,7 +44,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "sidecar/whisper-cpp",
+      "sidecar/whisper-cli",
       "sidecar/diarize-cli",
       "sidecar/pandoc",
       "sidecar/ffmpeg"

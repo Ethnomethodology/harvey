@@ -62,7 +62,7 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "sidecar/whisper-cpp",
+          "name": "sidecar/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",
@@ -173,7 +173,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "sidecar/whisper-cpp",
+          "name": "sidecar/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",

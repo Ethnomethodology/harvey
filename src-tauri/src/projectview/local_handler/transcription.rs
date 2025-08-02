@@ -441,7 +441,7 @@ async fn resolve_whisper_model_path( model_name: &str, job_id: &str) -> Result<S
     Ok(model_file_path.to_string_lossy().to_string())
 }
 
-// --- Helper: Run whisper-cpp Sidecar ---
+// --- Helper: Run whisper-cli Sidecar ---
 async fn run_whisper_cpp_sidecar(
     app_handle: &AppHandle,
     media_path: &str,
@@ -452,7 +452,7 @@ async fn run_whisper_cpp_sidecar(
     output_path_base_str: &str,
     expected_output_path: &Path
 ) -> Result<PathBuf, CommandError> {
-    let sidecar_name = "whisper-cpp";
+    let sidecar_name = "whisper-cli";
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
     debug!("[Transcription][LocalRun][{}] Using Whisper language: '{}'", job_id, lang_arg);
 
@@ -468,8 +468,8 @@ async fn run_whisper_cpp_sidecar(
     let shell_scope = app_handle.shell();
     let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
      .map_err(|e| {
-         error!("Failed to spawn whisper-cpp: {}. Check tauri.conf.json, binary paths, and permissions.", e);
-         CommandError::from(format!("Failed to execute whisper-cpp sidecar: {}. Ensure it's bundled and executable.", e))
+         error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);
+         CommandError::from(format!("Failed to execute whisper-cli sidecar: {}. Ensure it's bundled and executable.", e))
      })?;
     info!("[Transcription][LocalRun][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
 
@@ -483,7 +483,7 @@ async fn run_whisper_cpp_sidecar(
             warn!("[Transcription][LocalRun][{}] Cancellation requested during '{}'. Killing process...", job_id, sidecar_name);
             let _ = child.kill();
             if expected_output_path.exists() { let _ = fs::remove_file(expected_output_path); }
-            return Err(CommandError::from("Whisper-cpp process cancelled."));
+            return Err(CommandError::from("whisper-cli process cancelled."));
         }
 
         tokio::select! {

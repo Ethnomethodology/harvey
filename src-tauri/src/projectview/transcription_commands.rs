@@ -860,7 +860,7 @@ pub(crate) fn prepare_output_paths(
     // Use a short, generic temporary base name for whisper's direct output.
     let temp_whisper_output_base_orig = transcripts_dir.join(format!("whisper_temp_{}_orig", job_id));
     let temp_whisper_output_base_orig_str = temp_whisper_output_base_orig.to_string_lossy().to_string();
-    // This is the path whisper-cpp will actually write its JSON to.
+    // This is the path whisper-cli will actually write its JSON to.
     let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
 
     // The final path for the transcript uses the (potentially truncated at import) media_filename_stem.
@@ -1760,7 +1760,7 @@ async fn run_whisper_cpp_sidecar_cmd(
     is_translation_pass: bool,
     cancel_flag: Arc<AtomicBool>, // New argument
 ) -> Result<PathBuf, CommandError> {
-    let sidecar_name = "whisper-cpp";
+    let sidecar_name = "whisper-cli";
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
     // debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass); // Original debug
 
@@ -1776,14 +1776,14 @@ async fn run_whisper_cpp_sidecar_cmd(
         args.push("--translate".into());
     }
 
-    info!("[Whisper CPP CMD][{}] DEBUG: Executing whisper-cpp. Language: '{}', Translate: {}. Full Args: {:?}", job_id, lang_arg, is_translation_pass, args);
+    info!("[Whisper CPP CMD][{}] DEBUG: Executing whisper-cli. Language: '{}', Translate: {}. Full Args: {:?}", job_id, lang_arg, is_translation_pass, args);
     // debug!("[Whisper CPP CMD][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args); // Original debug
 
     let shell_scope = app_handle.shell();
     let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
      .map_err(|e| {
-         error!("Failed to spawn whisper-cpp: {}. Check tauri.conf.json, binary paths, and permissions.", e);
-         CommandError::from(format!("Failed to execute whisper-cpp sidecar: {}. Ensure it's bundled and executable.", e))
+         error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);
+         CommandError::from(format!("Failed to execute whisper-cli sidecar: {}. Ensure it's bundled and executable.", e))
      })?;
     info!("[Whisper CPP CMD][{}] Spawned sidecar '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
 
@@ -1850,7 +1850,7 @@ async fn run_whisper_cpp_sidecar_cmd(
     }
 
     if !expected_whisper_json_output_path.exists() {
-        error!("[Whisper CPP CMD][{}] Output JSON file NOT found after whisper-cpp execution and wait: {:?}", job_id, expected_whisper_json_output_path);
+        error!("[Whisper CPP CMD][{}] Output JSON file NOT found after whisper-cli execution and wait: {:?}", job_id, expected_whisper_json_output_path);
         return Err(CommandError::from(format!("Whisper output JSON missing: {:?}", expected_whisper_json_output_path)));
     }
 
@@ -1868,7 +1868,7 @@ async fn run_whisper_cpp_sidecar_cmd(
         _ => {} // File exists and is not empty
     }
 
-    info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cpp execution: {:?}", job_id, expected_whisper_json_output_path);
+    info!("[Whisper CPP CMD][{}] DEBUG: Output JSON file FOUND after whisper-cli execution: {:?}", job_id, expected_whisper_json_output_path);
     Ok(expected_whisper_json_output_path.to_path_buf())
 }
 
