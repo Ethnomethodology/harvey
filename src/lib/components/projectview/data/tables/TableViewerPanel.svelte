@@ -444,7 +444,7 @@
                         }
                     }
                 ],
-                cellContextMenu: [
+                contextMenu: [
                     {
                         label: "Copy",
                         menu: [
