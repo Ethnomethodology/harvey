@@ -18,6 +18,12 @@
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
 
+    // Custom Context Menu State
+    let showCustomRowMenu = false;
+    let customMenuX = 0;
+    let customMenuY = 0;
+    let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
+
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
     let currentMatchIndex = -1;
@@ -199,6 +205,7 @@
                 },
                 clipboard: true,
             });
+            console.log('[TableViewerPanel] tabulatorInstance SET:', tabulatorInstance);
 
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
@@ -424,6 +431,7 @@
             headerSort: false,
             cssClass: "tabulator-row-number-column"
         };
+        
 
         let dataColumnDefs = headers.map(header => {
             const colDef = {
@@ -442,161 +450,89 @@
                         action: function(e, column) {
                             openHeaderEditor(column);
                         }
+                    },
+                    {
+                        label: "Copy Header",
+                        action: function(e, column) {
+                            navigator.clipboard.writeText(column.getField()).catch(err => {
+                                console.error('Could not copy header to clipboard: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Cut Header (Placeholder)",
+                        action: function(e, column) {
+                            console.log(`Placeholder: Cut header ${column.getField()}`);
+                            alert(`Cut Header (Placeholder): ${column.getField()}`);
+                        }
+                    },
+                    {
+                        label: "Paste Header (Placeholder)",
+                        action: function(e, column) {
+                            console.log(`Placeholder: Paste header at ${column.getField()}`);
+                            alert(`Paste Header (Placeholder)`);
+                        }
+                    },
+                    {
+                        label: "Delete Column",
+                        action: function(e, column) {
+                            if (confirm(`Are you sure you want to delete the column '${column.getField()}'? This action cannot be undone.`)) {
+                                tabulatorInstance.deleteColumn(column);
+                                console.warn(`Column '${column.getField()}' deleted. Data model might be out of sync.`);
+                            }
+                        }
+                    },
+                    {
+                        label: "Insert Column Left (Placeholder)",
+                        action: function(e, column) {
+                            console.log(`Placeholder: Insert column left of ${column.getField()}`);
+                            alert(`Insert Column Left (Placeholder)`);
+                        }
+                    },
+                    {
+                        label: "Insert Column Right (Placeholder)",
+                        action: function(e, column) {
+                            console.log(`Placeholder: Insert column right of ${column.getField()}`);
+                            alert(`Insert Column Right (Placeholder)`);
+                        }
                     }
                 ],
                 contextMenu: [
                     {
                         label: "Copy",
-                        menu: [
-                            {
-                                label: "Copy Cell",
-                                action: function(e, cell) {
-                                    navigator.clipboard.writeText(cell.getValue()).catch(err => {
-                                        console.error('Could not copy cell value to clipboard: ', err);
-                                    });
-                                }
-                            },
-                            {
-                                label: "Copy Row",
-                                action: function(e, cell) {
-                                    const row = cell.getRow();
-                                    tabulatorInstance.deselectRow(); // Clear existing selections
-                                    row.select();
-                                    tabulatorInstance.copyToClipboard("selected");
-                                }
-                            },
-                            {
-                                label: "Copy Column",
-                                action: function(e, cell) {
-                                    const column = cell.getColumn();
-                                    const columnData = tabulatorInstance.getRows().map(row => row.getCell(column).getValue());
-                                    navigator.clipboard.writeText(columnData.join('\n')).catch(err => {
-                                        console.error('Could not copy column to clipboard: ', err);
-                                    });
-                                }
-                            }
-                        ]
+                        action: function(e, cell) {
+                            navigator.clipboard.writeText(cell.getValue()).catch(err => {
+                                console.error('Could not copy cell value to clipboard: ', err);
+                            });
+                        }
                     },
                     {
                         label: "Cut",
-                        menu: [
-                            {
-                                label: "Cut Cell",
-                                action: function(e, cell) {
-                                    navigator.clipboard.writeText(cell.getValue()).then(() => {
-                                        cell.setValue("");
-                                    }).catch(err => {
-                                        console.error('Could not cut cell value: ', err);
-                                    });
-                                }
-                            },
-                            {
-                                label: "Cut Row",
-                                action: function(e, cell) {
-                                    const row = cell.getRow();
-                                    tabulatorInstance.deselectRow();
-                                    row.select();
-                                    tabulatorInstance.copyToClipboard("selected");
-                                    row.delete();
-                                }
-                            },
-                            {
-                                label: "Cut Column",
-                                action: function(e, cell) {
-                                    const column = cell.getColumn();
-                                    const columnData = tabulatorInstance.getRows().map(row => row.getCell(column).getValue());
-                                    navigator.clipboard.writeText(columnData.join('\n')).then(() => {
-                                        tabulatorInstance.getRows().forEach(row => row.getCell(column).setValue(""));
-                                    }).catch(err => {
-                                        console.error('Could not cut column: ', err);
-                                    });
-                                }
-                            }
-                        ]
+                        action: function(e, cell) {
+                            navigator.clipboard.writeText(cell.getValue()).then(() => {
+                                cell.setValue("");
+                            }).catch(err => {
+                                console.error('Could not cut cell value: ', err);
+                            });
+                        }
                     },
                     {
                         label: "Paste",
-                        menu: [
-                            {
-                                label: "Paste Cell",
-                                action: function(e, cell) {
-                                    navigator.clipboard.readText().then(text => {
-                                        cell.setValue(text);
-                                    }).catch(err => {
-                                        console.error('Could not paste into cell: ', err);
-                                    });
-                                }
-                            },
-                            {
-                                label: "Paste Row",
-                                action: function(e, cell) {
-                                    // Placeholder
-                                }
-                            },
-                            {
-                                label: "Paste Column",
-                                action: function(e, cell) {
-                                    // Placeholder
-                                }
-                            }
-                        ]
+                        action: function(e, cell) {
+                            navigator.clipboard.readText().then(text => {
+                                cell.setValue(text);
+                            }).catch(err => {
+                                console.error('Could not paste into cell: ', err);
+                            });
+                        }
                     },
                     {
                         label: "Delete",
-                        menu: [
-                            {
-                                label: "Delete Row",
-                                action: function(e, cell) {
-                                    cell.getRow().delete();
-                                }
-                            },
-                            {
-                                label: "Delete Column",
-                                action: function(e, cell) {
-                                    cell.getColumn().delete();
-                                }
-                            }
-                        ]
+                        action: function(e, cell) {
+                            cell.setValue("");
+                        }
                     },
-                    {
-                        label: "Insert",
-                        menu: [
-                            {
-                                label: "Insert Row Above",
-                                action: function(e, cell) {
-                                    tabulatorInstance.addRow({}, true, cell.getRow());
-                                }
-                            },
-                            {
-                                label: "Insert Row Below",
-                                action: function(e, cell) {
-                                    tabulatorInstance.addRow({}, false, cell.getRow());
-                                }
-                            },
-                            {
-                                label: "Insert Column Left",
-                                action: function(e, cell) {
-                                    const newColName = prompt("Enter new column name:");
-                                    if (newColName) {
-                                        const newColDef = { title: newColName, field: newColName, editor: "input", headerFilter: "input" };
-                                        tabulatorInstance.addColumn(newColDef, true, cell.getColumn());
-                                        isDirty = true;
-                                    }
-                                }
-                            },
-                            {
-                                label: "Insert Column Right",
-                                action: function(e, cell) {
-                                    const newColName = prompt("Enter new column name:");
-                                    if (newColName) {
-                                        const newColDef = { title: newColName, field: newColName, editor: "input", headerFilter: "input" };
-                                        tabulatorInstance.addColumn(newColDef, false, cell.getColumn());
-                                        isDirty = true;
-                                    }
-                                }
-                            }
-                        ]
-                    }
+                    
                 ]
             };
 
@@ -663,13 +599,47 @@
             isLoading = false; // No path on mount, so not loading
         }
 
+        const handleContextMenu = (event) => {
+            const target = event.target;
+            // Check if the right-click was on a row number cell
+            if (target.closest('.tabulator-row-number-column') && !target.closest('.tabulator-header')) {
+                event.preventDefault(); // Prevent default browser context menu
+                event.stopPropagation(); // Stop propagation to prevent document click from closing it immediately
+                showCustomRowMenu = true;
+                customMenuX = event.clientX;
+                customMenuY = event.clientY;
+
+                // Get the row component
+                const rowElement = target.closest('.tabulator-row');
+                if (rowElement) {
+                    if (tabulatorInstance) {
+                        clickedRowComponent = tabulatorInstance.getRow(rowElement);
+                    }
+                }
+            }
+        };
+
+        const hideCustomRowMenu = (event) => {
+            // Check if the click was outside the custom menu
+            if (showCustomRowMenu && event.target.closest('.custom-row-menu') === null) {
+                showCustomRowMenu = false;
+            }
+        };
+
+        tableContainer.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('click', hideCustomRowMenu);
+
 		return () => {
 			if (tabulatorInstance) {
 				tabulatorInstance.destroy();
 				tabulatorInstance = null;
 			}
+            tableContainer.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('click', hideCustomRowMenu);
 		}
     });
+
+    
 
     // React to tablePath changes
     $: if (tablePath && tableContainer) {
@@ -771,6 +741,23 @@
             </button>
         </div>
     </div>
+</div>
+{/if}
+
+{#if showCustomRowMenu}
+<div
+    class="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md py-1"
+    style="left: {customMenuX}px; top: {customMenuY}px;"
+>
+    <ul class="text-sm text-gray-700 dark:text-gray-200">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={copyRow}>Copy</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={cutRow}>Cut</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={pasteRow}>Paste</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={deleteRow}>Delete</button></li>
+        <hr class="my-1 border-gray-200 dark:border-gray-700">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowAbove}>Insert Row Above</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowBelow}>Insert Row Below</button></li>
+    </ul>
 </div>
 {/if}
 
