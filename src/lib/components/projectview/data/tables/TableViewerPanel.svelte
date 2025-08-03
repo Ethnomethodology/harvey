@@ -452,7 +452,7 @@
                         }
                     },
                     {
-                        label: "Copy Header",
+                        label: "Copy",
                         action: function(e, column) {
                             navigator.clipboard.writeText(column.getField()).catch(err => {
                                 console.error('Could not copy header to clipboard: ', err);
@@ -460,14 +460,14 @@
                         }
                     },
                     {
-                        label: "Cut Header (Placeholder)",
+                        label: "Cut",
                         action: function(e, column) {
                             console.log(`Placeholder: Cut header ${column.getField()}`);
                             alert(`Cut Header (Placeholder): ${column.getField()}`);
                         }
                     },
                     {
-                        label: "Paste Header (Placeholder)",
+                        label: "Paste",
                         action: function(e, column) {
                             console.log(`Placeholder: Paste header at ${column.getField()}`);
                             alert(`Paste Header (Placeholder)`);
@@ -483,14 +483,14 @@
                         }
                     },
                     {
-                        label: "Insert Column Left (Placeholder)",
+                        label: "Insert Column Left",
                         action: function(e, column) {
                             console.log(`Placeholder: Insert column left of ${column.getField()}`);
                             alert(`Insert Column Left (Placeholder)`);
                         }
                     },
                     {
-                        label: "Insert Column Right (Placeholder)",
+                        label: "Insert Column Right",
                         action: function(e, column) {
                             console.log(`Placeholder: Insert column right of ${column.getField()}`);
                             alert(`Insert Column Right (Placeholder)`);
