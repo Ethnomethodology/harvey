@@ -13,6 +13,9 @@ use chrono::Utc; // Added for timestamps
 // use uuid::Uuid; // Removed unused import
 use crate::projectview::db_handler; // Added for database operations
 use crate::projectview::waveform_utils;
+use tauri::Manager;
+use tokio::sync::Mutex;
+use tauri_plugin_shell::process::CommandChild;
 
 use std::{
     fs::{self, File},
@@ -25,6 +28,26 @@ use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
 
+
+// --- State for Live Transcription ---
+pub struct LiveTranscriptionState {
+    pub child: Mutex<Option<CommandChild>>,
+    pub is_running: Arc<AtomicBool>,
+}
+
+impl Default for LiveTranscriptionState {
+    fn default() -> Self {
+        Self {
+            child: Mutex::new(None),
+            is_running: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct LiveTranscriptionResult {
+    pub text: String,
+}
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -2280,5 +2303,94 @@ pub async fn cancel_transcription(
     } else {
         warn!("[Transcribe Command][Cancel] Cancellation request for unknown or already completed job ID: {}", job_id);
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn check_audio_permission(app_handle: AppHandle) -> Result<bool, String> {
+    let mic_permission = tauri_plugin_mic::Permission::is_granted().await;
+
+    match mic_permission {
+        Ok(true) => Ok(true),
+        Ok(false) => {
+            // If permission is not granted, we can request it.
+            match tauri_plugin_mic::Permission::request().await {
+                Ok(true) => Ok(true),
+                Ok(false) => Ok(false),
+                Err(e) => Err(format!("Failed to request microphone permission: {}", e)),
+            }
+        }
+        Err(e) => Err(format!("Failed to check microphone permission: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn start_live_transcription(
+    app_handle: AppHandle,
+    model_name: String,
+    language: String,
+    state: tauri::State<'_, LiveTranscriptionState>,
+) -> Result<(), String> {
+    if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("Live transcription is already running.".to_string());
+    }
+
+    let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
+        .map_err(|e| e.to_string())?;
+
+    let (mut rx, child) = app_handle
+        .shell()
+        .sidecar("whisper-stream")
+        .expect("failed to create `whisper-stream` command")
+        .args(&[
+            "-m",
+            &model_path,
+            "-l",
+            &language,
+            "--step", "3000",
+            "--length", "10000",
+        ])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    *state.child.lock().await = Some(child);
+    state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+
+    let is_running_clone = state.is_running.clone();
+    let app_handle_clone = app_handle.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            if let CommandEvent::Stdout(line) = event {
+                let text = line.trim().to_string();
+                if text.starts_with("[") && text.ends_with("]") {
+                    continue;
+                }
+                app_handle_clone
+                    .emit("live_transcription_result", LiveTranscriptionResult { text })
+                    .unwrap();
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_live_transcription(
+    state: tauri::State<'_, LiveTranscriptionState>
+) -> Result<(), String> {
+    if !state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("Live transcription is not running.".to_string());
+    }
+
+    if let Some(child) = state.child.lock().await.take() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+
+    state.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }

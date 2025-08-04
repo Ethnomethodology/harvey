@@ -13,9 +13,13 @@
     import { saveDocumentContent } from '$lib/services/projectService.js'; 
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
+    import { invoke } from '@tauri-apps/api/core';
+    import { listen } from '@tauri-apps/api/event';
 
     let editorRef;
     let editorJsonState = '';
+    let isLiveTranscriptionActive = false;
+    let liveTranscriptionError = null;
 
     let currentJson = null;
     let initialJson = null;
@@ -36,6 +40,12 @@
 
     let prevPath = null;
     $: if (selectedPath !== prevPath) {
+        if (isLiveTranscriptionActive) {
+            message('Please stop the live transcription before switching to a different document.', { title: 'Live Transcription Active', type: 'warning' });
+            // This is a tricky situation. We can't easily prevent the store from updating.
+            // The best we can do is to show a message and let the user handle it.
+            return;
+        }
         prevPath = selectedPath;
         if (selectedPath) {
             console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
@@ -92,6 +102,10 @@
     }
 
      async function handleDiscard() {
+        if (isLiveTranscriptionActive) {
+            await message('Please stop the live transcription before discarding changes.', { title: 'Live Transcription Active', type: 'warning' });
+            return;
+        }
         const proj = get(project);
         if (proj.isDocumentDirty || proj.isDocumentMetadataDirty) {
             const userConfirmed = await confirm('Discard unsaved changes (content and highlights)?', { type: 'warning', title: 'Discard Changes' });
@@ -111,11 +125,6 @@
             console.log('[DocumentEditorPanel] Discard skipped: No changes detected in store for content or metadata.');
         }
     }
-
-    onMount(() => {
-        console.log('[DocumentEditorPanel] Mounted.');
-        setActiveDocumentEditorRef(self);
-    });
 	onDestroy(() => {
         console.log('[DocumentEditorPanel] Destroyed.');
         if (get(project).activeDocumentEditorRef === self) {
@@ -141,32 +150,105 @@
 
     const self = { save, discard, resetEditorState };
 
+    let unlisten;
+
+    onMount(async () => {
+        console.log('[DocumentEditorPanel] Mounted.');
+        setActiveDocumentEditorRef(self);
+        unlisten = await listen('live_transcription_result', (event) => {
+            if (editorRef) {
+                editorRef.insertText(event.payload.text);
+            }
+        });
+    });
+
+	onDestroy(async () => {
+        console.log('[DocumentEditorPanel] Destroyed.');
+        if (get(project).activeDocumentEditorRef === self) {
+             clearActiveDocumentEditorRef();
+        }
+        if (isLiveTranscriptionActive) {
+            await invoke('stop_live_transcription');
+        }
+        if (unlisten) {
+            unlisten();
+        }
+	});
+
+    async function toggleLiveTranscription() {
+        if (isLiveTranscriptionActive) {
+            await invoke('stop_live_transcription');
+            isLiveTranscriptionActive = false;
+            return;
+        }
+
+        try {
+            const permission = await invoke('check_audio_permission');
+            if (!permission) {
+                liveTranscriptionError = 'Microphone permission denied.';
+                return;
+            }
+
+            isLiveTranscriptionActive = true;
+            liveTranscriptionError = null;
+            await invoke('start_live_transcription', {
+                modelName: 'ggml-tiny.en.bin',
+                language: 'en',
+            });
+        } catch (error) {
+            isLiveTranscriptionActive = false;
+            liveTranscriptionError = error;
+        }
+    }
+
+    $: liveTranscriptionStatus = isLiveTranscriptionActive
+        ? 'active'
+        : liveTranscriptionError
+        ? 'error'
+        : 'default';
 </script>
 
 <div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden exported-transcript">
-    {#if isLoading}
-        <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
-    {:else if errorMessage && selectedPath}
-         <div class="flex-grow flex items-center justify-center text-red-500 p-4 text-center">{errorMessage}</div>
-    {:else if !selectedPath}
-         <div class="flex-grow flex items-center justify-center text-gray-500">No document selected or loaded.</div>
-    {:else}
-        <div class="flex-grow min-h-0 overflow-hidden">
-             {#key selectedPath}
-                 <LexicalEditor
-                     bind:this={editorRef}
-                     initialJson={currentJson}
-                     editable={true}
-                     placeholder="Start typing your document..."
-                     enableTableCellMenu={true}
-                     enableTableCellResize={true}
-                     on:change={handleEditorChange}
-                     on:highlightevent={handleHighlightEvent}
-                     enableSearch={true}
-                 />
-             {/key}
-        </div>
-    {/if}
+    <div class="relative flex-grow min-h-0">
+        {#if isLoading}
+            <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
+        {:else if errorMessage && selectedPath}
+            <div class="flex-grow flex items-center justify-center text-red-500 p-4 text-center">{errorMessage}</div>
+        {:else if !selectedPath}
+            <div class="flex-grow flex items-center justify-center text-gray-500">No document selected or loaded.</div>
+        {:else}
+            <div class="flex-grow min-h-0 overflow-hidden">
+                {#if selectedPath && selectedPath.endsWith('.json')}
+                    <div class="absolute top-0 right-0 p-2 z-10">
+                        <button
+                            on:click={toggleLiveTranscription}
+                            class:mic-active={liveTranscriptionStatus === 'active'}
+                            class:mic-error={liveTranscriptionStatus === 'error'}
+                            class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 p-2 rounded-full"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
+                                <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3"/>
+                            </svg>
+                        </button>
+                    </div>
+                {/if}
+                {#key selectedPath}
+                    <LexicalEditor
+                        bind:this={editorRef}
+                        initialJson={currentJson}
+                        editable={true}
+                        placeholder="Start typing your document..."
+                        enableTableCellMenu={true}
+                        enableTableCellResize={true}
+                        on:change={handleEditorChange}
+                        on:highlightevent={handleHighlightEvent}
+                        enableSearch={true}
+                    />
+                {/key}
+            </div>
+        {/if}
+    </div>
 </div>
 
 <style lang="postcss">
@@ -176,6 +258,27 @@
 	.btn-secondary:hover:not(:disabled) { @apply bg-gray-300 border-gray-400; }
 	.btn-secondary:disabled { @apply bg-gray-100 text-gray-400 border-gray-200; }
     .btn-primary.text-xs, .btn-secondary.text-xs { @apply py-1 px-2; }
+
+    .mic-active {
+        color: red;
+        animation: blink 1s infinite;
+    }
+
+    .mic-error {
+        color: orange;
+    }
+
+    @keyframes blink {
+        0% {
+            color: red;
+        }
+        50% {
+            color: pink;
+        }
+        100% {
+            color: red;
+        }
+    }
 
      :global(.lexical-wrapper) {
         flex-grow: 1;

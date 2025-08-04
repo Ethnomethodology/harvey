@@ -166,6 +166,21 @@
               ]
             }
           ]
+        },
+        {
+          "name": "sidecar/whisper-stream",
+          "sidecar": true,
+          "args": [
+            "-m",
+            {
+              "validator": "\\S+"
+            },
+            "-l",
+            {
+              "validator": "\\S+"
+            },
+            "--step"
+          ]
         }
       ]
     },
@@ -276,6 +291,21 @@
                 }
               ]
             }
+          ]
+        },
+        {
+          "name": "sidecar/whisper-stream",
+          "sidecar": true,
+          "args": [
+            "-m",
+            {
+              "validator": "\\S+"
+            },
+            "-l",
+            {
+              "validator": "\\S+"
+            },
+            "--step"
           ]
         }
       ]

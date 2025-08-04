@@ -47,7 +47,8 @@
       "sidecar/whisper-cli",
       "sidecar/diarize-cli",
       "sidecar/pandoc",
-      "sidecar/ffmpeg"
+      "sidecar/ffmpeg",
+      "sidecar/whisper-stream"
     ],
     "licenseFile": "../LICENSE.md",
     "license": "MIT",
