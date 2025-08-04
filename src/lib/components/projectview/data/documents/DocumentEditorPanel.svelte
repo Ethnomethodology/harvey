@@ -39,16 +39,15 @@
     }
 
     let prevPath = null;
-    $: if (selectedPath !== prevPath) {
+
+    function handlePathChange(newPath) {
         if (isLiveTranscriptionActive) {
             message('Please stop the live transcription before switching to a different document.', { title: 'Live Transcription Active', type: 'warning' });
-            // This is a tricky situation. We can't easily prevent the store from updating.
-            // The best we can do is to show a message and let the user handle it.
             return;
         }
-        prevPath = selectedPath;
-        if (selectedPath) {
-            console.log(`[DocumentEditorPanel] Detected document path change to: ${selectedPath}`);
+        prevPath = newPath;
+        if (newPath) {
+            console.log(`[DocumentEditorPanel] Detected document path change to: ${newPath}`);
             if (currentJson) { 
                 editorJsonState = currentJson;
                  if (editorRef) editorRef.resetEditorState(currentJson);
@@ -60,6 +59,10 @@
             editorJsonState = '';
             if (editorRef) editorRef.resetEditorState('');
         }
+    }
+
+    $: if (selectedPath !== prevPath) {
+        handlePathChange(selectedPath);
     }
 
     function handleEditorChange(event) {
@@ -183,12 +186,6 @@
         }
 
         try {
-            const permission = await invoke('check_audio_permission');
-            if (!permission) {
-                liveTranscriptionError = 'Microphone permission denied.';
-                return;
-            }
-
             isLiveTranscriptionActive = true;
             liveTranscriptionError = null;
             await invoke('start_live_transcription', {

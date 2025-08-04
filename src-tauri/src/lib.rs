@@ -62,7 +62,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init()) // Added this line
-        .plugin(tauri_plugin_mic::init())
         // Global shortcut plugin is now initialized in .setup
         .setup(|app_mut_ref| -> Result<(), Box<dyn std::error::Error>> {
             // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed
@@ -192,7 +191,6 @@ pub fn run() {
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,
-            projectview::transcription_commands::check_audio_permission,
 
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,

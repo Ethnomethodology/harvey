@@ -13,7 +13,6 @@ use chrono::Utc; // Added for timestamps
 // use uuid::Uuid; // Removed unused import
 use crate::projectview::db_handler; // Added for database operations
 use crate::projectview::waveform_utils;
-use tauri::Manager;
 use tokio::sync::Mutex;
 use tauri_plugin_shell::process::CommandChild;
 
@@ -2307,24 +2306,6 @@ pub async fn cancel_transcription(
 }
 
 #[tauri::command]
-pub async fn check_audio_permission(app_handle: AppHandle) -> Result<bool, String> {
-    let mic_permission = tauri_plugin_mic::Permission::is_granted().await;
-
-    match mic_permission {
-        Ok(true) => Ok(true),
-        Ok(false) => {
-            // If permission is not granted, we can request it.
-            match tauri_plugin_mic::Permission::request().await {
-                Ok(true) => Ok(true),
-                Ok(false) => Ok(false),
-                Err(e) => Err(format!("Failed to request microphone permission: {}", e)),
-            }
-        }
-        Err(e) => Err(format!("Failed to check microphone permission: {}", e)),
-    }
-}
-
-#[tauri::command]
 pub async fn start_live_transcription(
     app_handle: AppHandle,
     model_name: String,
@@ -2365,7 +2346,7 @@ pub async fn start_live_transcription(
                 break;
             }
             if let CommandEvent::Stdout(line) = event {
-                let text = line.trim().to_string();
+                let text = String::from_utf8_lossy(&line).to_string();
                 if text.starts_with("[") && text.ends_with("]") {
                     continue;
                 }
