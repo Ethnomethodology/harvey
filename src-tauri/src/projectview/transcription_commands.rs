@@ -2330,6 +2330,7 @@ pub async fn start_live_transcription(
             &language,
             "--step", "3000",
             "--length", "10000",
+            "-c", "0",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
