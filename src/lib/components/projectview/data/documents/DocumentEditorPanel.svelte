@@ -111,6 +111,12 @@
             console.log('[DocumentEditorPanel] Discard skipped: No changes detected in store for content or metadata.');
         }
     }
+
+    onMount(() => {
+        console.log('[DocumentEditorPanel] Mounted.');
+        setActiveDocumentEditorRef(self);
+    });
+
 	onDestroy(() => {
         console.log('[DocumentEditorPanel] Destroyed.');
         if (get(project).activeDocumentEditorRef === self) {
@@ -136,56 +142,6 @@
 
     const self = { save, discard, resetEditorState };
 
-    let unlisten;
-
-    onMount(async () => {
-        console.log('[DocumentEditorPanel] Mounted.');
-        setActiveDocumentEditorRef(self);
-        unlisten = await listen('live_transcription_result', (event) => {
-            if (editorRef) {
-                editorRef.insertText(event.payload.text);
-            }
-        });
-    });
-
-	onDestroy(async () => {
-        console.log('[DocumentEditorPanel] Destroyed.');
-        if (get(project).activeDocumentEditorRef === self) {
-             clearActiveDocumentEditorRef();
-        }
-        if (isLiveTranscriptionActive) {
-            await invoke('stop_live_transcription');
-        }
-        if (unlisten) {
-            unlisten();
-        }
-	});
-
-    async function toggleLiveTranscription() {
-        if (isLiveTranscriptionActive) {
-            await invoke('stop_live_transcription');
-            isLiveTranscriptionActive = false;
-            return;
-        }
-
-        try {
-            isLiveTranscriptionActive = true;
-            liveTranscriptionError = null;
-            await invoke('start_live_transcription', {
-                modelName: 'ggml-tiny.en.bin',
-                language: 'en',
-            });
-        } catch (error) {
-            isLiveTranscriptionActive = false;
-            liveTranscriptionError = error;
-        }
-    }
-
-    $: liveTranscriptionStatus = isLiveTranscriptionActive
-        ? 'active'
-        : liveTranscriptionError
-        ? 'error'
-        : 'default';
 </script>
 
 <div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden exported-transcript">
