@@ -2331,6 +2331,7 @@ pub async fn start_live_transcription(
             "--step", "3000",
             "--length", "10000",
             "-c", "0",
+            "--no-timestamps",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
