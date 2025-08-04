@@ -14,9 +14,15 @@
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
     import { createEventDispatcher } from 'svelte';
+    import { listen } from '@tauri-apps/api/event';
+    import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
+
+    let isLiveTranscriptionActive = false;
+    let liveTranscriptionError = null;
+    let showLiveTranscribeModal = false;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -359,7 +365,55 @@
             message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
         }
     }
-  
+
+    let unlisten;
+
+    onMount(async () => {
+        unlisten = await listen('live_transcription_result', (event) => {
+            if ($project.activeDocumentEditorRef?.ref) {
+                $project.activeDocumentEditorRef.ref.insertText(event.payload.text);
+            }
+        });
+    });
+
+    onDestroy(async () => {
+        if (isLiveTranscriptionActive) {
+            await invoke('stop_live_transcription');
+        }
+        if (unlisten) {
+            unlisten();
+        }
+    });
+
+    function toggleLiveTranscription() {
+        if (isLiveTranscriptionActive) {
+            invoke('stop_live_transcription');
+            isLiveTranscriptionActive = false;
+        } else {
+            showLiveTranscribeModal = true;
+        }
+    }
+
+    async function handleLiveTranscribe(event) {
+        const { model, language } = event.detail;
+        try {
+            isLiveTranscriptionActive = true;
+            liveTranscriptionError = null;
+            await invoke('start_live_transcription', {
+                modelName: model,
+                language: language,
+            });
+        } catch (error) {
+            isLiveTranscriptionActive = false;
+            liveTranscriptionError = error;
+        }
+    }
+
+    $: liveTranscriptionStatus = isLiveTranscriptionActive
+        ? 'active'
+        : liveTranscriptionError
+        ? 'error'
+        : 'default';
   </script>
   
   <div
@@ -374,6 +428,12 @@
             on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
         >
             <span class="text-xs">Transcribe</span>
+        </button>
+        <button class="ui-button-icon flex items-center ml-2" on:click={toggleLiveTranscription}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
+                <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3"/>
+            </svg>
         </button>
         {/if}
     </div>
@@ -525,4 +585,10 @@
     transcriptPath={$project.activeTranscriptPathInDataTab}
     on:confirm={handleExportConfirm}
     on:close={() => isExportModalOpen = false}
+/>
+
+<LiveTranscribeModelModal
+    bind:showModal={showLiveTranscribeModal}
+    on:confirm={handleLiveTranscribe}
+    on:close={() => showLiveTranscribeModal = false}
 />
