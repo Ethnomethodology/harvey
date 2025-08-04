@@ -183,7 +183,11 @@
                 columnDefaults: { // Add this section
                     headerSort:false,
                     headerHozAlign:"center",
-                    editor:"input",
+                    editor:"textarea",
+                editorParams:{
+                    verticalNavigation:"editor",
+                    shiftEnterSubmit:true,
+                },
                     resizable:"header",
                     width:100,
                     minWidth: 50, // Set a minimum width for all columns (in pixels)
@@ -273,7 +277,8 @@
             tabulatorInstance.on("cellEdited", function(cell) {
                 const rowIndex = cell.getRow().getPosition() - 1;
                 const field = cell.getField();
-                const newValue = cell.getValue();
+                // Sanitize newValue: remove carriage returns to prevent _x000D_ display issues
+                const newValue = cell.getValue().replace(/\r/g, '');
                 tableData[rowIndex][field] = newValue;
                 isDirty = true;
                 project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
@@ -438,11 +443,13 @@
                 field: header,
                 headerFilter: "input",
                 sorter: inferSorter(data, header),
-                editor: "input",
-                formatter: "textarea",
-                formatterParams: {
-                    autoResize: false
+                editor: "textarea",
+                editorParams:{
+                    verticalNavigation:"editor",
+                    shiftEnterSubmit:true,
                 },
+                formatter: "textarea",
+                formatterParams: {},
                 headerContextMenu: [
                     {
                         label: "Edit Header",
@@ -462,14 +469,12 @@
                         label: "Cut",
                         action: function(e, column) {
                             console.log(`Cut header ${column.getField()}`);
-                            alert(`Cut Header: ${column.getField()}`);
                         }
                     },
                     {
                         label: "Paste",
                         action: function(e, column) {
                             console.log(`Paste header at ${column.getField()}`);
-                            alert(`Paste Header`);
                         }
                     },
                     {
@@ -485,14 +490,12 @@
                         label: "Insert Column Left",
                         action: function(e, column) {
                             console.log(`Insert column left of ${column.getField()}`);
-                            alert(`Insert Column Left`);
                         }
                     },
                     {
                         label: "Insert Column Right",
                         action: function(e, column) {
                             console.log(`Insert column right of ${column.getField()}`);
-                            alert(`Insert Column Right`);
                         }
                     }
                 ],
