@@ -35,8 +35,6 @@
     }
 
     let prevPath = null;
-
-    let prevPath = null;
     $: if (selectedPath !== prevPath) {
         prevPath = selectedPath;
         if (selectedPath) {
