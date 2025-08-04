@@ -360,11 +360,10 @@
         let isLoading = true;
         try {
             const importResult = await importTableFile(); // No arguments needed, projectService handles file selection
+            console.log(`[DataLeftPanel] importResult from importTableFile:`, importResult);
             if (importResult) {
-                headerConfirmationData = {
-                    tablePath: importResult.table_path,
-                    previewData: importResult.preview_data,
-                };
+                headerConfirmationData.tablePath = importResult.table_path;
+                headerConfirmationData.previewData = importResult.preview_data;
                 showHeaderConfirmationModal = true;
             } else {
                 // If result is null, it means the user cancelled the file selection.

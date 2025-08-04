@@ -749,6 +749,7 @@ export async function importTableFile(hasHeaders) {
             sourcePathStr: sourceFilePath,
             projectXmlPathStr: projectXmlPath
         });
+        console.log(`[ProjectService] Result from 'import_table_file':`, result);
 
         if (result && result.table_path && result.preview_data) {
             setAssetImportStatus(false, `${sourceFilename} imported successfully.`);
@@ -782,7 +783,20 @@ export async function loadTableData(tablePath, hasHeaders) {
             throw new Error("Backend returned invalid data format for table.");
         }
 
-        return tableData;
+        // Sanitize data: remove carriage returns from all cell values
+        const sanitizedData = tableData.data.map(row => {
+            const newRow = {};
+            for (const key in row) {
+                if (typeof row[key] === 'string') {
+                    newRow[key] = row[key].replace(/\r/g, '');
+                } else {
+                    newRow[key] = row[key];
+                }
+            }
+            return newRow;
+        });
+
+        return { headers: tableData.headers, data: sanitizedData };
     } catch (error) {
         const errorMessage = error.message || String(error);
         await message(`Error loading table data: ${errorMessage}`, { title: 'Load Table Error', type: 'error' });

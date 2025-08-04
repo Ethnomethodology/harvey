@@ -18,6 +18,12 @@
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
 
+    // Custom Context Menu State
+    let showCustomRowMenu = false;
+    let customMenuX = 0;
+    let customMenuY = 0;
+    let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
+
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
     let currentMatchIndex = -1;
@@ -25,33 +31,7 @@
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
 
-    // Placeholder functions (Unchanged)
-    function openRowForm(row) {
-        const rowData = row.getData();
-        console.log("Placeholder: Open form view for row:", rowData); // Keep as is (placeholder)
-        alert(`Open Form View (Placeholder)\n\nRow Data:\n${JSON.stringify(rowData, null, 2)}`);
-    }
-    function addComment(cell) {
-        const cellValue = cell.getValue();
-        const columnName = cell.getColumn().getField();
-        const rowData = cell.getRow().getData();
-        console.log(`Placeholder: Add comment to cell (${columnName}: ${cellValue})`, rowData); // Keep as is (placeholder)
-        const comment = prompt(`Add comment for "${columnName}" in this row:`, "");
-        if (comment !== null) {
-            alert(`Comment Added (Placeholder):\n"${comment}"`);
-        }
-    }
-     function addHighlight(cell) {
-        const cellValue = cell.getValue();
-        const columnName = cell.getColumn().getField();
-        const rowData = cell.getRow().getData();
-        console.log(`Placeholder: Add highlight to cell (${columnName}: ${cellValue})`, rowData); // Keep as is (placeholder)
-         const highlight = confirm(`Highlight this cell?`);
-         if (highlight) {
-             alert(`Cell Highlighted (Placeholder)`);
-            cell.getElement().classList.toggle('cell-highlighted-placeholder');
-         }
-     }
+    
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
@@ -192,14 +172,37 @@
                 height: "100%",
                 placeholder: "No Data Available",
                 selectable: 1,
+                selectableRange: true,
+                selectableRangeColumns:true,
+                selectableRangeRows:true,
+                selectableRangeClearCells:true,
+                history:true,
+                editTriggerEvent:"dblclick",
                 movableColumns: false, // Set to false to disable column reordering
                 resizableColumnFit: false, // Set to false to allow table to expand
                 columnDefaults: { // Add this section
+                    headerSort:false,
+                    headerHozAlign:"center",
+                    editor:"textarea",
+                editorParams:{
+                    verticalNavigation:"editor",
+                    shiftEnterSubmit:true,
+                },
+                    resizable:"header",
+                    width:100,
                     minWidth: 50, // Set a minimum width for all columns (in pixels)
                 },
-                
-                
+                clipboard: true,
+                clipboardCopyStyled:false,
+                clipboardCopyConfig:{
+                    rowHeaders:false,
+                    columnHeaders:false,
+                },
+                clipboardCopyRowRange:"range",
+                clipboardPasteParser:"range",
+                clipboardPasteAction:"range",
             });
+            console.log('[TableViewerPanel] tabulatorInstance SET:', tabulatorInstance);
 
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
@@ -274,7 +277,8 @@
             tabulatorInstance.on("cellEdited", function(cell) {
                 const rowIndex = cell.getRow().getPosition() - 1;
                 const field = cell.getField();
-                const newValue = cell.getValue();
+                // Sanitize newValue: remove carriage returns to prevent _x000D_ display issues
+                const newValue = cell.getValue().replace(/\r/g, '');
                 tableData[rowIndex][field] = newValue;
                 isDirty = true;
                 project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
@@ -414,7 +418,12 @@
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
-        // Define the row number column
+        
+        
+
+        
+        
+
         const rowNumColumn = {
             title: "#",
             formatter: "rownum",
@@ -423,8 +432,10 @@
             hozAlign: "center",
             resizable: false,
             headerSort: false,
-            cssClass: "tabulator-row-number-column"
+            cssClass: "tabulator-row-number-column",
+            editor:false
         };
+        
 
         let dataColumnDefs = headers.map(header => {
             const colDef = {
@@ -432,18 +443,98 @@
                 field: header,
                 headerFilter: "input",
                 sorter: inferSorter(data, header),
-                editor: "input",
-                formatter: "textarea",
-                formatterParams: {
-                    autoResize: false
+                editor: "textarea",
+                editorParams:{
+                    verticalNavigation:"editor",
+                    shiftEnterSubmit:true,
                 },
+                formatter: "textarea",
+                formatterParams: {},
                 headerContextMenu: [
                     {
                         label: "Edit Header",
                         action: function(e, column) {
                             openHeaderEditor(column);
                         }
+                    },
+                    {
+                        label: "Copy",
+                        action: function(e, column) {
+                            navigator.clipboard.writeText(column.getField()).catch(err => {
+                                console.error('Could not copy header to clipboard: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Cut",
+                        action: function(e, column) {
+                            console.log(`Cut header ${column.getField()}`);
+                        }
+                    },
+                    {
+                        label: "Paste",
+                        action: function(e, column) {
+                            console.log(`Paste header at ${column.getField()}`);
+                        }
+                    },
+                    {
+                        label: "Delete Column",
+                        action: function(e, column) {
+                            if (confirm(`Are you sure you want to delete the column '${column.getField()}'? This action cannot be undone.`)) {
+                                tabulatorInstance.deleteColumn(column);
+                                console.warn(`Column '${column.getField()}' deleted. Data model might be out of sync.`);
+                            }
+                        }
+                    },
+                    {
+                        label: "Insert Column Left",
+                        action: function(e, column) {
+                            console.log(`Insert column left of ${column.getField()}`);
+                        }
+                    },
+                    {
+                        label: "Insert Column Right",
+                        action: function(e, column) {
+                            console.log(`Insert column right of ${column.getField()}`);
+                        }
                     }
+                ],
+                contextMenu: [
+                    {
+                        label: "Copy",
+                        action: function(e, cell) {
+                            navigator.clipboard.writeText(cell.getValue()).catch(err => {
+                                console.error('Could not copy cell value to clipboard: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Cut",
+                        action: function(e, cell) {
+                            navigator.clipboard.writeText(cell.getValue()).then(() => {
+                                cell.setValue("");
+                            }).catch(err => {
+                                console.error('Could not cut cell value: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Paste",
+                        action: function(e, cell) {
+                            navigator.clipboard.readText().then(text => {
+                                cell.setValue(text);
+                            }).catch(err => {
+                                console.error('Could not paste into cell: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Delete",
+                        action: function(e, cell) {
+                            cell.setValue("");
+                        }
+                    },
+                    
                 ]
             };
 
@@ -510,13 +601,59 @@
             isLoading = false; // No path on mount, so not loading
         }
 
+        const handleContextMenu = (event) => {
+            const target = event.target;
+            // Check if the right-click was on a row number cell
+            if (target.closest('.tabulator-row-number-column') && !target.closest('.tabulator-header')) {
+                event.preventDefault(); // Prevent default browser context menu
+                event.stopPropagation(); // Stop propagation to prevent document click from closing it immediately
+                showCustomRowMenu = true;
+                customMenuX = event.clientX;
+                customMenuY = event.clientY;
+
+                // Get the row component
+                const rowElement = target.closest('.tabulator-row');
+                if (rowElement) {
+                    if (tabulatorInstance) {
+                        clickedRowComponent = tabulatorInstance.getRow(rowElement);
+                    }
+                }
+            }
+        };
+
+        const hideCustomRowMenu = (event) => {
+            // Check if the click was outside the custom menu
+            if (showCustomRowMenu && event.target.closest('.custom-row-menu') === null) {
+                showCustomRowMenu = false;
+            }
+        };
+
+        tableContainer.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('click', hideCustomRowMenu);
+
+        document.getElementById("history-undo").addEventListener("click", function(){
+            if (tabulatorInstance) {
+                tabulatorInstance.undo();
+            }
+        });
+
+        document.getElementById("history-redo").addEventListener("click", function(){
+            if (tabulatorInstance) {
+                tabulatorInstance.redo();
+            }
+        });
+
 		return () => {
 			if (tabulatorInstance) {
 				tabulatorInstance.destroy();
 				tabulatorInstance = null;
 			}
+            tableContainer.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('click', hideCustomRowMenu);
 		}
     });
+
+    
 
     // React to tablePath changes
     $: if (tablePath && tableContainer) {
@@ -621,11 +758,39 @@
 </div>
 {/if}
 
+{#if showCustomRowMenu}
+<div
+    class="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md py-1"
+    style="left: {customMenuX}px; top: {customMenuY}px;"
+>
+    <ul class="text-sm text-gray-700 dark:text-gray-200">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={copyRow}>Copy</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={cutRow}>Cut</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={pasteRow}>Paste</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={deleteRow}>Delete</button></li>
+        <hr class="my-1 border-gray-200 dark:border-gray-700">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowAbove}>Insert Row Above</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowBelow}>Insert Row Below</button></li>
+    </ul>
+</div>
+{/if}
+
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate pr-2" title={tablePath}>
-            Data: {tablePath ? tablePath.split(/[\\/]/).pop() : 'No table selected'}
-        </h3>
+        <div class="flex items-center space-x-2">
+            <button id="history-undo" class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" title="Undo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.919.5.5 0 0 0-.908-.418A6 6 0 1 0 8 2z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L.694 6.438a.5.5 0 0 0 0 .724l6.896 6.896A.5.5 0 0 0 8 13.466V9.534a.25.25 0 0 0-.41-.192L1.194 6.706a.5.5 0 0 0 0-.724l6.396-6.396A.25.25 0 0 0 8 4.466"/>
+                </svg>
+            </button>
+            <button id="history-redo" class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500" title="Redo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.919.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L.694 6.438a.5.5 0 0 0 0 .724l6.896 6.896A.5.5 0 0 0 8 13.466V9.534a.25.25 0 0 0-.41-.192L1.194 6.706a.5.5 0 0 0 0-.724l6.396-6.396A.25.25 0 0 0 8 4.466"/>
+                </svg>
+            </button>
+        </div>
          { #if !isLoading && !error }
          <div class="flex items-center space-x-2">
             <input
@@ -660,7 +825,7 @@
               </svg>
             </button>
             <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    onclick={() => { console.log('TODO: Add new row placeholder action'); alert('Add Row (Placeholder)'); }}
+                    onclick={() => { console.log('TODO: Add new row action'); alert('Add Row'); }}
                     title="Add New Row">
                 Add Row
             </button>
