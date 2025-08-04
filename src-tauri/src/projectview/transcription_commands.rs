@@ -2328,8 +2328,6 @@ pub async fn start_live_transcription(
             &model_path,
             "-l",
             &language,
-            "--step", "500",
-            "--length", "5000",
             "-c", "0",
         ])
         .spawn()
