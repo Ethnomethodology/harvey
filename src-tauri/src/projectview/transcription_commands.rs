@@ -2341,20 +2341,37 @@ pub async fn start_live_transcription(
     let app_handle_clone = app_handle.clone();
 
     tokio::spawn(async move {
+        info!("[Live Transcription] Started listening to whisper-stream sidecar.");
         while let Some(event) = rx.recv().await {
             if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
+                info!("[Live Transcription] Loop broken due to is_running flag being false.");
                 break;
             }
-            if let CommandEvent::Stdout(line) = event {
-                let text = String::from_utf8_lossy(&line).to_string();
-                if text.starts_with("[") && text.ends_with("]") {
-                    continue;
+            match event {
+                CommandEvent::Stdout(line) => {
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    if text.starts_with("[") && text.ends_with("]") {
+                        debug!("[Live Transcription][whisper-stream stdout meta]: {}", text);
+                        continue;
+                    }
+                    debug!("[Live Transcription][whisper-stream stdout]: {}", text);
+                    app_handle_clone
+                        .emit("live_transcription_result", LiveTranscriptionResult { text })
+                        .unwrap();
                 }
-                app_handle_clone
-                    .emit("live_transcription_result", LiveTranscriptionResult { text })
-                    .unwrap();
+                CommandEvent::Stderr(line) => {
+                    error!("[Live Transcription][whisper-stream stderr]: {}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Error(err) => {
+                    error!("[Live Transcription][whisper-stream error]: {}", err);
+                }
+                CommandEvent::Terminated(payload) => {
+                    info!("[Live Transcription] Whisper-stream process terminated with payload: {:?}", payload);
+                }
+                _ => {}
             }
         }
+        info!("[Live Transcription] Stopped listening to whisper-stream sidecar.");
     });
 
     Ok(())
