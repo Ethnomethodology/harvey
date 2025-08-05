@@ -404,9 +404,11 @@
                 modelName: model,
                 language: language,
             });
+            isLiveTranscriptionActive = true;
         } catch (error) {
             isLiveTranscriptionActive = false;
             liveTranscriptionError = error;
+            message(`Failed to start live transcription: ${error}`, { title: 'Error', type: 'error' });
         }
     }
 
@@ -592,7 +594,6 @@
 
 <LiveTranscribeModelModal
     bind:showModal={showLiveTranscribeModal}
-    bind:isLiveTranscriptionActive={isLiveTranscriptionActive}
     on:confirm={handleLiveTranscribe}
     on:close={() => showLiveTranscribeModal = false}
 />

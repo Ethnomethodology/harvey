@@ -6,7 +6,6 @@
     import ManageModelsModal from './ManageModelsModal.svelte';
 
     export let showModal = false;
-    export let isLiveTranscriptionActive = false;
 
     const dispatch = createEventDispatcher();
 
@@ -31,7 +30,6 @@
             message('Please select a model.', { title: 'Error', type: 'error' });
             return;
         }
-        isLiveTranscriptionActive = true;
         dispatch('confirm', { model: selectedModel, language: selectedLanguage });
         closeModal();
     }
