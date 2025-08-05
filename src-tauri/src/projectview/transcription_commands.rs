@@ -2311,7 +2311,7 @@ pub async fn start_live_transcription(
     model_name: String,
     language: String,
     state: tauri::State<'_, LiveTranscriptionState>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
         return Err("Live transcription is already running.".to_string());
     }
@@ -2373,13 +2373,13 @@ pub async fn start_live_transcription(
         info!("[Live Transcription] Stopped listening to whisper-stream sidecar.");
     });
 
-    Ok(())
+    Ok(true)
 }
 
 #[tauri::command]
 pub async fn stop_live_transcription(
     state: tauri::State<'_, LiveTranscriptionState>
-) -> Result<(), String> {
+) -> Result<bool, String> {
     info!("[Live Transcription] Stop command received.");
     if !state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
         return Err("Live transcription is not running.".to_string());
@@ -2390,5 +2390,5 @@ pub async fn stop_live_transcription(
     }
 
     state.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
-    Ok(())
+    Ok(true)
 }

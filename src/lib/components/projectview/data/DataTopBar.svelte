@@ -387,10 +387,16 @@
         }
     });
 
-    function toggleLiveTranscription() {
+    async function toggleLiveTranscription() {
         if (isLiveTranscriptionActive) {
-            invoke('stop_live_transcription');
-            isLiveTranscriptionActive = false;
+            try {
+                const stopped = await invoke('stop_live_transcription');
+                if (stopped) {
+                    isLiveTranscriptionActive = false;
+                }
+            } catch (error) {
+                message(`Failed to stop live transcription: ${error}`, { title: 'Error', type: 'error' });
+            }
         } else {
             showLiveTranscribeModal = true;
         }
@@ -400,11 +406,13 @@
         const { model, language } = event.detail;
         try {
             liveTranscriptionError = null;
-            await invoke('start_live_transcription', {
+            const started = await invoke('start_live_transcription', {
                 modelName: model,
                 language: language,
             });
-            isLiveTranscriptionActive = true;
+            if (started) {
+                isLiveTranscriptionActive = true;
+            }
         } catch (error) {
             isLiveTranscriptionActive = false;
             liveTranscriptionError = error;
