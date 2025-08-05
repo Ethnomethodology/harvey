@@ -370,10 +370,13 @@
 
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
-            if ($project.activeDocumentEditorRef?.ref?.insertText) {
-                $project.activeDocumentEditorRef.ref.insertText(event.payload.text);
-            } else if ($project.activeMediaNoteEditorRef?.ref?.insertText) {
-                $project.activeMediaNoteEditorRef.ref.insertText(event.payload.text);
+            console.log('[DataTopBar] Received live_transcription_result event. Payload:', event.payload.text);
+            console.log('[DataTopBar] activeDocumentEditorRef:', $project.activeDocumentEditorRef);
+            console.log('[DataTopBar] activeMediaNoteEditorRef:', $project.activeMediaNoteEditorRef);
+            if ($project.activeDocumentEditorRef?.insertText) {
+                $project.activeDocumentEditorRef.insertText(event.payload.text);
+            } else if ($project.activeMediaNoteEditorRef?.insertText) {
+                $project.activeMediaNoteEditorRef.insertText(event.payload.text);
             }
         });
     });

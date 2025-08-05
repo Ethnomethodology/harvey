@@ -2329,6 +2329,8 @@ pub async fn start_live_transcription(
             "-l",
             &language,
             "-c", "0",
+            "--step", "500",
+            "--length", "5000",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -2349,14 +2351,15 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
-                    if text.starts_with("[") && text.ends_with("]") {
-                        debug!("[Live Transcription][whisper-stream stdout meta]: {}", text);
+                    debug!("[Live Transcription][whisper-stream stdout]: Received line: '{}'", text);
+                    if text.trim().is_empty() {
+                        debug!("[Live Transcription][whisper-stream stdout]: Line is empty or whitespace, skipping.");
                         continue;
                     }
-                    debug!("[Live Transcription][whisper-stream stdout]: {}", text);
                     app_handle_clone
-                        .emit("live_transcription_result", LiveTranscriptionResult { text })
-                        .unwrap();
+                        .emit("live_transcription_result", LiveTranscriptionResult { text: text.trim().to_string() })
+                        .unwrap_or_else(|e| error!("[Live Transcription] Failed to emit event: {}", e));
+                    info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", text.trim());
                 }
                 CommandEvent::Stderr(line) => {
                     error!("[Live Transcription][whisper-stream stderr]: {}", String::from_utf8_lossy(&line));

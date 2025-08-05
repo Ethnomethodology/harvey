@@ -132,15 +132,21 @@
         console.log('[DocumentEditorPanel] External discard() called.');
         return handleDiscard();
     }
-     export function resetEditorState(jsonString) {
+    export function resetEditorState(jsonString) {
         if (editorRef) {
              console.log('[DocumentEditorPanel] External resetEditorState called.');
              editorRef.resetEditorState(jsonString);
              editorJsonState = jsonString || '';
         }
     }
+    export function insertText(text) {
+        if (editorRef) {
+            console.log('[DocumentEditorPanel] External insertText() called with text:', text);
+            editorRef.insertText(text);
+        }
+    }
 
-    const self = { save, discard, resetEditorState };
+    const self = { save, discard, resetEditorState, insertText };
 
 </script>
 

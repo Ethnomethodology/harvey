@@ -724,6 +724,27 @@
     };
   });
 
+  export function insertText(text) {
+    if (!editor || !isReady || !editor.isEditable()) {
+      console.warn("[LexicalEditor] insertText called but editor not initialized, not ready, or not editable.");
+      return;
+    }
+    editor.update(() => {
+      const selection = _getSelection();
+      if (_isRangeSelection(selection)) {
+        selection.insertText(text);
+      } else {
+        // If no range selection, insert at the end of the root or current paragraph
+        const root = _getRoot();
+        if (root.getLastChild()) {
+          root.getLastChild().append(_createTextNode(text));
+        } else {
+          root.append(_createParagraphNode().append(_createTextNode(text)));
+        }
+      }
+    });
+  }
+
   export function resetEditorState(jsonString = null) {
     if (!editor) { console.warn("[LexicalEditor] resetEditorState called before editor initialized."); return; }
     console.log("[LexicalEditor] resetEditorState called.");
