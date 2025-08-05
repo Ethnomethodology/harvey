@@ -399,7 +399,6 @@
     async function handleLiveTranscribe(event) {
         const { model, language } = event.detail;
         try {
-            isLiveTranscriptionActive = true;
             liveTranscriptionError = null;
             await invoke('start_live_transcription', {
                 modelName: model,
@@ -593,6 +592,7 @@
 
 <LiveTranscribeModelModal
     bind:showModal={showLiveTranscribeModal}
+    bind:isLiveTranscriptionActive={isLiveTranscriptionActive}
     on:confirm={handleLiveTranscribe}
     on:close={() => showLiveTranscribeModal = false}
 />
