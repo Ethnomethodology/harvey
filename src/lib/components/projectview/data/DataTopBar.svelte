@@ -367,23 +367,49 @@
     }
 
     let unlisten;
+    let commitTimeoutId; // New: To manage the commit timeout
 
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
             console.log('[DataTopBar] Received live_transcription_result event. Payload:', event.payload.text);
             console.log('[DataTopBar] activeDocumentEditorRef:', $project.activeDocumentEditorRef);
             console.log('[DataTopBar] activeMediaNoteEditorRef:', $project.activeMediaNoteEditorRef);
+
+            // Clear any existing commit timeout
+            if (commitTimeoutId) {
+                clearTimeout(commitTimeoutId);
+            }
+
             if ($project.activeDocumentEditorRef?.insertText) {
                 $project.activeDocumentEditorRef.insertText(event.payload.text);
             } else if ($project.activeMediaNoteEditorRef?.insertText) {
                 $project.activeMediaNoteEditorRef.insertText(event.payload.text);
             }
+
+            // Set a new timeout to commit the utterance after a short delay (e.g., 1.5 seconds of silence)
+            commitTimeoutId = setTimeout(() => {
+                if ($project.activeDocumentEditorRef?.commitCurrentUtterance) {
+                    $project.activeDocumentEditorRef.commitCurrentUtterance();
+                } else if ($project.activeMediaNoteEditorRef?.commitCurrentUtterance) {
+                    $project.activeMediaNoteEditorRef.commitCurrentUtterance();
+                }
+                commitTimeoutId = null; // Clear the timeout ID after it fires
+            }, 1500); // 1.5 seconds
         });
     });
 
     onDestroy(async () => {
         if (isLiveTranscriptionActive) {
             await invoke('stop_live_transcription');
+        }
+        // Ensure any pending utterance is committed when the component is destroyed
+        if (commitTimeoutId) {
+            clearTimeout(commitTimeoutId);
+            if ($project.activeDocumentEditorRef?.commitCurrentUtterance) {
+                $project.activeDocumentEditorRef.commitCurrentUtterance();
+            } else if ($project.activeMediaNoteEditorRef?.commitCurrentUtterance) {
+                $project.activeMediaNoteEditorRef.commitCurrentUtterance();
+            }
         }
         if (unlisten) {
             unlisten();

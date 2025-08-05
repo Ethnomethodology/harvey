@@ -2351,15 +2351,20 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
-                    debug!("[Live Transcription][whisper-stream stdout]: Received line: '{}'", text);
-                    if text.trim().is_empty() {
-                        debug!("[Live Transcription][whisper-stream stdout]: Line is empty or whitespace, skipping.");
-                        continue;
+                    // Filter out unwanted messages and ANSI escape codes
+                    let cleaned_text = text
+                        .replace("[Start speaking]", "")
+                        .replace("[BLANK_AUDIO]", "")
+                        .replace("[ Silence ]", "")
+                        .replace("\u{1b}[2K", "") // ANSI escape code for clear line
+                        .replace("\r", "") // Carriage return
+                        .trim()
+                        .to_string();
+
+                    if !cleaned_text.is_empty() {
+                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone() });
+                        info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", cleaned_text);
                     }
-                    app_handle_clone
-                        .emit("live_transcription_result", LiveTranscriptionResult { text: text.trim().to_string() })
-                        .unwrap_or_else(|e| error!("[Live Transcription] Failed to emit event: {}", e));
-                    info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", text.trim());
                 }
                 CommandEvent::Stderr(line) => {
                     error!("[Live Transcription][whisper-stream stderr]: {}", String::from_utf8_lossy(&line));

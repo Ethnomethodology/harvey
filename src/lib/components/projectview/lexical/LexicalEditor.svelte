@@ -5,7 +5,7 @@
     createEditor, $getRoot as _getRoot, $getSelection as _getSelection, $setSelection as _setSelection,
     $isRangeSelection as _isRangeSelection, $isElementNode as _isElementNode,
     $isTextNode as _isTextNode, $getNodeByKey as _getNodeByKey,
-    $createParagraphNode as _createParagraphNode,
+    $createParagraphNode as _createParagraphNode, $isParagraphNode as _isParagraphNode,
     FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, INDENT_CONTENT_COMMAND,
     OUTDENT_CONTENT_COMMAND, SELECTION_CHANGE_COMMAND, CLICK_COMMAND,
     UNDO_COMMAND, REDO_COMMAND, KEY_MODIFIER_COMMAND,
@@ -159,6 +159,10 @@
   let resizerLineStyle = 'display: none;';
 
   const MIN_COLUMN_WIDTH = 50;
+
+  let currentInterimParagraphNode = null; // New: Stores the active interim paragraph node
+  let currentUtteranceText = ""; // New: Stores the current uncommitted utterance
+  let lastCommittedText = ""; // New: Stores the text of the last committed utterance
 
   export const editorNodes = [
     ExtendedTextNode,
@@ -724,24 +728,52 @@
     };
   });
 
-  export function insertText(text) {
+  export function insertText(newText) {
     if (!editor || !isReady || !editor.isEditable()) {
       console.warn("[LexicalEditor] insertText called but editor not initialized, not ready, or not editable.");
       return;
     }
     editor.update(() => {
-      const selection = _getSelection();
-      if (_isRangeSelection(selection)) {
-        selection.insertText(text);
-      } else {
-        // If no range selection, insert at the end of the root or current paragraph
-        const root = _getRoot();
-        if (root.getLastChild()) {
-          root.getLastChild().append(_createTextNode(text));
-        } else {
-          root.append(_createParagraphNode().append(_createTextNode(text)));
-        }
+      const root = _getRoot();
+
+      // Ignore empty or whitespace-only text
+      if (!newText || newText.trim() === '') {
+          return;
       }
+
+      // Ensure currentInterimParagraphNode exists and is valid
+      if (!currentInterimParagraphNode || !_isParagraphNode(currentInterimParagraphNode) || !currentInterimParagraphNode.isAttached()) {
+        currentInterimParagraphNode = _createParagraphNode();
+        root.append(currentInterimParagraphNode);
+      }
+
+      // Always update the content of the interim paragraph with the latest utterance
+      let textNode = currentInterimParagraphNode.getFirstChild();
+      if (!textNode || !_isTextNode(textNode)) {
+        currentInterimParagraphNode.clear();
+        textNode = _createTextNode(newText);
+        currentInterimParagraphNode.append(textNode);
+      } else {
+        textNode.setTextContent(newText);
+      }
+      currentInterimParagraphNode.selectEnd();
+    });
+  }
+
+  export function commitCurrentUtterance() {
+    if (!editor || !isReady || !editor.isEditable() || !currentInterimParagraphNode || currentInterimParagraphNode.getTextContent().trim() === '') {
+      return; // Nothing to commit
+    }
+    editor.update(() => {
+      const root = _getRoot();
+      const finalParagraph = _createParagraphNode();
+      finalParagraph.append(_createTextNode(currentInterimParagraphNode.getTextContent()));
+      root.append(finalParagraph);
+      finalParagraph.selectEnd();
+
+      currentInterimParagraphNode.clear();
+      currentInterimParagraphNode.remove();
+      currentInterimParagraphNode = null;
     });
   }
 
