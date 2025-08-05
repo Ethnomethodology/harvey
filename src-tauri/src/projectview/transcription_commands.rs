@@ -2380,6 +2380,7 @@ pub async fn start_live_transcription(
 pub async fn stop_live_transcription(
     state: tauri::State<'_, LiveTranscriptionState>
 ) -> Result<(), String> {
+    info!("[Live Transcription] Stop command received.");
     if !state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
         return Err("Live transcription is not running.".to_string());
     }
