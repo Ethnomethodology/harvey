@@ -454,10 +454,17 @@
         {/if}
         {#if $project.activeDocumentEditorRef || $project.activeMediaNoteEditorRef}
         <button class="ui-button-icon flex items-center ml-2" on:click={toggleLiveTranscription} title="Live Transcription">
+            {#if isLiveTranscriptionActive}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-fill" class:blinking-red-text={isLiveTranscriptionActive} viewBox="0 0 16 16">
+                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z"/>
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
+            </svg>
+            {:else}
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
                 <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
                 <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3"/>
             </svg>
+            {/if}
         </button>
         {/if}
     </div>
@@ -554,6 +561,16 @@
   </div>
   
   <style lang="postcss">
+    .blinking-red-text {
+        animation: blink-text 1s infinite;
+    }
+
+    @keyframes blink-text {
+        0% { color: #f87171; }
+        50% { color: #ef4444; }
+        100% { color: #f87171; }
+    }
+
     .ui-button-icon {
         @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
         /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component's style for ui-button-icon base */
@@ -567,6 +584,16 @@
 
     /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
   
+    .blinking-red {
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+        0% { background-color: #f87171; }
+        50% { background-color: #ef4444; }
+        100% { background-color: #f87171; }
+    }
+
     :global(html.dark) .dark\:bg-gray-800 {
          background-color: #1f2937 !important;
     }
