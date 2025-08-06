@@ -366,22 +366,15 @@
         }
     }
 
-    let unlisten = null; // Declare unlisten at the top level
-    let accumulatedTranscription = ""; // Stores the full accumulated transcription
-    let currentInterimText = ""; // Stores the current non-finalized segment
+    let unlisten = null;
 
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
-            console.log('[DataTopBar] live_transcription_result event received:', event);
-            const { text } = event.payload;
+            const { text, is_final } = event.payload;
             const editorRef = get(project).activeDocumentEditorRef || get(project).activeMediaNoteEditorRef;
-            console.log('[DataTopBar] editorRef:', editorRef);
 
-            if (editorRef?.updateLiveTranscriptionText) {
-                console.log('[DataTopBar] Calling editorRef.updateLiveTranscriptionText with text:', text);
-                editorRef.updateLiveTranscriptionText(text);
-            } else {
-                console.warn('[DataTopBar] editorRef or editorRef.updateLiveTranscriptionText is not available.', editorRef);
+            if (editorRef?.ref?.updateLiveTranscription) {
+                editorRef.ref.updateLiveTranscription(text, is_final);
             }
         });
     });
@@ -393,8 +386,6 @@
         if (unlisten) {
             unlisten();
         }
-        accumulatedTranscription = ""; // Clear on destroy
-        currentInterimText = ""; // Clear on destroy
     });
 
     async function toggleLiveTranscription() {
@@ -403,8 +394,6 @@
                 const stopped = await invoke('stop_live_transcription');
                 if (stopped) {
                     isLiveTranscriptionActive = false;
-                    accumulatedTranscription = ""; // Clear on stop
-                    currentInterimText = ""; // Clear on stop
                 }
             } catch (error) {
                 message(`Failed to stop live transcription: ${error}`, { title: 'Error', type: 'error' });
@@ -418,8 +407,6 @@
         const { model, language } = event.detail;
         try {
             liveTranscriptionError = null;
-            accumulatedTranscription = ""; // Clear on start
-            currentInterimText = ""; // Clear on start
             const started = await invoke('start_live_transcription', {
                 modelName: model,
                 language: language,

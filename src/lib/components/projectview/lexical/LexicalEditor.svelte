@@ -160,8 +160,6 @@
 
   const MIN_COLUMN_WIDTH = 50;
 
-  let lastLiveTranscriptionText = ""; // Stores the last received interim transcription text
-  let lastProcessedText = ""; // Stores the last text that was actually processed by the editor
 
   export const editorNodes = [
     ExtendedTextNode,
@@ -727,29 +725,32 @@
     };
   });
 
-  export function updateLiveTranscriptionText(text) {
-    if (!editor || !isReady || !editor.isEditable() || !text) {
-        return;
-    }
-    const newText = text.trim();
-    if (newText === lastProcessedText) {
-        return;
-    }
+  export function updateLiveTranscription(text, isFinal) {
+    if (!editor || !isReady || !editable) return;
 
     editor.update(() => {
         const root = _getRoot();
-        let targetNode = root.getLastChild();
+        let lastParagraph = root.getLastChild();
 
-        if (!targetNode || !_isParagraphNode(targetNode)) {
-            targetNode = _createParagraphNode();
-            root.append(targetNode);
+        if (!lastParagraph || !_isParagraphNode(lastParagraph)) {
+            lastParagraph = _createParagraphNode();
+            root.append(lastParagraph);
         }
 
-        const textNode = _createTextNode(newText + " ");
-        targetNode.append(textNode);
-        targetNode.selectEnd();
+        // If the incoming text is final, we append it.
+        // If it's not final, we replace the content of the last paragraph.
+        if (isFinal) {
+            lastParagraph.append(_createTextNode(text + " "));
+        } else {
+            // For interim results, we clear the last paragraph and append the new text.
+            // This is to handle the case where the interim result is a refinement of the previous one.
+            lastParagraph.clear();
+            lastParagraph.append(_createTextNode(text));
+        }
+
+        // Ensure the cursor is at the end.
+        lastParagraph.selectEnd();
     });
-    lastProcessedText = newText;
   }
 
   export function resetEditorState(jsonString = null) {

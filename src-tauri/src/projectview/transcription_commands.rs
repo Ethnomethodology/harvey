@@ -46,6 +46,7 @@ impl Default for LiveTranscriptionState {
 #[derive(serde::Serialize, Clone)]
 pub struct LiveTranscriptionResult {
     pub text: String,
+    pub is_final: bool,
 }
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
@@ -2328,13 +2329,13 @@ pub async fn start_live_transcription(
             &model_path,
             "-l",
             &language,
+            "--step", "0",
+            "--length", "5000",
             "-c", "0",
-            "--step", "5000",
-            "--length", "10000",
             "-t", "8",
+            "--no-context",
             "--max-tokens", "32",
             "--audio-ctx", "768",
-            "--single-segment",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -2347,6 +2348,7 @@ pub async fn start_live_transcription(
 
     tokio::spawn(async move {
         info!("[Live Transcription] Started listening to whisper-stream sidecar.");
+        let mut last_text = String::new();
         while let Some(event) = rx.recv().await {
             if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
                 info!("[Live Transcription] Loop broken due to is_running flag being false.");
@@ -2355,19 +2357,24 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
-                    // Filter out unwanted messages and ANSI escape codes
                     let cleaned_text = text
                         .replace("[Start speaking]", "")
                         .replace("[BLANK_AUDIO]", "")
                         .replace("[ Silence ]", "")
-                        .replace("\u{1b}[2K", "") // ANSI escape code for clear line
-                        .replace("\r", "") // Carriage return
+                        .replace("\u{1b}[2K", "")
+                        .replace("\r", "")
                         .trim()
                         .to_string();
 
                     if !cleaned_text.is_empty() {
-                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone() });
-                        info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", cleaned_text);
+                        let is_final = !text.contains("...");
+                        if cleaned_text != last_text {
+                            let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
+                            info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
+                            if is_final {
+                                last_text = cleaned_text;
+                            }
+                        }
                     }
                 }
                 CommandEvent::Stderr(line) => {
@@ -2379,7 +2386,7 @@ pub async fn start_live_transcription(
                 CommandEvent::Terminated(payload) => {
                     info!("[Live Transcription] Whisper-stream process terminated with payload: {:?}", payload);
                 }
-                _ => {} // Handle other potential CommandEvent variants if necessary
+                _ => {}
             }
         }
         info!("[Live Transcription] Stopped listening to whisper-stream sidecar.");
