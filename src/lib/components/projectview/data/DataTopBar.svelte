@@ -366,35 +366,23 @@
         }
     }
 
-    let unlisten;
-    let commitTimeoutId; // New: To manage the commit timeout
+    let unlisten = null; // Declare unlisten at the top level
+    let accumulatedTranscription = ""; // Stores the full accumulated transcription
+    let currentInterimText = ""; // Stores the current non-finalized segment
 
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
-            console.log('[DataTopBar] Received live_transcription_result event. Payload:', event.payload.text);
-            console.log('[DataTopBar] activeDocumentEditorRef:', $project.activeDocumentEditorRef);
-            console.log('[DataTopBar] activeMediaNoteEditorRef:', $project.activeMediaNoteEditorRef);
+            console.log('[DataTopBar] live_transcription_result event received:', event);
+            const { text, is_final } = event.payload;
+            const editorRef = get(project).activeDocumentEditorRef || get(project).activeMediaNoteEditorRef;
+            console.log('[DataTopBar] editorRef:', editorRef);
 
-            // Clear any existing commit timeout
-            if (commitTimeoutId) {
-                clearTimeout(commitTimeoutId);
+            if (editorRef?.updateLiveTranscriptionText) {
+                console.log('[DataTopBar] Calling editorRef.updateLiveTranscriptionText with text:', text, 'is_final:', is_final);
+                editorRef.updateLiveTranscriptionText(text, is_final);
+            } else {
+                console.warn('[DataTopBar] editorRef or editorRef.updateLiveTranscriptionText is not available.', editorRef);
             }
-
-            if ($project.activeDocumentEditorRef?.insertText) {
-                $project.activeDocumentEditorRef.insertText(event.payload.text);
-            } else if ($project.activeMediaNoteEditorRef?.insertText) {
-                $project.activeMediaNoteEditorRef.insertText(event.payload.text);
-            }
-
-            // Set a new timeout to commit the utterance after a short delay (e.g., 1.5 seconds of silence)
-            commitTimeoutId = setTimeout(() => {
-                if ($project.activeDocumentEditorRef?.commitCurrentUtterance) {
-                    $project.activeDocumentEditorRef.commitCurrentUtterance();
-                } else if ($project.activeMediaNoteEditorRef?.commitCurrentUtterance) {
-                    $project.activeMediaNoteEditorRef.commitCurrentUtterance();
-                }
-                commitTimeoutId = null; // Clear the timeout ID after it fires
-            }, 1500); // 1.5 seconds
         });
     });
 
@@ -402,18 +390,11 @@
         if (isLiveTranscriptionActive) {
             await invoke('stop_live_transcription');
         }
-        // Ensure any pending utterance is committed when the component is destroyed
-        if (commitTimeoutId) {
-            clearTimeout(commitTimeoutId);
-            if ($project.activeDocumentEditorRef?.commitCurrentUtterance) {
-                $project.activeDocumentEditorRef.commitCurrentUtterance();
-            } else if ($project.activeMediaNoteEditorRef?.commitCurrentUtterance) {
-                $project.activeMediaNoteEditorRef.commitCurrentUtterance();
-            }
-        }
         if (unlisten) {
             unlisten();
         }
+        accumulatedTranscription = ""; // Clear on destroy
+        currentInterimText = ""; // Clear on destroy
     });
 
     async function toggleLiveTranscription() {
@@ -422,6 +403,8 @@
                 const stopped = await invoke('stop_live_transcription');
                 if (stopped) {
                     isLiveTranscriptionActive = false;
+                    accumulatedTranscription = ""; // Clear on stop
+                    currentInterimText = ""; // Clear on stop
                 }
             } catch (error) {
                 message(`Failed to stop live transcription: ${error}`, { title: 'Error', type: 'error' });
@@ -435,6 +418,8 @@
         const { model, language } = event.detail;
         try {
             liveTranscriptionError = null;
+            accumulatedTranscription = ""; // Clear on start
+            currentInterimText = ""; // Clear on start
             const started = await invoke('start_live_transcription', {
                 modelName: model,
                 language: language,

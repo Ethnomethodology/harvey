@@ -46,6 +46,7 @@ impl Default for LiveTranscriptionState {
 #[derive(serde::Serialize, Clone)]
 pub struct LiveTranscriptionResult {
     pub text: String,
+    pub is_final: bool,
 }
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
@@ -2329,7 +2330,7 @@ pub async fn start_live_transcription(
             "-l",
             &language,
             "-c", "0",
-            "--step", "500",
+            "--step", "5000",
             "--length", "5000",
         ])
         .spawn()
@@ -2362,7 +2363,8 @@ pub async fn start_live_transcription(
                         .to_string();
 
                     if !cleaned_text.is_empty() {
-                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone() });
+                        let is_final = cleaned_text.ends_with(".") || cleaned_text.ends_with("?") || cleaned_text.ends_with("!");
+let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
                         info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", cleaned_text);
                     }
                 }
@@ -2375,7 +2377,7 @@ pub async fn start_live_transcription(
                 CommandEvent::Terminated(payload) => {
                     info!("[Live Transcription] Whisper-stream process terminated with payload: {:?}", payload);
                 }
-                _ => {}
+                _ => {} // Handle other potential CommandEvent variants if necessary
             }
         }
         info!("[Live Transcription] Stopped listening to whisper-stream sidecar.");

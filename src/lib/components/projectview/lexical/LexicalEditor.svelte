@@ -160,9 +160,8 @@
 
   const MIN_COLUMN_WIDTH = 50;
 
-  let currentInterimParagraphNode = null; // New: Stores the active interim paragraph node
-  let currentUtteranceText = ""; // New: Stores the current uncommitted utterance
-  let lastCommittedText = ""; // New: Stores the text of the last committed utterance
+  let lastLiveTranscriptionText = ""; // Stores the last received interim transcription text
+  let lastProcessedText = ""; // Stores the last text that was actually processed by the editor
 
   export const editorNodes = [
     ExtendedTextNode,
@@ -728,53 +727,52 @@
     };
   });
 
-  export function insertText(newText) {
-    if (!editor || !isReady || !editor.isEditable()) {
-      console.warn("[LexicalEditor] insertText called but editor not initialized, not ready, or not editable.");
-      return;
+    export function updateLiveTranscriptionText(currentSegmentText, isFinal = false) {
+    console.log('[LexicalEditor] updateLiveTranscriptionText called with text:', currentSegmentText, 'isFinal:', isFinal);
+    if (!editor || !isReady || !editor.isEditable() || !currentSegmentText) {
+        console.log('[LexicalEditor] updateLiveTranscriptionText: Editor not ready or text empty.');
+        return;
     }
+
     editor.update(() => {
-      const root = _getRoot();
+        console.log('[LexicalEditor] Executing editor.update for live transcription.');
+        const root = _getRoot();
+        let targetNode = root.getLastChild();
 
-      // Ignore empty or whitespace-only text
-      if (!newText || newText.trim() === '') {
-          return;
-      }
+        // If the editor is empty or the last node is not a paragraph, create a new one
+        if (!targetNode || !_isParagraphNode(targetNode)) {
+            console.log('[LexicalEditor] Creating new paragraph for live transcription.');
+            targetNode = _createParagraphNode();
+            root.append(targetNode);
+        }
 
-      // Ensure currentInterimParagraphNode exists and is valid
-      if (!currentInterimParagraphNode || !_isParagraphNode(currentInterimParagraphNode) || !currentInterimParagraphNode.isAttached()) {
-        currentInterimParagraphNode = _createParagraphNode();
-        root.append(currentInterimParagraphNode);
-      }
-
-      // Always update the content of the interim paragraph with the latest utterance
-      let textNode = currentInterimParagraphNode.getFirstChild();
-      if (!textNode || !_isTextNode(textNode)) {
-        currentInterimParagraphNode.clear();
-        textNode = _createTextNode(newText);
-        currentInterimParagraphNode.append(textNode);
-      } else {
-        textNode.setTextContent(newText);
-      }
-      currentInterimParagraphNode.selectEnd();
+        // If it's an interim update, replace the text of the last text node in the paragraph
+        if (!isFinal) {
+            let textNode = targetNode.getLastChild();
+            if (textNode && _isTextNode(textNode)) {
+                textNode.setTextContent(currentSegmentText);
+            } else {
+                // If no text node, clear and append new text node
+                targetNode.clear();
+                targetNode.append(_createTextNode(currentSegmentText));
+            }
+            targetNode.selectEnd();
+        } else {
+            // If it's a final segment, append the text and then add a new paragraph
+            let textNode = targetNode.getLastChild();
+            if (textNode && _isTextNode(textNode)) {
+                textNode.setTextContent(currentSegmentText);
+            } else {
+                targetNode.clear();
+                targetNode.append(_createTextNode(currentSegmentText));
+            }
+            console.log('[LexicalEditor] Final segment received, adding new paragraph.');
+            root.append(_createParagraphNode());
+            root.getLastChild().selectEnd();
+        }
     });
-  }
-
-  export function commitCurrentUtterance() {
-    if (!editor || !isReady || !editor.isEditable() || !currentInterimParagraphNode || currentInterimParagraphNode.getTextContent().trim() === '') {
-      return; // Nothing to commit
-    }
-    editor.update(() => {
-      const root = _getRoot();
-      const finalParagraph = _createParagraphNode();
-      finalParagraph.append(_createTextNode(currentInterimParagraphNode.getTextContent()));
-      root.append(finalParagraph);
-      finalParagraph.selectEnd();
-
-      currentInterimParagraphNode.clear();
-      currentInterimParagraphNode.remove();
-      currentInterimParagraphNode = null;
-    });
+    lastProcessedText = currentSegmentText;
+    console.log('[LexicalEditor] updateLiveTranscriptionText completed. lastProcessedText:', lastProcessedText);
   }
 
   export function resetEditorState(jsonString = null) {

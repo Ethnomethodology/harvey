@@ -139,14 +139,13 @@
              editorJsonState = jsonString || '';
         }
     }
-    export function insertText(text) {
+    export function updateLiveTranscriptionText(text, isFinal) {
         if (editorRef) {
-            console.log('[DocumentEditorPanel] External insertText() called with text:', text);
-            editorRef.insertText(text);
+            console.log('[DocumentEditorPanel] updateLiveTranscriptionText called on editorRef:', editorRef, 'with text:', text, 'isFinal:', isFinal);
+            editorRef.updateLiveTranscriptionText(text, isFinal);
         }
     }
-
-    const self = { save, discard, resetEditorState, insertText };
+    const self = { save, discard, resetEditorState, updateLiveTranscriptionText };
 
 </script>
 
