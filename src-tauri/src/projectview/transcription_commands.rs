@@ -46,7 +46,6 @@ impl Default for LiveTranscriptionState {
 #[derive(serde::Serialize, Clone)]
 pub struct LiveTranscriptionResult {
     pub text: String,
-    pub is_final: bool,
 }
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
@@ -2331,7 +2330,11 @@ pub async fn start_live_transcription(
             &language,
             "-c", "0",
             "--step", "5000",
-            "--length", "5000",
+            "--length", "10000",
+            "-t", "8",
+            "--max-tokens", "32",
+            "--audio-ctx", "768",
+            "--single-segment",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
@@ -2363,8 +2366,7 @@ pub async fn start_live_transcription(
                         .to_string();
 
                     if !cleaned_text.is_empty() {
-                        let is_final = cleaned_text.ends_with(".") || cleaned_text.ends_with("?") || cleaned_text.ends_with("!");
-let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
+                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone() });
                         info!("[Live Transcription] Emitted live_transcription_result with text: '{}'", cleaned_text);
                     }
                 }

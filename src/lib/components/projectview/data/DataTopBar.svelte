@@ -373,13 +373,13 @@
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
             console.log('[DataTopBar] live_transcription_result event received:', event);
-            const { text, is_final } = event.payload;
+            const { text } = event.payload;
             const editorRef = get(project).activeDocumentEditorRef || get(project).activeMediaNoteEditorRef;
             console.log('[DataTopBar] editorRef:', editorRef);
 
             if (editorRef?.updateLiveTranscriptionText) {
-                console.log('[DataTopBar] Calling editorRef.updateLiveTranscriptionText with text:', text, 'is_final:', is_final);
-                editorRef.updateLiveTranscriptionText(text, is_final);
+                console.log('[DataTopBar] Calling editorRef.updateLiveTranscriptionText with text:', text);
+                editorRef.updateLiveTranscriptionText(text);
             } else {
                 console.warn('[DataTopBar] editorRef or editorRef.updateLiveTranscriptionText is not available.', editorRef);
             }
