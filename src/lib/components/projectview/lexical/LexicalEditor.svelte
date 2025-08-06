@@ -393,6 +393,7 @@
       nodes: editorNodes,
       theme: {
         paragraph: 'speech-plain-text',
+        'live-transcription': 'text-gray-500 italic',
         text: { bold: 'font-bold', italic: 'italic', underline: 'underline', strikethrough: 'line-through' },
         heading: { h1: 'text-2xl font-bold mb-1 mt-2', h2: 'text-xl font-semibold mb-1 mt-1', h3: 'text-lg font-semibold mb-1' },
         list: {
@@ -725,31 +726,38 @@
     };
   });
 
-  export function updateLiveTranscription(text, isFinal) {
+  export function updateLiveTranscriptionText(text, isFinal) {
     if (!editor || !isReady || !editable) return;
 
     editor.update(() => {
         const root = _getRoot();
         let lastParagraph = root.getLastChild();
+        let livePara = null;
 
-        if (!lastParagraph || !_isParagraphNode(lastParagraph)) {
-            lastParagraph = _createParagraphNode();
-            root.append(lastParagraph);
-        }
-
-        // If the incoming text is final, we append it.
-        // If it's not final, we replace the content of the last paragraph.
-        if (isFinal) {
-            lastParagraph.append(_createTextNode(text + " "));
+        // Check if the last paragraph is our dedicated live paragraph
+        if (lastParagraph && _isParagraphNode(lastParagraph) && typeof lastParagraph.hasStyle === 'function' && lastParagraph.hasStyle('live-transcription')) {
+            livePara = lastParagraph;
         } else {
-            // For interim results, we clear the last paragraph and append the new text.
-            // This is to handle the case where the interim result is a refinement of the previous one.
-            lastParagraph.clear();
-            lastParagraph.append(_createTextNode(text));
+            livePara = _createParagraphNode().setStyle('live-transcription');
+            root.append(livePara);
         }
 
-        // Ensure the cursor is at the end.
-        lastParagraph.selectEnd();
+        if (isFinal) {
+            // On final result, clear the live paragraph and append the final text.
+            livePara.clear();
+            livePara.append(_createTextNode(text + " "));
+            // Then, remove the style so it becomes a normal paragraph.
+            livePara.setStyle('');
+            // And create a new, empty live paragraph for the next utterance.
+            const newLivePara = _createParagraphNode().setStyle('live-transcription');
+            root.append(newLivePara);
+            newLivePara.selectEnd();
+        } else {
+            // For interim results, replace the content of the live paragraph.
+            livePara.clear();
+            livePara.append(_createTextNode(text));
+            livePara.selectEnd();
+        }
     });
   }
 

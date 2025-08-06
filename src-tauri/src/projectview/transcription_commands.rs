@@ -2333,7 +2333,6 @@ pub async fn start_live_transcription(
             "--length", "5000",
             "-c", "0",
             "-t", "8",
-            "--no-context",
             "--max-tokens", "32",
             "--audio-ctx", "768",
         ])

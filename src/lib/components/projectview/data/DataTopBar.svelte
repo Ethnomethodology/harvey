@@ -371,10 +371,20 @@
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
             const { text, is_final } = event.payload;
-            const editorRef = get(project).activeDocumentEditorRef || get(project).activeMediaNoteEditorRef;
+            const p = get(project);
+            let editorRef = null;
 
-            if (editorRef?.ref?.updateLiveTranscription) {
-                editorRef.ref.updateLiveTranscription(text, is_final);
+            // Find the correct active editor
+            if (p.activeDocumentEditorRef) {
+                editorRef = p.activeDocumentEditorRef;
+            } else if (p.activeMediaNoteEditorRef) {
+                editorRef = p.activeMediaNoteEditorRef;
+            } else if (p.activeImportedTranscriptEditorRef) {
+                editorRef = p.activeImportedTranscriptEditorRef;
+            }
+
+            if (editorRef?.ref?.updateLiveTranscriptionText) {
+                editorRef.ref.updateLiveTranscriptionText(text, is_final);
             }
         });
     });

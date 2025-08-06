@@ -114,12 +114,12 @@
 
     onMount(() => {
         console.log('[DocumentEditorPanel] Mounted.');
-        setActiveDocumentEditorRef(self);
+        setActiveDocumentEditorRef({ ref: self });
     });
 
 	onDestroy(() => {
         console.log('[DocumentEditorPanel] Destroyed.');
-        if (get(project).activeDocumentEditorRef === self) {
+        if (get(project).activeDocumentEditorRef?.ref === self) {
              clearActiveDocumentEditorRef();
         }
 	});
@@ -141,7 +141,6 @@
     }
     export function updateLiveTranscriptionText(text, isFinal) {
         if (editorRef) {
-            console.log('[DocumentEditorPanel] updateLiveTranscriptionText called on editorRef:', editorRef, 'with text:', text, 'isFinal:', isFinal);
             editorRef.updateLiveTranscriptionText(text, isFinal);
         }
     }
