@@ -2348,6 +2348,9 @@ pub async fn start_live_transcription(
     tokio::spawn(async move {
         info!("[Live Transcription] Started listening to whisper-stream sidecar.");
         let mut last_text = String::new();
+        let mut in_transcription_block = false;
+        let mut transcription_buffer: Vec<String> = Vec::new();
+
         while let Some(event) = rx.recv().await {
             if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
                 info!("[Live Transcription] Loop broken due to is_running flag being false.");
@@ -2356,22 +2359,50 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
-                    let cleaned_text = text
-                        .replace("[Start speaking]", "")
-                        .replace("[BLANK_AUDIO]", "")
-                        .replace("[ Silence ]", "")
-                        .replace("\u{1b}[2K", "")
-                        .replace("\r", "")
-                        .trim()
-                        .to_string();
 
-                    if !cleaned_text.is_empty() {
-                        let is_final = !text.contains("...");
-                        if cleaned_text != last_text {
-                            let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
-                            info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
-                            if is_final {
-                                last_text = cleaned_text;
+                    if text.contains("### Transcription") && text.contains("START") {
+                        in_transcription_block = true;
+                        transcription_buffer.clear();
+                        continue;
+                    }
+
+                    if text.contains("### Transcription") && text.contains("END") {
+                        in_transcription_block = false;
+                        let full_transcript = transcription_buffer.join("\n");
+                        let cleaned_text = full_transcript.trim();
+
+                        if !cleaned_text.is_empty() && cleaned_text != last_text {
+                            let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.to_string(), is_final: true });
+                            info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: true", cleaned_text);
+                            last_text = cleaned_text.to_string();
+                        }
+                        transcription_buffer.clear();
+                        continue;
+                    }
+
+                    if in_transcription_block {
+                        let trimmed_line = text.trim();
+                        if !trimmed_line.is_empty() {
+                            transcription_buffer.push(trimmed_line.to_string());
+                        }
+                    } else {
+                        let cleaned_text = text
+                            .replace("[Start speaking]", "")
+                            .replace("[BLANK_AUDIO]", "")
+                            .replace("[ Silence ]", "")
+                            .replace("\u{1b}[2K", "")
+                            .replace("\r", "")
+                            .trim()
+                            .to_string();
+
+                        if !cleaned_text.is_empty() {
+                            let is_final = !text.contains("...");
+                            if cleaned_text != last_text {
+                                let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
+                                info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
+                                if is_final {
+                                    last_text = cleaned_text;
+                                }
                             }
                         }
                     }
