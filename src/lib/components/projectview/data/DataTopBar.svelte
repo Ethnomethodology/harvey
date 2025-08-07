@@ -86,6 +86,7 @@
     let showDirtyIndicator = false;
     let isLayoutSettingsModalOpen = false;
     let isExportModalOpen = false;
+    let currentActivePath;
 
     let displayTitle = '';
   
@@ -133,6 +134,28 @@
             }
         } else {
             displayTitle = 'Harvey'; // Default if project or name is not available
+        }
+    }
+
+    // Stop live transcription if the user switches to another file
+    $: {
+        const newActivePath = $project.selectedDocumentPath ||
+                             $project.selectedMediaNotePath ||
+                             $project.currentImportedTranscriptPath ||
+                             $project.selectedTablePath ||
+                             $project.selectedImagePath;
+
+        if (newActivePath !== currentActivePath) {
+            if (isLiveTranscriptionActive) {
+                invoke('stop_live_transcription').then(stopped => {
+                    if (stopped) {
+                        isLiveTranscriptionActive = false;
+                    }
+                }).catch(err => {
+                    console.error("Failed to stop live transcription on file switch:", err);
+                });
+            }
+            currentActivePath = newActivePath;
         }
     }
   
