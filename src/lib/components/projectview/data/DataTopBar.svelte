@@ -393,7 +393,7 @@
 
     onMount(async () => {
         unlisten = await listen('live_transcription_result', (event) => {
-            const { text, is_final } = event.payload;
+            const { text, is_final, start_time, end_time } = event.payload;
             const p = get(project);
             let editorRef = null;
 
@@ -407,7 +407,7 @@
             }
 
             if (editorRef?.ref?.updateLiveTranscriptionText) {
-                editorRef.ref.updateLiveTranscriptionText(text, is_final);
+                editorRef.ref.updateLiveTranscriptionText(text, is_final, start_time, end_time);
             }
         });
     });

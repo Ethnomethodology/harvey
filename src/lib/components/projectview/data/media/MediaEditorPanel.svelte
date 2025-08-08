@@ -216,12 +216,12 @@
         }
     }
     export function getItemPath() { return mediaPath; }
-    export function updateLiveTranscriptionText(text, isFinal) {
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
         if (lexicalEditorRef) {
-            console.log('[MediaEditorPanel] updateLiveTranscriptionText called on lexicalEditorRef:', lexicalEditorRef, 'with text:', text, 'isFinal:', isFinal);
-            lexicalEditorRef.updateLiveTranscriptionText(text, isFinal);
+            lexicalEditorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
         }
     }
+
     const self = { save, discard, resetEditorState, getItemPath, updateLiveTranscriptionText };
 
     function handleRequestDataTranscribe(event) {

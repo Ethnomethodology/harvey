@@ -726,7 +726,7 @@
     };
   });
 
-  export function updateLiveTranscriptionText(text, isFinal) {
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
     if (!editor || !isReady || !editable) return;
 
     editor.update(() => {
@@ -745,7 +745,8 @@
         if (isFinal) {
             // On final result, clear the live paragraph and append the final text.
             livePara.clear();
-            livePara.append(_createTextNode(text + " "));
+            const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
+            livePara.append(_createTextNode(timestamp + ' ' + text + ' '));
             // Then, remove the style so it becomes a normal paragraph.
             livePara.setStyle('');
             // And create a new, empty live paragraph for the next utterance.
@@ -1998,23 +1999,46 @@ $: if (editor && activeLayout) {
       @apply bg-gray-600;
   }
 
-  .toolbar button.mini-toolbar-button.active {
-      @apply bg-blue-100 border-blue-300 text-blue-800;
+  html.dark .toolbar button.mini-toolbar-button.active {
+    @apply bg-blue-500 text-white;
   }
 
-  html.dark .toolbar button.mini-toolbar-button.active {
-      @apply bg-blue-800 border-blue-600 text-blue-200;
+  .separator {
+    @apply w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1;
+  }
+
+  .lexical-placeholder-theme-class {
+      /* Styles for the placeholder text */
+  }
+
+  .editor-table {
+      border-collapse: collapse;
+      width: 100%;
+  }
+
+  .editor-table-cell {
+      border: 1px solid #ccc;
+      padding: 8px;
+      min-width: 50px; /* Ensure cells have a minimum width */
+      position: relative; /* Needed for resizer positioning */
+  }
+
+  .editor-table-cell-header {
+      background-color: #f2f2f2;
+      font-weight: bold;
+      text-align: center;
+  }
+
+  .resizer-line {
+      /* The style is dynamically applied in the script */
   }
 
   .indent-outdent-icon {
-      color: theme('colors.gray.800');
+      transform: scaleX(-1); /* Flips the icon horizontally */
   }
 
-  html.dark .indent-outdent-icon {
-      color: theme('colors.white');
+  button.active {
+    @apply bg-gray-300 dark:bg-gray-500;
   }
 
-  .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
-    display: none;
-  }
 </style>

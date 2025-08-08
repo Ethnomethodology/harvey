@@ -139,11 +139,12 @@
              editorJsonState = jsonString || '';
         }
     }
-    export function updateLiveTranscriptionText(text, isFinal) {
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
         if (editorRef) {
-            editorRef.updateLiveTranscriptionText(text, isFinal);
+            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
         }
     }
+
     const self = { save, discard, resetEditorState, updateLiveTranscriptionText };
 
 </script>

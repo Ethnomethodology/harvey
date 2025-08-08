@@ -32,6 +32,7 @@ use quick_xml;
 pub struct LiveTranscriptionState {
     pub child: Mutex<Option<CommandChild>>,
     pub is_running: Arc<AtomicBool>,
+    pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
 }
 
 impl Default for LiveTranscriptionState {
@@ -39,6 +40,7 @@ impl Default for LiveTranscriptionState {
         Self {
             child: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
+            start_time: Mutex::new(None),
         }
     }
 }
@@ -47,6 +49,8 @@ impl Default for LiveTranscriptionState {
 pub struct LiveTranscriptionResult {
     pub text: String,
     pub is_final: bool,
+    pub start_time: f64,
+    pub end_time: f64,
 }
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
@@ -2329,8 +2333,8 @@ pub async fn start_live_transcription(
             &model_path,
             "-l",
             &language,
-            "--step", "0",
-            "--length", "5000",
+            "--step", "5000",
+            "--length", "30000",
             "-c", "0",
             "-t", "8",
             "--max-tokens", "32",
@@ -2341,15 +2345,16 @@ pub async fn start_live_transcription(
 
     *state.child.lock().await = Some(child);
     state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+    *state.start_time.lock().await = Some(chrono::Utc::now());
 
     let is_running_clone = state.is_running.clone();
     let app_handle_clone = app_handle.clone();
+    let start_time_clone = state.start_time.lock().await.clone();
 
     tokio::spawn(async move {
         info!("[Live Transcription] Started listening to whisper-stream sidecar.");
         let mut last_text = String::new();
-        let mut in_transcription_block = false;
-        let mut transcription_buffer: Vec<String> = Vec::new();
+        let mut segment_start_time = 0.0;
 
         while let Some(event) = rx.recv().await {
             if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2359,51 +2364,27 @@ pub async fn start_live_transcription(
             match event {
                 CommandEvent::Stdout(line) => {
                     let text = String::from_utf8_lossy(&line).to_string();
+                    let cleaned_text = text
+                        .replace("[Start speaking]", "")
+                        .replace("[BLANK_AUDIO]", "")
+                        .replace("[ Silence ]", "")
+                        .replace("\u{1b}[2K", "")
+                        .replace("\r", "")
+                        .trim()
+                        .to_string();
 
-                    if text.contains("### Transcription") && text.contains("START") {
-                        in_transcription_block = true;
-                        transcription_buffer.clear();
-                        continue;
-                    }
-
-                    if text.contains("### Transcription") && text.contains("END") {
-                        in_transcription_block = false;
-                        let full_transcript = transcription_buffer.join("\n");
-                        let cleaned_text = full_transcript.trim();
-
-                        if !cleaned_text.is_empty() && cleaned_text != last_text {
-                            let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.to_string(), is_final: true });
-                            info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: true", cleaned_text);
-                            last_text = cleaned_text.to_string();
-                        }
-                        transcription_buffer.clear();
-                        continue;
-                    }
-
-                    if in_transcription_block {
-                        let trimmed_line = text.trim();
-                        if !trimmed_line.is_empty() {
-                            transcription_buffer.push(trimmed_line.to_string());
-                        }
-                    } else {
-                        let cleaned_text = text
-                            .replace("[Start speaking]", "")
-                            .replace("[BLANK_AUDIO]", "")
-                            .replace("[ Silence ]", "")
-                            .replace("\u{1b}[2K", "")
-                            .replace("\r", "")
-                            .trim()
-                            .to_string();
-
-                        if !cleaned_text.is_empty() {
-                            let is_final = !text.contains("...");
-                            if cleaned_text != last_text {
-                                let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final });
-                                info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
-                                if is_final {
-                                    last_text = cleaned_text;
-                                }
-                            }
+                    if !cleaned_text.is_empty() && cleaned_text != last_text {
+                        let is_final = !cleaned_text.ends_with("...");
+                        let end_time = if let Some(start_time) = start_time_clone {
+                            (chrono::Utc::now() - start_time).num_milliseconds() as f64 / 1000.0
+                        } else {
+                            0.0
+                        };
+                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final, start_time: segment_start_time, end_time });
+                        info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
+                        if is_final {
+                            last_text = cleaned_text;
+                            segment_start_time = end_time;
                         }
                     }
                 }
