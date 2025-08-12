@@ -2321,6 +2321,7 @@ pub async fn start_live_transcription(
     active_document_path: String,
     state: tauri::State<'_, LiveTranscriptionState>,
 ) -> Result<bool, String> {
+    info!("[Live Transcription] Start command received. Save audio: {}, Path: {}", save_audio, active_document_path);
     if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
         return Err("Live transcription is already running.".to_string());
     }
@@ -2354,6 +2355,7 @@ pub async fn start_live_transcription(
 
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
         let output_path = attachments_dir.join(format!("live_audio_{}.wav", timestamp));
+        info!("[Live Transcription] Starting ffmpeg recording to path: {:?}", output_path);
 
         let ffmpeg_args = if cfg!(target_os = "macos") {
             vec![
