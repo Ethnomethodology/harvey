@@ -31,7 +31,6 @@ use quick_xml;
 // --- State for Live Transcription ---
 pub struct LiveTranscriptionState {
     pub whisper_child: Mutex<Option<CommandChild>>,
-    pub ffmpeg_child: Mutex<Option<CommandChild>>,
     pub is_running: Arc<AtomicBool>,
     pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
 }
@@ -40,7 +39,6 @@ impl Default for LiveTranscriptionState {
     fn default() -> Self {
         Self {
             whisper_child: Mutex::new(None),
-            ffmpeg_child: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
             start_time: Mutex::new(None),
         }
@@ -2329,24 +2327,18 @@ pub async fn start_live_transcription(
     let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
         .map_err(|e| e.to_string())?;
 
-    let (mut rx, whisper_child) = app_handle
-        .shell()
-        .sidecar("whisper-stream")
-        .expect("failed to create `whisper-stream` command")
-        .args(&[
-            "-m",
-            &model_path,
-            "-l",
-            &language,
-            "--step", "5000",
-            "--length", "5000",
-            "-c", "0",
-            "-t", "8",
-            "--max-tokens", "32",
-            "--audio-ctx", "768",
-        ])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut args = vec![
+        "-m".to_string(),
+        model_path.clone(),
+        "-l".to_string(),
+        language.clone(),
+        "--step".to_string(), "5000".to_string(),
+        "--length".to_string(), "5000".to_string(),
+        "-c".to_string(), "0".to_string(),
+        "-t".to_string(), "8".to_string(),
+        "--max-tokens".to_string(), "32".to_string(),
+        "--audio-ctx".to_string(), "768".to_string(),
+    ];
 
     if save_audio {
         let active_doc_path = PathBuf::from(&active_document_path);
@@ -2355,55 +2347,19 @@ pub async fn start_live_transcription(
 
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
         let output_path = attachments_dir.join(format!("live_audio_{}.wav", timestamp));
-        info!("[Live Transcription] Starting ffmpeg recording to path: {:?}", output_path);
+        info!("[Live Transcription] Saving audio to path: {:?}", output_path);
 
-        let ffmpeg_args = if cfg!(target_os = "macos") {
-            vec![
-                "-f", "avfoundation", "-i", "0:none", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
-                output_path.to_str().unwrap(),
-            ]
-        } else if cfg!(target_os = "windows") {
-            vec![
-                "-f", "dshow", "-i", "audio=default", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
-                output_path.to_str().unwrap(),
-            ]
-        } else {
-            vec![
-                "-f", "alsa", "-i", "default", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
-                output_path.to_str().unwrap(),
-            ]
-        };
-
-        let (mut ffmpeg_rx, ffmpeg_child) = app_handle
-            .shell()
-            .sidecar("ffmpeg")
-            .expect("failed to create `ffmpeg` command")
-            .args(ffmpeg_args)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-
-        *state.ffmpeg_child.lock().await = Some(ffmpeg_child);
-
-        tokio::spawn(async move {
-            while let Some(event) = ffmpeg_rx.recv().await {
-                match event {
-                    CommandEvent::Stdout(line) => {
-                        info!("[ffmpeg stdout]: {}", String::from_utf8_lossy(&line));
-                    }
-                    CommandEvent::Stderr(line) => {
-                        error!("[ffmpeg stderr]: {}", String::from_utf8_lossy(&line));
-                    }
-                    CommandEvent::Error(err) => {
-                        error!("[ffmpeg error]: {}", err);
-                    }
-                    CommandEvent::Terminated(payload) => {
-                        info!("[ffmpeg terminated]: {:?}", payload);
-                    }
-                    _ => {}
-                }
-            }
-        });
+        args.push("--save-audio".to_string());
+        args.push(output_path.to_str().unwrap().to_string());
     }
+
+    let (mut rx, whisper_child) = app_handle
+        .shell()
+        .sidecar("whisper-stream")
+        .expect("failed to create `whisper-stream` command")
+        .args(args)
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
     *state.whisper_child.lock().await = Some(whisper_child);
     state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -2478,10 +2434,6 @@ pub async fn stop_live_transcription(
     }
 
     if let Some(child) = state.whisper_child.lock().await.take() {
-        child.kill().map_err(|e| e.to_string())?;
-    }
-
-    if let Some(child) = state.ffmpeg_child.lock().await.take() {
         child.kill().map_err(|e| e.to_string())?;
     }
 
