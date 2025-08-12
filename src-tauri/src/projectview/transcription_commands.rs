@@ -5,7 +5,7 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter}; // Removed ShellExt from here
+use tauri::{AppHandle, Emitter, Manager}; // Removed ShellExt from here
 use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
 use serde::Deserialize; // Added for FFProbeOutput
