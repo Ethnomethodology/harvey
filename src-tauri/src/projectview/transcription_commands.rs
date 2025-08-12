@@ -30,7 +30,8 @@ use quick_xml;
 
 // --- State for Live Transcription ---
 pub struct LiveTranscriptionState {
-    pub child: Mutex<Option<CommandChild>>,
+    pub whisper_child: Mutex<Option<CommandChild>>,
+    pub ffmpeg_child: Mutex<Option<CommandChild>>,
     pub is_running: Arc<AtomicBool>,
     pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
 }
@@ -38,7 +39,8 @@ pub struct LiveTranscriptionState {
 impl Default for LiveTranscriptionState {
     fn default() -> Self {
         Self {
-            child: Mutex::new(None),
+            whisper_child: Mutex::new(None),
+            ffmpeg_child: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
             start_time: Mutex::new(None),
         }
@@ -2315,6 +2317,8 @@ pub async fn start_live_transcription(
     app_handle: AppHandle,
     model_name: String,
     language: String,
+    save_audio: bool,
+    active_document_path: String,
     state: tauri::State<'_, LiveTranscriptionState>,
 ) -> Result<bool, String> {
     if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2324,7 +2328,7 @@ pub async fn start_live_transcription(
     let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
         .map_err(|e| e.to_string())?;
 
-    let (mut rx, child) = app_handle
+    let (mut rx, whisper_child) = app_handle
         .shell()
         .sidecar("whisper-stream")
         .expect("failed to create `whisper-stream` command")
@@ -2343,7 +2347,43 @@ pub async fn start_live_transcription(
         .spawn()
         .map_err(|e| e.to_string())?;
 
-    *state.child.lock().await = Some(child);
+    if save_audio {
+        let active_doc_path = PathBuf::from(&active_document_path);
+        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+        fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+        let output_path = attachments_dir.join(format!("live_audio_{}.wav", timestamp));
+
+        let ffmpeg_args = if cfg!(target_os = "macos") {
+            vec![
+                "-f", "avfoundation", "-i", ":0", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                output_path.to_str().unwrap(),
+            ]
+        } else if cfg!(target_os = "windows") {
+            vec![
+                "-f", "dshow", "-i", "audio=default", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                output_path.to_str().unwrap(),
+            ]
+        } else {
+            vec![
+                "-f", "alsa", "-i", "default", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                output_path.to_str().unwrap(),
+            ]
+        };
+
+        let (_ffmpeg_rx, ffmpeg_child) = app_handle
+            .shell()
+            .sidecar("ffmpeg")
+            .expect("failed to create `ffmpeg` command")
+            .args(ffmpeg_args)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        *state.ffmpeg_child.lock().await = Some(ffmpeg_child);
+    }
+
+    *state.whisper_child.lock().await = Some(whisper_child);
     state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
     *state.start_time.lock().await = Some(chrono::Utc::now());
 
@@ -2415,7 +2455,11 @@ pub async fn stop_live_transcription(
         return Err("Live transcription is not running.".to_string());
     }
 
-    if let Some(child) = state.child.lock().await.take() {
+    if let Some(child) = state.whisper_child.lock().await.take() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+
+    if let Some(child) = state.ffmpeg_child.lock().await.take() {
         child.kill().map_err(|e| e.to_string())?;
     }
 

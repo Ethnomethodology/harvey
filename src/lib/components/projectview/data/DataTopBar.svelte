@@ -437,12 +437,20 @@
     }
 
     async function handleLiveTranscribe(event) {
-        const { model, language } = event.detail;
+        const { model, language, saveAudio } = event.detail;
         try {
+            const activePath = get(project).selectedDocumentPath || get(project).selectedMediaNotePath;
+            if (!activePath) {
+                message('No active document to transcribe into.', { title: 'Error', type: 'error' });
+                return;
+            }
+
             liveTranscriptionError = null;
             const started = await invoke('start_live_transcription', {
                 modelName: model,
                 language: language,
+                saveAudio: saveAudio,
+                activeDocumentPath: activePath
             });
             if (started) {
                 isLiveTranscriptionActive = true;

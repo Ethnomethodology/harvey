@@ -12,6 +12,7 @@
     let models = [];
     let selectedModel = '';
     let selectedLanguage = 'en';
+    let saveAudio = false;
     let showManageModelsModal = false;
 
     async function loadModels() {
@@ -30,7 +31,7 @@
             message('Please select a model.', { title: 'Error', type: 'error' });
             return;
         }
-        dispatch('confirm', { model: selectedModel, language: selectedLanguage });
+        dispatch('confirm', { model: selectedModel, language: selectedLanguage, saveAudio });
         closeModal();
     }
 
@@ -72,6 +73,12 @@
             </select>
         </div>
 
+        <div class="mb-4">
+            <label class="flex items-center">
+                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Save transcription audio</span>
+            </label>
+        </div>
         <div class="flex justify-between items-center mt-6">
             <button on:click={() => showManageModelsModal = true} class="text-sm text-blue-600 hover:underline">Manage Models</button>
             <div class="flex space-x-2">
