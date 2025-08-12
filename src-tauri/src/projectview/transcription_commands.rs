@@ -2481,21 +2481,6 @@ pub async fn stop_live_transcription(
 
             if !audio_files.is_empty() {
                 info!("[Live Transcription] Found {} audio files to attach.", audio_files.len());
-                let db_path = match db_handler::get_db_path() {
-                    Ok(p) => p,
-                    Err(e) => {
-                        error!("[Live Transcription] Failed to get db path: {}", e);
-                        return Ok(true); // Still return true as transcription stopped.
-                    }
-                };
-                let conn = match rusqlite::Connection::open(&db_path) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        error!("[Live Transcription] Failed to open db connection: {}", e);
-                        return Ok(true);
-                    }
-                };
-
                 let relative_doc_path = match active_doc_path.strip_prefix(&project_base_dir) {
                     Ok(p) => p.to_string_lossy().replace("\\", "/"),
                     Err(_) => {
@@ -2504,27 +2489,56 @@ pub async fn stop_live_transcription(
                     }
                 };
 
-                match db_handler::get_asset_metadata(&conn, &project_uuid, &relative_doc_path) {
-                    Ok(Some(mut metadata)) => {
-                        let attachments_json = json!(audio_files).to_string();
-                        let new_field = ("attachments".to_string(), attachments_json);
+                match db_handler::load_asset_metadata(&project_uuid, &relative_doc_path) {
+                    Ok(Some(metadata_from_db)) => {
+                        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db.custom_fields_json
+                            .as_deref()
+                            .and_then(|json| serde_json::from_str(json).ok())
+                            .unwrap_or_else(Vec::new);
 
-                        if let Some(existing_field) = metadata.custom_fields.iter_mut().find(|f| f.0 == "attachments") {
-                            *existing_field = new_field;
+                        let attachments_json_string = json!(audio_files).to_string();
+
+                        if let Some(existing_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
+                            if let Some(obj) = existing_field.as_object_mut() {
+                                obj.insert("value".to_string(), json!(attachments_json_string));
+                            }
                         } else {
-                            metadata.custom_fields.push(new_field);
+                            let new_field = json!({
+                                "key": "attachments",
+                                "value": attachments_json_string
+                            });
+                            custom_fields.push(new_field);
                         }
 
-                        let custom_fields_payload: Vec<db_handler::CustomFieldPayload> = metadata.custom_fields.iter().map(|(k, v)| db_handler::CustomFieldPayload {
-                            key: k.clone(),
-                            value: v.clone(),
-                        }).collect();
+                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
 
-                        if let Err(e) = db_handler::update_asset_custom_fields(&conn, &project_uuid, &relative_doc_path, &custom_fields_payload) {
+                        let file_metadata = FileMetadata {
+                            file_name: metadata_from_db.file_name,
+                            file_path: metadata_from_db.file_path,
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: metadata_from_db.title.unwrap_or_default(),
+                            description: metadata_from_db.description.unwrap_or_default(),
+                            summary: metadata_from_db.summary.unwrap_or_default(),
+                            duration_seconds: metadata_from_db.duration_seconds,
+                            width: metadata_from_db.width,
+                            height: metadata_from_db.height,
+                            frame_rate: metadata_from_db.frame_rate,
+                            bit_rate: metadata_from_db.bit_rate,
+                            audio_codec: metadata_from_db.audio_codec,
+                            video_codec: metadata_from_db.video_codec,
+                            created_at: metadata_from_db.creation_time,
+                            original_import_path: metadata_from_db.original_import_path,
+                            speaker_names: metadata_from_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+                            waveform_data: metadata_from_db.waveform_data,
+                        };
+
+                        if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
                             error!("[Live Transcription] Failed to update metadata with attachments: {}", e);
                         } else {
                             info!("[Live Transcription] Successfully updated metadata with attachments.");
-                             let _ = app_handle.emit("metadata_updated", serde_json::json!({ "path": active_doc_path_str }));
+                            if let Err(e) = app_handle.emit("metadata_updated", &relative_doc_path) {
+                                error!("Failed to emit metadata_updated event: {}", e);
+                            }
                         }
                     },
                     Ok(None) => warn!("[Live Transcription] No existing metadata found for document '{}'. Cannot attach audio files.", relative_doc_path),
