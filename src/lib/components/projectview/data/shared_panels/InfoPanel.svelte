@@ -524,6 +524,33 @@
                     {/if}
                 </div>
 
+                <!-- Attachments Section -->
+                {#if itemType === 'doc' && currentFileMetadata?.customFields}
+                    {@const attachmentsField = currentFileMetadata.customFields.find(f => f.key === 'attachments')}
+                    {#if attachmentsField && attachmentsField.value}
+                        {@const attachments = JSON.parse(attachmentsField.value)}
+                        {#if Array.isArray(attachments) && attachments.length > 0}
+                            <hr class="my-4 border-gray-300 dark:border-gray-700">
+                            <div class="mb-3">
+                                <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Attachments</h3>
+                                <ul class="list-disc list-inside space-y-1 pl-1">
+                                    {#each attachments as attachment, i (attachment)}
+                                        <li class="text-gray-900 dark:text-gray-100">
+                                            <button
+                                                class="text-blue-600 dark:text-blue-400 hover:underline text-left"
+                                                on:click={() => invoke('show_in_folder', { path: attachment })}
+                                                title="Show in folder"
+                                            >
+                                                {attachment.split(/[/\\]/).pop() || attachment}
+                                            </button>
+                                        </li>
+                                    {/each}
+                                </ul>
+                            </div>
+                        {/if}
+                    {/if}
+                {/if}
+
                 {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(currentFileMetadata.customFields && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">
                     <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Technical Details</h3>

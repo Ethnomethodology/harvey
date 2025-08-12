@@ -439,9 +439,14 @@
     async function handleLiveTranscribe(event) {
         const { model, language, saveAudio } = event.detail;
         try {
-            const activePath = get(project).selectedDocumentPath || get(project).selectedMediaNotePath;
+            const projectState = get(project);
+            const activePath = projectState.selectedDocumentPath || projectState.selectedMediaNotePath;
             if (!activePath) {
                 message('No active document to transcribe into.', { title: 'Error', type: 'error' });
+                return;
+            }
+            if (!projectState.id || !projectState.baseDirectory) {
+                message('Project details not available. Cannot start transcription.', { title: 'Error', type: 'error' });
                 return;
             }
 
@@ -450,7 +455,9 @@
                 modelName: model,
                 language: language,
                 saveAudio: saveAudio,
-                activeDocumentPath: activePath
+                activeDocumentPath: activePath,
+                projectUuid: projectState.id,
+                projectBaseDir: projectState.baseDirectory
             });
             if (started) {
                 isLiveTranscriptionActive = true;

@@ -33,6 +33,9 @@ pub struct LiveTranscriptionState {
     pub whisper_child: Mutex<Option<CommandChild>>,
     pub is_running: Arc<AtomicBool>,
     pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
+    pub active_document_path: Mutex<Option<String>>,
+    pub project_uuid: Mutex<Option<String>>,
+    pub project_base_dir: Mutex<Option<PathBuf>>,
 }
 
 impl Default for LiveTranscriptionState {
@@ -41,6 +44,9 @@ impl Default for LiveTranscriptionState {
             whisper_child: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
             start_time: Mutex::new(None),
+            active_document_path: Mutex::new(None),
+            project_uuid: Mutex::new(None),
+            project_base_dir: Mutex::new(None),
         }
     }
 }
@@ -2319,6 +2325,8 @@ pub async fn start_live_transcription(
     language: String,
     save_audio: bool,
     active_document_path: String,
+    project_uuid: String,
+    project_base_dir: String,
     state: tauri::State<'_, LiveTranscriptionState>,
 ) -> Result<bool, String> {
     if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
@@ -2360,6 +2368,9 @@ pub async fn start_live_transcription(
     *state.whisper_child.lock().await = Some(whisper_child);
     state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
     *state.start_time.lock().await = Some(chrono::Utc::now());
+    *state.active_document_path.lock().await = Some(active_document_path);
+    *state.project_uuid.lock().await = Some(project_uuid);
+    *state.project_base_dir.lock().await = Some(PathBuf::from(project_base_dir));
 
     let is_running_clone = state.is_running.clone();
     let app_handle_clone = app_handle.clone();
@@ -2422,6 +2433,7 @@ pub async fn start_live_transcription(
 
 #[tauri::command]
 pub async fn stop_live_transcription(
+    app_handle: AppHandle,
     state: tauri::State<'_, LiveTranscriptionState>
 ) -> Result<bool, String> {
     info!("[Live Transcription] Stop command received.");
@@ -2434,5 +2446,95 @@ pub async fn stop_live_transcription(
     }
 
     state.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let active_doc_path_opt = state.active_document_path.lock().await.take();
+    let project_uuid_opt = state.project_uuid.lock().await.take();
+    let project_base_dir_opt = state.project_base_dir.lock().await.take();
+
+    if let (Some(active_doc_path_str), Some(project_uuid), Some(project_base_dir)) = (active_doc_path_opt, project_uuid_opt, project_base_dir_opt) {
+        info!("[Live Transcription] Processing saved audio for doc: {}", active_doc_path_str);
+
+        let active_doc_path = PathBuf::from(&active_doc_path_str);
+        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+
+        if attachments_dir.exists() && attachments_dir.is_dir() {
+            let mut audio_files: Vec<String> = Vec::new();
+            match fs::read_dir(&attachments_dir) {
+                Ok(entries) => {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.is_file() {
+                                if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
+                                    if extension.eq_ignore_ascii_case("wav") {
+                                         audio_files.push(path.to_string_lossy().to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("[Live Transcription] Failed to read attachments directory: {}", e);
+                }
+            }
+
+            if !audio_files.is_empty() {
+                info!("[Live Transcription] Found {} audio files to attach.", audio_files.len());
+                let db_path = match db_handler::get_db_path() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        error!("[Live Transcription] Failed to get db path: {}", e);
+                        return Ok(true); // Still return true as transcription stopped.
+                    }
+                };
+                let conn = match rusqlite::Connection::open(&db_path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("[Live Transcription] Failed to open db connection: {}", e);
+                        return Ok(true);
+                    }
+                };
+
+                let relative_doc_path = match active_doc_path.strip_prefix(&project_base_dir) {
+                    Ok(p) => p.to_string_lossy().replace("\\", "/"),
+                    Err(_) => {
+                        error!("[Live Transcription] Failed to create relative path for document.");
+                        return Ok(true);
+                    }
+                };
+
+                match db_handler::get_asset_metadata(&conn, &project_uuid, &relative_doc_path) {
+                    Ok(Some(mut metadata)) => {
+                        let attachments_json = json!(audio_files).to_string();
+                        let new_field = ("attachments".to_string(), attachments_json);
+
+                        if let Some(existing_field) = metadata.custom_fields.iter_mut().find(|f| f.0 == "attachments") {
+                            *existing_field = new_field;
+                        } else {
+                            metadata.custom_fields.push(new_field);
+                        }
+
+                        let custom_fields_payload: Vec<db_handler::CustomFieldPayload> = metadata.custom_fields.iter().map(|(k, v)| db_handler::CustomFieldPayload {
+                            key: k.clone(),
+                            value: v.clone(),
+                        }).collect();
+
+                        if let Err(e) = db_handler::update_asset_custom_fields(&conn, &project_uuid, &relative_doc_path, &custom_fields_payload) {
+                            error!("[Live Transcription] Failed to update metadata with attachments: {}", e);
+                        } else {
+                            info!("[Live Transcription] Successfully updated metadata with attachments.");
+                             let _ = app_handle.emit("metadata_updated", serde_json::json!({ "path": active_doc_path_str }));
+                        }
+                    },
+                    Ok(None) => warn!("[Live Transcription] No existing metadata found for document '{}'. Cannot attach audio files.", relative_doc_path),
+                    Err(e) => error!("[Live Transcription] Failed to get metadata for document '{}': {}", relative_doc_path, e),
+                }
+            }
+        }
+    } else {
+        warn!("[Live Transcription] Could not update attachments metadata because path or project info was missing from state.");
+    }
+
     Ok(true)
 }
