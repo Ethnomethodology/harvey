@@ -2357,7 +2357,7 @@ pub async fn start_live_transcription(
 
     let (mut rx, whisper_child) = command.args(args).spawn().map_err(|e| e.to_string())?;
 
-    *state.child.lock().await = Some(child);
+    *state.whisper_child.lock().await = Some(whisper_child);
     state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
     *state.start_time.lock().await = Some(chrono::Utc::now());
 
