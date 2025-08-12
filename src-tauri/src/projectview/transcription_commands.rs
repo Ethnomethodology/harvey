@@ -2359,7 +2359,7 @@ pub async fn start_live_transcription(
 
         let ffmpeg_args = if cfg!(target_os = "macos") {
             vec![
-                "-f", "avfoundation", "-i", ":0", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                "-f", "avfoundation", "-i", "0:none", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
                 output_path.to_str().unwrap(),
             ]
         } else if cfg!(target_os = "windows") {
@@ -2374,7 +2374,7 @@ pub async fn start_live_transcription(
             ]
         };
 
-        let (_ffmpeg_rx, ffmpeg_child) = app_handle
+        let (mut ffmpeg_rx, ffmpeg_child) = app_handle
             .shell()
             .sidecar("ffmpeg")
             .expect("failed to create `ffmpeg` command")
@@ -2383,6 +2383,26 @@ pub async fn start_live_transcription(
             .map_err(|e| e.to_string())?;
 
         *state.ffmpeg_child.lock().await = Some(ffmpeg_child);
+
+        tokio::spawn(async move {
+            while let Some(event) = ffmpeg_rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(line) => {
+                        info!("[ffmpeg stdout]: {}", String::from_utf8_lossy(&line));
+                    }
+                    CommandEvent::Stderr(line) => {
+                        error!("[ffmpeg stderr]: {}", String::from_utf8_lossy(&line));
+                    }
+                    CommandEvent::Error(err) => {
+                        error!("[ffmpeg error]: {}", err);
+                    }
+                    CommandEvent::Terminated(payload) => {
+                        info!("[ffmpeg terminated]: {:?}", payload);
+                    }
+                    _ => {}
+                }
+            }
+        });
     }
 
     *state.whisper_child.lock().await = Some(whisper_child);
