@@ -2334,11 +2334,13 @@ pub async fn start_live_transcription(
             "-l",
             &language,
             "--step", "5000",
-            "--length", "30000",
+            "--length", "5000",
             "-c", "0",
             "-t", "8",
             "--max-tokens", "32",
             "--audio-ctx", "768",
+            "--no-context",
+            "--single-segment",
         ])
         .spawn()
         .map_err(|e| e.to_string())?;
