@@ -33,6 +33,7 @@ pub struct LiveTranscriptionState {
     pub whisper_child: Mutex<Option<CommandChild>>,
     pub is_running: Arc<AtomicBool>,
     pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
+    pub active_document_path: Mutex<Option<String>>,
 }
 
 impl Default for LiveTranscriptionState {
@@ -41,6 +42,7 @@ impl Default for LiveTranscriptionState {
             whisper_child: Mutex::new(None),
             is_running: Arc::new(AtomicBool::new(false)),
             start_time: Mutex::new(None),
+            active_document_path: Mutex::new(None),
         }
     }
 }
@@ -2341,16 +2343,8 @@ pub async fn start_live_transcription(
     ];
 
     if save_audio {
-        let active_doc_path = PathBuf::from(&active_document_path);
-        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
-        fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
-
-        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
-        let output_path = attachments_dir.join(format!("live_audio_{}.wav", timestamp));
-        info!("[Live Transcription] Saving audio to path: {:?}", output_path);
-
         args.push("--save-audio".to_string());
-        args.push(output_path.to_str().unwrap().to_string());
+        *state.active_document_path.lock().await = Some(active_document_path);
     }
 
     let (mut rx, whisper_child) = app_handle
@@ -2426,6 +2420,7 @@ pub async fn start_live_transcription(
 
 #[tauri::command]
 pub async fn stop_live_transcription(
+    app_handle: AppHandle,
     state: tauri::State<'_, LiveTranscriptionState>
 ) -> Result<bool, String> {
     info!("[Live Transcription] Stop command received.");
@@ -2435,6 +2430,25 @@ pub async fn stop_live_transcription(
 
     if let Some(child) = state.whisper_child.lock().await.take() {
         child.kill().map_err(|e| e.to_string())?;
+    }
+
+    if let Some(doc_path_str) = state.active_document_path.lock().await.take() {
+        let resource_dir = app_handle.path().resource_dir().unwrap();
+        let source_audio_path = resource_dir.join("output.wav");
+
+        if source_audio_path.exists() {
+            let active_doc_path = PathBuf::from(&doc_path_str);
+            let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+            fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+
+            let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+            let dest_path = attachments_dir.join(format!("live_audio_{}.wav", timestamp));
+
+            fs::rename(&source_audio_path, &dest_path).map_err(|e| e.to_string())?;
+            info!("[Live Transcription] Moved saved audio to {:?}", dest_path);
+        } else {
+            warn!("[Live Transcription] Expected to find saved audio at {:?}, but it was not there.", source_audio_path);
+        }
     }
 
     state.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
