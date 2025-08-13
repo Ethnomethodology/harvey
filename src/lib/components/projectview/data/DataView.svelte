@@ -142,7 +142,24 @@
         // InfoPanel will react to panelStateStore.activeInfoPanelTab
     }
 
-	onMount(() => {
+	import { listen } from '@tauri-apps/api/event';
+
+	let infoPanelRefreshKey = null;
+
+	onMount(async () => {
+		const unlisten = await listen('metadata_updated', (event) => {
+			console.log(`[DataView] Received metadata_updated event for path:`, event.payload);
+			// Check if the updated item is the one currently being viewed.
+			// The payload is the relative path of the asset.
+			if (event.payload && event.payload === activeItemPath) {
+				console.log(`[DataView] Refreshing InfoPanel for ${activeItemPath}`);
+				infoPanelRefreshKey = Date.now();
+			}
+		});
+
+		return () => {
+			unlisten();
+		};
 	});
 
 </script>
@@ -200,7 +217,7 @@
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
         {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
             <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out" transition:slide="{{ duration: 300, axis: 'x' }}">
-                <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
+                <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
             </div>
         {/if}
         <!-- Consider adding a toggle button for infoPanelCollapsed if needed, or manage via RightBar interaction -->

@@ -31,6 +31,13 @@
         }
     }
 
+    $: {
+        if (refreshKey && currentOriginalAssetDetails?.originalRelativePath) {
+            console.log(`[InfoPanel] Refresh triggered by key: ${refreshKey}`);
+            loadMetadata(currentOriginalAssetDetails.originalRelativePath);
+        }
+    }
+
     async function getOriginalAssetDetails(selectedPath, projectStoreState) {
         if (!selectedPath || !projectStoreState || !projectStoreState.baseDirectory) {
             const fallbackName = selectedPath ? await basename(selectedPath) : 'Unknown.file';
@@ -305,6 +312,7 @@
 
     export let itemPath = null;
     export let itemType = null;
+    export let refreshKey = null;
 
     $: {
         if ($project.fileRenamed && $project.fileRenamed.newPath) {
