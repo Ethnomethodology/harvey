@@ -2541,7 +2541,44 @@ pub async fn stop_live_transcription(
                             }
                         }
                     },
-                    Ok(None) => warn!("[Live Transcription] No existing metadata found for document '{}'. Cannot attach audio files.", relative_doc_path),
+                    Ok(None) => {
+                        info!("[Live Transcription] No existing metadata for '{}'. Creating new entry.", relative_doc_path);
+                        let file_metadata = FileMetadata {
+                            file_name: active_doc_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                            file_path: active_doc_path_str.clone(),
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: String::new(),
+                            description: String::new(),
+                            summary: String::new(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            created_at: Some(Utc::now().to_rfc3339()),
+                            original_import_path: None,
+                            speaker_names: None,
+                            waveform_data: None,
+                        };
+
+                        let attachments_json_string = json!(audio_files).to_string();
+                        let custom_fields = vec![json!({
+                            "key": "attachments",
+                            "value": attachments_json_string
+                        })];
+                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+
+                        if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, "doc", Some(&updated_custom_fields_json_str)) {
+                            error!("[Live Transcription] Failed to save new metadata with attachments: {}", e);
+                        } else {
+                            info!("[Live Transcription] Successfully saved new metadata with attachments.");
+                            if let Err(e) = app_handle.emit("metadata_updated", &relative_doc_path) {
+                                error!("Failed to emit metadata_updated event: {}", e);
+                            }
+                        }
+                    },
                     Err(e) => error!("[Live Transcription] Failed to get metadata for document '{}': {}", relative_doc_path, e),
                 }
             }

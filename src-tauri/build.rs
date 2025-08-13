@@ -114,17 +114,17 @@ fn main() {
     let pandoc_final_name = format!("pandoc-{}{}", target, extension);
     let pandoc_dest_path = sidecar_dir.join(&pandoc_final_name);
     if !pandoc_dest_path.exists() {
-        let (pandoc_os, pandoc_arch) = match target.as_str() {
-            "aarch64-apple-darwin" => ("macOS", "arm64-"),
-            "x86_64-apple-darwin" => ("macOS", "x86_64-"),
-            "x86_64-pc-windows-msvc" => ("windows-x86_64", ""),
-            "aarch64-pc-windows-msvc" => ("windows-arm64", ""), // Assuming pandoc supports this
-            "x86_64-unknown-linux-gnu" => ("linux-x86_64", ""), // Assuming pandoc naming
-            "aarch64-unknown-linux-gnu" => ("linux-arm64", ""), // Assuming pandoc naming
-            _ => ("", ""),
+        let pandoc_asset_part = match target.as_str() {
+            "aarch64-apple-darwin" | "x86_64-apple-darwin" => "macOS",
+            "x86_64-pc-windows-msvc" => "windows-x86_64",
+            "aarch64-pc-windows-msvc" => "windows-arm64",
+            "x86_64-unknown-linux-gnu" => "linux-amd64",
+            "aarch64-unknown-linux-gnu" => "linux-arm64",
+            _ => "",
         };
 
-        if !pandoc_os.is_empty() {
+
+        if !pandoc_asset_part.is_empty() {
             let pandoc_release_url = "https://api.github.com/repos/jgm/pandoc/releases/latest";
             let pandoc_release_json = Command::new("curl").args(&["-sL", pandoc_release_url]).output().expect("Failed to fetch Pandoc release info");
             let pandoc_release_str = String::from_utf8_lossy(&pandoc_release_json.stdout);
@@ -135,19 +135,28 @@ fn main() {
                 .map(|value| value.trim().trim_matches(|c| c == '"' || c == ','))
                 .unwrap_or("3.2.1"); // Fallback tag
 
-            let pandoc_asset_name = format!("pandoc-{}-{}{}.zip", pandoc_tag, pandoc_arch, pandoc_os);
+            let archive_extension = if target.contains("linux") { "tar.gz" } else { "zip" };
+            let pandoc_asset_name = format!("pandoc-{}-{}.{}", pandoc_tag, pandoc_asset_part, archive_extension);
             let pandoc_url = format!("https://github.com/jgm/pandoc/releases/download/{}/{}", pandoc_tag, pandoc_asset_name);
             let archive_path = temp_dir.join(&pandoc_asset_name);
 
             download_file(&pandoc_url, &archive_path);
 
             println!("cargo:info=Extracting {}...", archive_path.display());
-            let status = Command::new("unzip")
-                .args(&["-o", &archive_path.to_string_lossy(), "-d", &temp_dir.to_string_lossy()])
-                .status()
-                .expect("Failed to start unzip command");
+            let extract_status = if archive_extension == "zip" {
+                Command::new("unzip")
+                    .args(&["-o", &archive_path.to_string_lossy(), "-d", &temp_dir.to_string_lossy()])
+                    .status()
+            } else { // tar.gz
+                Command::new("tar")
+                    .args(&["-xzf", &archive_path.to_string_lossy(), "-C", &temp_dir.to_string_lossy()])
+                    .status()
+            };
+
+            let status = extract_status.expect("Failed to start extraction command");
+
             if !status.success() {
-                panic!("Failed to extract pandoc archive: {}. Unzip exit code: {}", archive_path.display(), status);
+                panic!("Failed to extract pandoc archive: {}. Extraction exit code: {}", archive_path.display(), status);
             }
 
             let search_filename = format!("pandoc{}", extension);
