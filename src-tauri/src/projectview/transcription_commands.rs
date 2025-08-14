@@ -2536,7 +2536,7 @@ pub async fn stop_live_transcription(
                             error!("[Live Transcription] Failed to update metadata with attachments: {}", e);
                         } else {
                             info!("[Live Transcription] Successfully updated metadata with attachments.");
-                            if let Err(e) = app_handle.emit("metadata_updated", &relative_doc_path) {
+                            if let Err(e) = app_handle.emit("metadata_updated", &active_doc_path_str) {
                                 error!("Failed to emit metadata_updated event: {}", e);
                             }
                         }
@@ -2574,7 +2574,7 @@ pub async fn stop_live_transcription(
                             error!("[Live Transcription] Failed to save new metadata with attachments: {}", e);
                         } else {
                             info!("[Live Transcription] Successfully saved new metadata with attachments.");
-                            if let Err(e) = app_handle.emit("metadata_updated", &relative_doc_path) {
+                            if let Err(e) = app_handle.emit("metadata_updated", &active_doc_path_str) {
                                 error!("Failed to emit metadata_updated event: {}", e);
                             }
                         }
