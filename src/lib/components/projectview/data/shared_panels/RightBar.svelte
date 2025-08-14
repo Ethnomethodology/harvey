@@ -55,10 +55,3 @@
         </button>
     {/if}
 </div>
-
-<style>
-    /* Ensure the width is strictly controlled */
-    .w-12 {
-        width: 3rem; /* 48px */
-    }
-</style>
