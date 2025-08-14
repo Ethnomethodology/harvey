@@ -487,8 +487,8 @@
                 </div>
 
                 <div class="mb-3">
-                    <label for="filePathRelative" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path (Relative):</label>
-                    <span id="filePathRelative" class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
+                    <label for="filePathAbsolute" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
+                    <span id="filePathAbsolute" class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</span>
                 </div>
 
                 {#if currentFileMetadata.creation_time}
