@@ -4,37 +4,29 @@
     import { get } from 'svelte/store';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
+    export let itemType = null;
+
     const dispatch = createEventDispatcher();
 
-    // New icon for Metadata tab
     const METADATA_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-code w-5 h-5" viewBox="0 0 16 16"> <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/> <path d="M8.646 6.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L10.293 9 8.646 7.354a.5.5 0 0 1 0-.708m-1.292 0a.5.5 0 0 0-.708 0l-2 2a.5.5 0 0 0 0 .708l2 2a.5.5 0 0 0 .708-.708L5.707 9l1.647-1.646a.5.5 0 0 0 0-.708"/> </svg>`;
+    const ATTACHMENTS_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paperclip w-5 h-5" viewBox="0 0 16 16"> <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0z"/> </svg>`;
 
-    let currentActiveTab = 'metadata'; // Default active tab
-
-    // Subscribe to store changes if active tab is managed globally
-    panelStateStore.subscribe(store => {
-        if (store.activeInfoPanelTab) {
-            currentActiveTab = store.activeInfoPanelTab;
-        }
-        // We also need infoPanelCollapsed state for the icon
-    });
-
-    function handleMetadataClick() {
-        const store = get(panelStateStore); // Get current store values
-        if (store.activeInfoPanelTab === 'metadata' && !store.infoPanelCollapsed) {
-            panelStateStore.toggleInfoPanel(true); // Collapse it
+    function handleTabClick(tabName) {
+        const store = get(panelStateStore);
+        if (store.activeInfoPanelTab === tabName && !store.infoPanelCollapsed) {
+            panelStateStore.toggleInfoPanel(true); // Collapse if active tab is clicked again
         } else {
-            panelStateStore.setActiveInfoPanelTab('metadata');
-            panelStateStore.toggleInfoPanel(false); // Open it
+            panelStateStore.setActiveInfoPanelTab(tabName);
+            panelStateStore.toggleInfoPanel(false); // Ensure panel is open
         }
-        dispatch('tabchange', { tabName: 'metadata' }); // Notify parent if needed
+        dispatch('tabchange', { tabName });
     }
 
 </script>
 
 <div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2 shadow-md">
     <button
-        on:click={handleMetadataClick}
+        on:click={() => handleTabClick('metadata')}
         class="p-2 rounded-md focus:outline-none transition-colors"
         class:text-blue-600={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
         class:dark:text-blue-400={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
@@ -46,7 +38,22 @@
     >
         {@html METADATA_ICON_SVG}
     </button>
-    <!-- Add other icon buttons for future tabs here -->
+
+    {#if itemType === 'doc'}
+        <button
+            on:click={() => handleTabClick('attachments')}
+            class="p-2 rounded-md focus:outline-none transition-colors"
+            class:text-blue-600={$panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed}
+            class:dark:text-blue-400={$panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed}
+            class:hover:bg-gray-300={!($panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed)}
+            class:dark:hover:bg-gray-600={!($panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed)}
+            class:text-gray-700={!($panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed)}
+            class:dark:text-gray-300={!($panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed)}
+            title="Attachments"
+        >
+            {@html ATTACHMENTS_ICON_SVG}
+        </button>
+    {/if}
 </div>
 
 <style>

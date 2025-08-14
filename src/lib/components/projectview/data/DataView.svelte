@@ -10,8 +10,9 @@
     import ImportedTranscriptView from './imported_transcripts/ImportedTranscriptView.svelte';
     import MediaView from './media/MediaView.svelte';
     import GroupDetailView from './groups/GroupDetailView.svelte';
-    import InfoPanel from './shared_panels/InfoPanel.svelte'; // NEW
-    import RightBar from './shared_panels/RightBar.svelte';   // NEW
+    import InfoPanel from './shared_panels/InfoPanel.svelte';
+    import AttachmentsPanel from './shared_panels/AttachmentsPanel.svelte';
+    import RightBar from './shared_panels/RightBar.svelte';
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
     import { checkUnsavedChangesThenProceed } from '$lib/services/projectService.js';
     import { get } from 'svelte/store';
@@ -217,7 +218,11 @@
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
         {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
             <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out" transition:slide="{{ duration: 300, axis: 'x' }}">
-                <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
+                {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
+                    <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
+                {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
+                    <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
+                {/if}
             </div>
         {/if}
         <!-- Consider adding a toggle button for infoPanelCollapsed if needed, or manage via RightBar interaction -->
@@ -225,7 +230,7 @@
         <!-- New Right Bar (Far Right) -->
         {#if activeViewType !== 'group_detail' && activeItemPath}
             <div class="h-full flex-shrink-0">
-                <RightBar on:tabchange={handleRightBarTabChange} />
+                <RightBar on:tabchange={handleRightBarTabChange} itemType={activeItemTypeForInfoPanel} />
             </div>
         {/if}
 	</div>
