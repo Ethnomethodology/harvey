@@ -546,7 +546,7 @@
                                         <li class="text-gray-900 dark:text-gray-100">
                                             <button
                                                 class="text-blue-600 dark:text-blue-400 hover:underline text-left"
-                                                on:click={() => invoke('show_in_folder', { path: attachment })}
+                                                on:click={() => invoke('reveal_in_file_explorer', { filePathStr: attachment })}
                                                 title="Show in folder"
                                             >
                                                 {attachment.split(/[/\\]/).pop() || attachment}
