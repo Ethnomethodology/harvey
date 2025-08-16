@@ -11,6 +11,7 @@
     import MediaView from './media/MediaView.svelte';
     import GroupDetailView from './groups/GroupDetailView.svelte';
     import InfoPanel from './shared_panels/InfoPanel.svelte';
+    import HighlightsPanel from './shared_panels/HighlightsPanel.svelte';
     import AttachmentsPanel from './shared_panels/AttachmentsPanel.svelte';
     import RightBar from './shared_panels/RightBar.svelte';
     import { project, prepareDocumentView, prepareImportedTranscriptView, prepareMediaNoteView } from '$lib/stores/projectStore.js';
@@ -224,6 +225,8 @@
             <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out" transition:slide="{{ duration: 300, axis: 'x' }}">
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
+                {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
+                    <HighlightsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'attachments'}
                     <AttachmentsPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} />
                 {/if}

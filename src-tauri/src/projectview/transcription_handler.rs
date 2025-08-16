@@ -420,7 +420,7 @@ mod tests {
     use crate::projectview::db_handler; // For direct db interactions in test
     use chrono::Utc;
     use serde_json; // For serializing segments in test setup
-    use rusqlite::Connection; // For in-memory DB
+    use rusqlite::{Connection, OptionalExtension}; // For in-memory DB
 
     #[test]
     fn test_metadata_saved_to_db_and_xml_updated_correctly() -> Result<(), Box<dyn std::error::Error>> {
@@ -438,17 +438,14 @@ mod tests {
 
         let project_xml_path = project_base_dir.join("project.xml");
         let initial_project_data = ProjectXml {
-            project_name: "Test Project DB".to_string(),
+            name: "Test Project DB".to_string(),
             project_uuid: "test_uuid_db_xml".to_string(),
-            project_root_is_single_file: false,
+            media_files: Default::default(),
+            document_files: Default::default(),
+            table_files: Default::default(),
+            image_files: Default::default(),
             imported_transcript_files: Default::default(),
-            document_metadata_files: Default::default(), // Should remain empty for this transcript's metadata
-            video_files: Default::default(), audio_files: Default::default(), image_files: Default::default(),
-            document_files: Default::default(), table_files: Default::default(), other_files: Default::default(),
-            chat_files: Default::default(), project_settings: Default::default(), saved_searches: Default::default(),
-            project_tags: Default::default(), project_people: Default::default(), project_places: Default::default(),
-            project_organizations: Default::default(), project_highlights_config: Default::default(),
-            project_highlights_filters: Default::default(), project_highlights_summary_types: Default::default(),
+            document_metadata_files: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&initial_project_data)?;
         fs::write(&project_xml_path, xml_string)?;
@@ -466,16 +463,34 @@ mod tests {
         // Manually run the DDL for asset_metadata table and trigger for the test connection
         conn_test_db.execute_batch(
             "CREATE TABLE IF NOT EXISTS asset_metadata (
-                asset_relative_path TEXT PRIMARY KEY, file_name TEXT NOT NULL, file_path TEXT NOT NULL,
-                last_modified TEXT NOT NULL, title TEXT, description TEXT, summary TEXT,
-                duration_seconds REAL, width INTEGER, height INTEGER, frame_rate REAL,
-                bit_rate INTEGER, audio_codec TEXT, video_codec TEXT, creation_time TEXT,
-                asset_type TEXT NOT NULL, custom_fields_json TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                asset_relative_path TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                last_modified TEXT NOT NULL,
+                title TEXT,
+                description TEXT,
+                summary TEXT,
+                duration_seconds REAL,
+                width INTEGER,
+                height INTEGER,
+                frame_rate REAL,
+                bit_rate INTEGER,
+                audio_codec TEXT,
+                video_codec TEXT,
+                creation_time TEXT,
+                asset_type TEXT NOT NULL,
+                custom_fields_json TEXT,
+                original_import_path TEXT,
+                speaker_names_json TEXT,
+                waveform_data BLOB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (project_id, asset_relative_path)
             );
             CREATE TRIGGER IF NOT EXISTS update_asset_metadata_updated_at
             AFTER UPDATE ON asset_metadata FOR EACH ROW BEGIN
-                UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP WHERE asset_relative_path = OLD.asset_relative_path;
+                UPDATE asset_metadata SET updated_at = CURRENT_TIMESTAMP WHERE project_id = OLD.project_id AND asset_relative_path = OLD.asset_relative_path;
             END;",
         )?;
 
@@ -489,9 +504,10 @@ mod tests {
             last_modified: Utc::now().to_rfc3339(),
             title: String::new(), description: String::new(), summary: String::new(),
             duration_seconds: None, width: None, height: None, frame_rate: None,
-            bit_rate: None, audio_codec: None, video_codec: None, creation_time: None,
+            bit_rate: None, audio_codec: None, video_codec: None, created_at: None,
             original_import_path: None,
             speaker_names: None,
+            waveform_data: None,
         };
 
         let asset_relative_path_for_db_str = final_transcript_path
@@ -506,22 +522,27 @@ mod tests {
             let custom_fields_json_val: Option<&str> = None;
             let sql_insert = "
                 INSERT INTO asset_metadata (
-                    asset_relative_path, file_name, file_path, last_modified, title,
+                    project_id, asset_relative_path, file_name, file_path, last_modified, title,
                     description, summary, duration_seconds, width, height, frame_rate,
-                    bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
-                ON CONFLICT(asset_relative_path) DO UPDATE SET
+                    bit_rate, audio_codec, video_codec, creation_time, asset_type, custom_fields_json,
+                    original_import_path, speaker_names_json, waveform_data
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+                ON CONFLICT(project_id, asset_relative_path) DO UPDATE SET
                     file_name = excluded.file_name, file_path = excluded.file_path, last_modified = excluded.last_modified,
                     title = excluded.title, description = excluded.description, summary = excluded.summary,
                     duration_seconds = excluded.duration_seconds, width = excluded.width, height = excluded.height,
                     frame_rate = excluded.frame_rate, bit_rate = excluded.bit_rate, audio_codec = excluded.audio_codec,
                     video_codec = excluded.video_codec, creation_time = excluded.creation_time,
                     asset_type = excluded.asset_type, custom_fields_json = excluded.custom_fields_json,
+                    original_import_path = excluded.original_import_path,
+                    speaker_names_json = excluded.speaker_names_json,
+                    waveform_data = excluded.waveform_data,
                     updated_at = CURRENT_TIMESTAMP;
             ";
              conn_test_db.execute(
                 sql_insert,
                 rusqlite::params![
+                    "test_uuid_db_xml",
                     asset_relative_path_for_db_str,
                     file_metadata_for_db_obj.file_name,
                     file_metadata_for_db_obj.file_path,
@@ -534,11 +555,14 @@ mod tests {
                     db_handler::to_sql_optional(file_metadata_for_db_obj.height),
                     db_handler::to_sql_optional(file_metadata_for_db_obj.frame_rate),
                     db_handler::to_sql_optional(file_metadata_for_db_obj.bit_rate),
-                    db_handler::to_sql_optional(file_metadata_for_db_obj.audio_codec.as_deref()),
-                    db_handler::to_sql_optional(file_metadata_for_db_obj.video_codec.as_deref()),
-                    db_handler::to_sql_optional(file_metadata_for_db_obj.creation_time.as_deref()),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.audio_codec.as_deref()),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.video_codec.as_deref()),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.created_at.as_deref()),
                     asset_type_str,
                     db_handler::to_sql_optional_str(custom_fields_json_val),
+                    db_handler::to_sql_optional_str(file_metadata_for_db_obj.original_import_path.as_deref()),
+                    db_handler::to_sql_optional_str(None), // speaker_names_json
+                    db_handler::to_sql_optional_blob(file_metadata_for_db_obj.waveform_data.as_deref()),
                 ],
             )?;
         }
@@ -562,10 +586,10 @@ mod tests {
              let mut stmt_load = conn_test_db.prepare("
                 SELECT file_name, file_path, last_modified, title, description, summary,
                        duration_seconds, width, height, frame_rate, bit_rate, audio_codec, video_codec,
-                       creation_time, custom_fields_json, asset_type
-                FROM asset_metadata WHERE asset_relative_path = ?1
+                       creation_time, custom_fields_json, asset_type, original_import_path, speaker_names_json, waveform_data
+                FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path = ?2
             ")?;
-            stmt_load.query_row(rusqlite::params![asset_relative_path_for_db_str], |row| {
+            stmt_load.query_row(rusqlite::params!["test_uuid_db_xml", asset_relative_path_for_db_str], |row| {
                 Ok(db_handler::FileMetadataWithCustomFieldsFromDb {
                     file_name: row.get(0)?, file_path: row.get(1)?, last_modified: row.get(2)?,
                     title: row.get(3)?, description: row.get(4)?, summary: row.get(5)?,
@@ -573,6 +597,7 @@ mod tests {
                     frame_rate: row.get(9)?, bit_rate: row.get(10)?, audio_codec: row.get(11)?,
                     video_codec: row.get(12)?, creation_time: row.get(13)?,
                     custom_fields_json: row.get(14)?, asset_type: row.get(15)?,
+                    original_import_path: row.get(16)?, speaker_names_json: row.get(17)?, waveform_data: row.get(18)?,
                 })
             }).optional()?
         };

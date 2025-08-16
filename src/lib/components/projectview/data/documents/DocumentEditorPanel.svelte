@@ -8,9 +8,11 @@
         markDocumentChangesDiscarded,
         setActiveDocumentEditorRef,
         clearActiveDocumentEditorRef,
-        updateDocumentHighlights
+        updateDocumentHighlights,
+        highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { saveDocumentContent } from '$lib/services/projectService.js'; 
+    import { invoke } from '@tauri-apps/api/core';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
 
@@ -23,6 +25,7 @@
     let isLoading = false;
     let selectedPath = null;
     let errorMessage = null;
+    let initialHighlights = []; // New state for highlights
 
     $: {
         const p = $project;
@@ -32,6 +35,13 @@
         isDirty = p.isDocumentDirty; 
         isLoading = p.isDocumentLoading;
         errorMessage = (selectedPath && p.error && p.error.includes("Failed to load document")) ? p.error : null;
+
+        // Load highlights when selectedPath changes and it's a document
+        if (selectedPath && selectedPath.toLowerCase().endsWith('.json')) { // Assuming lexical docs are .json
+            loadHighlightsForDocument(selectedPath);
+        } else {
+            initialHighlights = []; // Clear highlights for non-lexical docs
+        }
     }
 
     let prevPath = null;
@@ -52,6 +62,25 @@
         }
     }
 
+    async function loadHighlightsForDocument(path) {
+        try {
+            const loaded = await invoke('load_lexical_highlights', {
+                args: {
+                    projectId: get(project).id,
+                    documentPath: path,
+                }
+            });
+            if (loaded) {
+                initialHighlights = JSON.parse(loaded);
+            } else {
+                initialHighlights = [];
+            }
+        } catch (e) {
+            console.error("Error loading lexical highlights:", e);
+            initialHighlights = [];
+        }
+    }
+
     function handleEditorChange(event) {
         const newJson = event.detail.jsonString;
         if (editorJsonState !== newJson) {
@@ -60,11 +89,24 @@
         }
 	}
 
-    function handleHighlightEvent(event) {
+    async function handleHighlightEvent(event) {
         const { type, id, text, nodeKey, color } = event.detail; // Added color
         console.log(`[DocumentEditorPanel] Highlight event received: type=${type}, id=${id}, nodeKey=${nodeKey}, color=${color}`);
         if (selectedPath) {
             updateDocumentHighlights({ type, id, text, nodeKey, color }); 
+            await tick();
+            // Save highlights to DB
+            invoke('save_lexical_highlights', {
+                args: {
+                    projectId: get(project).id,
+                    documentPath: selectedPath,
+                    highlightsJson: JSON.stringify(get(project).documentHighlights),
+                }
+            })
+            .then(() => {
+                highlightsLastUpdated.set(new Date());
+            })
+            .catch(err => console.error("Error saving lexical highlights:", err));
         }
     }
 
@@ -169,6 +211,8 @@
                      on:change={handleEditorChange}
                      on:highlightevent={handleHighlightEvent}
                      enableSearch={true}
+                     documentPath={selectedPath}
+                     initialHighlights={initialHighlights}
                  />
              {/key}
         </div>

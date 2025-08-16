@@ -206,6 +206,11 @@ pub fn run() {
             projectview::pdf_annotation_handler::save_pdf_annotations,
             // --- END ADDED ---
 
+            // --- Project view LEXICAL HIGHLIGHT commands ---
+            projectview::lexical_highlight_handler::load_lexical_highlights,
+            projectview::lexical_highlight_handler::save_lexical_highlights,
+            projectview::lexical_highlight_handler::delete_lexical_highlights,
+
             // --- Document Import Process Command ---
             projectview::document_handler::import_document,
             projectview::export_handler::export_transcript_to_docx,

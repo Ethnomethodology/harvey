@@ -111,6 +111,8 @@
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
+  export let documentPath = null;
+  export let initialHighlights = [];
 
   let editorWrapper;
   let editorContainer;
@@ -228,6 +230,8 @@
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
 
+    loadHighlights();
+
     return () => {
       document.removeEventListener('click', handleClickOutside, true);
       document.removeEventListener('click', handleClickOutsideSearch, true);
@@ -285,6 +289,32 @@
       const { rows, columns } = event.detail;
       editor.dispatchCommand(INSERT_TABLE_COMMAND, { rows: String(rows), columns: String(columns) });
       showInsertTableModal = false;
+  }
+
+  async function loadHighlights() {
+    if (!documentPath) return;
+    try {
+      const highlightsJson = await invoke('load_lexical_highlights', {
+        args: {
+          projectId: get(project).id,
+          documentPath,
+        }
+      });
+      if (highlightsJson) {
+        const highlights = JSON.parse(highlightsJson);
+        editor.update(() => {
+          for (const highlight of highlights) {
+            const node = _getNodeByKey(highlight.nodeKey);
+            if (_isExtendedTextNode(node)) {
+              node.setStyle(`background-color: ${highlight.color}`);
+              node.setHighlightId(highlight.id);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error loading highlights:', error);
+    }
   }
 
 
@@ -364,8 +394,11 @@
     isColorDropdownOpen = !isColorDropdownOpen;
   }
 
-  const dispatch = createEventDispatcher();
+  import { get } from 'svelte/store';
+  import { project } from '$lib/stores/projectStore.js';
+  import { invoke } from '@tauri-apps/api/core';
 
+  const dispatch = createEventDispatcher();
 
   function createInitialEditorState(jsonProp) {
       if (jsonProp && typeof jsonProp === 'string' && jsonProp.trim() !== '' && jsonProp !== 'null' && jsonProp !== 'undefined') {
@@ -443,6 +476,17 @@
             root.append(_createParagraphNode());
         });
     }
+
+    // Apply initial highlights after editor state is set
+    editor.update(() => {
+        for (const highlight of initialHighlights) {
+            const node = _getNodeByKey(highlight.nodeKey);
+            if (_isExtendedTextNode(node)) {
+                node.setStyle(`background-color: ${highlight.color}`);
+                node.setHighlightId(highlight.id);
+            }
+        }
+    });
 
 
     editor.setRootElement(editorContainer);
@@ -1051,6 +1095,7 @@
             _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
+            const highlights = [];
             for (const node of selectedNodes) {
                 let targetNode = node;
                 // If selection is within a segmented node, target the parent ExtendedTextNode
@@ -1066,34 +1111,49 @@
                         if (currentHighlightId === null) { // New highlight
                             const newId = uuidv4();
                             extendedNode.setHighlightId(newId);
-                            dispatch('highlightevent', {
+                            const highlight = {
                                 type: 'add',
                                 id: newId,
                                 text: extendedNode.getTextContent(),
                                 nodeKey: extendedNode.getKey(),
                                 color: colorToApply // Pass the actual color
-                            });
+                            };
+                            highlights.push(highlight);
+                            dispatch('highlightevent', highlight);
                         } else { // Existing highlight, color might be changing
-                             dispatch('highlightevent', {
+                             const highlight = {
                                 type: 'add', // 'add' can also mean 'update' in this context
                                 id: currentHighlightId,
                                 text: extendedNode.getTextContent(),
                                 nodeKey: extendedNode.getKey(),
                                 color: colorToApply // Update with the new color
-                            });
+                            };
+                            highlights.push(highlight);
+                            dispatch('highlightevent', highlight);
                         }
                     } else { // Removing highlight (color is transparent)
                         if (currentHighlightId !== null) {
-                            dispatch('highlightevent', {
+                            const highlight = {
                                 type: 'remove',
                                 id: currentHighlightId,
                                 nodeKey: extendedNode.getKey(),
                                 color: 'transparent' // Indicate removal
-                            });
+                            };
+                            highlights.push(highlight);
+                            dispatch('highlightevent', highlight);
                             extendedNode.setHighlightId(null);
                         }
                     }
                 }
+            }
+            if (documentPath) {
+                invoke('save_lexical_highlights', {
+                    args: {
+                        projectId: get(project).id,
+                        documentPath,
+                        highlightsJson: JSON.stringify(highlights),
+                    }
+                }).catch(err => console.error("Error saving highlights:", err));
             }
         }
     });
@@ -2081,7 +2141,13 @@ $: if (editor && activeLayout) {
         const node = _getNodeByKey(clickedNodeKey);
         if (_isExtendedTextNode(node)) {
           node.setStyle('background-color: transparent;');
+          const highlightId = node.getHighlightId();
           node.setHighlightId(null);
+          dispatch('highlightevent', {
+            type: 'remove',
+            id: highlightId,
+            nodeKey: clickedNodeKey,
+          });
         }
       });
     }

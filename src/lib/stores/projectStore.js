@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
 
 export const groupContentNotification = writable(null);
+export const highlightsLastUpdated = writable(null);
 
 const HARVEY_FILES_DIR = "harvey_files";
 const MEDIA_DIR_NAME = 'Media';
