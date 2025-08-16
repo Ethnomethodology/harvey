@@ -82,6 +82,7 @@
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
+  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
 
   export let initialJson = null;
   export let editable = true;
@@ -157,6 +158,9 @@
   let resizeTargetCellKey = null;
   let resizeStartPos = { x: 0, y: 0 };
   let resizerLineStyle = 'display: none;';
+
+  let showFloatingToolbar = false;
+  let floatingToolbarPosition = { top: 0, left: 0 };
 
   const MIN_COLUMN_WIDTH = 50;
 
@@ -479,6 +483,21 @@
             if (isReady && editor) {
                 try {
                     editor.getEditorState().read(updateToolbarState);
+                    const selection = _getSelection();
+                    if (selection && !selection.isCollapsed()) {
+                        const domSelection = window.getSelection();
+                        if (domSelection && !domSelection.isCollapsed) {
+                            const domRange = domSelection.getRangeAt(0);
+                            const rect = domRange.getBoundingClientRect();
+                            floatingToolbarPosition = {
+                                top: rect.top - 40,
+                                left: rect.left + (rect.width / 2) - 80,
+                            };
+                            showFloatingToolbar = true;
+                        }
+                    } else {
+                        showFloatingToolbar = false;
+                    }
                 } catch(readError) {
                     console.error("Error reading state on selection change:", readError);
                 }
@@ -1974,6 +1993,20 @@ $: if (editor && activeLayout) {
   bind:showModal={showInsertTableModal}
   on:confirm={handleInsertTableConfirm}
   on:close={() => showInsertTableModal = false}
+/>
+
+<FloatingHighlightToolbar
+  editor={editor}
+  showToolbar={showFloatingToolbar}
+  toolbarPosition={floatingToolbarPosition}
+  onHighlight={(color) => {
+    applyHighlightColor(color);
+    showFloatingToolbar = false;
+  }}
+  onRemoveHighlight={() => {
+    applyHighlightColor('transparent');
+    showFloatingToolbar = false;
+  }}
 />
 
 
