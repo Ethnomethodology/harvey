@@ -109,6 +109,7 @@
   export let enableTableCellMenu = false;
   export let enableTableCellResize = false;
   export let enableSearch = false;
+  export let enableFloatingToolbar = true;
 
   let editorWrapper;
   let editorContainer;
@@ -483,20 +484,22 @@
             if (isReady && editor) {
                 try {
                     editor.getEditorState().read(updateToolbarState);
-                    const selection = _getSelection();
-                    if (selection && !selection.isCollapsed()) {
-                        const domSelection = window.getSelection();
-                        if (domSelection && !domSelection.isCollapsed) {
-                            const domRange = domSelection.getRangeAt(0);
-                            const rect = domRange.getBoundingClientRect();
-                            floatingToolbarPosition = {
-                                top: rect.top - 40,
-                                left: rect.left + (rect.width / 2) - 80,
-                            };
-                            showFloatingToolbar = true;
+                    if (enableFloatingToolbar) {
+                        const selection = _getSelection();
+                        if (selection && !selection.isCollapsed()) {
+                            const domSelection = window.getSelection();
+                            if (domSelection && !domSelection.isCollapsed) {
+                                const domRange = domSelection.getRangeAt(0);
+                                const rect = domRange.getBoundingClientRect();
+                                floatingToolbarPosition = {
+                                    top: rect.top - 40,
+                                    left: rect.left + (rect.width / 2) - 80,
+                                };
+                                showFloatingToolbar = true;
+                            }
+                        } else {
+                            showFloatingToolbar = false;
                         }
-                    } else {
-                        showFloatingToolbar = false;
                     }
                 } catch(readError) {
                     console.error("Error reading state on selection change:", readError);
@@ -990,10 +993,7 @@
 
             if (colorToApply !== 'transparent') {
                 styles['background-color'] = colorToApply;
-                if (isDarkMode) {
-                    styles['color'] = '#111827'; // Dark text for dark mode highlights
-                }
-                // In light mode, text color is not explicitly changed, allowing it to inherit.
+                styles['color'] = isDarkMode ? '#111827' : '#000000';
             } else {
                 // Removing highlight
                 styles['background-color'] = null;
@@ -1995,6 +1995,7 @@ $: if (editor && activeLayout) {
   on:close={() => showInsertTableModal = false}
 />
 
+{#if enableFloatingToolbar}
 <FloatingHighlightToolbar
   editor={editor}
   showToolbar={showFloatingToolbar}
@@ -2008,6 +2009,7 @@ $: if (editor && activeLayout) {
     showFloatingToolbar = false;
   }}
 />
+{/if}
 
 
 <style lang="postcss">

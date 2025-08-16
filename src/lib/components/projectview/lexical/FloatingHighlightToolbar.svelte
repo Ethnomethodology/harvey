@@ -1,18 +1,25 @@
 
 <!-- src/lib/components/projectview/lexical/FloatingHighlightToolbar.svelte -->
 <script>
+  import { onMount } from 'svelte';
+
   export let editor;
   export let showToolbar;
   export let toolbarPosition;
   export let onHighlight;
   export let onRemoveHighlight;
 
+  let isDarkMode = false;
+  onMount(() => {
+    isDarkMode = document.documentElement.classList.contains('dark');
+  });
+
   const highlightOptions = [
-      { value: 'rgba(255, 242, 117, 0.5)', label: 'Yellow' },
-      { value: 'rgba(168, 255, 158, 0.5)', label: 'Green' },
-      { value: 'rgba(174, 239, 255, 0.5)', label: 'Blue' },
-      { value: 'rgba(255, 176, 207, 0.5)', label: 'Pink' },
-      { value: 'rgba(208, 160, 255, 0.5)', label: 'Purple' },
+      { value: '#FFF275', label: 'Yellow' }, 
+      { value: '#A8FF9E', label: 'Green' }, 
+      { value: '#AEEFFF', label: 'Blue' },
+      { value: '#FFB0CF', label: 'Pink' }, 
+      { value: '#D0A0FF', label: 'Purple' },
   ];
 
   function handleHighlight(color) {
@@ -31,6 +38,7 @@
 {#if showToolbar}
 <div
   class="selection-toolbar"
+  class:dark={isDarkMode}
   style="top: {toolbarPosition.top}px; left: {toolbarPosition.left}px;"
 >
   <div class="highlight-options">
@@ -64,6 +72,11 @@
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
+.selection-toolbar.dark {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
 .highlight-options {
   display: flex;
   gap: 4px;
@@ -78,10 +91,19 @@
   cursor: pointer;
 }
 
+.selection-toolbar.dark .color-box {
+    border-color: #718096;
+}
+
 .remove-highlight {
   background: none;
   border: none;
   cursor: pointer;
   padding: 4px;
+  color: #000;
+}
+
+.selection-toolbar.dark .remove-highlight {
+    color: #fff;
 }
 </style>
