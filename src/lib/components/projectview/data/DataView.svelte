@@ -87,6 +87,10 @@
             activeItemTypeForInfoPanel = itemTypeForInfo;
              console.debug(`[DataView Store Sub] InfoPanelType updated to: ${activeItemTypeForInfoPanel}`);
         }
+
+        if (itemTypeForInfo !== 'doc' && get(panelStateStore).activeInfoPanelTab === 'attachments') {
+            panelStateStore.setActiveInfoPanelTab('metadata');
+        }
     });
 
     async function handleViewChangeRequest(eventDetailFromDispatch) {

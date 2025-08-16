@@ -13,11 +13,13 @@
 
     function handleTabClick(tabName) {
         const store = get(panelStateStore);
-        if (store.activeInfoPanelTab === tabName && !store.infoPanelCollapsed) {
-            panelStateStore.toggleInfoPanel(true); // Collapse if active tab is clicked again
+        if (store.activeInfoPanelTab === tabName) {
+            panelStateStore.toggleInfoPanel();
         } else {
             panelStateStore.setActiveInfoPanelTab(tabName);
-            panelStateStore.toggleInfoPanel(false); // Ensure panel is open
+            if (store.infoPanelCollapsed) {
+                panelStateStore.toggleInfoPanel();
+            }
         }
         dispatch('tabchange', { tabName });
     }

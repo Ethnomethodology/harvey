@@ -17,6 +17,12 @@
     let duration = 0;
     let volume = 1;
 
+    onDestroy(() => {
+        if (audio) {
+            audio.pause();
+        }
+    });
+
     function togglePlay() {
         if (isPlaying) {
             audio.pause();
@@ -85,9 +91,9 @@
         </button>
     </div>
 
-    <div class="flex items-center space-x-2 mt-2">
+    <div class="flex items-center justify-center space-x-2 mt-2">
         <span class="text-gray-600 dark:text-gray-300">{@html VOLUME_HIGH_ICON}</span>
-        <input type="range" class="w-full h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
+        <input type="range" class="w-1/3 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
     </div>
 </div>
 {/if}

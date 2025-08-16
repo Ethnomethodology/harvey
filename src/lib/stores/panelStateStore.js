@@ -22,10 +22,10 @@ function toggleDataLeftPanel() {
 }
 
 // NEW: Function to toggle the new InfoPanel
-function toggleInfoPanel() {
+function toggleInfoPanel(collapsed) {
     panelStateStore.update(state => ({
         ...state,
-        infoPanelCollapsed: !state.infoPanelCollapsed
+        infoPanelCollapsed: collapsed ?? !state.infoPanelCollapsed
     }));
 }
 
