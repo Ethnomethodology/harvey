@@ -83,6 +83,7 @@
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
   import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
+  import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
 
   export let initialJson = null;
   export let editable = true;
@@ -162,6 +163,10 @@
 
   let showFloatingToolbar = false;
   let floatingToolbarPosition = { top: 0, left: 0 };
+
+  let showModifyToolbar = false;
+  let modifyToolbarPosition = { top: 0, left: 0 };
+  let clickedNodeKey = null;
 
   const MIN_COLUMN_WIDTH = 50;
 
@@ -500,6 +505,8 @@
                         } else {
                             showFloatingToolbar = false;
                         }
+                        showModifyToolbar = false;
+                        clickedNodeKey = null;
                     }
                 } catch(readError) {
                     console.error("Error reading state on selection change:", readError);
@@ -538,6 +545,47 @@
             if (!clickedCell && showTableCellMenu) {
                 closeTableCellMenu(false);
             }
+            return false;
+          },
+          COMMAND_PRIORITY_LOW
+        ),
+        editor.registerCommand(
+          CLICK_COMMAND,
+          (payload) => {
+            const event = payload;
+            if (event.button !== 0 || !editor || !editor.isEditable()) return false;
+
+            editor.update(() => {
+                const selection = _getSelection();
+                if (selection.isCollapsed()) {
+                    const node = selection.anchor.getNode();
+                    const parent = node.getParent();
+                    if (_isExtendedTextNode(node) && node.getHighlightId()) {
+                        const domElement = editor.getElementByKey(node.getKey());
+                        if (domElement) {
+                            const rect = domElement.getBoundingClientRect();
+                            modifyToolbarPosition = {
+                                top: rect.top - 40,
+                                left: rect.left,
+                            };
+                            showModifyToolbar = true;
+                            clickedNodeKey = node.getKey();
+                        }
+                    } else if (_isExtendedTextNode(parent) && parent.getHighlightId()) {
+                        const domElement = editor.getElementByKey(parent.getKey());
+                        if (domElement) {
+                            const rect = domElement.getBoundingClientRect();
+                            modifyToolbarPosition = {
+                                top: rect.top - 40,
+                                left: rect.left,
+                            };
+                            showModifyToolbar = true;
+                            clickedNodeKey = parent.getKey();
+                        }
+                    }
+                }
+            });
+
             return false;
           },
           COMMAND_PRIORITY_LOW
@@ -2010,6 +2058,37 @@ $: if (editor && activeLayout) {
   }}
 />
 {/if}
+
+<FloatingModifyHighlightToolbar
+  editor={editor}
+  showToolbar={showModifyToolbar}
+  toolbarPosition={modifyToolbarPosition}
+  onChangeColor={(color) => {
+    if (clickedNodeKey) {
+      editor.update(() => {
+        const node = _getNodeByKey(clickedNodeKey);
+        if (_isExtendedTextNode(node)) {
+          node.setStyle(`background-color: ${color};`);
+        }
+      });
+    }
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
+  onDelete={() => {
+    if (clickedNodeKey) {
+      editor.update(() => {
+        const node = _getNodeByKey(clickedNodeKey);
+        if (_isExtendedTextNode(node)) {
+          node.setStyle('background-color: transparent;');
+          node.setHighlightId(null);
+        }
+      });
+    }
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
+/>
 
 
 <style lang="postcss">
