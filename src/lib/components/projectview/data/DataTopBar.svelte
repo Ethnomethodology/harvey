@@ -13,10 +13,16 @@
     import { get, derived } from 'svelte/store';
     import { basename } from '@tauri-apps/api/path';
     import { languageOptions } from '$lib/constants/transcriptionOptions.js';
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+    import { listen } from '@tauri-apps/api/event';
+    import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
+
+    let isLiveTranscriptionActive = false;
+    let liveTranscriptionError = null;
+    let showLiveTranscribeModal = false;
 
     function getLanguageLabel(langCode) {
 		if (!langCode || langCode === 'original') return 'Original';
@@ -80,6 +86,7 @@
     let showDirtyIndicator = false;
     let isLayoutSettingsModalOpen = false;
     let isExportModalOpen = false;
+    let currentActivePath;
 
     let displayTitle = '';
   
@@ -127,6 +134,28 @@
             }
         } else {
             displayTitle = 'Harvey'; // Default if project or name is not available
+        }
+    }
+
+    // Stop live transcription if the user switches to another file
+    $: {
+        const newActivePath = $project.selectedDocumentPath ||
+                             $project.selectedMediaNotePath ||
+                             $project.currentImportedTranscriptPath ||
+                             $project.selectedTablePath ||
+                             $project.selectedImagePath;
+
+        if (newActivePath !== currentActivePath) {
+            if (isLiveTranscriptionActive) {
+                invoke('stop_live_transcription').then(stopped => {
+                    if (stopped) {
+                        isLiveTranscriptionActive = false;
+                    }
+                }).catch(err => {
+                    console.error("Failed to stop live transcription on file switch:", err);
+                });
+            }
+            currentActivePath = newActivePath;
         }
     }
   
@@ -359,7 +388,92 @@
             message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
         }
     }
-  
+
+    let unlisten = null;
+
+    onMount(async () => {
+        unlisten = await listen('live_transcription_result', (event) => {
+            const { text, is_final, start_time, end_time } = event.payload;
+            const p = get(project);
+            let editorRef = null;
+
+            // Find the correct active editor
+            if (p.activeDocumentEditorRef) {
+                editorRef = p.activeDocumentEditorRef;
+            } else if (p.activeMediaNoteEditorRef) {
+                editorRef = p.activeMediaNoteEditorRef;
+            } else if (p.activeImportedTranscriptEditorRef) {
+                editorRef = p.activeImportedTranscriptEditorRef;
+            }
+
+            if (editorRef?.ref?.updateLiveTranscriptionText) {
+                editorRef.ref.updateLiveTranscriptionText(text, is_final, start_time, end_time);
+            }
+        });
+    });
+
+    onDestroy(async () => {
+        if (isLiveTranscriptionActive) {
+            await invoke('stop_live_transcription');
+        }
+        if (unlisten) {
+            unlisten();
+        }
+    });
+
+    async function toggleLiveTranscription() {
+        if (isLiveTranscriptionActive) {
+            try {
+                const stopped = await invoke('stop_live_transcription');
+                if (stopped) {
+                    isLiveTranscriptionActive = false;
+                }
+            } catch (error) {
+                message(`Failed to stop live transcription: ${error}`, { title: 'Error', type: 'error' });
+            }
+        } else {
+            showLiveTranscribeModal = true;
+        }
+    }
+
+    async function handleLiveTranscribe(event) {
+        const { model, language, saveAudio } = event.detail;
+        try {
+            const projectState = get(project);
+            const activePath = projectState.selectedDocumentPath || projectState.selectedMediaNotePath;
+            if (!activePath) {
+                message('No active document to transcribe into.', { title: 'Error', type: 'error' });
+                return;
+            }
+            if (!projectState.id || !projectState.baseDirectory) {
+                message('Project details not available. Cannot start transcription.', { title: 'Error', type: 'error' });
+                return;
+            }
+
+            liveTranscriptionError = null;
+            const started = await invoke('start_live_transcription', {
+                modelName: model,
+                language: language,
+                saveAudio: saveAudio,
+                activeDocumentPath: activePath,
+                projectUuid: projectState.id,
+                projectBaseDir: projectState.baseDirectory
+            });
+            if (started) {
+                isLiveTranscriptionActive = true;
+            }
+        } catch (error) {
+            isLiveTranscriptionActive = false;
+            liveTranscriptionError = error;
+            message(`Failed to start live transcription: ${error}`, { title: 'Error', type: 'error' });
+        }
+    }
+
+    $: liveTranscriptionStatus = isLiveTranscriptionActive
+        ? 'active'
+        : liveTranscriptionError
+        ? 'error'
+        : 'default';
   </script>
   
   <div
@@ -374,6 +488,21 @@
             on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
         >
             <span class="text-xs">Transcribe</span>
+        </button>
+        {/if}
+        {#if $project.activeDocumentEditorRef || $project.activeMediaNoteEditorRef}
+        <button class="ui-button-icon flex items-center ml-2" on:click={toggleLiveTranscription} title="Live Transcription">
+            {#if isLiveTranscriptionActive}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-fill" class:blinking-red-text={isLiveTranscriptionActive} viewBox="0 0 16 16">
+                <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z"/>
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
+            </svg>
+            {:else}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic" viewBox="0 0 16 16">
+                <path d="M3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5"/>
+                <path d="M10 8a2 2 0 1 1-4 0V3a2 2 0 1 1 4 0zM8 0a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V3a3 3 0 0 0-3-3"/>
+            </svg>
+            {/if}
         </button>
         {/if}
     </div>
@@ -470,6 +599,16 @@
   </div>
   
   <style lang="postcss">
+    .blinking-red-text {
+        animation: blink-text 1s infinite;
+    }
+
+    @keyframes blink-text {
+        0% { color: #f87171; }
+        50% { color: #ef4444; }
+        100% { color: #f87171; }
+    }
+
     .ui-button-icon {
         @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
         /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component's style for ui-button-icon base */
@@ -483,6 +622,16 @@
 
     /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
   
+    .blinking-red {
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+        0% { background-color: #f87171; }
+        50% { background-color: #ef4444; }
+        100% { background-color: #f87171; }
+    }
+
     :global(html.dark) .dark\:bg-gray-800 {
          background-color: #1f2937 !important;
     }
@@ -525,4 +674,10 @@
     transcriptPath={$project.activeTranscriptPathInDataTab}
     on:confirm={handleExportConfirm}
     on:close={() => isExportModalOpen = false}
+/>
+
+<LiveTranscribeModelModal
+    bind:showModal={showLiveTranscribeModal}
+    on:confirm={handleLiveTranscribe}
+    on:close={() => showLiveTranscribeModal = false}
 />

@@ -31,6 +31,13 @@
         }
     }
 
+    $: {
+        if (refreshKey && currentOriginalAssetDetails?.originalRelativePath) {
+            console.log(`[InfoPanel] Refresh triggered by key: ${refreshKey}`);
+            loadMetadata(currentOriginalAssetDetails.originalRelativePath);
+        }
+    }
+
     async function getOriginalAssetDetails(selectedPath, projectStoreState) {
         if (!selectedPath || !projectStoreState || !projectStoreState.baseDirectory) {
             const fallbackName = selectedPath ? await basename(selectedPath) : 'Unknown.file';
@@ -305,6 +312,7 @@
 
     export let itemPath = null;
     export let itemType = null;
+    export let refreshKey = null;
 
     $: {
         if ($project.fileRenamed && $project.fileRenamed.newPath) {
@@ -479,8 +487,8 @@
                 </div>
 
                 <div class="mb-3">
-                    <label for="filePathRelative" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path (Relative):</label>
-                    <span id="filePathRelative" class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.file_path || ''}</span>
+                    <label for="filePathAbsolute" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
+                    <span id="filePathAbsolute" class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</span>
                 </div>
 
                 {#if currentFileMetadata.creation_time}
@@ -523,6 +531,33 @@
                         <span id="summaryInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
                     {/if}
                 </div>
+
+                <!-- Attachments Section -->
+                {#if itemType === 'doc' && currentFileMetadata?.customFields}
+                    {@const attachmentsField = currentFileMetadata.customFields.find(f => f.key === 'attachments')}
+                    {#if attachmentsField && attachmentsField.value}
+                        {@const attachments = JSON.parse(attachmentsField.value)}
+                        {#if Array.isArray(attachments) && attachments.length > 0}
+                            <hr class="my-4 border-gray-300 dark:border-gray-700">
+                            <div class="mb-3">
+                                <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Attachments</h3>
+                                <ul class="list-disc list-inside space-y-1 pl-1">
+                                    {#each attachments as attachment, i (attachment)}
+                                        <li class="text-gray-900 dark:text-gray-100">
+                                            <button
+                                                class="text-blue-600 dark:text-blue-400 hover:underline text-left"
+                                                on:click={() => invoke('reveal_in_file_explorer', { filePathStr: attachment })}
+                                                title="Show in folder"
+                                            >
+                                                {attachment.split(/[/\\]/).pop() || attachment}
+                                            </button>
+                                        </li>
+                                    {/each}
+                                </ul>
+                            </div>
+                        {/if}
+                    {/if}
+                {/if}
 
                 {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(currentFileMetadata.customFields && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
                     <hr class="my-4 border-gray-300 dark:border-gray-700">

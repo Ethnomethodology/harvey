@@ -114,11 +114,12 @@
 
     onMount(() => {
         console.log('[DocumentEditorPanel] Mounted.');
-        setActiveDocumentEditorRef(self);
+        setActiveDocumentEditorRef({ ref: self });
     });
+
 	onDestroy(() => {
         console.log('[DocumentEditorPanel] Destroyed.');
-        if (get(project).activeDocumentEditorRef === self) {
+        if (get(project).activeDocumentEditorRef?.ref === self) {
              clearActiveDocumentEditorRef();
         }
 	});
@@ -131,15 +132,20 @@
         console.log('[DocumentEditorPanel] External discard() called.');
         return handleDiscard();
     }
-     export function resetEditorState(jsonString) {
+    export function resetEditorState(jsonString) {
         if (editorRef) {
              console.log('[DocumentEditorPanel] External resetEditorState called.');
              editorRef.resetEditorState(jsonString);
              editorJsonState = jsonString || '';
         }
     }
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
+        if (editorRef) {
+            editorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
+        }
+    }
 
-    const self = { save, discard, resetEditorState };
+    const self = { save, discard, resetEditorState, updateLiveTranscriptionText };
 
 </script>
 

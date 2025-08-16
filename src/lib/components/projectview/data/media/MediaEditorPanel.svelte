@@ -216,7 +216,13 @@
         }
     }
     export function getItemPath() { return mediaPath; }
-    const self = { save, discard, resetEditorState, getItemPath };
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
+        if (lexicalEditorRef) {
+            lexicalEditorRef.updateLiveTranscriptionText(text, isFinal, startTime, endTime);
+        }
+    }
+
+    const self = { save, discard, resetEditorState, getItemPath, updateLiveTranscriptionText };
 
     function handleRequestDataTranscribe(event) {
         dispatch('requestTranscriptionTabWithMedia', { mediaPath: event.detail.mediaPath });

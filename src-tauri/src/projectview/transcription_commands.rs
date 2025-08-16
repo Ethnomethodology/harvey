@@ -13,6 +13,8 @@ use chrono::Utc; // Added for timestamps
 // use uuid::Uuid; // Removed unused import
 use crate::projectview::db_handler; // Added for database operations
 use crate::projectview::waveform_utils;
+use tokio::sync::Mutex;
+use tauri_plugin_shell::process::CommandChild;
 
 use std::{
     fs::{self, File},
@@ -25,6 +27,37 @@ use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
 
+
+// --- State for Live Transcription ---
+pub struct LiveTranscriptionState {
+    pub whisper_child: Mutex<Option<CommandChild>>,
+    pub is_running: Arc<AtomicBool>,
+    pub start_time: Mutex<Option<chrono::DateTime<chrono::Utc>>>,
+    pub active_document_path: Mutex<Option<String>>,
+    pub project_uuid: Mutex<Option<String>>,
+    pub project_base_dir: Mutex<Option<PathBuf>>,
+}
+
+impl Default for LiveTranscriptionState {
+    fn default() -> Self {
+        Self {
+            whisper_child: Mutex::new(None),
+            is_running: Arc::new(AtomicBool::new(false)),
+            start_time: Mutex::new(None),
+            active_document_path: Mutex::new(None),
+            project_uuid: Mutex::new(None),
+            project_base_dir: Mutex::new(None),
+        }
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct LiveTranscriptionResult {
+    pub text: String,
+    pub is_final: bool,
+    pub start_time: f64,
+    pub end_time: f64,
+}
 
 // --- FFProbe Helper Structs (copied from core_commands.rs) ---
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -2281,4 +2314,278 @@ pub async fn cancel_transcription(
         warn!("[Transcribe Command][Cancel] Cancellation request for unknown or already completed job ID: {}", job_id);
     }
     Ok(())
+}
+
+use tauri::Manager;
+
+#[tauri::command]
+pub async fn start_live_transcription(
+    app_handle: AppHandle,
+    model_name: String,
+    language: String,
+    save_audio: bool,
+    active_document_path: String,
+    project_uuid: String,
+    project_base_dir: String,
+    state: tauri::State<'_, LiveTranscriptionState>,
+) -> Result<bool, String> {
+    if state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("Live transcription is already running.".to_string());
+    }
+
+    let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
+        .map_err(|e| e.to_string())?;
+
+    let mut args = vec![
+        "-m".to_string(),
+        model_path.clone(),
+        "-l".to_string(),
+        language.clone(),
+        "--step".to_string(), "5000".to_string(),
+        "--length".to_string(), "5000".to_string(),
+        "-c".to_string(), "0".to_string(),
+        "-t".to_string(), "8".to_string(),
+        "--max-tokens".to_string(), "32".to_string(),
+        "--audio-ctx".to_string(), "768".to_string(),
+    ];
+
+    let mut command = app_handle
+        .shell()
+        .sidecar("whisper-stream")
+        .expect("failed to create `whisper-stream` command");
+
+    if save_audio {
+        let active_doc_path = PathBuf::from(&active_document_path);
+        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+        fs::create_dir_all(&attachments_dir).map_err(|e| e.to_string())?;
+
+        args.push("--save-audio".to_string());
+        command = command.current_dir(attachments_dir);
+    }
+
+    let (mut rx, whisper_child) = command.args(args).spawn().map_err(|e| e.to_string())?;
+
+    *state.whisper_child.lock().await = Some(whisper_child);
+    state.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+    *state.start_time.lock().await = Some(chrono::Utc::now());
+    *state.active_document_path.lock().await = Some(active_document_path);
+    *state.project_uuid.lock().await = Some(project_uuid);
+    *state.project_base_dir.lock().await = Some(PathBuf::from(project_base_dir));
+
+    let is_running_clone = state.is_running.clone();
+    let app_handle_clone = app_handle.clone();
+    let start_time_clone = state.start_time.lock().await.clone();
+
+    tokio::spawn(async move {
+        info!("[Live Transcription] Started listening to whisper-stream sidecar.");
+        let mut last_text = String::new();
+        let mut segment_start_time = 0.0;
+
+        while let Some(event) = rx.recv().await {
+            if !is_running_clone.load(std::sync::atomic::Ordering::SeqCst) {
+                info!("[Live Transcription] Loop broken due to is_running flag being false.");
+                break;
+            }
+            match event {
+                CommandEvent::Stdout(line) => {
+                    let text = String::from_utf8_lossy(&line).to_string();
+                    let cleaned_text = text
+                        .replace("[Start speaking]", "")
+                        .replace("[BLANK_AUDIO]", "")
+                        .replace("[ Silence ]", "")
+                        .replace("\u{1b}[2K", "")
+                        .replace("\r", "")
+                        .trim()
+                        .to_string();
+
+                    if !cleaned_text.is_empty() && cleaned_text != last_text {
+                        let is_final = !cleaned_text.ends_with("...");
+                        let end_time = if let Some(start_time) = start_time_clone {
+                            (chrono::Utc::now() - start_time).num_milliseconds() as f64 / 1000.0
+                        } else {
+                            0.0
+                        };
+                        let _ = app_handle_clone.emit("live_transcription_result", LiveTranscriptionResult { text: cleaned_text.clone(), is_final, start_time: segment_start_time, end_time });
+                        info!("[Live Transcription] Emitted live_transcription_result with text: '{}', is_final: {}", cleaned_text, is_final);
+                        if is_final {
+                            last_text = cleaned_text;
+                            segment_start_time = end_time;
+                        }
+                    }
+                }
+                CommandEvent::Stderr(line) => {
+                    error!("[Live Transcription][whisper-stream stderr]: {}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Error(err) => {
+                    error!("[Live Transcription][whisper-stream error]: {}", err);
+                }
+                CommandEvent::Terminated(payload) => {
+                    info!("[Live Transcription] Whisper-stream process terminated with payload: {:?}", payload);
+                }
+                _ => {}
+            }
+        }
+        info!("[Live Transcription] Stopped listening to whisper-stream sidecar.");
+    });
+
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn stop_live_transcription(
+    app_handle: AppHandle,
+    state: tauri::State<'_, LiveTranscriptionState>
+) -> Result<bool, String> {
+    info!("[Live Transcription] Stop command received.");
+    if !state.is_running.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("Live transcription is not running.".to_string());
+    }
+
+    if let Some(child) = state.whisper_child.lock().await.take() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+
+    state.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let active_doc_path_opt = state.active_document_path.lock().await.take();
+    let project_uuid_opt = state.project_uuid.lock().await.take();
+    let project_base_dir_opt = state.project_base_dir.lock().await.take();
+
+    if let (Some(active_doc_path_str), Some(project_uuid), Some(project_base_dir)) = (active_doc_path_opt, project_uuid_opt, project_base_dir_opt) {
+        info!("[Live Transcription] Processing saved audio for doc: {}", active_doc_path_str);
+
+        let active_doc_path = PathBuf::from(&active_doc_path_str);
+        let attachments_dir = active_doc_path.parent().unwrap().join("attachments");
+
+        if attachments_dir.exists() && attachments_dir.is_dir() {
+            let mut audio_files: Vec<String> = Vec::new();
+            match fs::read_dir(&attachments_dir) {
+                Ok(entries) => {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.is_file() {
+                                if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
+                                    if extension.eq_ignore_ascii_case("wav") {
+                                         audio_files.push(path.to_string_lossy().to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("[Live Transcription] Failed to read attachments directory: {}", e);
+                }
+            }
+
+            if !audio_files.is_empty() {
+                info!("[Live Transcription] Found {} audio files to attach.", audio_files.len());
+                let relative_doc_path = match active_doc_path.strip_prefix(&project_base_dir) {
+                    Ok(p) => p.to_string_lossy().replace("\\", "/"),
+                    Err(_) => {
+                        error!("[Live Transcription] Failed to create relative path for document.");
+                        return Ok(true);
+                    }
+                };
+
+                match db_handler::load_asset_metadata(&project_uuid, &relative_doc_path) {
+                    Ok(Some(metadata_from_db)) => {
+                        let mut custom_fields: Vec<serde_json::Value> = metadata_from_db.custom_fields_json
+                            .as_deref()
+                            .and_then(|json| serde_json::from_str(json).ok())
+                            .unwrap_or_else(Vec::new);
+
+                        let attachments_json_string = json!(audio_files).to_string();
+
+                        if let Some(existing_field) = custom_fields.iter_mut().find(|f| f.get("key").and_then(|k| k.as_str()) == Some("attachments")) {
+                            if let Some(obj) = existing_field.as_object_mut() {
+                                obj.insert("value".to_string(), json!(attachments_json_string));
+                            }
+                        } else {
+                            let new_field = json!({
+                                "key": "attachments",
+                                "value": attachments_json_string
+                            });
+                            custom_fields.push(new_field);
+                        }
+
+                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+
+                        let file_metadata = FileMetadata {
+                            file_name: metadata_from_db.file_name,
+                            file_path: metadata_from_db.file_path,
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: metadata_from_db.title.unwrap_or_default(),
+                            description: metadata_from_db.description.unwrap_or_default(),
+                            summary: metadata_from_db.summary.unwrap_or_default(),
+                            duration_seconds: metadata_from_db.duration_seconds,
+                            width: metadata_from_db.width,
+                            height: metadata_from_db.height,
+                            frame_rate: metadata_from_db.frame_rate,
+                            bit_rate: metadata_from_db.bit_rate,
+                            audio_codec: metadata_from_db.audio_codec,
+                            video_codec: metadata_from_db.video_codec,
+                            created_at: metadata_from_db.creation_time,
+                            original_import_path: metadata_from_db.original_import_path,
+                            speaker_names: metadata_from_db.speaker_names_json.and_then(|s| serde_json::from_str(&s).ok()),
+                            waveform_data: metadata_from_db.waveform_data,
+                        };
+
+                        if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, &metadata_from_db.asset_type, Some(&updated_custom_fields_json_str)) {
+                            error!("[Live Transcription] Failed to update metadata with attachments: {}", e);
+                        } else {
+                            info!("[Live Transcription] Successfully updated metadata with attachments.");
+                            if let Err(e) = app_handle.emit("metadata_updated", &active_doc_path_str) {
+                                error!("Failed to emit metadata_updated event: {}", e);
+                            }
+                        }
+                    },
+                    Ok(None) => {
+                        info!("[Live Transcription] No existing metadata for '{}'. Creating new entry.", relative_doc_path);
+                        let file_metadata = FileMetadata {
+                            file_name: active_doc_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                            file_path: active_doc_path_str.clone(),
+                            last_modified: Utc::now().to_rfc3339(),
+                            title: String::new(),
+                            description: String::new(),
+                            summary: String::new(),
+                            duration_seconds: None,
+                            width: None,
+                            height: None,
+                            frame_rate: None,
+                            bit_rate: None,
+                            audio_codec: None,
+                            video_codec: None,
+                            created_at: Some(Utc::now().to_rfc3339()),
+                            original_import_path: None,
+                            speaker_names: None,
+                            waveform_data: None,
+                        };
+
+                        let attachments_json_string = json!(audio_files).to_string();
+                        let custom_fields = vec![json!({
+                            "key": "attachments",
+                            "value": attachments_json_string
+                        })];
+                        let updated_custom_fields_json_str = serde_json::to_string(&custom_fields).unwrap_or_else(|_| "[]".to_string());
+
+                        if let Err(e) = db_handler::save_asset_metadata(&project_uuid, &file_metadata, &relative_doc_path, "doc", Some(&updated_custom_fields_json_str)) {
+                            error!("[Live Transcription] Failed to save new metadata with attachments: {}", e);
+                        } else {
+                            info!("[Live Transcription] Successfully saved new metadata with attachments.");
+                            if let Err(e) = app_handle.emit("metadata_updated", &active_doc_path_str) {
+                                error!("Failed to emit metadata_updated event: {}", e);
+                            }
+                        }
+                    },
+                    Err(e) => error!("[Live Transcription] Failed to get metadata for document '{}': {}", relative_doc_path, e),
+                }
+            }
+        }
+    } else {
+        warn!("[Live Transcription] Could not update attachments metadata because path or project info was missing from state.");
+    }
+
+    Ok(true)
 }

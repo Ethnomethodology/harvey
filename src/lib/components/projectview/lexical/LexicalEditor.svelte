@@ -5,7 +5,7 @@
     createEditor, $getRoot as _getRoot, $getSelection as _getSelection, $setSelection as _setSelection,
     $isRangeSelection as _isRangeSelection, $isElementNode as _isElementNode,
     $isTextNode as _isTextNode, $getNodeByKey as _getNodeByKey,
-    $createParagraphNode as _createParagraphNode,
+    $createParagraphNode as _createParagraphNode, $isParagraphNode as _isParagraphNode,
     FORMAT_TEXT_COMMAND, FORMAT_ELEMENT_COMMAND, INDENT_CONTENT_COMMAND,
     OUTDENT_CONTENT_COMMAND, SELECTION_CHANGE_COMMAND, CLICK_COMMAND,
     UNDO_COMMAND, REDO_COMMAND, KEY_MODIFIER_COMMAND,
@@ -159,6 +159,7 @@
   let resizerLineStyle = 'display: none;';
 
   const MIN_COLUMN_WIDTH = 50;
+
 
   export const editorNodes = [
     ExtendedTextNode,
@@ -392,6 +393,7 @@
       nodes: editorNodes,
       theme: {
         paragraph: 'speech-plain-text',
+        'live-transcription': 'text-gray-500 italic',
         text: { bold: 'font-bold', italic: 'italic', underline: 'underline', strikethrough: 'line-through' },
         heading: { h1: 'text-2xl font-bold mb-1 mt-2', h2: 'text-xl font-semibold mb-1 mt-1', h3: 'text-lg font-semibold mb-1' },
         list: {
@@ -723,6 +725,42 @@
       isReady = false;
     };
   });
+
+    export function updateLiveTranscriptionText(text, isFinal, startTime, endTime) {
+    if (!editor || !isReady || !editable) return;
+
+    editor.update(() => {
+        const root = _getRoot();
+        let lastParagraph = root.getLastChild();
+        let livePara = null;
+
+        // Check if the last paragraph is our dedicated live paragraph
+        if (lastParagraph && _isParagraphNode(lastParagraph) && typeof lastParagraph.hasStyle === 'function' && lastParagraph.hasStyle('live-transcription')) {
+            livePara = lastParagraph;
+        } else {
+            livePara = _createParagraphNode().setStyle('live-transcription');
+            root.append(livePara);
+        }
+
+        if (isFinal) {
+            // On final result, clear the live paragraph and append the final text.
+            livePara.clear();
+            const timestamp = `[${new Date(startTime * 1000).toISOString().substr(11, 12)} - ${new Date(endTime * 1000).toISOString().substr(11, 12)}]`;
+            livePara.append(_createTextNode(timestamp + ' ' + text + ' '));
+            // Then, remove the style so it becomes a normal paragraph.
+            livePara.setStyle('');
+            // And create a new, empty live paragraph for the next utterance.
+            const newLivePara = _createParagraphNode().setStyle('live-transcription');
+            root.append(newLivePara);
+            newLivePara.selectEnd();
+        } else {
+            // For interim results, replace the content of the live paragraph.
+            livePara.clear();
+            livePara.append(_createTextNode(text));
+            livePara.selectEnd();
+        }
+    });
+  }
 
   export function resetEditorState(jsonString = null) {
     if (!editor) { console.warn("[LexicalEditor] resetEditorState called before editor initialized."); return; }
@@ -1961,23 +1999,46 @@ $: if (editor && activeLayout) {
       @apply bg-gray-600;
   }
 
-  .toolbar button.mini-toolbar-button.active {
-      @apply bg-blue-100 border-blue-300 text-blue-800;
+  html.dark .toolbar button.mini-toolbar-button.active {
+    @apply bg-blue-500 text-white;
   }
 
-  html.dark .toolbar button.mini-toolbar-button.active {
-      @apply bg-blue-800 border-blue-600 text-blue-200;
+  .separator {
+    @apply w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1;
+  }
+
+  .lexical-placeholder-theme-class {
+      /* Styles for the placeholder text */
+  }
+
+  .editor-table {
+      border-collapse: collapse;
+      width: 100%;
+  }
+
+  .editor-table-cell {
+      border: 1px solid #ccc;
+      padding: 8px;
+      min-width: 50px; /* Ensure cells have a minimum width */
+      position: relative; /* Needed for resizer positioning */
+  }
+
+  .editor-table-cell-header {
+      background-color: #f2f2f2;
+      font-weight: bold;
+      text-align: center;
+  }
+
+  .resizer-line {
+      /* The style is dynamically applied in the script */
   }
 
   .indent-outdent-icon {
-      color: theme('colors.gray.800');
+      transform: scaleX(-1); /* Flips the icon horizontally */
   }
 
-  html.dark .indent-outdent-icon {
-      color: theme('colors.white');
+  button.active {
+    @apply bg-gray-300 dark:bg-gray-500;
   }
 
-  .lexical-editor-wrapper-style :global(.lexical-content .layout-hidden) {
-    display: none;
-  }
 </style>
