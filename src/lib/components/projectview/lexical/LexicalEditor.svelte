@@ -1160,22 +1160,15 @@ function gatherAllHighlights() {
     return allHighlights;
 }
 
+import { setDocumentHighlights, saveHighlights } from '$lib/stores/projectStore.js';
+
 function updateAndSaveHighlights(highlights) {
     if (!editor || !documentPath) return;
 
     dispatch('highlightschange', { highlights });
 
-    invoke('save_lexical_highlights', {
-        args: {
-            projectId: get(project).id,
-            documentPath,
-            highlightsJson: JSON.stringify(highlights),
-        }
-    })
-    .then(() => {
-        dispatch('highlightssaved');
-    })
-    .catch(err => console.error("Error saving lexical highlights:", err));
+    setDocumentHighlights(highlights);
+    saveHighlights();
 }
 
 
