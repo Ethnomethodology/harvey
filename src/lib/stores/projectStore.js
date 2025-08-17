@@ -29,6 +29,7 @@ const createMinimalValidLexicalJson = () => {
 
 
 const initialState = {
+    id: null,
     name: null,
     xmlPath: null,
     baseDirectory: null,
@@ -258,7 +259,15 @@ export function markDocumentChangesDiscarded() { console.info('[ProjectStore] Ma
 export function clearDocumentEditorState() { console.info('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { console.log('[ProjectStore] setActiveDocumentEditorRef called with:', editorInstance); project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { console.log('[ProjectStore] clearActiveDocumentEditorRef called.'); project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-export function setDocumentHighlights(highlights) { project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
+export function setDocumentHighlights(highlights) {
+    project.update(p => {
+        if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
+            return p;
+        }
+        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+    });
+    saveHighlights();
+}
 export function addCommentToHighlight(highlightId, comment) {
     project.update(p => {
         const highlights = p.currentDocumentHighlights.map(h => {
@@ -275,7 +284,10 @@ export function addCommentToHighlight(highlightId, comment) {
 
 export async function saveHighlights() {
     const p = get(project);
-    if (!p.selectedDocumentPath) return;
+    if (!p.id || !p.selectedDocumentPath) {
+        console.error("[projectStore] Aborted saveHighlights: Missing projectId or document path.", { projectId: p.id, path: p.selectedDocumentPath });
+        return;
+    }
 
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('save_lexical_highlights', {
