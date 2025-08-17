@@ -1143,9 +1143,11 @@
 
             if (documentPath) {
                 invoke('save_lexical_highlights', {
-                    projectId: get(project).id,
-                    documentPath,
-                    highlightsJson: JSON.stringify(allHighlights),
+                    args: {
+                        projectId: get(project).id,
+                        documentPath,
+                        highlightsJson: JSON.stringify(allHighlights),
+                    }
                 })
                 .then(() => {
                     dispatch('highlightssaved');

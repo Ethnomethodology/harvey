@@ -65,8 +65,10 @@
     async function loadHighlightsForDocument(path) {
         try {
             const loaded = await invoke('load_lexical_highlights', {
-                projectId: get(project).id,
-                documentPath: path,
+                args: {
+                    projectId: get(project).id,
+                    documentPath: path,
+                }
             });
             if (loaded) {
                 initialHighlights = JSON.parse(loaded);
