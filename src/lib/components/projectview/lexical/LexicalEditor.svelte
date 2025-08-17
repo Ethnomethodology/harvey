@@ -113,6 +113,7 @@
   export let enableFloatingToolbar = true;
   export let documentPath = null;
   export let initialHighlights = [];
+  export let documentHighlights = [];
 
   let editorWrapper;
   let editorContainer;
@@ -1128,18 +1129,25 @@ function gatherAllHighlights() {
     const allHighlights = [];
     const root = _getRoot();
     const nodesToVisit = [root];
+    const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
+
     while(nodesToVisit.length > 0) {
         const currentNode = nodesToVisit.pop();
         if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
+            const highlightId = currentNode.getHighlightId();
             const style = currentNode.getStyle();
             const colorMatch = style.match(/background-color:\s*(.*?);/);
             const color = colorMatch ? colorMatch[1] : 'transparent';
+
+            const existingHighlight = existingHighlightsMap.get(highlightId);
+
             allHighlights.push({
-                id: currentNode.getHighlightId(),
+                id: highlightId,
                 text: currentNode.getTextContent(),
                 nodeKey: currentNode.getKey(),
                 color: color,
-                tags: [] // Add tags property
+                tags: existingHighlight ? existingHighlight.tags : [],
+                comments: existingHighlight ? existingHighlight.comments : []
             });
         }
         if (currentNode.getChildren) {

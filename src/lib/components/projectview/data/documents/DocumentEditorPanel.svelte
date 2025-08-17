@@ -201,6 +201,7 @@
                      enableSearch={true}
                      documentPath={selectedPath}
                      initialHighlights={initialHighlights}
+                     documentHighlights={$project.currentDocumentHighlights}
                  />
              {/key}
         </div>
