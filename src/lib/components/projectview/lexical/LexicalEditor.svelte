@@ -1117,7 +1117,6 @@
                 }
             }
 
-            // After modifications, gather all highlights from the entire document
             const allHighlights = [];
             const root = _getRoot();
             const nodesToVisit = [root];
@@ -1138,25 +1137,29 @@
                     nodesToVisit.push(...currentNode.getChildren());
                 }
             }
-            dispatch('highlightschange', { highlights: allHighlights });
 
-
-            if (documentPath) {
-                invoke('save_lexical_highlights', {
-                    args: {
-                        projectId: get(project).id,
-                        documentPath,
-                        highlightsJson: JSON.stringify(allHighlights),
-                    }
-                })
-                .then(() => {
-                    dispatch('highlightssaved');
-                })
-                .catch(err => console.error("Error saving highlights:", err));
-            }
+            updateAndSaveHighlights(allHighlights);
         }
     });
     isHighlightDropdownOpen = false;
+}
+
+function updateAndSaveHighlights(highlights) {
+    if (!editor || !documentPath) return;
+
+    dispatch('highlightschange', { highlights });
+
+    invoke('save_lexical_highlights', {
+        args: {
+            projectId: get(project).id,
+            documentPath,
+            highlightsJson: JSON.stringify(highlights),
+        }
+    })
+    .then(() => {
+        dispatch('highlightssaved');
+    })
+    .catch(err => console.error("Error saving lexical highlights:", err));
 }
 
 
@@ -2130,6 +2133,29 @@ $: if (editor && activeLayout) {
           node.setStyle(`background-color: ${color};`);
         }
       });
+      editor.getEditorState().read(() => {
+          const allHighlights = [];
+            const root = _getRoot();
+            const nodesToVisit = [root];
+            while(nodesToVisit.length > 0) {
+                const currentNode = nodesToVisit.pop();
+                if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
+                    const style = currentNode.getStyle();
+                    const colorMatch = style.match(/background-color:\s*(.*?);/);
+                    const color = colorMatch ? colorMatch[1] : 'transparent';
+                    allHighlights.push({
+                        id: currentNode.getHighlightId(),
+                        text: currentNode.getTextContent(),
+                        nodeKey: currentNode.getKey(),
+                        color: color
+                    });
+                }
+                if (currentNode.getChildren) {
+                    nodesToVisit.push(...currentNode.getChildren());
+                }
+            }
+            updateAndSaveHighlights(allHighlights);
+      });
     }
     showModifyToolbar = false;
     clickedNodeKey = null;
@@ -2140,14 +2166,31 @@ $: if (editor && activeLayout) {
         const node = _getNodeByKey(clickedNodeKey);
         if (_isExtendedTextNode(node)) {
           node.setStyle('background-color: transparent;');
-          const highlightId = node.getHighlightId();
           node.setHighlightId(null);
-          dispatch('highlightevent', {
-            type: 'remove',
-            id: highlightId,
-            nodeKey: clickedNodeKey,
-          });
         }
+      });
+      editor.getEditorState().read(() => {
+          const allHighlights = [];
+            const root = _getRoot();
+            const nodesToVisit = [root];
+            while(nodesToVisit.length > 0) {
+                const currentNode = nodesToVisit.pop();
+                if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
+                    const style = currentNode.getStyle();
+                    const colorMatch = style.match(/background-color:\s*(.*?);/);
+                    const color = colorMatch ? colorMatch[1] : 'transparent';
+                    allHighlights.push({
+                        id: currentNode.getHighlightId(),
+                        text: currentNode.getTextContent(),
+                        nodeKey: currentNode.getKey(),
+                        color: color
+                    });
+                }
+                if (currentNode.getChildren) {
+                    nodesToVisit.push(...currentNode.getChildren());
+                }
+            }
+            updateAndSaveHighlights(allHighlights);
       });
     }
     showModifyToolbar = false;
