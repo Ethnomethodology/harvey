@@ -58,6 +58,10 @@ import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stor
 
     $: groupedHighlights = groupHighlights($project.currentDocumentHighlights);
 
+    $: {
+        console.log('[Jules DEBUG] Highlights from store in panel:', $project.currentDocumentHighlights);
+    }
+
     function handleTagsUpdate(highlightId, newTags) {
         const newHighlights = $project.currentDocumentHighlights.map(h => {
             if (h.id === highlightId) {

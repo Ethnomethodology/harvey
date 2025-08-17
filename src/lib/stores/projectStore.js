@@ -237,7 +237,15 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
             import('$lib/services/projectService.js').then(async service => {
                 if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
                 else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
-                if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(filePath); project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
+                if (service.loadDocumentMetadata) {
+                    try {
+                        const meta = await service.loadDocumentMetadata(filePath);
+                        console.log('[Jules DEBUG] Loaded metadata in store:', meta); // DEBUG
+                        project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p);
+                    } catch (e) {
+                        project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);
+                    }
+                }
             }).catch(err => project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isPdf) {
              import('$lib/services/projectService.js').then(async service => {
