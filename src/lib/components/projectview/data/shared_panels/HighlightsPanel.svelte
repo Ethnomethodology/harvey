@@ -24,18 +24,24 @@
 
     function handleAddComment(event) {
         const { highlightId, comment } = event.detail;
-        const highlightIndex = highlights.findIndex(h => h.id === highlightId);
-        if (highlightIndex !== -1) {
-            highlights = highlights.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = [...(h.comments || []), comment];
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            setDocumentHighlights(highlights);
-            saveHighlights();
+        highlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = [...(h.comments || []), comment];
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+        setDocumentHighlights(highlights);
+
+        const updatedHighlight = highlights.find(h => h.id === highlightId);
+        if (updatedHighlight) {
+            selectedHighlightForComments = {
+                ...selectedHighlightForComments,
+                comments: updatedHighlight.comments
+            };
         }
+
+        saveHighlights();
     }
 
     function groupHighlights(highlights) {
@@ -147,7 +153,7 @@
                         <div class="p-2">
                             <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                         </div>
-                        <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex items-center justify-between">
+                        <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex flex-col">
                             <div class="flex items-center w-full">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tags-fill mr-2" viewBox="0 0 16 16">
                                     <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
@@ -162,16 +168,18 @@
                                     />
                                 </div>
                             </div>
-                            <button on:click={() => openCommentsModal(highlight)} class="ml-2 relative">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-fill" viewBox="0 0 16 16">
-                                    <path d="M8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6-.097 1.016-.417 2.13-.771 2.966-.079.186.074.394.273.362 2.256-.37 3.597-.938 4.18-1.234A9 9 0 0 0 8 15"/>
-                                </svg>
-                                {#if highlight.comments && highlight.comments.length > 0}
-                                    <span class="absolute -top-1 -right-2 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                                        {highlight.comments.length}
-                                    </span>
-                                {/if}
-                            </button>
+                            <div class="flex justify-end w-full mt-1">
+                                <button on:click={() => openCommentsModal(highlight)} class="relative">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-fill" viewBox="0 0 16 16">
+                                        <path d="M8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6-.097 1.016-.417 2.13-.771 2.966-.079.186.074.394.273.362 2.256-.37 3.597-.938 4.18-1.234A9 9 0 0 0 8 15"/>
+                                    </svg>
+                                    {#if highlight.comments && highlight.comments.length > 0}
+                                        <span class="absolute -top-1 -right-2 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                                            {highlight.comments.length}
+                                        </span>
+                                    {/if}
+                                </button>
+                            </div>
                         </div>
                     </li>
                 {/each}
