@@ -1087,18 +1087,15 @@
                 styles['background-color'] = colorToApply;
                 styles['color'] = isDarkMode ? '#111827' : '#000000';
             } else {
-                // Removing highlight
                 styles['background-color'] = null;
-                styles['color'] = null; // Remove any explicit text color, allowing it to inherit.
+                styles['color'] = null;
             }
 
             _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
-            const highlights = [];
             for (const node of selectedNodes) {
                 let targetNode = node;
-                // If selection is within a segmented node, target the parent ExtendedTextNode
                 if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent()) && targetNode.isSegmented()) {
                      targetNode = targetNode.getParent();
                 }
@@ -1107,53 +1104,53 @@
                     const extendedNode = targetNode;
                     const currentHighlightId = extendedNode.getHighlightId();
 
-                    if (colorToApply !== 'transparent') { // Applying a color
-                        if (currentHighlightId === null) { // New highlight
+                    if (colorToApply !== 'transparent') {
+                        if (currentHighlightId === null) {
                             const newId = uuidv4();
                             extendedNode.setHighlightId(newId);
-                            const highlight = {
-                                type: 'add',
-                                id: newId,
-                                text: extendedNode.getTextContent(),
-                                nodeKey: extendedNode.getKey(),
-                                color: colorToApply // Pass the actual color
-                            };
-                            highlights.push(highlight);
-                            dispatch('highlightevent', highlight);
-                        } else { // Existing highlight, color might be changing
-                             const highlight = {
-                                type: 'add', // 'add' can also mean 'update' in this context
-                                id: currentHighlightId,
-                                text: extendedNode.getTextContent(),
-                                nodeKey: extendedNode.getKey(),
-                                color: colorToApply // Update with the new color
-                            };
-                            highlights.push(highlight);
-                            dispatch('highlightevent', highlight);
                         }
-                    } else { // Removing highlight (color is transparent)
+                    } else {
                         if (currentHighlightId !== null) {
-                            const highlight = {
-                                type: 'remove',
-                                id: currentHighlightId,
-                                nodeKey: extendedNode.getKey(),
-                                color: 'transparent' // Indicate removal
-                            };
-                            highlights.push(highlight);
-                            dispatch('highlightevent', highlight);
                             extendedNode.setHighlightId(null);
                         }
                     }
                 }
             }
+
+            // After modifications, gather all highlights from the entire document
+            const allHighlights = [];
+            const root = _getRoot();
+            const nodesToVisit = [root];
+            while(nodesToVisit.length > 0) {
+                const currentNode = nodesToVisit.pop();
+                if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
+                    const style = currentNode.getStyle();
+                    const colorMatch = style.match(/background-color:\s*(.*?);/);
+                    const color = colorMatch ? colorMatch[1] : 'transparent';
+                    allHighlights.push({
+                        id: currentNode.getHighlightId(),
+                        text: currentNode.getTextContent(),
+                        nodeKey: currentNode.getKey(),
+                        color: color
+                    });
+                }
+                if (currentNode.getChildren) {
+                    nodesToVisit.push(...currentNode.getChildren());
+                }
+            }
+            dispatch('highlightschange', { highlights: allHighlights });
+
+
             if (documentPath) {
                 invoke('save_lexical_highlights', {
-                    args: {
-                        projectId: get(project).id,
-                        documentPath,
-                        highlightsJson: JSON.stringify(highlights),
-                    }
-                }).catch(err => console.error("Error saving highlights:", err));
+                    projectId: get(project).id,
+                    documentPath,
+                    highlightsJson: JSON.stringify(allHighlights),
+                })
+                .then(() => {
+                    dispatch('highlightssaved');
+                })
+                .catch(err => console.error("Error saving highlights:", err));
             }
         }
     });

@@ -8,7 +8,7 @@
         markDocumentChangesDiscarded,
         setActiveDocumentEditorRef,
         clearActiveDocumentEditorRef,
-        updateDocumentHighlights,
+        setDocumentHighlights,
         highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { saveDocumentContent } from '$lib/services/projectService.js'; 
@@ -65,10 +65,8 @@
     async function loadHighlightsForDocument(path) {
         try {
             const loaded = await invoke('load_lexical_highlights', {
-                args: {
-                    projectId: get(project).id,
-                    documentPath: path,
-                }
+                projectId: get(project).id,
+                documentPath: path,
             });
             if (loaded) {
                 initialHighlights = JSON.parse(loaded);
@@ -89,24 +87,11 @@
         }
 	}
 
-    async function handleHighlightEvent(event) {
-        const { type, id, text, nodeKey, color } = event.detail; // Added color
-        console.log(`[DocumentEditorPanel] Highlight event received: type=${type}, id=${id}, nodeKey=${nodeKey}, color=${color}`);
+    function handleHighlightsChange(event) {
+        const { highlights } = event.detail;
+        console.log(`[DocumentEditorPanel] Highlights change event received with ${highlights.length} highlights.`);
         if (selectedPath) {
-            updateDocumentHighlights({ type, id, text, nodeKey, color }); 
-            await tick();
-            // Save highlights to DB
-            invoke('save_lexical_highlights', {
-                args: {
-                    projectId: get(project).id,
-                    documentPath: selectedPath,
-                    highlightsJson: JSON.stringify(get(project).documentHighlights),
-                }
-            })
-            .then(() => {
-                highlightsLastUpdated.set(new Date());
-            })
-            .catch(err => console.error("Error saving lexical highlights:", err));
+            setDocumentHighlights(highlights);
         }
     }
 
@@ -209,7 +194,8 @@
                      enableTableCellMenu={true}
                      enableTableCellResize={true}
                      on:change={handleEditorChange}
-                     on:highlightevent={handleHighlightEvent}
+                     on:highlightschange={handleHighlightsChange}
+                     on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      enableSearch={true}
                      documentPath={selectedPath}
                      initialHighlights={initialHighlights}
