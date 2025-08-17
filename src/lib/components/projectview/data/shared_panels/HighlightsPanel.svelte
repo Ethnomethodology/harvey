@@ -85,8 +85,8 @@
         {#if groupedHighlights.length > 0}
             <ul class="space-y-2">
                 {#each groupedHighlights as highlight}
-                    <li class="p-2 rounded-md" style="background-color: {highlight.color}; color: {highlight.color === '#111827' ? '#ffffff' : '#000000'};">
-                        <p class="font-semibold">{highlight.text}</p>
+                    <li class="p-2 rounded-md bg-white dark:bg-gray-700 border-l-4" style="border-color: {highlight.color};">
+                        <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                     </li>
                 {/each}
             </ul>
