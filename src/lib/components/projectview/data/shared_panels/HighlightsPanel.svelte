@@ -3,6 +3,7 @@
     import { onMount } from 'svelte';
     import { get } from 'svelte/store';
     import { project, highlightsLastUpdated, setDocumentHighlights, addCommentToHighlight } from '$lib/stores/projectStore.js';
+    import { invoke } from '@tauri-apps/api/core';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
