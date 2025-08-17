@@ -1,17 +1,12 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
-    import { onMount } from 'svelte';
-    import { get } from 'svelte/store';
-    import { project, highlightsLastUpdated, setDocumentHighlights, addCommentToHighlight } from '$lib/stores/projectStore.js';
-    import { invoke } from '@tauri-apps/api/core';
+import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stores/projectStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
     export let itemPath = null;
     export let itemType = null;
 
-    let highlights = [];
-    let groupedHighlights = [];
     let allTags = [];
 
     let showCommentsModal = false;
@@ -48,7 +43,8 @@
                     id: highlight.id,
                     color: highlight.color,
                     textParts: [],
-                    tags: highlight.tags || []
+                    tags: highlight.tags || [],
+                    comments: highlight.comments || []
                 });
             }
             map.get(highlight.id).textParts.push(highlight.text);
@@ -60,8 +56,10 @@
         }));
     }
 
+    $: groupedHighlights = groupHighlights($project.currentDocumentHighlights);
+
     function handleTagsUpdate(highlightId, newTags) {
-        const newHighlights = highlights.map(h => {
+        const newHighlights = $project.currentDocumentHighlights.map(h => {
             if (h.id === highlightId) {
                 return { ...h, tags: newTags };
             }
@@ -74,50 +72,9 @@
         if (!allTags.includes(newTag)) {
             allTags = [...allTags, newTag];
         }
-        const highlight = highlights.find(h => h.id === highlightId);
+        const highlight = $project.currentDocumentHighlights.find(h => h.id === highlightId);
         const newTags = [...(highlight?.tags || []), newTag];
         handleTagsUpdate(highlightId, newTags);
-    }
-
-    async function loadHighlights() {
-        if (!itemPath || itemType !== 'doc') {
-            highlights = [];
-            groupedHighlights = [];
-            return;
-        }
-
-        try {
-            const highlightsJson = await invoke('load_lexical_highlights', {
-                args: {
-                    projectId: get(project).id,
-                    documentPath: itemPath,
-                }
-            });
-
-            if (highlightsJson) {
-                highlights = JSON.parse(highlightsJson);
-                groupedHighlights = groupHighlights(highlights);
-            } else {
-                highlights = [];
-                groupedHighlights = [];
-            }
-        } catch (error) {
-            console.error('Error loading highlights:', error);
-            highlights = [];
-            groupedHighlights = [];
-        }
-    }
-
-    onMount(() => {
-        loadHighlights();
-    });
-
-    $: if (itemPath) {
-        loadHighlights();
-    }
-
-    $: if ($highlightsLastUpdated) {
-        loadHighlights();
     }
 </script>
 
