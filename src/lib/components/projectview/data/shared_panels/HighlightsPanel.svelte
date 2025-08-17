@@ -2,14 +2,16 @@
 <script>
     import { onMount } from 'svelte';
     import { get } from 'svelte/store';
-    import { project, highlightsLastUpdated } from '$lib/stores/projectStore.js';
+    import { project, highlightsLastUpdated, setDocumentHighlights } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
+    import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
 
     export let itemPath = null;
     export let itemType = null;
 
     let highlights = [];
     let groupedHighlights = [];
+    let allTags = ['important', 'todo', 'question']; // Dummy data for now
 
     function groupHighlights(highlights) {
         if (!highlights || highlights.length === 0) {
@@ -22,7 +24,8 @@
                 map.set(highlight.id, {
                     id: highlight.id,
                     color: highlight.color,
-                    textParts: []
+                    textParts: [],
+                    tags: highlight.tags || []
                 });
             }
             map.get(highlight.id).textParts.push(highlight.text);
@@ -30,8 +33,38 @@
 
         return Array.from(map.values()).map(group => ({
             ...group,
-            text: group.textParts.join(' ') // Join the text parts to form a single string
+            text: group.textParts.join(' ')
         }));
+    }
+
+    function handleTagsUpdate(highlightId, newTags) {
+        highlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                return { ...h, tags: newTags };
+            }
+            return h;
+        });
+        setDocumentHighlights(highlights);
+        saveHighlights();
+    }
+
+    function handleCreateTag(newTag, highlightId) {
+        if (!allTags.includes(newTag)) {
+            allTags = [...allTags, newTag];
+        }
+        const newTags = [...(highlights.find(h => h.id === highlightId)?.tags || []), newTag];
+        handleTagsUpdate(highlightId, newTags);
+    }
+
+    async function saveHighlights() {
+        await invoke('save_lexical_highlights', {
+            args: {
+                projectId: get(project).id,
+                documentPath: itemPath,
+                highlightsJson: JSON.stringify(highlights),
+            }
+        });
+        highlightsLastUpdated.set(new Date());
     }
 
     async function loadHighlights() {
@@ -84,9 +117,25 @@
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
         {#if groupedHighlights.length > 0}
             <ul class="space-y-2">
-                {#each groupedHighlights as highlight}
-                    <li class="p-2 rounded-md bg-white dark:bg-gray-700 border-l-4" style="border-color: {highlight.color};">
-                        <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
+                {#each groupedHighlights as highlight (highlight.id)}
+                    <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                        <div class="p-2">
+                            <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tags-fill mr-2" viewBox="0 0 16 16">
+                                <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
+                                <path d="M1.293 7.793A1 1 0 0 1 1 7.086V2a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l.043-.043z"/>
+                            </svg>
+                            <div class="w-full">
+                                <TagMultiSelect
+                                    allTags={allTags}
+                                    assignedTags={highlight.tags}
+                                    on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
+                                    on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}
+                                />
+                            </div>
+                        </div>
                     </li>
                 {/each}
             </ul>

@@ -1138,7 +1138,8 @@ function gatherAllHighlights() {
                 id: currentNode.getHighlightId(),
                 text: currentNode.getTextContent(),
                 nodeKey: currentNode.getKey(),
-                color: color
+                color: color,
+                tags: [] // Add tags property
             });
         }
         if (currentNode.getChildren) {
