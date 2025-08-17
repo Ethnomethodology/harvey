@@ -1094,6 +1094,7 @@
             _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
+            const newId = uuidv4();
             for (const node of selectedNodes) {
                 let targetNode = node;
                 if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent()) && targetNode.isSegmented()) {
@@ -1106,7 +1107,6 @@
 
                     if (colorToApply !== 'transparent') {
                         if (currentHighlightId === null) {
-                            const newId = uuidv4();
                             extendedNode.setHighlightId(newId);
                         }
                     } else {
@@ -2135,10 +2135,26 @@ $: if (editor && activeLayout) {
   onChangeColor={(color) => {
     if (clickedNodeKey) {
       editor.update(() => {
-        const node = _getNodeByKey(clickedNodeKey);
-        if (_isExtendedTextNode(node)) {
-          node.setStyle(`background-color: ${color};`);
+        const clickedNode = _getNodeByKey(clickedNodeKey);
+        if (!_isExtendedTextNode(clickedNode)) return;
+        const highlightId = clickedNode.getHighlightId();
+        if (!highlightId) return;
+
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        while(nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
+                currentNode.setStyle(`background-color: ${color};`);
+            }
+            if (currentNode.getChildren) {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
         }
+
         const allHighlights = gatherAllHighlights();
         updateAndSaveHighlights(allHighlights);
       });
@@ -2149,10 +2165,25 @@ $: if (editor && activeLayout) {
   onDelete={() => {
     if (clickedNodeKey) {
       editor.update(() => {
-        const node = _getNodeByKey(clickedNodeKey);
-        if (_isExtendedTextNode(node)) {
-          node.setStyle('background-color: transparent;');
-          node.setHighlightId(null);
+        const clickedNode = _getNodeByKey(clickedNodeKey);
+        if (!_isExtendedTextNode(clickedNode)) return;
+        const highlightId = clickedNode.getHighlightId();
+        if (!highlightId) return;
+
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        while(nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
+                currentNode.setStyle('background-color: transparent;');
+                currentNode.setHighlightId(null);
+            }
+            if (currentNode.getChildren) {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
         }
         const allHighlights = gatherAllHighlights();
         updateAndSaveHighlights(allHighlights);

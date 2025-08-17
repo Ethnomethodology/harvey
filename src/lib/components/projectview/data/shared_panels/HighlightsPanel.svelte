@@ -9,10 +9,35 @@
     export let itemType = null;
 
     let highlights = [];
+    let groupedHighlights = [];
+
+    function groupHighlights(highlights) {
+        if (!highlights || highlights.length === 0) {
+            return [];
+        }
+
+        const map = new Map();
+        for (const highlight of highlights) {
+            if (!map.has(highlight.id)) {
+                map.set(highlight.id, {
+                    id: highlight.id,
+                    color: highlight.color,
+                    textParts: []
+                });
+            }
+            map.get(highlight.id).textParts.push(highlight.text);
+        }
+
+        return Array.from(map.values()).map(group => ({
+            ...group,
+            text: group.textParts.join(' ') // Join the text parts to form a single string
+        }));
+    }
 
     async function loadHighlights() {
         if (!itemPath || itemType !== 'doc') {
             highlights = [];
+            groupedHighlights = [];
             return;
         }
 
@@ -26,12 +51,15 @@
 
             if (highlightsJson) {
                 highlights = JSON.parse(highlightsJson);
+                groupedHighlights = groupHighlights(highlights);
             } else {
                 highlights = [];
+                groupedHighlights = [];
             }
         } catch (error) {
             console.error('Error loading highlights:', error);
             highlights = [];
+            groupedHighlights = [];
         }
     }
 
@@ -54,9 +82,9 @@
     </div>
 
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
-        {#if highlights.length > 0}
+        {#if groupedHighlights.length > 0}
             <ul class="space-y-2">
-                {#each highlights as highlight}
+                {#each groupedHighlights as highlight}
                     <li class="p-2 rounded-md" style="background-color: {highlight.color}; color: {highlight.color === '#111827' ? '#ffffff' : '#000000'};">
                         <p class="font-semibold">{highlight.text}</p>
                     </li>
