@@ -166,6 +166,43 @@ pub async fn save_document_and_update_xml( project_xml_path: String, target_path
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+pub struct DocumentMetadata {
+    metadata: Option<FileMetadataWithCustomFieldsFromDb>,
+    highlights: Option<String>,
+}
+
+#[tauri::command]
+pub async fn load_document_metadata(
+    project_xml_path_str: String,
+    original_document_relative_path_str: String,
+) -> Result<Option<DocumentMetadata>, CommandError> {
+    let project_xml_path = PathBuf::from(&project_xml_path_str);
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+    let project_id = project_data.project_uuid;
+    let project_base_dir = project_xml_path.parent().unwrap();
+    let original_document_abs_path = project_base_dir.join(&original_document_relative_path_str);
+
+    let metadata = db_handler::load_asset_metadata(&project_id, &original_document_relative_path_str)?;
+
+    let highlights = db_handler::load_lexical_highlights_from_db(
+        &project_id,
+        original_document_abs_path.to_str().unwrap(),
+    )?;
+
+    if metadata.is_none() && highlights.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(DocumentMetadata {
+        metadata,
+        highlights,
+    }))
+}
+
 
 #[tauri::command]
 pub async fn read_file_content(path: String) -> Result<String, CommandError> {

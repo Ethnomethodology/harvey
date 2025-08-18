@@ -195,6 +195,7 @@ pub fn run() {
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,
             projectview::document_commands::load_note_json,
+            projectview::document_commands::load_document_metadata,
             projectview::document_commands::save_document_and_update_xml,
             projectview::document_commands::read_file_content,
             projectview::document_commands::delete_temporary_file,
