@@ -1,28 +1,15 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
     import { get } from 'svelte/store';
-import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { allTags, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
     export let itemPath = null;
     export let itemType = null;
 
-    let allTags = [];
-
     let showCommentsModal = false;
-
-    $: {
-        if ($project.currentDocumentHighlights) {
-            const uniqueTags = new Set();
-            $project.currentDocumentHighlights.forEach(h => {
-                if (h.tags) {
-                    h.tags.forEach(tag => uniqueTags.add(tag));
-                }
-            });
-            allTags = [...uniqueTags];
-        }
-    }
     let selectedHighlightId = null;
 
     function openCommentsModal(highlight) {
@@ -80,12 +67,12 @@ import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, u
     }
 
     function handleCreateTag(newTag, highlightId) {
-        if (!allTags.includes(newTag)) {
-            allTags = [...allTags, newTag];
-        }
+        addGlobalTag(newTag);
         const highlight = $project.currentDocumentHighlights.find(h => h.id === highlightId);
-        const newTags = [...(highlight?.tags || []), newTag];
-        handleTagsUpdate(highlightId, newTags);
+        if (highlight && !highlight.tags?.includes(newTag)) {
+            const newTags = [...(highlight.tags || []), newTag];
+            handleTagsUpdate(highlightId, newTags);
+        }
     }
 </script>
 
@@ -110,7 +97,7 @@ import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, u
                                 </svg>
                                 <div class="w-full relative">
                                     <TagMultiSelect
-                                        allTags={allTags}
+                                        allTags={$allTags}
                                         assignedTags={highlight.tags}
                                         on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                                         on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}
