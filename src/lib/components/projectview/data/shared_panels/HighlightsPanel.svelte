@@ -1,5 +1,6 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
+    import { get } from 'svelte/store';
 import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stores/projectStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
@@ -10,6 +11,18 @@ import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stor
     let allTags = [];
 
     let showCommentsModal = false;
+
+    $: {
+        if ($project.currentDocumentHighlights) {
+            const uniqueTags = new Set();
+            $project.currentDocumentHighlights.forEach(h => {
+                if (h.tags) {
+                    h.tags.forEach(tag => uniqueTags.add(tag));
+                }
+            });
+            allTags = [...uniqueTags];
+        }
+    }
     let selectedHighlightForComments = null;
 
     function openCommentsModal(highlight) {
