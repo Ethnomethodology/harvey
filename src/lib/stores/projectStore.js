@@ -261,7 +261,10 @@ export function setActiveDocumentEditorRef(editorInstance) { console.log('[Proje
 export function clearActiveDocumentEditorRef() { console.log('[ProjectStore] clearActiveDocumentEditorRef called.'); project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
 export function setDocumentHighlights(highlights) {
     project.update(p => {
-        if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) {
+        const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
+        const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
+
+        if (!isDocActive && !isMediaNoteActive) {
             return p;
         }
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
@@ -318,8 +321,19 @@ export function deleteComment(highlightId, commentId) {
 
 export async function saveHighlights() {
     const p = get(project);
-    if (!p.id || !p.selectedDocumentPath) {
-        console.error("[projectStore] Aborted saveHighlights: Missing projectId or document path.", { projectId: p.id, path: p.selectedDocumentPath });
+    let path_to_save_against = null;
+
+    if (p.selectedDocumentPath) {
+        path_to_save_against = p.selectedDocumentPath;
+    } else if (p.selectedMediaNotePath && p.activeTranscriptPathInDataTab) {
+        path_to_save_against = p.activeTranscriptPathInDataTab;
+    }
+
+    if (!p.id || !path_to_save_against) {
+        console.error("[projectStore] Aborted saveHighlights: Missing projectId or a valid path to save against.", {
+            projectId: p.id,
+            path: path_to_save_against
+        });
         return;
     }
 
@@ -327,7 +341,7 @@ export async function saveHighlights() {
     await invoke('save_lexical_highlights', {
         args: {
             projectId: p.id,
-            documentPath: p.selectedDocumentPath,
+            documentPath: path_to_save_against,
             highlightsJson: JSON.stringify(p.currentDocumentHighlights),
         }
     });
