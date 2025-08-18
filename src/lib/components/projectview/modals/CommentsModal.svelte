@@ -13,6 +13,7 @@
     let editingCommentId = null;
     let editingText = '';
     let replyingToCommentId = null;
+    let replyingToCommentText = '';
 
     function toggleMenu(commentId) {
         activeMenuId = activeMenuId === commentId ? null : commentId;
@@ -27,6 +28,7 @@
             editingText = comment.text;
         } else if (action === 'reply') {
             replyingToCommentId = comment.id;
+            replyingToCommentText = comment.text;
         } else {
             console.log(action, comment);
         }
@@ -59,11 +61,13 @@
         };
         dispatch('addcomment', { highlightId, comment: newComment });
         newCommentText = '';
-        replyingToCommentId = null; // Reset after adding
+        replyingToCommentId = null;
+        replyingToCommentText = '';
     }
 
     function cancelReply() {
         replyingToCommentId = null;
+        replyingToCommentText = '';
     }
 
     function closeModal() {
@@ -148,8 +152,11 @@
         <div class="mt-6">
             {#if replyingToCommentId}
                 <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                    Replying to comment...
-                    <button on:click={cancelReply} class="text-blue-500 hover:underline text-xs">(Cancel)</button>
+                    Replying to:
+                    <blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-2 my-1 text-gray-500 italic truncate">
+                        {replyingToCommentText}
+                    </blockquote>
+                    <button on:click={cancelReply} class="text-blue-500 hover:underline text-xs">(Cancel Reply)</button>
                 </div>
             {/if}
             <textarea
