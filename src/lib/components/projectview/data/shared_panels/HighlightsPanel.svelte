@@ -1,13 +1,21 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
     import { get } from 'svelte/store';
+    import { onDestroy } from 'svelte';
     import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
-    import { allTags, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
+    import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
     export let itemPath = null;
     export let itemType = null;
+
+    let allTags = [];
+    const unsubscribe = allTagsStore.subscribe(value => {
+        allTags = value;
+    });
+
+    onDestroy(unsubscribe);
 
     let showCommentsModal = false;
     let selectedHighlightId = null;
@@ -97,7 +105,7 @@
                                 </svg>
                                 <div class="w-full relative">
                                     <TagMultiSelect
-                                        allTags={$allTags}
+                                        allTags={allTags}
                                         assignedTags={highlight.tags}
                                         on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                                         on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}

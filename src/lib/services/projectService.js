@@ -1524,8 +1524,9 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         if (projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
             saveFunction = projState.activeDocumentEditorRef.ref.save;
         } else {
-            if (projState.isDocumentDirty) saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
-            else if (projState.isDocumentMetadataDirty) saveFunction = () => saveDocumentMetadata(itemPath);
+            if (projState.isDocumentDirty || projState.isDocumentMetadataDirty) {
+                saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
+            }
         }
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialDocumentJson;
