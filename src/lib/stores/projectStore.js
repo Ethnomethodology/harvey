@@ -269,7 +269,6 @@ export function setDocumentHighlights(highlights) {
         }
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
     });
-    saveHighlights();
 }
 export function addCommentToHighlight(highlightId, comment) {
     project.update(p => {
@@ -282,7 +281,6 @@ export function addCommentToHighlight(highlightId, comment) {
         });
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
     });
-    saveHighlights();
 }
 
 export function updateComment(highlightId, commentId, newText) {
@@ -301,7 +299,6 @@ export function updateComment(highlightId, commentId, newText) {
         });
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
     });
-    saveHighlights();
 }
 
 export function deleteComment(highlightId, commentId) {
@@ -316,36 +313,6 @@ export function deleteComment(highlightId, commentId) {
         });
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
     });
-    saveHighlights();
-}
-
-export async function saveHighlights() {
-    const p = get(project);
-    let path_to_save_against = null;
-
-    if (p.selectedDocumentPath) {
-        path_to_save_against = p.selectedDocumentPath;
-    } else if (p.selectedMediaNotePath && p.activeTranscriptPathInDataTab) {
-        path_to_save_against = p.activeTranscriptPathInDataTab;
-    }
-
-    if (!p.id || !path_to_save_against) {
-        console.error("[projectStore] Aborted saveHighlights: Missing projectId or a valid path to save against.", {
-            projectId: p.id,
-            path: path_to_save_against
-        });
-        return;
-    }
-
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('save_lexical_highlights', {
-        args: {
-            projectId: p.id,
-            documentPath: path_to_save_against,
-            highlightsJson: JSON.stringify(p.currentDocumentHighlights),
-        }
-    });
-    highlightsLastUpdated.set(new Date());
 }
 export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; console.debug(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`); } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); console.debug(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; console.debug(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`); } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
 export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.info('[ProjectStore] Marking Lexical document metadata as saved.'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isDocumentMetadataDirty: false, currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata }; } return p; }); }

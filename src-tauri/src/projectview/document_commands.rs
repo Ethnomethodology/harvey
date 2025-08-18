@@ -13,9 +13,13 @@ use serde_json;
 
 // --- save_note_json Command ---
 #[tauri::command]
-pub async fn save_note_json(target_path: String, json_content: String) -> Result<(), String> {
+pub async fn save_note_json(
+    target_path: String,
+    json_content: String,
+    highlights_json: Option<String>,
+) -> Result<(), String> {
     info!("Saving JSON content to: {}", target_path);
-    let path = PathBuf::from(target_path);
+    let path = PathBuf::from(&target_path);
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed create parent dir: {}", e))?;
@@ -25,6 +29,24 @@ pub async fn save_note_json(target_path: String, json_content: String) -> Result
 
     fs::write(&path, json_content).map_err(|e| format!("Failed write JSON file: {}", e))?;
     info!("Successfully saved JSON file: {}", path.display());
+
+    if let Some(highlights) = highlights_json {
+        info!("Highlights provided, attempting to save...");
+        let project_xml_path = get_project_xml_path_from_item(&path)
+            .map_err(|e| format!("Failed to get project xml path: {}", e))?;
+        let project_data: ProjectXml = {
+            let xml_content = fs::read_to_string(&project_xml_path)
+                .map_err(|e| format!("Failed to read project xml: {}", e))?;
+            quick_xml::de::from_str(&xml_content)
+                .map_err(|e| format!("Failed to parse project xml: {}", e))?
+        };
+        let project_id = project_data.project_uuid;
+
+        db_handler::save_lexical_highlights_to_db(&project_id, target_path.as_str(), &highlights)
+            .map_err(|e| format!("Failed to save highlights: {}", e))?;
+        info!("Successfully saved highlights for: {}", target_path);
+    }
+
     Ok(())
 }
 

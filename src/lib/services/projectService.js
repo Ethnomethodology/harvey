@@ -1234,7 +1234,70 @@ export async function saveTableData(tablePath, tableData) {
         throw error;
     }
 }
-export async function saveDocumentContent(filePath, jsonContent) { if (filePath && filePath.toLowerCase().endsWith('.pdf')) { project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'})); throw new Error("PDF content saving is not handled by saveDocumentContent."); } if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); } try { const parsed = JSON.parse(jsonContent); if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure."); } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); } const filename = await basename(filePath); project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` })); let mainContentSaveError = null; try { await invoke('save_note_json', { targetPath: filePath, jsonContent: jsonContent }); markDocumentAsSaved(jsonContent); } catch (error) { mainContentSaveError = error; const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` })); } const projState = get(project); let metadataSaveError = null; if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) { try { await saveDocumentMetadata(filePath); } catch (error) { metadataSaveError = error; } } if (mainContentSaveError) { await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' }); throw mainContentSaveError; } if (metadataSaveError) throw metadataSaveError; }
+export async function saveDocumentContent(filePath, jsonContent) {
+    if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
+        project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'}));
+        throw new Error("PDF content saving is not handled by saveDocumentContent.");
+    }
+    if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
+        const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content.";
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'}));
+        throw new Error(errorMsg);
+    }
+    try {
+        const parsed = JSON.parse(jsonContent);
+        if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure.");
+    } catch (e) {
+        const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`;
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        throw new Error(errorMsg);
+    }
+
+    const projState = get(project);
+    const filename = await basename(filePath);
+    project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` }));
+
+    let mainContentSaveError = null;
+    try {
+        const highlights_json = (projState.isDocumentMetadataDirty && projState.currentDocumentHighlights?.length > 0)
+            ? JSON.stringify(projState.currentDocumentHighlights)
+            : null;
+
+        await invoke('save_note_json', {
+            targetPath: filePath,
+            jsonContent: jsonContent,
+            highlightsJson: highlights_json,
+        });
+        markDocumentAsSaved(jsonContent);
+        if (highlights_json) {
+            markDocumentMetadataAsSaved(projState.currentDocumentFileLevelMetadata);
+        }
+    } catch (error) {
+        mainContentSaveError = error;
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+    }
+
+    let metadataSaveError = null;
+    if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) {
+        try {
+            await saveDocumentMetadata(filePath);
+        } catch (error) {
+            metadataSaveError = error;
+        }
+    }
+
+    if (mainContentSaveError) {
+        await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' });
+        throw mainContentSaveError;
+    }
+    if (metadataSaveError) {
+        // We don't throw here because the main content saved successfully.
+        // The error will be handled by saveDocumentMetadata itself.
+    }
+}
 export async function loadDocumentMetadata(originalDocumentAbsPath) {
     const proj = get(project);
     if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null;
