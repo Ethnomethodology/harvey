@@ -23,25 +23,23 @@ import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, u
             allTags = [...uniqueTags];
         }
     }
-    let selectedHighlightForComments = null;
+    let selectedHighlightId = null;
 
     function openCommentsModal(highlight) {
-        selectedHighlightForComments = highlight;
+        selectedHighlightId = highlight.id;
         showCommentsModal = true;
     }
+
+    function closeModal() {
+        showCommentsModal = false;
+        selectedHighlightId = null;
+    }
+
+    $: selectedHighlightForComments = $project.currentDocumentHighlights.find(h => h.id === selectedHighlightId) || null;
 
     function handleAddComment(event) {
         const { highlightId, comment } = event.detail;
         addCommentToHighlight(highlightId, comment);
-
-        // Immediately update local state for modal reactivity
-        const updatedHighlight = get(project).currentDocumentHighlights.find(h => h.id === highlightId);
-        if (updatedHighlight) {
-            selectedHighlightForComments = {
-                ...selectedHighlightForComments,
-                comments: updatedHighlight.comments
-            };
-        }
     }
 
     function groupHighlights(highlights) {
@@ -151,7 +149,7 @@ import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, u
     bind:showModal={showCommentsModal}
     comments={selectedHighlightForComments?.comments || []}
     highlightId={selectedHighlightForComments?.id}
-    on:close={() => showCommentsModal = false}
+    on:close={closeModal}
     on:addcomment={handleAddComment}
     on:deletecomment={(e) => deleteComment(e.detail.highlightId, e.detail.commentId)}
     on:editcomment={(e) => updateComment(e.detail.highlightId, e.detail.commentId, e.detail.newText)}
