@@ -12,7 +12,8 @@
         markMediaNoteTranscriptChangesDiscarded,
         setActiveMediaNoteEditorRef,
         clearActiveMediaNoteEditorRef,
-        setDocumentHighlights
+        setDocumentHighlights,
+        highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -424,8 +425,11 @@
                         placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
                         on:highlightschange={handleHighlightsChange}
+                        on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                         toolbarConfig={mediaToolbarConfig}
                         activeLayout={$activeLayout}
+                        documentPath={associatedTranscriptPath}
+                        documentHighlights={$project.currentDocumentHighlights}
                     />
                 {/key}
             </div>
