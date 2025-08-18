@@ -1270,16 +1270,29 @@ export async function saveDocumentContent(filePath, jsonContent) {
             jsonContent: jsonContent,
             highlightsJson: highlights_json,
         });
-        markDocumentAsSaved(jsonContent);
+
+        // Mark content as saved
+        if (projState.selectedDocumentPath === filePath) {
+            markDocumentAsSaved(jsonContent);
+        } else if (projState.selectedMediaNotePath) {
+            // This is a media note, use its specific save marker
+            const { markMediaNoteTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+            markMediaNoteTranscriptAsSaved(projState.selectedMediaNotePath, jsonContent);
+        }
+
+        // Mark metadata (highlights) as saved
         if (highlights_json) {
             markDocumentMetadataAsSaved(projState.currentDocumentFileLevelMetadata);
         }
+
     } catch (error) {
         mainContentSaveError = error;
         const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
         project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
     }
 
+    // This block is now mostly redundant for highlights, but might handle other metadata.
+    // Let's keep it but ensure it doesn't run for media notes to avoid errors.
     let metadataSaveError = null;
     if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) {
         try {
