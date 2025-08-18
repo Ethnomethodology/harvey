@@ -1,6 +1,7 @@
 // src-tauri/src/projectview/document_commands.rs
 use super::shared_types::*;
 use super::shared_utils::*;
+use super::db_handler::{self, FileMetadataWithCustomFieldsFromDb};
 use crate::welcome::config::CommandError;
 use log::{info, warn, error, debug};
 use std::{
