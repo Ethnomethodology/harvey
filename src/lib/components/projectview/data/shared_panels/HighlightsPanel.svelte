@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte -->
 <script>
     import { get } from 'svelte/store';
-import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stores/projectStore.js';
+import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
@@ -153,4 +153,6 @@ import { project, setDocumentHighlights, addCommentToHighlight } from '$lib/stor
     highlightId={selectedHighlightForComments?.id}
     on:close={() => showCommentsModal = false}
     on:addcomment={handleAddComment}
+    on:deletecomment={(e) => deleteComment(e.detail.highlightId, e.detail.commentId)}
+    on:editcomment={(e) => updateComment(e.detail.highlightId, e.detail.commentId, e.detail.newText)}
 />

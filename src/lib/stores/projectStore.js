@@ -282,6 +282,40 @@ export function addCommentToHighlight(highlightId, comment) {
     saveHighlights();
 }
 
+export function updateComment(highlightId, commentId, newText) {
+    project.update(p => {
+        const highlights = p.currentDocumentHighlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = h.comments.map(c => {
+                    if (c.id === commentId) {
+                        return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                    }
+                    return c;
+                });
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+    });
+    saveHighlights();
+}
+
+export function deleteComment(highlightId, commentId) {
+    project.update(p => {
+        const highlights = p.currentDocumentHighlights.map(h => {
+            if (h.id === highlightId) {
+                // Also remove any replies to the comment being deleted
+                const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+    });
+    saveHighlights();
+}
+
 export async function saveHighlights() {
     const p = get(project);
     if (!p.id || !p.selectedDocumentPath) {
