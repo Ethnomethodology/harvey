@@ -431,18 +431,12 @@ export function prepareMediaNoteView(mediaPath) {
     });
 
     if (normalizedMediaPath) {
-        // Find the media file in the files tree to get its associated transcripts
         const currentProjectState = get(project);
         function findMediaFileInTree(nodes, path) {
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
-                if (node.path === path && node.file_type === 'media') {
-                    return node;
-                }
-                if (node.children) {
-                    const found = findMediaFileInTree(node.children, path);
-                    if (found) return found;
-                }
+                if (node.path === path && node.file_type === 'media') return node;
+                if (node.children) { const found = findMediaFileInTree(node.children, path); if (found) return found; }
             }
             return null;
         }
@@ -453,13 +447,30 @@ export function prepareMediaNoteView(mediaPath) {
         project.update(p => ({
             ...p,
             activeTranscriptPathInDataTab: firstTranscriptPath,
-            // If no transcript, set error state to display "No Transcription Yet"
             mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
-            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false, // Only load if there's a transcript
-            isLoading: firstTranscriptPath ? true : false, // Global loading
+            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false,
+            isLoading: firstTranscriptPath ? true : false,
+            currentDocumentHighlights: [], // Clear highlights initially
         }));
-    } else { // If clearing selection, ensure global loading is false
-        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null }));
+
+        if (firstTranscriptPath) {
+            import('$lib/services/projectService.js').then(async service => {
+                const meta = await service.loadDocumentMetadata(firstTranscriptPath);
+                project.update(p => {
+                    if (p.selectedMediaNotePath === normalizedMediaPath) {
+                        return {
+                            ...p,
+                            currentDocumentFileLevelMetadata: meta?.metadata || { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+                            currentDocumentHighlights: meta?.highlights || [],
+                            isDocumentMetadataDirty: false,
+                        };
+                    }
+                    return p;
+                });
+            });
+        }
+    } else {
+        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null, currentDocumentHighlights: [] }));
     }
 }
 

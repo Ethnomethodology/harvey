@@ -11,7 +11,8 @@
         markMediaNoteTranscriptAsSaved,
         markMediaNoteTranscriptChangesDiscarded,
         setActiveMediaNoteEditorRef,
-        clearActiveMediaNoteEditorRef
+        clearActiveMediaNoteEditorRef,
+        setDocumentHighlights
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -149,6 +150,11 @@
             }
         }
 	}
+
+    function handleHighlightsChange(event) {
+        const { highlights } = event.detail;
+        setDocumentHighlights(highlights);
+    }
 
     async function handleSave() {
         if (!mediaPath) { console.error("[MediaEditorPanel] Save Error: No mediaPath for context."); await message("Cannot save: No media file is active for this note.", { title: "Save Error", type: "error" }); return; }
@@ -411,6 +417,7 @@
                         editable={true}
                         placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
+                        on:highlightschange={handleHighlightsChange}
                         toolbarConfig={mediaToolbarConfig}
                         activeLayout={$activeLayout}
                     />

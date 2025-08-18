@@ -44,7 +44,7 @@
         if (value.selectedMediaNotePath) {
             pathFromStore = value.selectedMediaNotePath;
             typeFromStore = 'media_note';
-            itemTypeForInfo = 'media_note'; // or 'audio' / 'video' if more specific needed by InfoPanel
+            itemTypeForInfo = 'doc'; // Treat the associated transcript as a doc for panels
         } else if (value.currentImportedTranscriptPath) {
             pathFromStore = value.currentImportedTranscriptPath;
             typeFromStore = 'imported_transcript';
