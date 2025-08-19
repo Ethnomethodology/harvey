@@ -10,14 +10,6 @@
     export let itemPath = null;
     export let itemType = null;
 
-    let allTags = [];
-    const unsubscribe = allTagsStore.subscribe(value => {
-        allTags = value;
-    });
-
-    onDestroy(unsubscribe);
-
-    let showCommentsModal = false;
     let selectedHighlightId = null;
 
     function openCommentsModal(highlight) {
@@ -105,7 +97,7 @@
                                 </svg>
                                 <div class="w-full relative">
                                     <TagMultiSelect
-                                        allTags={allTags}
+                                        allTags={$allTagsStore}
                                         assignedTags={highlight.tags}
                                         on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                                         on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}
