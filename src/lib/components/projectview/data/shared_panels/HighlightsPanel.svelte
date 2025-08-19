@@ -10,6 +10,7 @@
     export let itemPath = null;
     export let itemType = null;
 
+    let showCommentsModal = false;
     let selectedHighlightId = null;
 
     function openCommentsModal(highlight) {
