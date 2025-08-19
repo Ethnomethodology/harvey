@@ -1265,6 +1265,40 @@ pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) 
 
 // --- End Lexical Highlights Functions ---
 
+use std::collections::HashSet;
+use crate::projectview::shared_types::Highlight;
+
+pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, CommandError> {
+    debug!("[DB] Loading all tags for project_id {}", project_id);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+
+    let rows = stmt.query_map(params![project_id], |row| {
+        row.get(0)
+    })?;
+
+    let mut all_tags = HashSet::new();
+    for row in rows {
+        let annotations_json: String = row?;
+        if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            for highlight in highlights {
+                if let Some(tags) = highlight.tags {
+                    for tag in tags {
+                        all_tags.insert(tag);
+                    }
+                }
+            }
+        }
+    }
+
+    info!("[DB] Found {} unique tags for project_id {}", all_tags.len(), project_id);
+    let mut sorted_tags: Vec<String> = all_tags.into_iter().collect();
+    sorted_tags.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    Ok(sorted_tags)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

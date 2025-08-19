@@ -280,51 +280,12 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         project.update((current) => ({ ...current, ...dataToSet }));
 
         try {
-            const allTranscriptPaths = [];
-            function collectTranscriptPaths(nodes) {
-                if (!Array.isArray(nodes)) return;
-                for (const node of nodes) {
-                    if (node.file_type === 'media' && Array.isArray(node.associated_transcripts)) {
-                        node.associated_transcripts.forEach(t => {
-                            if(t.path) allTranscriptPaths.push(t.path)
-                        });
-                    }
-                    if (node.children) {
-                        collectTranscriptPaths(node.children);
-                    }
-                }
-            }
-            collectTranscriptPaths(loadedData.files);
-
-            const allTaggableItemPaths = [
-                ...(loadedData.document_files || []).map(f => f.path),
-                ...(loadedData.imported_transcript_files || []).map(f => f.path),
-                ...allTranscriptPaths
-            ];
-
-            const tagPromises = allTaggableItemPaths.map(path =>
-                loadDocumentMetadata(path).catch(e => {
-                    console.warn(`Failed to load metadata from ${path} for tag aggregation:`, e);
-                    return null;
-                })
-            );
-
-            const allMetadata = await Promise.all(tagPromises);
-            const allProjectTags = new Set();
-            allMetadata.forEach(meta => {
-                if (meta && meta.highlights && Array.isArray(meta.highlights)) {
-                    meta.highlights.forEach(h => {
-                        if (h.tags && Array.isArray(h.tags)) {
-                            h.tags.forEach(tag => allProjectTags.add(tag));
-                        }
-                    });
-                }
-            });
-            setTags(Array.from(allProjectTags));
-            console.log(`[ProjectService] Initialized global tag store with ${allProjectTags.size} tags.`);
-
+            const tags = await invoke('get_all_tags', { projectId: loadedData.project_uuid });
+            setTags(tags);
+            console.log(`[ProjectService] Initialized global tag store with ${tags.length} tags.`);
         } catch (tagError) {
-            console.error('[ProjectService] Failed to aggregate and set global tags:', tagError);
+            console.error('[ProjectService] Failed to get all tags from backend:', tagError);
+            setTags([]); // Ensure tags are cleared on error
         }
 
         // Update project groups list

@@ -59,6 +59,21 @@ pub async fn get_asset_metadata_command(
 }
 
 #[tauri::command]
+pub async fn get_all_tags(project_id: String) -> Result<Vec<String>, String> {
+    info!("[CMD] get_all_tags called for project_id: {}", project_id);
+    match db_handler::get_all_tags_for_project(&project_id) {
+        Ok(tags) => {
+            info!("[CMD] Found {} tags for project_id {}", tags.len(), project_id);
+            Ok(tags)
+        }
+        Err(e) => {
+            error!("[CMD] Error getting all tags for project_id {}: {}", project_id, e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn update_asset_metadata_command(
     _app_handle: AppHandle,
     project_xml_path_str: String, // Added: Path to the project's XML file

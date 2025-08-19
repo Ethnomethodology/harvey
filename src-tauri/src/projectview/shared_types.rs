@@ -80,6 +80,21 @@ impl Default for SpeakersXml {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Highlight {
+    pub id: String,
+    pub text: String,
+    #[serde(rename = "nodeKey")]
+    pub node_key: Option<String>,
+    pub color: String,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub comments: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub timestamp: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
