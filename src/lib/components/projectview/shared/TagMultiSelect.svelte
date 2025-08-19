@@ -12,6 +12,7 @@
 	const dispatch = createEventDispatcher();
 
 	$: {
+		console.log('[TagMultiSelect] allTags prop updated:', allTags);
 		updateAvailableTags();
 	}
 
