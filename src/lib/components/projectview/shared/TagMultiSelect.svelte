@@ -8,6 +8,7 @@
 	let availableTags: string[] = [];
 	let showDropdown = false;
 	let searchTerm = '';
+	let rootElement: HTMLElement;
 
 	const dispatch = createEventDispatcher();
 
@@ -59,9 +60,15 @@
 			searchTerm = '';
 		}
 	}
+
+	function handleClickOutside(event: MouseEvent) {
+		if (rootElement && !rootElement.contains(event.target as Node)) {
+			showDropdown = false;
+		}
+	}
 </script>
 
-<div class="relative">
+<div class="relative" bind:this={rootElement}>
 	<div
         class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-gray-600 rounded-md min-h-[30px] w-full"
         on:click={() => isEditable && toggleDropdown()}
@@ -134,12 +141,7 @@
 	{/if}
 </div>
 
-<svelte:window on:click={(event) => {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.relative')) {
-        showDropdown = false;
-    }
-}}/>
+<svelte:window on:click={handleClickOutside} />
 
 <style>
 	.relative {
