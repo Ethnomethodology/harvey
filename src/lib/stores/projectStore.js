@@ -2,6 +2,7 @@
 import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
+import { addTag } from '$lib/stores/tagStore.js';
 
 export const groupContentNotification = writable(null);
 export const highlightsLastUpdated = writable(null);
@@ -259,7 +260,6 @@ export function markDocumentChangesDiscarded() { console.info('[ProjectStore] Ma
 export function clearDocumentEditorState() { console.info('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
 export function setActiveDocumentEditorRef(editorInstance) { console.log('[ProjectStore] setActiveDocumentEditorRef called with:', editorInstance); project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
 export function clearActiveDocumentEditorRef() { console.log('[ProjectStore] clearActiveDocumentEditorRef called.'); project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-import { addTag } from '$lib/stores/tagStore.js';
 export function setDocumentHighlights(highlights) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
