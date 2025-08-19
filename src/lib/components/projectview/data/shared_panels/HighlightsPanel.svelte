@@ -10,6 +10,10 @@
     export let itemPath = null;
     export let itemType = null;
 
+    $: {
+        console.log('[HighlightsPanel] allTagsStore updated:', $allTagsStore);
+    }
+
     let showCommentsModal = false;
     let selectedHighlightId = null;
 

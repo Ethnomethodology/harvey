@@ -23,7 +23,9 @@ export function addTag(newTag) {
     const tagToAdd = newTag.trim();
     allTags.update(currentTags => {
         if (!currentTags.includes(tagToAdd)) {
-            return [...currentTags, tagToAdd];
+            const newTags = [...currentTags, tagToAdd];
+            console.log(`[tagStore] Adding new tag "${tagToAdd}". New tags:`, newTags);
+            return newTags;
         }
         return currentTags;
     });
