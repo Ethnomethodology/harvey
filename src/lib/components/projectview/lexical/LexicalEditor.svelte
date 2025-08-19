@@ -1160,14 +1160,10 @@ function gatherAllHighlights() {
     return allHighlights;
 }
 
-import { setDocumentHighlights } from '$lib/stores/projectStore.js';
-
 function updateAndSaveHighlights(highlights) {
     if (!editor || !documentPath) return;
 
     dispatch('highlightschange', { highlights });
-
-    setDocumentHighlights(highlights);
 }
 
 
