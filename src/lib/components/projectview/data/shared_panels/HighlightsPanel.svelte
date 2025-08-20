@@ -2,7 +2,7 @@
 <script>
     import { get } from 'svelte/store';
     import { onDestroy } from 'svelte';
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights } from '$lib/stores/projectStore.js';
     import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
@@ -23,18 +23,27 @@
         selectedHighlightId = null;
     }
 
-    $: selectedHighlightForComments = $project.currentDocumentHighlights.find(h => h.id === selectedHighlightId) || null;
+    // --- Reactive State based on itemType ---
+    let activeHighlights = [];
+    $: {
+        if (itemType === 'imported_transcript') {
+            activeHighlights = $project.currentImportedTranscriptHighlights || [];
+        } else {
+            activeHighlights = $project.currentDocumentHighlights || [];
+        }
+    }
+
+    $: selectedHighlightForComments = activeHighlights.find(h => h.id === selectedHighlightId) || null;
 
     function handleAddComment(event) {
         const { highlightId, comment } = event.detail;
-        addCommentToHighlight(highlightId, comment);
+        addCommentToHighlight(highlightId, comment); // This seems to be generic, which is fine
     }
 
     function groupHighlights(highlights) {
         if (!highlights || highlights.length === 0) {
             return [];
         }
-
         const map = new Map();
         for (const highlight of highlights) {
             if (!map.has(highlight.id)) {
@@ -48,23 +57,30 @@
             }
             map.get(highlight.id).textParts.push(highlight.text);
         }
-
         return Array.from(map.values()).map(group => ({
             ...group,
             text: group.textParts.join(' ')
         }));
     }
 
-    $: groupedHighlights = groupHighlights($project.currentDocumentHighlights);
+    $: groupedHighlights = groupHighlights(activeHighlights);
+
+    function handleHighlightsUpdate(newHighlights) {
+        if (itemType === 'imported_transcript') {
+            setImportedTranscriptHighlights(newHighlights);
+        } else {
+            setDocumentHighlights(newHighlights);
+        }
+    }
 
     function handleTagsUpdate(highlightId, newTags) {
-        const newHighlights = $project.currentDocumentHighlights.map(h => {
+        const newHighlights = activeHighlights.map(h => {
             if (h.id === highlightId) {
                 return { ...h, tags: newTags };
             }
             return h;
         });
-        setDocumentHighlights(newHighlights);
+        handleHighlightsUpdate(newHighlights);
     }
 
     function handleCreateTag(newTag, highlightId) {
