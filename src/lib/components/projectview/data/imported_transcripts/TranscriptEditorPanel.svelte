@@ -10,7 +10,9 @@
         setActiveImportedTranscriptEditorRef,
         clearActiveImportedTranscriptEditorRef,
         setLoadedImportedTranscriptData,
-        setImportedTranscriptLoadFailed
+        setImportedTranscriptLoadFailed,
+        setImportedTranscriptHighlights,
+        highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -64,6 +66,10 @@
     let selectedPath = null;
     let errorMessage = null;
 
+    // New state for highlights
+    let initialHighlights = [];
+    let isMetadataDirty = false;
+
     const ALL_CONVERSION_NODES = [
         RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
         HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
@@ -96,6 +102,15 @@
             if (errorMessage !== p.importedTranscriptError) {
                 errorMessage = p.importedTranscriptError;
             }
+
+            // Sync highlight state
+            if (initialHighlights !== p.initialImportedTranscriptHighlights) {
+                initialHighlights = p.initialImportedTranscriptHighlights;
+            }
+            if (isMetadataDirty !== p.isImportedTranscriptMetadataDirty) {
+                isMetadataDirty = p.isImportedTranscriptMetadataDirty;
+            }
+
         } else if (itemPath && p.currentImportedTranscriptPath !== itemPath && selectedPath === itemPath) {
             selectedPath = null;
             currentLexicalJson = null;
@@ -103,26 +118,55 @@
             isDirty = false;
             isLoading = false;
             errorMessage = null;
+
+            initialHighlights = [];
+            isMetadataDirty = false;
+
             if (editorRef) editorRef.resetEditorState('');
             editorJsonState = '';
         }
     });
 
-    // --- Path Change Reaction (Unchanged) ---
-    let prevPath = null;
+    // --- Path Change Reaction (REFACTORED) ---
+    let prevPath = itemPath;
     $: if (itemPath && itemPath !== prevPath) {
+        console.log(`[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`);
         prevPath = itemPath;
-        console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
         loadAndConvertTranscript(itemPath);
-    } else if (!itemPath && prevPath) {
-        prevPath = null;
-        selectedPath = null;
-        editorJsonState = '';
-        if (editorRef) editorRef.resetEditorState('');
-        isLoading = false;
-        errorMessage = null;
-        if (get(project).currentImportedTranscriptPath === prevPath) {
-            setLoadedImportedTranscriptData(null, null);
+        loadHighlightsForTranscript(itemPath);
+    }
+
+    async function loadHighlightsForTranscript(path) {
+        console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
+        if (!path) {
+            setImportedTranscriptHighlights([], false);
+            return;
+        }
+        try {
+            const projectId = get(project).id;
+            if (!projectId) {
+                console.error("[TranscriptEditorPanel] Cannot load highlights, project ID is missing.");
+                return;
+            }
+            console.log(`[TranscriptEditorPanel] Invoking 'load_lexical_highlights' with projectId: ${projectId}, documentPath: ${path}`);
+            const rawHighlights = await invoke('load_lexical_highlights', {
+                args: {
+                    projectId: projectId,
+                    documentPath: path,
+                }
+            });
+            console.log(`[TranscriptEditorPanel] Received from backend:`, rawHighlights);
+
+            const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
+            console.log(`[TranscriptEditorPanel] Parsed ${highlights.length} highlights. Updating store.`);
+
+            initialHighlights = highlights; // Set the initial highlights
+            setImportedTranscriptHighlights(highlights, false); // Update the store
+
+            console.log(`[TranscriptEditorPanel] Store updated with highlights.`);
+        } catch (e) {
+            console.error("[TranscriptEditorPanel] Error loading lexical highlights for transcript:", e);
+            setImportedTranscriptHighlights([], false);
         }
     }
 
@@ -400,6 +444,11 @@
     // --- REMOVED lexicalTableToSegments function ---
     // It is no longer needed for saving
 
+    function handleHighlightsChange(event) {
+        const { highlights } = event.detail;
+        setImportedTranscriptHighlights(highlights);
+    }
+
     // --- Editor Change Handler (Unchanged) ---
     function handleEditorChange(event) {
         clearTimeout(changeDebounceTimeout);
@@ -419,47 +468,26 @@
 
     // --- MODIFIED Save Handler ---
     async function handleSave() {
-        if (!itemPath) {
-            console.error("[TranscriptEditorPanel] Save Error: No itemPath.");
-            await message("Cannot save: No transcript file is active.", { title: "Save Error", type: "error" });
-            return;
-        }
-        if (isLoading || errorMessage) {
-             console.error("[TranscriptEditorPanel] Save Error: Cannot save while loading or in error state.");
-             await message(`Cannot save: ${isLoading ? 'Transcript is still loading.' : `Transcript failed to load (${errorMessage})`}`, { title: "Save Error", type: "error" });
-            return;
+        const projState = get(project);
+        if (!projState.currentImportedTranscriptPath) {
+            console.error("[TranscriptEditorPanel] Save Error: No transcript path selected in store.");
+            await message("Cannot save: No transcript is currently selected.", { title: "Save Error", type: "error"});
+            throw new Error("Save Error: No transcript path selected.");
         }
 
-        // Use the current Lexical JSON state directly
-        const finalJsonToSave = editorJsonState;
-
-        if (!finalJsonToSave || !isValidLexicalState(finalJsonToSave)) {
-            console.error("[TranscriptEditorPanel] Save Error: editorJsonState is empty or invalid.");
-             await message("Cannot save: Transcript content is empty or invalid.", { title: "Save Error", type: "error" });
+        if (!projState.isImportedTranscriptDirty && !projState.isImportedTranscriptMetadataDirty) {
+            console.log("[TranscriptEditorPanel] handleSave: Content and metadata not dirty. Save skipped.");
             return;
         }
 
-        console.log("[TranscriptEditorPanel] handleSave: Saving full Lexical JSON state for:", itemPath);
-
+        console.log("[TranscriptEditorPanel] handleSave: Attempting to save transcript (and/or metadata) via service:", projState.currentImportedTranscriptPath);
         try {
-            console.log("[TranscriptEditorPanel] Saving Lexical JSON:", finalJsonToSave.substring(0, 500) + "...");
-
-            project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
-
-            // Use the same backend command used for documents
-            await invoke('save_note_json', {
-                targetPath: itemPath,
-                jsonContent: finalJsonToSave // Save the full Lexical state
-            });
-
-            // Update the store's initial state to match the saved state
-            markImportedTranscriptAsSaved(itemPath, finalJsonToSave);
-            console.log("[TranscriptEditorPanel] Transcript save successful.");
-
+            const { saveImportedTranscriptContent } = await import('$lib/services/projectService.js');
+            await saveImportedTranscriptContent(projState.currentImportedTranscriptPath, editorJsonState);
+            console.log("[TranscriptEditorPanel] Transcript (and/or metadata) save successful via service.");
         } catch (error) {
-             console.error("[TranscriptEditorPanel] Save failed:", error);
-             await message(`Failed to save transcript: ${error.message || error}`, { title: 'Save Error', type: 'error' });
-             project.update(p => ({ ...p, statusMessage: `Error saving transcript.`}));
+            console.error("[TranscriptEditorPanel] Save operation failed:", error);
+            throw error;
         }
     }
 
@@ -488,34 +516,17 @@
         }
     }
 
-    // --- Mount/Destroy and Exported Functions (Unchanged) ---
-onMount(() => {
-    console.log('[TranscriptEditorPanel] Mounted with path:', itemPath);
-    setActiveImportedTranscriptEditorRef({ ref: self });
-    if (itemPath && !currentLexicalJson && !isLoading) {
-        console.log("[TranscriptEditorPanel onMount] Path exists, no data, not loading -> Triggering load.");
-        loadAndConvertTranscript(itemPath);
-    } else if (itemPath && currentLexicalJson && isValidLexicalState(currentLexicalJson)) {
-        console.log("[TranscriptEditorPanel onMount] Path exists, valid data exists -> Setting editor state.");
-        editorJsonState = currentLexicalJson;
-        if (editorRef) editorRef.resetEditorState(currentLexicalJson);
-        if(isLoading) isLoading = false;
-         if(errorMessage) errorMessage = null;
-    } else if (itemPath && currentLexicalJson && !isValidLexicalState(currentLexicalJson)) {
-         console.error("[TranscriptEditorPanel onMount] Path exists, but existing data is invalid. Setting error state.");
-         errorMessage = "Stored transcript data is invalid.";
-         setImportedTranscriptLoadFailed(itemPath, errorMessage);
-         if(editorRef) editorRef.resetEditorState('');
-         editorJsonState = '';
-         isLoading = false;
-    } else {
-         console.log("[TranscriptEditorPanel onMount] No path or already loading (or initial load has not provided currentLexicalJson yet).");
-         isLoading = !!itemPath && !currentLexicalJson;
-         errorMessage = null;
-         editorJsonState = '';
-         if(editorRef) editorRef.resetEditorState('');
-    }
-});
+    // --- Mount/Destroy and Exported Functions (MODIFIED) ---
+    onMount(() => {
+        console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath);
+        setActiveImportedTranscriptEditorRef({ ref: self });
+        if (itemPath) {
+            loadAndConvertTranscript(itemPath);
+            loadHighlightsForTranscript(itemPath);
+        } else {
+            isLoading = false;
+        }
+    });
 
 	onDestroy(() => {
         console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
@@ -577,6 +588,8 @@ onMount(() => {
                      editable={true}
                      placeholder="Transcript content will appear here as a table..."
                      on:change={handleEditorChange}
+                     on:highlightschange={handleHighlightsChange}
+                     on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
@@ -585,6 +598,9 @@ onMount(() => {
                         search: true
                      }}
                      enableSearch={true}
+                     documentPath={itemPath}
+                     initialHighlights={initialHighlights}
+                     documentHighlights={$project.currentImportedTranscriptHighlights}
                  />
             {/key}
         </div>

@@ -174,7 +174,7 @@
     async function handleManualSave() {
         const projState = get(project);
         const currentCanSave = !projState.autosaveEnabled && 
-                               (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
+                               (projState.isDocumentDirty || projState.isDocumentMetadataDirty || projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty || projState.isMediaNoteTranscriptDirty || projState.isPdfAnnotationsDirty);
         
         if (!currentCanSave) { 
             console.warn("[DataTopBar] Manual save clicked but conditions not met."); 
@@ -195,7 +195,7 @@
                 await saveCurrentPdfAnnotations();
                 console.log("[DataTopBar] PDF Annotations manual save successful."); 
             } catch (error) { console.error("[DataTopBar] PDF Annotations manual save failed:", error); }
-        } else if (projState.isImportedTranscriptDirty && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
+        } else if ((projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty) && projState.currentImportedTranscriptPath && projState.activeImportedTranscriptEditorRef?.ref && typeof projState.activeImportedTranscriptEditorRef.ref.save === 'function') {
              console.log("[DataTopBar] Manual save triggered for IMPORTED TRANSCRIPT via editor ref:", projState.currentImportedTranscriptPath);
             try { await projState.activeImportedTranscriptEditorRef.ref.save(); console.log("[DataTopBar] Imported Transcript manual save successful."); } 
             catch (error) { console.error("[DataTopBar] Imported Transcript manual save via editor ref failed:", error); }
@@ -234,7 +234,7 @@
                 // No direct editorRef.save() for PDF annotations usually, service call is direct
                 saveAction = 'pdfAnnotations';
                 console.log(`[DataTopBar Autosave Watch] PDF Annotations for ${p.selectedDocumentPath} are dirty.`);
-            } else if (p.isImportedTranscriptDirty && p.currentImportedTranscriptPath && p.activeImportedTranscriptEditorRef?.ref) {
+            } else if ((p.isImportedTranscriptDirty || p.isImportedTranscriptMetadataDirty) && p.currentImportedTranscriptPath && p.activeImportedTranscriptEditorRef?.ref) {
                 shouldAutosave = true;
                 activeEditorRefToSave = p.activeImportedTranscriptEditorRef.ref;
                 saveAction = 'importedTranscript';
@@ -267,7 +267,7 @@
                 } else if (saveAction === 'pdfAnnotations') {
                     editorStillActiveAndDirty = currentProjState.selectedDocumentPath?.toLowerCase().endsWith('.pdf') && currentProjState.isPdfAnnotationsDirty;
                 } else if (saveAction === 'importedTranscript' && activeEditorRefToSave) {
-                    editorStillActiveAndDirty = currentProjState.activeImportedTranscriptEditorRef?.ref === activeEditorRefToSave && currentProjState.isImportedTranscriptDirty;
+                    editorStillActiveAndDirty = currentProjState.activeImportedTranscriptEditorRef?.ref === activeEditorRefToSave && (currentProjState.isImportedTranscriptDirty || currentProjState.isImportedTranscriptMetadataDirty);
                 } else if (saveAction === 'mediaNoteTranscript' && activeEditorRefToSave) {
                     editorStillActiveAndDirty = currentProjState.activeMediaNoteEditorRef?.ref === activeEditorRefToSave && currentProjState.isMediaNoteTranscriptDirty;
                 } else if (saveAction === 'table' && activeEditorRefToSave) {

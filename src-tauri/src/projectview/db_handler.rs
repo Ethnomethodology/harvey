@@ -1249,6 +1249,56 @@ pub fn rename_annotations_in_db(project_id: &str, old_document_path: &str, new_d
     Ok(())
 }
 
+// --- Lexical Highlights Functions ---
+
+pub fn save_lexical_highlights_to_db(project_id: &str, document_path: &str, highlights_json: &str) -> Result<(), CommandError> {
+    save_annotations_to_db(project_id, document_path, highlights_json, "lexical")
+}
+
+pub fn load_lexical_highlights_from_db(project_id: &str, document_path: &str) -> Result<Option<String>, CommandError> {
+    load_annotations_from_db(project_id, document_path, "lexical")
+}
+
+pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) -> Result<(), CommandError> {
+    delete_annotations_from_db(project_id, document_path, "lexical")
+}
+
+// --- End Lexical Highlights Functions ---
+
+use std::collections::HashSet;
+use crate::projectview::shared_types::Highlight;
+
+pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, CommandError> {
+    debug!("[DB] Loading all tags for project_id {}", project_id);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+
+    let rows = stmt.query_map(params![project_id], |row| {
+        row.get(0)
+    })?;
+
+    let mut all_tags = HashSet::new();
+    for row in rows {
+        let annotations_json: String = row?;
+        if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            for highlight in highlights {
+                if let Some(tags) = highlight.tags {
+                    for tag in tags {
+                        all_tags.insert(tag);
+                    }
+                }
+            }
+        }
+    }
+
+    info!("[DB] Found {} unique tags for project_id {}", all_tags.len(), project_id);
+    let mut sorted_tags: Vec<String> = all_tags.into_iter().collect();
+    sorted_tags.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    Ok(sorted_tags)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1370,9 +1420,11 @@ mod tests {
         let conn_check = Connection::open(&test_db_path).unwrap();
         assert!(simulate_init_logic_for_pdf_annotations_project_id(&conn_check).is_ok());
 
-        let mut stmt_verify = conn_check.prepare("PRAGMA table_info(pdf_annotations)").unwrap();
-        let columns: Vec<String> = stmt_verify.query_map([], |row| row.get(1)).unwrap().map(|r| r.unwrap()).collect();
-        assert!(columns.contains(&"project_id".to_string()), "project_id column should have been added");
+        {
+            let mut stmt_verify = conn_check.prepare("PRAGMA table_info(pdf_annotations)").unwrap();
+            let columns: Vec<String> = stmt_verify.query_map([], |row| row.get(1)).unwrap().map(|r| r.unwrap()).collect();
+            assert!(columns.contains(&"project_id".to_string()), "project_id column should have been added");
+        }
 
         // Clean up
         drop(conn_check); // Release connection before removing file

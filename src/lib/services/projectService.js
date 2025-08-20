@@ -72,6 +72,8 @@ import {
     markMediaNoteTranscriptChangesDiscarded
 } from '$lib/stores/projectStore.js';
 
+import { setTags } from '$lib/stores/tagStore.js';
+
 import {
     transcriptStore,
     setTranscriptData,
@@ -277,6 +279,15 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         };
         project.update((current) => ({ ...current, ...dataToSet }));
 
+        try {
+            const tags = await invoke('get_all_tags', { projectId: loadedData.project_uuid });
+            setTags(tags);
+            console.log(`[ProjectService] Initialized global tag store with ${tags.length} tags.`);
+        } catch (tagError) {
+            console.error('[ProjectService] Failed to get all tags from backend:', tagError);
+            setTags([]); // Ensure tags are cleared on error
+        }
+
         // Update project groups list
         try {
             const { updateProjectGroupsList } = await import('$lib/stores/projectStore.js');
@@ -333,7 +344,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             
             selectMedia(mediaFileToSelect);
         
-            selectMedia(null);
+            
         }
     } catch (error) {
         console.error('[ProjectService] Failed to load project data:', error);
@@ -1234,8 +1245,166 @@ export async function saveTableData(tablePath, tableData) {
         throw error;
     }
 }
-export async function saveDocumentContent(filePath, jsonContent) { if (filePath && filePath.toLowerCase().endsWith('.pdf')) { project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'})); throw new Error("PDF content saving is not handled by saveDocumentContent."); } if (!filePath || jsonContent === null || typeof jsonContent !== 'string') { const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content."; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'})); throw new Error(errorMsg); } try { const parsed = JSON.parse(jsonContent); if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure."); } catch (e) { const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`; await message(errorMsg, { title: 'Save Error', type: 'error' }); project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'})); throw new Error(errorMsg); } const filename = await basename(filePath); project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` })); let mainContentSaveError = null; try { await invoke('save_note_json', { targetPath: filePath, jsonContent: jsonContent }); markDocumentAsSaved(jsonContent); } catch (error) { mainContentSaveError = error; const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error'); project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` })); } const projState = get(project); let metadataSaveError = null; if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) { try { await saveDocumentMetadata(filePath); } catch (error) { metadataSaveError = error; } } if (mainContentSaveError) { await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' }); throw mainContentSaveError; } if (metadataSaveError) throw metadataSaveError; }
-export async function loadDocumentMetadata(originalDocumentAbsPath) { const proj = get(project); if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null; let relativePath = ""; const base = proj.baseDirectory; const absPath = originalDocumentAbsPath; if (absPath.startsWith(base)) { relativePath = absPath.substring(base.length); if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length); if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1); } else return null; const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/'); try { const fullMetadataJsonString = await invoke('load_document_metadata', { projectXmlPathStr: proj.xmlPath, originalDocumentRelativePathStr: originalDocumentRelativePathStr }); if (fullMetadataJsonString && typeof fullMetadataJsonString === 'string') { const parsedFullMetadata = JSON.parse(fullMetadataJsonString); if (parsedFullMetadata?.metadata && Array.isArray(parsedFullMetadata.highlights)) return parsedFullMetadata; return null; } return null; } catch (error) { return null; } }
+export async function saveDocumentContent(filePath, jsonContent) {
+    if (filePath && filePath.toLowerCase().endsWith('.pdf')) {
+        project.update(p => ({...p, documentError: "PDF content cannot be saved this way.", statusMessage: 'Save failed (PDF type).'}));
+        throw new Error("PDF content saving is not handled by saveDocumentContent.");
+    }
+    if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
+        const errorMsg = "Cannot save document: Missing path or invalid/missing JSON content.";
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed.'}));
+        throw new Error(errorMsg);
+    }
+    try {
+        const parsed = JSON.parse(jsonContent);
+        if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure.");
+    } catch (e) {
+        const errorMsg = `Cannot save document: Content not valid JSON or invalid structure. ${e.message}`;
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, documentError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        throw new Error(errorMsg);
+    }
+
+    const projState = get(project);
+    const filename = await basename(filePath);
+    project.update(p => ({ ...p, statusMessage: `Saving document ${filename}...` }));
+
+    let mainContentSaveError = null;
+    try {
+        const highlights_json = (projState.isDocumentMetadataDirty && projState.currentDocumentHighlights?.length > 0)
+            ? JSON.stringify(projState.currentDocumentHighlights)
+            : null;
+
+        await invoke('save_note_json', {
+            targetPath: filePath,
+            jsonContent: jsonContent,
+            highlightsJson: highlights_json,
+        });
+
+        // Mark content as saved
+        if (projState.selectedDocumentPath === filePath) {
+            markDocumentAsSaved(jsonContent);
+        } else if (projState.selectedMediaNotePath) {
+            // This is a media note, use its specific save marker
+            const { markMediaNoteTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+            markMediaNoteTranscriptAsSaved(projState.selectedMediaNotePath, jsonContent);
+        }
+
+        // Mark metadata (highlights) as saved
+        if (highlights_json) {
+            markDocumentMetadataAsSaved(projState.currentDocumentFileLevelMetadata);
+        }
+
+    } catch (error) {
+        mainContentSaveError = error;
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        project.update(p => ({ ...p, documentError: `Failed save document: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+    }
+
+    // This block is now mostly redundant for highlights, but might handle other metadata.
+    // Let's keep it but ensure it doesn't run for media notes to avoid errors.
+    let metadataSaveError = null;
+    if (projState.selectedDocumentPath === filePath && projState.isDocumentMetadataDirty) {
+        try {
+            await saveDocumentMetadata(filePath);
+        } catch (error) {
+            metadataSaveError = error;
+        }
+    }
+
+    if (mainContentSaveError) {
+        await message(`Error saving document '${filename}': ${mainContentSaveError.message || mainContentSaveError}`, { title: 'Save Document Error', type: 'error' });
+        throw mainContentSaveError;
+    }
+    if (metadataSaveError) {
+        // We don't throw here because the main content saved successfully.
+        // The error will be handled by saveDocumentMetadata itself.
+    }
+}
+
+export async function saveImportedTranscriptContent(filePath, jsonContent) {
+    if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
+        const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.'}));
+        throw new Error(errorMsg);
+    }
+    try {
+        const parsed = JSON.parse(jsonContent);
+        if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure.");
+    } catch (e) {
+        const errorMsg = `Cannot save transcript: Content not valid JSON or invalid structure. ${e.message}`;
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        throw new Error(errorMsg);
+    }
+
+    const projState = get(project);
+    const filename = await basename(filePath);
+    project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
+
+    try {
+        const highlights_json = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
+            ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+            : null;
+
+        await invoke('save_note_json', {
+            targetPath: filePath,
+            jsonContent: jsonContent,
+            highlightsJson: highlights_json,
+        });
+
+        const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+        markImportedTranscriptAsSaved(filePath, jsonContent);
+
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        project.update(p => ({ ...p, importedTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+        await message(`Error saving transcript '${filename}': ${errorMessage}`, { title: 'Save Transcript Error', type: 'error' });
+        throw error;
+    }
+}
+export async function loadDocumentMetadata(originalDocumentAbsPath) {
+    const proj = get(project);
+    if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null;
+    let relativePath = "";
+    const base = proj.baseDirectory;
+    const absPath = originalDocumentAbsPath;
+    if (absPath.startsWith(base)) {
+        relativePath = absPath.substring(base.length);
+        if (relativePath.startsWith(sep)) relativePath = relativePath.substring(sep.length);
+        if (relativePath.startsWith('/') || relativePath.startsWith('\\')) relativePath = relativePath.substring(1);
+    } else {
+        return null;
+    }
+    const originalDocumentRelativePathStr = relativePath.replace(/\\/g, '/');
+
+    try {
+        const result = await invoke('load_document_metadata', {
+            projectXmlPathStr: proj.xmlPath,
+            originalDocumentRelativePathStr: originalDocumentRelativePathStr
+        });
+
+        if (result) {
+            if (result.highlights && typeof result.highlights === 'string') {
+                try {
+                    result.highlights = JSON.parse(result.highlights);
+                } catch (e) {
+                    console.error("Failed to parse highlights JSON from backend:", e);
+                    result.highlights = [];
+                }
+            } else {
+                result.highlights = [];
+            }
+            return result;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error loading document metadata:", error);
+        return null;
+    }
+}
 export async function saveDocumentMetadata(originalDocumentAbsPath) {
     const proj = get(project);
     if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) {
@@ -1310,6 +1479,84 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) {
     }
 }
 
+export async function loadImageAnnotations(imageAbsPath) {
+    const { setLoadedImageAnnotations, setImageAnnotationsLoadFailed } = await import('$lib/stores/projectStore.js');
+
+    const currentProj = get(project);
+    const projectBaseDir = currentProj.baseDirectory;
+    const projectId = currentProj.id;
+
+    if (!imageAbsPath) {
+        setLoadedImageAnnotations([]);
+        return;
+    }
+
+    if (!projectBaseDir || !projectId) {
+        const errorMsg = "Project data not fully loaded.";
+        console.error(`[ProjectService] Cannot load image annotations: ${errorMsg}`);
+        setImageAnnotationsLoadFailed(imageAbsPath, errorMsg);
+        return;
+    }
+
+    let relativeImagePath = imageAbsPath;
+    if (imageAbsPath.startsWith(projectBaseDir)) {
+        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+    }
+    relativeImagePath = relativeImagePath.replace(/\\/g, '/');
+
+    try {
+        const annotationsJsonString = await invoke('load_image_annotations', {
+            projectId,
+            imageRelativePathStr: relativeImagePath
+        });
+        const annotations = annotationsJsonString ? JSON.parse(annotationsJsonString) : [];
+        setLoadedImageAnnotations(annotations);
+    } catch (err) {
+        console.error(`[ProjectService] Error loading annotations for ${relativeImagePath}:`, err);
+        setImageAnnotationsLoadFailed(imageAbsPath, err.message || String(err));
+    }
+}
+
+export async function saveImageAnnotations() {
+    const { markImageAnnotationsAsSaved } = await import('$lib/stores/projectStore.js');
+    const projState = get(project);
+    const imagePath = projState.selectedDocumentPath;
+    const annotations = projState.currentImageAnnotations;
+
+    if (!imagePath || !projState.isImageAnnotationsDirty) {
+        return;
+    }
+
+    const projectBaseDir = projState.baseDirectory;
+    const projectId = projState.id;
+
+    if (!projectBaseDir || !projectId) {
+        console.error("[ProjectService] saveImageAnnotations: Project data not fully loaded.");
+        notificationStore.add('Error: Project not fully loaded. Cannot save annotations.', 'error');
+        return;
+    }
+
+    let relativeImagePath = imagePath;
+    if (imagePath.startsWith(projectBaseDir)) {
+        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+    }
+    relativeImagePath = relativeImagePath.replace(/\\/g, '/');
+
+    try {
+        await invoke('save_image_annotations', {
+            projectId,
+            imageRelativePathStr: relativeImagePath,
+            annotationsJsonString: JSON.stringify(annotations, null, 2)
+        });
+        markImageAnnotationsAsSaved();
+        console.log(`[ProjectService] Image annotations saved for ${relativeImagePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving image annotations for ${relativeImagePath}:`, error);
+        notificationStore.add(`Error saving image annotations: ${error.message || error}`, 'error');
+    }
+}
+
+
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
     const tsState = get(transcriptStore); // Get transcript store state
@@ -1346,7 +1593,15 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         saveFunction = async () => saveCurrentPdfAnnotations();
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialPdfAnnotations;
-    } else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
+    } else if (projState.selectedDocumentType === 'images' && projState.isImageAnnotationsDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedDocumentPath;
+        itemTypeForPrompt = 'image annotations';
+        saveFunction = async () => saveImageAnnotations();
+        discardFunction = () => markDocumentChangesDiscarded(); // This should also clear image annotations
+        initialContentForReset = projState.initialImageAnnotations;
+    }
+    else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
         itemTypeForPrompt = 'table';
@@ -1359,13 +1614,14 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         if (projState.activeDocumentEditorRef?.ref && typeof projState.activeDocumentEditorRef.ref.save === 'function') {
             saveFunction = projState.activeDocumentEditorRef.ref.save;
         } else {
-            if (projState.isDocumentDirty) saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
-            else if (projState.isDocumentMetadataDirty) saveFunction = () => saveDocumentMetadata(itemPath);
+            if (projState.isDocumentDirty || projState.isDocumentMetadataDirty) {
+                saveFunction = () => saveDocumentContent(itemPath, projState.currentDocumentJson);
+            }
         }
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialDocumentJson;
         resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
-    } else if (projState.currentImportedTranscriptPath && projState.isImportedTranscriptDirty) {
+    } else if (projState.currentImportedTranscriptPath && (projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.currentImportedTranscriptPath;
         itemTypeForPrompt = 'imported transcript';

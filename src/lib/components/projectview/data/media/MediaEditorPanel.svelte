@@ -11,13 +11,15 @@
         markMediaNoteTranscriptAsSaved,
         markMediaNoteTranscriptChangesDiscarded,
         setActiveMediaNoteEditorRef,
-        clearActiveMediaNoteEditorRef
+        clearActiveMediaNoteEditorRef,
+        setDocumentHighlights,
+        highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { basename, dirname, join } from '@tauri-apps/api/path';
     import { project as projectStore } from '$lib/stores/projectStore.js';
-    import { handleTrimMediaConfirm } from '$lib/services/projectService.js';
+    import { handleTrimMediaConfirm, saveDocumentContent } from '$lib/services/projectService.js';
 
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
@@ -150,18 +152,29 @@
         }
 	}
 
+    function handleHighlightsChange(event) {
+        const { highlights } = event.detail;
+        setDocumentHighlights(highlights);
+    }
+
     async function handleSave() {
         if (!mediaPath) { console.error("[MediaEditorPanel] Save Error: No mediaPath for context."); await message("Cannot save: No media file is active for this note.", { title: "Save Error", type: "error" }); return; }
         if (!associatedTranscriptPath) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Associated data path is not determined.`); await message("Cannot save: Note file location is unknown.", { title: "Save Error", type: "error" }); return; }
         if (isTranscriptLoading || (transcriptLoadError && !isFileNotFoundInfo)) { console.error(`[MediaEditorPanel - ${mediaPath}] Save Error: Cannot save while loading or in error state.`); await message(`Cannot save: ${isTranscriptLoading ? 'Note is still loading.' : `Note failed to load (${transcriptLoadError})`}`, { title: "Save Error", type: "error" }); return; }
+
         const finalJsonToSave = localEditorJsonState || defaultEmptyJson;
         projectStore.update(p => ({ ...p, statusMessage: `Saving data for ${transcriptName}...`}));
+
         try {
-            await invoke('save_note_json', { targetPath: associatedTranscriptPath, jsonContent: finalJsonToSave });
-            if (get(projectStore).selectedMediaNotePath === mediaPath) { markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave); }
+            // Use the centralized saveDocumentContent service which now handles highlights
+            await saveDocumentContent(associatedTranscriptPath, finalJsonToSave);
+            // The service now handles marking things as saved, but we can keep this for local state consistency if needed.
+            if (get(projectStore).selectedMediaNotePath === mediaPath) {
+                markMediaNoteTranscriptAsSaved(mediaPath, finalJsonToSave);
+            }
             projectStore.update(p => ({ ...p, statusMessage: `Data for ${transcriptName} saved.`}));
         } catch (error) {
-             await message(`Failed to save data: ${error.message || error}`, { title: 'Save Error', type: 'error' });
+             // Error message is already shown by the service, so we just update the status
              projectStore.update(p => ({ ...p, statusMessage: `Error saving data for ${transcriptName}.`}));
         }
     }
@@ -411,8 +424,12 @@
                         editable={true}
                         placeholder="Enter data for this media file..."
                         on:change={handleEditorChange}
+                        on:highlightschange={handleHighlightsChange}
+                        on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                         toolbarConfig={mediaToolbarConfig}
                         activeLayout={$activeLayout}
+                        documentPath={associatedTranscriptPath}
+                        documentHighlights={$project.currentDocumentHighlights}
                     />
                 {/key}
             </div>

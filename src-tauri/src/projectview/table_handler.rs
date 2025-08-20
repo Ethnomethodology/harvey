@@ -700,27 +700,14 @@ mod tests {
     fn create_dummy_project_xml(project_dir: &Path, project_name: &str) -> PathBuf {
         let project_xml_path = project_dir.join("project.xml");
         let project_data = ProjectXml {
-            project_name: project_name.to_string(),
+            name: project_name.to_string(),
             project_uuid: "test-uuid".to_string(),
-            project_root_is_single_file: false,
-            video_files: Default::default(),
-            audio_files: Default::default(),
-            image_files: Default::default(),
+            media_files: Default::default(),
             document_files: Default::default(),
             table_files: Default::default(),
-            other_files: Default::default(),
+            image_files: Default::default(),
             imported_transcript_files: Default::default(),
             document_metadata_files: Default::default(),
-            chat_files: Default::default(),
-            project_settings: Default::default(),
-            saved_searches: Default::default(),
-            project_tags: Default::default(),
-            project_people: Default::default(),
-            project_places: Default::default(),
-            project_organizations: Default::default(),
-            project_highlights_config: Default::default(),
-            project_highlights_filters: Default::default(),
-            project_highlights_summary_types: Default::default(),
         };
         let xml_string = quick_xml::se::to_string(&project_data).unwrap();
         fs::write(&project_xml_path, xml_string).unwrap();
@@ -750,9 +737,10 @@ mod tests {
         writeln!(source_file, "header1,header2\nval1,val2")?;
         let dummy_table_path_str = dummy_table_path.to_string_lossy().to_string();
 
-        let import_result = import_table_file(dummy_table_path_str.clone()).await;
+        let import_result = import_table_file(dummy_table_path_str.clone(), project_xml_path_str.clone()).await;
         assert!(import_result.is_ok(), "import_table_file failed: {:?}", import_result.err());
-        let final_table_abs_path_str = import_result.unwrap();
+        let result_value = import_result.unwrap();
+        let final_table_abs_path_str = result_value["table_path"].as_str().unwrap().to_string();
         let final_table_abs_path = PathBuf::from(&final_table_abs_path_str);
 
         assert!(final_table_abs_path.exists(), "Imported table file should exist at {}", final_table_abs_path_str);
@@ -774,8 +762,10 @@ mod tests {
         assert_eq!(table_entry_xml.relative_path, expected_relative_path);
         assert!(updated_project_data.document_metadata_files.files.is_empty(), "document_metadata_files should be empty in XML");
 
-        let loaded_meta_option = db_handler::load_asset_metadata(&expected_relative_path)
-            .expect("Failed to load metadata from DB for assertion");
+        let loaded_meta_option: Option<FileMetadataWithCustomFieldsFromDb> = db_handler::load_asset_metadata(
+            "test-uuid",
+            &expected_relative_path
+        ).expect("Failed to load metadata from DB for assertion");
 
         assert!(loaded_meta_option.is_some(), "Metadata should be found in DB for relative path: {}", expected_relative_path);
         if let Some(loaded_meta) = loaded_meta_option {

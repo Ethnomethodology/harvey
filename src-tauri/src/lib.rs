@@ -176,6 +176,7 @@ pub fn run() {
             // --- Project view METADATA commands (asset_metadata table) ---
             projectview::metadata_commands::get_asset_metadata_command,
             projectview::metadata_commands::update_asset_metadata_command,
+            projectview::metadata_commands::get_all_tags,
             // --- Custom Field Definition Commands ---
             projectview::metadata_commands::create_custom_field_definition_command,
             projectview::metadata_commands::get_all_custom_field_definitions_command,
@@ -195,6 +196,7 @@ pub fn run() {
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,
             projectview::document_commands::load_note_json,
+            projectview::document_commands::load_document_metadata,
             projectview::document_commands::save_document_and_update_xml,
             projectview::document_commands::read_file_content,
             projectview::document_commands::delete_temporary_file,
@@ -205,6 +207,11 @@ pub fn run() {
             projectview::pdf_annotation_handler::load_pdf_annotations,
             projectview::pdf_annotation_handler::save_pdf_annotations,
             // --- END ADDED ---
+
+            // --- Project view LEXICAL HIGHLIGHT commands ---
+            projectview::lexical_highlight_handler::load_lexical_highlights,
+            projectview::lexical_highlight_handler::save_lexical_highlights,
+            projectview::lexical_highlight_handler::delete_lexical_highlights,
 
             // --- Document Import Process Command ---
             projectview::document_handler::import_document,

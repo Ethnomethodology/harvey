@@ -2,8 +2,10 @@
 import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
+import { addTag } from '$lib/stores/tagStore.js';
 
 export const groupContentNotification = writable(null);
+export const highlightsLastUpdated = writable(null);
 
 const HARVEY_FILES_DIR = "harvey_files";
 const MEDIA_DIR_NAME = 'Media';
@@ -28,6 +30,7 @@ const createMinimalValidLexicalJson = () => {
 
 
 const initialState = {
+    id: null,
     name: null,
     xmlPath: null,
     baseDirectory: null,
@@ -61,6 +64,10 @@ const initialState = {
     currentPdfAnnotations: [],
     initialPdfAnnotations: [],
     isPdfAnnotationsDirty: false,
+
+    currentImageAnnotations: [],
+    initialImageAnnotations: [],
+    isImageAnnotationsDirty: false,
 
     currentImportedTranscriptPath: null,
     currentImportedTranscriptLexicalJson: null,
@@ -114,12 +121,10 @@ export async function updateProjectGroupsList(projectId) {
         return;
     }
     try {
-        console.log(`[projectStore] Fetching groups for project: ${projectId}`);
         const { invoke } = await import('@tauri-apps/api/core');
         const groups = await invoke('get_project_groups', { projectId });
         const sortedGroups = groups.sort((a, b) => a.name.localeCompare(b.name));
         currentProjectGroupsList.set(sortedGroups);
-        console.log(`[projectStore] Updated currentProjectGroupsList with ${sortedGroups.length} groups.`);
     } catch (error) {
         console.error('[projectStore] Error fetching project groups:', error);
         currentProjectGroupsList.set([]);
@@ -166,7 +171,6 @@ export function setSelectedGroup(groupId, groupData) {
 
 
 export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
-    console.debug(`[ProjectStore] prepareDocumentView called for path: ${filePath}, type: ${itemType}`);
     const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables';
     const isImage = itemType === 'images';
@@ -183,7 +187,8 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
         let newIsDocumentLoading = false;
         if (filePath) {
             newIsDocumentLoading = (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) ||
-                                  (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations)));
+                                  (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations))) ||
+                                  (isImage && (!selectingSamePath || !p.currentImageAnnotations));
         }
 
         return {
@@ -205,6 +210,9 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
             currentPdfAnnotations: (isPdf && selectingSamePath) ? p.currentPdfAnnotations : [],
             initialPdfAnnotations: (isPdf && selectingSamePath) ? p.initialPdfAnnotations : [],
             isPdfAnnotationsDirty: (isPdf && selectingSamePath) ? p.isPdfAnnotationsDirty : false,
+            currentImageAnnotations: (isImage && selectingSamePath) ? p.currentImageAnnotations : [],
+            initialImageAnnotations: (isImage && selectingSamePath) ? p.initialImageAnnotations : [],
+            isImageAnnotationsDirty: (isImage && selectingSamePath) ? p.isImageAnnotationsDirty : false,
 
             isDocumentLoading: newIsDocumentLoading, // This is now correctly conditional on filePath
             documentError: null,
@@ -242,55 +250,400 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
                 if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(filePath);
                 else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
              }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
-        } else if (isTable || isImage) {
+        } else if (isImage) {
+            import('$lib/services/projectService.js').then(async service => {
+                if (service.loadImageAnnotations) await service.loadImageAnnotations(filePath);
+                else { console.error("[ProjectStore] loadImageAnnotations not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
+            }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+        } else if (isTable) {
              project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
         }
     } else { // If filePath is null (clearing selection)
          project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
     }
 }
-export function setLoadedDocumentData(filePath, jsonContent) { console.info(`[ProjectStore] Setting loaded document data (JSON) for: ${filePath}`); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); }
+export function setLoadedDocumentData(filePath, jsonContent) { project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); }
 export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, isLoading: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; }); }
 export function setDocumentEditorContent(newJsonContent) { project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { const initial = p.initialDocumentJson; const current = p.currentDocumentJson; const isNewDifferentFromInitial = initial !== newJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newJsonContent || p.isDocumentDirty !== newDirtyState) { return { ...p, currentDocumentJson: newJsonContent, isDocumentDirty: newDirtyState, }; } } return p; }); }
-export function markDocumentAsSaved(savedJsonContent) { console.info('[ProjectStore] Marking document as saved (JSON).'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); }
-export function markDocumentChangesDiscarded() { console.info('[ProjectStore] Marking document changes as discarded.'); project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); return { ...p, currentDocumentJson: isPdf ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, }; } return p; }); }
-export function clearDocumentEditorState() { console.info('[ProjectStore] Clearing document editor state.'); project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false })); }
-export function setActiveDocumentEditorRef(editorInstance) { console.log('[ProjectStore] setActiveDocumentEditorRef called with:', editorInstance); project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
-export function clearActiveDocumentEditorRef() { console.log('[ProjectStore] clearActiveDocumentEditorRef called.'); project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
-export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; console.debug(`[ProjectStore] Lexical Highlight ADDED/UPDATED: ID=${id}, NodeKey=${nodeKey}`); } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); console.debug(`[ProjectStore] Lexical Highlight REMOVED: ID=${id}`); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; console.debug(`[ProjectStore] Lexical Highlight UPDATED: ID=${id}`); } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
-export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) { console.info('[ProjectStore] Marking Lexical document metadata as saved.'); project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isDocumentMetadataDirty: false, currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata }; } return p; }); }
-export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } if(annotationChanged) console.debug(`[ProjectStore] PDF Annotation ADDED/UPDATED: ID=${id}`); } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; console.debug(`[ProjectStore] PDF Annotation REMOVED: ID=${id}`); } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true;  } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); }
+export function markDocumentAsSaved(savedJsonContent) { project.update(p => { if (p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf') ) { return { ...p, initialDocumentJson: savedJsonContent, currentDocumentJson: savedJsonContent, isDocumentDirty: false, statusMessage: `Document saved: ${p.selectedDocumentPath?.split(/[\\/]/).pop()}` }; } return p; }); }
+export function markDocumentChangesDiscarded() { project.update(p => { if (p.selectedDocumentPath) { const isPdf = p.selectedDocumentPath.toLowerCase().endsWith('.pdf'); const isImage = ['jpg', 'jpeg', 'png', 'gif'].some(ext => p.selectedDocumentPath.toLowerCase().endsWith(ext)); return { ...p, currentDocumentJson: isPdf || isImage ? p.currentDocumentJson : p.initialDocumentJson, isDocumentDirty: isPdf || isImage ? p.isDocumentDirty : false, statusMessage: 'Document changes discarded.', currentDocumentFileLevelMetadata: p.currentDocumentFileLevelMetadata, currentDocumentHighlights: (isPdf || isImage || p.isDocumentMetadataDirty) ? [] : p.currentDocumentHighlights, isDocumentMetadataDirty: false, currentPdfAnnotations: isPdf ? (p.initialPdfAnnotations || []) : p.currentPdfAnnotations, isPdfAnnotationsDirty: false, currentImageAnnotations: isImage ? (p.initialImageAnnotations || []) : p.currentImageAnnotations, isImageAnnotationsDirty: false, }; } return p; }); }
+export function clearDocumentEditorState() { project.update(p => ({ ...p, selectedDocumentPath: null, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, currentImageAnnotations: [], initialImageAnnotations: [], isImageAnnotationsDirty: false })); }
+export function setActiveDocumentEditorRef(editorInstance) { project.update(p => ({ ...p, activeDocumentEditorRef: editorInstance })); }
+export function clearActiveDocumentEditorRef() { project.update(p => ({ ...p, activeDocumentEditorRef: null })); }
+export function setDocumentHighlights(highlights) {
+    project.update(p => {
+        const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
+        const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
+
+        if (!isDocActive && !isMediaNoteActive) {
+            return p;
+        }
+
+        highlights.forEach(h => {
+            if (h.tags && Array.isArray(h.tags)) {
+                h.tags.forEach(tag => {
+                    addTag(tag);
+                });
+            }
+        });
+
+        const updatedState = { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+
+        if (isMediaNoteActive) {
+            updatedState.isMediaNoteTranscriptDirty = true;
+        }
+
+
+        return updatedState;
+    });
+    highlightsLastUpdated.set(new Date());
+}
+
+export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
+    project.update(p => {
+        let highlights, key, dirtyFlag;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+        }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = [...(h.comments || []), comment];
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
+export function updateComment(highlightId, commentId, newText, docType = 'doc') {
+    project.update(p => {
+        let highlights, key, dirtyFlag;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+        }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = h.comments.map(c => {
+                    if (c.id === commentId) {
+                        return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                    }
+                    return c;
+                });
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
+export function deleteComment(highlightId, commentId, docType = 'doc') {
+    project.update(p => {
+        let highlights, key, dirtyFlag;
+
+        if (docType === 'pdf') {
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
+        } else if (docType === 'image') {
+            highlights = p.currentImageAnnotations;
+            key = 'currentImageAnnotations';
+            dirtyFlag = 'isImageAnnotationsDirty';
+        } else {
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
+        }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
+    });
+}
+
+export function updateDocumentHighlights(newHighlightEvent) {
+    const currentPath = get(project).selectedDocumentPath;
+    if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) {
+        updatePdfAnnotations(newHighlightEvent);
+        return;
+    }
+    if (currentPath && ['jpg', 'jpeg', 'png', 'gif'].some(ext => currentPath.toLowerCase().endsWith(ext))) {
+        updateImageAnnotations(newHighlightEvent, true);
+        return;
+    }
+    project.update(p => {
+        if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; }
+        let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || []));
+        const { type, id, text, nodeKey, color } = newHighlightEvent;
+        if (type === 'add') {
+            if (!nodeKey) {
+                console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc.");
+                return p;
+            }
+            const existingIndex = highlights.findIndex(h => h.id === id);
+            const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() };
+            if (existingIndex === -1) highlights.push(newHighlightData);
+            else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] };
+        } else if (type === 'remove') {
+            highlights = highlights.filter(h => h.id !== id);
+        } else if (type === 'update') {
+            if (!nodeKey) {
+                console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc.");
+                return p;
+            }
+            const existingIndex = highlights.findIndex(h => h.id === id);
+            if (existingIndex !== -1) {
+                highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() };
+            }
+        }
+        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+    });
+}
+
+export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
+    project.update(p => {
+        const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
+
+        if (isDocActive) {
+            return {
+                ...p,
+                isDocumentMetadataDirty: false,
+                currentDocumentFileLevelMetadata: updatedFileLevelMetadata ? { ...p.currentDocumentFileLevelMetadata, ...updatedFileLevelMetadata } : p.currentDocumentFileLevelMetadata
+            };
+        }
+
+        if (p.selectedMediaNotePath) {
+            return {
+                ...p,
+                isDocumentMetadataDirty: false
+            };
+        }
+
+        return p;
+    });
+}
+
+export function updatePdfAnnotations(pdfHighlightEvent, isFullArray = false) {
+    project.update(p => {
+        if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; }
+
+        if (isFullArray) {
+            const newAnnotations = pdfHighlightEvent; // In this case, the event is the full array.
+            const initialJson = JSON.stringify(p.initialPdfAnnotations);
+            const currentJson = JSON.stringify(newAnnotations);
+            const isDirty = initialJson !== currentJson;
+            return { ...p, currentPdfAnnotations: newAnnotations, isPdfAnnotationsDirty: isDirty };
+        }
+
+        // --- Logic for single event object ---
+        let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : [];
+        let { type, id, ...highlightData } = pdfHighlightEvent;
+        if (!type || type === 'pdfHighlight') type = 'add';
+        let annotationChanged = false;
+
+        if (type === 'add') {
+            const existingIndex = annotations.findIndex(h => h.id === id);
+            const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() };
+            if (existingIndex === -1) {
+                annotations.push(newAnnotation);
+                annotationChanged = true;
+            } else {
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation };
+                    annotationChanged = true;
+                }
+            }
+        } else if (type === 'remove') {
+            const initialLength = annotations.length;
+            annotations = annotations.filter(h => h.id !== id);
+            if (annotations.length < initialLength) {
+                annotationChanged = true;
+            }
+        } else if (type === 'update') {
+            const existingIndex = annotations.findIndex(h => h.id === id);
+            if (existingIndex !== -1) {
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
+                    annotationChanged = true;
+                }
+            }
+        }
+
+        if (annotationChanged) {
+            return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true };
+        }
+        return p;
+    });
+}
+
 export function markPdfAnnotationsDirty(updatedAnnotations = null) { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: true, isDocumentDirty: false, currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations }; } return p; }); }
-export function markPdfAnnotationsAsSaved() { console.info('[ProjectStore] Marking PDF annotations as saved.'); project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
-export function setLoadedPdfAnnotations(annotationsArray) { console.info(`[ProjectStore] Setting loaded PDF annotations. Count: ${annotationsArray?.length || 0}`); project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));}
+export function markPdfAnnotationsAsSaved() { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
+export function setLoadedPdfAnnotations(annotationsArray) { project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));}
 export function setPdfAnnotationsLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] PDF annotations load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && filePath.toLowerCase().endsWith('.pdf')) { return { ...p, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false, isDocumentLoading: false, documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load PDF annotations: ${errorMsg}`, statusMessage: `Error loading PDF annotations for ${filePath.split(/[\\/]/).pop()}.`, isLoading: false }; } if (p.isDocumentLoading && p.selectedDocumentPath !== filePath && filePath.toLowerCase().endsWith('.pdf')){ console.warn(`[ProjectStore setPdfAnnotationsLoadFailed] Error for non-selected but previously loading PDF ${filePath}. Clearing general document loading.`); return { ...p, isDocumentLoading: false, isLoading:false }; } return p; }); }
 
+// --- Image Annotation State Management ---
+export function setLoadedImageAnnotations(annotationsArray) {
+    project.update(p => ({
+        ...p,
+        currentImageAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [],
+        initialImageAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [],
+        isImageAnnotationsDirty: false,
+        isDocumentLoading: false,
+        isLoading: false
+    }));
+}
+
+export function setImageAnnotationsLoadFailed(filePath, errorMsg) {
+    console.error(`[ProjectStore] Image annotations load failed for: ${filePath}`, errorMsg);
+    project.update(p => {
+        if (p.selectedDocumentPath === filePath) {
+            return {
+                ...p,
+                currentImageAnnotations: [],
+                initialImageAnnotations: [],
+                isImageAnnotationsDirty: false,
+                isDocumentLoading: false,
+                documentError: (p.documentError ? p.documentError + "; " : "") + `Failed to load annotations: ${errorMsg}`,
+                statusMessage: `Error loading annotations for ${filePath.split(/[\\/]/).pop()}.`,
+                isLoading: false
+            };
+        }
+        return p;
+    });
+}
+
+export function updateImageAnnotations(annotations, markDirty = true) {
+    project.update(p => {
+        // This function can receive a single annotation object or a full array
+        if (!Array.isArray(annotations)) {
+            // Handle single annotation object
+            const { type, id, ...highlightData } = annotations;
+            let currentAnns = Array.isArray(p.currentImageAnnotations) ? JSON.parse(JSON.stringify(p.currentImageAnnotations)) : [];
+            let annotationChanged = false;
+
+            if (type === 'add') {
+                const existingIndex = currentAnns.findIndex(h => h.id === id);
+                const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() };
+                if (existingIndex === -1) {
+                    currentAnns.push(newAnnotation);
+                    annotationChanged = true;
+                } else {
+                    if (JSON.stringify(currentAnns[existingIndex]) !== JSON.stringify({ ...currentAnns[existingIndex], ...newAnnotation })) {
+                        currentAnns[existingIndex] = { ...currentAnns[existingIndex], ...newAnnotation };
+                        annotationChanged = true;
+                    }
+                }
+            } else if (type === 'remove') {
+                const initialLength = currentAnns.length;
+                currentAnns = currentAnns.filter(h => h.id !== id);
+                if (currentAnns.length < initialLength) {
+                    annotationChanged = true;
+                }
+            } else if (type === 'update') {
+                const existingIndex = currentAnns.findIndex(h => h.id === id);
+                if (existingIndex !== -1) {
+                    if (JSON.stringify(currentAnns[existingIndex]) !== JSON.stringify({ ...currentAnns[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) {
+                        currentAnns[existingIndex] = { ...currentAnns[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
+                        annotationChanged = true;
+                    }
+                }
+            }
+
+            if (annotationChanged) {
+                 highlightsLastUpdated.set(new Date());
+                return { ...p, currentImageAnnotations: currentAnns, isImageAnnotationsDirty: true };
+            }
+            return p;
+
+        } else {
+            // Handle full array update
+            const initialJson = JSON.stringify(p.initialImageAnnotations);
+            const currentJson = JSON.stringify(annotations);
+            const isDirty = initialJson !== currentJson;
+            highlightsLastUpdated.set(new Date());
+            return {
+                ...p,
+                currentImageAnnotations: annotations,
+                isImageAnnotationsDirty: markDirty ? isDirty : p.isImageAnnotationsDirty
+            };
+        }
+    });
+}
+
+
+export function markImageAnnotationsAsSaved() {
+    project.update(p => {
+        if (p.selectedDocumentPath && ['jpg', 'jpeg', 'png', 'gif'].some(ext => p.selectedDocumentPath.toLowerCase().endsWith(ext))) {
+            return {
+                ...p,
+                isImageAnnotationsDirty: false,
+                initialImageAnnotations: JSON.parse(JSON.stringify(p.currentImageAnnotations)),
+                statusMessage: 'Image annotations saved.'
+            };
+        }
+        return p;
+    });
+}
+
+
 export function prepareImportedTranscriptView(filePath) {
-    
     project.update(p => {
         const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath && !!filePath && !!p.currentImportedTranscriptLexicalJson;
-        let finalIsImportedTranscriptLoading = false;
-        let finalIsGlobalLoading = p.isLoading; // Preserve current global loading unless changed by this action
-        let finalStatusMessage = p.statusMessage;
-
-        if (!filePath) {
-            finalStatusMessage = 'Imported transcript selection cleared.';
-            finalIsGlobalLoading = false;
-        } else if (isReselectingSameLoadedPath) {
-            finalStatusMessage = `Viewing imported transcript: ${filePath.split(/[\/]/).pop()}`;
-            finalIsGlobalLoading = false;
-        } else {
-            finalIsImportedTranscriptLoading = true;
-            finalStatusMessage = `Loading imported transcript: ${filePath.split(/[\/]/).pop()}`;
-            finalIsGlobalLoading = true;
-        }
+        let finalIsImportedTranscriptLoading = !filePath ? false : !isReselectingSameLoadedPath;
+        let finalIsGlobalLoading = finalIsImportedTranscriptLoading;
+        let finalStatusMessage = !filePath ? 'Imported transcript selection cleared.' :
+            isReselectingSameLoadedPath ? `Viewing imported transcript: ${filePath.split(/[\/]/).pop()}` :
+            `Loading imported transcript: ${filePath.split(/[\/]/).pop()}`;
 
         return {
             ...p,
-            // Clear group selection if a transcript path is being set
             selectedGroupId: filePath ? null : p.selectedGroupId,
             selectedGroupData: filePath ? null : p.selectedGroupData,
-
             currentImportedTranscriptPath: filePath,
             currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
             initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
@@ -300,20 +653,68 @@ export function prepareImportedTranscriptView(filePath) {
             activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
             statusMessage: finalStatusMessage,
             isLoading: finalIsGlobalLoading,
-
-            // Clear other view states
-            selectedDocumentPath: null, /* ... other document fields ... */
-            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
-            selectedMediaNotePath: null, /* ... other media note fields ... */
+            selectedDocumentPath: null,
+            currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
+            currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+            currentDocumentHighlights: [], isDocumentMetadataDirty: false,
+            currentPdfAnnotations: [], initialPdfAnnotations: [], isPdfAnnotationsDirty: false,
+            selectedMediaNotePath: null,
             currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, mediaNoteTranscriptError: null, isMediaNoteTranscriptLoading: false, activeMediaNoteEditorRef: null,
+            // Reset imported transcript highlight state
+            initialImportedTranscriptHighlights: [],
+            currentImportedTranscriptHighlights: [],
+            isImportedTranscriptMetadataDirty: false,
         };
     });
 }
-export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { console.info(`[ProjectStore] Setting loaded data for imported transcript: ${filePath}`); const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
+export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
 export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
-export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) { console.info(`[ProjectStore] Marking imported transcript as saved: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, initialImportedTranscriptLexicalJson: savedLexicalJsonContent, currentImportedTranscriptLexicalJson: savedLexicalJsonContent, isImportedTranscriptDirty: false, statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}` }; } return p; }); }
-export function markImportedTranscriptChangesDiscarded(filePath) { console.info(`[ProjectStore] Marking imported transcript changes as discarded: ${filePath}`); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); }
+export function setImportedTranscriptHighlights(highlights, markDirty = true) {
+    project.update(store => {
+        const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
+        const currentJson = JSON.stringify(highlights);
+
+        store.currentImportedTranscriptHighlights = highlights;
+        if (markDirty) {
+            store.isImportedTranscriptMetadataDirty = initialJson !== currentJson;
+        }
+        return store;
+    });
+    highlightsLastUpdated.set(new Date());
+}
+
+export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) {
+    project.update(p => {
+        if (p.currentImportedTranscriptPath === filePath) {
+            p.initialImportedTranscriptLexicalJson = savedLexicalJsonContent;
+            p.currentImportedTranscriptLexicalJson = savedLexicalJsonContent;
+            p.isImportedTranscriptDirty = false;
+
+            // Also update highlight baseline
+            p.initialImportedTranscriptHighlights = JSON.parse(JSON.stringify(p.currentImportedTranscriptHighlights));
+            p.isImportedTranscriptMetadataDirty = false;
+
+            p.statusMessage = `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}`;
+        }
+        return p;
+    });
+}
+export function markImportedTranscriptChangesDiscarded(filePath) {
+    project.update(p => {
+        if (p.currentImportedTranscriptPath === filePath) {
+            p.currentImportedTranscriptLexicalJson = p.initialImportedTranscriptLexicalJson;
+            p.isImportedTranscriptDirty = false;
+
+            // Also revert highlights
+            p.currentImportedTranscriptHighlights = JSON.parse(JSON.stringify(p.initialImportedTranscriptHighlights));
+            p.isImportedTranscriptMetadataDirty = false;
+
+            p.statusMessage = 'Imported transcript changes discarded.';
+        }
+        return p;
+    });
+}
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
@@ -355,18 +756,12 @@ export function prepareMediaNoteView(mediaPath) {
     });
 
     if (normalizedMediaPath) {
-        // Find the media file in the files tree to get its associated transcripts
         const currentProjectState = get(project);
         function findMediaFileInTree(nodes, path) {
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
-                if (node.path === path && node.file_type === 'media') {
-                    return node;
-                }
-                if (node.children) {
-                    const found = findMediaFileInTree(node.children, path);
-                    if (found) return found;
-                }
+                if (node.path === path && node.file_type === 'media') return node;
+                if (node.children) { const found = findMediaFileInTree(node.children, path); if (found) return found; }
             }
             return null;
         }
@@ -377,18 +772,34 @@ export function prepareMediaNoteView(mediaPath) {
         project.update(p => ({
             ...p,
             activeTranscriptPathInDataTab: firstTranscriptPath,
-            // If no transcript, set error state to display "No Transcription Yet"
             mediaNoteTranscriptError: firstTranscriptPath ? null : "INFO:FILE_NOT_FOUND",
-            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false, // Only load if there's a transcript
-            isLoading: firstTranscriptPath ? true : false, // Global loading
+            isMediaNoteTranscriptLoading: firstTranscriptPath ? true : false,
+            isLoading: firstTranscriptPath ? true : false,
+            currentDocumentHighlights: [], // Clear highlights initially
         }));
-    } else { // If clearing selection, ensure global loading is false
-        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null }));
+
+        if (firstTranscriptPath) {
+            import('$lib/services/projectService.js').then(async service => {
+                const meta = await service.loadDocumentMetadata(firstTranscriptPath);
+                project.update(p => {
+                    if (p.selectedMediaNotePath === normalizedMediaPath) {
+                        return {
+                            ...p,
+                            currentDocumentFileLevelMetadata: meta?.metadata || { file_name: '', last_modified: '', title: '', description: '', summary: '' },
+                            currentDocumentHighlights: meta?.highlights || [],
+                            isDocumentMetadataDirty: false,
+                        };
+                    }
+                    return p;
+                });
+            });
+        }
+    } else {
+        project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null, currentDocumentHighlights: [] }));
     }
 }
 
 export function setLoadedMediaNoteTranscriptData(mediaPath, jsonString) {
-    console.info(`[ProjectStore] Setting loaded media note transcript data for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             const content = jsonString || defaultEmptyJson;
@@ -496,7 +907,6 @@ export function setMediaNoteTranscriptEditorContent(mediaPath, newJsonContent) {
 }
 
 export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
-    console.info(`[ProjectStore] Marking media note transcript as saved for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             return {
@@ -513,7 +923,6 @@ export function markMediaNoteTranscriptAsSaved(mediaPath, savedJsonContent) {
 }
 
 export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
-    console.info(`[ProjectStore] Marking media note transcript changes as discarded for media: ${mediaPath}`);
     project.update(p => {
         if (p.selectedMediaNotePath === mediaPath) {
             const errorToKeep = p.initialMediaNoteTranscriptJson === defaultEmptyJson && p.mediaNoteTranscriptError === "INFO:FILE_NOT_FOUND"
@@ -535,11 +944,11 @@ export function markMediaNoteTranscriptChangesDiscarded(mediaPath) {
     });
 }
 
-export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) { console.log('[ProjectStore] setActiveMediaNoteEditorRef called for path:', mediaPath, 'with instance:', editorRefInstance); project.update(p => { if (p.selectedMediaNotePath === mediaPath) { return { ...p, activeMediaNoteEditorRef: { path: mediaPath, ref: editorRefInstance } }; } if (p.activeMediaNoteEditorRef && p.activeMediaNoteEditorRef.path !== mediaPath) { console.log('[ProjectStore] activeMediaNoteEditorRef changed to a different path. Clearing old ref.'); } return p; }); }
+export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) { project.update(p => { if (p.selectedMediaNotePath === mediaPath) { return { ...p, activeMediaNoteEditorRef: { path: mediaPath, ref: editorRefInstance } }; } if (p.activeMediaNoteEditorRef && p.activeMediaNoteEditorRef.path !== mediaPath) { } return p; }); }
 
-export function clearActiveMediaNoteEditorRef() { console.log('[ProjectStore] clearActiveMediaNoteEditorRef called.'); project.update(p => { if (p.activeMediaNoteEditorRef) { return { ...p, activeMediaNoteEditorRef: null }; } return p; }); }
+export function clearActiveMediaNoteEditorRef() { project.update(p => { if (p.activeMediaNoteEditorRef) { return { ...p, activeMediaNoteEditorRef: null }; } return p; }); }
 
-export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; console.info(`[ProjectStore] Toggling autosave to: ${newState}`); return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
+export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
 export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting ? true : p.isLoading })); }

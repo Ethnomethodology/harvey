@@ -82,6 +82,8 @@
   import LinkModal from '../modals/LinkModal.svelte';
   import InsertTableModal from '../modals/InsertTableModal.svelte';
   import TableCellActionMenu from './TableCellActionMenu.svelte';
+  import FloatingHighlightToolbar from './FloatingHighlightToolbar.svelte';
+  import FloatingModifyHighlightToolbar from './FloatingModifyHighlightToolbar.svelte';
 
   export let initialJson = null;
   export let editable = true;
@@ -108,6 +110,10 @@
   export let enableTableCellMenu = false;
   export let enableTableCellResize = false;
   export let enableSearch = false;
+  export let enableFloatingToolbar = true;
+  export let documentPath = null;
+  export let initialHighlights = [];
+  export let documentHighlights = [];
 
   let editorWrapper;
   let editorContainer;
@@ -157,6 +163,13 @@
   let resizeTargetCellKey = null;
   let resizeStartPos = { x: 0, y: 0 };
   let resizerLineStyle = 'display: none;';
+
+  let showFloatingToolbar = false;
+  let floatingToolbarPosition = { top: 0, left: 0 };
+
+  let showModifyToolbar = false;
+  let modifyToolbarPosition = { top: 0, left: 0 };
+  let clickedNodeKey = null;
 
   const MIN_COLUMN_WIDTH = 50;
 
@@ -218,6 +231,8 @@
     document.addEventListener('pointermove', handlePointerMove);
     document.addEventListener('pointerup', handlePointerUp);
 
+    loadHighlights();
+
     return () => {
       document.removeEventListener('click', handleClickOutside, true);
       document.removeEventListener('click', handleClickOutsideSearch, true);
@@ -275,6 +290,32 @@
       const { rows, columns } = event.detail;
       editor.dispatchCommand(INSERT_TABLE_COMMAND, { rows: String(rows), columns: String(columns) });
       showInsertTableModal = false;
+  }
+
+  async function loadHighlights() {
+    if (!documentPath) return;
+    try {
+      const highlightsJson = await invoke('load_lexical_highlights', {
+        args: {
+          projectId: get(project).id,
+          documentPath,
+        }
+      });
+      if (highlightsJson) {
+        const highlights = JSON.parse(highlightsJson);
+        editor.update(() => {
+          for (const highlight of highlights) {
+            const node = _getNodeByKey(highlight.nodeKey);
+            if (_isExtendedTextNode(node)) {
+              node.setStyle(`background-color: ${highlight.color}`);
+              node.setHighlightId(highlight.id);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error loading highlights:', error);
+    }
   }
 
 
@@ -354,8 +395,11 @@
     isColorDropdownOpen = !isColorDropdownOpen;
   }
 
-  const dispatch = createEventDispatcher();
+  import { get } from 'svelte/store';
+  import { project } from '$lib/stores/projectStore.js';
+  import { invoke } from '@tauri-apps/api/core';
 
+  const dispatch = createEventDispatcher();
 
   function createInitialEditorState(jsonProp) {
       if (jsonProp && typeof jsonProp === 'string' && jsonProp.trim() !== '' && jsonProp !== 'null' && jsonProp !== 'undefined') {
@@ -434,6 +478,17 @@
         });
     }
 
+    // Apply initial highlights after editor state is set
+    editor.update(() => {
+        for (const highlight of initialHighlights) {
+            const node = _getNodeByKey(highlight.nodeKey);
+            if (_isExtendedTextNode(node)) {
+                node.setStyle(`background-color: ${highlight.color}`);
+                node.setHighlightId(highlight.id);
+            }
+        }
+    });
+
 
     editor.setRootElement(editorContainer);
 
@@ -479,6 +534,25 @@
             if (isReady && editor) {
                 try {
                     editor.getEditorState().read(updateToolbarState);
+                    if (enableFloatingToolbar) {
+                        const selection = _getSelection();
+                        if (selection && !selection.isCollapsed()) {
+                            const domSelection = window.getSelection();
+                            if (domSelection && !domSelection.isCollapsed) {
+                                const domRange = domSelection.getRangeAt(0);
+                                const rect = domRange.getBoundingClientRect();
+                                floatingToolbarPosition = {
+                                    top: rect.top - 40,
+                                    left: rect.left + (rect.width / 2) - 80,
+                                };
+                                showFloatingToolbar = true;
+                            }
+                        } else {
+                            showFloatingToolbar = false;
+                        }
+                        showModifyToolbar = false;
+                        clickedNodeKey = null;
+                    }
                 } catch(readError) {
                     console.error("Error reading state on selection change:", readError);
                 }
@@ -516,6 +590,47 @@
             if (!clickedCell && showTableCellMenu) {
                 closeTableCellMenu(false);
             }
+            return false;
+          },
+          COMMAND_PRIORITY_LOW
+        ),
+        editor.registerCommand(
+          CLICK_COMMAND,
+          (payload) => {
+            const event = payload;
+            if (event.button !== 0 || !editor || !editor.isEditable()) return false;
+
+            editor.update(() => {
+                const selection = _getSelection();
+                if (selection.isCollapsed()) {
+                    const node = selection.anchor.getNode();
+                    const parent = node.getParent();
+                    if (_isExtendedTextNode(node) && node.getHighlightId()) {
+                        const domElement = editor.getElementByKey(node.getKey());
+                        if (domElement) {
+                            const rect = domElement.getBoundingClientRect();
+                            modifyToolbarPosition = {
+                                top: rect.top - 40,
+                                left: rect.left,
+                            };
+                            showModifyToolbar = true;
+                            clickedNodeKey = node.getKey();
+                        }
+                    } else if (_isExtendedTextNode(parent) && parent.getHighlightId()) {
+                        const domElement = editor.getElementByKey(parent.getKey());
+                        if (domElement) {
+                            const rect = domElement.getBoundingClientRect();
+                            modifyToolbarPosition = {
+                                top: rect.top - 40,
+                                left: rect.left,
+                            };
+                            showModifyToolbar = true;
+                            clickedNodeKey = parent.getKey();
+                        }
+                    }
+                }
+            });
+
             return false;
           },
           COMMAND_PRIORITY_LOW
@@ -971,22 +1086,18 @@
 
             if (colorToApply !== 'transparent') {
                 styles['background-color'] = colorToApply;
-                if (isDarkMode) {
-                    styles['color'] = '#111827'; // Dark text for dark mode highlights
-                }
-                // In light mode, text color is not explicitly changed, allowing it to inherit.
+                styles['color'] = isDarkMode ? '#111827' : '#000000';
             } else {
-                // Removing highlight
                 styles['background-color'] = null;
-                styles['color'] = null; // Remove any explicit text color, allowing it to inherit.
+                styles['color'] = null;
             }
 
             _patchStyleText(normalizedSelection, styles);
 
             const selectedNodes = normalizedSelection.getNodes();
+            const newId = uuidv4();
             for (const node of selectedNodes) {
                 let targetNode = node;
-                // If selection is within a segmented node, target the parent ExtendedTextNode
                 if (targetNode.getParent() && _isExtendedTextNode(targetNode.getParent()) && targetNode.isSegmented()) {
                      targetNode = targetNode.getParent();
                 }
@@ -995,42 +1106,64 @@
                     const extendedNode = targetNode;
                     const currentHighlightId = extendedNode.getHighlightId();
 
-                    if (colorToApply !== 'transparent') { // Applying a color
-                        if (currentHighlightId === null) { // New highlight
-                            const newId = uuidv4();
+                    if (colorToApply !== 'transparent') {
+                        if (currentHighlightId === null) {
                             extendedNode.setHighlightId(newId);
-                            dispatch('highlightevent', {
-                                type: 'add',
-                                id: newId,
-                                text: extendedNode.getTextContent(),
-                                nodeKey: extendedNode.getKey(),
-                                color: colorToApply // Pass the actual color
-                            });
-                        } else { // Existing highlight, color might be changing
-                             dispatch('highlightevent', {
-                                type: 'add', // 'add' can also mean 'update' in this context
-                                id: currentHighlightId,
-                                text: extendedNode.getTextContent(),
-                                nodeKey: extendedNode.getKey(),
-                                color: colorToApply // Update with the new color
-                            });
                         }
-                    } else { // Removing highlight (color is transparent)
+                    } else {
                         if (currentHighlightId !== null) {
-                            dispatch('highlightevent', {
-                                type: 'remove',
-                                id: currentHighlightId,
-                                nodeKey: extendedNode.getKey(),
-                                color: 'transparent' // Indicate removal
-                            });
                             extendedNode.setHighlightId(null);
                         }
                     }
                 }
             }
+
+            const allHighlights = gatherAllHighlights();
+            updateAndSaveHighlights(allHighlights);
         }
     });
     isHighlightDropdownOpen = false;
+}
+
+function gatherAllHighlights() {
+    const allHighlights = [];
+    const root = _getRoot();
+    const nodesToVisit = [root];
+    const existingHighlightsMap = new Map(documentHighlights.map(h => [h.id, h]));
+
+    while(nodesToVisit.length > 0) {
+        const currentNode = nodesToVisit.pop();
+        if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId()) {
+            const highlightId = currentNode.getHighlightId();
+            const style = currentNode.getStyle();
+            const colorMatch = style.match(/background-color:\s*(.*?);/);
+            const color = colorMatch ? colorMatch[1] : 'transparent';
+
+            const existingHighlight = existingHighlightsMap.get(highlightId);
+
+            allHighlights.push({
+                id: highlightId,
+                text: currentNode.getTextContent(),
+                nodeKey: currentNode.getKey(),
+                color: color,
+                tags: existingHighlight ? existingHighlight.tags : [],
+                comments: existingHighlight ? existingHighlight.comments : []
+            });
+        }
+        if (currentNode.getChildren) {
+            const children = currentNode.getChildren();
+            for (let i = children.length - 1; i >= 0; i--) {
+                nodesToVisit.push(children[i]);
+            }
+        }
+    }
+    return allHighlights;
+}
+
+function updateAndSaveHighlights(highlights) {
+    if (!editor || !documentPath) return;
+
+    dispatch('highlightschange', { highlights });
 }
 
 
@@ -1974,6 +2107,88 @@ $: if (editor && activeLayout) {
   bind:showModal={showInsertTableModal}
   on:confirm={handleInsertTableConfirm}
   on:close={() => showInsertTableModal = false}
+/>
+
+{#if enableFloatingToolbar}
+<FloatingHighlightToolbar
+  editor={editor}
+  showToolbar={showFloatingToolbar}
+  toolbarPosition={floatingToolbarPosition}
+  onHighlight={(color) => {
+    applyHighlightColor(color);
+    showFloatingToolbar = false;
+  }}
+  onRemoveHighlight={() => {
+    applyHighlightColor('transparent');
+    showFloatingToolbar = false;
+  }}
+/>
+{/if}
+
+<FloatingModifyHighlightToolbar
+  editor={editor}
+  showToolbar={showModifyToolbar}
+  toolbarPosition={modifyToolbarPosition}
+  onChangeColor={(color) => {
+    if (clickedNodeKey) {
+      editor.update(() => {
+        const clickedNode = _getNodeByKey(clickedNodeKey);
+        if (!_isExtendedTextNode(clickedNode)) return;
+        const highlightId = clickedNode.getHighlightId();
+        if (!highlightId) return;
+
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        while(nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
+                currentNode.setStyle(`background-color: ${color};`);
+            }
+            if (currentNode.getChildren) {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
+        }
+
+        const allHighlights = gatherAllHighlights();
+        updateAndSaveHighlights(allHighlights);
+      });
+    }
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
+  onDelete={() => {
+    if (clickedNodeKey) {
+      editor.update(() => {
+        const clickedNode = _getNodeByKey(clickedNodeKey);
+        if (!_isExtendedTextNode(clickedNode)) return;
+        const highlightId = clickedNode.getHighlightId();
+        if (!highlightId) return;
+
+        const root = _getRoot();
+        const nodesToVisit = [root];
+        while(nodesToVisit.length > 0) {
+            const currentNode = nodesToVisit.pop();
+            if (_isExtendedTextNode(currentNode) && currentNode.getHighlightId() === highlightId) {
+                currentNode.setStyle('background-color: transparent;');
+                currentNode.setHighlightId(null);
+            }
+            if (currentNode.getChildren) {
+                const children = currentNode.getChildren();
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodesToVisit.push(children[i]);
+                }
+            }
+        }
+        const allHighlights = gatherAllHighlights();
+        updateAndSaveHighlights(allHighlights);
+      });
+    }
+    showModifyToolbar = false;
+    clickedNodeKey = null;
+  }}
 />
 
 
