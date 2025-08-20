@@ -149,12 +149,7 @@
     async function loadHighlightsForTranscript(path) {
         console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
         if (!path) {
-            project.update(p => ({
-                ...p,
-                initialImportedTranscriptHighlights: [],
-                currentImportedTranscriptHighlights: [],
-                isImportedTranscriptMetadataDirty: false
-            }));
+            setImportedTranscriptHighlights([], false);
             return;
         }
         try {
@@ -164,42 +159,24 @@
                 return;
             }
             console.log(`[TranscriptEditorPanel] Invoking 'load_lexical_highlights' with projectId: ${projectId}, documentPath: ${path}`);
-            const loaded = await invoke('load_lexical_highlights', {
+            const rawHighlights = await invoke('load_lexical_highlights', {
                 args: {
                     projectId: projectId,
                     documentPath: path,
                 }
             });
-            console.log(`[TranscriptEditorPanel] Received from backend:`, loaded);
+            console.log(`[TranscriptEditorPanel] Received from backend:`, rawHighlights);
 
-            const highlights = loaded ? JSON.parse(loaded) : [];
+            const highlights = rawHighlights ? JSON.parse(rawHighlights) : [];
             console.log(`[TranscriptEditorPanel] Parsed ${highlights.length} highlights. Updating store.`);
 
-            project.update(p => {
-                if (p.currentImportedTranscriptPath === path) {
-                    return {
-                        ...p,
-                        initialImportedTranscriptHighlights: highlights,
-                        currentImportedTranscriptHighlights: JSON.parse(JSON.stringify(highlights)),
-                        isImportedTranscriptMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
+            initialHighlights = highlights; // Set the initial highlights
+            setImportedTranscriptHighlights(highlights, false); // Update the store
+
             console.log(`[TranscriptEditorPanel] Store updated with highlights.`);
         } catch (e) {
             console.error("[TranscriptEditorPanel] Error loading lexical highlights for transcript:", e);
-            project.update(p => {
-                if (p.currentImportedTranscriptPath === path) {
-                    return {
-                        ...p,
-                        initialImportedTranscriptHighlights: [],
-                        currentImportedTranscriptHighlights: [],
-                        isImportedTranscriptMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
+            setImportedTranscriptHighlights([], false);
         }
     }
 
@@ -528,8 +505,8 @@
 
             project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
 
-            const highlights_json = (isMetadataDirty && $project.currentImportedTranscriptHighlights)
-                ? JSON.stringify($project.currentImportedTranscriptHighlights)
+            const highlights_json = (isMetadataDirty && get(project).currentImportedTranscriptHighlights)
+                ? JSON.stringify(get(project).currentImportedTranscriptHighlights)
                 : null;
 
             // Use the same backend command used for documents
