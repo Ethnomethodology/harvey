@@ -132,12 +132,13 @@
         }
     });
 
-    // --- Path Change Reaction (Unchanged) ---
+    // --- Path Change Reaction (MODIFIED) ---
     let prevPath = null;
     $: if (itemPath && itemPath !== prevPath) {
         prevPath = itemPath;
         console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
         loadAndConvertTranscript(itemPath);
+        loadHighlightsForTranscript(itemPath);
     } else if (!itemPath && prevPath) {
         prevPath = null;
         selectedPath = null;
@@ -147,6 +148,63 @@
         errorMessage = null;
         if (get(project).currentImportedTranscriptPath === prevPath) {
             setLoadedImportedTranscriptData(null, null);
+        }
+    }
+
+    async function loadHighlightsForTranscript(path) {
+        console.log(`[TranscriptEditorPanel] Attempting to load highlights for: ${path}`);
+        if (!path) {
+            project.update(p => ({
+                ...p,
+                initialImportedTranscriptHighlights: [],
+                currentImportedTranscriptHighlights: [],
+                isImportedTranscriptMetadataDirty: false
+            }));
+            return;
+        }
+        try {
+            const projectId = get(project).id;
+            if (!projectId) {
+                console.error("[TranscriptEditorPanel] Cannot load highlights, project ID is missing.");
+                return;
+            }
+            console.log(`[TranscriptEditorPanel] Invoking 'load_lexical_highlights' with projectId: ${projectId}, documentPath: ${path}`);
+            const loaded = await invoke('load_lexical_highlights', {
+                args: {
+                    projectId: projectId,
+                    documentPath: path,
+                }
+            });
+            console.log(`[TranscriptEditorPanel] Received from backend:`, loaded);
+
+            const highlights = loaded ? JSON.parse(loaded) : [];
+            console.log(`[TranscriptEditorPanel] Parsed ${highlights.length} highlights. Updating store.`);
+
+            project.update(p => {
+                if (p.currentImportedTranscriptPath === path) {
+                    return {
+                        ...p,
+                        initialImportedTranscriptHighlights: highlights,
+                        currentImportedTranscriptHighlights: JSON.parse(JSON.stringify(highlights)),
+                        isImportedTranscriptMetadataDirty: false,
+                    };
+                }
+                return p;
+            });
+            console.log(`[TranscriptEditorPanel] Store updated with highlights.`);
+        } catch (e) {
+            console.error("[TranscriptEditorPanel] Error loading lexical highlights for transcript:", e);
+            project.update(p => {
+                if (p.currentImportedTranscriptPath === path) {
+                    return {
+                        ...p,
+                        initialImportedTranscriptHighlights: [],
+                        currentImportedTranscriptHighlights: [],
+                        isImportedTranscriptMetadataDirty: false,
+                    };
+                }
+                return p;
+            });
         }
     }
 
