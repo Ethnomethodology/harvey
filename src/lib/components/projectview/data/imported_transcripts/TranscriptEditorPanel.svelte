@@ -129,7 +129,7 @@
 
     // --- Path Change Reaction (MODIFIED) ---
     let prevPath = null;
-    $: if (itemPath && itemPath !== prevPath) {
+    $: if (itemPath && itemPath !== prevPath && editorRef) {
         prevPath = itemPath;
         console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
         loadAndConvertTranscript(itemPath);
