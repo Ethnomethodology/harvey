@@ -2,7 +2,8 @@
 <script>
     import { get } from 'svelte/store';
     import { onDestroy } from 'svelte';
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations } from '$lib/stores/projectStore.js';
+
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, saveImageAnnotations } from '$lib/stores/projectStore.js';
     import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
@@ -31,6 +32,8 @@
             activeHighlights = $project.currentImportedTranscriptHighlights || [];
         } else if (isPdf) {
             activeHighlights = $project.currentPdfAnnotations || [];
+        } else if (itemType === 'images') {
+            activeHighlights = $project.currentImageAnnotations || [];
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }
@@ -38,39 +41,59 @@
 
     $: selectedHighlightForComments = activeHighlights.find(h => h.id === selectedHighlightId) || null;
 
-    function groupHighlights(highlights) {
+    // This function now also needs to handle the structure of image annotations
+    function processHighlights(highlights, type) {
         if (!highlights || highlights.length === 0) {
             return [];
         }
-        const map = new Map();
-        for (const highlight of highlights) {
-            if (!map.has(highlight.id)) {
-                map.set(highlight.id, {
-                    id: highlight.id,
-                    color: highlight.color,
-                    textParts: [],
-                    tags: highlight.tags || [],
-                    comments: highlight.comments || [],
-                    pageIndex: highlight.pageIndex // Capture pageIndex for PDFs
-                });
+        if (type === 'images') {
+            return highlights.map(annotation => {
+                const titleBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Title');
+                const descriptionBody = annotation.body.find(b => b.purpose === 'commenting' && b.type === 'Description');
+                const colorBody = annotation.body.find(b => b.purpose === 'highlighting');
+
+                return {
+                    id: annotation.id,
+                    color: colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)', // Default color
+                    title: titleBody ? titleBody.value : 'No title',
+                    description: descriptionBody ? descriptionBody.value : 'No description',
+                    tags: annotation.tags || [],
+                    comments: annotation.comments || []
+                };
+            });
+        } else { // Handles 'doc', 'pdf', 'imported_transcript'
+            const map = new Map();
+            for (const highlight of highlights) {
+                if (!map.has(highlight.id)) {
+                    map.set(highlight.id, {
+                        id: highlight.id,
+                        color: highlight.color,
+                        textParts: [],
+                        tags: highlight.tags || [],
+                        comments: highlight.comments || [],
+                        pageIndex: highlight.pageIndex // Capture pageIndex for PDFs
+                    });
+                }
+                map.get(highlight.id).textParts.push(highlight.text);
             }
-            map.get(highlight.id).textParts.push(highlight.text);
+            return Array.from(map.values()).map(group => ({
+                ...group,
+                text: group.textParts.join(' ')
+            }));
         }
-        return Array.from(map.values()).map(group => ({
-            ...group,
-            text: group.textParts.join(' ')
-        }));
     }
 
-    $: groupedHighlights = groupHighlights(activeHighlights);
+    $: processedHighlights = processHighlights(activeHighlights, itemType);
 
-    function handleHighlightsUpdate(newHighlights) {
+    async function handleHighlightsUpdate(newHighlights) {
         const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
         if (itemType === 'imported_transcript') {
             setImportedTranscriptHighlights(newHighlights);
         } else if (isPdf) {
-            // We'll need a dedicated function for this in the store to handle the different state slice
-            updatePdfAnnotations(newHighlights, true); // `true` to mark dirty
+            updatePdfAnnotations(newHighlights, true);
+        } else if (itemType === 'images') {
+            updateImageAnnotations(newHighlights); // Assumes updateImageAnnotations handles both array and single object
+            await saveImageAnnotations();
         } else {
             setDocumentHighlights(newHighlights);
         }
@@ -89,7 +112,7 @@
     function handleCreateTag(newTag, highlightId) {
         addGlobalTag(newTag);
         const highlight = activeHighlights.find(h => h.id === highlightId);
-        if (highlight && !highlight.tags?.includes(newTag)) {
+        if (highlight && !(highlight.tags || []).includes(newTag)) {
             const newTags = [...(highlight.tags || []), newTag];
             handleTagsUpdate(highlightId, newTags);
         }
@@ -100,17 +123,22 @@
         const { highlightId, commentId, newText, comment } = detail;
 
         let docType = itemType;
-        if (itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf')) {
-            docType = 'pdf';
+        if (itemType === 'doc') {
+             docType = $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'doc';
+        } else if (itemType === 'images') {
+            docType = 'image';
         }
 
-        // Pass itemType to the store actions
         if (type === 'addcomment') {
             addCommentToHighlight(highlightId, comment, docType);
         } else if (type === 'deletecomment') {
             deleteComment(highlightId, commentId, docType);
         } else if (type === 'editcomment') {
             updateComment(highlightId, commentId, newText, docType);
+        }
+
+        if (docType === 'image') {
+            saveImageAnnotations();
         }
     }
 </script>
@@ -121,15 +149,20 @@
     </div>
 
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
-        {#if groupedHighlights.length > 0}
+        {#if processedHighlights.length > 0}
             <ul class="space-y-2">
-                {#each groupedHighlights as highlight (highlight.id)}
+                {#each processedHighlights as highlight (highlight.id)}
                     <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
-                            {#if highlight.pageIndex !== undefined && highlight.pageIndex !== null}
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Page {highlight.pageIndex + 1}</p>
+                            {#if itemType === 'images'}
+                                <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
+                                <p class="text-gray-600 dark:text-gray-300 mt-1">{highlight.description || 'No Description'}</p>
+                            {:else}
+                                {#if highlight.pageIndex !== undefined && highlight.pageIndex !== null}
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Page {highlight.pageIndex + 1}</p>
+                                {/if}
+                                <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                             {/if}
-                            <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                         </div>
                         <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex flex-col">
                             <div class="flex items-center w-full">
@@ -162,7 +195,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript'}
+        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript' || itemType === 'images'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>

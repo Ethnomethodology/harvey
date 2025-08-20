@@ -1,3 +1,0 @@
-This is a dummy transcript file.
-It has some text to highlight.
-And a second line of text.

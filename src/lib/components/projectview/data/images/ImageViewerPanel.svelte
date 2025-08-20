@@ -1,11 +1,11 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
-    import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-    import { dirname, join, sep } from '@tauri-apps/api/path'; // ensure sep is imported
-    import { get } from 'svelte/store';
-    import { project } from '$lib/stores/projectStore.js';
+    import { convertFileSrc } from '@tauri-apps/api/core';
+    import { sep } from '@tauri-apps/api/path';
+    import { get, derived } from 'svelte/store';
+    import { project, updateImageAnnotations, saveImageAnnotations } from '$lib/stores/projectStore.js';
     import OpenSeadragon from 'openseadragon';
-    import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for annotations
+    import { v4 as uuidv4 } from 'uuid';
 
     export let imagePath = '';
 
@@ -24,7 +24,13 @@
     let annotationBeingEdited = null; // Stores the annotation data when editing
     let isEditingExisting = false; // Flag to indicate if we are editing or creating
 
-    let currentAnnotations = []; // This will hold our annotation data
+    // Get annotations from the central store
+    const currentAnnotations = derived(project, $project => {
+        if ($project.selectedDocumentPath === imagePath && $project.selectedDocumentType === 'images') {
+            return $project.currentImageAnnotations || [];
+        }
+        return [];
+    });
 
     // State for drawing mode: 'rectangle', 'circle', 'polygon', or null
     let activeDrawingTool = null;
@@ -37,94 +43,6 @@
     let currentPolygon = { points: [], previewLine: null, closingPreviewLine: null }; // For polygon drawing
     let currentPreviewPolygonPoints = []; // For filled polygon preview
     let svgOverlay; // Reference to the SVG element
-
-    async function loadAnnotationsForImage(imgPath) {
-        currentAnnotations = [];
-
-        const currentProj = get(project);
-        if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
-            console.error('[ImageViewerPanel loadAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
-            return;
-        }
-        const projectId = currentProj.id;
-
-        const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = imgPath;
-
-        if (projectBaseDir && imgPath.startsWith(projectBaseDir)) {
-            relativeImagePath = imgPath.substring(projectBaseDir.length);
-            if (relativeImagePath.startsWith(sep) || relativeImagePath.startsWith('/') || relativeImagePath.startsWith('\\')) {
-                relativeImagePath = relativeImagePath.substring(1);
-            }
-        } else {
-            console.warn(`[ImageViewerPanel loadAnnotationsForImage] imgPath "${imgPath}" may not be within projectBaseDir "${projectBaseDir}". Using path as is for DB key, this might fail if not truly relative.`);
-        }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
-
-        console.log(`[ImageViewerPanel loadAnnotationsForImage] Attempting for project ${projectId} (from $project.id), image relative path: ${relativeImagePath} (absolute: ${imgPath})`);
-
-        try {
-            const annotationsJsonString = await invoke('load_image_annotations', {
-                projectId: projectId,
-                imageRelativePathStr: relativeImagePath
-            });
-            if (annotationsJsonString && typeof annotationsJsonString === 'string') {
-                const loaded = JSON.parse(annotationsJsonString);
-                if (Array.isArray(loaded)) {
-                    currentAnnotations = loaded;
-                    console.log(`[ImageViewerPanel loadAnnotationsForImage] Loaded ${loaded.length} annotations for ${relativeImagePath}.`);
-                } else {
-                    console.warn(`[ImageViewerPanel loadAnnotationsForImage] Loaded data for ${relativeImagePath} is not an array.`);
-                }
-            } else {
-                 console.log(`[ImageViewerPanel loadAnnotationsForImage] No annotations found or empty content for ${relativeImagePath}.`);
-            }
-        } catch (err) {
-            console.error(`[ImageViewerPanel loadAnnotationsForImage] Error for ${relativeImagePath} (absolute: ${imgPath}):`, err);
-            currentAnnotations = [];
-        }
-    }
-
-    async function saveAnnotationsForImage() {
-        if (!currentLoadedPath) {
-            console.warn("[ImageViewerPanel saveAnnotationsForImage] No image path, cannot save.");
-            return;
-        }
-        const currentProj = get(project);
-        if (!currentProj || !currentProj.id || typeof currentProj.id !== 'string' || currentProj.id.trim() === '') {
-            console.error('[ImageViewerPanel saveAnnotationsForImage] project ID (from $project.id) is missing or invalid.');
-            // await message('Cannot save image annotations: Project identifier is missing or invalid.', { title: 'Save Error', type: 'error' });
-            return;
-        }
-        const projectId = currentProj.id;
-
-        const projectBaseDir = currentProj.baseDirectory;
-        let relativeImagePath = currentLoadedPath;
-
-        if (projectBaseDir && currentLoadedPath.startsWith(projectBaseDir)) {
-            relativeImagePath = currentLoadedPath.substring(projectBaseDir.length);
-            if (relativeImagePath.startsWith(sep) || relativeImagePath.startsWith('/') || relativeImagePath.startsWith('\\')) {
-                relativeImagePath = relativeImagePath.substring(1);
-            }
-        } else {
-            console.error(`[ImageViewerPanel saveAnnotationsForImage] Cannot determine relative path for ${currentLoadedPath} using base ${projectBaseDir}. Cannot save.`);
-            return;
-        }
-        relativeImagePath = relativeImagePath.replace(/\\/g, '/');
-
-        console.log(`[ImageViewerPanel saveAnnotationsForImage] Saving ${currentAnnotations.length} annotations for project ${projectId} (from $project.id), image relative path: ${relativeImagePath}`);
-
-        try {
-            await invoke('save_image_annotations', {
-                projectId: projectId,
-                imageRelativePathStr: relativeImagePath,
-                annotationsJsonString: JSON.stringify(currentAnnotations, null, 2)
-            });
-            console.log(`[ImageViewerPanel saveAnnotationsForImage] Annotations saved for project ${projectId} (from $project.id), image ${relativeImagePath}`);
-        } catch (err) {
-            console.error(`[ImageViewerPanel saveAnnotationsForImage] Error saving for project ${projectId} (from $project.id), image ${relativeImagePath}:`, err);
-        }
-    }
 
     function adjustOpacity(rgbaColor, newOpacity) {
         if (!rgbaColor || typeof rgbaColor !== 'string' || !rgbaColor.startsWith('rgba(')) { return rgbaColor; }
@@ -142,7 +60,6 @@
 
         console.log(`[ImageViewerPanel initializeViewer] Proceeding with initialization for: ${pathForImage}`);
         currentLoadedPath = pathForImage; isLoading = true; error = null;
-        currentAnnotations = [];
 
         if (osdViewer) { try { osdViewer.destroy(); console.log("Previous OpenSeadragon instance destroyed."); } catch (e) { console.warn("Error destroying previous OpenSeadragon instance:", e); } osdViewer = null; }
         if(osdViewerElement) osdViewerElement.innerHTML = '';
@@ -182,7 +99,7 @@
                     svgOverlay.style.pointerEvents = 'none'; // Allow OSD events to pass through
                 }
                 setupDrawingEvents();
-                await loadAnnotationsForImage(pathForImage);
+                // We no longer call loadAnnotationsForImage here, as it's handled by the store
                 console.log('[ImageViewerPanel] OpenSeadragon setup complete.');
             });
 
@@ -285,7 +202,6 @@
         if (!startViewportPoint) return;
 
         const endViewportPoint = osdViewer.viewport.pointFromPixel(event.position);
-
         let newAnnotation = null;
 
         if (activeDrawingTool === 'rectangle') {
@@ -295,26 +211,12 @@
                 Math.abs(startViewportPoint.x - endViewportPoint.x),
                 Math.abs(startViewportPoint.y - endViewportPoint.y)
             );
-
             if (viewportRect.width > 0.001 && viewportRect.height > 0.001) {
                 newAnnotation = {
                     id: uuidv4(),
                     type: 'Annotation',
-                    target: {
-                        selector: {
-                            type: 'FragmentSelector',
-                            value: {
-                                x: viewportRect.x,
-                                y: viewportRect.y,
-                                width: viewportRect.width,
-                                height: viewportRect.height,
-                                shape: 'rectangle'
-                            }
-                        }
-                    },
-                    body: [
-                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
-                    ]
+                    target: { selector: { type: 'FragmentSelector', value: { ...viewportRect, shape: 'rectangle' } } },
+                    body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
                 };
             }
         } else if (activeDrawingTool === 'circle') {
@@ -323,33 +225,19 @@
             const r = Math.sqrt(dx * dx + dy * dy) / 2;
             const cx = startViewportPoint.x + dx / 2;
             const cy = startViewportPoint.y + dy / 2;
-
             if (r > 0.0005) {
                 newAnnotation = {
                     id: uuidv4(),
                     type: 'Annotation',
-                    target: {
-                        selector: {
-                            type: 'FragmentSelector',
-                            value: {
-                                cx: cx,
-                                cy: cy,
-                                r: r,
-                                shape: 'circle'
-                            }
-                        }
-                    },
-                    body: [
-                        { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
-                    ]
+                    target: { selector: { type: 'FragmentSelector', value: { cx, cy, r, shape: 'circle' } } },
+                    body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
                 };
             }
         }
 
         if (newAnnotation) {
-            currentAnnotations = [...currentAnnotations, newAnnotation];
-            await saveAnnotationsForImage();
-
+            updateImageAnnotations([...$currentAnnotations, newAnnotation]);
+            await saveImageAnnotations();
             annotationBeingEdited = newAnnotation;
             isEditingExisting = false;
             const osdRect = osdViewerElement.getBoundingClientRect();
@@ -359,39 +247,28 @@
         }
         currentRect = null;
         currentCircle = null;
+        startViewportPoint = null;
     }
 
     function onDoubleClick(event) {
-        if (activeDrawingTool !== 'polygon' || !isDrawing) {
-            return;
-        }
+        if (activeDrawingTool !== 'polygon' || !isDrawing) return;
         event.preventDefaultAction = true;
 
         const newAnnotation = {
             id: uuidv4(),
             type: 'Annotation',
-            target: {
-                selector: {
-                    type: 'FragmentSelector',
-                    value: {
-                        shape: 'polygon',
-                        points: currentPolygon.points
-                    }
-                }
-            },
-            body: [
-                { type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }
-            ]
+            target: { selector: { type: 'FragmentSelector', value: { shape: 'polygon', points: currentPolygon.points } } },
+            body: [{ type: 'Color', value: 'rgba(255, 242, 117, 0.5)', purpose: 'highlighting' }]
         };
 
-        currentAnnotations = [...currentAnnotations, newAnnotation];
-        saveAnnotationsForImage();
+        updateImageAnnotations([...$currentAnnotations, newAnnotation]);
+        saveImageAnnotations();
 
-        // Reset drawing state
         isDrawing = false;
         currentPolygon = { points: [], previewLine: null, closingPreviewLine: null };
         currentPreviewPolygonPoints = [];
         activeDrawingTool = null;
+        startViewportPoint = null;
     }
 
     function updateAnnotationPositions() {
@@ -418,43 +295,48 @@
 
     async function handleAnnotationDialogSave(event) {
         const { title, description, color } = event.detail;
-        if (annotationBeingEdited) {
-            const newBody = [];
-            if (title) newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
-            if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
-            newBody.push({ type: 'Color', value: color, purpose: 'highlighting' });
+        if (!annotationBeingEdited) return;
 
-            const updatedAnnotation = {
-                ...annotationBeingEdited,
-                body: newBody
-            };
+        const newBody = [
+            { type: 'Color', value: color, purpose: 'highlighting' }
+        ];
+        if (title) newBody.push({ type: 'Title', value: title, purpose: 'commenting' });
+        if (description) newBody.push({ type: 'Description', value: description, purpose: 'commenting' });
 
-            currentAnnotations = currentAnnotations.map(a =>
-                a.id === updatedAnnotation.id ? updatedAnnotation : a
-            );
-            await saveAnnotationsForImage();
-        }
-        annotationBeingEdited = null;
-        isEditingExisting = false;
-        showAnnotationCreationDialog = false;
+        const updatedAnnotation = {
+            ...annotationBeingEdited,
+            body: newBody,
+        };
+
+        const updatedAnnotations = $currentAnnotations.map(a =>
+            a.id === updatedAnnotation.id ? updatedAnnotation : a
+        );
+
+        updateImageAnnotations(updatedAnnotations);
+        await saveImageAnnotations();
+
+        closeAnnotationDialog();
     }
 
     async function handleAnnotationDialogCancel() {
-        // If it was a new annotation being created, remove it from the list
         if (!isEditingExisting && annotationBeingEdited) {
-            currentAnnotations = currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
-            await saveAnnotationsForImage();
+            const annotationsWithoutNew = $currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
+            updateImageAnnotations(annotationsWithoutNew);
+            await saveImageAnnotations();
         }
-        annotationBeingEdited = null;
-        isEditingExisting = false;
-        showAnnotationCreationDialog = false;
+        closeAnnotationDialog();
     }
 
     async function handleAnnotationDialogDelete() {
         if (annotationBeingEdited) {
-            currentAnnotations = currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
-            await saveAnnotationsForImage();
+            const annotationsWithoutDeleted = $currentAnnotations.filter(a => a.id !== annotationBeingEdited.id);
+            updateImageAnnotations(annotationsWithoutDeleted);
+            await saveImageAnnotations();
         }
+        closeAnnotationDialog();
+    }
+
+    function closeAnnotationDialog() {
         annotationBeingEdited = null;
         isEditingExisting = false;
         showAnnotationCreationDialog = false;
@@ -473,8 +355,7 @@
             osdViewer.removeHandler('canvas-release', onMouseUp);
             osdViewer.removeHandler('canvas-double-click', onDoubleClick);
             osdViewer.removeHandler('update-viewport', updateAnnotationPositions);
-            // Remove the SVG overlay when component is destroyed
-            if (svgOverlay) { // Removed hasOverlay check
+            if (svgOverlay && osdViewer.getOverlayById(svgOverlay)) {
                 osdViewer.removeOverlay(svgOverlay);
             }
             osdViewer.destroy();
@@ -492,26 +373,21 @@
         } else if (!imagePath && osdViewer) {
             console.log(`[ImageViewerPanel reactive] imagePath cleared, destroying viewer instance.`);
             if (osdViewer) {
-                // Remove the SVG overlay before destroying OSD
-                if (svgOverlay) { // Removed hasOverlay check
+                if (svgOverlay && osdViewer.getOverlayById(svgOverlay)) {
                     osdViewer.removeOverlay(svgOverlay);
                 }
                 osdViewer.destroy();
             }
             osdViewer = null;
             isLoading = false; error = null; currentLoadedPath = null;
-            currentAnnotations = [];
         }
     }
 
     // Reactive statement to update annotation positions when viewport changes
-    // This is crucial for annotations to stay in place during zoom/pan
-    $: if (osdViewer && currentAnnotations) {
-        // Force re-render of annotations when viewport changes
-        // This is a bit of a hack, but ensures Svelte re-evaluates the `rect` calculation
-        // for each annotation. A more performant solution might involve directly manipulating
-        // DOM elements, but for a small number of annotations, this is fine.
-        currentAnnotations = currentAnnotations;
+    $: if (osdViewer && $currentAnnotations) {
+        // This is a reactive statement that will re-run whenever $currentAnnotations changes,
+        // which is exactly what we want to keep the SVG overlay in sync with the store.
+        // Svelte's reactivity handles the re-rendering of the {#each} block below.
     }
 </script>
 
@@ -574,7 +450,7 @@
             <svg bind:this={svgOverlay} class="pointer-events-none z-20" viewBox="0 0 1 1"
                  class:cursor-draw={activeDrawingTool !== null}
                  class:cursor-pan={activeDrawingTool === null}>
-                {#each currentAnnotations as annotation (annotation.id)}
+                {#each $currentAnnotations as annotation (annotation.id)}
                     {@const shapeData = annotation.target.selector.value}
                     {@const colorBody = annotation.body.find(b => b.purpose === 'highlighting' && b.type === 'Color')}
                     {@const fillColor = colorBody ? colorBody.value : 'rgba(255, 242, 117, 0.5)'}

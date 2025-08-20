@@ -1479,6 +1479,84 @@ export async function saveDocumentMetadata(originalDocumentAbsPath) {
     }
 }
 
+export async function loadImageAnnotations(imageAbsPath) {
+    const { setLoadedImageAnnotations, setImageAnnotationsLoadFailed } = await import('$lib/stores/projectStore.js');
+
+    const currentProj = get(project);
+    const projectBaseDir = currentProj.baseDirectory;
+    const projectId = currentProj.id;
+
+    if (!imageAbsPath) {
+        setLoadedImageAnnotations([]);
+        return;
+    }
+
+    if (!projectBaseDir || !projectId) {
+        const errorMsg = "Project data not fully loaded.";
+        console.error(`[ProjectService] Cannot load image annotations: ${errorMsg}`);
+        setImageAnnotationsLoadFailed(imageAbsPath, errorMsg);
+        return;
+    }
+
+    let relativeImagePath = imageAbsPath;
+    if (imageAbsPath.startsWith(projectBaseDir)) {
+        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+    }
+    relativeImagePath = relativeImagePath.replace(/\\/g, '/');
+
+    try {
+        const annotationsJsonString = await invoke('load_image_annotations', {
+            projectId,
+            imageRelativePathStr: relativeImagePath
+        });
+        const annotations = annotationsJsonString ? JSON.parse(annotationsJsonString) : [];
+        setLoadedImageAnnotations(annotations);
+    } catch (err) {
+        console.error(`[ProjectService] Error loading annotations for ${relativeImagePath}:`, err);
+        setImageAnnotationsLoadFailed(imageAbsPath, err.message || String(err));
+    }
+}
+
+export async function saveImageAnnotations() {
+    const { markImageAnnotationsAsSaved } = await import('$lib/stores/projectStore.js');
+    const projState = get(project);
+    const imagePath = projState.selectedDocumentPath;
+    const annotations = projState.currentImageAnnotations;
+
+    if (!imagePath || !projState.isImageAnnotationsDirty) {
+        return;
+    }
+
+    const projectBaseDir = projState.baseDirectory;
+    const projectId = projState.id;
+
+    if (!projectBaseDir || !projectId) {
+        console.error("[ProjectService] saveImageAnnotations: Project data not fully loaded.");
+        notificationStore.add('Error: Project not fully loaded. Cannot save annotations.', 'error');
+        return;
+    }
+
+    let relativeImagePath = imagePath;
+    if (imagePath.startsWith(projectBaseDir)) {
+        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+    }
+    relativeImagePath = relativeImagePath.replace(/\\/g, '/');
+
+    try {
+        await invoke('save_image_annotations', {
+            projectId,
+            imageRelativePathStr: relativeImagePath,
+            annotationsJsonString: JSON.stringify(annotations, null, 2)
+        });
+        markImageAnnotationsAsSaved();
+        console.log(`[ProjectService] Image annotations saved for ${relativeImagePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving image annotations for ${relativeImagePath}:`, error);
+        notificationStore.add(`Error saving image annotations: ${error.message || error}`, 'error');
+    }
+}
+
+
 export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActionContextDescription) {
     const projState = get(project);
     const tsState = get(transcriptStore); // Get transcript store state
@@ -1515,7 +1593,15 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         saveFunction = async () => saveCurrentPdfAnnotations();
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialPdfAnnotations;
-    } else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
+    } else if (projState.selectedDocumentType === 'images' && projState.isImageAnnotationsDirty) {
+        itemIsDirty = true;
+        itemPath = projState.selectedDocumentPath;
+        itemTypeForPrompt = 'image annotations';
+        saveFunction = async () => saveImageAnnotations();
+        discardFunction = () => markDocumentChangesDiscarded(); // This should also clear image annotations
+        initialContentForReset = projState.initialImageAnnotations;
+    }
+    else if (projState.selectedDocumentType == 'tables' && projState.isDocumentDirty) {
         itemIsDirty = true;
         itemPath = projState.selectedDocumentPath;
         itemTypeForPrompt = 'table';
