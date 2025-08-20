@@ -138,7 +138,6 @@
         prevPath = itemPath;
         console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
         loadAndConvertTranscript(itemPath);
-        loadHighlightsForTranscript(itemPath);
     } else if (!itemPath && prevPath) {
         prevPath = null;
         selectedPath = null;
@@ -148,51 +147,6 @@
         errorMessage = null;
         if (get(project).currentImportedTranscriptPath === prevPath) {
             setLoadedImportedTranscriptData(null, null);
-        }
-    }
-
-    async function loadHighlightsForTranscript(path) {
-        if (!path) {
-            project.update(p => ({
-                ...p,
-                initialImportedTranscriptHighlights: [],
-                currentImportedTranscriptHighlights: [],
-                isImportedTranscriptMetadataDirty: false
-            }));
-            return;
-        }
-        try {
-            const loaded = await invoke('load_lexical_highlights', {
-                args: {
-                    projectId: get(project).id,
-                    documentPath: path,
-                }
-            });
-            const highlights = loaded ? JSON.parse(loaded) : [];
-            project.update(p => {
-                if (p.currentImportedTranscriptPath === path) {
-                    return {
-                        ...p,
-                        initialImportedTranscriptHighlights: highlights,
-                        currentImportedTranscriptHighlights: JSON.parse(JSON.stringify(highlights)),
-                        isImportedTranscriptMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
-        } catch (e) {
-            console.error("Error loading lexical highlights for transcript:", e);
-            project.update(p => {
-                if (p.currentImportedTranscriptPath === path) {
-                    return {
-                        ...p,
-                        initialImportedTranscriptHighlights: [],
-                        currentImportedTranscriptHighlights: [],
-                        isImportedTranscriptMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
         }
     }
 
