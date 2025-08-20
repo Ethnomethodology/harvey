@@ -1535,7 +1535,7 @@ export async function checkUnsavedChangesThenProceed(newPathToLoad, providedActi
         discardFunction = () => markDocumentChangesDiscarded();
         initialContentForReset = projState.initialDocumentJson;
         resetEditorFunction = projState.activeDocumentEditorRef?.ref?.resetEditorState;
-    } else if (projState.currentImportedTranscriptPath && projState.isImportedTranscriptDirty) {
+    } else if (projState.currentImportedTranscriptPath && (projState.isImportedTranscriptDirty || projState.isImportedTranscriptMetadataDirty)) {
         itemIsDirty = true;
         itemPath = projState.currentImportedTranscriptPath;
         itemTypeForPrompt = 'imported transcript';
