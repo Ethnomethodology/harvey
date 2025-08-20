@@ -27,6 +27,12 @@
 
     let showColorPicker = false;
 
+    const highlightOptions = [
+        { value: '#FFF275', label: 'Yellow' }, { value: '#A8FF9E', label: 'Green' }, { value: '#AEEFFF', label: 'Blue' },
+        { value: '#FFB0CF', label: 'Pink' }, { value: '#D0A0FF', label: 'Purple' }, { value: 'transparent', label: 'None' }
+    ];
+    const highlightColors = highlightOptions.filter(o => o.value !== 'transparent').map(o => o.value);
+
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
     let currentMatchIndex = -1;
@@ -712,13 +718,18 @@
         const { color } = event.detail;
         if (!tabulatorInstance) return;
 
-        const selectedCells = tabulatorInstance.getSelectedCells();
-        if (selectedCells.length > 0) {
-            selectedCells.forEach(cell => {
-                cell.getElement().style.backgroundColor = color;
-            });
+        try {
+            const selectedCells = tabulatorInstance.getSelectedCells();
+            if (selectedCells.length > 0) {
+                selectedCells.forEach(cell => {
+                    cell.getElement().style.backgroundColor = color;
+                });
+            }
+        } catch (e) {
+            console.error("Error applying highlight:", e);
+        } finally {
+            showColorPicker = false;
         }
-        showColorPicker = false;
     }
 
     function clearHighlight() {
@@ -815,8 +826,9 @@
 
 <ColorPickerModal
     bind:showModal={showColorPicker}
+    colors={highlightColors}
     on:close={() => (showColorPicker = false)}
-    on:confirm={applyHighlight}
+    on:confirm={(e) => applyHighlight(e)}
 />
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
