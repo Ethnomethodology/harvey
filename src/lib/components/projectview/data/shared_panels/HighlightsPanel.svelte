@@ -2,7 +2,7 @@
 <script>
     import { get } from 'svelte/store';
     import { onDestroy } from 'svelte';
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations } from '$lib/stores/projectStore.js';
     import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
@@ -26,19 +26,17 @@
     // --- Reactive State based on itemType ---
     let activeHighlights = [];
     $: {
+        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
         if (itemType === 'imported_transcript') {
             activeHighlights = $project.currentImportedTranscriptHighlights || [];
+        } else if (isPdf) {
+            activeHighlights = $project.currentPdfAnnotations || [];
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }
     }
 
     $: selectedHighlightForComments = activeHighlights.find(h => h.id === selectedHighlightId) || null;
-
-    function handleAddComment(event) {
-        const { highlightId, comment } = event.detail;
-        addCommentToHighlight(highlightId, comment); // This seems to be generic, which is fine
-    }
 
     function groupHighlights(highlights) {
         if (!highlights || highlights.length === 0) {
@@ -52,7 +50,8 @@
                     color: highlight.color,
                     textParts: [],
                     tags: highlight.tags || [],
-                    comments: highlight.comments || []
+                    comments: highlight.comments || [],
+                    pageIndex: highlight.pageIndex // Capture pageIndex for PDFs
                 });
             }
             map.get(highlight.id).textParts.push(highlight.text);
@@ -66,8 +65,12 @@
     $: groupedHighlights = groupHighlights(activeHighlights);
 
     function handleHighlightsUpdate(newHighlights) {
+        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
         if (itemType === 'imported_transcript') {
             setImportedTranscriptHighlights(newHighlights);
+        } else if (isPdf) {
+            // We'll need a dedicated function for this in the store to handle the different state slice
+            updatePdfAnnotations(newHighlights, true); // `true` to mark dirty
         } else {
             setDocumentHighlights(newHighlights);
         }
@@ -85,10 +88,25 @@
 
     function handleCreateTag(newTag, highlightId) {
         addGlobalTag(newTag);
-        const highlight = $project.currentDocumentHighlights.find(h => h.id === highlightId);
+        const highlight = activeHighlights.find(h => h.id === highlightId);
         if (highlight && !highlight.tags?.includes(newTag)) {
             const newTags = [...(highlight.tags || []), newTag];
             handleTagsUpdate(highlightId, newTags);
+        }
+    }
+
+    function handleCommentAction(event) {
+        const { type, detail } = event;
+        const { highlightId, commentId, newText, comment } = detail;
+        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
+
+        // Pass itemType to the store actions (which will need to be generalized)
+        if (type === 'addcomment') {
+            addCommentToHighlight(highlightId, comment, isPdf ? 'pdf' : 'doc');
+        } else if (type === 'deletecomment') {
+            deleteComment(highlightId, commentId, isPdf ? 'pdf' : 'doc');
+        } else if (type === 'editcomment') {
+            updateComment(highlightId, commentId, newText, isPdf ? 'pdf' : 'doc');
         }
     }
 </script>
@@ -104,6 +122,9 @@
                 {#each groupedHighlights as highlight (highlight.id)}
                     <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
+                            {#if highlight.pageIndex !== undefined && highlight.pageIndex !== null}
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Page {highlight.pageIndex + 1}</p>
+                            {/if}
                             <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                         </div>
                         <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex flex-col">
@@ -154,7 +175,7 @@
     comments={selectedHighlightForComments?.comments || []}
     highlightId={selectedHighlightForComments?.id}
     on:close={closeModal}
-    on:addcomment={handleAddComment}
-    on:deletecomment={(e) => deleteComment(e.detail.highlightId, e.detail.commentId)}
-    on:editcomment={(e) => updateComment(e.detail.highlightId, e.detail.commentId, e.detail.newText)}
+    on:addcomment={(e) => handleCommentAction(e)}
+    on:deletecomment={(e) => handleCommentAction(e)}
+    on:editcomment={(e) => handleCommentAction(e)}
 />

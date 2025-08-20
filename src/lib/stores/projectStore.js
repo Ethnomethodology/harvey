@@ -285,51 +285,91 @@ export function setDocumentHighlights(highlights) {
     });
     highlightsLastUpdated.set(new Date());
 }
-export function addCommentToHighlight(highlightId, comment) {
+
+export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
     project.update(p => {
-        const highlights = p.currentDocumentHighlights.map(h => {
-            if (h.id === highlightId) {
-                const newComments = [...(h.comments || []), comment];
-                return { ...h, comments: newComments };
-            }
-            return h;
-        });
-        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        if (docType === 'pdf') {
+            const highlights = p.currentPdfAnnotations.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = [...(h.comments || []), comment];
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+        } else {
+            const highlights = p.currentDocumentHighlights.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = [...(h.comments || []), comment];
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        }
     });
 }
 
-export function updateComment(highlightId, commentId, newText) {
+export function updateComment(highlightId, commentId, newText, docType = 'doc') {
     project.update(p => {
-        const highlights = p.currentDocumentHighlights.map(h => {
-            if (h.id === highlightId) {
-                const newComments = h.comments.map(c => {
-                    if (c.id === commentId) {
-                        return { ...c, text: newText, updatedAt: new Date().toISOString() };
-                    }
-                    return c;
-                });
-                return { ...h, comments: newComments };
-            }
-            return h;
-        });
-        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        if (docType === 'pdf') {
+             const highlights = p.currentPdfAnnotations.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = h.comments.map(c => {
+                        if (c.id === commentId) {
+                            return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                        }
+                        return c;
+                    });
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+        } else {
+            const highlights = p.currentDocumentHighlights.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = h.comments.map(c => {
+                        if (c.id === commentId) {
+                            return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                        }
+                        return c;
+                    });
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        }
     });
 }
 
-export function deleteComment(highlightId, commentId) {
+export function deleteComment(highlightId, commentId, docType = 'doc') {
     project.update(p => {
-        const highlights = p.currentDocumentHighlights.map(h => {
-            if (h.id === highlightId) {
-                // Also remove any replies to the comment being deleted
-                const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
-                return { ...h, comments: newComments };
-            }
-            return h;
-        });
-        return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        if (docType === 'pdf') {
+            const highlights = p.currentPdfAnnotations.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+        } else {
+            const highlights = p.currentDocumentHighlights.map(h => {
+                if (h.id === highlightId) {
+                    const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+                    return { ...h, comments: newComments };
+                }
+                return h;
+            });
+            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+        }
     });
 }
+
 export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
+
 export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
@@ -352,7 +392,60 @@ export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
         return p;
     });
 }
-export function updatePdfAnnotations(pdfHighlightEvent) { project.update(p => { if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : []; let { type, id, ...highlightData } = pdfHighlightEvent; if (!type || type === 'pdfHighlight') type = 'add'; let annotationChanged = false; if (type === 'add') { const existingIndex = annotations.findIndex(h => h.id === id); const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() }; if (existingIndex === -1) { annotations.push(newAnnotation); annotationChanged = true; } else { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) { annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation }; annotationChanged = true; } } } else if (type === 'remove') { const initialLength = annotations.length; annotations = annotations.filter(h => h.id !== id); if (annotations.length < initialLength) { annotationChanged = true; } } else if (type === 'update') { const existingIndex = annotations.findIndex(h => h.id === id); if (existingIndex !== -1) { if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) { annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() }; annotationChanged = true;  } } } if (annotationChanged) { return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true }; } return p; }); }
+
+export function updatePdfAnnotations(pdfHighlightEvent, isFullArray = false) {
+    project.update(p => {
+        if (!p.selectedDocumentPath || !p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; }
+
+        if (isFullArray) {
+            const newAnnotations = pdfHighlightEvent; // In this case, the event is the full array.
+            const initialJson = JSON.stringify(p.initialPdfAnnotations);
+            const currentJson = JSON.stringify(newAnnotations);
+            const isDirty = initialJson !== currentJson;
+            return { ...p, currentPdfAnnotations: newAnnotations, isPdfAnnotationsDirty: isDirty };
+        }
+
+        // --- Logic for single event object ---
+        let annotations = Array.isArray(p.currentPdfAnnotations) ? JSON.parse(JSON.stringify(p.currentPdfAnnotations)) : [];
+        let { type, id, ...highlightData } = pdfHighlightEvent;
+        if (!type || type === 'pdfHighlight') type = 'add';
+        let annotationChanged = false;
+
+        if (type === 'add') {
+            const existingIndex = annotations.findIndex(h => h.id === id);
+            const newAnnotation = { id, ...highlightData, timestamp: new Date().toISOString() };
+            if (existingIndex === -1) {
+                annotations.push(newAnnotation);
+                annotationChanged = true;
+            } else {
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...newAnnotation })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...newAnnotation };
+                    annotationChanged = true;
+                }
+            }
+        } else if (type === 'remove') {
+            const initialLength = annotations.length;
+            annotations = annotations.filter(h => h.id !== id);
+            if (annotations.length < initialLength) {
+                annotationChanged = true;
+            }
+        } else if (type === 'update') {
+            const existingIndex = annotations.findIndex(h => h.id === id);
+            if (existingIndex !== -1) {
+                if (JSON.stringify(annotations[existingIndex]) !== JSON.stringify({ ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() })) {
+                    annotations[existingIndex] = { ...annotations[existingIndex], ...highlightData, timestamp: new Date().toISOString() };
+                    annotationChanged = true;
+                }
+            }
+        }
+
+        if (annotationChanged) {
+            return { ...p, currentPdfAnnotations: annotations, isPdfAnnotationsDirty: true, isDocumentDirty: true };
+        }
+        return p;
+    });
+}
+
 export function markPdfAnnotationsDirty(updatedAnnotations = null) { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: true, isDocumentDirty: false, currentPdfAnnotations: updatedAnnotations !== null ? updatedAnnotations : p.currentPdfAnnotations }; } return p; }); }
 export function markPdfAnnotationsAsSaved() { project.update(p => { if (p.selectedDocumentPath && p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return { ...p, isPdfAnnotationsDirty: false, isDocumentDirty: false, initialPdfAnnotations: JSON.parse(JSON.stringify(p.currentPdfAnnotations)), statusMessage: 'PDF annotations saved.' }; } return p; }); }
 export function setLoadedPdfAnnotations(annotationsArray) { project.update(p => ({ ...p, currentPdfAnnotations: Array.isArray(annotationsArray) ? annotationsArray : [], initialPdfAnnotations: Array.isArray(annotationsArray) ? JSON.parse(JSON.stringify(annotationsArray)) : [], isPdfAnnotationsDirty: false, isDocumentLoading: false, isLoading: false }));}
