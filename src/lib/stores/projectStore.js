@@ -70,7 +70,6 @@ const initialState = {
     initialImportedTranscriptLexicalJson: null,
     isImportedTranscriptDirty: false,
     isImportedTranscriptLoading: false,
-    setImportedTranscriptHighlights,
     importedTranscriptError: null,
     activeImportedTranscriptEditorRef: null,
 
@@ -399,7 +398,7 @@ export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { 
 export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
 export function setImportedTranscriptEditorContent(filePath, newLexicalJsonContent) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const initial = p.initialImportedTranscriptLexicalJson; const current = p.currentImportedTranscriptLexicalJson; const isNewDifferentFromInitial = initial !== newLexicalJsonContent; const newDirtyState = isNewDifferentFromInitial; if (current !== newLexicalJsonContent || p.isImportedTranscriptDirty !== newDirtyState) { return { ...p, currentImportedTranscriptLexicalJson: newLexicalJsonContent, isImportedTranscriptDirty: newDirtyState, }; } } return p; }); }
 export function setImportedTranscriptHighlights(highlights, markDirty = true) {
-    update(store => {
+    project.update(store => {
         const initialJson = JSON.stringify(store.initialImportedTranscriptHighlights);
         const currentJson = JSON.stringify(highlights);
 
