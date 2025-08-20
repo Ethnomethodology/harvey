@@ -2,6 +2,7 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
+    import ColorPickerModal from '$lib/components/projectview/lexical/ColorPickerModal.svelte';
     import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
     import { get } from 'svelte/store'; // To read store value
@@ -23,6 +24,8 @@
     let customMenuX = 0;
     let customMenuY = 0;
     let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
+
+    let showColorPicker = false;
 
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
@@ -534,7 +537,18 @@
                             cell.setValue("");
                         }
                     },
-                    
+                    {
+                        label: "Highlight Color...",
+                        action: function(e, cell) {
+                            showColorPicker = true;
+                        }
+                    },
+                    {
+                        label: "Clear Highlight",
+                        action: function(e, cell) {
+                            clearHighlight();
+                        }
+                    }
                 ]
             };
 
@@ -694,6 +708,30 @@
 
     const self = { save };
 
+    function applyHighlight(event) {
+        const { color } = event.detail;
+        if (!tabulatorInstance) return;
+
+        const selectedCells = tabulatorInstance.getSelectedCells();
+        if (selectedCells.length > 0) {
+            selectedCells.forEach(cell => {
+                cell.getElement().style.backgroundColor = color;
+            });
+        }
+        showColorPicker = false;
+    }
+
+    function clearHighlight() {
+        if (!tabulatorInstance) return;
+
+        const selectedCells = tabulatorInstance.getSelectedCells();
+        if (selectedCells.length > 0) {
+            selectedCells.forEach(cell => {
+                cell.getElement().style.backgroundColor = '';
+            });
+        }
+    }
+
     async function handleSaveHeader() {
         if (!currentColumnComponent || editingHeader.newName.trim() === '') return;
 
@@ -774,6 +812,12 @@
     </ul>
 </div>
 {/if}
+
+<ColorPickerModal
+    bind:showModal={showColorPicker}
+    on:close={() => (showColorPicker = false)}
+    on:confirm={applyHighlight}
+/>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
