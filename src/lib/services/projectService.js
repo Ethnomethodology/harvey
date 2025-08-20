@@ -344,7 +344,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             
             selectMedia(mediaFileToSelect);
         
-            selectMedia(null);
+            
         }
     } catch (error) {
         console.error('[ProjectService] Failed to load project data:', error);

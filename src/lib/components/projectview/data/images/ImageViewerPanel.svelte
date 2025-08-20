@@ -3,7 +3,8 @@
     import { convertFileSrc } from '@tauri-apps/api/core';
     import { sep } from '@tauri-apps/api/path';
     import { get, derived } from 'svelte/store';
-    import { project, updateImageAnnotations, saveImageAnnotations } from '$lib/stores/projectStore.js';
+    import { project, updateImageAnnotations } from '$lib/stores/projectStore.js';
+    import { saveImageAnnotations } from '$lib/services/projectService.js';
     import OpenSeadragon from 'openseadragon';
     import { v4 as uuidv4 } from 'uuid';
 

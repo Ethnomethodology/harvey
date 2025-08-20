@@ -3,7 +3,8 @@
     import { get } from 'svelte/store';
     import { onDestroy } from 'svelte';
 
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, saveImageAnnotations } from '$lib/stores/projectStore.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations } from '$lib/stores/projectStore.js';
+    import { saveImageAnnotations } from '$lib/services/projectService.js';
     import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';

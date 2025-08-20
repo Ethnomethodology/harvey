@@ -65,7 +65,7 @@
                 itemTypeForInfo = 'table';
             } else if (IMAGE_EXTENSIONS_SET.has(extension)) {
                 typeFromStore = 'images';
-                itemTypeForInfo = 'image';
+                itemTypeForInfo = 'images';
             } else {
                 console.warn(`[DataView Store Sub] Path ${pathFromStore} (from selectedDocumentPath) has undetermined type.`);
                 typeFromStore = 'placeholder';
