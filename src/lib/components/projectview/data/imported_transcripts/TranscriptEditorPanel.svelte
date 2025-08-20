@@ -10,7 +10,9 @@
         setActiveImportedTranscriptEditorRef,
         clearActiveImportedTranscriptEditorRef,
         setLoadedImportedTranscriptData,
-        setImportedTranscriptLoadFailed
+        setImportedTranscriptLoadFailed,
+        setDocumentHighlights,
+        highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
     import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -400,6 +402,11 @@
     // --- REMOVED lexicalTableToSegments function ---
     // It is no longer needed for saving
 
+    function handleHighlightsChange(event) {
+        const { highlights } = event.detail;
+        setDocumentHighlights(highlights);
+    }
+
     // --- Editor Change Handler (Unchanged) ---
     function handleEditorChange(event) {
         clearTimeout(changeDebounceTimeout);
@@ -446,10 +453,15 @@
 
             project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
 
+            const highlights_json = ($project.isDocumentMetadataDirty && $project.currentDocumentHighlights?.length > 0)
+                ? JSON.stringify($project.currentDocumentHighlights)
+                : null;
+
             // Use the same backend command used for documents
             await invoke('save_note_json', {
                 targetPath: itemPath,
-                jsonContent: finalJsonToSave // Save the full Lexical state
+                jsonContent: finalJsonToSave, // Save the full Lexical state
+                highlightsJson: highlights_json
             });
 
             // Update the store's initial state to match the saved state
@@ -577,6 +589,8 @@ onMount(() => {
                      editable={true}
                      placeholder="Transcript content will appear here as a table..."
                      on:change={handleEditorChange}
+                     on:highlightschange={handleHighlightsChange}
+                     on:highlightssaved={() => highlightsLastUpdated.set(new Date())}
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
@@ -585,6 +599,8 @@ onMount(() => {
                         search: true
                      }}
                      enableSearch={true}
+                     documentPath={itemPath}
+                     documentHighlights={$project.currentDocumentHighlights}
                  />
             {/key}
         </div>
