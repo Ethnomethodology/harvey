@@ -121,13 +121,13 @@
                     </li>
                 {/each}
             </ul>
-        {:else if itemType === 'doc'}
+        {:else if itemType === 'doc' || itemType === 'media'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
-                No highlights present for this document.
+                No highlights for this item.
             </p>
         {:else}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
-                Highlights are only available for document files.
+                Highlights are not available for this item type.
             </p>
         {/if}
     </div>
