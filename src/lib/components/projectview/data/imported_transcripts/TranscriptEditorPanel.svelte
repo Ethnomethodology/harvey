@@ -128,18 +128,12 @@
     });
 
     // --- Path Change Reaction (REFACTORED) ---
-    let hasLoadedOnceForPath = null; // Prevent re-loading on non-path changes
-    $: if (itemPath && editorRef) {
-        // Only trigger if the path is new
-        if (itemPath !== hasLoadedOnceForPath) {
-            console.log(`[TranscriptEditorPanel] Reactive trigger for new path: ${itemPath}`);
-            hasLoadedOnceForPath = itemPath;
-            loadAndConvertTranscript(itemPath);
-            loadHighlightsForTranscript(itemPath);
-        }
-    } else if (!itemPath && hasLoadedOnceForPath) {
-        // Reset when itemPath becomes null to allow re-loading if it's selected again
-        hasLoadedOnceForPath = null;
+    let prevPath = itemPath;
+    $: if (itemPath && itemPath !== prevPath) {
+        console.log(`[TranscriptEditorPanel] Path prop changed from ${prevPath} to ${itemPath}. Reloading.`);
+        prevPath = itemPath;
+        loadAndConvertTranscript(itemPath);
+        loadHighlightsForTranscript(itemPath);
     }
 
     async function loadHighlightsForTranscript(path) {
@@ -552,7 +546,12 @@
     onMount(() => {
         console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath);
         setActiveImportedTranscriptEditorRef({ ref: self });
-        // The reactive `$: if (itemPath && editorRef)` block now handles all load logic.
+        if (itemPath) {
+            loadAndConvertTranscript(itemPath);
+            loadHighlightsForTranscript(itemPath);
+        } else {
+            isLoading = false;
+        }
     });
 
 	onDestroy(() => {
