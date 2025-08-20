@@ -98,15 +98,19 @@
     function handleCommentAction(event) {
         const { type, detail } = event;
         const { highlightId, commentId, newText, comment } = detail;
-        const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
 
-        // Pass itemType to the store actions (which will need to be generalized)
+        let docType = itemType;
+        if (itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf')) {
+            docType = 'pdf';
+        }
+
+        // Pass itemType to the store actions
         if (type === 'addcomment') {
-            addCommentToHighlight(highlightId, comment, isPdf ? 'pdf' : 'doc');
+            addCommentToHighlight(highlightId, comment, docType);
         } else if (type === 'deletecomment') {
-            deleteComment(highlightId, commentId, isPdf ? 'pdf' : 'doc');
+            deleteComment(highlightId, commentId, docType);
         } else if (type === 'editcomment') {
-            updateComment(highlightId, commentId, newText, isPdf ? 'pdf' : 'doc');
+            updateComment(highlightId, commentId, newText, docType);
         }
     }
 </script>

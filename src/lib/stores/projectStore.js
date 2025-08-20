@@ -288,83 +288,96 @@ export function setDocumentHighlights(highlights) {
 
 export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
     project.update(p => {
+        let highlights, key, dirtyFlag;
+
         if (docType === 'pdf') {
-            const highlights = p.currentPdfAnnotations.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = [...(h.comments || []), comment];
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
         } else {
-            const highlights = p.currentDocumentHighlights.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = [...(h.comments || []), comment];
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
         }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = [...(h.comments || []), comment];
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
 export function updateComment(highlightId, commentId, newText, docType = 'doc') {
     project.update(p => {
+        let highlights, key, dirtyFlag;
+
         if (docType === 'pdf') {
-             const highlights = p.currentPdfAnnotations.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = h.comments.map(c => {
-                        if (c.id === commentId) {
-                            return { ...c, text: newText, updatedAt: new Date().toISOString() };
-                        }
-                        return c;
-                    });
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
         } else {
-            const highlights = p.currentDocumentHighlights.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = h.comments.map(c => {
-                        if (c.id === commentId) {
-                            return { ...c, text: newText, updatedAt: new Date().toISOString() };
-                        }
-                        return c;
-                    });
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
         }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = h.comments.map(c => {
+                    if (c.id === commentId) {
+                        return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                    }
+                    return c;
+                });
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
 export function deleteComment(highlightId, commentId, docType = 'doc') {
     project.update(p => {
+        let highlights, key, dirtyFlag;
+
         if (docType === 'pdf') {
-            const highlights = p.currentPdfAnnotations.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentPdfAnnotations: highlights, isPdfAnnotationsDirty: true };
+            highlights = p.currentPdfAnnotations;
+            key = 'currentPdfAnnotations';
+            dirtyFlag = 'isPdfAnnotationsDirty';
+        } else if (docType === 'imported_transcript') {
+            highlights = p.currentImportedTranscriptHighlights;
+            key = 'currentImportedTranscriptHighlights';
+            dirtyFlag = 'isImportedTranscriptMetadataDirty';
         } else {
-            const highlights = p.currentDocumentHighlights.map(h => {
-                if (h.id === highlightId) {
-                    const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
-                    return { ...h, comments: newComments };
-                }
-                return h;
-            });
-            return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
+            highlights = p.currentDocumentHighlights;
+            key = 'currentDocumentHighlights';
+            dirtyFlag = 'isDocumentMetadataDirty';
         }
+
+        const newHighlights = highlights.map(h => {
+            if (h.id === highlightId) {
+                const newComments = h.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+                return { ...h, comments: newComments };
+            }
+            return h;
+        });
+
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
