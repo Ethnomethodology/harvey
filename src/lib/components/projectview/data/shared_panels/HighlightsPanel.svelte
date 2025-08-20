@@ -121,7 +121,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if itemType === 'doc' || itemType === 'media'}
+        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>

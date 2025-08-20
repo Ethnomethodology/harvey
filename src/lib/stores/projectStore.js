@@ -537,22 +537,21 @@ export async function switchTranscriptInDataTab(newTranscriptPath) {
             type: 'warning',
         });
         if (!userConfirmed) {
-            // To prevent the dropdown from looking like it changed, we need to reset the store's active path
-            // to what it was, which forces the UI to revert.
-            const originalPath = proj.activeTranscriptPathInDataTab;
-            project.update(p => ({ ...p, activeTranscriptPathInDataTab: null }));
-            setTimeout(() => project.update(p => ({ ...p, activeTranscriptPathInDataTab: originalPath })), 0);
             return;
         }
     }
 
     project.update(p => {
+        // Find the media file associated with the newTranscriptPath
+        // This assumes that the media file entry contains associated_transcripts with their paths
         let mediaFileForNewTranscript = null;
         function findMediaFileByTranscriptPath(nodes, transcriptPath) {
             if (!Array.isArray(nodes)) return null;
             for (const node of nodes) {
-                if (node.file_type === 'media' && node.associated_transcripts?.some(t => t.path === transcriptPath)) {
-                    return node;
+                if (node.file_type === 'media' && node.associated_transcripts) {
+                    if (node.associated_transcripts.some(t => t.path === transcriptPath)) {
+                        return node;
+                    }
                 }
                 if (node.children) {
                     const found = findMediaFileByTranscriptPath(node.children, transcriptPath);
@@ -567,32 +566,14 @@ export async function switchTranscriptInDataTab(newTranscriptPath) {
         return {
             ...p,
             activeTranscriptPathInDataTab: newTranscriptPath,
+            // Update selectedMediaNotePath to trigger MediaEditorPanel to load the correct media
             selectedMediaNotePath: mediaFileForNewTranscript ? mediaFileForNewTranscript.path : p.selectedMediaNotePath,
             isMediaNoteTranscriptLoading: true,
             mediaNoteTranscriptError: null,
-            // Also clear highlights immediately before loading new ones
-            currentDocumentHighlights: [],
-            isDocumentMetadataDirty: false,
         };
     });
 
-    // This will trigger the load in MediaEditorPanel, and now we also load metadata
-    if (newTranscriptPath) {
-        import('$lib/services/projectService.js').then(async service => {
-            const meta = await service.loadDocumentMetadata(newTranscriptPath);
-            project.update(p => {
-                if (p.activeTranscriptPathInDataTab === newTranscriptPath) {
-                    return {
-                        ...p,
-                        currentDocumentFileLevelMetadata: meta?.metadata || { file_name: '', last_modified: '', title: '', description: '', summary: '' },
-                        currentDocumentHighlights: meta?.highlights || [],
-                        isDocumentMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
-        });
-    }
+    // This will trigger the load in MediaEditorPanel
 }
 
 export function setMediaNoteTranscriptLoadFailed(mediaPath, errorMsg, isFileNotFound = false) {
