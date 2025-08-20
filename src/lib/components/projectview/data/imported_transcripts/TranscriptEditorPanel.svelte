@@ -11,7 +11,7 @@
         clearActiveImportedTranscriptEditorRef,
         setLoadedImportedTranscriptData,
         setImportedTranscriptLoadFailed,
-        setDocumentHighlights,
+        setImportedTranscriptHighlights,
         highlightsLastUpdated
     } from '$lib/stores/projectStore.js';
     import { invoke } from '@tauri-apps/api/core';
@@ -66,6 +66,11 @@
     let selectedPath = null;
     let errorMessage = null;
 
+    // New state for highlights
+    let initialHighlights = [];
+    let currentHighlights = [];
+    let isMetadataDirty = false;
+
     const ALL_CONVERSION_NODES = [
         RootNode, ParagraphNode, TextNode, ExtendedTextNode, LineBreakNode,
         HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode,
@@ -98,6 +103,18 @@
             if (errorMessage !== p.importedTranscriptError) {
                 errorMessage = p.importedTranscriptError;
             }
+
+            // Sync highlight state
+            if (initialHighlights !== p.initialImportedTranscriptHighlights) {
+                initialHighlights = p.initialImportedTranscriptHighlights;
+            }
+            if (currentHighlights !== p.currentImportedTranscriptHighlights) {
+                currentHighlights = p.currentImportedTranscriptHighlights;
+            }
+            if (isMetadataDirty !== p.isImportedTranscriptMetadataDirty) {
+                isMetadataDirty = p.isImportedTranscriptMetadataDirty;
+            }
+
         } else if (itemPath && p.currentImportedTranscriptPath !== itemPath && selectedPath === itemPath) {
             selectedPath = null;
             currentLexicalJson = null;
@@ -105,6 +122,11 @@
             isDirty = false;
             isLoading = false;
             errorMessage = null;
+
+            initialHighlights = [];
+            currentHighlights = [];
+            isMetadataDirty = false;
+
             if (editorRef) editorRef.resetEditorState('');
             editorJsonState = '';
         }
@@ -116,6 +138,7 @@
         prevPath = itemPath;
         console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
         loadAndConvertTranscript(itemPath);
+        loadHighlightsForTranscript(itemPath);
     } else if (!itemPath && prevPath) {
         prevPath = null;
         selectedPath = null;
@@ -125,6 +148,51 @@
         errorMessage = null;
         if (get(project).currentImportedTranscriptPath === prevPath) {
             setLoadedImportedTranscriptData(null, null);
+        }
+    }
+
+    async function loadHighlightsForTranscript(path) {
+        if (!path) {
+            project.update(p => ({
+                ...p,
+                initialImportedTranscriptHighlights: [],
+                currentImportedTranscriptHighlights: [],
+                isImportedTranscriptMetadataDirty: false
+            }));
+            return;
+        }
+        try {
+            const loaded = await invoke('load_lexical_highlights', {
+                args: {
+                    projectId: get(project).id,
+                    documentPath: path,
+                }
+            });
+            const highlights = loaded ? JSON.parse(loaded) : [];
+            project.update(p => {
+                if (p.currentImportedTranscriptPath === path) {
+                    return {
+                        ...p,
+                        initialImportedTranscriptHighlights: highlights,
+                        currentImportedTranscriptHighlights: JSON.parse(JSON.stringify(highlights)),
+                        isImportedTranscriptMetadataDirty: false,
+                    };
+                }
+                return p;
+            });
+        } catch (e) {
+            console.error("Error loading lexical highlights for transcript:", e);
+            project.update(p => {
+                if (p.currentImportedTranscriptPath === path) {
+                    return {
+                        ...p,
+                        initialImportedTranscriptHighlights: [],
+                        currentImportedTranscriptHighlights: [],
+                        isImportedTranscriptMetadataDirty: false,
+                    };
+                }
+                return p;
+            });
         }
     }
 
@@ -404,7 +472,7 @@
 
     function handleHighlightsChange(event) {
         const { highlights } = event.detail;
-        setDocumentHighlights(highlights);
+        setImportedTranscriptHighlights(highlights);
     }
 
     // --- Editor Change Handler (Unchanged) ---
@@ -453,8 +521,8 @@
 
             project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
 
-            const highlights_json = ($project.isDocumentMetadataDirty && $project.currentDocumentHighlights?.length > 0)
-                ? JSON.stringify($project.currentDocumentHighlights)
+            const highlights_json = (isMetadataDirty && currentHighlights)
+                ? JSON.stringify(currentHighlights)
                 : null;
 
             // Use the same backend command used for documents
@@ -600,7 +668,8 @@ onMount(() => {
                      }}
                      enableSearch={true}
                      documentPath={itemPath}
-                     documentHighlights={$project.currentDocumentHighlights}
+                     initialHighlights={initialHighlights}
+                     documentHighlights={currentHighlights}
                  />
             {/key}
         </div>

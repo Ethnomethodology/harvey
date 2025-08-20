@@ -73,6 +73,10 @@ const initialState = {
     importedTranscriptError: null,
     activeImportedTranscriptEditorRef: null,
 
+    initialImportedTranscriptHighlights: [],
+    currentImportedTranscriptHighlights: [],
+    isImportedTranscriptMetadataDirty: false,
+
     selectedMediaNotePath: null,
     currentMediaNoteTranscriptJson: null,
     initialMediaNoteTranscriptJson: null,
@@ -261,9 +265,8 @@ export function setDocumentHighlights(highlights) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
         const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
-        const isImportedTranscriptActive = !!p.currentImportedTranscriptPath;
 
-        if (!isDocActive && !isMediaNoteActive && !isImportedTranscriptActive) {
+        if (!isDocActive && !isMediaNoteActive) {
             return p;
         }
 
@@ -329,6 +332,28 @@ export function deleteComment(highlightId, commentId) {
         return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
     });
 }
+
+export function setImportedTranscriptHighlights(highlights) {
+    project.update(p => {
+        if (!p.currentImportedTranscriptPath) return p;
+
+        highlights.forEach(h => {
+            if (h.tags && Array.isArray(h.tags)) {
+                h.tags.forEach(tag => addTag(tag));
+            }
+        });
+
+        if (JSON.stringify(p.currentImportedTranscriptHighlights) !== JSON.stringify(highlights)) {
+            return {
+                ...p,
+                currentImportedTranscriptHighlights: highlights,
+                isImportedTranscriptMetadataDirty: true
+            };
+        }
+        return p;
+    });
+}
+
 export function updateDocumentHighlights(newHighlightEvent) { const currentPath = get(project).selectedDocumentPath; if (currentPath && currentPath.toLowerCase().endsWith('.pdf')) { updatePdfAnnotations(newHighlightEvent); return; } project.update(p => { if (!p.selectedDocumentPath || p.selectedDocumentPath.toLowerCase().endsWith('.pdf')) { return p; } let highlights = JSON.parse(JSON.stringify(p.currentDocumentHighlights || [])); const { type, id, text, nodeKey, color } = newHighlightEvent; if (type === 'add') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'add' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); const newHighlightData = { id, text, nodeKey, color: color || 'transparent', codes: [], comments: [], timestamp: new Date().toISOString() }; if (existingIndex === -1) highlights.push(newHighlightData); else highlights[existingIndex] = { ...newHighlightData, codes: highlights[existingIndex].codes || [], comments: highlights[existingIndex].comments || [] }; } else if (type === 'remove') { highlights = highlights.filter(h => h.id !== id); } else if (type === 'update') { if (!nodeKey) { console.warn("[ProjectStore updateDocumentHighlights] 'update' event missing nodeKey for Lexical doc."); return p; } const existingIndex = highlights.findIndex(h => h.id === id); if (existingIndex !== -1) { highlights[existingIndex] = { ...highlights[existingIndex], text, nodeKey, color: color || highlights[existingIndex].color, timestamp: new Date().toISOString() }; } } return { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true }; }); }
 export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
     project.update(p => {
@@ -371,6 +396,7 @@ export function prepareImportedTranscriptView(filePath) {
             ...p,
             selectedGroupId: filePath ? null : p.selectedGroupId,
             selectedGroupData: filePath ? null : p.selectedGroupData,
+
             currentImportedTranscriptPath: filePath,
             currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
             initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
@@ -378,8 +404,14 @@ export function prepareImportedTranscriptView(filePath) {
             isImportedTranscriptLoading: finalIsImportedTranscriptLoading,
             importedTranscriptError: null,
             activeImportedTranscriptEditorRef: isReselectingSameLoadedPath ? p.activeImportedTranscriptEditorRef : null,
+
+            initialImportedTranscriptHighlights: isReselectingSameLoadedPath ? p.initialImportedTranscriptHighlights : [],
+            currentImportedTranscriptHighlights: isReselectingSameLoadedPath ? p.currentImportedTranscriptHighlights : [],
+            isImportedTranscriptMetadataDirty: isReselectingSameLoadedPath ? p.isImportedTranscriptMetadataDirty : false,
+
             statusMessage: finalStatusMessage,
             isLoading: finalIsGlobalLoading,
+
             selectedDocumentPath: null,
             currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, documentError: null, activeDocumentEditorRef: null,
             currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' },
@@ -389,23 +421,6 @@ export function prepareImportedTranscriptView(filePath) {
             currentMediaNoteTranscriptJson: null, initialMediaNoteTranscriptJson: null, isMediaNoteTranscriptDirty: false, mediaNoteTranscriptError: null, isMediaNoteTranscriptLoading: false, activeMediaNoteEditorRef: null,
         };
     });
-
-    if (filePath) {
-        import('$lib/services/projectService.js').then(async service => {
-            const meta = await service.loadDocumentMetadata(filePath);
-            project.update(p => {
-                if (p.currentImportedTranscriptPath === filePath) {
-                    return {
-                        ...p,
-                        currentDocumentFileLevelMetadata: meta?.metadata || { file_name: '', last_modified: '', title: '', description: '', summary: '' },
-                        currentDocumentHighlights: meta?.highlights || [],
-                        isDocumentMetadataDirty: false,
-                    };
-                }
-                return p;
-            });
-        });
-    }
 }
 export function setLoadedImportedTranscriptData(filePath, lexicalJsonContent) { const minimalValidJson = createMinimalValidLexicalJson(); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { const isValid = lexicalJsonContent && typeof lexicalJsonContent === 'string' && lexicalJsonContent.length > 2; return { ...p, currentImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, initialImportedTranscriptLexicalJson: isValid ? lexicalJsonContent : minimalValidJson, isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: isValid ? null : "Loaded content was invalid, showing empty editor.", statusMessage: `Loaded imported transcript: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; } }); }
 export function setImportedTranscriptLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Imported transcript load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), initialImportedTranscriptLexicalJson: createMinimalValidLexicalJson(), isImportedTranscriptDirty: false, isImportedTranscriptLoading: false, importedTranscriptError: `Failed to load transcript: ${errorMsg}`, statusMessage: `Error loading imported transcript ${filePath.split(/[\\/]/).pop()}.`, activeImportedTranscriptEditorRef: null, isLoading: false }; } else if (p.isImportedTranscriptLoading && p.currentImportedTranscriptPath === filePath) { return { ...p, isImportedTranscriptLoading: false, isLoading: false }; } return p; }); }
@@ -413,19 +428,35 @@ export function setImportedTranscriptEditorContent(filePath, newLexicalJsonConte
 export function markImportedTranscriptAsSaved(filePath, savedLexicalJsonContent) {
     project.update(p => {
         if (p.currentImportedTranscriptPath === filePath) {
+            const newInitialHighlights = JSON.parse(JSON.stringify(p.currentImportedTranscriptHighlights));
             return {
                 ...p,
                 initialImportedTranscriptLexicalJson: savedLexicalJsonContent,
                 currentImportedTranscriptLexicalJson: savedLexicalJsonContent,
                 isImportedTranscriptDirty: false,
-                isDocumentMetadataDirty: false, // Also reset highlights dirty flag
+                initialImportedTranscriptHighlights: newInitialHighlights,
+                isImportedTranscriptMetadataDirty: false,
                 statusMessage: `Imported transcript saved: ${filePath.split(/[\\/]/).pop()}`
             };
         }
         return p;
     });
 }
-export function markImportedTranscriptChangesDiscarded(filePath) { project.update(p => { if (p.currentImportedTranscriptPath === filePath) { return { ...p, currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson, isImportedTranscriptDirty: false, statusMessage: 'Imported transcript changes discarded.'}; } return p; }); }
+export function markImportedTranscriptChangesDiscarded(filePath) {
+    project.update(p => {
+        if (p.currentImportedTranscriptPath === filePath) {
+            return {
+                ...p,
+                currentImportedTranscriptLexicalJson: p.initialImportedTranscriptLexicalJson,
+                isImportedTranscriptDirty: false,
+                currentImportedTranscriptHighlights: p.initialImportedTranscriptHighlights,
+                isImportedTranscriptMetadataDirty: false,
+                statusMessage: 'Imported transcript changes discarded.'
+            };
+        }
+        return p;
+    });
+}
 export function setActiveImportedTranscriptEditorRef(editorInstance) { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: editorInstance })); }
 export function clearActiveImportedTranscriptEditorRef() { project.update(p => ({ ...p, activeImportedTranscriptEditorRef: null })); }
 
