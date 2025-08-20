@@ -127,23 +127,19 @@
         }
     });
 
-    // --- Path Change Reaction (MODIFIED) ---
-    let prevPath = null;
-    $: if (itemPath && itemPath !== prevPath && editorRef) {
-        prevPath = itemPath;
-        console.log(`[TranscriptEditorPanel] Path changed to: ${itemPath}`);
-        loadAndConvertTranscript(itemPath);
-        loadHighlightsForTranscript(itemPath);
-    } else if (!itemPath && prevPath) {
-        prevPath = null;
-        selectedPath = null;
-        editorJsonState = '';
-        if (editorRef) editorRef.resetEditorState('');
-        isLoading = false;
-        errorMessage = null;
-        if (get(project).currentImportedTranscriptPath === prevPath) {
-            setLoadedImportedTranscriptData(null, null);
+    // --- Path Change Reaction (REFACTORED) ---
+    let hasLoadedOnceForPath = null; // Prevent re-loading on non-path changes
+    $: if (itemPath && editorRef) {
+        // Only trigger if the path is new
+        if (itemPath !== hasLoadedOnceForPath) {
+            console.log(`[TranscriptEditorPanel] Reactive trigger for new path: ${itemPath}`);
+            hasLoadedOnceForPath = itemPath;
+            loadAndConvertTranscript(itemPath);
+            loadHighlightsForTranscript(itemPath);
         }
+    } else if (!itemPath && hasLoadedOnceForPath) {
+        // Reset when itemPath becomes null to allow re-loading if it's selected again
+        hasLoadedOnceForPath = null;
     }
 
     async function loadHighlightsForTranscript(path) {
@@ -552,34 +548,12 @@
         }
     }
 
-    // --- Mount/Destroy and Exported Functions (Unchanged) ---
-onMount(() => {
-    console.log('[TranscriptEditorPanel] Mounted with path:', itemPath);
-    setActiveImportedTranscriptEditorRef({ ref: self });
-    if (itemPath && !currentLexicalJson && !isLoading) {
-        console.log("[TranscriptEditorPanel onMount] Path exists, no data, not loading -> Triggering load.");
-        loadAndConvertTranscript(itemPath);
-    } else if (itemPath && currentLexicalJson && isValidLexicalState(currentLexicalJson)) {
-        console.log("[TranscriptEditorPanel onMount] Path exists, valid data exists -> Setting editor state.");
-        editorJsonState = currentLexicalJson;
-        if (editorRef) editorRef.resetEditorState(currentLexicalJson);
-        if(isLoading) isLoading = false;
-         if(errorMessage) errorMessage = null;
-    } else if (itemPath && currentLexicalJson && !isValidLexicalState(currentLexicalJson)) {
-         console.error("[TranscriptEditorPanel onMount] Path exists, but existing data is invalid. Setting error state.");
-         errorMessage = "Stored transcript data is invalid.";
-         setImportedTranscriptLoadFailed(itemPath, errorMessage);
-         if(editorRef) editorRef.resetEditorState('');
-         editorJsonState = '';
-         isLoading = false;
-    } else {
-         console.log("[TranscriptEditorPanel onMount] No path or already loading (or initial load has not provided currentLexicalJson yet).");
-         isLoading = !!itemPath && !currentLexicalJson;
-         errorMessage = null;
-         editorJsonState = '';
-         if(editorRef) editorRef.resetEditorState('');
-    }
-});
+    // --- Mount/Destroy and Exported Functions (MODIFIED) ---
+    onMount(() => {
+        console.log('[TranscriptEditorPanel] Mounted. Path:', itemPath);
+        setActiveImportedTranscriptEditorRef({ ref: self });
+        // The reactive `$: if (itemPath && editorRef)` block now handles all load logic.
+    });
 
 	onDestroy(() => {
         console.log('[TranscriptEditorPanel] Destroyed for path:', itemPath);
