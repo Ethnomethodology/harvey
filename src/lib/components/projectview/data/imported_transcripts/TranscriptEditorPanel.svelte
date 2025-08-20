@@ -468,52 +468,26 @@
 
     // --- MODIFIED Save Handler ---
     async function handleSave() {
-        if (!itemPath) {
-            console.error("[TranscriptEditorPanel] Save Error: No itemPath.");
-            await message("Cannot save: No transcript file is active.", { title: "Save Error", type: "error" });
-            return;
-        }
-        if (isLoading || errorMessage) {
-             console.error("[TranscriptEditorPanel] Save Error: Cannot save while loading or in error state.");
-             await message(`Cannot save: ${isLoading ? 'Transcript is still loading.' : `Transcript failed to load (${errorMessage})`}`, { title: "Save Error", type: "error" });
-            return;
+        const projState = get(project);
+        if (!projState.currentImportedTranscriptPath) {
+            console.error("[TranscriptEditorPanel] Save Error: No transcript path selected in store.");
+            await message("Cannot save: No transcript is currently selected.", { title: "Save Error", type: "error"});
+            throw new Error("Save Error: No transcript path selected.");
         }
 
-        // Use the current Lexical JSON state directly
-        const finalJsonToSave = editorJsonState;
-
-        if (!finalJsonToSave || !isValidLexicalState(finalJsonToSave)) {
-            console.error("[TranscriptEditorPanel] Save Error: editorJsonState is empty or invalid.");
-             await message("Cannot save: Transcript content is empty or invalid.", { title: "Save Error", type: "error" });
+        if (!projState.isImportedTranscriptDirty && !projState.isImportedTranscriptMetadataDirty) {
+            console.log("[TranscriptEditorPanel] handleSave: Content and metadata not dirty. Save skipped.");
             return;
         }
 
-        console.log("[TranscriptEditorPanel] handleSave: Saving full Lexical JSON state for:", itemPath);
-
+        console.log("[TranscriptEditorPanel] handleSave: Attempting to save transcript (and/or metadata) via service:", projState.currentImportedTranscriptPath);
         try {
-            console.log("[TranscriptEditorPanel] Saving Lexical JSON:", finalJsonToSave.substring(0, 500) + "...");
-
-            project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
-
-            const highlights_json = (isMetadataDirty && get(project).currentImportedTranscriptHighlights)
-                ? JSON.stringify(get(project).currentImportedTranscriptHighlights)
-                : null;
-
-            // Use the same backend command used for documents
-            await invoke('save_note_json', {
-                targetPath: itemPath,
-                jsonContent: finalJsonToSave, // Save the full Lexical state
-                highlightsJson: highlights_json
-            });
-
-            // Update the store's initial state to match the saved state
-            markImportedTranscriptAsSaved(itemPath, finalJsonToSave);
-            console.log("[TranscriptEditorPanel] Transcript save successful.");
-
+            const { saveImportedTranscriptContent } = await import('$lib/services/projectService.js');
+            await saveImportedTranscriptContent(projState.currentImportedTranscriptPath, editorJsonState);
+            console.log("[TranscriptEditorPanel] Transcript (and/or metadata) save successful via service.");
         } catch (error) {
-             console.error("[TranscriptEditorPanel] Save failed:", error);
-             await message(`Failed to save transcript: ${error.message || error}`, { title: 'Save Error', type: 'error' });
-             project.update(p => ({ ...p, statusMessage: `Error saving transcript.`}));
+            console.error("[TranscriptEditorPanel] Save operation failed:", error);
+            throw error;
         }
     }
 

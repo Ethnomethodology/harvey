@@ -1322,6 +1322,49 @@ export async function saveDocumentContent(filePath, jsonContent) {
         // The error will be handled by saveDocumentMetadata itself.
     }
 }
+
+export async function saveImportedTranscriptContent(filePath, jsonContent) {
+    if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
+        const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed.'}));
+        throw new Error(errorMsg);
+    }
+    try {
+        const parsed = JSON.parse(jsonContent);
+        if (!parsed.root?.children) throw new Error("Invalid Lexical JSON structure.");
+    } catch (e) {
+        const errorMsg = `Cannot save transcript: Content not valid JSON or invalid structure. ${e.message}`;
+        await message(errorMsg, { title: 'Save Error', type: 'error' });
+        project.update(p => ({...p, importedTranscriptError: errorMsg, statusMessage: 'Save failed (invalid content).'}));
+        throw new Error(errorMsg);
+    }
+
+    const projState = get(project);
+    const filename = await basename(filePath);
+    project.update(p => ({ ...p, statusMessage: `Saving transcript ${filename}...` }));
+
+    try {
+        const highlights_json = (projState.isImportedTranscriptMetadataDirty && projState.currentImportedTranscriptHighlights?.length > 0)
+            ? JSON.stringify(projState.currentImportedTranscriptHighlights)
+            : null;
+
+        await invoke('save_note_json', {
+            targetPath: filePath,
+            jsonContent: jsonContent,
+            highlightsJson: highlights_json,
+        });
+
+        const { markImportedTranscriptAsSaved } = await import('$lib/stores/projectStore.js');
+        markImportedTranscriptAsSaved(filePath, jsonContent);
+
+    } catch (error) {
+        const errorMessage = typeof error === 'string' ? error : (error?.message || 'Unknown error');
+        project.update(p => ({ ...p, importedTranscriptError: `Failed save transcript: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
+        await message(`Error saving transcript '${filename}': ${errorMessage}`, { title: 'Save Transcript Error', type: 'error' });
+        throw error;
+    }
+}
 export async function loadDocumentMetadata(originalDocumentAbsPath) {
     const proj = get(project);
     if (!proj.xmlPath || !proj.baseDirectory || !originalDocumentAbsPath) return null;
