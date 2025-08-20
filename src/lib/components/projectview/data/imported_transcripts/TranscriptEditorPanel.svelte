@@ -68,7 +68,6 @@
 
     // New state for highlights
     let initialHighlights = [];
-    let currentHighlights = [];
     let isMetadataDirty = false;
 
     const ALL_CONVERSION_NODES = [
@@ -108,9 +107,6 @@
             if (initialHighlights !== p.initialImportedTranscriptHighlights) {
                 initialHighlights = p.initialImportedTranscriptHighlights;
             }
-            if (currentHighlights !== p.currentImportedTranscriptHighlights) {
-                currentHighlights = p.currentImportedTranscriptHighlights;
-            }
             if (isMetadataDirty !== p.isImportedTranscriptMetadataDirty) {
                 isMetadataDirty = p.isImportedTranscriptMetadataDirty;
             }
@@ -124,7 +120,6 @@
             errorMessage = null;
 
             initialHighlights = [];
-            currentHighlights = [];
             isMetadataDirty = false;
 
             if (editorRef) editorRef.resetEditorState('');
@@ -533,8 +528,8 @@
 
             project.update(p => ({ ...p, statusMessage: `Saving transcript ${itemPath.split(/[\\/]/).pop()}...`}));
 
-            const highlights_json = (isMetadataDirty && currentHighlights)
-                ? JSON.stringify(currentHighlights)
+            const highlights_json = (isMetadataDirty && $project.currentImportedTranscriptHighlights)
+                ? JSON.stringify($project.currentImportedTranscriptHighlights)
                 : null;
 
             // Use the same backend command used for documents
@@ -681,7 +676,7 @@ onMount(() => {
                      enableSearch={true}
                      documentPath={itemPath}
                      initialHighlights={initialHighlights}
-                     documentHighlights={currentHighlights}
+                     documentHighlights={$project.currentImportedTranscriptHighlights}
                  />
             {/key}
         </div>
