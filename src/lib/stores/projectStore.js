@@ -261,8 +261,9 @@ export function setDocumentHighlights(highlights) {
     project.update(p => {
         const isDocActive = p.selectedDocumentPath && !p.selectedDocumentPath.toLowerCase().endsWith('.pdf');
         const isMediaNoteActive = p.selectedMediaNotePath && p.activeTranscriptPathInDataTab;
+        const isImportedTranscriptActive = !!p.currentImportedTranscriptPath;
 
-        if (!isDocActive && !isMediaNoteActive) {
+        if (!isDocActive && !isMediaNoteActive && !isImportedTranscriptActive) {
             return p;
         }
 
@@ -392,22 +393,6 @@ export function prepareImportedTranscriptView(filePath) {
     if (filePath) {
         import('$lib/services/projectService.js').then(async service => {
             const meta = await service.loadDocumentMetadata(filePath);
-
-            // Defensively check for highlights in media_transcript_data if not at top level
-            if (meta && (!meta.highlights || meta.highlights.length === 0) && meta.media_transcript_data?.highlights) {
-                console.log("[ProjectStore] Found highlights for imported transcript in media_transcript_data fallback.");
-                let highlights_data = meta.media_transcript_data.highlights;
-                if (typeof highlights_data === 'string') {
-                    try {
-                        meta.highlights = JSON.parse(highlights_data);
-                    } catch (e) {
-                        console.error("Failed to parse highlights from media_transcript_data:", e);
-                    }
-                } else if (Array.isArray(highlights_data)) {
-                    meta.highlights = highlights_data;
-                }
-            }
-
             project.update(p => {
                 if (p.currentImportedTranscriptPath === filePath) {
                     return {
