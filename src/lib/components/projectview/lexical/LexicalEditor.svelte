@@ -500,25 +500,31 @@
 
     unregisterListeners = mergeRegister(
         editor.registerUpdateListener(({ editorState, prevEditorState }) => {
+            let highlightsChanged = false;
+            let currentHighlights;
+
             if (isReady) {
                 try {
-                    editorState.read(updateToolbarState);
+                    editorState.read(() => {
+                        updateToolbarState();
+                        if (!prevEditorState.isEmpty()) {
+                            currentHighlights = gatherAllHighlights();
+                            const previousHighlights = documentHighlights;
+                            highlightsChanged = didHighlightsChange(previousHighlights, currentHighlights);
+                        }
+                    });
                 } catch (readError) {
                     console.error("Error reading editor state in update listener:", readError);
                 }
+
                 const jsonString = JSON.stringify(editorState.toJSON());
                 dispatch('change', { jsonString: jsonString });
 
-                // Check for highlight text changes
-                if (!prevEditorState.isEmpty()) {
-                    const currentHighlights = gatherAllHighlights();
-                    const previousHighlights = documentHighlights;
-
-                    if (didHighlightsChange(previousHighlights, currentHighlights)) {
-                        updateAndSaveHighlights(currentHighlights);
-                    }
+                if (highlightsChanged) {
+                    updateAndSaveHighlights(currentHighlights);
                 }
             }
+
             if (showTableCellMenu) {
                 try {
                     editorState.read(() => {
