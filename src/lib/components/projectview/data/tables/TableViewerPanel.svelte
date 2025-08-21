@@ -2,10 +2,11 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
-    import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
+    import { loadTableData, saveTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
     import { get } from 'svelte/store'; // To read store value
     import { sep } from '@tauri-apps/api/path'; // For path manipulation
+    import { toast } from '$lib/stores/toastStore.js';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -13,7 +14,6 @@
     let tableContainer;
     let tabulatorInstance = null;
     let tableData = [];
-    let isDirty = false;
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null; // Track what path is currently loaded/being loaded
@@ -23,6 +23,19 @@
     let customMenuX = 0;
     let customMenuY = 0;
     let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
+    let showHighlightSubMenu = false;
+    let clickedCell = null;
+
+    function handleHighlightMouseEnter(e, cell) {
+        showHighlightSubMenu = true;
+        clickedCell = cell;
+        customMenuX = e.clientX;
+        customMenuY = e.clientY;
+    }
+
+    function handleHighlightMouseLeave() {
+        showHighlightSubMenu = false;
+    }
 
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     const highlightOptions = HIGHLIGHT_OPTIONS;
@@ -33,8 +46,8 @@
     // It might be useful to also store the actual column fields for easy access
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
-
     
+    let selectedCellCache = [];
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
@@ -76,8 +89,6 @@
             timeout = setTimeout(() => func.apply(context, args), delay);
         };
     }
-
-    
 
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
         if (newHasHeaders !== null) {
@@ -279,8 +290,16 @@
                 // Sanitize newValue: remove carriage returns to prevent _x000D_ display issues
                 const newValue = cell.getValue().replace(/\r/g, '');
                 tableData[rowIndex][field] = newValue;
-                isDirty = true;
                 project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
+                saveTableData(tablePath, tableData);
+            });
+
+            tabulatorInstance.on("rangeAdded", (range) => {
+                selectedCellCache = range.getCells();
+            });
+
+            tabulatorInstance.on("rangeRemoved", (range) => {
+                selectedCellCache = [];
             });
 
             // Disable macOS autocorrect/autocomplete on column header filters and init snapshot
@@ -434,12 +453,6 @@
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
-        
-        
-
-        
-        
-
         const rowNumColumn = {
             title: "#",
             formatter: "rownum",
@@ -556,10 +569,7 @@
                         },
                         {
                             label: "Highlight",
-                            menu: highlightOptions.map(option => ({
-                                label: `<div style='display:flex; align-items:center;'><div style='width:10px; height:10px; background-color:${option.value}; margin-right:8px; border:1px solid #ccc;'></div>${option.label}</div>`,
-                                action: (e, cell) => applyHighlight(cell, option.value)
-                            }))
+                            action: (e, cell) => handleHighlightMouseEnter(e, cell),
                         },
                         {
                             label: "Clear Highlight",
@@ -710,34 +720,8 @@
         }
     });
 
-    async function handleSave() {
-        if (!isDirty) return;
-        try {
-            await saveTableData(tablePath, tableData);
-            isDirty = false;
-        } catch (error) {
-            console.error("Failed to save table data:", error);
-        }
-    }
-
-    export function save() {
-        return handleSave();
-    }
-
-    const self = { save };
-
     function applyHighlight(cell, color) {
-        const table = cell.getTable();
-        const ranges = table.getRanges();
-        let cellsToHighlight = [];
-
-        if (ranges.length > 0) {
-            ranges.forEach(range => {
-                cellsToHighlight = cellsToHighlight.concat(range.getCells());
-            });
-        } else {
-            cellsToHighlight.push(cell);
-        }
+        let cellsToHighlight = selectedCellCache.length > 0 ? selectedCellCache : [cell];
 
         if (cellsToHighlight.length > 0) {
             let rowsToUpdate = new Set();
@@ -757,8 +741,7 @@
             rowsToUpdate.forEach(row => {
                 row.update(row.getData());
             });
-            isDirty = true;
-            handleSave();
+            saveTableData(tablePath, tableData);
         }
     }
 
@@ -796,6 +779,21 @@
         }
     }
 </script>
+
+{#if showHighlightSubMenu}
+<div
+    class="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md py-1"
+    style="left: {customMenuX + 150}px; top: {customMenuY}px;"
+    on:mouseenter={() => showHighlightSubMenu = true}
+    on:mouseleave={() => showHighlightSubMenu = false}
+>
+    <ul class="text-sm text-gray-700 dark:text-gray-200">
+        {#each highlightOptions as option}
+            <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={() => applyHighlight(clickedCell, option.value)}><div style='display:flex; align-items:center;'><div style='width:10px; height:10px; background-color:${option.value}; margin-right:8px; border:1px solid #ccc;'></div>${option.label}</div></button></li>
+        {/each}
+    </ul>
+</div>
+{/if}
 
 {#if showEditHeaderModal}
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
