@@ -358,13 +358,20 @@
     function styledCellFormatter(cell, formatterParams, onRendered) {
         const data = cell.getRow().getData();
         const field = cell.getField();
+        const element = cell.getElement();
 
+        // Apply background color from our custom style store
         if (data._cellStyles && data._cellStyles[field] && data._cellStyles[field].backgroundColor) {
-            cell.getElement().style.backgroundColor = data._cellStyles[field].backgroundColor;
+            element.style.backgroundColor = data._cellStyles[field].backgroundColor;
         } else {
-            cell.getElement().style.backgroundColor = '';
+            element.style.backgroundColor = ''; // Clear background if no style is set
         }
 
+        // This is the crucial part to restore text wrapping.
+        // The default formatter was replaced, so we need to replicate its behavior.
+        element.style.whiteSpace = "pre-wrap";
+
+        // Return the cell's original value to be displayed.
         return cell.getValue();
     }
 
