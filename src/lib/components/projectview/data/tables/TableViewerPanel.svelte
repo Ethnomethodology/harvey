@@ -24,7 +24,13 @@
     let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
 
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
+    import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
+
     const highlightOptions = HIGHLIGHT_OPTIONS;
+
+    // State for the color picker modal
+    let showColorPicker = false;
+    let colorPickerCallback = null;
 
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
@@ -491,10 +497,9 @@
                         separator: true,
                     },
                     {
-                        label: "Color Cell",
-                        menu: highlightOptions.map(option => ({
-                            label: `<span style="display:inline-block; width:10px; height:10px; background-color:${option.value}; margin-right:5px;"></span> ${option.label}`,
-                            action: (e, cell) => {
+                        label: "Color Cell...",
+                        action: (e, cell) => {
+                            colorPickerCallback = (color) => {
                                 const selectedCells = tabulatorInstance.getSelectedCells();
                                 const cellsToUpdate = selectedCells.length > 0 ? selectedCells : [cell];
 
@@ -507,11 +512,12 @@
                                     if (!newCellStyles[field]) {
                                         newCellStyles[field] = {};
                                     }
-                                    newCellStyles[field].backgroundColor = option.value;
+                                    newCellStyles[field].backgroundColor = color;
                                     row.update({ _cellStyles: newCellStyles });
                                 });
-                            }
-                        }))
+                            };
+                            showColorPicker = true;
+                        }
                     },
                     {
                         label: "Clear Cell Color",
@@ -797,6 +803,21 @@
         </div>
     </div>
 </div>
+
+<ColorPickerModal
+    bind:show={showColorPicker}
+    on:save={(e) => {
+        if (colorPickerCallback) {
+            colorPickerCallback(e.detail.color);
+        }
+        showColorPicker = false;
+        colorPickerCallback = null;
+    }}
+    on:cancel={() => {
+        showColorPicker = false;
+        colorPickerCallback = null;
+    }}
+/>
 
 <style lang="postcss">
     .min-h-0 { min-height: 0; }
