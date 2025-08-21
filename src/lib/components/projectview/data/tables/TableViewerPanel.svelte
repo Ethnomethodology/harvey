@@ -809,13 +809,13 @@
         <div class="mt-4 flex justify-end space-x-2">
             <button
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md"
-                onclick={() => showEditHeaderModal = false}
+                on:click={() => showEditHeaderModal = false}
             >
                 Cancel
             </button>
             <button
                 class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-                onclick={handleSaveHeader}
+                on:click={handleSaveHeader}
             >
                 Save
             </button>
@@ -830,13 +830,13 @@
     style="left: {customMenuX}px; top: {customMenuY}px;"
 >
     <ul class="text-sm text-gray-700 dark:text-gray-200">
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={copyRow}>Copy</button></li>
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={cutRow}>Cut</button></li>
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={pasteRow}>Paste</button></li>
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={deleteRow}>Delete</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={copyRow}>Copy</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={cutRow}>Cut</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={pasteRow}>Paste</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={deleteRow}>Delete</button></li>
         <hr class="my-1 border-gray-200 dark:border-gray-700">
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowAbove}>Insert Row Above</button></li>
-        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={insertRowBelow}>Insert Row Below</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={insertRowAbove}>Insert Row Above</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={insertRowBelow}>Insert Row Below</button></li>
     </ul>
 </div>
 {/if}
@@ -873,7 +873,7 @@
             <button
               title="Previous Match"
               class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              onclick={goToPreviousMatch}
+              on:click={goToPreviousMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
@@ -883,7 +883,7 @@
             <button
               title="Next Match"
               class="p-1 border rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              onclick={goToNextMatch}
+              on:click={goToNextMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
@@ -891,7 +891,7 @@
               </svg>
             </button>
             <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    onclick={() => { console.log('TODO: Add new row action'); alert('Add Row'); }}
+                    on:click={() => { console.log('TODO: Add new row action'); alert('Add Row'); }}
                     title="Add New Row">
                 Add Row
             </button>
