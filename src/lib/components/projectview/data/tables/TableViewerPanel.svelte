@@ -6,7 +6,6 @@
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
     import { get } from 'svelte/store'; // To read store value
     import { sep } from '@tauri-apps/api/path'; // For path manipulation
-    import { toast } from '$lib/stores/toastStore.js';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -23,19 +22,6 @@
     let customMenuX = 0;
     let customMenuY = 0;
     let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
-    let showHighlightSubMenu = false;
-    let clickedCell = null;
-
-    function handleHighlightMouseEnter(e, cell) {
-        showHighlightSubMenu = true;
-        clickedCell = cell;
-        customMenuX = e.clientX;
-        customMenuY = e.clientY;
-    }
-
-    function handleHighlightMouseLeave() {
-        showHighlightSubMenu = false;
-    }
 
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
     const highlightOptions = HIGHLIGHT_OPTIONS;
@@ -66,7 +52,6 @@
             }
         });
         tableLayoutSnapshot.columns = newSnapshotColumns;
-        // console.debug('[TableViewerPanel updateTableLayoutSnapshot] Snapshot updated:', JSON.stringify(tableLayoutSnapshot, null, 2));
     }
 
     function getRelativePath(absolutePath, baseDir) {
@@ -78,7 +63,7 @@
                 relativePath = relativePath.substring(1);
             }
         }
-        return relativePath.replace(/\\/g, '/'); // Normalize to forward slashes
+        return relativePath.replaceAll('\\', '/'); // Normalize to forward slashes
     }
 
     function debounce(func, delay) {
@@ -95,30 +80,23 @@
             hasHeaders = newHasHeaders;
         }
         if (!pathForTable || !tableContainer) {
-            console.debug('[TableViewerPanel initializeTable] Skipping: no path or container.', { pathForTable, tableContainerExists: !!tableContainer }); // DEBUG
-            isLoading = false; // Ensure loading is false if we skip
             return;
         }
 
-        // Prevent re-initialization if already loading or loaded for this path
         if (isLoading && currentLoadedPath === pathForTable) {
-            console.debug(`[TableViewerPanel initializeTable] Already loading ${pathForTable}, skipping.`); // DEBUG
             return;
         }
         if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) {
-            console.debug(`[TableViewerPanel initializeTable] Table for ${pathForTable} already initialized and loaded.`); // DEBUG
             return;
         }
 
-
-        console.info(`[TableViewerPanel initializeTable] Initializing for path: ${pathForTable}`); // INFO
-        currentLoadedPath = pathForTable; // Set path being processed
+        currentLoadedPath = pathForTable;
         isLoading = true;
         error = null;
         tableData = [];
+        selectedCellCache = [];
 
         if (tabulatorInstance) {
-            console.debug('[TableViewerPanel initializeTable] Destroying previous Tabulator instance.'); // DEBUG
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
@@ -129,23 +107,20 @@
             tableData = response.data;
 
             if (tableData.length === 0) {
-                console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.'); // WARN
+                console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.');
             }
 
-            await tick(); // Ensure DOM is ready if container was re-rendered
+            await tick();
 
             if (!tableContainer) {
-                 console.error('[TableViewerPanel initializeTable] Table container element became null during data load for path:', pathForTable); // ERROR
                  error = 'Failed to initialize table viewer: container lost.';
                  isLoading = false;
-                 currentLoadedPath = null; // Reset if failed
+                 currentLoadedPath = null;
                  return;
             }
 
             const projectBaseDir = get(project)?.baseDirectory;
             if (!projectBaseDir) {
-                console.error("[TableViewerPanel] Project baseDirectory not available from store. Cannot determine relative path for layout prefs.");
-                // Proceed without layout prefs, or handle error more gracefully
                 error = "Project configuration error: base directory missing.";
                 isLoading = false;
                 currentLoadedPath = null;
@@ -154,53 +129,44 @@
             const relativeTablePath = getRelativePath(pathForTable, projectBaseDir);
 
             if (!relativeTablePath) {
-                console.error(`[TableViewerPanel] Could not determine relative path for ${pathForTable} against base ${projectBaseDir}`);
                 error = "Error determining asset relative path.";
                 isLoading = false;
-                currentLoadedPath = null; // Reset if failed
+                currentLoadedPath = null;
                 return;
             }
-            console.debug(`[TableViewerPanel] Absolute path: ${pathForTable}, Relative path for DB: ${relativeTablePath}`);
-
 
             let savedLayout = null;
             try {
                 const layoutData = await loadTableLayoutPrefs(relativeTablePath);
                 if (layoutData) {
-                    savedLayout = layoutData; // Directly use the object
-                    console.debug(`[TableViewerPanel] Loaded layout for ${relativeTablePath}:`, JSON.stringify(savedLayout, null, 2));
-                } else {
-                    console.debug(`[TableViewerPanel] No saved layout found for ${relativeTablePath}.`);
+                    savedLayout = layoutData;
                 }
             } catch (e) {
                 console.error(`[TableViewerPanel] Error loading layout for ${relativeTablePath}:`, e);
             }
 
-            // initialLayoutMode logic removed
-
-            console.debug(`[TableViewerPanel initializeTable] Creating Tabulator instance for ${pathForTable} (relative: ${relativeTablePath}) with layout: fitData`); // DEBUG
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
-                layout: "fitData", // Changed to fitData for Excel-like resizing
-                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout), // Pass isFirstLoad
+                layout: "fitData",
+                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout),
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
                 history:true,
                 editTriggerEvent:"dblclick",
-                movableColumns: false, // Set to false to disable column reordering
-                resizableColumnFit: false, // Set to false to allow table to expand
-                columnDefaults: { // Add this section
+                movableColumns: false,
+                resizableColumnFit: false,
+                columnDefaults: {
                     headerSort:false,
                     headerHozAlign:"center",
                     editor:"textarea",
-                editorParams:{
-                    verticalNavigation:"editor",
-                    shiftEnterSubmit:true,
-                },
+                    editorParams:{
+                        verticalNavigation:"editor",
+                        shiftEnterSubmit:true,
+                    },
                     resizable:"header",
                     width:100,
-                    minWidth: 50, // Set a minimum width for all columns (in pixels)
+                    minWidth: 50,
                 },
                 clipboard: true,
                 clipboardCopyStyled:false,
@@ -212,24 +178,19 @@
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
             });
-            console.log('[TableViewerPanel] tabulatorInstance SET:', tabulatorInstance);
 
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
 
                 const baseDirForSave = get(project)?.baseDirectory;
                 if (!baseDirForSave) {
-                    console.error("[TableViewerPanel saveLayout] baseDirectory not available. Cannot save layout.");
                     return;
                 }
-                console.debug(`[TableViewerPanel saveCurrentTableLayout] Inputs for getRelativePath - currentLoadedPath: ${currentLoadedPath}, baseDirForSave: ${baseDirForSave}`);
                 const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
                 if (!relativePathForSave) {
-                    console.error(`[TableViewerPanel saveCurrentTableLayout] Could not determine relative path for DB key. Absolute path: ${currentLoadedPath}`);
                     return;
                 }
 
-                console.debug(`[TableViewerPanel saveCurrentTableLayout] Attempting to save layout for ${relativePathForSave} using snapshot:`, JSON.stringify(tableLayoutSnapshot, null, 2));
                 try {
                     const layoutToSave = { columns: {} };
                     for (const field in tableLayoutSnapshot.columns) {
@@ -243,51 +204,34 @@
                         }
                         layoutToSave.columns[field] = columnSaveData;
                     }
-
-                    // The layout object is now expected to be a JS object directly.
-                    // The backend will handle the stringification when saving.
                     await saveTableLayoutPrefs(relativePathForSave, layoutToSave);
-                    console.info(`[TableViewerPanel] Layout saved for ${relativePathForSave}`);
                 } catch (error) {
                     console.error(`[TableViewerPanel] Failed to save layout for ${relativePathForSave}:`, error);
                 }
             }, 750);
 
             tabulatorInstance.on("columnResized", (column) => {
-                // console.debug(`[TableViewerPanel columnResized] Column: ${column.getField()}, Width: ${column.getWidth()}`);
                 if (tableLayoutSnapshot.columns[column.getField()]) {
                     tableLayoutSnapshot.columns[column.getField()].width = column.getWidth();
-                } else { // Should ideally not happen if snapshot is initialized correctly
+                } else {
                     tableLayoutSnapshot.columns[column.getField()] = {
                         width: column.getWidth(),
-                        order: column.getPosition(true) -1, // Be cautious with order here
+                        order: column.getPosition(true) -1,
                         visible: column.isVisible()
                     };
                 }
-                // Update orders for all columns as resizing one might affect others in some layouts
-                updateTableLayoutSnapshot(); // This will re-capture all orders and widths
-                saveCurrentTableLayout(); // Call debounced save
+                updateTableLayoutSnapshot();
+                saveCurrentTableLayout();
             });
 
-            tabulatorInstance.on("columnMoved", (column, columns) => { // columns is array of all column components in new order
-                // console.debug(`[TableViewerPanel columnMoved] Column: ${column.getField()} moved.`);
-                updateTableLayoutSnapshot(); // This will re-capture all new orders and existing widths
-                saveCurrentTableLayout(); // Call debounced save
-            });
-            // tabulatorInstance.on("columnVisibilityChanged", (column, visible) => {
-            //     updateTableLayoutSnapshot();
-            //     saveCurrentTableLayout();
-            // });
-
-
-            tabulatorInstance.on("rowClick", function(e, row){
-                 console.debug("Row Clicked:", row.getData()); // DEBUG
+            tabulatorInstance.on("columnMoved", (column, columns) => {
+                updateTableLayoutSnapshot();
+                saveCurrentTableLayout();
             });
 
             tabulatorInstance.on("cellEdited", function(cell) {
                 const rowIndex = cell.getRow().getPosition() - 1;
                 const field = cell.getField();
-                // Sanitize newValue: remove carriage returns to prevent _x000D_ display issues
                 const newValue = cell.getValue().replace(/\r/g, '');
                 tableData[rowIndex][field] = newValue;
                 project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
@@ -302,9 +246,8 @@
                 selectedCellCache = [];
             });
 
-            // Disable macOS autocorrect/autocomplete on column header filters and init snapshot
             tabulatorInstance.on("renderComplete", () => {
-                updateTableLayoutSnapshot(); // Initial snapshot after table is fully rendered
+                updateTableLayoutSnapshot();
                 const filters = tableContainer.querySelectorAll(".tabulator-header-filter input");
                 filters.forEach(input => {
                     input.setAttribute("autocomplete", "off");
@@ -314,30 +257,22 @@
                 });
             });
 
-            // After setting up event handlers:
             setTimeout(() => {
                 if (tabulatorInstance && typeof tabulatorInstance.redraw === 'function') {
-                    console.debug('[TableViewerPanel initializeTable] Triggering a gentle redraw after short delay.'); // DEBUG
-                    tabulatorInstance.redraw(); // Using redraw() without 'true' for a less disruptive redraw
+                    tabulatorInstance.redraw();
                 }
-            }, 100); // 100ms delay, can be adjusted
+            }, 100);
 
             const columns = tabulatorInstance.getColumnDefinitions();
-            columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder'); // Store actual field names
-
-            console.info(`[TableViewerPanel initializeTable] Tabulator initialized for ${pathForTable}.`); // INFO
+            columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder');
 
         } catch (err) {
-            console.error(`[TableViewerPanel initializeTable] Error for path ${pathForTable}:`, err); // ERROR
             error = `Failed to load table: ${err.message || err}`;
-            currentLoadedPath = null; // Reset if failed
+            currentLoadedPath = null;
         } finally {
-            // Only set isLoading to false if we are still on the same path.
-            // This prevents a quick flash if path changes rapidly.
             if (currentLoadedPath === pathForTable) {
                 isLoading = false;
             }
-            console.debug(`[TableViewerPanel initializeTable] Finished for ${pathForTable}. isLoading: ${isLoading}`); // DEBUG
         }
     }
 
@@ -345,7 +280,7 @@
         if (!tabulatorInstance) return;
         const term = searchTerm.trim();
 
-        clearHighlights(); // Clear highlights before new search or clearing filter
+        clearHighlights();
 
         if (!term) {
             tabulatorInstance.clearFilter();
@@ -359,30 +294,25 @@
         searchMatches = tabulatorInstance.getRows("active");
 
         if (searchMatches.length > 0) {
-            // currentMatchIndex = 0; // Set before navigateToMatch
-            navigateToMatch(0); // Navigate to the first match
+            navigateToMatch(0);
         } else {
             currentMatchIndex = -1;
         }
-        console.debug(`Found ${searchMatches.length} rows matching "${term}"`); // DEBUG
     }
 
     function clearHighlights() {
         if (tabulatorInstance) {
-            tabulatorInstance.deselectRow(); // Deselect all rows
+            tabulatorInstance.deselectRow();
         }
-        console.debug("clearHighlights called: deselected all rows."); // DEBUG
     }
 
     async function navigateToMatch(index) {
         if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
             currentMatchIndex = -1;
-            // If no valid match, ensure nothing is selected from search
             if (tabulatorInstance) tabulatorInstance.deselectRow();
             return;
         }
 
-        // It's good practice to clear any programmatically set selections before new action
         if (tabulatorInstance) {
             tabulatorInstance.deselectRow();
         }
@@ -393,9 +323,9 @@
         if (rowComponent) {
             try {
                 await rowComponent.scrollTo();
-                await rowComponent.select(); // Select the current row
+                await rowComponent.select();
             } catch (err) {
-                console.error("Error navigating to match:", err); // ERROR
+                console.error("Error navigating to match:", err);
             }
         }
     }
@@ -403,22 +333,15 @@
     function goToNextMatch() {
         if (searchMatches.length > 0 && currentMatchIndex < searchMatches.length - 1) {
             navigateToMatch(currentMatchIndex + 1);
-        } else if (searchMatches.length > 0 && currentMatchIndex === searchMatches.length - 1) {
-            // Optional: loop back to the first match
-            // navigateToMatch(0);
         }
     }
 
     function goToPreviousMatch() {
         if (searchMatches.length > 0 && currentMatchIndex > 0) {
             navigateToMatch(currentMatchIndex - 1);
-        } else if (searchMatches.length > 0 && currentMatchIndex === 0) {
-            // Optional: loop back to the last match
-            // navigateToMatch(searchMatches.length - 1);
         }
     }
 
-    // Function to generate column definitions
     let showEditHeaderModal = false;
     let editingHeader = { oldName: '', newName: '' };
     let currentColumnComponent = null;
@@ -450,7 +373,6 @@
     }
 
     function generateColumns(data, headers, savedLayoutObj, isFirstLoad) {
-        console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
         const rowNumColumn = {
@@ -465,7 +387,6 @@
             editor:false
         };
         
-
         let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
@@ -511,7 +432,6 @@
                         action: function(e, column) {
                             if (confirm(`Are you sure you want to delete the column '${column.getField()}'? This action cannot be undone.`)) {
                                 tabulatorInstance.deleteColumn(column);
-                                console.warn(`Column '${column.getField()}' deleted. Data model might be out of sync.`);
                             }
                         }
                     },
@@ -529,6 +449,10 @@
                     }
                 ],
                 contextMenu: (cell) => {
+                    const colorOptionsHtml = highlightOptions.map(option => {
+                        return `<div style="width: 20px; height: 20px; background-color: ${option.value}; border: 1px solid #ccc; cursor: pointer;" data-color="${option.value}" title="${option.label}"></div>`;
+                    }).join('');
+
                     let menu = [
                         {
                             label: "Copy",
@@ -568,8 +492,13 @@
                             separator: true,
                         },
                         {
-                            label: "Highlight",
-                            action: (e, cell) => handleHighlightMouseEnter(e, cell),
+                            label: `<div style="display: flex; align-items: center; gap: 5px; padding: 5px 0;">${colorOptionsHtml}</div>`,
+                            action: (e, cell) => {
+                                const color = e.target.dataset.color;
+                                if (color) {
+                                    applyHighlight(cell, color);
+                                }
+                            }
                         },
                         {
                             label: "Clear Highlight",
@@ -582,25 +511,14 @@
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
                 const savedCol = savedLayoutObj.columns[header];
-                console.debug(`[TableViewerPanel generateColumns] Applying saved layout for column '${header}': width=${savedCol.width}, order=${savedCol.order}, visible=${savedCol.visible}`);
                 if (typeof savedCol.width === 'number' && savedCol.width > 0) {
                     colDef.width = savedCol.width;
-                } else {
-                    console.debug(`[TableViewerPanel generateColumns] No valid saved width for column '${header}', default will be used by Tabulator.`);
                 }
                 colDef.visible = savedCol.visible;
-            } else {
-                if (isFirstLoad) {
-                    console.debug(`[TableViewerPanel generateColumns] First load for column '${header}': Width to be determined by layout mode.`);
-                } else {
-                    console.debug(`[TableViewerPanel generateColumns] New column '${header}' in existing layout, will be sized by Tabulator or current layout mode.`);
-                }
             }
-            console.debug(`[TableViewerPanel generateColumns] Final effective width for column '${header}': ${colDef.width}, minWidth: ${colDef.minWidth}, visible: ${colDef.visible}`);
             return colDef;
         });
 
-        // Sort data columns based on saved layout
         if (savedLayoutObj && savedLayoutObj.columns) {
             dataColumnDefs.sort((a, b) => {
                 const orderA = savedLayoutObj.columns[a.field]?.order ?? Infinity;
@@ -614,14 +532,9 @@
             });
         }
 
-        // Combine the row number column with the data columns
-        let finalColumnDefs = [rowNumColumn].concat(dataColumnDefs);
-
-        console.debug('[TableViewerPanel generateColumns] Final column definitions after applying layout and sort:', JSON.stringify(finalColumnDefs.map(c => ({ field: c.field, width: c.width, visible: c.visible, order: savedLayoutObj?.columns[c.field]?.order })), null, 2));
-        return finalColumnDefs;
+        return [rowNumColumn].concat(dataColumnDefs);
     }
 
-     // Very basic type inference for better default sorting
      function inferSorter(data, field) {
          if (!data || data.length === 0 || !data[0].hasOwnProperty(field)) return "string";
          const firstValue = data[0][field];
@@ -630,30 +543,20 @@
          return "string";
      }
 
-
-
-
-
     onMount(() => {
-        console.debug('[TableViewerPanel] Mounted. Initial Path:', tablePath); // DEBUG
-        // tableContainer should be available here due to bind:this
         if (tablePath && tableContainer) {
              initializeTable(tablePath);
-        } else {
-            isLoading = false; // No path on mount, so not loading
         }
 
         const handleContextMenu = (event) => {
             const target = event.target;
-            // Check if the right-click was on a row number cell
             if (target.closest('.tabulator-row-number-column') && !target.closest('.tabulator-header')) {
-                event.preventDefault(); // Prevent default browser context menu
-                event.stopPropagation(); // Stop propagation to prevent document click from closing it immediately
+                event.preventDefault();
+                event.stopPropagation();
                 showCustomRowMenu = true;
                 customMenuX = event.clientX;
                 customMenuY = event.clientY;
 
-                // Get the row component
                 const rowElement = target.closest('.tabulator-row');
                 if (rowElement) {
                     if (tabulatorInstance) {
@@ -664,7 +567,6 @@
         };
 
         const hideCustomRowMenu = (event) => {
-            // Check if the click was outside the custom menu
             if (showCustomRowMenu && event.target.closest('.custom-row-menu') === null) {
                 showCustomRowMenu = false;
             }
@@ -695,15 +597,11 @@
 		}
     });
 
-    
-
-    // React to tablePath changes
     $: if (tablePath && tableContainer) {
         if (tablePath !== currentLoadedPath) {
             initializeTable(tablePath);
         }
     } else if (!tablePath && tabulatorInstance) {
-        console.info(`[TableViewerPanel reactive] tablePath cleared, destroying table`); // INFO
         tabulatorInstance.destroy();
         tabulatorInstance = null;
         tableData = [];
@@ -713,7 +611,6 @@
     }
 
     onDestroy(() => {
-        console.debug('[TableViewerPanel] Destroyed.'); // DEBUG
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
@@ -726,17 +623,19 @@
         if (cellsToHighlight.length > 0) {
             let rowsToUpdate = new Set();
             cellsToHighlight.forEach(c => {
-                const row = c.getRow();
-                const rowData = row.getData();
-                if (!rowData._highlights) {
-                    rowData._highlights = {};
+                if (c && typeof c.getRow === 'function') {
+                    const row = c.getRow();
+                    const rowData = row.getData();
+                    if (!rowData._highlights) {
+                        rowData._highlights = {};
+                    }
+                    if (color === 'transparent' || color === '') {
+                        delete rowData._highlights[c.getField()];
+                    } else {
+                        rowData._highlights[c.getField()] = color;
+                    }
+                    rowsToUpdate.add(row);
                 }
-                if (color === 'transparent' || color === '') {
-                    delete rowData._highlights[c.getField()];
-                } else {
-                    rowData._highlights[c.getField()] = color;
-                }
-                rowsToUpdate.add(row);
             });
             rowsToUpdate.forEach(row => {
                 row.update(row.getData());
@@ -754,7 +653,6 @@
         try {
             await renameTableHeader(tablePath, oldName, newName);
 
-            // Update the saved layout preferences to reflect the header rename
             const projectBaseDir = get(project)?.baseDirectory;
             if (projectBaseDir) {
                 const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
@@ -764,12 +662,10 @@
                         savedLayout.columns[newName] = savedLayout.columns[oldName];
                         delete savedLayout.columns[oldName];
                         await saveTableLayoutPrefs(relativeTablePath, savedLayout);
-                        console.info(`[TableViewerPanel] Migrated layout preferences from '${oldName}' to '${newName}'.`);
                     }
                 }
             }
 
-            // Re-initialize the table to reflect the changes from the file
             await initializeTable(tablePath, null, true);
 
         } catch (error) {
@@ -779,21 +675,6 @@
         }
     }
 </script>
-
-{#if showHighlightSubMenu}
-<div
-    class="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md py-1"
-    style="left: {customMenuX + 150}px; top: {customMenuY}px;"
-    on:mouseenter={() => showHighlightSubMenu = true}
-    on:mouseleave={() => showHighlightSubMenu = false}
->
-    <ul class="text-sm text-gray-700 dark:text-gray-200">
-        {#each highlightOptions as option}
-            <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={() => applyHighlight(clickedCell, option.value)}><div style='display:flex; align-items:center;'><div style='width:10px; height:10px; background-color:${option.value}; margin-right:8px; border:1px solid #ccc;'></div>${option.label}</div></button></li>
-        {/each}
-    </ul>
-</div>
-{/if}
 
 {#if showEditHeaderModal}
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -862,7 +743,7 @@
             <input
               type="search"
               bind:value={searchTerm}
-              oninput={handleSearch}
+              on:input={handleSearch}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
