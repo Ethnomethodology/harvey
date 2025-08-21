@@ -499,7 +499,7 @@
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
 
     unregisterListeners = mergeRegister(
-        editor.registerUpdateListener(({ editorState }) => {
+        editor.registerUpdateListener(({ editorState, prevEditorState }) => {
             if (isReady) {
                 try {
                     editorState.read(updateToolbarState);
@@ -508,6 +508,16 @@
                 }
                 const jsonString = JSON.stringify(editorState.toJSON());
                 dispatch('change', { jsonString: jsonString });
+
+                // Check for highlight text changes
+                if (!prevEditorState.isEmpty()) {
+                    const currentHighlights = gatherAllHighlights();
+                    const previousHighlights = documentHighlights;
+
+                    if (didHighlightsChange(previousHighlights, currentHighlights)) {
+                        updateAndSaveHighlights(currentHighlights);
+                    }
+                }
             }
             if (showTableCellMenu) {
                 try {
@@ -1156,6 +1166,29 @@ function gatherAllHighlights() {
         }
     }
     return allHighlights;
+}
+
+function didHighlightsChange(oldHighlights, newHighlights) {
+    if (oldHighlights.length !== newHighlights.length) {
+        return true;
+    }
+
+    const oldMap = new Map(oldHighlights.map(h => [h.id, h]));
+
+    for (const newHighlight of newHighlights) {
+        const oldHighlight = oldMap.get(newHighlight.id);
+        if (!oldHighlight) {
+            return true;
+        }
+        if (oldHighlight.text !== newHighlight.text ||
+            oldHighlight.color !== newHighlight.color ||
+            JSON.stringify(oldHighlight.tags) !== JSON.stringify(newHighlight.tags) ||
+            JSON.stringify(oldHighlight.comments) !== JSON.stringify(newHighlight.comments)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function updateAndSaveHighlights(highlights) {
