@@ -355,22 +355,19 @@
         showEditHeaderModal = true;
     }
 
-    function highlightFormatter(cell, formatterParams, onRendered) {
-        const rowData = cell.getRow().getData();
+    function styledCellFormatter(cell, formatterParams, onRendered) {
+        const data = cell.getRow().getData();
         const field = cell.getField();
-        const cellElement = cell.getElement();
 
-        if (rowData._highlights && rowData._highlights[field]) {
-            cellElement.style.backgroundColor = rowData._highlights[field];
+        if (data._cellStyles && data._cellStyles[field] && data._cellStyles[field].backgroundColor) {
+            cell.getElement().style.backgroundColor = data._cellStyles[field].backgroundColor;
         } else {
-            cellElement.style.backgroundColor = '';
+            cell.getElement().style.backgroundColor = '';
         }
 
-        cellElement.style.whiteSpace = 'pre-wrap';
-
-        const value = cell.getValue();
-        return value !== null && typeof value !== 'undefined' ? value : '';
+        return cell.getValue();
     }
+
 
     function generateColumns(data, headers, savedLayoutObj, isFirstLoad) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
@@ -398,7 +395,7 @@
                     verticalNavigation:"editor",
                     shiftEnterSubmit:true,
                 },
-                formatter: highlightFormatter,
+                formatter: styledCellFormatter,
                 formatterParams: {},
                 headerContextMenu: [
                     {
@@ -448,65 +445,92 @@
                         }
                     }
                 ],
-                contextMenu: (cell) => {
-                    const colorOptionsHtml = highlightOptions.map(option => {
-                        return `<div style="width: 20px; height: 20px; background-color: ${option.value}; border: 1px solid #ccc; cursor: pointer;" data-color="${option.value}" title="${option.label}"></div>`;
-                    }).join('');
-
-                    let menu = [
-                        {
-                            label: "Copy",
-                            action: (e, cell) => {
-                                navigator.clipboard.writeText(cell.getValue()).catch(err => {
-                                    console.error('Could not copy cell value to clipboard: ', err);
-                                });
-                            }
-                        },
-                        {
-                            label: "Cut",
-                            action: (e, cell) => {
-                                navigator.clipboard.writeText(cell.getValue()).then(() => {
-                                    cell.setValue("");
-                                }).catch(err => {
-                                    console.error('Could not cut cell value: ', err);
-                                });
-                            }
-                        },
-                        {
-                            label: "Paste",
-                            action: (e, cell) => {
-                                navigator.clipboard.readText().then(text => {
-                                    cell.setValue(text);
-                                }).catch(err => {
-                                    console.error('Could not paste into cell: ', err);
-                                });
-                            }
-                        },
-                        {
-                            label: "Delete",
-                            action: (e, cell) => {
-                                cell.setValue("");
-                            }
-                        },
-                        {
-                            separator: true,
-                        },
-                        {
-                            label: `<div style="display: flex; align-items: center; gap: 5px; padding: 5px 0;">${colorOptionsHtml}</div>`,
-                            action: (e, cell) => {
-                                const color = e.target.dataset.color;
-                                if (color) {
-                                    applyHighlight(cell, color);
-                                }
-                            }
-                        },
-                        {
-                            label: "Clear Highlight",
-                            action: (e, cell) => applyHighlight(cell, '')
+                cellContextMenu: [
+                    {
+                        label: "Copy",
+                        action: (e, cell) => {
+                            navigator.clipboard.writeText(cell.getValue()).catch(err => {
+                                console.error('Could not copy cell value to clipboard: ', err);
+                            });
                         }
-                    ];
-                    return menu;
-                }
+                    },
+                    {
+                        label: "Cut",
+                        action: (e, cell) => {
+                            navigator.clipboard.writeText(cell.getValue()).then(() => {
+                                cell.setValue("");
+                            }).catch(err => {
+                                console.error('Could not cut cell value: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Paste",
+                        action: (e, cell) => {
+                            navigator.clipboard.readText().then(text => {
+                                cell.setValue(text);
+                            }).catch(err => {
+                                console.error('Could not paste into cell: ', err);
+                            });
+                        }
+                    },
+                    {
+                        label: "Delete",
+                        action: (e, cell) => {
+                            cell.setValue("");
+                        }
+                    },
+                    {
+                        separator: true,
+                    },
+                    {
+                        label: "Color Cell",
+                        menu: highlightOptions.map(option => ({
+                            label: `<span style="display:inline-block; width:10px; height:10px; background-color:${option.value}; margin-right:5px;"></span> ${option.label}`,
+                            action: (e, cell) => {
+                                const selectedCells = tabulatorInstance.getSelectedCells();
+                                const cellsToUpdate = selectedCells.length > 0 ? selectedCells : [cell];
+
+                                cellsToUpdate.forEach(c => {
+                                    const row = c.getRow();
+                                    let rowData = row.getData();
+                                    let field = c.getField();
+
+                                    const newCellStyles = { ...(rowData._cellStyles || {}) };
+                                    if (!newCellStyles[field]) {
+                                        newCellStyles[field] = {};
+                                    }
+                                    newCellStyles[field].backgroundColor = option.value;
+                                    row.update({ _cellStyles: newCellStyles });
+                                });
+                            }
+                        }))
+                    },
+                    {
+                        label: "Clear Cell Color",
+                        action: (e, cell) => {
+                            const selectedCells = tabulatorInstance.getSelectedCells();
+                            const cellsToUpdate = selectedCells.length > 0 ? selectedCells : [cell];
+
+                            cellsToUpdate.forEach(c => {
+                                const row = c.getRow();
+                                let rowData = row.getData();
+                                let field = c.getField();
+
+                                if (rowData._cellStyles && rowData._cellStyles[field]) {
+                                    const newCellStyles = { ...rowData._cellStyles };
+                                    delete newCellStyles[field].backgroundColor;
+
+                                    if (Object.keys(newCellStyles[field]).length === 0) {
+                                        delete newCellStyles[field];
+                                    }
+
+                                    row.update({ _cellStyles: newCellStyles });
+                                }
+                            });
+                        }
+                    }
+                ]
             };
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
@@ -616,33 +640,6 @@
             tabulatorInstance = null;
         }
     });
-
-    function applyHighlight(cell, color) {
-        let cellsToHighlight = selectedCellCache.length > 0 ? selectedCellCache : [cell];
-
-        if (cellsToHighlight.length > 0) {
-            let rowsToUpdate = new Set();
-            cellsToHighlight.forEach(c => {
-                if (c && typeof c.getRow === 'function') {
-                    const row = c.getRow();
-                    const rowData = row.getData();
-                    if (!rowData._highlights) {
-                        rowData._highlights = {};
-                    }
-                    if (color === 'transparent' || color === '') {
-                        delete rowData._highlights[c.getField()];
-                    } else {
-                        rowData._highlights[c.getField()] = color;
-                    }
-                    rowsToUpdate.add(row);
-                }
-            });
-            rowsToUpdate.forEach(row => {
-                row.update(row.getData());
-            });
-            saveTableData(tablePath, tableData);
-        }
-    }
 
     async function handleSaveHeader() {
         if (!currentColumnComponent || editingHeader.newName.trim() === '') return;
