@@ -2,7 +2,6 @@
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
-    import ColorPickerModal from '$lib/components/projectview/lexical/ColorPickerModal.svelte';
     import { loadTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
     import { get } from 'svelte/store'; // To read store value
@@ -25,13 +24,8 @@
     let customMenuY = 0;
     let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
 
-    let showColorPicker = false;
-
-    const highlightOptions = [
-        { value: '#FFF275', label: 'Yellow' }, { value: '#A8FF9E', label: 'Green' }, { value: '#AEEFFF', label: 'Blue' },
-        { value: '#FFB0CF', label: 'Pink' }, { value: '#D0A0FF', label: 'Purple' }, { value: 'transparent', label: 'None' }
-    ];
-    const highlightColors = highlightOptions.filter(o => o.value !== 'transparent').map(o => o.value);
+    import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
+    const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let searchTerm = '';
     let searchMatches = []; // To store Tabulator RowComponents that match
@@ -180,11 +174,7 @@
                 columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout), // Pass isFirstLoad
                 height: "100%",
                 placeholder: "No Data Available",
-                selectable: 1,
-                selectableRange: true,
-                selectableRangeColumns:true,
-                selectableRangeRows:true,
-                selectableRangeClearCells:true,
+                selectableRange: 1,
                 history:true,
                 editTriggerEvent:"dblclick",
                 movableColumns: false, // Set to false to disable column reordering
@@ -423,6 +413,23 @@
         showEditHeaderModal = true;
     }
 
+    function highlightFormatter(cell, formatterParams, onRendered) {
+        const rowData = cell.getRow().getData();
+        const field = cell.getField();
+        const cellElement = cell.getElement();
+
+        if (rowData._highlights && rowData._highlights[field]) {
+            cellElement.style.backgroundColor = rowData._highlights[field];
+        } else {
+            cellElement.style.backgroundColor = '';
+        }
+
+        cellElement.style.whiteSpace = 'pre-wrap';
+
+        const value = cell.getValue();
+        return value !== null && typeof value !== 'undefined' ? value : '';
+    }
+
     function generateColumns(data, headers, savedLayoutObj, isFirstLoad) {
         console.debug('[TableViewerPanel generateColumns] Received savedLayoutObj:', JSON.stringify(savedLayoutObj, null, 2), `isFirstLoad: ${isFirstLoad}`);
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
@@ -457,7 +464,7 @@
                     verticalNavigation:"editor",
                     shiftEnterSubmit:true,
                 },
-                formatter: "textarea",
+                formatter: highlightFormatter,
                 formatterParams: {},
                 headerContextMenu: [
                     {
@@ -508,54 +515,59 @@
                         }
                     }
                 ],
-                contextMenu: [
-                    {
-                        label: "Copy",
-                        action: function(e, cell) {
-                            navigator.clipboard.writeText(cell.getValue()).catch(err => {
-                                console.error('Could not copy cell value to clipboard: ', err);
-                            });
-                        }
-                    },
-                    {
-                        label: "Cut",
-                        action: function(e, cell) {
-                            navigator.clipboard.writeText(cell.getValue()).then(() => {
+                contextMenu: (cell) => {
+                    let menu = [
+                        {
+                            label: "Copy",
+                            action: (e, cell) => {
+                                navigator.clipboard.writeText(cell.getValue()).catch(err => {
+                                    console.error('Could not copy cell value to clipboard: ', err);
+                                });
+                            }
+                        },
+                        {
+                            label: "Cut",
+                            action: (e, cell) => {
+                                navigator.clipboard.writeText(cell.getValue()).then(() => {
+                                    cell.setValue("");
+                                }).catch(err => {
+                                    console.error('Could not cut cell value: ', err);
+                                });
+                            }
+                        },
+                        {
+                            label: "Paste",
+                            action: (e, cell) => {
+                                navigator.clipboard.readText().then(text => {
+                                    cell.setValue(text);
+                                }).catch(err => {
+                                    console.error('Could not paste into cell: ', err);
+                                });
+                            }
+                        },
+                        {
+                            label: "Delete",
+                            action: (e, cell) => {
                                 cell.setValue("");
-                            }).catch(err => {
-                                console.error('Could not cut cell value: ', err);
-                            });
+                            }
+                        },
+                        {
+                            separator: true,
+                        },
+                        {
+                            label: "Highlight",
+                            menu: highlightOptions.map(option => ({
+                                label: `<div style='display:flex; align-items:center;'><div style='width:10px; height:10px; background-color:${option.value}; margin-right:8px; border:1px solid #ccc;'></div>${option.label}</div>`,
+                                action: (e, cell) => applyHighlight(cell, option.value)
+                            }))
+                        },
+                        {
+                            label: "Clear Highlight",
+                            action: (e, cell) => applyHighlight(cell, '')
                         }
-                    },
-                    {
-                        label: "Paste",
-                        action: function(e, cell) {
-                            navigator.clipboard.readText().then(text => {
-                                cell.setValue(text);
-                            }).catch(err => {
-                                console.error('Could not paste into cell: ', err);
-                            });
-                        }
-                    },
-                    {
-                        label: "Delete",
-                        action: function(e, cell) {
-                            cell.setValue("");
-                        }
-                    },
-                    {
-                        label: "Highlight Color...",
-                        action: function(e, cell) {
-                            showColorPicker = true;
-                        }
-                    },
-                    {
-                        label: "Clear Highlight",
-                        action: function(e, cell) {
-                            clearHighlight();
-                        }
-                    }
-                ]
+                    ];
+                    return menu;
+                }
             };
 
             if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
@@ -714,32 +726,39 @@
 
     const self = { save };
 
-    function applyHighlight(event) {
-        const { color } = event.detail;
-        if (!tabulatorInstance) return;
+    function applyHighlight(cell, color) {
+        const table = cell.getTable();
+        const ranges = table.getRanges();
+        let cellsToHighlight = [];
 
-        try {
-            const selectedCells = tabulatorInstance.getSelectedCells();
-            if (selectedCells.length > 0) {
-                selectedCells.forEach(cell => {
-                    cell.getElement().style.backgroundColor = color;
-                });
-            }
-        } catch (e) {
-            console.error("Error applying highlight:", e);
-        } finally {
-            showColorPicker = false;
-        }
-    }
-
-    function clearHighlight() {
-        if (!tabulatorInstance) return;
-
-        const selectedCells = tabulatorInstance.getSelectedCells();
-        if (selectedCells.length > 0) {
-            selectedCells.forEach(cell => {
-                cell.getElement().style.backgroundColor = '';
+        if (ranges.length > 0) {
+            ranges.forEach(range => {
+                cellsToHighlight = cellsToHighlight.concat(range.getCells());
             });
+        } else {
+            cellsToHighlight.push(cell);
+        }
+
+        if (cellsToHighlight.length > 0) {
+            let rowsToUpdate = new Set();
+            cellsToHighlight.forEach(c => {
+                const row = c.getRow();
+                const rowData = row.getData();
+                if (!rowData._highlights) {
+                    rowData._highlights = {};
+                }
+                if (color === 'transparent' || color === '') {
+                    delete rowData._highlights[c.getField()];
+                } else {
+                    rowData._highlights[c.getField()] = color;
+                }
+                rowsToUpdate.add(row);
+            });
+            rowsToUpdate.forEach(row => {
+                row.update(row.getData());
+            });
+            isDirty = true;
+            handleSave();
         }
     }
 
@@ -823,13 +842,6 @@
     </ul>
 </div>
 {/if}
-
-<ColorPickerModal
-    bind:showModal={showColorPicker}
-    colors={highlightColors}
-    on:close={() => (showColorPicker = false)}
-    on:confirm={(e) => applyHighlight(e)}
-/>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
