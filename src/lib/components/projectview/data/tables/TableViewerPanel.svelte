@@ -86,7 +86,20 @@
                             label: "Color Cell...",
                             action: () => {
                                 colorPickerCallback = (color) => {
-                                    const cellsToUpdate = tabulatorInstance.getSelectedCells().length > 0 ? tabulatorInstance.getSelectedCells() : [cell];
+                                    const ranges = tabulatorInstance.getRanges();
+                                    let cellsToUpdate = [];
+                                    if (ranges && ranges.length > 0) {
+                                        ranges.forEach(range => {
+                                            const cells = range.getCells();
+                                            cellsToUpdate.push(...cells);
+                                        });
+                                    }
+
+                                    // If no ranges are selected, use the cell that was right-clicked
+                                    if (cellsToUpdate.length === 0) {
+                                        cellsToUpdate.push(cell);
+                                    }
+
                                     cellsToUpdate.forEach(c => {
                                         const row = c.getRow();
                                         let rowData = row.getData();
@@ -104,7 +117,19 @@
                         {
                             label: "Clear Cell Color",
                             action: () => {
-                                const cellsToUpdate = tabulatorInstance.getSelectedCells().length > 0 ? tabulatorInstance.getSelectedCells() : [cell];
+                                const ranges = tabulatorInstance.getRanges();
+                                let cellsToUpdate = [];
+                                if (ranges && ranges.length > 0) {
+                                    ranges.forEach(range => {
+                                        const cells = range.getCells();
+                                        cellsToUpdate.push(...cells);
+                                    });
+                                }
+
+                                if (cellsToUpdate.length === 0) {
+                                    cellsToUpdate.push(cell);
+                                }
+
                                 cellsToUpdate.forEach(c => {
                                     const row = c.getRow();
                                     let rowData = row.getData();
@@ -162,6 +187,7 @@
                 height: "100%",
                 layout: "fitData",
                 history: true,
+                selectableRange: true,
                 columnDefaults: {
                     resizable: "header",
                     headerSort: false,
