@@ -1,10 +1,10 @@
 <!-- src/lib/components/projectview/data/tables/TableViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
-import { get, writable } from 'svelte/store';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { loadTableData, saveTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
     import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
+    import { get } from 'svelte/store'; // To read store value
     import { sep } from '@tauri-apps/api/path'; // For path manipulation
 
     export let tablePath = '';
@@ -26,7 +26,7 @@ import { get, writable } from 'svelte/store';
     import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
 
-const colorPickerStateStore = writable({ show: false, callback: null });
+    let colorPickerState = { show: false, callback: null };
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let searchTerm = '';
@@ -358,28 +358,6 @@ const colorPickerStateStore = writable({ show: false, callback: null });
         showEditHeaderModal = true;
     }
 
-    function updateCellStyles(cellComponent, color) {
-        if (!cellComponent) return;
-        const row = cellComponent.getRow();
-        let rowData = row.getData();
-        const field = cellComponent.getField();
-
-        if (!rowData._cellStyles) rowData._cellStyles = {};
-        if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
-
-        if (color) {
-            rowData._cellStyles[field].backgroundColor = color;
-        } else {
-            // Clearing the color
-            delete rowData._cellStyles[field].backgroundColor;
-            if (Object.keys(rowData._cellStyles[field]).length === 0) {
-                delete rowData._cellStyles[field];
-            }
-        }
-        // Update the row in Tabulator. This is important for reactivity within the table.
-        row.update({ _cellStyles: rowData._cellStyles });
-    }
-
     function styledCellFormatter(cell, formatterParams, onRendered) {
         const data = cell.getRow().getData();
         const field = cell.getField();
@@ -471,7 +449,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                         }
                     }
                 ],
-                contextMenu: (e, cell) => {
+                contextMenu: (cell) => {
                     return [
                         { label: "Copy", action: () => navigator.clipboard.writeText(cell.getValue()) },
                         { label: "Cut", action: () => { navigator.clipboard.writeText(cell.getValue()); cell.setValue(""); } },
@@ -479,35 +457,74 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
                         {
-                            label: "Set Background Color",
+                            label: "Color Cell...",
                             action: () => {
-                                console.log("Set Background Color menu item clicked for cell:", cell.getValue());
-                                colorPickerStateStore.set({
+                                colorPickerState = {
                                     show: true,
                                     callback: (color) => {
                                         const ranges = tabulatorInstance.getRanges();
-                                        const selectedCells = ranges.flatMap(r => r.getCells());
-
-                                        if (selectedCells.length > 1) {
-                                            selectedCells.forEach(c => updateCellStyles(c, color));
+                                        if (ranges && ranges.length > 0) {
+                                            ranges.forEach(range => {
+                                                const structuredCells = range.getStructuredCells();
+                                                structuredCells.forEach(rowOfCells => {
+                                                    rowOfCells.forEach(c => {
+                                                        const row = c.getRow();
+                                                        let rowData = row.getData();
+                                                        let field = c.getField();
+                                                        if (!rowData._cellStyles) rowData._cellStyles = {};
+                                                        if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
+                                                        rowData._cellStyles[field].backgroundColor = color;
+                                                        row.update({ _cellStyles: rowData._cellStyles });
+                                                    });
+                                                });
+                                            });
                                         } else {
-                                            updateCellStyles(cell, color);
+                                            const row = cell.getRow();
+                                            let rowData = row.getData();
+                                            let field = cell.getField();
+                                            if (!rowData._cellStyles) rowData._cellStyles = {};
+                                            if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
+                                            rowData._cellStyles[field].backgroundColor = color;
+                                            row.update({ _cellStyles: rowData._cellStyles });
                                         }
                                         saveTableData(tablePath, tableData);
                                     }
-                                });
+                                };
                             }
                         },
                         {
-                            label: "Clear Background Color",
+                            label: "Clear Cell Color",
                             action: () => {
                                 const ranges = tabulatorInstance.getRanges();
-                                const selectedCells = ranges.flatMap(r => r.getCells());
-
-                                if (selectedCells.length > 1) {
-                                    selectedCells.forEach(c => updateCellStyles(c, null));
+                                if (ranges && ranges.length > 0) {
+                                    ranges.forEach(range => {
+                                        const structuredCells = range.getStructuredCells();
+                                        structuredCells.forEach(rowOfCells => {
+                                            rowOfCells.forEach(c => {
+                                                const row = c.getRow();
+                                                let rowData = row.getData();
+                                                let field = c.getField();
+                                                if (rowData._cellStyles && rowData._cellStyles[field]) {
+                                                    delete rowData._cellStyles[field].backgroundColor;
+                                                    if (Object.keys(rowData._cellStyles[field]).length === 0) {
+                                                        delete rowData._cellStyles[field];
+                                                    }
+                                                    row.update({ _cellStyles: rowData._cellStyles });
+                                                }
+                                            });
+                                        });
+                                    });
                                 } else {
-                                    updateCellStyles(cell, null);
+                                    const row = cell.getRow();
+                                    let rowData = row.getData();
+                                    let field = cell.getField();
+                                    if (rowData._cellStyles && rowData._cellStyles[field]) {
+                                        delete rowData._cellStyles[field].backgroundColor;
+                                        if (Object.keys(rowData._cellStyles[field]).length === 0) {
+                                            delete rowData._cellStyles[field];
+                                        }
+                                        row.update({ _cellStyles: rowData._cellStyles });
+                                    }
                                 }
                                 saveTableData(tablePath, tableData);
                             }
@@ -555,7 +572,33 @@ const colorPickerStateStore = writable({ show: false, callback: null });
              initializeTable(tablePath);
         }
 
-        // Remove manual context menu handling for rows as it's now handled by Tabulator's contextMenu
+        const handleContextMenu = (event) => {
+            const target = event.target;
+            if (target.closest('.tabulator-row-number-column') && !target.closest('.tabulator-header')) {
+                event.preventDefault();
+                event.stopPropagation();
+                showCustomRowMenu = true;
+                customMenuX = event.clientX;
+                customMenuY = event.clientY;
+
+                const rowElement = target.closest('.tabulator-row');
+                if (rowElement) {
+                    if (tabulatorInstance) {
+                        clickedRowComponent = tabulatorInstance.getRow(rowElement);
+                    }
+                }
+            }
+        };
+
+        const hideCustomRowMenu = (event) => {
+            if (showCustomRowMenu && event.target.closest('.custom-row-menu') === null) {
+                showCustomRowMenu = false;
+            }
+        };
+
+        tableContainer.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('click', hideCustomRowMenu);
+
         document.getElementById("history-undo").addEventListener("click", function(){
             if (tabulatorInstance) {
                 tabulatorInstance.undo();
@@ -573,6 +616,8 @@ const colorPickerStateStore = writable({ show: false, callback: null });
 				tabulatorInstance.destroy();
 				tabulatorInstance = null;
 			}
+            tableContainer.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('click', hideCustomRowMenu);
 		}
     });
 
@@ -656,22 +701,32 @@ const colorPickerStateStore = writable({ show: false, callback: null });
         </div>
     </div>
 </div>
-{/if}
-
-{#if $colorPickerStateStore.show}
 <ColorPickerModal
-    bind:show={$colorPickerStateStore.show}
-    title="Set Cell Background Color"
-    on:confirm={(e) => {
-        const state = get(colorPickerStateStore);
-        if (state.callback) state.callback(e.detail.color);
-        colorPickerStateStore.set({ show: false, callback: null });
+    bind:show={colorPickerState.show}
+    on:save={(e) => {
+        if (colorPickerState.callback) colorPickerState.callback(e.detail.color);
+        colorPickerState = { show: false, callback: null };
     }}
-    on:close={() => colorPickerStateStore.set({ show: false, callback: null })}
+    on:cancel={() => colorPickerState = { show: false, callback: null }}
 />
 {/if}
 
-<!-- The custom row context menu is removed as this functionality is now part of Tabulator's native context menus -->
+{#if showCustomRowMenu}
+<div
+    class="absolute z-50 bg-white dark:bg-gray-800 shadow-lg rounded-md py-1"
+    style="left: {customMenuX}px; top: {customMenuY}px;"
+>
+    <ul class="text-sm text-gray-700 dark:text-gray-200">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={copyRow}>Copy</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={cutRow}>Cut</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={pasteRow}>Paste</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={deleteRow}>Delete</button></li>
+        <hr class="my-1 border-gray-200 dark:border-gray-700">
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={insertRowAbove}>Insert Row Above</button></li>
+        <li><button class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700" on:click={insertRowBelow}>Insert Row Below</button></li>
+    </ul>
+</div>
+{/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
