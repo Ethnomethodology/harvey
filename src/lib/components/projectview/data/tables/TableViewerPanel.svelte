@@ -509,6 +509,9 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                                             rowData._rowBackgroundColor = color;
                                             row.update({ _rowBackgroundColor: rowData._rowBackgroundColor });
                                         }
+
+                                        const updatedData = tabulatorInstance.getData();
+                                        tableData = updatedData;
                                         saveTableData(tablePath, tableData);
                                     }
                                 });
@@ -533,6 +536,9 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                                     delete rowData._rowBackgroundColor;
                                     row.update({ _rowBackgroundColor: undefined });
                                 }
+
+                                const updatedData = tabulatorInstance.getData();
+                                tableData = updatedData;
                                 saveTableData(tablePath, tableData);
                             }
                         }
