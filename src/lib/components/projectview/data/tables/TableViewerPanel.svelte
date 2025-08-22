@@ -524,9 +524,6 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                             action: () => {
                                 const ranges = tabulatorInstance.getRanges();
                                 const selectedCells = ranges.flatMap(r => r.getCells());
-
-                                const ranges = tabulatorInstance.getRanges();
-                                const selectedCells = ranges.flatMap(r => r.getCells());
                                 const rowsToUpdate = (selectedCells.length > 0)
                                     ? [...new Set(selectedCells.map(c => c.getRow()))]
                                     : [cell.getRow()];
