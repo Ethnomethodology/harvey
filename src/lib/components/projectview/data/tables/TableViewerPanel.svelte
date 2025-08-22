@@ -370,7 +370,11 @@ const colorPickerStateStore = writable({ show: false, callback: null });
     }
 
     function applyRowColor(cell, color = null) {
-        if (!tabulatorInstance) return;
+        console.log(`[applyRowColor] Called. Color: ${color}. Cell value:`, cell.getValue());
+        if (!tabulatorInstance) {
+            console.error("[applyRowColor] Tabulator instance not found.");
+            return;
+        }
         const ranges = tabulatorInstance.getRanges();
         const selectedCells = ranges.flatMap(r => r.getCells());
         const rowsToUpdate = (selectedCells.length > 0)
