@@ -87,28 +87,28 @@
                             action: () => {
                                 colorPickerCallback = (color) => {
                                     const ranges = tabulatorInstance.getRanges();
-                                    let cellsToUpdate = [];
                                     if (ranges && ranges.length > 0) {
                                         ranges.forEach(range => {
                                             const cells = range.getCells();
-                                            cellsToUpdate.push(...cells);
+                                            cells.forEach(c => {
+                                                const row = c.getRow();
+                                                let rowData = row.getData();
+                                                let field = c.getField();
+                                                if (!rowData._cellStyles) rowData._cellStyles = {};
+                                                if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
+                                                rowData._cellStyles[field].backgroundColor = color;
+                                                row.update({ _cellStyles: rowData._cellStyles });
+                                            });
                                         });
-                                    }
-
-                                    // If no ranges are selected, use the cell that was right-clicked
-                                    if (cellsToUpdate.length === 0) {
-                                        cellsToUpdate.push(cell);
-                                    }
-
-                                    cellsToUpdate.forEach(c => {
-                                        const row = c.getRow();
+                                    } else {
+                                        const row = cell.getRow();
                                         let rowData = row.getData();
-                                        let field = c.getField();
+                                        let field = cell.getField();
                                         if (!rowData._cellStyles) rowData._cellStyles = {};
                                         if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
                                         rowData._cellStyles[field].backgroundColor = color;
                                         row.update({ _cellStyles: rowData._cellStyles });
-                                    });
+                                    }
                                     saveTableData(tablePath, tableData);
                                 };
                                 showColorPicker = true;
@@ -118,22 +118,26 @@
                             label: "Clear Cell Color",
                             action: () => {
                                 const ranges = tabulatorInstance.getRanges();
-                                let cellsToUpdate = [];
                                 if (ranges && ranges.length > 0) {
                                     ranges.forEach(range => {
                                         const cells = range.getCells();
-                                        cellsToUpdate.push(...cells);
+                                        cells.forEach(c => {
+                                            const row = c.getRow();
+                                            let rowData = row.getData();
+                                            let field = c.getField();
+                                            if (rowData._cellStyles && rowData._cellStyles[field]) {
+                                                delete rowData._cellStyles[field].backgroundColor;
+                                                if (Object.keys(rowData._cellStyles[field]).length === 0) {
+                                                    delete rowData._cellStyles[field];
+                                                }
+                                                row.update({ _cellStyles: rowData._cellStyles });
+                                            }
+                                        });
                                     });
-                                }
-
-                                if (cellsToUpdate.length === 0) {
-                                    cellsToUpdate.push(cell);
-                                }
-
-                                cellsToUpdate.forEach(c => {
-                                    const row = c.getRow();
+                                } else {
+                                    const row = cell.getRow();
                                     let rowData = row.getData();
-                                    let field = c.getField();
+                                    let field = cell.getField();
                                     if (rowData._cellStyles && rowData._cellStyles[field]) {
                                         delete rowData._cellStyles[field].backgroundColor;
                                         if (Object.keys(rowData._cellStyles[field]).length === 0) {
@@ -141,7 +145,7 @@
                                         }
                                         row.update({ _cellStyles: rowData._cellStyles });
                                     }
-                                });
+                                }
                                 saveTableData(tablePath, tableData);
                             }
                         }
