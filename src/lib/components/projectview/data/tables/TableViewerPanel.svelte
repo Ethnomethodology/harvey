@@ -6,6 +6,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { get } from 'svelte/store';
     import { sep } from '@tauri-apps/api/path';
+    import { getRelativePath } from '$lib/utils/pathUtils.js';
     import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
 
