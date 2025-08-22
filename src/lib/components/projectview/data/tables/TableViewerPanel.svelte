@@ -670,12 +670,13 @@ const colorPickerStateStore = writable({ show: false, callback: null });
 <ColorPickerModal
     bind:show={$colorPickerStateStore.show}
     title="Set Cell Background Color"
-    on:confirm={(e) => {
-        const state = get(colorPickerStateStore);
-        if (state.callback) state.callback(e.detail.color);
+    on:confirm={() => {
+        console.log('MODAL CONFIRMED!');
+    }}
+    on:close={() => {
+        console.log('MODAL CLOSED!');
         colorPickerStateStore.set({ show: false, callback: null });
     }}
-    on:close={() => colorPickerStateStore.set({ show: false, callback: null })}
 />
 {/if}
 
