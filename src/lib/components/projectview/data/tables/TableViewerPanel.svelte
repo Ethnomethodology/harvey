@@ -378,15 +378,22 @@ const colorPickerStateStore = writable({ show: false, callback: null });
             : [cell.getRow()];
 
         rowsToUpdate.forEach(row => {
+            // Manually update the DOM element for an immediate visual effect.
+            const rowElement = row.getElement();
+            if (rowElement) {
+                rowElement.style.backgroundColor = color || "";
+            }
+
+            // Also update the underlying data for persistence.
             let rowData = row.getData();
             if (color) {
                 rowData._rowBackgroundColor = color;
             } else {
                 delete rowData._rowBackgroundColor;
             }
+            // We still call update to ensure Tabulator's internal data model is aware of the change.
             row.update({ _rowBackgroundColor: color || undefined })
-                .then(() => row.reformat())
-                .catch(err => console.error("Row update/reformat failed:", err));
+                .catch(err => console.error("Row data update failed:", err));
         });
 
         const updatedData = tabulatorInstance.getData();
