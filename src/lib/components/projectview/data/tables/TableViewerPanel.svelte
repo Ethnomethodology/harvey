@@ -26,8 +26,7 @@
     import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
 
-    let showColorPicker = false;
-    let colorPickerCallback = null;
+    let colorPickerState = { show: false, callback: null };
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let searchTerm = '';
@@ -459,37 +458,38 @@
                         { separator: true },
                         {
                             label: "Color Cell...",
-                            action: async () => {
-                                colorPickerCallback = (color) => {
-                                    const ranges = tabulatorInstance.getRanges();
-                                    if (ranges && ranges.length > 0) {
-                                        ranges.forEach(range => {
-                                            const structuredCells = range.getStructuredCells();
-                                            structuredCells.forEach(rowOfCells => {
-                                                rowOfCells.forEach(c => {
-                                                    const row = c.getRow();
-                                                    let rowData = row.getData();
-                                                    let field = c.getField();
-                                                    if (!rowData._cellStyles) rowData._cellStyles = {};
-                                                    if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
-                                                    rowData._cellStyles[field].backgroundColor = color;
-                                                    row.update({ _cellStyles: rowData._cellStyles });
+                            action: () => {
+                                colorPickerState = {
+                                    show: true,
+                                    callback: (color) => {
+                                        const ranges = tabulatorInstance.getRanges();
+                                        if (ranges && ranges.length > 0) {
+                                            ranges.forEach(range => {
+                                                const structuredCells = range.getStructuredCells();
+                                                structuredCells.forEach(rowOfCells => {
+                                                    rowOfCells.forEach(c => {
+                                                        const row = c.getRow();
+                                                        let rowData = row.getData();
+                                                        let field = c.getField();
+                                                        if (!rowData._cellStyles) rowData._cellStyles = {};
+                                                        if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
+                                                        rowData._cellStyles[field].backgroundColor = color;
+                                                        row.update({ _cellStyles: rowData._cellStyles });
+                                                    });
                                                 });
                                             });
-                                        });
-                                    } else {
-                                        const row = cell.getRow();
-                                        let rowData = row.getData();
-                                        let field = cell.getField();
-                                        if (!rowData._cellStyles) rowData._cellStyles = {};
-                                        if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
-                                        rowData._cellStyles[field].backgroundColor = color;
-                                        row.update({ _cellStyles: rowData._cellStyles });
+                                        } else {
+                                            const row = cell.getRow();
+                                            let rowData = row.getData();
+                                            let field = cell.getField();
+                                            if (!rowData._cellStyles) rowData._cellStyles = {};
+                                            if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
+                                            rowData._cellStyles[field].backgroundColor = color;
+                                            row.update({ _cellStyles: rowData._cellStyles });
+                                        }
+                                        saveTableData(tablePath, tableData);
                                     }
-                                    saveTableData(tablePath, tableData);
                                 };
-                                showColorPicker = true;
-                                await tick();
                             }
                         },
                         {
@@ -702,12 +702,12 @@
     </div>
 </div>
 <ColorPickerModal
-    bind:show={showColorPicker}
+    bind:show={colorPickerState.show}
     on:save={(e) => {
-        if (colorPickerCallback) colorPickerCallback(e.detail.color);
-        colorPickerCallback = null;
+        if (colorPickerState.callback) colorPickerState.callback(e.detail.color);
+        colorPickerState = { show: false, callback: null };
     }}
-    on:cancel={() => colorPickerCallback = null}
+    on:cancel={() => colorPickerState = { show: false, callback: null }}
 />
 {/if}
 
