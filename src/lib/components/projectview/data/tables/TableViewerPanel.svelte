@@ -369,26 +369,29 @@ const colorPickerStateStore = writable({ show: false, callback: null });
         showEditHeaderModal = true;
     }
 
-    function updateCellStyles(cellComponent, color) {
-        if (!cellComponent) return;
-        const row = cellComponent.getRow();
-        let rowData = row.getData();
-        const field = cellComponent.getField();
+    function applyRowColor(cell, color = null) {
+        if (!tabulatorInstance) return;
+        const ranges = tabulatorInstance.getRanges();
+        const selectedCells = ranges.flatMap(r => r.getCells());
+        const rowsToUpdate = (selectedCells.length > 0)
+            ? [...new Set(selectedCells.map(c => c.getRow()))]
+            : [cell.getRow()];
 
-        if (!rowData._cellStyles) rowData._cellStyles = {};
-        if (!rowData._cellStyles[field]) rowData._cellStyles[field] = {};
-
-        if (color) {
-            rowData._cellStyles[field].backgroundColor = color;
-        } else {
-            // Clearing the color
-            delete rowData._cellStyles[field].backgroundColor;
-            if (Object.keys(rowData._cellStyles[field]).length === 0) {
-                delete rowData._cellStyles[field];
+        rowsToUpdate.forEach(row => {
+            let rowData = row.getData();
+            if (color) {
+                rowData._rowBackgroundColor = color;
+            } else {
+                delete rowData._rowBackgroundColor;
             }
-        }
-        // Update the row in Tabulator. This is important for reactivity within the table.
-        row.update({ _cellStyles: rowData._cellStyles });
+            row.update({ _rowBackgroundColor: color || undefined })
+                .then(() => row.reformat())
+                .catch(err => console.error("Row update/reformat failed:", err));
+        });
+
+        const updatedData = tabulatorInstance.getData();
+        tableData = updatedData;
+        saveTableData(tablePath, tableData);
     }
 
     function styledCellFormatter(cell, formatterParams, onRendered) {
@@ -495,26 +498,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                                 colorPickerStateStore.set({
                                     show: true,
                                     callback: (color) => {
-                                        const ranges = tabulatorInstance.getRanges();
-                                        const selectedCells = ranges.flatMap(r => r.getCells());
-
-                                        const ranges = tabulatorInstance.getRanges();
-                                        const selectedCells = ranges.flatMap(r => r.getCells());
-                                        const rowsToUpdate = (selectedCells.length > 0)
-                                            ? [...new Set(selectedCells.map(c => c.getRow()))]
-                                            : [cell.getRow()];
-
-                                        rowsToUpdate.forEach(row => {
-                                            let rowData = row.getData();
-                                            rowData._rowBackgroundColor = color;
-                                            row.update({ _rowBackgroundColor: rowData._rowBackgroundColor })
-                                                .then(() => row.reformat())
-                                                .catch(err => console.error("Row update/reformat failed:", err));
-                                        });
-
-                                        const updatedData = tabulatorInstance.getData();
-                                        tableData = updatedData;
-                                        saveTableData(tablePath, tableData);
+                                        applyRowColor(cell, color);
                                     }
                                 });
                             }
@@ -522,23 +506,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                         {
                             label: "Clear Row Background Color",
                             action: () => {
-                                const ranges = tabulatorInstance.getRanges();
-                                const selectedCells = ranges.flatMap(r => r.getCells());
-                                const rowsToUpdate = (selectedCells.length > 0)
-                                    ? [...new Set(selectedCells.map(c => c.getRow()))]
-                                    : [cell.getRow()];
-
-                                rowsToUpdate.forEach(row => {
-                                    let rowData = row.getData();
-                                    delete rowData._rowBackgroundColor;
-                                    row.update({ _rowBackgroundColor: undefined }) // Force update
-                                        .then(() => row.reformat())
-                                        .catch(err => console.error("Row update/reformat failed:", err));
-                                });
-
-                                const updatedData = tabulatorInstance.getData();
-                                tableData = updatedData;
-                                saveTableData(tablePath, tableData);
+                                applyRowColor(cell, null);
                             }
                         }
                     ];
