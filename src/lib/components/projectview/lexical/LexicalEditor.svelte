@@ -499,32 +499,16 @@
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
 
     unregisterListeners = mergeRegister(
-        editor.registerUpdateListener(({ editorState, prevEditorState }) => {
-            let highlightsChanged = false;
-            let currentHighlights;
-
+        editor.registerUpdateListener(({ editorState }) => {
             if (isReady) {
                 try {
-                    editorState.read(() => {
-                        updateToolbarState();
-                        if (!prevEditorState.isEmpty()) {
-                            currentHighlights = gatherAllHighlights();
-                            const previousHighlights = documentHighlights;
-                            highlightsChanged = didHighlightsChange(previousHighlights, currentHighlights);
-                        }
-                    });
+                    editorState.read(updateToolbarState);
                 } catch (readError) {
                     console.error("Error reading editor state in update listener:", readError);
                 }
-
                 const jsonString = JSON.stringify(editorState.toJSON());
                 dispatch('change', { jsonString: jsonString });
-
-                if (highlightsChanged) {
-                    updateAndSaveHighlights(currentHighlights);
-                }
             }
-
             if (showTableCellMenu) {
                 try {
                     editorState.read(() => {
@@ -1172,29 +1156,6 @@ function gatherAllHighlights() {
         }
     }
     return allHighlights;
-}
-
-function didHighlightsChange(oldHighlights, newHighlights) {
-    if (oldHighlights.length !== newHighlights.length) {
-        return true;
-    }
-
-    const oldMap = new Map(oldHighlights.map(h => [h.id, h]));
-
-    for (const newHighlight of newHighlights) {
-        const oldHighlight = oldMap.get(newHighlight.id);
-        if (!oldHighlight) {
-            return true;
-        }
-        if (oldHighlight.text !== newHighlight.text ||
-            oldHighlight.color !== newHighlight.color ||
-            JSON.stringify(oldHighlight.tags) !== JSON.stringify(newHighlight.tags) ||
-            JSON.stringify(oldHighlight.comments) !== JSON.stringify(newHighlight.comments)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 function updateAndSaveHighlights(highlights) {

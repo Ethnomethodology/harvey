@@ -1,11 +1,21 @@
 <!-- src/lib/components/projectview/data/tables/TableViewerPanel.svelte -->
 <script>
     import { onMount, onDestroy, tick } from 'svelte';
-import { get, writable } from 'svelte/store';
+    import { get, writable } from 'svelte/store';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
-    import { loadTableData, saveTableData, saveTableLayoutPrefs, loadTableLayoutPrefs, renameTableHeader } from '$lib/services/projectService.js'; // Added new functions
-    import { project } from '$lib/stores/projectStore.js'; // For baseDirectory
-    import { sep } from '@tauri-apps/api/path'; // For path manipulation
+    import {
+        loadTableData,
+        saveTableData,
+        saveTableLayoutPrefs,
+        loadTableLayoutPrefs,
+        renameTableHeader,
+        saveTableStyles,
+        loadTableStyles
+    } from '$lib/services/projectService.js';
+    import { project } from '$lib/stores/projectStore.js';
+    import { sep } from '@tauri-apps/api/path';
+    import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
+    import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
 
     export let tablePath = '';
     export let hasHeaders = true;
@@ -15,28 +25,17 @@ import { get, writable } from 'svelte/store';
     let tableData = [];
     let isLoading = true;
     let error = null;
-    let currentLoadedPath = null; // Track what path is currently loaded/being loaded
+    let currentLoadedPath = null;
 
-    // Custom Context Menu State
-    let showCustomRowMenu = false;
-    let customMenuX = 0;
-    let customMenuY = 0;
-    let clickedRowComponent = null; // To store the Tabulator RowComponent that was right-clicked
-
-    import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
-    import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
-
-const colorPickerStateStore = writable({ show: false, callback: null });
+    const colorPickerStateStore = writable({ show: false, callback: null });
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
+    let tableStyles = { rowStyles: {} };
     let searchTerm = '';
-    let searchMatches = []; // To store Tabulator RowComponents that match
+    let searchMatches = [];
     let currentMatchIndex = -1;
-    // It might be useful to also store the actual column fields for easy access
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
-
-    let selectedCellCache = [];
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
@@ -44,12 +43,12 @@ const colorPickerStateStore = writable({ show: false, callback: null });
         const newSnapshotColumns = {};
         currentColumnDefs.forEach((colDef, index) => {
             if (colDef.field) {
-                const columnComponent = tabulatorInstance.getColumn(colDef.field); // Get column component
+                const columnComponent = tabulatorInstance.getColumn(colDef.field);
                 if (columnComponent) {
                     newSnapshotColumns[colDef.field] = {
-                        order: index, // Or columnComponent.getPosition(true) - 1 if more robust for order
+                        order: index,
                         visible: columnComponent.isVisible(),
-                        width: columnComponent.getWidth(), // Get live width
+                        width: columnComponent.getWidth(),
                     };
                 }
             }
@@ -66,7 +65,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                 relativePath = relativePath.substring(1);
             }
         }
-        return relativePath.replaceAll('\\', '/'); // Normalize to forward slashes
+        return relativePath.replaceAll('\\', '/');
     }
 
     function debounce(func, delay) {
@@ -79,25 +78,15 @@ const colorPickerStateStore = writable({ show: false, callback: null });
     }
 
     async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
-        if (newHasHeaders !== null) {
-            hasHeaders = newHasHeaders;
-        }
-        if (!pathForTable || !tableContainer) {
-            return;
-        }
-
-        if (isLoading && currentLoadedPath === pathForTable) {
-            return;
-        }
-        if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) {
-            return;
-        }
+        if (newHasHeaders !== null) hasHeaders = newHasHeaders;
+        if (!pathForTable || !tableContainer) return;
+        if (isLoading && currentLoadedPath === pathForTable) return;
+        if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) return;
 
         currentLoadedPath = pathForTable;
         isLoading = true;
         error = null;
         tableData = [];
-        selectedCellCache = [];
 
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
@@ -105,20 +94,22 @@ const colorPickerStateStore = writable({ show: false, callback: null });
         }
 
         try {
-            const response = await loadTableData(pathForTable, hasHeaders);
-            const tableHeaders = response.headers;
-            tableData = response.data;
-
-            if (tableData.length === 0) {
-                console.warn('[TableViewerPanel initializeTable] No data returned from loadTableData.');
+            const loadedStyles = await loadTableStyles(pathForTable);
+            if (loadedStyles && loadedStyles.rowStyles) {
+                tableStyles = loadedStyles;
+            } else {
+                tableStyles = { rowStyles: {} };
             }
+
+            const response = await loadTableData(pathForTable, hasHeaders);
+            tableData = response.data;
+            const tableHeaders = response.headers;
 
             await tick();
 
             if (!tableContainer) {
                  error = 'Failed to initialize table viewer: container lost.';
                  isLoading = false;
-                 currentLoadedPath = null;
                  return;
             }
 
@@ -126,27 +117,16 @@ const colorPickerStateStore = writable({ show: false, callback: null });
             if (!projectBaseDir) {
                 error = "Project configuration error: base directory missing.";
                 isLoading = false;
-                currentLoadedPath = null;
                 return;
             }
             const relativeTablePath = getRelativePath(pathForTable, projectBaseDir);
-
             if (!relativeTablePath) {
                 error = "Error determining asset relative path.";
                 isLoading = false;
-                currentLoadedPath = null;
                 return;
             }
 
-            let savedLayout = null;
-            try {
-                const layoutData = await loadTableLayoutPrefs(relativeTablePath);
-                if (layoutData) {
-                    savedLayout = layoutData;
-                }
-            } catch (e) {
-                console.error(`[TableViewerPanel] Error loading layout for ${relativeTablePath}:`, e);
-            }
+            let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
 
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
@@ -156,14 +136,12 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                 placeholder: "No Data Available",
                 selectableRange: 1,
                 rowFormatter: function(row) {
-                    const data = row.getData();
-                    const rowElement = row.getElement();
-                    console.log(`[Row Formatter] Formatting row ${row.getPosition()}. Data contains color:`, data._rowBackgroundColor || 'No');
-                    if (data._rowBackgroundColor) {
-                        console.log(`[Row Formatter] Applying color ${data._rowBackgroundColor} to row ${row.getPosition()}`);
-                        rowElement.style.backgroundColor = data._rowBackgroundColor;
+                    const rowIndex = row.getPosition();
+                    const color = tableStyles.rowStyles[rowIndex];
+                    if (color) {
+                        row.getElement().style.backgroundColor = color;
                     } else {
-                        rowElement.style.backgroundColor = ""; // Clear it if not present
+                        row.getElement().style.backgroundColor = "";
                     }
                 },
                 history:true,
@@ -174,20 +152,14 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                     headerSort:false,
                     headerHozAlign:"center",
                     editor:"textarea",
-                    editorParams:{
-                        verticalNavigation:"editor",
-                        shiftEnterSubmit:true,
-                    },
+                    editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
                     resizable:"header",
                     width:100,
                     minWidth: 50,
                 },
                 clipboard: true,
                 clipboardCopyStyled:false,
-                clipboardCopyConfig:{
-                    rowHeaders:false,
-                    columnHeaders:false,
-                },
+                clipboardCopyConfig:{ rowHeaders:false, columnHeaders:false },
                 clipboardCopyRowRange:"range",
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
@@ -195,165 +167,56 @@ const colorPickerStateStore = writable({ show: false, callback: null });
 
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
-
                 const baseDirForSave = get(project)?.baseDirectory;
-                if (!baseDirForSave) {
-                    return;
-                }
                 const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
-                if (!relativePathForSave) {
-                    return;
-                }
-
-                try {
-                    const layoutToSave = { columns: {} };
-                    for (const field in tableLayoutSnapshot.columns) {
-                        const colData = tableLayoutSnapshot.columns[field];
-                        const columnSaveData = {
-                            order: colData.order,
-                            visible: colData.visible,
-                        };
-                        if (typeof colData.width === 'number' && colData.width > 0) {
-                            columnSaveData.width = colData.width;
-                        }
-                        layoutToSave.columns[field] = columnSaveData;
-                    }
-                    await saveTableLayoutPrefs(relativePathForSave, layoutToSave);
-                } catch (error) {
-                    console.error(`[TableViewerPanel] Failed to save layout for ${relativePathForSave}:`, error);
-                }
+                if (!baseDirForSave || !relativePathForSave) return;
+                updateTableLayoutSnapshot();
+                await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
             }, 750);
 
-            tabulatorInstance.on("columnResized", (column) => {
-                if (tableLayoutSnapshot.columns[column.getField()]) {
-                    tableLayoutSnapshot.columns[column.getField()].width = column.getWidth();
-                } else {
-                    tableLayoutSnapshot.columns[column.getField()] = {
-                        width: column.getWidth(),
-                        order: column.getPosition(true) -1,
-                        visible: column.isVisible()
-                    };
-                }
-                updateTableLayoutSnapshot();
-                saveCurrentTableLayout();
-            });
-
-            tabulatorInstance.on("columnMoved", (column, columns) => {
-                updateTableLayoutSnapshot();
-                saveCurrentTableLayout();
-            });
+            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
+            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
 
             tabulatorInstance.on("cellEdited", function(cell) {
-                const rowIndex = cell.getRow().getPosition() - 1;
-                const field = cell.getField();
-                const newValue = cell.getValue().replace(/\r/g, '');
-                tableData[rowIndex][field] = newValue;
-                project.update(p => ({ ...p, isDocumentDirty: true, tableData: tableData }));
+                const updatedData = tabulatorInstance.getData();
+                tableData = updatedData;
                 saveTableData(tablePath, tableData);
             });
 
-            tabulatorInstance.on("rangeAdded", (range) => {
-                selectedCellCache = range.getCells();
-            });
+            tabulatorInstance.on("renderComplete", updateTableLayoutSnapshot);
 
-            tabulatorInstance.on("rangeRemoved", (range) => {
-                selectedCellCache = [];
-            });
-
-            tabulatorInstance.on("renderComplete", () => {
-                updateTableLayoutSnapshot();
-                const filters = tableContainer.querySelectorAll(".tabulator-header-filter input");
-                filters.forEach(input => {
-                    input.setAttribute("autocomplete", "off");
-                    input.setAttribute("autocorrect", "off");
-                    input.setAttribute("autocapitalize", "none");
-                    input.setAttribute("spellcheck", "false");
-                });
-            });
-
-            setTimeout(() => {
-                if (tabulatorInstance && typeof tabulatorInstance.redraw === 'function') {
-                    tabulatorInstance.redraw();
-                }
-            }, 100);
-
-            const columns = tabulatorInstance.getColumnDefinitions();
-            columnFields = columns.map(col => col.field).filter(field => field && field !== 'placeholder');
+            columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
 
         } catch (err) {
             error = `Failed to load table: ${err.message || err}`;
-            currentLoadedPath = null;
         } finally {
-            if (currentLoadedPath === pathForTable) {
-                isLoading = false;
-            }
+            isLoading = false;
         }
     }
 
     function handleSearch() {
         if (!tabulatorInstance) return;
         const term = searchTerm.trim();
-
-        clearHighlights();
-
-        if (!term) {
-            tabulatorInstance.clearFilter();
-            searchMatches = [];
-            currentMatchIndex = -1;
-            return;
-        }
-
-        const filters = columnFields.map(field => ({ field: field, type: 'like', value: term }));
-        tabulatorInstance.setFilter(filters);
+        tabulatorInstance.setFilter(term ? columnFields.map(field => ({ field, type: 'like', value: term })) : []);
         searchMatches = tabulatorInstance.getRows("active");
-
-        if (searchMatches.length > 0) {
-            navigateToMatch(0);
-        } else {
-            currentMatchIndex = -1;
-        }
-    }
-
-    function clearHighlights() {
-        if (tabulatorInstance) {
-            tabulatorInstance.deselectRow();
-        }
+        currentMatchIndex = -1;
+        if (searchMatches.length > 0) navigateToMatch(0);
     }
 
     async function navigateToMatch(index) {
-        if (!tabulatorInstance || searchMatches.length === 0 || index < 0 || index >= searchMatches.length) {
-            currentMatchIndex = -1;
-            if (tabulatorInstance) tabulatorInstance.deselectRow();
-            return;
-        }
-
-        if (tabulatorInstance) {
-            tabulatorInstance.deselectRow();
-        }
-
+        if (!tabulatorInstance || !searchMatches[index]) return;
         currentMatchIndex = index;
-        const rowComponent = searchMatches[currentMatchIndex];
-
-        if (rowComponent) {
-            try {
-                await rowComponent.scrollTo();
-                await rowComponent.select();
-            } catch (err) {
-                console.error("Error navigating to match:", err);
-            }
-        }
+        await searchMatches[index].scrollTo().catch(err => console.error("Scroll failed", err));
+        tabulatorInstance.deselectRow();
+        searchMatches[index].select();
     }
 
     function goToNextMatch() {
-        if (searchMatches.length > 0 && currentMatchIndex < searchMatches.length - 1) {
-            navigateToMatch(currentMatchIndex + 1);
-        }
+        if (currentMatchIndex < searchMatches.length - 1) navigateToMatch(currentMatchIndex + 1);
     }
 
     function goToPreviousMatch() {
-        if (searchMatches.length > 0 && currentMatchIndex > 0) {
-            navigateToMatch(currentMatchIndex - 1);
-        }
+        if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
     }
 
     let showEditHeaderModal = false;
@@ -362,19 +225,13 @@ const colorPickerStateStore = writable({ show: false, callback: null });
 
     function openHeaderEditor(column) {
         currentColumnComponent = column;
-        editingHeader = {
-            oldName: column.getDefinition().field,
-            newName: column.getDefinition().field
-        };
+        editingHeader = { oldName: column.getDefinition().field, newName: column.getDefinition().field };
         showEditHeaderModal = true;
     }
 
-    function applyRowColor(cell, color = null) {
-        console.log(`[applyRowColor] Called. Color: ${color}. Cell value:`, cell.getValue());
-        if (!tabulatorInstance) {
-            console.error("[applyRowColor] Tabulator instance not found.");
-            return;
-        }
+    async function applyRowColor(cell, color = null) {
+        if (!tabulatorInstance) return;
+
         const ranges = tabulatorInstance.getRanges();
         const selectedCells = ranges.flatMap(r => r.getCells());
         const rowsToUpdate = (selectedCells.length > 0)
@@ -382,119 +239,41 @@ const colorPickerStateStore = writable({ show: false, callback: null });
             : [cell.getRow()];
 
         rowsToUpdate.forEach(row => {
-            // Manually update the DOM element for an immediate visual effect.
+            const rowIndex = row.getPosition();
             const rowElement = row.getElement();
-            if (rowElement) {
-                rowElement.style.backgroundColor = color || "";
-            }
 
-            // Also update the underlying data for persistence.
-            let rowData = row.getData();
             if (color) {
-                rowData._rowBackgroundColor = color;
+                tableStyles.rowStyles[rowIndex] = color;
+                if (rowElement) rowElement.style.backgroundColor = color;
             } else {
-                delete rowData._rowBackgroundColor;
+                delete tableStyles.rowStyles[rowIndex];
+                if (rowElement) rowElement.style.backgroundColor = "";
             }
-            // We still call update to ensure Tabulator's internal data model is aware of the change.
-            row.update({ _rowBackgroundColor: color || undefined })
-                .catch(err => console.error("Row data update failed:", err));
         });
 
-        const updatedData = tabulatorInstance.getData();
-        tableData = updatedData;
-        saveTableData(tablePath, tableData);
-    }
-
-    function styledCellFormatter(cell, formatterParams, onRendered) {
-        const data = cell.getRow().getData();
-        const field = cell.getField();
-        const element = cell.getElement();
-
-        if (data._cellStyles && data._cellStyles[field] && data._cellStyles[field].backgroundColor) {
-            element.style.backgroundColor = data._cellStyles[field].backgroundColor;
-        } else {
-            element.style.backgroundColor = '';
+        try {
+            await saveTableStyles(tablePath, tableStyles);
+        } catch (err) {
+            console.error("Failed to save table styles:", err);
         }
-
-        element.style.whiteSpace = "pre-wrap";
-        return cell.getValue();
     }
 
-    function generateColumns(data, headers, savedLayoutObj, isFirstLoad) {
+    function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
-        const rowNumColumn = {
-            title: "#",
-            formatter: "rownum",
-            width: 50,
-            minWidth: 30,
-            hozAlign: "center",
-            resizable: false,
-            headerSort: false,
-            cssClass: "tabulator-row-number-column",
-            editor:false
-        };
+        const rowNumColumn = { title: "#", formatter: "rownum", width: 50, minWidth: 30, hozAlign: "center", resizable: false, headerSort: false, cssClass: "tabulator-row-number-column", editor:false };
 
         let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
                 field: header,
                 headerFilter: "input",
-                sorter: inferSorter(data, header),
+                sorter: "string", // Simpler default
                 editor: "textarea",
-                editorParams:{
-                    verticalNavigation:"editor",
-                    shiftEnterSubmit:true,
-                },
-                formatter: styledCellFormatter,
-                formatterParams: {},
+                editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
+                formatter: (cell) => { cell.getElement().style.whiteSpace = "pre-wrap"; return cell.getValue(); },
                 headerContextMenu: [
-                    {
-                        label: "Edit Header",
-                        action: function(e, column) {
-                            openHeaderEditor(column);
-                        }
-                    },
-                    {
-                        label: "Copy",
-                        action: function(e, column) {
-                            navigator.clipboard.writeText(column.getField()).catch(err => {
-                                console.error('Could not copy header to clipboard: ', err);
-                            });
-                        }
-                    },
-                    {
-                        label: "Cut",
-                        action: function(e, column) {
-                            console.log(`Cut header ${column.getField()}`);
-                        }
-                    },
-                    {
-                        label: "Paste",
-                        action: function(e, column) {
-                            console.log(`Paste header at ${column.getField()}`);
-                        }
-                    },
-                    {
-                        label: "Delete Column",
-                        action: function(e, column) {
-                            if (confirm(`Are you sure you want to delete the column '${column.getField()}'? This action cannot be undone.`)) {
-                                tabulatorInstance.deleteColumn(column);
-                            }
-                        }
-                    },
-                    {
-                        label: "Insert Column Left",
-                        action: function(e, column) {
-                            console.log(`Insert column left of ${column.getField()}`);
-                        }
-                    },
-                    {
-                        label: "Insert Column Right",
-                        action: function(e, column) {
-                            console.log(`Insert column right of ${column.getField()}`);
-                        }
-                    }
+                    { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                 ],
                 contextMenu: (e, cell) => {
                     return [
@@ -506,129 +285,73 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                         {
                             label: "Set Row Background Color",
                             action: () => {
-                                colorPickerStateStore.set({
-                                    show: true,
-                                    callback: (color) => {
-                                        applyRowColor(cell, color);
-                                    }
-                                });
+                                colorPickerStateStore.set({ show: true, callback: (color) => applyRowColor(cell, color) });
                             }
                         },
                         {
                             label: "Clear Row Background Color",
-                            action: () => {
-                                applyRowColor(cell, null);
-                            }
+                            action: () => applyRowColor(cell, null)
                         }
                     ];
                 }
             };
 
-            if (savedLayoutObj && savedLayoutObj.columns && savedLayoutObj.columns[header]) {
+            if (savedLayoutObj?.columns?.[header]) {
                 const savedCol = savedLayoutObj.columns[header];
-                if (typeof savedCol.width === 'number' && savedCol.width > 0) {
-                    colDef.width = savedCol.width;
-                }
+                if (typeof savedCol.width === 'number' && savedCol.width > 0) colDef.width = savedCol.width;
                 colDef.visible = savedCol.visible;
             }
             return colDef;
         });
 
-        if (savedLayoutObj && savedLayoutObj.columns) {
-            dataColumnDefs.sort((a, b) => {
-                const orderA = savedLayoutObj.columns[a.field]?.order ?? Infinity;
-                const orderB = savedLayoutObj.columns[b.field]?.order ?? Infinity;
-                return orderA - orderB;
-            });
-            dataColumnDefs.forEach(colDef => {
-                if (savedLayoutObj.columns[colDef.field] && typeof savedLayoutObj.columns[colDef.field].visible === 'boolean') {
-                    colDef.visible = savedLayoutObj.columns[colDef.field].visible;
-                }
-            });
+        if (savedLayoutObj?.columns) {
+            dataColumnDefs.sort((a, b) => (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity));
         }
 
-        return [rowNumColumn].concat(dataColumnDefs);
+        return [rowNumColumn, ...dataColumnDefs];
     }
 
-     function inferSorter(data, field) {
-         if (!data || data.length === 0 || !data[0].hasOwnProperty(field)) return "string";
-         const firstValue = data[0][field];
-         if (typeof firstValue === 'number') return "number";
-         if (typeof firstValue === 'boolean') return "boolean";
-         return "string";
-     }
-
     onMount(() => {
-        if (tablePath && tableContainer) {
-             initializeTable(tablePath);
-        }
+        if (tablePath) initializeTable(tablePath);
 
-        // Remove manual context menu handling for rows as it's now handled by Tabulator's contextMenu
-        document.getElementById("history-undo").addEventListener("click", function(){
-            if (tabulatorInstance) {
-                tabulatorInstance.undo();
-            }
-        });
+        const undoBtn = document.getElementById("history-undo");
+        const redoBtn = document.getElementById("history-redo");
 
-        document.getElementById("history-redo").addEventListener("click", function(){
-            if (tabulatorInstance) {
-                tabulatorInstance.redo();
-            }
-        });
+        const undo = () => tabulatorInstance?.undo();
+        const redo = () => tabulatorInstance?.redo();
+
+        undoBtn?.addEventListener("click", undo);
+        redoBtn?.addEventListener("click", redo);
 
 		return () => {
-			if (tabulatorInstance) {
-				tabulatorInstance.destroy();
-				tabulatorInstance = null;
-			}
+			tabulatorInstance?.destroy();
+            undoBtn?.removeEventListener("click", undo);
+            redoBtn?.removeEventListener("click", redo);
 		}
     });
 
-    $: if (tablePath && tableContainer) {
-        if (tablePath !== currentLoadedPath) {
-            initializeTable(tablePath);
-        }
-    } else if (!tablePath && tabulatorInstance) {
-        tabulatorInstance.destroy();
-        tabulatorInstance = null;
-        tableData = [];
-        isLoading = false;
-        error = null;
-        currentLoadedPath = null;
+    $: if (tablePath && tablePath !== currentLoadedPath) {
+        initializeTable(tablePath);
     }
 
-    onDestroy(() => {
-        if (tabulatorInstance) {
-            tabulatorInstance.destroy();
-            tabulatorInstance = null;
-        }
-    });
-
-
     async function handleSaveHeader() {
-        if (!currentColumnComponent || editingHeader.newName.trim() === '') return;
-
-        const oldName = editingHeader.oldName;
-        const newName = editingHeader.newName;
-
+        if (!currentColumnComponent || !editingHeader.newName.trim()) return;
+        const { oldName, newName } = editingHeader;
         try {
             await renameTableHeader(tablePath, oldName, newName);
-
             const projectBaseDir = get(project)?.baseDirectory;
             if (projectBaseDir) {
                 const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
                 if (relativeTablePath) {
                     let savedLayout = await loadTableLayoutPrefs(relativeTablePath);
-                    if (savedLayout && savedLayout.columns && savedLayout.columns[oldName]) {
+                    if (savedLayout?.columns?.[oldName]) {
                         savedLayout.columns[newName] = savedLayout.columns[oldName];
                         delete savedLayout.columns[oldName];
                         await saveTableLayoutPrefs(relativeTablePath, savedLayout);
                     }
                 }
             }
-
             await initializeTable(tablePath, null, true);
-
         } catch (error) {
             console.error("Failed to rename header:", error);
         } finally {
@@ -649,16 +372,10 @@ const colorPickerStateStore = writable({ show: false, callback: null });
             class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
         />
         <div class="mt-4 flex justify-end space-x-2">
-            <button
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md"
-                on:click={() => showEditHeaderModal = false}
-            >
+            <button class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md" on:click={() => showEditHeaderModal = false}>
                 Cancel
             </button>
-            <button
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-                on:click={handleSaveHeader}
-            >
+            <button class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md" on:click={handleSaveHeader}>
                 Save
             </button>
         </div>
@@ -669,18 +386,15 @@ const colorPickerStateStore = writable({ show: false, callback: null });
 {#if $colorPickerStateStore.show}
 <ColorPickerModal
     bind:show={$colorPickerStateStore.show}
-    title="Set Cell Background Color"
-    on:confirm={() => {
-        console.log('MODAL CONFIRMED!');
-    }}
-    on:close={() => {
-        console.log('MODAL CLOSED!');
+    title="Set Row Background Color"
+    on:confirm={(e) => {
+        const state = get(colorPickerStateStore);
+        if (state.callback) state.callback(e.detail.color);
         colorPickerStateStore.set({ show: false, callback: null });
     }}
+    on:close={() => colorPickerStateStore.set({ show: false, callback: null })}
 />
 {/if}
-
-<!-- The custom row context menu is removed as this functionality is now part of Tabulator's native context menus -->
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-gray-600 dark:bg-slate-600 flex-shrink-0">
@@ -698,7 +412,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                 </svg>
             </button>
         </div>
-         { #if !isLoading && !error }
+         {#if !isLoading && !error}
          <div class="flex items-center space-x-2">
             <input
               type="search"
@@ -707,9 +421,6 @@ const colorPickerStateStore = writable({ show: false, callback: null });
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
-              autocorrect="off"
-              autocapitalize="none"
-              spellcheck="false"
             >
             <button
               title="Previous Match"
@@ -717,9 +428,7 @@ const colorPickerStateStore = writable({ show: false, callback: null });
               on:click={goToPreviousMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex <= 0}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/>
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/></svg>
             </button>
             <button
               title="Next Match"
@@ -727,17 +436,13 @@ const colorPickerStateStore = writable({ show: false, callback: null });
               on:click={goToNextMatch}
               disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/>
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
             </button>
-            <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    on:click={() => { console.log('TODO: Add new row action'); alert('Add Row'); }}
-                    title="Add New Row">
+            <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50" on:click={() => { console.log('TODO: Add new row action'); alert('Add Row'); }} title="Add New Row">
                 Add Row
             </button>
          </div>
-         { /if }
+         {/if}
     </div>
 
     <div class="flex-grow overflow-auto min-h-0 relative">
@@ -790,27 +495,25 @@ const colorPickerStateStore = writable({ show: false, callback: null });
     padding-left: 0px !important;
 }
 
-
-
         :global(.tabulator-cell) {
-            overflow: hidden; /* Prevent cell itself from showing overflow if textarea somehow fails */
-            word-break: break-all; /* Help break very long words at cell level */
+            overflow: hidden;
+            word-break: break-all;
         }
 
         :global(.tabulator-cell textarea) {
             width: 100%;
             height: 100%;
             box-sizing: border-box;
-            overflow: auto; /* Important: allow scrollbars within the textarea */
-            white-space: pre-wrap; /* Respect newlines, wrap text */
-            word-break: break-all; /* Break long words within textarea */
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
             border: none;
             resize: none;
-            padding: 2px 4px; /* Adjust to match Tabulator's default cell padding or desired look */
+            padding: 2px 4px;
             margin: 0;
-            background-color: transparent; /* Inherit cell background */
-            color: inherit; /* Inherit cell text color */
-            font-family: inherit; /* Inherit cell font */
-            font-size: inherit; /* Inherit cell font size */
+            background-color: transparent;
+            color: inherit;
+            font-family: inherit;
+            font-size: inherit;
         }
 </style>

@@ -111,6 +111,41 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+/**
+ * Saves the style information for a specific table.
+ * @param {string} tablePath - The absolute path to the table file.
+ * @param {object} styles - The style object to save.
+ * @returns {Promise<void>}
+ */
+export async function saveTableStyles(tablePath, styles) {
+    try {
+        await invoke('save_table_styles', { tablePath, styles: JSON.stringify(styles) });
+    } catch (error) {
+        console.error(`Failed to save styles for table ${tablePath}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Loads the style information for a specific table.
+ * @param {string} tablePath - The absolute path to the table file.
+ * @returns {Promise<object|null>} The loaded style object, or null if not found.
+ */
+export async function loadTableStyles(tablePath) {
+    try {
+        const stylesStr = await invoke('load_table_styles', { tablePath });
+        if (stylesStr) {
+            return JSON.parse(stylesStr);
+        }
+        return null;
+    } catch (error) {
+        console.error(`Failed to load styles for table ${tablePath}:`, error);
+        // It's common for styles to not exist, so we don't re-throw.
+        // We just log the error and return null.
+        return null;
+    }
+}
+
 export async function createNewDocument(projectXmlPath) {
     if (!projectXmlPath) {
         console.error('[ProjectService] Cannot create document: Project XML path is missing.');
