@@ -155,6 +155,15 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
+                rowFormatter: function(row) {
+                    const data = row.getData();
+                    const rowElement = row.getElement();
+                    if (data._rowBackgroundColor) {
+                        rowElement.style.backgroundColor = data._rowBackgroundColor;
+                    } else {
+                        rowElement.style.backgroundColor = ""; // Clear it if not present
+                    }
+                },
                 history:true,
                 editTriggerEvent:"dblclick",
                 movableColumns: false,
@@ -479,19 +488,26 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
                         {
-                            label: "Set Background Color",
+                            label: "Set Row Background Color",
                             action: () => {
-                                console.log("Set Background Color menu item clicked for cell:", cell.getValue());
                                 colorPickerStateStore.set({
                                     show: true,
                                     callback: (color) => {
                                         const ranges = tabulatorInstance.getRanges();
                                         const selectedCells = ranges.flatMap(r => r.getCells());
 
-                                        if (selectedCells.length > 1) {
-                                            selectedCells.forEach(c => updateCellStyles(c, color));
+                                        if (selectedCells.length > 0) {
+                                            const uniqueRows = [...new Set(selectedCells.map(c => c.getRow()))];
+                                            uniqueRows.forEach(row => {
+                                                let rowData = row.getData();
+                                                rowData._rowBackgroundColor = color;
+                                                row.update({ _rowBackgroundColor: rowData._rowBackgroundColor });
+                                            });
                                         } else {
-                                            updateCellStyles(cell, color);
+                                            const row = cell.getRow();
+                                            let rowData = row.getData();
+                                            rowData._rowBackgroundColor = color;
+                                            row.update({ _rowBackgroundColor: rowData._rowBackgroundColor });
                                         }
                                         saveTableData(tablePath, tableData);
                                     }
@@ -499,15 +515,23 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                             }
                         },
                         {
-                            label: "Clear Background Color",
+                            label: "Clear Row Background Color",
                             action: () => {
                                 const ranges = tabulatorInstance.getRanges();
                                 const selectedCells = ranges.flatMap(r => r.getCells());
 
-                                if (selectedCells.length > 1) {
-                                    selectedCells.forEach(c => updateCellStyles(c, null));
+                                if (selectedCells.length > 0) {
+                                    const uniqueRows = [...new Set(selectedCells.map(c => c.getRow()))];
+                                    uniqueRows.forEach(row => {
+                                        let rowData = row.getData();
+                                        delete rowData._rowBackgroundColor;
+                                        row.update({ _rowBackgroundColor: undefined }); // Force update
+                                    });
                                 } else {
-                                    updateCellStyles(cell, null);
+                                    const row = cell.getRow();
+                                    let rowData = row.getData();
+                                    delete rowData._rowBackgroundColor;
+                                    row.update({ _rowBackgroundColor: undefined });
                                 }
                                 saveTableData(tablePath, tableData);
                             }
