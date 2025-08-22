@@ -459,7 +459,7 @@
                         { separator: true },
                         {
                             label: "Color Cell...",
-                            action: () => {
+                            action: async () => {
                                 colorPickerCallback = (color) => {
                                     const ranges = tabulatorInstance.getRanges();
                                     if (ranges && ranges.length > 0) {
@@ -489,6 +489,7 @@
                                     saveTableData(tablePath, tableData);
                                 };
                                 showColorPicker = true;
+                                await tick();
                             }
                         },
                         {
