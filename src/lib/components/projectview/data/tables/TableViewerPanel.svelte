@@ -158,7 +158,9 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                 rowFormatter: function(row) {
                     const data = row.getData();
                     const rowElement = row.getElement();
+                    console.log(`[Row Formatter] Formatting row ${row.getPosition()}. Data contains color:`, data._rowBackgroundColor || 'No');
                     if (data._rowBackgroundColor) {
+                        console.log(`[Row Formatter] Applying color ${data._rowBackgroundColor} to row ${row.getPosition()}`);
                         rowElement.style.backgroundColor = data._rowBackgroundColor;
                     } else {
                         rowElement.style.backgroundColor = ""; // Clear it if not present
