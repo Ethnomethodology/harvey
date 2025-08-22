@@ -498,19 +498,19 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                                         const ranges = tabulatorInstance.getRanges();
                                         const selectedCells = ranges.flatMap(r => r.getCells());
 
-                                        if (selectedCells.length > 0) {
-                                            const uniqueRows = [...new Set(selectedCells.map(c => c.getRow()))];
-                                            uniqueRows.forEach(row => {
-                                                let rowData = row.getData();
-                                                rowData._rowBackgroundColor = color;
-                                                row.update({ _rowBackgroundColor: rowData._rowBackgroundColor });
-                                            });
-                                        } else {
-                                            const row = cell.getRow();
+                                        const ranges = tabulatorInstance.getRanges();
+                                        const selectedCells = ranges.flatMap(r => r.getCells());
+                                        const rowsToUpdate = (selectedCells.length > 0)
+                                            ? [...new Set(selectedCells.map(c => c.getRow()))]
+                                            : [cell.getRow()];
+
+                                        rowsToUpdate.forEach(row => {
                                             let rowData = row.getData();
                                             rowData._rowBackgroundColor = color;
-                                            row.update({ _rowBackgroundColor: rowData._rowBackgroundColor });
-                                        }
+                                            row.update({ _rowBackgroundColor: rowData._rowBackgroundColor })
+                                                .then(() => row.reformat())
+                                                .catch(err => console.error("Row update/reformat failed:", err));
+                                        });
 
                                         const updatedData = tabulatorInstance.getData();
                                         tableData = updatedData;
@@ -525,19 +525,19 @@ const colorPickerStateStore = writable({ show: false, callback: null });
                                 const ranges = tabulatorInstance.getRanges();
                                 const selectedCells = ranges.flatMap(r => r.getCells());
 
-                                if (selectedCells.length > 0) {
-                                    const uniqueRows = [...new Set(selectedCells.map(c => c.getRow()))];
-                                    uniqueRows.forEach(row => {
-                                        let rowData = row.getData();
-                                        delete rowData._rowBackgroundColor;
-                                        row.update({ _rowBackgroundColor: undefined }); // Force update
-                                    });
-                                } else {
-                                    const row = cell.getRow();
+                                const ranges = tabulatorInstance.getRanges();
+                                const selectedCells = ranges.flatMap(r => r.getCells());
+                                const rowsToUpdate = (selectedCells.length > 0)
+                                    ? [...new Set(selectedCells.map(c => c.getRow()))]
+                                    : [cell.getRow()];
+
+                                rowsToUpdate.forEach(row => {
                                     let rowData = row.getData();
                                     delete rowData._rowBackgroundColor;
-                                    row.update({ _rowBackgroundColor: undefined });
-                                }
+                                    row.update({ _rowBackgroundColor: undefined }) // Force update
+                                        .then(() => row.reformat())
+                                        .catch(err => console.error("Row update/reformat failed:", err));
+                                });
 
                                 const updatedData = tabulatorInstance.getData();
                                 tableData = updatedData;
