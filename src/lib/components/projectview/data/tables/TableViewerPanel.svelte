@@ -227,12 +227,12 @@
         showEditHeaderModal = true;
     }
 
-    async function applyHighlightToSelectedCells(color) {
-        if (!tabulatorInstance || !selectedCells.length) return;
+    async function applyHighlightToCells(color, cellsToModify) {
+        if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
 
         const rowsToReformat = new Set();
 
-        selectedCells.forEach(cell => {
+        cellsToModify.forEach(cell => {
             const row = cell.getRow();
             const rowIndex = row.getPosition();
             const colField = cell.getField();
@@ -247,9 +247,7 @@
         });
 
         rowsToReformat.forEach(row => row.reformat());
-
-        selectedCells = [];
-        tabulatorInstance.clearHistory();
+        tabulatorInstance.deselectRange();
 
         try {
             await saveTableStyles(tablePath, {
@@ -304,9 +302,15 @@
                 contextMenu: (e, cell) => {
                     e.preventDefault(); // Prevent deselection on right-click
 
+                    const highlightAction = (color) => {
+                        const range = tabulatorInstance.getSelectedRange();
+                        const cellsToModify = range.length > 0 ? range : [cell];
+                        applyHighlightToCells(color, cellsToModify);
+                    };
+
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => applyHighlightToSelectedCells(option.value)
+                        action: () => highlightAction(option.value)
                     }));
 
                     return [
@@ -321,7 +325,7 @@
                         },
                         {
                             label: "Clear Highlight on Selected Cells",
-                            action: () => applyHighlightToSelectedCells(null)
+                            action: () => highlightAction(null)
                         }
                     ];
                 }
