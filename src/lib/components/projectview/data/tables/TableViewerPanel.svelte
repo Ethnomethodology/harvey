@@ -25,6 +25,7 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
+    let selectedCells = []; // Track selected cells
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
@@ -90,6 +91,7 @@
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
+        selectedCells = []; // Reset on re-initialization
 
         try {
             const loadedStyles = await loadTableStyles(pathForTable);
@@ -132,15 +134,6 @@
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
-                rowFormatter: function(row) {
-                    const rowIndex = row.getPosition();
-                    const color = tableStyles.rowStyles[rowIndex];
-                    if (color) {
-                        row.getElement().style.backgroundColor = color;
-                    } else {
-                        row.getElement().style.backgroundColor = "";
-                    }
-                },
                 history:true,
                 editTriggerEvent:"dblclick",
                 movableColumns: false,
@@ -160,6 +153,14 @@
                 clipboardCopyRowRange:"range",
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
+            });
+
+            tabulatorInstance.on("rangeSelected", (range) => {
+                selectedCells = range;
+            });
+
+            tabulatorInstance.on("rangeDeselected", (range) => {
+                selectedCells = [];
             });
 
             const saveCurrentTableLayout = debounce(async () => {
@@ -226,73 +227,39 @@
         showEditHeaderModal = true;
     }
 
-    async function applyRowColor(cell, color = null) {
+    async function applyHighlightToSelectedCells(color, clickedCell) {
         if (!tabulatorInstance) return;
 
-        const rowsToUpdate = [cell.getRow()];
+        const cellsToModify = selectedCells.length > 0 ? selectedCells : [clickedCell];
 
-        rowsToUpdate.forEach(row => {
+        if (!cellsToModify.length) return;
+
+        const rowsToReformat = new Set();
+
+        cellsToModify.forEach(cell => {
+            const row = cell.getRow();
             const rowIndex = row.getPosition();
-            const rowElement = row.getElement();
-
-            if (color) {
-                tableStyles.rowStyles[rowIndex] = color;
-                if (rowElement) rowElement.style.backgroundColor = color;
-            } else {
-                delete tableStyles.rowStyles[rowIndex];
-                if (rowElement) rowElement.style.backgroundColor = "";
-
-                // Also clear individual cell colors in that row
-                const cellsInRow = row.getCells();
-                cellsInRow.forEach(cellInRow => {
-                    const colField = cellInRow.getField();
-                    const cellKey = `cell-${rowIndex}-${colField}`;
-                    if (tableStyles.cellStyles[cellKey]) {
-                        delete tableStyles.cellStyles[cellKey];
-                        const cellElement = cellInRow.getElement();
-                        if (cellElement) cellElement.style.backgroundColor = ""; // Reset cell's inline style
-                    }
-                });
-            }
-        });
-
-        try {
-            await saveTableStyles(tablePath, tableStyles);
-        } catch (err) {
-            console.error("Failed to save table styles:", err);
-        }
-    }
-
-    async function applyCellColor(cell, color = null) {
-        if (!tabulatorInstance) return;
-
-        const cellsToUpdate = [cell];
-
-        cellsToUpdate.forEach(c => {
-            if (!c || typeof c.getRow !== 'function') {
-                console.warn("Invalid object passed to applyCellColor, expected a Tabulator cell component.", c);
-                return;
-            }
-            const row = c.getRow();
-            const rowIndex = row.getPosition();
-            const colField = c.getField();
+            const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
-            const cellElement = c.getElement();
 
             if (color) {
                 tableStyles.cellStyles[cellKey] = color;
-                if (cellElement) cellElement.style.backgroundColor = color;
             } else {
                 delete tableStyles.cellStyles[cellKey];
-                if (cellElement) {
-                    const rowColor = tableStyles.rowStyles[rowIndex];
-                    cellElement.style.backgroundColor = rowColor || '';
-                }
             }
+            rowsToReformat.add(row);
         });
 
+        rowsToReformat.forEach(row => row.reformat());
+
+        // Clear the selection after applying the action
+        selectedCells = [];
+
         try {
-            await saveTableStyles(tablePath, tableStyles);
+            await saveTableStyles(tablePath, {
+                rowStyles: tableStyles.rowStyles,
+                cellStyles: tableStyles.cellStyles
+            });
         } catch (err) {
             console.error("Failed to save table styles:", err);
         }
@@ -301,7 +268,17 @@
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
-        const rowNumColumn = { title: "#", formatter: "rownum", width: 50, minWidth: 30, hozAlign: "center", resizable: false, headerSort: false, cssClass: "tabulator-row-number-column", editor:false };
+        const rowNumColumn = {
+            title: "#",
+            formatter: "rownum",
+            width: 50,
+            minWidth: 30,
+            hozAlign: "center",
+            resizable: false,
+            headerSort: false,
+            cssClass: "tabulator-row-number-column",
+            editor:false
+        };
 
         let dataColumnDefs = headers.map(header => {
             const colDef = {
@@ -316,12 +293,11 @@
                     const rowIndex = row.getPosition();
                     const colField = cell.getField();
                     const cellKey = `cell-${rowIndex}-${colField}`;
-                    const color = tableStyles.cellStyles[cellKey];
                     const cellElement = cell.getElement();
 
-                    if (color) {
-                        cellElement.style.backgroundColor = color;
-                    }
+                    const cellColor = tableStyles.cellStyles[cellKey];
+
+                    cellElement.style.backgroundColor = cellColor || "";
 
                     cell.getElement().style.whiteSpace = "pre-wrap";
                     return cell.getValue();
@@ -330,14 +306,11 @@
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                 ],
                 contextMenu: (e, cell) => {
-                    const rowColorOptions = highlightOptions.map(option => ({
-                        label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => applyRowColor(cell, option.value)
-                    }));
+                    e.preventDefault(); // Prevent deselection on right-click
 
-                    const cellColorOptions = highlightOptions.map(option => ({
+                    const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => applyCellColor(cell, option.value)
+                        action: () => applyHighlightToSelectedCells(option.value, cell)
                     }));
 
                     return [
@@ -347,23 +320,12 @@
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
                         {
-                            label: "Set Row Color",
-                            menu: rowColorOptions,
-                            menuTrigger: "hover"
+                            label: "Highlight Selected Cells",
+                            menu: highlightColorOptions
                         },
                         {
-                            label: "Clear Row Color",
-                            action: () => applyRowColor(cell, null)
-                        },
-                        { separator: true },
-                        {
-                            label: "Set Cell Color",
-                            menu: cellColorOptions,
-                            menuTrigger: "hover"
-                        },
-                        {
-                            label: "Clear Cell Color",
-                            action: () => applyCellColor(cell, null)
+                            label: "Clear Highlight on Selected Cells",
+                            action: () => applyHighlightToSelectedCells(null, cell)
                         }
                     ];
                 }
