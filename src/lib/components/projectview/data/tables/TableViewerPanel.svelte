@@ -134,6 +134,8 @@
                 height: "100%",
                 placeholder: "No Data Available",
                 selectableRange: 1,
+                selectableRangeColumns: true,
+                selectableRangeRows: true,
                 history:true,
                 editTriggerEvent:"dblclick",
                 movableColumns: false,
@@ -227,8 +229,12 @@
         showEditHeaderModal = true;
     }
 
-    async function applyHighlightToCells(color, cellsToModify) {
-        if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
+    async function applyHighlightToSelectedCells(color, clickedCell) {
+        if (!tabulatorInstance) return;
+
+        const cellsToModify = selectedCells.length > 0 ? selectedCells : [clickedCell];
+
+        if (!cellsToModify.length) return;
 
         const rowsToReformat = new Set();
 
@@ -247,10 +253,9 @@
         });
 
         rowsToReformat.forEach(row => row.reformat());
-        const rangeModule = tabulatorInstance.getModule("selectRange");
-        if(rangeModule){
-            rangeModule.deselectRange();
-        }
+
+        // Clear the selection after applying the action
+        selectedCells = [];
 
         try {
             await saveTableStyles(tablePath, {
@@ -281,6 +286,22 @@
                 if(rangeModule) {
                     rangeModule.selectRange(row);
                 }
+            },
+            contextMenu: (e, cell) => {
+                e.preventDefault();
+                const row = cell.getRow();
+                const cells = row.getCells();
+                const highlightAction = (color) => {
+                    applyHighlightToCells(color, cells);
+                };
+                const highlightColorOptions = highlightOptions.map(option => ({
+                    label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                    action: () => highlightAction(option.value)
+                }));
+                return [
+                    { label: "Highlight Row", menu: highlightColorOptions },
+                    { label: "Clear Row Highlight", action: () => highlightAction(null) }
+                ];
             }
         };
 
@@ -289,7 +310,7 @@
                 title: header,
                 field: header,
                 headerFilter: "input",
-                sorter: "string", // Simpler default
+                sorter: "string",
                 editor: "textarea",
                 editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
                 formatter: (cell) => {
@@ -311,15 +332,45 @@
                 },
                 headerContextMenu: [
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
+                    {
+                        label: "Highlight Column",
+                        menu: highlightOptions.map(option => ({
+                            label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                            action: () => {
+                                const columnComponent = tabulatorInstance.getColumn(header);
+                                if (columnComponent) {
+                                    applyHighlightToCells(option.value, columnComponent.getCells());
+                                }
+                            }
+                        }))
+                    },
+                    {
+                        label: "Clear Column Highlight",
+                        action: () => {
+                            const columnComponent = tabulatorInstance.getColumn(header);
+                            if (columnComponent) {
+                                applyHighlightToCells(null, columnComponent.getCells());
+                            }
+                        }
+                    }
                 ],
                 contextMenu: (e, cell) => {
-                    e.preventDefault(); // Prevent deselection on right-click
+                    e.preventDefault();
                     const rangeModule = tabulatorInstance.getModule("selectRange");
                     const ranges = rangeModule ? rangeModule.getRanges() : [];
-                    const selectedCells = ranges.length > 0 ? ranges[0].getCells() : [cell];
+
+                    let selectedCellsForMenu = [cell];
+                    if (ranges.length > 0) {
+                        const activeRange = ranges[0];
+                        const cellsInRange = activeRange.getCells();
+                        const isCellInActiveRange = cellsInRange.some(c => c.getElement() === cell.getElement());
+                        if (isCellInActiveRange) {
+                            selectedCellsForMenu = cellsInRange;
+                        }
+                    }
 
                     const highlightAction = (color) => {
-                        applyHighlightToCells(color, selectedCells);
+                        applyHighlightToCells(color, selectedCellsForMenu);
                     };
 
                     const highlightColorOptions = highlightOptions.map(option => ({
