@@ -227,16 +227,12 @@
         showEditHeaderModal = true;
     }
 
-    async function applyHighlightToSelectedCells(color, clickedCell) {
-        if (!tabulatorInstance) return;
-
-        const cellsToModify = selectedCells.length > 0 ? selectedCells : [clickedCell];
-
-        if (!cellsToModify.length) return;
+    async function applyHighlightToSelectedCells(color) {
+        if (!tabulatorInstance || !selectedCells.length) return;
 
         const rowsToReformat = new Set();
 
-        cellsToModify.forEach(cell => {
+        selectedCells.forEach(cell => {
             const row = cell.getRow();
             const rowIndex = row.getPosition();
             const colField = cell.getField();
@@ -252,8 +248,8 @@
 
         rowsToReformat.forEach(row => row.reformat());
 
-        // Clear the selection after applying the action
         selectedCells = [];
+        tabulatorInstance.clearHistory();
 
         try {
             await saveTableStyles(tablePath, {
@@ -310,7 +306,7 @@
 
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => applyHighlightToSelectedCells(option.value, cell)
+                        action: () => applyHighlightToSelectedCells(option.value)
                     }));
 
                     return [
@@ -325,7 +321,7 @@
                         },
                         {
                             label: "Clear Highlight on Selected Cells",
-                            action: () => applyHighlightToSelectedCells(null, cell)
+                            action: () => applyHighlightToSelectedCells(null)
                         }
                     ];
                 }

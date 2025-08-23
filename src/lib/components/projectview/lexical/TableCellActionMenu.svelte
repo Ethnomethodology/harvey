@@ -309,13 +309,12 @@
             {#if item.type === 'separator'}
                 <hr class="my-1 border-gray-200 dark:border-gray-700" />
             {:else if item.type === 'submenu'}
-              <div class="relative" on:mouseleave={closeSubmenu}>
+              <div class="relative" on:mouseenter={(e) => openSubmenu(item, e)} on:mouseleave={closeSubmenu}>
                 <button
                   type="button"
                   class="w-full flex items-center px-3 py-1.5 text-left text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                   role="menuitem"
                   tabindex="-1"
-                  on:mouseenter={(e) => openSubmenu(item, e)}
                 >
                   <span>{item.label}</span>
                   <span class="ml-auto">▶</span>
