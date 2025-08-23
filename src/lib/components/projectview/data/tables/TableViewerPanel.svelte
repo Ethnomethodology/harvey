@@ -241,6 +241,18 @@
             } else {
                 delete tableStyles.rowStyles[rowIndex];
                 if (rowElement) rowElement.style.backgroundColor = "";
+
+                // Also clear individual cell colors in that row
+                const cellsInRow = row.getCells();
+                cellsInRow.forEach(cellInRow => {
+                    const colField = cellInRow.getField();
+                    const cellKey = `cell-${rowIndex}-${colField}`;
+                    if (tableStyles.cellStyles[cellKey]) {
+                        delete tableStyles.cellStyles[cellKey];
+                        const cellElement = cellInRow.getElement();
+                        if (cellElement) cellElement.style.backgroundColor = ""; // Reset cell's inline style
+                    }
+                });
             }
         });
 
@@ -336,7 +348,8 @@
                         { separator: true },
                         {
                             label: "Set Row Color",
-                            menu: rowColorOptions
+                            menu: rowColorOptions,
+                            menuTrigger: "hover"
                         },
                         {
                             label: "Clear Row Color",
@@ -345,7 +358,8 @@
                         { separator: true },
                         {
                             label: "Set Cell Color",
-                            menu: cellColorOptions
+                            menu: cellColorOptions,
+                            menuTrigger: "hover"
                         },
                         {
                             label: "Clear Cell Color",
