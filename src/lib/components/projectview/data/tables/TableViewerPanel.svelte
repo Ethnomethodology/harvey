@@ -206,7 +206,7 @@
         const rowsToReformat = new Set();
         cellsToModify.forEach(cell => {
             const row = cell.getRow();
-            const rowIndex = row.getIndex();
+            const rowIndex = row.getData().harvey_internal_id;
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
             if (color) {
@@ -233,7 +233,7 @@
 
     async function applyHighlightToRow(color, row) {
         if (!tabulatorInstance || !row) return;
-        const rowIndex = row.getIndex();
+        const rowIndex = row.getData().harvey_internal_id;
         if (color) {
             tableStyles.rowStyles[rowIndex] = color;
         } else {
@@ -262,7 +262,7 @@
                 editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
                 formatter: (cell) => {
                     const row = cell.getRow();
-                    const rowIndex = row.getIndex();
+                    const rowIndex = row.getData().harvey_internal_id;
                     const colField = cell.getField();
                     const cellKey = `cell-${rowIndex}-${colField}`;
                     const cellElement = cell.getElement();
@@ -392,7 +392,7 @@
                 movableColumns: true,
                 resizableColumnFit: false,
                 rowFormatter: (row) => {
-                    const rowIndex = row.getIndex();
+                    const rowIndex = row.getData().harvey_internal_id;
                     const rowColor = tableStyles.rowStyles[rowIndex];
                     row.getElement().style.backgroundColor = rowColor || "";
                 },
