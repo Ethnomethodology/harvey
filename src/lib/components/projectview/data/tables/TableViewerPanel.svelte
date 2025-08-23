@@ -71,7 +71,6 @@
     }
 
     async function deleteColumn(column) {
-        if (!confirm(`Are you sure you want to delete the "${column.getDefinition().title}" column?`)) return;
         try {
             await column.delete();
             await debouncedSave();
@@ -126,7 +125,6 @@
     }
 
     async function deleteRow(row) {
-        if (!confirm(`Are you sure you want to delete row #${row.getPosition()}?`)) return;
         try {
             await row.delete();
             await debouncedSave();
