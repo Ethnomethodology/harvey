@@ -30,7 +30,7 @@
     const colorPickerStateStore = writable({ show: false, callback: null });
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
-    let tableStyles = { rowStyles: {} };
+    let tableStyles = { rowStyles: {}, cellStyles: {} };
     let searchTerm = '';
     let searchMatches = [];
     let currentMatchIndex = -1;
@@ -95,11 +95,10 @@
 
         try {
             const loadedStyles = await loadTableStyles(pathForTable);
-            if (loadedStyles && loadedStyles.rowStyles) {
-                tableStyles = loadedStyles;
-            } else {
-                tableStyles = { rowStyles: {} };
-            }
+            tableStyles = {
+                rowStyles: loadedStyles?.rowStyles || {},
+                cellStyles: loadedStyles?.cellStyles || {},
+            };
 
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
@@ -258,6 +257,41 @@
         }
     }
 
+    async function applyCellColor(cell, color = null) {
+        if (!tabulatorInstance) return;
+
+        const ranges = tabulatorInstance.getRanges();
+        const selectedCells = ranges.flatMap(r => r.getCells());
+        const cellsToUpdate = selectedCells.length > 0 ? selectedCells : [cell];
+
+        cellsToUpdate.forEach(c => {
+            const row = c.getRow();
+            const rowIndex = row.getPosition();
+            const colField = c.getField();
+            const cellKey = `cell-${rowIndex}-${colField}`;
+            const cellElement = c.getElement();
+
+            if (color) {
+                tableStyles.cellStyles[cellKey] = color;
+                if (cellElement) cellElement.style.backgroundColor = color;
+            } else {
+                delete tableStyles.cellStyles[cellKey];
+                if (cellElement) {
+                    const row = c.getRow();
+                    const rowIndex = row.getPosition();
+                    const rowColor = tableStyles.rowStyles[rowIndex];
+                    cellElement.style.backgroundColor = rowColor || '';
+                }
+            }
+        });
+
+        try {
+            await saveTableStyles(tablePath, tableStyles);
+        } catch (err) {
+            console.error("Failed to save table styles:", err);
+        }
+    }
+
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
 
@@ -271,7 +305,21 @@
                 sorter: "string", // Simpler default
                 editor: "textarea",
                 editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
-                formatter: (cell) => { cell.getElement().style.whiteSpace = "pre-wrap"; return cell.getValue(); },
+                formatter: (cell) => {
+                    const row = cell.getRow();
+                    const rowIndex = row.getPosition();
+                    const colField = cell.getField();
+                    const cellKey = `cell-${rowIndex}-${colField}`;
+                    const color = tableStyles.cellStyles[cellKey];
+                    const cellElement = cell.getElement();
+
+                    if (color) {
+                        cellElement.style.backgroundColor = color;
+                    }
+
+                    cell.getElement().style.whiteSpace = "pre-wrap";
+                    return cell.getValue();
+                },
                 headerContextMenu: [
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                 ],
@@ -291,6 +339,17 @@
                         {
                             label: "Clear Row Background Color",
                             action: () => applyRowColor(cell, null)
+                        },
+                        { separator: true },
+                        {
+                            label: "Set Cell Background Color",
+                            action: () => {
+                                colorPickerStateStore.set({ show: true, callback: (color) => applyCellColor(cell, color) });
+                            }
+                        },
+                        {
+                            label: "Clear Cell Background Color",
+                            action: () => applyCellColor(cell, null)
                         }
                     ];
                 }
