@@ -96,7 +96,10 @@
 
         rowsToReformat.forEach(row => row.reformat());
 
-        tabulatorInstance.getRanges().forEach(range => range.remove());
+        const ranges = tabulatorInstance.getRanges();
+        if (ranges) {
+            ranges.forEach(range => range.remove());
+        }
 
         try {
             await saveTableStyles(tablePath, {
@@ -140,7 +143,7 @@
                     if (ranges.length > 0) {
                         const activeRange = ranges[0];
                         const cellsInRange = activeRange.getCells();
-                        const isCellInActiveRange = cellsInRange.some(c => c.getElement() === cell.getElement());
+                        const isCellInActiveRange = cellsInRange.includes(cell);
                         if (isCellInActiveRange) {
                             selectedCellsForMenu = cellsInRange;
                         }
