@@ -356,6 +356,7 @@
             };
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
+            tableData.forEach((d, i) => d.harvey_internal_id = i);
             const tableHeaders = response.headers;
             await tick();
             if (!tableContainer) {
@@ -378,6 +379,7 @@
             let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
+                index: "harvey_internal_id",
                 layout: "fitData",
                 columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout),
                 height: "100%",
