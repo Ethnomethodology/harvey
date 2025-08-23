@@ -14,7 +14,6 @@
     } from '$lib/services/projectService.js';
     import { project } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
-    import ColorPickerModal from '$lib/components/modals/ColorPickerModal.svelte';
     import { HIGHLIGHT_OPTIONS } from '$lib/constants/highlightOptions.js';
 
     export let tablePath = '';
@@ -27,7 +26,6 @@
     let error = null;
     let currentLoadedPath = null;
 
-    const colorPickerStateStore = writable({ show: false, callback: null });
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
     let tableStyles = { rowStyles: {}, cellStyles: {} };
@@ -320,6 +318,16 @@
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                 ],
                 contextMenu: (e, cell) => {
+                    const rowColorOptions = highlightOptions.map(option => ({
+                        label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                        action: () => applyRowColor(cell, option.value)
+                    }));
+
+                    const cellColorOptions = highlightOptions.map(option => ({
+                        label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                        action: () => applyCellColor(cell, option.value)
+                    }));
+
                     return [
                         { label: "Copy", action: () => navigator.clipboard.writeText(cell.getValue()) },
                         { label: "Cut", action: () => { navigator.clipboard.writeText(cell.getValue()); cell.setValue(""); } },
@@ -327,24 +335,20 @@
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
                         {
-                            label: "Set Row Background Color",
-                            action: () => {
-                                colorPickerStateStore.set({ show: true, callback: (color) => applyRowColor(cell, color) });
-                            }
+                            label: "Set Row Color",
+                            menu: rowColorOptions
                         },
                         {
-                            label: "Clear Row Background Color",
+                            label: "Clear Row Color",
                             action: () => applyRowColor(cell, null)
                         },
                         { separator: true },
                         {
-                            label: "Set Cell Background Color",
-                            action: () => {
-                                colorPickerStateStore.set({ show: true, callback: (color) => applyCellColor(cell, color) });
-                            }
+                            label: "Set Cell Color",
+                            menu: cellColorOptions
                         },
                         {
-                            label: "Clear Cell Background Color",
+                            label: "Clear Cell Color",
                             action: () => applyCellColor(cell, null)
                         }
                     ];
@@ -436,19 +440,6 @@
         </div>
     </div>
 </div>
-{/if}
-
-{#if $colorPickerStateStore.show}
-<ColorPickerModal
-    bind:show={$colorPickerStateStore.show}
-    title="Set Row Background Color"
-    on:confirm={(e) => {
-        const state = get(colorPickerStateStore);
-        if (state.callback) state.callback(e.detail.color);
-        colorPickerStateStore.set({ show: false, callback: null });
-    }}
-    on:close={() => colorPickerStateStore.set({ show: false, callback: null })}
-/>
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
