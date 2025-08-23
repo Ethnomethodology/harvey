@@ -155,7 +155,23 @@
                     headerSort:false,
                     hozAlign:"center",
                     formatter: "rownum",
-                    cssClass:"range-header-col"
+                    cssClass:"range-header-col",
+                    contextMenu: (e, component) => {
+                        e.preventDefault();
+                        const row = component.getRow();
+                        const cells = row.getCells();
+                        const highlightAction = (color) => {
+                            applyHighlightToCells(color, cells);
+                        };
+                        const highlightColorOptions = highlightOptions.map(option => ({
+                            label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                            action: () => highlightAction(option.value)
+                        }));
+                        return [
+                            { label: "Highlight Row", menu: highlightColorOptions },
+                            { label: "Clear Row Highlight", action: () => highlightAction(null) }
+                        ];
+                    }
                 },
                 clipboard: true,
                 clipboardCopyStyled:false,
@@ -257,8 +273,10 @@
         });
 
         rowsToReformat.forEach(row => row.reformat());
+
         const rangeModule = tabulatorInstance.getModule("selectRange");
         if(rangeModule){
+            // To prevent issues with menu closing before action, we manually deselect
             rangeModule.deselectRange();
         }
 
@@ -274,18 +292,6 @@
 
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
-
-        const rowNumColumn = {
-            title: "#",
-            formatter: "rownum",
-            width: 50,
-            minWidth: 30,
-            hozAlign: "center",
-            resizable: false,
-            headerSort: false,
-            cssClass: "tabulator-row-number-column",
-            editor: false
-        };
 
         let dataColumnDefs = headers.map(header => {
             const colDef = {
@@ -308,27 +314,6 @@
                 },
                 headerContextMenu: [
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
-                    {
-                        label: "Highlight Column",
-                        menu: highlightOptions.map(option => ({
-                            label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                            action: () => {
-                                const columnComponent = tabulatorInstance.getColumn(header);
-                                if (columnComponent) {
-                                    applyHighlightToCells(option.value, columnComponent.getCells());
-                                }
-                            }
-                        }))
-                    },
-                    {
-                        label: "Clear Column Highlight",
-                        action: () => {
-                            const columnComponent = tabulatorInstance.getColumn(header);
-                            if (columnComponent) {
-                                applyHighlightToCells(null, columnComponent.getCells());
-                            }
-                        }
-                    }
                 ],
                 contextMenu: (e, cell) => {
                     e.preventDefault();
@@ -382,7 +367,7 @@
             dataColumnDefs.sort((a, b) => (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity));
         }
 
-        return [rowNumColumn, ...dataColumnDefs];
+        return dataColumnDefs;
     }
 
     onMount(() => {
