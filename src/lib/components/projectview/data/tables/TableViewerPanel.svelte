@@ -231,6 +231,25 @@
         }
     }
 
+    async function applyHighlightToRow(color, row) {
+        if (!tabulatorInstance || !row) return;
+        const rowIndex = row.getPosition();
+        if (color) {
+            tableStyles.rowStyles[rowIndex] = color;
+        } else {
+            delete tableStyles.rowStyles[rowIndex];
+        }
+        row.reformat();
+        try {
+            await saveTableStyles(tablePath, {
+                rowStyles: tableStyles.rowStyles,
+                cellStyles: tableStyles.cellStyles
+            });
+        } catch (err) {
+            console.error("Failed to save table styles:", err);
+        }
+    }
+
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         let dataColumnDefs = headers.map(header => {
@@ -370,7 +389,17 @@
                 editTriggerEvent:"dblclick",
                 movableColumns: true,
                 resizableColumnFit: false,
+                rowFormatter: (row) => {
+                    const rowIndex = row.getPosition();
+                    const rowColor = tableStyles.rowStyles[rowIndex];
+                    row.getElement().style.backgroundColor = rowColor || "";
+                },
                 rowContextMenu: (row) => {
+                    const highlightColorOptions = highlightOptions.map(option => ({
+                        label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
+                        action: () => applyHighlightToRow(option.value, row)
+                    }));
+
                     const menu = [
                         { label: "Cut Row", action: (e, row) => cutRow(row) },
                         { label: "Copy Row", action: (e, row) => copyRow(row) },
@@ -386,6 +415,9 @@
                     menu.push({ label: "Insert Row Below", action: (e, row) => insertRow(row, 'after') });
                     menu.push({ separator: true });
                     menu.push({ label: "Delete Row", action: (e, row) => deleteRow(row) });
+                    menu.push({ separator: true });
+                    menu.push({ label: "Highlight Row", menu: highlightColorOptions });
+                    menu.push({ label: "Clear Row Highlight", action: () => applyHighlightToRow(null, row) });
 
                     return menu;
                 },
