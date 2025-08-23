@@ -25,7 +25,6 @@
     let isLoading = true;
     let error = null;
     let currentLoadedPath = null;
-    let selectedCells = []; // Track selected cells
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
@@ -76,183 +75,6 @@
         };
     }
 
-    async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
-        if (newHasHeaders !== null) hasHeaders = newHasHeaders;
-        if (!pathForTable || !tableContainer) return;
-        if (isLoading && currentLoadedPath === pathForTable) return;
-        if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) return;
-
-        currentLoadedPath = pathForTable;
-        isLoading = true;
-        error = null;
-        tableData = [];
-
-        if (tabulatorInstance) {
-            tabulatorInstance.destroy();
-            tabulatorInstance = null;
-        }
-        selectedCells = []; // Reset on re-initialization
-
-        try {
-            const loadedStyles = await loadTableStyles(pathForTable);
-            tableStyles = {
-                rowStyles: loadedStyles?.rowStyles || {},
-                cellStyles: loadedStyles?.cellStyles || {},
-            };
-
-            const response = await loadTableData(pathForTable, hasHeaders);
-            tableData = response.data;
-            const tableHeaders = response.headers;
-
-            await tick();
-
-            if (!tableContainer) {
-                 error = 'Failed to initialize table viewer: container lost.';
-                 isLoading = false;
-                 return;
-            }
-
-            const projectBaseDir = get(project)?.baseDirectory;
-            if (!projectBaseDir) {
-                error = "Project configuration error: base directory missing.";
-                isLoading = false;
-                return;
-            }
-            const relativeTablePath = getRelativePath(pathForTable, projectBaseDir);
-            if (!relativeTablePath) {
-                error = "Error determining asset relative path.";
-                isLoading = false;
-                return;
-            }
-
-            let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
-
-            tabulatorInstance = new Tabulator(tableContainer, {
-                data: tableData,
-                layout: "fitData",
-                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout),
-                height: "100%",
-                placeholder: "No Data Available",
-                selectableRange: 1,
-                selectableRangeColumns: true,
-                selectableRangeRows: true,
-                history:true,
-                editTriggerEvent:"dblclick",
-                movableColumns: false,
-                resizableColumnFit: false,
-                columnDefaults: {
-                    headerSort:false,
-                    headerHozAlign:"center",
-                    editor:"textarea",
-                    editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
-                    resizable:"header",
-                    width:100,
-                    minWidth: 50,
-                },
-                rowHeader:{
-                    resizable: false,
-                    frozen: true,
-                    headerSort:false,
-                    hozAlign:"center",
-                    formatter: "rownum",
-                    cssClass:"range-header-col",
-                    contextMenu: (e, component) => {
-                        e.preventDefault();
-                        const row = component.getRow();
-                        const cells = row.getCells();
-                        const highlightAction = (color) => {
-                            applyHighlightToCells(color, cells);
-                        };
-                        const highlightColorOptions = highlightOptions.map(option => ({
-                            label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                            action: () => highlightAction(option.value)
-                        }));
-                        return [
-                            { label: "Highlight Row", menu: highlightColorOptions },
-                            { label: "Clear Row Highlight", action: () => highlightAction(null) }
-                        ];
-                    }
-                },
-                clipboard: true,
-                clipboardCopyStyled:false,
-                clipboardCopyConfig:{ rowHeaders:false, columnHeaders:false },
-                clipboardCopyRowRange:"range",
-                clipboardPasteParser:"range",
-                clipboardPasteAction:"range",
-            });
-
-            tabulatorInstance.on("rangeSelected", (range) => {
-                selectedCells = range;
-            });
-
-            tabulatorInstance.on("rangeDeselected", (range) => {
-                selectedCells = [];
-            });
-
-            const saveCurrentTableLayout = debounce(async () => {
-                if (!tabulatorInstance || !currentLoadedPath) return;
-                const baseDirForSave = get(project)?.baseDirectory;
-                const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
-                if (!baseDirForSave || !relativePathForSave) return;
-                updateTableLayoutSnapshot();
-                await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
-            }, 750);
-
-            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
-            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
-
-            tabulatorInstance.on("cellEdited", function(cell) {
-                const updatedData = tabulatorInstance.getData();
-                tableData = updatedData;
-                saveTableData(tablePath, tableData);
-            });
-
-            tabulatorInstance.on("renderComplete", updateTableLayoutSnapshot);
-
-            columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
-
-        } catch (err) {
-            error = `Failed to load table: ${err.message || err}`;
-        } finally {
-            isLoading = false;
-        }
-    }
-
-    function handleSearch() {
-        if (!tabulatorInstance) return;
-        const term = searchTerm.trim();
-        tabulatorInstance.setFilter(term ? columnFields.map(field => ({ field, type: 'like', value: term })) : []);
-        searchMatches = tabulatorInstance.getRows("active");
-        currentMatchIndex = -1;
-        if (searchMatches.length > 0) navigateToMatch(0);
-    }
-
-    async function navigateToMatch(index) {
-        if (!tabulatorInstance || !searchMatches[index]) return;
-        currentMatchIndex = index;
-        await searchMatches[index].scrollTo().catch(err => console.error("Scroll failed", err));
-        tabulatorInstance.deselectRow();
-        searchMatches[index].select();
-    }
-
-    function goToNextMatch() {
-        if (currentMatchIndex < searchMatches.length - 1) navigateToMatch(currentMatchIndex + 1);
-    }
-
-    function goToPreviousMatch() {
-        if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
-    }
-
-    let showEditHeaderModal = false;
-    let editingHeader = { oldName: '', newName: '' };
-    let currentColumnComponent = null;
-
-    function openHeaderEditor(column) {
-        currentColumnComponent = column;
-        editingHeader = { oldName: column.getDefinition().field, newName: column.getDefinition().field };
-        showEditHeaderModal = true;
-    }
-
     async function applyHighlightToCells(color, cellsToModify) {
         if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
 
@@ -274,11 +96,7 @@
 
         rowsToReformat.forEach(row => row.reformat());
 
-        const rangeModule = tabulatorInstance.getModule("selectRange");
-        if(rangeModule){
-            // To prevent issues with menu closing before action, we manually deselect
-            rangeModule.deselectRange();
-        }
+        tabulatorInstance.getRanges().forEach(range => range.remove());
 
         try {
             await saveTableStyles(tablePath, {
@@ -368,6 +186,158 @@
         }
 
         return dataColumnDefs;
+    }
+
+    async function initializeTable(pathForTable, newHasHeaders = null, force = false) {
+        if (newHasHeaders !== null) hasHeaders = newHasHeaders;
+        if (!pathForTable || !tableContainer) return;
+        if (isLoading && currentLoadedPath === pathForTable) return;
+        if (!force && !isLoading && tabulatorInstance && currentLoadedPath === pathForTable) return;
+
+        currentLoadedPath = pathForTable;
+        isLoading = true;
+        error = null;
+        tableData = [];
+
+        if (tabulatorInstance) {
+            tabulatorInstance.destroy();
+            tabulatorInstance = null;
+        }
+
+        try {
+            const loadedStyles = await loadTableStyles(pathForTable);
+            tableStyles = {
+                rowStyles: loadedStyles?.rowStyles || {},
+                cellStyles: loadedStyles?.cellStyles || {},
+            };
+
+            const response = await loadTableData(pathForTable, hasHeaders);
+            tableData = response.data;
+            const tableHeaders = response.headers;
+
+            await tick();
+
+            if (!tableContainer) {
+                 error = 'Failed to initialize table viewer: container lost.';
+                 isLoading = false;
+                 return;
+            }
+
+            const projectBaseDir = get(project)?.baseDirectory;
+            if (!projectBaseDir) {
+                error = "Project configuration error: base directory missing.";
+                isLoading = false;
+                return;
+            }
+            const relativeTablePath = getRelativePath(pathForTable, projectBaseDir);
+            if (!relativeTablePath) {
+                error = "Error determining asset relative path.";
+                isLoading = false;
+                return;
+            }
+
+            let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
+
+            tabulatorInstance = new Tabulator(tableContainer, {
+                data: tableData,
+                layout: "fitData",
+                columns: generateColumns(tableData, tableHeaders, savedLayout, !savedLayout),
+                height: "100%",
+                placeholder: "No Data Available",
+                selectableRange: 1,
+                selectableRangeColumns: true,
+                selectableRangeRows: true,
+                history:true,
+                editTriggerEvent:"dblclick",
+                movableColumns: false,
+                resizableColumnFit: false,
+                columnDefaults: {
+                    headerSort:false,
+                    headerHozAlign:"center",
+                    editor:"textarea",
+                    editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
+                    resizable:"header",
+                    width:100,
+                    minWidth: 50,
+                },
+                rowHeader:{
+                    resizable: false,
+                    frozen: true,
+                    headerSort:false,
+                    hozAlign:"center",
+                    formatter: "rownum",
+                    cssClass:"range-header-col"
+                },
+                clipboard: true,
+                clipboardCopyStyled:false,
+                clipboardCopyConfig:{ rowHeaders:false, columnHeaders:false },
+                clipboardCopyRowRange:"range",
+                clipboardPasteParser:"range",
+                clipboardPasteAction:"range",
+            });
+
+            const saveCurrentTableLayout = debounce(async () => {
+                if (!tabulatorInstance || !currentLoadedPath) return;
+                const baseDirForSave = get(project)?.baseDirectory;
+                const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
+                if (!baseDirForSave || !relativePathForSave) return;
+                updateTableLayoutSnapshot();
+                await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
+            }, 750);
+
+            tabulatorInstance.on("columnResized", saveCurrentTableLayout);
+            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
+
+            tabulatorInstance.on("cellEdited", function(cell) {
+                const updatedData = tabulatorInstance.getData();
+                tableData = updatedData;
+                saveTableData(tablePath, tableData);
+            });
+
+            tabulatorInstance.on("renderComplete", updateTableLayoutSnapshot);
+
+            columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
+
+        } catch (err) {
+            error = `Failed to load table: ${err.message || err}`;
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    function handleSearch() {
+        if (!tabulatorInstance) return;
+        const term = searchTerm.trim();
+        tabulatorInstance.setFilter(term ? columnFields.map(field => ({ field, type: 'like', value: term })) : []);
+        searchMatches = tabulatorInstance.getRows("active");
+        currentMatchIndex = -1;
+        if (searchMatches.length > 0) navigateToMatch(0);
+    }
+
+    async function navigateToMatch(index) {
+        if (!tabulatorInstance || !searchMatches[index]) return;
+        currentMatchIndex = index;
+        await searchMatches[index].scrollTo().catch(err => console.error("Scroll failed", err));
+        tabulatorInstance.deselectRow();
+        searchMatches[index].select();
+    }
+
+    function goToNextMatch() {
+        if (currentMatchIndex < searchMatches.length - 1) navigateToMatch(currentMatchIndex + 1);
+    }
+
+    function goToPreviousMatch() {
+        if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
+    }
+
+    let showEditHeaderModal = false;
+    let editingHeader = { oldName: '', newName: '' };
+    let currentColumnComponent = null;
+
+    function openHeaderEditor(column) {
+        currentColumnComponent = column;
+        editingHeader = { oldName: column.getDefinition().field, newName: column.getDefinition().field };
+        showEditHeaderModal = true;
     }
 
     onMount(() => {
