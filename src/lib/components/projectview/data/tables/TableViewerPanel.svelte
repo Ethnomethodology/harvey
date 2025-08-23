@@ -34,6 +34,134 @@
     let currentMatchIndex = -1;
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
+    let tableClipboard = null;
+
+    const debouncedSave = debounce(async () => {
+        if (!tabulatorInstance) return;
+        const updatedData = tabulatorInstance.getData();
+        tableData = updatedData;
+        await saveTableData(tablePath, tableData);
+    }, 750);
+
+    function getUniqueColumnName(baseName) {
+        if (!tabulatorInstance) return baseName;
+        let newName = baseName;
+        let i = 1;
+        while (tabulatorInstance.getColumn(newName)) {
+            newName = `${baseName}_${i}`;
+            i++;
+        }
+        return newName;
+    }
+
+    // Column Actions
+    async function copyColumn(column) {
+        const field = column.getField();
+        const values = tabulatorInstance.getRows().map(row => row.getData()[field]);
+        tableClipboard = {
+            header: column.getDefinition().title,
+            values: values,
+            type: 'column'
+        };
+    }
+
+    async function cutColumn(column) {
+        await copyColumn(column);
+        await deleteColumn(column);
+    }
+
+    async function deleteColumn(column) {
+        if (!confirm(`Are you sure you want to delete the "${column.getDefinition().title}" column?`)) return;
+        try {
+            await column.delete();
+            await debouncedSave();
+            updateTableLayoutSnapshot();
+        } catch (err) {
+            console.error("Error deleting column:", err);
+        }
+    }
+
+    async function insertColumn(column, position) {
+        const newFieldName = getUniqueColumnName("NewColumn");
+        const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        try {
+            await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+            await debouncedSave();
+            updateTableLayoutSnapshot();
+        } catch (err) {
+            console.error(`Error inserting column ${position} ${column.getField()}:`, err);
+        }
+    }
+
+    async function pasteColumn(column, position) {
+        if (!tableClipboard || tableClipboard.type !== 'column') {
+            alert("No column data on clipboard.");
+            return;
+        }
+        const newFieldName = getUniqueColumnName(tableClipboard.header);
+        const newColumnDef = { title: tableClipboard.header, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        try {
+            await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+            const rows = tabulatorInstance.getRows();
+            rows.forEach((row, index) => {
+                if (tableClipboard.values[index] !== undefined) {
+                    row.getCell(newFieldName).setValue(tableClipboard.values[index], true);
+                }
+            });
+            await debouncedSave();
+            updateTableLayoutSnapshot();
+        } catch (err) {
+            console.error(`Error pasting column ${position} ${column.getField()}:`, err);
+        }
+    }
+
+    // Row Actions
+    async function copyRow(row) {
+        tableClipboard = { type: 'row', data: row.getData() };
+    }
+
+    async function cutRow(row) {
+        await copyRow(row);
+        await deleteRow(row);
+    }
+
+    async function deleteRow(row) {
+        if (!confirm(`Are you sure you want to delete row #${row.getPosition()}?`)) return;
+        try {
+            await row.delete();
+            await debouncedSave();
+        } catch (err) {
+            console.error("Error deleting row:", err);
+        }
+    }
+
+    async function insertRow(row, position) {
+        const newRowData = {};
+        tabulatorInstance.getColumns().forEach(column => {
+            if (column.getField()) {
+                newRowData[column.getField()] = "";
+            }
+        });
+        try {
+            await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            await debouncedSave();
+        } catch (err) {
+            console.error("Error inserting row:", err);
+        }
+    }
+
+    async function pasteRow(row, position) {
+        if (!tableClipboard || tableClipboard.type !== 'row') {
+            alert("No row data on clipboard.");
+            return;
+        }
+        try {
+            await tabulatorInstance.addRow(tableClipboard.data, position === 'before', row);
+            await debouncedSave();
+        } catch (err) {
+            console.error("Error pasting row:", err);
+        }
+    }
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
@@ -77,15 +205,12 @@
 
     async function applyHighlightToCells(color, cellsToModify) {
         if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
-
         const rowsToReformat = new Set();
-
         cellsToModify.forEach(cell => {
             const row = cell.getRow();
             const rowIndex = row.getPosition();
             const colField = cell.getField();
             const cellKey = `cell-${rowIndex}-${colField}`;
-
             if (color) {
                 tableStyles.cellStyles[cellKey] = color;
             } else {
@@ -93,14 +218,11 @@
             }
             rowsToReformat.add(row);
         });
-
         rowsToReformat.forEach(row => row.reformat());
-
         const ranges = tabulatorInstance.getRanges();
         if (ranges) {
             ranges.forEach(range => range.remove());
         }
-
         try {
             await saveTableStyles(tablePath, {
                 rowStyles: tableStyles.rowStyles,
@@ -113,7 +235,6 @@
 
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
-
         let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
@@ -133,9 +254,24 @@
                     cell.getElement().style.whiteSpace = "pre-wrap";
                     return cell.getValue();
                 },
-                headerContextMenu: [
-                    { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
-                ],
+                headerContextMenu: (column) => {
+                    const menu = [
+                        { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
+                        { separator: true },
+                        { label: "Cut Column", action: (e, column) => cutColumn(column) },
+                        { label: "Copy Column", action: (e, column) => copyColumn(column) },
+                    ];
+                    if (tableClipboard && tableClipboard.type === 'column') {
+                        menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
+                        menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
+                    }
+                    menu.push({ separator: true });
+                    menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
+                    menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
+                    menu.push({ separator: true });
+                    menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
+                    return menu;
+                },
                 contextMenu: (e, cell) => {
                     e.preventDefault();
                     const ranges = tabulatorInstance.getRanges();
@@ -148,34 +284,24 @@
                             selectedCellsForMenu = cellsInRange;
                         }
                     }
-
                     const highlightAction = (color) => {
                         applyHighlightToCells(color, selectedCellsForMenu);
                     };
-
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
                         action: () => highlightAction(option.value)
                     }));
-
                     return [
                         { label: "Copy", action: () => navigator.clipboard.writeText(cell.getValue()) },
                         { label: "Cut", action: () => { navigator.clipboard.writeText(cell.getValue()); cell.setValue(""); } },
                         { label: "Paste", action: () => navigator.clipboard.readText().then(text => cell.setValue(text)) },
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
-                        {
-                            label: "Highlight Selection",
-                            menu: highlightColorOptions
-                        },
-                        {
-                            label: "Clear Highlight",
-                            action: () => highlightAction(null)
-                        }
+                        { label: "Highlight Selection", menu: highlightColorOptions },
+                        { label: "Clear Highlight", action: () => highlightAction(null) }
                     ];
                 }
             };
-
             if (savedLayoutObj?.columns?.[header]) {
                 const savedCol = savedLayoutObj.columns[header];
                 if (typeof savedCol.width === 'number' && savedCol.width > 0) colDef.width = savedCol.width;
@@ -183,11 +309,9 @@
             }
             return colDef;
         });
-
         if (savedLayoutObj?.columns) {
             dataColumnDefs.sort((a, b) => (savedLayoutObj.columns[a.field]?.order ?? Infinity) - (savedLayoutObj.columns[b.field]?.order ?? Infinity));
         }
-
         return dataColumnDefs;
     }
 
@@ -213,19 +337,15 @@
                 rowStyles: loadedStyles?.rowStyles || {},
                 cellStyles: loadedStyles?.cellStyles || {},
             };
-
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
             const tableHeaders = response.headers;
-
             await tick();
-
             if (!tableContainer) {
                  error = 'Failed to initialize table viewer: container lost.';
                  isLoading = false;
                  return;
             }
-
             const projectBaseDir = get(project)?.baseDirectory;
             if (!projectBaseDir) {
                 error = "Project configuration error: base directory missing.";
@@ -238,9 +358,7 @@
                 isLoading = false;
                 return;
             }
-
             let savedLayout = await loadTableLayoutPrefs(relativeTablePath).catch(e => console.error(`Error loading layout for ${relativeTablePath}:`, e));
-
             tabulatorInstance = new Tabulator(tableContainer, {
                 data: tableData,
                 layout: "fitData",
@@ -252,8 +370,27 @@
                 selectableRangeRows: true,
                 history:true,
                 editTriggerEvent:"dblclick",
-                movableColumns: false,
+                movableColumns: true,
                 resizableColumnFit: false,
+                rowContextMenu: (row) => {
+                    const menu = [
+                        { label: "Cut Row", action: (e, row) => cutRow(row) },
+                        { label: "Copy Row", action: (e, row) => copyRow(row) },
+                    ];
+
+                    if (tableClipboard && tableClipboard.type === 'row') {
+                        menu.push({ label: "Paste Row Above", action: (e, row) => pasteRow(row, 'before') });
+                        menu.push({ label: "Paste Row Below", action: (e, row) => pasteRow(row, 'after') });
+                    }
+
+                    menu.push({ separator: true });
+                    menu.push({ label: "Insert Row Above", action: (e, row) => insertRow(row, 'before') });
+                    menu.push({ label: "Insert Row Below", action: (e, row) => insertRow(row, 'after') });
+                    menu.push({ separator: true });
+                    menu.push({ label: "Delete Row", action: (e, row) => deleteRow(row) });
+
+                    return menu;
+                },
                 columnDefaults: {
                     headerSort:false,
                     headerHozAlign:"center",
@@ -269,6 +406,7 @@
                     headerSort:false,
                     hozAlign:"center",
                     formatter: "rownum",
+                    width: 50,
                     cssClass:"range-header-col"
                 },
                 clipboard: true,
@@ -278,7 +416,6 @@
                 clipboardPasteParser:"range",
                 clipboardPasteAction:"range",
             });
-
             const saveCurrentTableLayout = debounce(async () => {
                 if (!tabulatorInstance || !currentLoadedPath) return;
                 const baseDirForSave = get(project)?.baseDirectory;
@@ -287,20 +424,11 @@
                 updateTableLayoutSnapshot();
                 await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
             }, 750);
-
             tabulatorInstance.on("columnResized", saveCurrentTableLayout);
             tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
-
-            tabulatorInstance.on("cellEdited", function(cell) {
-                const updatedData = tabulatorInstance.getData();
-                tableData = updatedData;
-                saveTableData(tablePath, tableData);
-            });
-
+            tabulatorInstance.on("cellEdited", debouncedSave);
             tabulatorInstance.on("renderComplete", updateTableLayoutSnapshot);
-
             columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
-
         } catch (err) {
             error = `Failed to load table: ${err.message || err}`;
         } finally {
@@ -345,16 +473,12 @@
 
     onMount(() => {
         if (tablePath) initializeTable(tablePath);
-
         const undoBtn = document.getElementById("history-undo");
         const redoBtn = document.getElementById("history-redo");
-
         const undo = () => tabulatorInstance?.undo();
         const redo = () => tabulatorInstance?.redo();
-
         undoBtn?.addEventListener("click", undo);
         redoBtn?.addEventListener("click", redo);
-
 		return () => {
 			tabulatorInstance?.destroy();
             undoBtn?.removeEventListener("click", undo);
