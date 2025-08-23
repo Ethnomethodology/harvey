@@ -247,7 +247,10 @@
         });
 
         rowsToReformat.forEach(row => row.reformat());
-        tabulatorInstance.deselectRange();
+        const rangeModule = tabulatorInstance.getModule("selectRange");
+        if(rangeModule){
+            rangeModule.deselectRange();
+        }
 
         try {
             await saveTableStyles(tablePath, {
@@ -271,7 +274,14 @@
             resizable: false,
             headerSort: false,
             cssClass: "tabulator-row-number-column",
-            editor:false
+            editor: false,
+            cellClick: (e, cell) => {
+                const row = cell.getRow();
+                const rangeModule = tabulatorInstance.getModule("selectRange");
+                if(rangeModule) {
+                    rangeModule.selectRange(row);
+                }
+            }
         };
 
         let dataColumnDefs = headers.map(header => {
@@ -288,24 +298,28 @@
                     const colField = cell.getField();
                     const cellKey = `cell-${rowIndex}-${colField}`;
                     const cellElement = cell.getElement();
-
                     const cellColor = tableStyles.cellStyles[cellKey];
-
                     cellElement.style.backgroundColor = cellColor || "";
-
                     cell.getElement().style.whiteSpace = "pre-wrap";
                     return cell.getValue();
+                },
+                headerClick: (e, column) => {
+                    const rangeModule = tabulatorInstance.getModule("selectRange");
+                    if(rangeModule) {
+                        rangeModule.selectRange(column);
+                    }
                 },
                 headerContextMenu: [
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                 ],
                 contextMenu: (e, cell) => {
                     e.preventDefault(); // Prevent deselection on right-click
+                    const rangeModule = tabulatorInstance.getModule("selectRange");
+                    const ranges = rangeModule ? rangeModule.getRanges() : [];
+                    const selectedCells = ranges.length > 0 ? ranges[0].getCells() : [cell];
 
                     const highlightAction = (color) => {
-                        const range = tabulatorInstance.getSelectedRange();
-                        const cellsToModify = range.length > 0 ? range : [cell];
-                        applyHighlightToCells(color, cellsToModify);
+                        applyHighlightToCells(color, selectedCells);
                     };
 
                     const highlightColorOptions = highlightOptions.map(option => ({
@@ -320,11 +334,11 @@
                         { label: "Delete", action: () => cell.setValue("") },
                         { separator: true },
                         {
-                            label: "Highlight Selected Cells",
+                            label: "Highlight Selection",
                             menu: highlightColorOptions
                         },
                         {
-                            label: "Clear Highlight on Selected Cells",
+                            label: "Clear Highlight",
                             action: () => highlightAction(null)
                         }
                     ];

@@ -327,7 +327,6 @@
                     role="menu"
                     aria-orientation="vertical"
                     bind:this={submenuElement}
-                    on:mouseleave={closeSubmenu}
                   >
                     {#each item.items as subitem}
                       {#if subitem.type === 'separator'}
