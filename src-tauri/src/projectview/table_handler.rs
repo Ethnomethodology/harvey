@@ -686,6 +686,28 @@ pub async fn rename_table_header(
     }
 }
 
+#[tauri::command]
+pub async fn save_table_styles(table_path: String, styles: String) -> Result<(), CommandError> {
+    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&table_path))?;
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+    let project_id = project_data.project_uuid;
+    db_handler::save_table_styles(&project_id, &table_path, &styles)
+}
+
+#[tauri::command]
+pub async fn load_table_styles(table_path: String) -> Result<Option<String>, CommandError> {
+    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&table_path))?;
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+    let project_id = project_data.project_uuid;
+    db_handler::load_table_styles(&project_id, &table_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

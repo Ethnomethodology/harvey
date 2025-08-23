@@ -234,6 +234,8 @@ pub fn run() {
             projectview::table_handler::set_table_headers,
             projectview::table_handler::save_table_data,
             projectview::table_handler::rename_table_header,
+            projectview::table_handler::save_table_styles,
+            projectview::table_handler::load_table_styles,
             projectview::core_commands::save_table_layout_prefs,
             projectview::core_commands::load_table_layout_prefs,
 

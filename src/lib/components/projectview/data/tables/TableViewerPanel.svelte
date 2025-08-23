@@ -231,9 +231,8 @@
     async function applyRowColor(cell, color = null) {
         if (!tabulatorInstance) return;
 
-        const ranges = tabulatorInstance.getRanges();
-        const selectedCells = ranges.flatMap(r => r.getCells());
-        const rowsToUpdate = (selectedCells.length > 0)
+        const selectedCells = tabulatorInstance.getSelectedCells();
+        const rowsToUpdate = (selectedCells && selectedCells.length > 0)
             ? [...new Set(selectedCells.map(c => c.getRow()))]
             : [cell.getRow()];
 
@@ -260,11 +259,14 @@
     async function applyCellColor(cell, color = null) {
         if (!tabulatorInstance) return;
 
-        const ranges = tabulatorInstance.getRanges();
-        const selectedCells = ranges.flatMap(r => r.getCells());
-        const cellsToUpdate = selectedCells.length > 0 ? selectedCells : [cell];
+        const selectedCells = tabulatorInstance.getSelectedCells();
+        const cellsToUpdate = (selectedCells && selectedCells.length > 0) ? selectedCells : [cell];
 
         cellsToUpdate.forEach(c => {
+            if (!c || typeof c.getRow !== 'function') {
+                console.warn("Invalid object passed to applyCellColor, expected a Tabulator cell component.", c);
+                return;
+            }
             const row = c.getRow();
             const rowIndex = row.getPosition();
             const colField = c.getField();
@@ -277,8 +279,6 @@
             } else {
                 delete tableStyles.cellStyles[cellKey];
                 if (cellElement) {
-                    const row = c.getRow();
-                    const rowIndex = row.getPosition();
                     const rowColor = tableStyles.rowStyles[rowIndex];
                     cellElement.style.backgroundColor = rowColor || '';
                 }
