@@ -149,6 +149,14 @@
                     width:100,
                     minWidth: 50,
                 },
+                rowHeader:{
+                    resizable: false,
+                    frozen: true,
+                    headerSort:false,
+                    hozAlign:"center",
+                    formatter: "rownum",
+                    cssClass:"range-header-col"
+                },
                 clipboard: true,
                 clipboardCopyStyled:false,
                 clipboardCopyConfig:{ rowHeaders:false, columnHeaders:false },
@@ -229,12 +237,8 @@
         showEditHeaderModal = true;
     }
 
-    async function applyHighlightToSelectedCells(color, clickedCell) {
-        if (!tabulatorInstance) return;
-
-        const cellsToModify = selectedCells.length > 0 ? selectedCells : [clickedCell];
-
-        if (!cellsToModify.length) return;
+    async function applyHighlightToCells(color, cellsToModify) {
+        if (!tabulatorInstance || !cellsToModify || cellsToModify.length === 0) return;
 
         const rowsToReformat = new Set();
 
@@ -253,9 +257,10 @@
         });
 
         rowsToReformat.forEach(row => row.reformat());
-
-        // Clear the selection after applying the action
-        selectedCells = [];
+        const rangeModule = tabulatorInstance.getModule("selectRange");
+        if(rangeModule){
+            rangeModule.deselectRange();
+        }
 
         try {
             await saveTableStyles(tablePath, {
@@ -279,30 +284,7 @@
             resizable: false,
             headerSort: false,
             cssClass: "tabulator-row-number-column",
-            editor: false,
-            cellClick: (e, cell) => {
-                const row = cell.getRow();
-                const rangeModule = tabulatorInstance.getModule("selectRange");
-                if(rangeModule) {
-                    rangeModule.selectRange(row);
-                }
-            },
-            contextMenu: (e, cell) => {
-                e.preventDefault();
-                const row = cell.getRow();
-                const cells = row.getCells();
-                const highlightAction = (color) => {
-                    applyHighlightToCells(color, cells);
-                };
-                const highlightColorOptions = highlightOptions.map(option => ({
-                    label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                    action: () => highlightAction(option.value)
-                }));
-                return [
-                    { label: "Highlight Row", menu: highlightColorOptions },
-                    { label: "Clear Row Highlight", action: () => highlightAction(null) }
-                ];
-            }
+            editor: false
         };
 
         let dataColumnDefs = headers.map(header => {
@@ -323,12 +305,6 @@
                     cellElement.style.backgroundColor = cellColor || "";
                     cell.getElement().style.whiteSpace = "pre-wrap";
                     return cell.getValue();
-                },
-                headerClick: (e, column) => {
-                    const rangeModule = tabulatorInstance.getModule("selectRange");
-                    if(rangeModule) {
-                        rangeModule.selectRange(column);
-                    }
                 },
                 headerContextMenu: [
                     { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
@@ -356,9 +332,7 @@
                 ],
                 contextMenu: (e, cell) => {
                     e.preventDefault();
-                    const rangeModule = tabulatorInstance.getModule("selectRange");
-                    const ranges = rangeModule ? rangeModule.getRanges() : [];
-
+                    const ranges = tabulatorInstance.getRanges();
                     let selectedCellsForMenu = [cell];
                     if (ranges.length > 0) {
                         const activeRange = ranges[0];
