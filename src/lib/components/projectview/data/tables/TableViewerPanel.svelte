@@ -231,10 +231,7 @@
     async function applyRowColor(cell, color = null) {
         if (!tabulatorInstance) return;
 
-        const selectedCells = tabulatorInstance.getSelectedCells();
-        const rowsToUpdate = (selectedCells && selectedCells.length > 0)
-            ? [...new Set(selectedCells.map(c => c.getRow()))]
-            : [cell.getRow()];
+        const rowsToUpdate = [cell.getRow()];
 
         rowsToUpdate.forEach(row => {
             const rowIndex = row.getPosition();
@@ -259,8 +256,7 @@
     async function applyCellColor(cell, color = null) {
         if (!tabulatorInstance) return;
 
-        const selectedCells = tabulatorInstance.getSelectedCells();
-        const cellsToUpdate = (selectedCells && selectedCells.length > 0) ? selectedCells : [cell];
+        const cellsToUpdate = [cell];
 
         cellsToUpdate.forEach(c => {
             if (!c || typeof c.getRow !== 'function') {
