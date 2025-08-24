@@ -259,13 +259,65 @@
         }
     }
 
+    // Custom header filter editor to prevent Enter key propagation
+    function customHeaderFilterEditor(cell, onRendered, success, cancel, editorParams){
+        var editor = document.createElement("input");
+        editor.setAttribute("type", "text");
+        editor.setAttribute("placeholder", "Filter...");
+        editor.style.width = "100%";
+        editor.style.boxSizing = "border-box";
+        editor.style.padding = "4px";
+        editor.style.border = "1px solid #ccc";
+        editor.style.borderRadius = "3px";
+
+        editor.value = cell.getValue();
+
+        onRendered(function(){
+            editor.focus();
+            editor.style.css = "100%";
+        });
+
+        function successFunc(){
+            success(editor.value);
+        }
+
+        editor.addEventListener("change", successFunc);
+        editor.addEventListener("blur", successFunc);
+
+        // Prevent Enter key from propagating
+        editor.addEventListener("keydown", function(e){
+            if(e.key === "Enter"){
+                e.preventDefault();
+                e.stopPropagation();
+                successFunc(); // Apply filter on Enter
+            }
+            if(e.key === "Escape"){
+                cancel();
+            }
+        });
+
+        return editor;
+    }
+
     function generateColumns(data, headers, savedLayoutObj) {
         if (!headers || headers.length === 0) return [{title: "No Data", field: "placeholder"}];
         let dataColumnDefs = headers.map(header => {
             const colDef = {
                 title: header,
                 field: header,
-                headerFilter: "input",
+                headerFilter: customHeaderFilterEditor, // Use custom editor
+                headerFilterPlaceholder: "Filter...", // Add a placeholder
+                headerFilterFunc: function(headerValue, rowValue, rowData, filterParams){
+                    // headerValue is the value from the header filter input
+                    // rowValue is the value of the cell in the current row for this column
+                    if (headerValue === null || headerValue === undefined || String(headerValue).trim() === "") {
+                        return true; // Show all rows if filter is empty
+                    }
+                    if (rowValue === null || rowValue === undefined) {
+                        return false; // Don't show rows with empty cell values if filter is not empty
+                    }
+                    return String(rowValue).toLowerCase().includes(String(headerValue).toLowerCase());
+                },
                 sorter: "string",
                 editor: "textarea",
                 editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
@@ -519,11 +571,21 @@
         };
         tableContainer?.addEventListener('keydown', handleKeyDown);
 
+        const handleHeaderFilterKeydown = (e) => {
+            if (e.target.tagName === 'INPUT' && e.target.closest('.tabulator-header-filter') && e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
+        tableContainer?.addEventListener('keydown', handleHeaderFilterKeydown);
+
+
 		return () => {
 			tabulatorInstance?.destroy();
             undoBtn?.removeEventListener("click", undo);
             redoBtn?.removeEventListener("click", redo);
             tableContainer?.removeEventListener('keydown', handleKeyDown);
+            tableContainer?.removeEventListener('keydown', handleHeaderFilterKeydown);
 		}
     });
 
@@ -533,6 +595,11 @@
 
     async function handleSaveHeader() {
         if (!currentColumnComponent || !editingHeader.newName.trim()) return;
+        if (!tablePath) {
+            console.error("[TableViewerPanel] handleSaveHeader: tablePath is missing. Aborting save.");
+            showEditHeaderModal = false;
+            return;
+        }
         const { oldName, newName } = editingHeader;
         try {
             await renameTableHeader(tablePath, oldName, newName);
@@ -572,7 +639,7 @@
             <button class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md" on:click={() => showEditHeaderModal = false}>
                 Cancel
             </button>
-            <button class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md" on:click={handleSaveHeader}>
+            <button class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md" on:click|preventDefault|stopPropagation={handleSaveHeader}>
                 Save
             </button>
         </div>

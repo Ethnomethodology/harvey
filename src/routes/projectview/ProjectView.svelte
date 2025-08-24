@@ -750,12 +750,16 @@ async function onConfirmTranscriptionStart(event) {
             }
             else if (actionType === 'table') {
 				const importResult = await importTableFile();
-                if (importResult) {
+                if (importResult && importResult.table_path && String(importResult.table_path).trim() !== '') {
 					headerConfirmationData = {
 						tablePath: importResult.table_path,
 						previewData: importResult.preview_data,
 					};
 					showHeaderConfirmationModal = true;
+                } else {
+                    console.error("[ProjectView] Table import failed or returned no path.", importResult);
+                    await message("Table import failed. No valid table path was returned.", { title: "Import Error", type: "error" });
+                    project.update(p => ({...p, isLoading: false, isImportingAsset: false, statusMessage: `Table import failed.`}));
                 }
             }
             else if (actionType === 'image') {
