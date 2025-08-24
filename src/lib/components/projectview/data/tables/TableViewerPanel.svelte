@@ -36,6 +36,15 @@
     let tableLayoutSnapshot = { columns: {} };
     let tableClipboard = null;
 
+    const saveCurrentTableLayout = debounce(async () => {
+        if (!tabulatorInstance || !currentLoadedPath) return;
+        const baseDirForSave = get(project)?.baseDirectory;
+        const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
+        if (!baseDirForSave || !relativePathForSave) return;
+        updateTableLayoutSnapshot();
+        await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
+    }, 750);
+
     const debouncedSave = debounce(async () => {
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
@@ -75,6 +84,7 @@
             await column.delete();
             await debouncedSave();
             updateTableLayoutSnapshot();
+            saveCurrentTableLayout(); // Trigger save after snapshot update
         } catch (err) {
             console.error("Error deleting column:", err);
         }
@@ -513,7 +523,6 @@
             tabulatorInstance.on("columnResized", saveCurrentTableLayout);
             tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
             tabulatorInstance.on("cellEdited", debouncedSave);
-            tabulatorInstance.on("renderComplete", updateTableLayoutSnapshot);
             columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
         } catch (err) {
             error = `Failed to load table: ${err.message || err}`;
