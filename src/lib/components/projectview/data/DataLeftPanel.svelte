@@ -22,6 +22,20 @@
 
     const dispatch = createEventDispatcher();
 
+    function showTooltip(event, category) {
+        const buttonRect = event.currentTarget.getBoundingClientRect();
+        const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
+        tooltipCategoryName = category.name;
+        tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
+        tooltipX = buttonRect.right + 8;
+        tooltipY = buttonRect.top;
+        tooltipVisible = true;
+    }
+
+    function hideTooltip() {
+        tooltipVisible = false;
+    }
+
     async function handleImportTranscriptConfirm(event) {
         const { sourceType } = event.detail;
         showImportTranscriptModal = false;
@@ -264,7 +278,7 @@
                     try {
                         const confirmed = await confirm(confirmTranscriptMsg, transcriptOptions);
                         if (confirmed) {
-                            try { await deleteImportedTranscript(item.path); project.update(p => ({ ...p, currentImportedTranscriptPath: null })); }
+                            try { await deleteImportedTranscript(item.path); project.update(p => ({ ...p, currentImportedTranscriptPath: null })); } 
                             catch (err) { await message(`Error deleting transcript: ${err}`, { title: 'Delete Error', type: 'error' }); }
                         } else { project.update(p => ({ ...p, statusMessage: 'Transcript deletion cancelled.' })); }
                     } catch (e) { await message(`Error deleting transcript: ${e}`, { title: 'Delete Error', type: 'error' });}
@@ -337,7 +351,7 @@
 
         if (categoryType === 'video' || categoryType === 'audio') {
             if (categoryType === 'video' || categoryType === 'audio') {
-        try { 
+        try {
             await importMediaFile(categoryType);
         } catch (e) {
             console.error(`[DataLeftPanel] Error importMediaFile ${categoryType}:`, e); 
@@ -681,7 +695,7 @@
                     const ext = node.name.split('.').pop()?.toLowerCase() ?? '';
                     const relativePath = node.relativePath || ($project.baseDirectory && node.path.startsWith($project.baseDirectory) ? node.path.substring($project.baseDirectory.length + 1) : node.path);
                     const mediaData = { name: node.name, path: node.path, relativePath: relativePath.replace(/\\/g, '/'), media_xml_identifier: node.media_xml_identifier || '', file_type: 'media' };
-                    if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); }
+                    if (VIDEO_EXTENSIONS.has(ext)) { videos.push(mediaData); } 
                     else if (AUDIO_EXTENSIONS.has(ext)) { audios.push(mediaData); }
                 }
                 if (node.children && node.children.length > 0) {
@@ -698,10 +712,9 @@
         
         
         
-        
 
         return CATEGORIES_BASE.map(cat => {
-            if (cat.type === 'video') { return { ...cat, files: videos }; }
+            if (cat.type === 'video') { return { ...cat, files: videos }; } 
             else if (cat.type === 'audio') { return { ...cat, files: audios }; }
             else if (cat.type === 'document') { return { ...cat, files: documents }; }
             else if (cat.type === 'table') { return { ...cat, files: tables }; }
@@ -722,7 +735,7 @@
 
     $: selectedItemPathInStore = $project.selectedMediaNotePath || $project.selectedDocumentPath || $project.selectedTablePath || $project.selectedImagePath || $project.currentImportedTranscriptPath || null;
 
-    $: { 
+    $: {
         let autoPath = null;
         if ($project.selectedMediaNotePath) {
             autoPath = $project.selectedMediaNotePath;
@@ -766,19 +779,7 @@
                     }
                 }
 
-            function showTooltip(event, category) {
-                const buttonRect = event.currentTarget.getBoundingClientRect();
-                const fullCategoryData = filteredCategories.find(fc => fc.type === category.type);
-                tooltipCategoryName = category.name;
-                tooltipFiles = fullCategoryData ? fullCategoryData.files || [] : [];
-                tooltipX = buttonRect.right + 8;
-                tooltipY = buttonRect.top;
-                tooltipVisible = true;
-            }
-
-            function hideTooltip() {
-                tooltipVisible = false;
-            }
+            
 
         {
             if (selectedItemPathInStore && $project.baseDirectory) {
@@ -916,7 +917,7 @@
                         {#each filteredCategories as category (category.type)}
                             <li>
                                 <div
-                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
                                     on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
                                     <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
                                         <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
@@ -925,7 +926,7 @@
                                     </div>
                                     <button
                                       type="button"
-                                      class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity {categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
+                                      class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'opacity-100' : ''}"
                                       title="Options"
                                       on:click|stopPropagation={(e) => handleCategoryContextMenu(e, category.type)}
                                       disabled={!category.importEnabled}
@@ -940,10 +941,10 @@
                                             <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
-                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left {fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left ${fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
                                                              on:click={() => handleItemClick(fileItem) }
                                                              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
-                                                            <span class="flex items-center space-x-1 {fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
+                                                            <span class="flex items-center space-x-1 ${fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
                                                                 <span>{fileItem.name}</span>
                                                             </span>
                                                             <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
@@ -1297,8 +1298,7 @@
         id="notes-left-panel-group-item-context-menu"
         class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
         style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
-        on:click|stopPropagation
-    >
+        on:click|stopPropagation>
         <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
         <button on:click={() => handleGroupContextMenuAction('Rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename...</button>
         <hr class="my-1 border-gray-200 dark:border-gray-600" />
