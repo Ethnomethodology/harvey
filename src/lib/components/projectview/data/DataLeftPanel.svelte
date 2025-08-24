@@ -557,6 +557,7 @@
     }
 
     async function handleItemClick(item) {
+        console.log(`[DataLeftPanel] handleItemClick: Clicked item path: ${item.path}`);
         if (item.file_type === 'doc' || item.file_type === 'table' || item.file_type === 'image' || item.file_type === 'imported_transcript' || item.file_type === 'media') { 
             let viewType = item.file_type; 
             if (item.file_type === 'doc') viewType = 'documents';
@@ -707,7 +708,6 @@
         videos.sort((a, b) => a.name.localeCompare(b.name));
         audios.sort((a, b) => a.name.localeCompare(b.name));
 
-        
         
         
         
@@ -941,10 +941,15 @@
                                             <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
-                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left ${fileItem.path === selectedItemPathInStore ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}" title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
+                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                                             class:bg-blue-100={fileItem.path === selectedItemPathInStore}
+                                                             class:dark:bg-blue-800={fileItem.path === selectedItemPathInStore}
+                                                             title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
                                                              on:click={() => handleItemClick(fileItem) }
                                                              on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleItemClick(fileItem); }}>
-                                                            <span class="flex items-center space-x-1 ${fileItem.path === selectedItemPathInStore ? 'text-blue-600 dark:text-blue-300' : 'text-gray-800 dark:text-gray-200'} truncate">
+                                                            <span class="flex items-center space-x-1 text-gray-800 dark:text-gray-200 truncate"
+                                                                  class:!text-blue-700={fileItem.path === selectedItemPathInStore}
+                                                                  class:dark:!text-blue-200={fileItem.path === selectedItemPathInStore}>
                                                                 <span>{fileItem.name}</span>
                                                             </span>
                                                             <button type="button" class="ml-2 flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" title="Options for {fileItem.name}" on:click|stopPropagation={(e) => handleItemContextMenu(e, fileItem)}> {@html CONTEXT_MENU_ICON_SVG} </button>
@@ -1164,8 +1169,7 @@
         id="notes-left-panel-category-context-menu"
         class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
         style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
-        on:click|stopPropagation
-      >
+        on:click|stopPropagation>
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
           <button
             on:click|stopPropagation={() => {

@@ -171,21 +171,22 @@ export function setSelectedGroup(groupId, groupData) {
 
 
 export function prepareDocumentView(filePath, itemType = 'document', hasHeaders = true) {
-    const isPdf = filePath ? filePath.toLowerCase().endsWith('.pdf') : false;
+    const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
+    const isPdf = normalizedFilePath ? normalizedFilePath.toLowerCase().endsWith('.pdf') : false;
     const isTable = itemType === 'tables';
     const isImage = itemType === 'images';
-    const isJsonDocument = filePath && itemType === 'documents' && !isPdf;
+    const isJsonDocument = normalizedFilePath && itemType === 'documents' && !isPdf;
 
     const defaultFileLevelMetadata = {
         file_name: '', last_modified: '', title: '', description: '', summary: '',
     };
 
     project.update(p => {
-        const selectingSamePath = p.selectedDocumentPath === filePath && filePath !== null; // Ensure filePath is not null for same path check
+        const selectingSamePath = p.selectedDocumentPath === normalizedFilePath && normalizedFilePath !== null; // Ensure filePath is not null for same path check
 
         // Determine if loading is needed only if filePath is valid
         let newIsDocumentLoading = false;
-        if (filePath) {
+        if (normalizedFilePath) {
             newIsDocumentLoading = (isJsonDocument && (!selectingSamePath || !p.currentDocumentJson)) ||
                                   (isPdf && (!selectingSamePath || !p.currentPdfAnnotations || (p.currentPdfAnnotations.length === 0 && !p.initialPdfAnnotations))) ||
                                   (isImage && (!selectingSamePath || !p.currentImageAnnotations));
@@ -194,10 +195,10 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
         return {
             ...p,
             // Clear group selection only if a file path is being actively set
-            selectedGroupId: filePath ? null : p.selectedGroupId,
-            selectedGroupData: filePath ? null : p.selectedGroupData,
+            selectedGroupId: normalizedFilePath ? null : p.selectedGroupId,
+            selectedGroupData: normalizedFilePath ? null : p.selectedGroupData,
 
-            selectedDocumentPath: filePath,
+            selectedDocumentPath: normalizedFilePath,
             selectedDocumentType: itemType,
             selectedDocumentOptions: isTable ? { hasHeaders: hasHeaders } : {},
             currentDocumentJson: (isJsonDocument && selectingSamePath) ? p.currentDocumentJson : (isJsonDocument ? null : null),
@@ -216,7 +217,7 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
 
             isDocumentLoading: newIsDocumentLoading, // This is now correctly conditional on filePath
             documentError: null,
-            statusMessage: filePath ? `Loading ${itemType}: ${filePath.split(/[\\/]/).pop()}` : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} selection cleared.`,
+            statusMessage: normalizedFilePath ? `Loading ${itemType}: ${normalizedFilePath.split(/[\\/]/).pop()}` : `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} selection cleared.`,
             isLoading: newIsDocumentLoading, // Global isLoading reflects specific loading
 
             // Clear other view states
@@ -238,29 +239,30 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
         };
     });
 
-    if (filePath) { // Only proceed with async loading if filePath is valid
+    if (normalizedFilePath) { // Only proceed with async loading if filePath is valid
         if (isJsonDocument) {
             import('$lib/services/projectService.js').then(async service => {
                 if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
-                else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
-                if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(filePath); project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === filePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
-            }).catch(err => project.update(p => { if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+                else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
+                if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(normalizedFilePath); project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
+            }).catch(err => project.update(p => { if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isPdf) {
              import('$lib/services/projectService.js').then(async service => {
-                if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(filePath);
-                else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-             }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+                if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(normalizedFilePath);
+                else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
+             }).catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isImage) {
             import('$lib/services/projectService.js').then(async service => {
-                if (service.loadImageAnnotations) await service.loadImageAnnotations(filePath);
-                else { console.error("[ProjectStore] loadImageAnnotations not found."); project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-            }).catch(err => project.update(p => {if(p.selectedDocumentPath === filePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+                if (service.loadImageAnnotations) await service.loadImageAnnotations(normalizedFilePath);
+                else { console.error("[ProjectStore] loadImageAnnotations not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
+            }).catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isTable) {
              project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
         }
-    } else { // If filePath is null (clearing selection)
+    } else { // If normalizedFilePath is null (clearing selection)
          project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
     }
+
 }
 export function setLoadedDocumentData(filePath, jsonContent) { project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: jsonContent || defaultEmptyJson, initialDocumentJson: jsonContent || defaultEmptyJson, isDocumentDirty: false, isDocumentLoading: false, documentError: null, statusMessage: `Loaded document: ${filePath.split(/[\\/]/).pop()}`, isLoading: false }; } else { if(p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; } }); }
 export function setDocumentLoadFailed(filePath, errorMsg) { console.error(`[ProjectStore] Document load failed for: ${filePath}`, errorMsg); project.update(p => { if (p.selectedDocumentPath === filePath && !filePath.toLowerCase().endsWith('.pdf') ) { return { ...p, currentDocumentJson: null, initialDocumentJson: null, isDocumentDirty: false, isDocumentLoading: false, activeDocumentEditorRef: null, documentError: `Failed to load document: ${errorMsg}`, statusMessage: `Error loading ${filePath.split(/[\\/]/).pop()}.`, currentDocumentFileLevelMetadata: { file_name: '', last_modified: '', title: '', description: '', summary: '' }, currentDocumentHighlights: [], isDocumentMetadataDirty: false, isLoading: false }; } else if (p.isDocumentLoading && p.selectedDocumentPath === filePath) { return { ...p, isDocumentLoading: false, isLoading: false }; } return p; }); }
@@ -632,19 +634,20 @@ export function markImageAnnotationsAsSaved() {
 
 
 export function prepareImportedTranscriptView(filePath) {
+    const normalizedFilePath = filePath ? filePath.replace(/\\/g, '/') : null;
     project.update(p => {
-        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === filePath && !!filePath && !!p.currentImportedTranscriptLexicalJson;
-        let finalIsImportedTranscriptLoading = !filePath ? false : !isReselectingSameLoadedPath;
+        const isReselectingSameLoadedPath = p.currentImportedTranscriptPath === normalizedFilePath && !!normalizedFilePath && !!p.currentImportedTranscriptLexicalJson;
+        let finalIsImportedTranscriptLoading = !normalizedFilePath ? false : !isReselectingSameLoadedPath;
         let finalIsGlobalLoading = finalIsImportedTranscriptLoading;
-        let finalStatusMessage = !filePath ? 'Imported transcript selection cleared.' :
-            isReselectingSameLoadedPath ? `Viewing imported transcript: ${filePath.split(/[\/]/).pop()}` :
-            `Loading imported transcript: ${filePath.split(/[\/]/).pop()}`;
+        let finalStatusMessage = !normalizedFilePath ? 'Imported transcript selection cleared.' :
+            isReselectingSameLoadedPath ? `Viewing imported transcript: ${normalizedFilePath.split(/[\/]/).pop()}` :
+            `Loading imported transcript: ${normalizedFilePath.split(/[\/]/).pop()}`;
 
         return {
             ...p,
-            selectedGroupId: filePath ? null : p.selectedGroupId,
-            selectedGroupData: filePath ? null : p.selectedGroupData,
-            currentImportedTranscriptPath: filePath,
+            selectedGroupId: normalizedFilePath ? null : p.selectedGroupId,
+            selectedGroupData: normalizedFilePath ? null : p.selectedGroupData,
+            currentImportedTranscriptPath: normalizedFilePath,
             currentImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.currentImportedTranscriptLexicalJson : null,
             initialImportedTranscriptLexicalJson: isReselectingSameLoadedPath ? p.initialImportedTranscriptLexicalJson : null,
             isImportedTranscriptDirty: isReselectingSameLoadedPath ? p.isImportedTranscriptDirty : false,
