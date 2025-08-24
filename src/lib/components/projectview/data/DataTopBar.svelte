@@ -400,11 +400,10 @@
             // Find the correct active editor
             if (p.activeDocumentEditorRef) {
                 editorRef = p.activeDocumentEditorRef;
-            } else if (p.activeMediaNoteEditorRef) {
-                editorRef = p.activeMediaNoteEditorRef;
             } else if (p.activeImportedTranscriptEditorRef) {
                 editorRef = p.activeImportedTranscriptEditorRef;
             }
+            // Removed activeMediaNoteEditorRef from live transcription updates
 
             if (editorRef?.ref?.updateLiveTranscriptionText) {
                 editorRef.ref.updateLiveTranscriptionText(text, is_final, start_time, end_time);
@@ -490,7 +489,7 @@
             <span class="text-xs">Transcribe</span>
         </button>
         {/if}
-        {#if $project.activeDocumentEditorRef || $project.activeMediaNoteEditorRef}
+        {#if $project.activeDocumentEditorRef || $project.activeImportedTranscriptEditorRef}
         <button class="ui-button-icon flex items-center ml-2" on:click={toggleLiveTranscription} title="Live Transcription">
             {#if isLiveTranscriptionActive}
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-fill" class:blinking-red-text={isLiveTranscriptionActive} viewBox="0 0 16 16">
