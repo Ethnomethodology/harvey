@@ -240,6 +240,10 @@
             delete tableStyles.rowStyles[rowIndex];
         }
         row.reformat();
+        const ranges = tabulatorInstance.getRanges();
+        if (ranges) {
+            ranges.forEach(range => range.remove());
+        }
         try {
             await saveTableStyles(tablePath, {
                 rowStyles: tableStyles.rowStyles,
