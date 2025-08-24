@@ -336,6 +336,9 @@
                     const menu = [
                         { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
                         { separator: true },
+                        { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
+                        { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
+                        { separator: true },
                         { label: "Cut Column", action: (e, column) => cutColumn(column) },
                         { label: "Copy Column", action: (e, column) => copyColumn(column) },
                     ];
