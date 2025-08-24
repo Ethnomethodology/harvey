@@ -300,32 +300,7 @@
                 },
                 contextMenu: (e, cell) => {
                     e.preventDefault();
-                    const ranges = tabulatorInstance.getRanges();
-                    let selectedCellsForMenu = [cell];
-                    if (ranges.length > 0) {
-                        const activeRange = ranges[0];
-                        const cellsInRange = activeRange.getCells();
-                        const isCellInActiveRange = cellsInRange.includes(cell);
-                        if (isCellInActiveRange) {
-                            selectedCellsForMenu = cellsInRange;
-                        }
-                    }
-                    const highlightAction = (color) => {
-                        applyHighlightToCells(color, selectedCellsForMenu);
-                    };
-                    const highlightColorOptions = highlightOptions.map(option => ({
-                        label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => highlightAction(option.value)
-                    }));
-                    return [
-                        { label: "Copy", action: () => navigator.clipboard.writeText(cell.getValue()) },
-                        { label: "Cut", action: () => { navigator.clipboard.writeText(cell.getValue()); cell.setValue(""); } },
-                        { label: "Paste", action: () => navigator.clipboard.readText().then(text => cell.setValue(text)) },
-                        { label: "Delete", action: () => cell.setValue("") },
-                        { separator: true },
-                        { label: "Highlight Selection", menu: highlightColorOptions },
-                        { label: "Clear Highlight", action: () => highlightAction(null) }
-                    ];
+                    return [];
                 }
             };
             if (savedLayoutObj?.columns?.[header]) {
@@ -535,10 +510,20 @@
         const redo = () => tabulatorInstance?.redo();
         undoBtn?.addEventListener("click", undo);
         redoBtn?.addEventListener("click", redo);
+
+        const handleKeyDown = (e) => {
+            if (e.metaKey && e.key === 'c') {
+                e.preventDefault();
+                tabulatorInstance?.copyToClipboard("range");
+            }
+        };
+        tableContainer?.addEventListener('keydown', handleKeyDown);
+
 		return () => {
 			tabulatorInstance?.destroy();
             undoBtn?.removeEventListener("click", undo);
             redoBtn?.removeEventListener("click", redo);
+            tableContainer?.removeEventListener('keydown', handleKeyDown);
 		}
     });
 
