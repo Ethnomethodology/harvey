@@ -396,7 +396,7 @@
                     const rowColor = tableStyles.rowStyles[rowIndex];
                     row.getElement().style.backgroundColor = rowColor || "";
                 },
-                rowContextMenu: (row) => {
+                rowContextMenu: (e, row) => {
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
                         action: () => applyHighlightToRow(option.value, row)
