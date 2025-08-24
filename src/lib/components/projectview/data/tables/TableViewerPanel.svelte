@@ -231,19 +231,24 @@
         }
     }
 
-    async function applyHighlightToRow(color, row) {
-        if (!tabulatorInstance || !row) return;
-        const rowIndex = row.getData().harvey_internal_id;
-        if (color) {
-            tableStyles.rowStyles[rowIndex] = color;
-        } else {
-            delete tableStyles.rowStyles[rowIndex];
-        }
-        row.reformat();
+    async function applyHighlightToRows(color, rows) {
+        if (!tabulatorInstance || !rows || rows.length === 0) return;
+
+        rows.forEach(row => {
+            const rowIndex = row.getData().harvey_internal_id;
+            if (color) {
+                tableStyles.rowStyles[rowIndex] = color;
+            } else {
+                delete tableStyles.rowStyles[rowIndex];
+            }
+            row.reformat();
+        });
+
         const ranges = tabulatorInstance.getRanges();
         if (ranges) {
             ranges.forEach(range => range.remove());
         }
+
         try {
             await saveTableStyles(tablePath, {
                 rowStyles: tableStyles.rowStyles,
@@ -401,9 +406,24 @@
                     row.getElement().style.backgroundColor = rowColor || "";
                 },
                 rowContextMenu: (e, row) => {
+                    const ranges = tabulatorInstance.getRanges();
+                    let selectedRowsForMenu = [row];
+
+                    if (ranges.length > 0) {
+                        const activeRange = ranges[0];
+                        const rangeRows = activeRange.getRows();
+                        if (rangeRows.some(r => r.getIndex() === row.getIndex())) {
+                            selectedRowsForMenu = rangeRows;
+                        }
+                    }
+
+                    const highlightAction = (color) => {
+                        applyHighlightToRows(color, selectedRowsForMenu);
+                    };
+
                     const highlightColorOptions = highlightOptions.map(option => ({
                         label: `<span style='display:inline-block; width:15px; height:15px; background-color:${option.value}; margin-right: 8px; vertical-align: middle;'></span>${option.label}`,
-                        action: () => applyHighlightToRow(option.value, row)
+                        action: () => highlightAction(option.value)
                     }));
 
                     const menu = [
@@ -423,7 +443,7 @@
                     menu.push({ label: "Delete Row", action: (e, row) => deleteRow(row) });
                     menu.push({ separator: true });
                     menu.push({ label: "Highlight Row", menu: highlightColorOptions });
-                    menu.push({ label: "Clear Row Highlight", action: () => applyHighlightToRow(null, row) });
+                    menu.push({ label: "Clear Row Highlight", action: () => highlightAction(null) });
 
                     return menu;
                 },
