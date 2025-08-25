@@ -37,6 +37,7 @@
             activeHighlights = $project.currentImageAnnotations || [];
         } else if (itemType === 'tables') {
             activeHighlights = $project.currentTableHighlights || [];
+            console.log('[HighlightsPanel] Active table highlights:', activeHighlights);
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }
@@ -95,6 +96,7 @@
     }
 
     $: processedHighlights = processHighlights(activeHighlights, itemType);
+    $: console.log('[HighlightsPanel] Processed highlights:', processedHighlights);
 
     async function handleHighlightsUpdate(newHighlights) {
         const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');

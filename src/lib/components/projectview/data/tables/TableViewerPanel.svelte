@@ -429,6 +429,7 @@
             tableStyles = { rowStyles: {}, cellStyles: {} };
 
             if (loadedHighlightsOrStyles) {
+            console.log('[TableViewerPanel] initializeTable loadedHighlightsOrStyles:', loadedHighlightsOrStyles);
                 if (Array.isArray(loadedHighlightsOrStyles)) {
                     // New format
                     highlightsForStore = loadedHighlightsOrStyles;
@@ -447,6 +448,7 @@
             }
 
             const { setLoadedTableHighlights } = await import('$lib/stores/projectStore.js');
+        console.log('[TableViewerPanel] initializeTable setting highlightsForStore:', highlightsForStore);
             setLoadedTableHighlights(highlightsForStore);
 
             const response = await loadTableData(pathForTable, hasHeaders);
