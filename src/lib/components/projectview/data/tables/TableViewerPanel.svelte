@@ -423,20 +423,32 @@
         }
 
         try {
-            const loadedHighlights = await loadTableStyles(pathForTable);
-            const { setLoadedTableHighlights } = await import('$lib/stores/projectStore.js');
-            setLoadedTableHighlights(loadedHighlights || []);
+            const loadedHighlightsOrStyles = await loadTableStyles(pathForTable);
 
+            let highlightsForStore = [];
             tableStyles = { rowStyles: {}, cellStyles: {} };
-            if (loadedHighlights) {
-                loadedHighlights.forEach(h => {
-                    if (h.id.startsWith('row-')) {
-                        const rowIndex = h.id.substring(4);
-                        tableStyles.rowStyles[rowIndex] = h.color;
-                    }
-                    // Future: Handle cell styles if needed
-                });
+
+            if (loadedHighlightsOrStyles) {
+                if (Array.isArray(loadedHighlightsOrStyles)) {
+                    // New format
+                    highlightsForStore = loadedHighlightsOrStyles;
+                    loadedHighlightsOrStyles.forEach(h => {
+                        if (h.id.startsWith('row-')) {
+                            const rowIndex = h.id.substring(4);
+                            tableStyles.rowStyles[rowIndex] = h.color;
+                        }
+                    });
+                } else if (typeof loadedHighlightsOrStyles === 'object' && loadedHighlightsOrStyles.rowStyles) {
+                    // Old format, for backward compatibility
+                    tableStyles.rowStyles = loadedHighlightsOrStyles.rowStyles || {};
+                    tableStyles.cellStyles = loadedHighlightsOrStyles.cellStyles || {};
+                    // Highlights panel will be empty for this table until new highlights are added.
+                }
             }
+
+            const { setLoadedTableHighlights } = await import('$lib/stores/projectStore.js');
+            setLoadedTableHighlights(highlightsForStore);
+
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
             tableData.forEach((d, i) => d.harvey_internal_id = i);
