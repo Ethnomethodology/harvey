@@ -64,7 +64,7 @@
                     comments: annotation.comments || []
                 };
             });
-        } else if (itemType === 'tables') {
+        } else if (type === 'tables') {
             return highlights.map(h => ({
                 id: h.id,
                 color: h.color,
