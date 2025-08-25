@@ -28,7 +28,7 @@
 
     const highlightOptions = HIGHLIGHT_OPTIONS;
 
-    let tableStyles = { rowStyles: {}, cellStyles: {} };
+    let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
     let searchTerm = '';
     let searchMatches = [];
     let currentMatchIndex = -1;
@@ -244,28 +244,53 @@
     async function applyHighlightToRows(color, rows) {
         if (!tabulatorInstance || !rows || rows.length === 0) return;
 
+        let currentHighlights = get(project).currentTableHighlights || [];
+
         rows.forEach(row => {
-            const rowIndex = row.getData().harvey_internal_id;
+            const rowData = row.getData();
+            const rowIndex = rowData.harvey_internal_id;
+
+            // Remove existing highlight for this row
+            currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
+
             if (color) {
-                tableStyles.rowStyles[rowIndex] = color;
-            } else {
-                delete tableStyles.rowStyles[rowIndex];
+                // Add new highlight
+                const text = Object.values(rowData).filter(val => val !== null && val !== undefined).join(' | ');
+                const newHighlight = {
+                    id: `row-${rowIndex}`,
+                    color: color,
+                    text: text,
+                    tags: [],
+                    comments: []
+                };
+                currentHighlights.push(newHighlight);
             }
-            row.reformat();
         });
+
+        // Update the store
+        const { setTableHighlights } = await import('$lib/stores/projectStore.js');
+        setTableHighlights(currentHighlights);
+
+        // Save to backend
+        try {
+            await saveTableStyles(tablePath, currentHighlights);
+        } catch (err) {
+            console.error("Failed to save table styles:", err);
+        }
+
+        // Re-derive styles and reformat rows
+        tableStyles = { rowStyles: {}, cellStyles: {} };
+        currentHighlights.forEach(h => {
+            if (h.id.startsWith('row-')) {
+                const rowIndex = h.id.substring(4);
+                tableStyles.rowStyles[rowIndex] = h.color;
+            }
+        });
+        rows.forEach(row => row.reformat());
 
         const ranges = tabulatorInstance.getRanges();
         if (ranges) {
             ranges.forEach(range => range.remove());
-        }
-
-        try {
-            await saveTableStyles(tablePath, {
-                rowStyles: tableStyles.rowStyles,
-                cellStyles: tableStyles.cellStyles
-            });
-        } catch (err) {
-            console.error("Failed to save table styles:", err);
         }
     }
 
@@ -398,11 +423,20 @@
         }
 
         try {
-            const loadedStyles = await loadTableStyles(pathForTable);
-            tableStyles = {
-                rowStyles: loadedStyles?.rowStyles || {},
-                cellStyles: loadedStyles?.cellStyles || {},
-            };
+            const loadedHighlights = await loadTableStyles(pathForTable);
+            const { setLoadedTableHighlights } = await import('$lib/stores/projectStore.js');
+            setLoadedTableHighlights(loadedHighlights || []);
+
+            tableStyles = { rowStyles: {}, cellStyles: {} };
+            if (loadedHighlights) {
+                loadedHighlights.forEach(h => {
+                    if (h.id.startsWith('row-')) {
+                        const rowIndex = h.id.substring(4);
+                        tableStyles.rowStyles[rowIndex] = h.color;
+                    }
+                    // Future: Handle cell styles if needed
+                });
+            }
             const response = await loadTableData(pathForTable, hasHeaders);
             tableData = response.data;
             tableData.forEach((d, i) => d.harvey_internal_id = i);

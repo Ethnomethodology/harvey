@@ -2,6 +2,7 @@
 import { writable, get } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { refreshProjectFiles } from '../services/projectService.js'; // Import refreshProjectFiles
+import * as projectService from '$lib/services/projectService.js';
 import { addTag } from '$lib/stores/tagStore.js';
 
 export const groupContentNotification = writable(null);
@@ -249,27 +250,27 @@ export function prepareDocumentView(filePath, itemType = 'document', hasHeaders 
 
     if (normalizedFilePath) { // Only proceed with async loading if filePath is valid
         if (isJsonDocument) {
-            import('$lib/services/projectService.js').then(async service => {
-                if (service.loadActiveDocumentContent) await service.loadActiveDocumentContent();
+            (async () => {
+                if (projectService.loadActiveDocumentContent) await projectService.loadActiveDocumentContent();
                 else { console.error("[ProjectStore] loadActiveDocumentContent not found."); project.update(p => { if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; });}
-                if (service.loadDocumentMetadata) { try { const meta = await service.loadDocumentMetadata(normalizedFilePath); project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
-            }).catch(err => project.update(p => { if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+                if (projectService.loadDocumentMetadata) { try { const meta = await projectService.loadDocumentMetadata(normalizedFilePath); project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, currentDocumentFileLevelMetadata: meta?.metadata || defaultFileLevelMetadata, currentDocumentHighlights: meta?.highlights || [], isDocumentMetadataDirty: false } : p); } catch (e) { project.update(p => p.selectedDocumentPath === normalizedFilePath && !isPdf ? { ...p, documentError: (p.documentError || '') + ` Meta load failed.` } : p);}}
+            })().catch(err => project.update(p => { if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isPdf) {
-             import('$lib/services/projectService.js').then(async service => {
-                if (service.loadPdfAnnotationsFromFile) await service.loadPdfAnnotationsFromFile(normalizedFilePath);
+             (async () => {
+                if (projectService.loadPdfAnnotationsFromFile) await projectService.loadPdfAnnotationsFromFile(normalizedFilePath);
                 else { console.error("[ProjectStore] loadPdfAnnotationsFromFile not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-             }).catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+             })().catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isImage) {
-            import('$lib/services/projectService.js').then(async service => {
-                if (service.loadImageAnnotations) await service.loadImageAnnotations(normalizedFilePath);
+            (async () => {
+                if (projectService.loadImageAnnotations) await projectService.loadImageAnnotations(normalizedFilePath);
                 else { console.error("[ProjectStore] loadImageAnnotations not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-            }).catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+            })().catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         } else if (isTable) {
              project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
-             import('$lib/services/projectService.js').then(async service => {
-                if (service.loadTableHighlights) await service.loadTableHighlights(normalizedFilePath);
+            (async () => {
+                if (projectService.loadTableHighlights) await projectService.loadTableHighlights(normalizedFilePath);
                 else { console.error("[ProjectStore] loadTableHighlights not found."); project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p;});}
-             }).catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
+            })().catch(err => project.update(p => {if(p.selectedDocumentPath === normalizedFilePath) return ({ ...p, isDocumentLoading: false, documentError: "Internal error."}); return p; }));
         }
     } else { // If normalizedFilePath is null (clearing selection)
          project.update(p => ({ ...p, isDocumentLoading: false, isLoading: false }));
@@ -875,8 +876,8 @@ export function prepareMediaNoteView(mediaPath) {
         }));
 
         if (firstTranscriptPath) {
-            import('$lib/services/projectService.js').then(async service => {
-                const meta = await service.loadDocumentMetadata(firstTranscriptPath);
+            (async () => {
+                const meta = await projectService.loadDocumentMetadata(firstTranscriptPath);
                 project.update(p => {
                     if (p.selectedMediaNotePath === normalizedMediaPath) {
                         return {
@@ -888,7 +889,7 @@ export function prepareMediaNoteView(mediaPath) {
                     }
                     return p;
                 });
-            });
+            })();
         }
     } else {
         project.update(p => ({ ...p, isMediaNoteTranscriptLoading: false, isLoading: false, activeTranscriptPathInDataTab: null, currentDocumentHighlights: [] }));
