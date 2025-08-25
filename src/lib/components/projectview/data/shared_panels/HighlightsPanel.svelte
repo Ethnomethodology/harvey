@@ -3,8 +3,8 @@
     import { get } from 'svelte/store';
     import { onDestroy } from 'svelte';
 
-    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations } from '$lib/stores/projectStore.js';
-    import { saveImageAnnotations } from '$lib/services/projectService.js';
+    import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
+    import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
     import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
@@ -35,6 +35,8 @@
             activeHighlights = $project.currentPdfAnnotations || [];
         } else if (itemType === 'images') {
             activeHighlights = $project.currentImageAnnotations || [];
+        } else if (itemType === 'tables') {
+            activeHighlights = $project.currentTableHighlights || [];
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }
@@ -93,8 +95,11 @@
         } else if (isPdf) {
             updatePdfAnnotations(newHighlights, true);
         } else if (itemType === 'images') {
-            updateImageAnnotations(newHighlights); // Assumes updateImageAnnotations handles both array and single object
+            updateImageAnnotations(newHighlights);
             await saveImageAnnotations();
+        } else if (itemType === 'tables') {
+            setTableHighlights(newHighlights);
+            await saveTableHighlights();
         } else {
             setDocumentHighlights(newHighlights);
         }
@@ -128,6 +133,8 @@
              docType = $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'doc';
         } else if (itemType === 'images') {
             docType = 'image';
+        } else if (itemType === 'tables') {
+            docType = 'table';
         }
 
         if (type === 'addcomment') {
@@ -140,6 +147,8 @@
 
         if (docType === 'image') {
             saveImageAnnotations();
+        } else if (docType === 'table') {
+            saveTableHighlights();
         }
     }
 </script>
@@ -196,7 +205,7 @@
                     </li>
                 {/each}
             </ul>
-        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript' || itemType === 'images'}
+        {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript' || itemType === 'images' || itemType === 'tables'}
             <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 No highlights for this item.
             </p>

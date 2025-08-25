@@ -146,6 +146,69 @@ export async function loadTableStyles(tablePath) {
     }
 }
 
+export async function loadTableHighlights(tableAbsPath) {
+    const { setLoadedTableHighlights, setTableHighlightsLoadFailed } = await import('$lib/stores/projectStore.js');
+
+    const currentProj = get(project);
+    const projectId = currentProj.id;
+
+    if (!tableAbsPath) {
+        setLoadedTableHighlights([]);
+        return;
+    }
+
+    if (!projectId) {
+        const errorMsg = "Project data not fully loaded.";
+        console.error(`[ProjectService] Cannot load table highlights: ${errorMsg}`);
+        setTableHighlightsLoadFailed(tableAbsPath, errorMsg);
+        return;
+    }
+
+    try {
+        const highlightsJsonString = await invoke('load_table_styles', {
+            projectId,
+            tablePath: tableAbsPath
+        });
+        const highlights = highlightsJsonString ? JSON.parse(highlightsJsonString) : [];
+        setLoadedTableHighlights(highlights);
+    } catch (err) {
+        console.error(`[ProjectService] Error loading highlights for ${tableAbsPath}:`, err);
+        setTableHighlightsLoadFailed(tableAbsPath, err.message || String(err));
+    }
+}
+
+export async function saveTableHighlights() {
+    const { markTableHighlightsAsSaved } = await import('$lib/stores/projectStore.js');
+    const projState = get(project);
+    const tablePath = projState.selectedDocumentPath;
+    const highlights = projState.currentTableHighlights;
+
+    if (!tablePath || !projState.isTableHighlightsDirty) {
+        return;
+    }
+
+    const projectId = projState.id;
+
+    if (!projectId) {
+        console.error("[ProjectService] saveTableHighlights: Project data not fully loaded.");
+        notificationStore.add('Error: Project not fully loaded. Cannot save highlights.', 'error');
+        return;
+    }
+
+    try {
+        await invoke('save_table_styles', {
+            projectId,
+            tablePath: tablePath,
+            styles: JSON.stringify(highlights)
+        });
+        markTableHighlightsAsSaved();
+        console.log(`[ProjectService] Table highlights saved for ${tablePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving table highlights for ${tablePath}:`, error);
+        notificationStore.add(`Error saving table highlights: ${error.message || error}`, 'error');
+    }
+}
+
 export async function createNewDocument(projectXmlPath) {
     if (!projectXmlPath) {
         console.error('[ProjectService] Cannot create document: Project XML path is missing.');
