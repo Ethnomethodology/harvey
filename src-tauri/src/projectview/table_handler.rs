@@ -687,25 +687,36 @@ pub async fn rename_table_header(
 }
 
 #[tauri::command]
-pub async fn save_table_styles(table_path: String, styles: String) -> Result<(), CommandError> {
-    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&table_path))?;
+pub async fn save_table_styles(file_path: String, styles: Value) -> Result<(), CommandError> {
+    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&file_path))?;
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
         quick_xml::de::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
-    db_handler::save_table_styles(&project_id, &table_path, &styles)
+    let styles_string = serde_json::to_string(&styles)
+        .map_err(|e| CommandError::from(format!("Failed to serialize table styles: {}", e)))?;
+    db_handler::save_table_styles(&project_id, &file_path, &styles_string)
 }
 
 #[tauri::command]
-pub async fn load_table_styles(table_path: String) -> Result<Option<String>, CommandError> {
-    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&table_path))?;
+pub async fn load_table_styles(file_path: String) -> Result<Value, CommandError> {
+    let project_xml_path = get_project_xml_path_from_item(&PathBuf::from(&file_path))?;
     let project_data: ProjectXml = {
         let xml_content = fs::read_to_string(&project_xml_path)?;
         quick_xml::de::from_str(&xml_content)?
     };
     let project_id = project_data.project_uuid;
-    db_handler::load_table_styles(&project_id, &table_path)
+    let styles_string_option = db_handler::load_table_styles(&project_id, &file_path)?;
+
+    match styles_string_option {
+        Some(styles_string) => {
+            let styles_value: Value = serde_json::from_str(&styles_string)
+                .map_err(|e| CommandError::from(format!("Failed to parse table styles: {}", e)))?;
+            Ok(styles_value)
+        },
+        None => Ok(json!([])), // Return an empty array if no styles are found
+    }
 }
 
 #[cfg(test)]
