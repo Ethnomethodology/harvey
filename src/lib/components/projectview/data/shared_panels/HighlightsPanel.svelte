@@ -38,7 +38,7 @@
             activeHighlights = $project.currentImageAnnotations || [];
         } else if (itemType === 'tables') {
             activeHighlights = $project.currentTableHighlights || [];
-            console.log('[HighlightsPanel] Active table highlights:', activeHighlights);
+            console.log('[HighlightsPanel] itemType is tables, activeHighlights is:', activeHighlights);
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }

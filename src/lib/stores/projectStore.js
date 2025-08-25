@@ -498,6 +498,7 @@ export function markDocumentMetadataAsSaved(updatedFileLevelMetadata) {
 
 // --- Table Highlight State Management ---
 export function setLoadedTableHighlights(highlightsArray) {
+    console.log('[projectStore] setLoadedTableHighlights called with:', highlightsArray);
     project.update(p => ({
         ...p,
         currentTableHighlights: Array.isArray(highlightsArray) ? highlightsArray : [],
