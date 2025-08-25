@@ -64,6 +64,14 @@
                     comments: annotation.comments || []
                 };
             });
+        } else if (itemType === 'tables') {
+            return highlights.map(h => ({
+                id: h.id,
+                color: h.color,
+                text: h.text,
+                tags: h.tags || [],
+                comments: h.comments || []
+            }));
         } else { // Handles 'doc', 'pdf', 'imported_transcript'
             const map = new Map();
             for (const highlight of highlights) {

@@ -119,7 +119,7 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
  */
 export async function saveTableStyles(tablePath, styles) {
     try {
-        await invoke('save_table_styles', { tablePath, styles: JSON.stringify(styles) });
+        await invoke('save_table_styles', { filePath: tablePath, styles: JSON.stringify(styles) });
     } catch (error) {
         console.error(`Failed to save styles for table ${tablePath}:`, error);
         throw error;
@@ -133,7 +133,7 @@ export async function saveTableStyles(tablePath, styles) {
  */
 export async function loadTableStyles(tablePath) {
     try {
-        const stylesStr = await invoke('load_table_styles', { tablePath });
+        const stylesStr = await invoke('load_table_styles', { filePath: tablePath });
         if (stylesStr) {
             return JSON.parse(stylesStr);
         }
@@ -174,7 +174,7 @@ export async function saveTableHighlights() {
     try {
         await invoke('save_table_styles', {
             filePath: tablePath,
-            styles: highlights
+            styles: JSON.stringify(highlights)
         });
         markTableHighlightsAsSaved();
         console.log(`[ProjectService] Table highlights saved for ${tablePath}`);
