@@ -11,6 +11,7 @@
 
     export let itemPath = null;
     export let itemType = null;
+    $: console.log(`[HighlightsPanel] itemType prop is now: ${itemType}`);
 
     let showCommentsModal = false;
     let selectedHighlightId = null;
@@ -96,7 +97,6 @@
     }
 
     $: processedHighlights = processHighlights(activeHighlights, itemType);
-    $: console.log('[HighlightsPanel] Processed highlights:', processedHighlights);
 
     async function handleHighlightsUpdate(newHighlights) {
         const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');

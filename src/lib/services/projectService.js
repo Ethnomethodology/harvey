@@ -134,11 +134,9 @@ export async function saveTableStyles(tablePath, styles) {
 export async function loadTableStyles(tablePath) {
     try {
         const styles = await invoke('load_table_styles', { filePath: tablePath });
-        console.log('[ProjectService] loadTableStyles received:', styles);
         if (styles) {
             if (typeof styles === 'string') {
                 const parsedStyles = JSON.parse(styles);
-                console.log('[ProjectService] loadTableStyles parsed:', parsedStyles);
                 return parsedStyles;
             }
             return styles;
