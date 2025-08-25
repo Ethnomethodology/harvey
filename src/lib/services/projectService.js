@@ -133,9 +133,12 @@ export async function saveTableStyles(tablePath, styles) {
  */
 export async function loadTableStyles(tablePath) {
     try {
-        const stylesStr = await invoke('load_table_styles', { filePath: tablePath });
-        if (stylesStr) {
-            return JSON.parse(stylesStr);
+        const styles = await invoke('load_table_styles', { filePath: tablePath });
+        if (styles) {
+            if (typeof styles === 'string') {
+                return JSON.parse(styles);
+            }
+            return styles;
         }
         return null;
     } catch (error) {
