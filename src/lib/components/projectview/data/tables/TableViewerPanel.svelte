@@ -9,6 +9,7 @@
         saveTableLayoutPrefs,
         loadTableLayoutPrefs,
         renameTableHeader,
+        deleteTableColumn,
         saveTableStyles,
         loadTableStyles,
         saveTableHighlights,
@@ -94,15 +95,30 @@
 
     async function cutColumn(column) {
         await copyColumn(column);
+        // Since we're about to delete the column from the file, we don't need to worry about saving.
+        // The delete action will handle the refresh.
         await deleteColumn(column);
     }
 
     async function deleteColumn(column) {
+        const columnName = column.getField();
         try {
-            // The columnDeleted event handler now saves the table changes and layout.
-            await column.delete();
+            // Call the backend to delete the column from the file
+            await deleteTableColumn(tablePath, columnName);
+
+            // After successful deletion from the backend, reload the table to reflect changes.
+            // The `initializeTable` function will fetch the new data and re-render the table.
+            await initializeTable(tablePath, null, true);
+
+            // Also, update the layout snapshot in memory and save it.
+            // This ensures that if the user performs other layout actions before closing,
+            // the deleted column is not part of that saved layout.
+            updateTableLayoutSnapshot();
+            await saveCurrentTableLayoutImmediately();
+
         } catch (err) {
-            console.error("Error deleting column:", err);
+            console.error(`Error deleting column "${columnName}":`, err);
+            // Optionally, show a notification to the user
         }
     }
 
@@ -592,10 +608,7 @@
             // Event-driven layout saving for structural changes
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
-            tabulatorInstance.on("columnDeleted", async () => {
-                await saveCurrentTableLayoutImmediately();
-                await saveTableChanges();
-            });
+            tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
 
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
