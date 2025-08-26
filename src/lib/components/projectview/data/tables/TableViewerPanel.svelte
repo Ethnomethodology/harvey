@@ -796,7 +796,7 @@
               type="search"
               bind:value={searchTerm}
               on:input={handleSearch}
-              on:keydown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+              on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
