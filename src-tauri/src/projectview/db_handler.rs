@@ -1431,7 +1431,7 @@ pub fn remove_tag_from_all_annotations(project_id: &str, tag_to_remove: &str) ->
 
             if modified {
                 let new_annotations_json = serde_json::to_string(&highlights)
-                    .map_err(|e| CommandError::Json(format!("Failed to serialize modified highlights: {}", e)))?;
+                    .map_err(|e| CommandError::JsonProcessing(format!("Failed to serialize modified highlights: {}", e)))?;
 
                 conn.execute(
                     "UPDATE pdf_annotations SET annotations_json = ?1 WHERE id = ?2",

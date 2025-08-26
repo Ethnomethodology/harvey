@@ -1,13 +1,14 @@
 // src-tauri/src/projectview/tag_handler.rs
 
 use serde::{Serialize, Deserialize};
-use crate::projectview::shared_types::{CommandError, Highlight};
+use crate::welcome::config::CommandError;
+use crate::projectview::shared_types::Highlight;
 use crate::projectview::db_handler;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TagInfo {
@@ -37,7 +38,7 @@ fn load_tag_metadata(project_root_path: &Path, tag_name: &str) -> Result<TagMeta
         .map_err(|e| CommandError::Io(format!("Failed to read tag metadata for {}: {}", tag_name, e)))?;
 
     serde_json::from_str(&content)
-        .map_err(|e| CommandError::Json(format!("Failed to parse tag metadata for {}: {}", tag_name, e)))
+        .map_err(|e| CommandError::JsonProcessing(format!("Failed to parse tag metadata for {}: {}", tag_name, e)))
 }
 
 fn save_tag_metadata(project_root_path: &Path, tag_name: &str, metadata: &TagMetadata) -> Result<(), CommandError> {
@@ -47,7 +48,7 @@ fn save_tag_metadata(project_root_path: &Path, tag_name: &str, metadata: &TagMet
 
     let metadata_path = get_tag_metadata_path(project_root_path, tag_name);
     let content = serde_json::to_string_pretty(metadata)
-        .map_err(|e| CommandError::Json(format!("Failed to serialize tag metadata for {}: {}", tag_name, e)))?;
+        .map_err(|e| CommandError::JsonProcessing(format!("Failed to serialize tag metadata for {}: {}", tag_name, e)))?;
 
     fs::write(&metadata_path, content)
         .map_err(|e| CommandError::Io(format!("Failed to write tag metadata for {}: {}", tag_name, e)))
