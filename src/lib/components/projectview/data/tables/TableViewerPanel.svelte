@@ -269,6 +269,7 @@
             }
         });
 
+        console.log('[TableViewerPanel] Applying highlights:', currentHighlights);
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
 
