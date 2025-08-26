@@ -1382,6 +1382,69 @@ pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, Command
     Ok(sorted_tags)
 }
 
+pub fn get_all_highlights_for_project(project_id: &str) -> Result<Vec<Highlight>, CommandError> {
+    debug!("[DB] Loading all highlights for project_id {}", project_id);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+
+    let rows = stmt.query_map(params![project_id], |row| {
+        row.get(0)
+    })?;
+
+    let mut all_highlights = Vec::new();
+    for row in rows {
+        let annotations_json: String = row?;
+        if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            all_highlights.extend(highlights);
+        }
+    }
+
+    info!("[DB] Found {} highlights for project_id {}", all_highlights.len(), project_id);
+    Ok(all_highlights)
+}
+
+pub fn remove_tag_from_all_annotations(project_id: &str, tag_to_remove: &str) -> Result<(), CommandError> {
+    debug!("[DB] Removing tag '{}' from all annotations for project_id {}", tag_to_remove, project_id);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // First, get all annotation entries for the project
+    let mut stmt = conn.prepare("SELECT id, annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+    let rows = stmt.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })?;
+
+    for row in rows {
+        let (id, annotations_json): (i64, String) = row?;
+        if let Ok(mut highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            let mut modified = false;
+            for highlight in &mut highlights {
+                if let Some(tags) = &mut highlight.tags {
+                    if tags.contains(&tag_to_remove.to_string()) {
+                        tags.retain(|t| t != tag_to_remove);
+                        modified = true;
+                    }
+                }
+            }
+
+            if modified {
+                let new_annotations_json = serde_json::to_string(&highlights)
+                    .map_err(|e| CommandError::Json(format!("Failed to serialize modified highlights: {}", e)))?;
+
+                conn.execute(
+                    "UPDATE pdf_annotations SET annotations_json = ?1 WHERE id = ?2",
+                    params![new_annotations_json, id],
+                )?;
+            }
+        }
+    }
+
+    info!("[DB] Finished removing tag '{}' from annotations for project_id {}", tag_to_remove, project_id);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1616,5 +1679,36 @@ mod tests {
 
         // Try renaming non-existent
         assert_eq!(rename_direct(&conn, &project_id, "non_existent.pdf", "another.pdf", "pdf").unwrap(), 0);
+    }
+
+    #[test]
+    fn test_remove_tag_from_annotations() {
+        let (_temp_dir, db_path, project_id) = setup_test_db();
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Sample highlights
+        let h1 = Highlight { id: "1".to_string(), text: "h1".to_string(), node_key: None, color: "red".to_string(), tags: Some(vec!["tag1".to_string(), "tag2".to_string()]), comments: None, timestamp: None };
+        let h2 = Highlight { id: "2".to_string(), text: "h2".to_string(), node_key: None, color: "blue".to_string(), tags: Some(vec!["tag2".to_string(), "tag3".to_string()]), comments: None, timestamp: None };
+        let h3 = Highlight { id: "3".to_string(), text: "h3".to_string(), node_key: None, color: "green".to_string(), tags: Some(vec!["tag1".to_string()]), comments: None, timestamp: None };
+
+        let annots1 = serde_json::to_string(&vec![h1.clone(), h2.clone()]).unwrap();
+        let annots2 = serde_json::to_string(&vec![h3.clone()]).unwrap();
+
+        conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)", params![&project_id, "doc1.pdf", &annots1, "pdf"]).unwrap();
+        conn.execute("INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)", params![&project_id, "doc2.pdf", &annots2, "pdf"]).unwrap();
+
+        // Remove "tag2"
+        remove_tag_from_all_annotations(&project_id, "tag2").unwrap();
+
+        // Verify doc1
+        let updated_annots1_json: String = conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = 'doc1.pdf'", [], |row| row.get(0)).unwrap();
+        let updated_highlights1: Vec<Highlight> = serde_json::from_str(&updated_annots1_json).unwrap();
+
+        assert_eq!(updated_highlights1[0].tags, Some(vec!["tag1".to_string()]));
+        assert_eq!(updated_highlights1[1].tags, Some(vec!["tag3".to_string()]));
+
+        // Verify doc2 is unchanged
+        let updated_annots2_json: String = conn.query_row("SELECT annotations_json FROM pdf_annotations WHERE pdf_document_path = 'doc2.pdf'", [], |row| row.get(0)).unwrap();
+        assert_eq!(updated_annots2_json, annots2);
     }
 }
