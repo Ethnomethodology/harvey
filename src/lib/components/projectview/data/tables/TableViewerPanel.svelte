@@ -100,9 +100,7 @@
     async function deleteColumn(column) {
         try {
             await column.delete();
-            await tick(); // Wait for DOM update to ensure Tabulator's state is current
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error("Error deleting column:", err);
         }
@@ -124,7 +122,6 @@
             });
 
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -146,7 +143,6 @@
                 }
             });
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
         }
@@ -592,7 +588,9 @@
                 await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
             }, 750);
             tabulatorInstance.on("columnResized", saveCurrentTableLayout);
-            tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
+            tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
+            tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
+            tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
                 const row = cell.getRow();
