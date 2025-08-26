@@ -560,7 +560,27 @@
             }, 750);
             tabulatorInstance.on("columnResized", saveCurrentTableLayout);
             tabulatorInstance.on("columnMoved", saveCurrentTableLayout);
-            tabulatorInstance.on("cellEdited", debouncedSave);
+            tabulatorInstance.on("cellEdited", (cell) => {
+                debouncedSave();
+                const row = cell.getRow();
+                const rowData = row.getData();
+                const rowIndex = rowData.harvey_internal_id;
+                const highlightId = `row-${rowIndex}`;
+
+                let currentHighlights = get(project).currentTableHighlights || [];
+                const highlightIndex = currentHighlights.findIndex(h => h.id === highlightId);
+
+                if (highlightIndex !== -1) {
+                    const newText = Object.values(rowData).filter(val => val !== null && val !== undefined).join(' | ');
+                    const updatedHighlights = [
+                        ...currentHighlights.slice(0, highlightIndex),
+                        { ...currentHighlights[highlightIndex], text: newText },
+                        ...currentHighlights.slice(highlightIndex + 1)
+                    ];
+                    setTableHighlights(updatedHighlights);
+                    saveTableHighlights();
+                }
+            });
             columnFields = tabulatorInstance.getColumnDefinitions().map(c => c.field).filter(Boolean);
         } catch (err) {
             error = `Failed to load table: ${err.message || err}`;
