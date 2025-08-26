@@ -531,11 +531,7 @@ export function setTableHighlights(highlights, markDirty = true) {
     project.update(store => {
         const initialJson = JSON.stringify(store.initialTableHighlights);
         const currentJson = JSON.stringify(highlights);
-
-        store.currentTableHighlights = highlights;
-        if (markDirty) {
-            store.isTableHighlightsDirty = initialJson !== currentJson;
-        }
+        const isDirty = markDirty ? initialJson !== currentJson : store.isTableHighlightsDirty;
 
         (highlights || []).forEach(h => {
             if (h.tags && Array.isArray(h.tags)) {
@@ -545,7 +541,11 @@ export function setTableHighlights(highlights, markDirty = true) {
             }
         });
 
-        return store;
+        return {
+            ...store,
+            currentTableHighlights: highlights,
+            isTableHighlightsDirty: isDirty
+        };
     });
     highlightsLastUpdated.set(new Date());
 }

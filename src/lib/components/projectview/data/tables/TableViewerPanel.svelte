@@ -271,7 +271,6 @@
 
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
-        await loadTableHighlights(tablePath);
 
         tableStyles = { rowStyles: {}, cellStyles: {} };
         currentHighlights.forEach(h => {
