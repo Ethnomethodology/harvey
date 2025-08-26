@@ -11,7 +11,8 @@
         renameTableHeader,
         saveTableStyles,
         loadTableStyles,
-        saveTableHighlights
+        saveTableHighlights,
+        loadTableHighlights
     } from '$lib/services/projectService.js';
     import { project, setTableHighlights, setLoadedTableHighlights } from '$lib/stores/projectStore.js';
     import { sep } from '@tauri-apps/api/path';
@@ -251,9 +252,11 @@
             const rowData = row.getData();
             const rowIndex = rowData.harvey_internal_id;
 
+            // Remove existing highlight for this row
             currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
 
             if (color) {
+                // Add new highlight
                 const text = Object.values(rowData).filter(val => val !== null && val !== undefined).join(' | ');
                 const newHighlight = {
                     id: `row-${rowIndex}`,
@@ -268,6 +271,7 @@
 
         setTableHighlights(currentHighlights);
         await saveTableHighlights();
+        await loadTableHighlights(tablePath);
 
         tableStyles = { rowStyles: {}, cellStyles: {} };
         currentHighlights.forEach(h => {

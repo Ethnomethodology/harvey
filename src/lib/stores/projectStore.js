@@ -302,11 +302,12 @@ export function setDocumentHighlights(highlights) {
             }
         });
 
-        const updatedState = { ...p, currentDocumentHighlights: [...highlights], isDocumentMetadataDirty: true };
+        const updatedState = { ...p, currentDocumentHighlights: highlights, isDocumentMetadataDirty: true };
 
         if (isMediaNoteActive) {
             updatedState.isMediaNoteTranscriptDirty = true;
         }
+
 
         return updatedState;
     });
@@ -316,7 +317,6 @@ export function setDocumentHighlights(highlights) {
 export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
-        let newState = { ...p };
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -348,17 +348,13 @@ export function addCommentToHighlight(highlightId, comment, docType = 'doc') {
             return h;
         });
 
-        newState[key] = newHighlights;
-        newState[dirtyFlag] = true;
-
-        return newState;
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
 export function updateComment(highlightId, commentId, newText, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
-        const newState = { ...p };
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -395,17 +391,13 @@ export function updateComment(highlightId, commentId, newText, docType = 'doc') 
             return h;
         });
 
-        newState[key] = newHighlights;
-        newState[dirtyFlag] = true;
-
-        return newState;
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
 export function deleteComment(highlightId, commentId, docType = 'doc') {
     project.update(p => {
         let highlights, key, dirtyFlag;
-        const newState = { ...p };
 
         if (docType === 'pdf') {
             highlights = p.currentPdfAnnotations;
@@ -437,10 +429,7 @@ export function deleteComment(highlightId, commentId, docType = 'doc') {
             return h;
         });
 
-        newState[key] = newHighlights;
-        newState[dirtyFlag] = true;
-
-        return newState;
+        return { ...p, [key]: newHighlights, [dirtyFlag]: true };
     });
 }
 
@@ -543,10 +532,9 @@ export function setTableHighlights(highlights, markDirty = true) {
         const initialJson = JSON.stringify(store.initialTableHighlights);
         const currentJson = JSON.stringify(highlights);
 
-        const newStore = { ...store, currentTableHighlights: [...highlights] };
-
+        store.currentTableHighlights = highlights;
         if (markDirty) {
-            newStore.isTableHighlightsDirty = initialJson !== currentJson;
+            store.isTableHighlightsDirty = initialJson !== currentJson;
         }
 
         (highlights || []).forEach(h => {
@@ -557,7 +545,7 @@ export function setTableHighlights(highlights, markDirty = true) {
             }
         });
 
-        return newStore;
+        return store;
     });
     highlightsLastUpdated.set(new Date());
 }
