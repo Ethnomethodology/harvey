@@ -65,9 +65,17 @@
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
-        console.log(`[TableViewerPanel] Calling saveTableData for path: ${tablePath}`);
+        console.log(`[TableViewerPanel] Calling saveTableData for path: ${tablePath} with data:`, dataToSave);
         await saveTableData(tablePath, dataToSave);
         console.log('[TableViewerPanel] saveTableData call completed.');
+
+        try {
+            console.log('[TableViewerPanel] Verifying save by reloading data...');
+            const reloadedData = await loadTableData(tablePath, hasHeaders);
+            console.log('[TableViewerPanel] *** VERIFICATION DATA ***', reloadedData);
+        } catch (error) {
+            console.error('[TableViewerPanel] Error during verification reload:', error);
+        }
     }
 
     const debouncedSave = debounce(saveTableChanges, 750);

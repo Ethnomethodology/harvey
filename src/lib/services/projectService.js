@@ -1302,13 +1302,10 @@ export async function saveCurrentPdfAnnotations() {
     }
 }
 export async function saveTableData(tablePath, tableData) {
-    console.log(`[ProjectService] saveTableData called for path: ${tablePath}`);
     if (!tablePath) {
-        console.error('[ProjectService] saveTableData: Aborting, no table path specified.');
         throw new Error("Cannot save, no table path specified.");
     }
     if (!tableData) {
-        console.error('[ProjectService] saveTableData: Aborting, no table data provided.');
         throw new Error("Cannot save, no table data provided.");
     }
 
@@ -1316,13 +1313,10 @@ export async function saveTableData(tablePath, tableData) {
     project.update(p => ({ ...p, statusMessage: `Saving table ${filename}...` }));
 
     try {
-        console.log(`[ProjectService] Invoking backend 'save_table_data' for ${filename}`);
         await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData });
-        console.log(`[ProjectService] Backend 'save_table_data' for ${filename} completed.`);
         project.update(p => ({ ...p, isDocumentDirty: false, statusMessage: `Table saved: ${filename}` }));
     } catch (error) {
         const errorMessage = error?.message || String(error);
-        console.error(`[ProjectService] Error saving table ${filename}:`, errorMessage);
         project.update(p => ({ ...p, documentError: `Failed to save table: ${errorMessage}`, statusMessage: `Error saving ${filename}.` }));
         await message(`Error saving table: ${errorMessage}`, { title: 'Save Table Error', type: 'error' });
         throw error;
