@@ -47,6 +47,15 @@
         await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
     }, 750);
 
+    async function saveCurrentTableLayoutImmediately() {
+        if (!tabulatorInstance || !currentLoadedPath) return;
+        const baseDirForSave = get(project)?.baseDirectory;
+        const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
+        if (!baseDirForSave || !relativePathForSave) return;
+        updateTableLayoutSnapshot();
+        await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
+    }
+
     async function saveTableChanges() {
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
@@ -92,8 +101,7 @@
         try {
             await column.delete();
             await saveTableChanges();
-            updateTableLayoutSnapshot();
-            saveCurrentTableLayout(); // Trigger save after snapshot update
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error("Error deleting column:", err);
         }
@@ -115,7 +123,7 @@
             });
 
             await saveTableChanges();
-            updateTableLayoutSnapshot();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -137,7 +145,7 @@
                 }
             });
             await saveTableChanges();
-            updateTableLayoutSnapshot();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
         }
