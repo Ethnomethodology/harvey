@@ -47,7 +47,7 @@
         await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
     }, 750);
 
-    const debouncedSave = debounce(async () => {
+    async function saveTableChanges() {
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
@@ -57,7 +57,9 @@
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
         await saveTableData(tablePath, dataToSave);
-    }, 750);
+    }
+
+    const debouncedSave = debounce(saveTableChanges, 750);
 
     function getUniqueColumnName(baseName) {
         if (!tabulatorInstance) return baseName;
@@ -89,7 +91,7 @@
     async function deleteColumn(column) {
         try {
             await column.delete();
-            await debouncedSave();
+            await saveTableChanges();
             updateTableLayoutSnapshot();
             saveCurrentTableLayout(); // Trigger save after snapshot update
         } catch (err) {
@@ -102,7 +104,7 @@
         const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: "input" };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
-            await debouncedSave();
+            await saveTableChanges();
             updateTableLayoutSnapshot();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
@@ -124,7 +126,7 @@
                     row.getCell(newFieldName).setValue(tableClipboard.values[index], true);
                 }
             });
-            await debouncedSave();
+            await saveTableChanges();
             updateTableLayoutSnapshot();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
@@ -144,7 +146,7 @@
     async function deleteRow(row) {
         try {
             await row.delete();
-            await debouncedSave();
+            await saveTableChanges();
         } catch (err) {
             console.error("Error deleting row:", err);
         }
@@ -159,7 +161,7 @@
         });
         try {
             await tabulatorInstance.addRow(newRowData, position === 'before', row);
-            await debouncedSave();
+            await saveTableChanges();
         } catch (err) {
             console.error("Error inserting row:", err);
         }
@@ -172,7 +174,7 @@
         }
         try {
             await tabulatorInstance.addRow(tableClipboard.data, position === 'before', row);
-            await debouncedSave();
+            await saveTableChanges();
         } catch (err) {
             console.error("Error pasting row:", err);
         }
