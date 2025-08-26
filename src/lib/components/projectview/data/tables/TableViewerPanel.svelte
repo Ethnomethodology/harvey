@@ -48,16 +48,7 @@
     }, 750);
 
     async function saveTableChanges() {
-        console.log('[TableViewerPanel] saveTableChanges triggered.');
-        if (!tabulatorInstance) {
-            console.log('[TableViewerPanel] Aborting save, no tabulator instance.');
-            return;
-        }
-        if (!tablePath) {
-            console.log('[TableViewerPanel] Aborting save, no tablePath.');
-            return;
-        }
-
+        if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
 
@@ -65,17 +56,7 @@
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
-        console.log(`[TableViewerPanel] Calling saveTableData for path: ${tablePath} with data:`, dataToSave);
         await saveTableData(tablePath, dataToSave);
-        console.log('[TableViewerPanel] saveTableData call completed.');
-
-        try {
-            console.log('[TableViewerPanel] Verifying save by reloading data...');
-            const reloadedData = await loadTableData(tablePath, hasHeaders);
-            console.log('[TableViewerPanel] *** VERIFICATION DATA ***', reloadedData);
-        } catch (error) {
-            console.error('[TableViewerPanel] Error during verification reload:', error);
-        }
     }
 
     const debouncedSave = debounce(saveTableChanges, 750);
@@ -123,6 +104,16 @@
         const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: "input" };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+
+            // Force Tabulator to update the data model for the new column
+            const rows = tabulatorInstance.getRows();
+            rows.forEach(row => {
+                const cell = row.getCell(newFieldName);
+                if (cell) {
+                    cell.setValue("", true); // Set empty string, suppress cellEdited event
+                }
+            });
+
             await saveTableChanges();
             updateTableLayoutSnapshot();
         } catch (err) {
@@ -179,7 +170,14 @@
             }
         });
         try {
-            await tabulatorInstance.addRow(newRowData, position === 'before', row);
+            const addedRow = await tabulatorInstance.addRow(newRowData, position === 'before', row);
+
+            // Workaround for suspected backend bug: "dirty" a cell to ensure the new row is saved.
+            const cells = addedRow.getCells();
+            if (cells.length > 0) {
+                cells[0].setValue(" ", true); // Set a single space, suppress cellEdited event
+            }
+
             await saveTableChanges();
         } catch (err) {
             console.error("Error inserting row:", err);
