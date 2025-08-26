@@ -796,6 +796,7 @@
               type="search"
               bind:value={searchTerm}
               on:input={handleSearch}
+              on:keydown={e => { if (e.key === 'Enter') e.preventDefault(); }}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
@@ -815,9 +816,6 @@
               disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
-            </button>
-            <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50" on:click={() => { console.log('TODO: Add new row action'); alert('Add Row'); }} title="Add New Row">
-                Add Row
             </button>
          </div>
          {/if}
@@ -875,7 +873,7 @@
 
         :global(.tabulator-cell) {
             overflow: hidden;
-            word-break: break-all;
+            word-break: break-word;
         }
 
         :global(.tabulator-cell textarea) {
