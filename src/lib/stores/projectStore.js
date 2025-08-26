@@ -529,7 +529,6 @@ export function setTableHighlightsLoadFailed(filePath, errorMsg) {
 
 export function setTableHighlights(highlights, markDirty = true) {
     project.update(store => {
-        console.log('[projectStore] setTableHighlights received:', highlights);
         const initialJson = JSON.stringify(store.initialTableHighlights);
         const currentJson = JSON.stringify(highlights);
         const isDirty = markDirty ? initialJson !== currentJson : store.isTableHighlightsDirty;
@@ -542,13 +541,11 @@ export function setTableHighlights(highlights, markDirty = true) {
             }
         });
 
-        const newStore = {
+        return {
             ...store,
             currentTableHighlights: highlights,
             isTableHighlightsDirty: isDirty
         };
-        console.log('[projectStore] setTableHighlights new store state:', newStore);
-        return newStore;
     });
     highlightsLastUpdated.set(new Date());
 }

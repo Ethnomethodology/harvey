@@ -28,7 +28,6 @@
     // --- Reactive State based on itemType ---
     let activeHighlights = [];
     $: {
-        console.log('[HighlightsPanel] Reactive block triggered. itemType:', itemType);
         const isPdf = itemType === 'doc' && $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf');
         if (itemType === 'imported_transcript') {
             activeHighlights = $project.currentImportedTranscriptHighlights || [];
@@ -36,8 +35,7 @@
             activeHighlights = $project.currentPdfAnnotations || [];
         } else if (itemType === 'images') {
             activeHighlights = $project.currentImageAnnotations || [];
-        } else if (itemType === 'tables') {
-            console.log('[HighlightsPanel] itemType is tables, getting highlights:', $project.currentTableHighlights);
+        } else if (itemType === 'tables' || itemType === 'table') {
             activeHighlights = $project.currentTableHighlights || [];
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
@@ -107,7 +105,7 @@
         } else if (itemType === 'images') {
             updateImageAnnotations(newHighlights);
             await saveImageAnnotations();
-        } else if (itemType === 'tables') {
+        } else if (itemType === 'tables' || itemType === 'table') {
             setTableHighlights(newHighlights);
             await saveTableHighlights();
         } else {
@@ -143,7 +141,7 @@
              docType = $project.selectedDocumentPath?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'doc';
         } else if (itemType === 'images') {
             docType = 'image';
-        } else if (itemType === 'tables') {
+        } else if (itemType === 'tables' || itemType === 'table') {
             docType = 'table';
         }
 
