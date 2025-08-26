@@ -9,7 +9,6 @@
         saveTableLayoutPrefs,
         loadTableLayoutPrefs,
         renameTableHeader,
-        deleteTableColumn,
         saveTableStyles,
         loadTableStyles,
         saveTableHighlights,
@@ -99,32 +98,11 @@
     }
 
     async function deleteColumn(column) {
-        const columnName = column.getField();
         try {
-            // Step 1: Capture the current layout BEFORE doing anything else.
-            updateTableLayoutSnapshot();
-            const layoutBeforeDelete = tableLayoutSnapshot;
-
-            // Step 2: Call the backend to delete the column from the file.
-            await deleteTableColumn(tablePath, columnName);
-
-            // Step 3: Manually remove the deleted column from our captured layout.
-            if (layoutBeforeDelete.columns[columnName]) {
-                delete layoutBeforeDelete.columns[columnName];
-            }
-
-            // Step 4: Save the now-modified layout object.
-            const projectBaseDir = get(project)?.baseDirectory;
-            const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
-            if (relativeTablePath) {
-                await saveTableLayoutPrefs(relativeTablePath, layoutBeforeDelete);
-            }
-
-            // Step 5: Reload the table. It will now load the correct data AND the correct layout.
-            await initializeTable(tablePath, null, true);
-
+            await column.delete();
+            await saveTableChanges();
         } catch (err) {
-            console.error(`Error deleting column "${columnName}":`, err);
+            console.error("Error deleting column:", err);
         }
     }
 
@@ -144,6 +122,7 @@
             });
 
             await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
