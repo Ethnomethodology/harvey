@@ -258,11 +258,24 @@ pub async fn delete_table_column(
         .and_then(|f| f.has_headers)
         .unwrap_or(true);
 
-    let loaded_value = match extension.as_str() {
+    let mut loaded_value = match extension.as_str() {
         "csv" => load_csv_data(&table_path, has_headers, None)?,
         "xlsx" => load_xlsx_data(&table_path, has_headers, None)?,
         _ => return Err(CommandError::from(format!("Unsupported table extension for deleting column: {}", extension))),
     };
+
+    // Sanitize data: remove carriage returns from all cell values, mirroring frontend logic.
+    if let Some(data) = loaded_value.get_mut("data").and_then(|d| d.as_array_mut()) {
+        for row in data.iter_mut() {
+            if let Some(row_obj) = row.as_object_mut() {
+                for (_, value) in row_obj.iter_mut() {
+                    if let Some(s) = value.as_str() {
+                        *value = json!(s.replace('\r', ""));
+                    }
+                }
+            }
+        }
+    }
 
     let original_headers_val = loaded_value.get("headers")
         .ok_or_else(|| CommandError::from("Loaded table data is missing 'headers' field"))?;
