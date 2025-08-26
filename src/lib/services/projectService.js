@@ -111,6 +111,100 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+export async function deleteTableColumn(tablePath, columnName) {
+    if (!tablePath || !columnName) {
+        throw new Error("Missing required parameters for deleting table column.");
+    }
+
+    try {
+        await invoke('delete_table_column', {
+            tablePathStr: tablePath,
+            columnNameToDelete: columnName
+        });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error deleting column: ${errorMessage}`, { title: 'Delete Column Error', type: 'error' });
+        throw error;
+    }
+}
+
+/**
+ * Saves the style information for a specific table.
+ * @param {string} tablePath - The absolute path to the table file.
+ * @param {object} styles - The style object to save.
+ * @returns {Promise<void>}
+ */
+export async function saveTableStyles(tablePath, styles) {
+    try {
+        await invoke('save_table_styles', { filePath: tablePath, styles: JSON.stringify(styles) });
+    } catch (error) {
+        console.error(`Failed to save styles for table ${tablePath}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Loads the style information for a specific table.
+ * @param {string} tablePath - The absolute path to the table file.
+ * @returns {Promise<object|null>} The loaded style object, or null if not found.
+ */
+export async function loadTableStyles(tablePath) {
+    try {
+        const styles = await invoke('load_table_styles', { filePath: tablePath });
+        if (styles) {
+            if (typeof styles === 'string') {
+                const parsedStyles = JSON.parse(styles);
+                return parsedStyles;
+            }
+            return styles;
+        }
+        return null;
+    } catch (error) {
+        console.error(`Failed to load styles for table ${tablePath}:`, error);
+        // It's common for styles to not exist, so we don't re-throw.
+        // We just log the error and return null.
+        return null;
+    }
+}
+
+import { setLoadedTableHighlights, setTableHighlightsLoadFailed, markTableHighlightsAsSaved } from '$lib/stores/projectStore.js';
+
+export async function loadTableHighlights(filePath) {
+    if (!filePath) {
+        setLoadedTableHighlights([]);
+        return;
+    }
+    try {
+        const highlights = await invoke("load_table_styles", { filePath });
+        setLoadedTableHighlights(highlights || []);
+    } catch (error) {
+        console.error(`Error loading table highlights for ${filePath}:`, error);
+        setTableHighlightsLoadFailed(filePath, error.message || String(error));
+    }
+}
+
+export async function saveTableHighlights() {
+    const projState = get(project);
+    const tablePath = projState.selectedDocumentPath;
+    const highlights = projState.currentTableHighlights;
+
+    if (!tablePath || !projState.isTableHighlightsDirty) {
+        return;
+    }
+
+    try {
+        await invoke('save_table_styles', {
+            filePath: tablePath,
+            styles: JSON.stringify(highlights)
+        });
+        markTableHighlightsAsSaved();
+        console.log(`[ProjectService] Table highlights saved for ${tablePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving table highlights for ${tablePath}:`, error);
+        notificationStore.add(`Error saving table highlights: ${error.message || error}`, 'error');
+    }
+}
+
 export async function createNewDocument(projectXmlPath) {
     if (!projectXmlPath) {
         console.error('[ProjectService] Cannot create document: Project XML path is missing.');

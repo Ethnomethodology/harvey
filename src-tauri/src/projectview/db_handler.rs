@@ -287,6 +287,32 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Recreated update_table_layout_preferences_updated_at trigger for new PK.");
 
+    // table_styles table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_styles (
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            styles TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, table_path)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized table_styles table.");
+
+    // Trigger for table_styles updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_table_styles_updated_at
+        AFTER UPDATE ON table_styles
+        FOR EACH ROW
+        BEGIN
+            UPDATE table_styles SET updated_at = CURRENT_TIMESTAMP WHERE project_id = OLD.project_id AND table_path = OLD.table_path;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_table_styles_updated_at trigger.");
+
     // projects table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS projects (
@@ -729,6 +755,63 @@ pub fn load_table_layout_preferences(project_id: &str, table_asset_relative_path
 }
 
 // --- End Table Layout Preferences Functions ---
+
+pub fn save_table_styles(project_id: &str, table_path: &str, styles: &str) -> Result<(), CommandError> {
+    debug!("[DB] Saving table styles for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    conn.execute(
+        "INSERT INTO table_styles (project_id, table_path, styles)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(project_id, table_path) DO UPDATE SET
+             styles = excluded.styles,
+             updated_at = CURRENT_TIMESTAMP",
+        params![project_id, table_path, styles],
+    )?;
+    info!("[DB] Table styles saved successfully for project_id {}: {}", project_id, table_path);
+    Ok(())
+}
+
+pub fn load_table_styles(project_id: &str, table_path: &str) -> Result<Option<String>, CommandError> {
+    debug!("[DB] Loading table styles for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Returning None for table styles: project_id {}, path {}", db_path.display(), project_id, table_path);
+        return Ok(None);
+    }
+    let conn = Connection::open(&db_path)?;
+    let mut stmt = conn.prepare("
+        SELECT styles
+        FROM table_styles
+        WHERE project_id = ?1 AND table_path = ?2
+    ")?;
+
+    let result = stmt.query_row(params![project_id, table_path], |row| {
+        row.get(0)
+    }).optional()?;
+
+    debug!("[DB] Load table styles result for project_id {} - {}: {}", project_id, table_path, if result.is_some() { "Some(...)" } else { "None" });
+    Ok(result)
+}
+
+pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting table styles for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, path {}", db_path.display(), project_id, table_path);
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    let changes = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, table_path])?;
+
+    if changes > 0 {
+        info!("[DB] Table styles deleted successfully for project_id {}: {} ({} rows affected)", project_id, table_path, changes);
+    } else {
+        debug!("[DB] No table styles found to delete for project_id {}: {}", project_id, table_path);
+    }
+    Ok(())
+}
 
 // Helper to convert Option<T> to dyn ToSql for rusqlite
 fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {

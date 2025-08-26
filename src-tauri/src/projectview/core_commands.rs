@@ -1483,6 +1483,13 @@ pub async fn delete_project_item( item_path: String, project_xml_path: String) -
                 info!("[Backend Delete Table] Deleted asset metadata from DB for project_id {}, table {}", project_id_for_db, item_relative_path);
             }
 
+            // Also delete table styles from the database
+            if let Err(e) = db_handler::delete_table_styles(&project_id_for_db, &item_path) {
+                warn!("[Backend Delete Table] Failed to delete table styles from DB for project_id {}, table {}: {}", project_id_for_db, item_path, e);
+            } else {
+                info!("[Backend Delete Table] Deleted table styles from DB for project_id {}, table {}", project_id_for_db, item_path);
+            }
+
             info!("[Backend Delete] Updating XML to remove table link with path '{}'", item_relative_path);
             let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path_buf)?)?;
             let initial_table_len = project_data.table_files.files.len();

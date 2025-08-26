@@ -5,11 +5,11 @@
     export let showModal = false;
     export let initialColor = '#FFFFFF'; // Default to white or transparent? Let's use white
     export let title = 'Select Color';
-  
+
     let selectedColor = initialColor || '#FFFFFF';
-  
+
     const dispatch = createEventDispatcher();
-  
+
     // Basic palette
     const colors = [
       '#FFFFFF', '#F3F4F6', '#E5E7EB', '#D1D5DB', '#9CA3AF', '#6B7280', '#4B5563', '#374151', '#1F2937', '#11182C', // Grays

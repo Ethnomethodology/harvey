@@ -337,7 +337,7 @@
                 enableLooping={showDataTrimUI}
                 loopStartTime={dataTrimStartTime}
                 loopEndTime={dataTrimEndTime}
-                on:requestDataTranscribe={handleRequestDataTranscribe}
+                
                 on:requestDataTrim={handleRequestDataTrim}
                 on:mediaLoadError={(e) => projectStore.update(p => ({...p, statusMessage: `Error loading media in data: ${e.detail.error}`}))}
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"

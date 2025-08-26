@@ -377,10 +377,8 @@
     { value: '#228B22', label: 'Forest Green' }, { value: '#FF8C00', label: 'Dark Orange' }, { value: '#800080', label: 'Purple' },
     { value: '#008B8B', label: 'Teal' }, { value: 'transparent', label: 'Default'}
   ];
-  const highlightOptions = [
-    { value: '#FFF275', label: 'Yellow' }, { value: '#A8FF9E', label: 'Green' }, { value: '#AEEFFF', label: 'Blue' },
-    { value: '#FFB0CF', label: 'Pink' }, { value: '#D0A0FF', label: 'Purple' }, { value: 'transparent', label: 'None' }
-  ];
+  import { HIGHLIGHT_OPTIONS_WITH_NONE } from '$lib/constants/highlightOptions.js';
+  const highlightOptions = HIGHLIGHT_OPTIONS_WITH_NONE;
   let isHighlightDropdownOpen = false;
   let highlightDropdownRef;
   function toggleHighlightDropdown() {
