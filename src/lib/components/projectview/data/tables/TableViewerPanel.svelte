@@ -99,8 +99,8 @@
 
     async function deleteColumn(column) {
         try {
+            // The columnDeleted event handler now saves the table changes and layout.
             await column.delete();
-            await saveTableChanges();
         } catch (err) {
             console.error("Error deleting column:", err);
         }
@@ -592,7 +592,10 @@
             // Event-driven layout saving for structural changes
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
-            tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
+            tabulatorInstance.on("columnDeleted", async () => {
+                await saveCurrentTableLayoutImmediately();
+                await saveTableChanges();
+            });
 
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
