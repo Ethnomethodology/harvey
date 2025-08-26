@@ -111,6 +111,23 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+export async function deleteTableColumn(tablePath, columnName) {
+    if (!tablePath || !columnName) {
+        throw new Error("Missing required parameters for deleting table column.");
+    }
+
+    try {
+        await invoke('delete_table_column', {
+            tablePathStr: tablePath,
+            columnNameToDelete: columnName
+        });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error deleting column: ${errorMessage}`, { title: 'Delete Column Error', type: 'error' });
+        throw error;
+    }
+}
+
 /**
  * Saves the style information for a specific table.
  * @param {string} tablePath - The absolute path to the table file.
