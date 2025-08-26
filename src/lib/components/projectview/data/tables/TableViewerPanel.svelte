@@ -48,7 +48,16 @@
     }, 750);
 
     async function saveTableChanges() {
-        if (!tabulatorInstance) return;
+        console.log('[TableViewerPanel] saveTableChanges triggered.');
+        if (!tabulatorInstance) {
+            console.log('[TableViewerPanel] Aborting save, no tabulator instance.');
+            return;
+        }
+        if (!tablePath) {
+            console.log('[TableViewerPanel] Aborting save, no tablePath.');
+            return;
+        }
+
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
 
@@ -56,7 +65,9 @@
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
+        console.log(`[TableViewerPanel] Calling saveTableData for path: ${tablePath}`);
         await saveTableData(tablePath, dataToSave);
+        console.log('[TableViewerPanel] saveTableData call completed.');
     }
 
     const debouncedSave = debounce(saveTableChanges, 750);
