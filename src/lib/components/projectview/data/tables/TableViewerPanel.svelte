@@ -51,7 +51,12 @@
         if (!tabulatorInstance) return;
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
-        await saveTableData(tablePath, tableData);
+
+        // Strip the internal ID before saving
+        const dataToSave = JSON.parse(JSON.stringify(updatedData));
+        dataToSave.forEach(row => delete row.harvey_internal_id);
+
+        await saveTableData(tablePath, dataToSave);
     }, 750);
 
     function getUniqueColumnName(baseName) {
