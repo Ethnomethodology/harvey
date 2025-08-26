@@ -236,6 +236,79 @@ pub async fn import_table_file(
 }
 
 #[tauri::command]
+pub async fn delete_table_column(
+    table_path_str: String,
+    column_name_to_delete: String,
+) -> Result<(), CommandError> {
+    let table_path = PathBuf::from(&table_path_str);
+    let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+    // Get the has_headers flag from the project XML
+    let project_xml_path = get_project_xml_path_from_item(&table_path)?;
+    let project_data: ProjectXml = {
+        let xml_content = fs::read_to_string(&project_xml_path)?;
+        quick_xml::de::from_str(&xml_content)?
+    };
+    let relative_path_for_xml = table_path
+        .strip_prefix(project_xml_path.parent().unwrap())?
+        .to_string_lossy()
+        .replace("\\", "/");
+    let has_headers = project_data.table_files.files.iter()
+        .find(|f| f.relative_path == relative_path_for_xml)
+        .and_then(|f| f.has_headers)
+        .unwrap_or(true);
+
+    let mut loaded_value = match extension.as_str() {
+        "csv" => load_csv_data(&table_path, has_headers, None)?,
+        "xlsx" => load_xlsx_data(&table_path, has_headers, None)?,
+        _ => return Err(CommandError::from(format!("Unsupported table extension for deleting column: {}", extension))),
+    };
+
+    // Sanitize data: remove carriage returns from all cell values, mirroring frontend logic.
+    if let Some(data) = loaded_value.get_mut("data").and_then(|d| d.as_array_mut()) {
+        for row in data.iter_mut() {
+            if let Some(row_obj) = row.as_object_mut() {
+                for (_, value) in row_obj.iter_mut() {
+                    if let Some(s) = value.as_str() {
+                        *value = json!(s.replace('\r', ""));
+                    }
+                }
+            }
+        }
+    }
+
+    let original_headers_val = loaded_value.get("headers")
+        .ok_or_else(|| CommandError::from("Loaded table data is missing 'headers' field"))?;
+    let original_headers: Vec<String> = serde_json::from_value(original_headers_val.clone())?;
+
+    let mut data_value = loaded_value.get("data")
+        .ok_or_else(|| CommandError::from("Loaded table data is missing 'data' field"))?
+        .clone();
+
+    let new_headers: Vec<String> = original_headers.into_iter()
+        .filter(|h| h != &column_name_to_delete)
+        .collect();
+
+    if let Some(arr) = data_value.as_array_mut() {
+        for item in arr {
+            if let Some(obj) = item.as_object_mut() {
+                obj.remove(&column_name_to_delete);
+            }
+        }
+    }
+
+    let data_vec = data_value.as_array()
+        .ok_or_else(|| CommandError::from("Data is not an array after processing"))?
+        .to_vec();
+
+    match extension.as_str() {
+        "csv" => save_csv_data_with_headers(&table_path, data_vec, &new_headers),
+        "xlsx" => save_xlsx_data_with_headers(&table_path, data_vec, &new_headers),
+        _ => unreachable!(),
+    }
+}
+
+#[tauri::command]
 pub async fn set_table_headers(
     table_path_str: String,
     has_headers: bool,
