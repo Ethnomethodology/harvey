@@ -40,6 +40,10 @@
 
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
+
+        // Redraw rows to recalculate height after resize
+        tabulatorInstance.getRows().forEach(row => row.reformat());
+
         const baseDirForSave = get(project)?.baseDirectory;
         const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
         if (!baseDirForSave || !relativePathForSave) return;
@@ -852,7 +856,8 @@
 
         :global(.tabulator-cell) {
             overflow: hidden;
-            word-break: break-all;
+            word-break: break-word;
+            border-right: 1px solid #ddd;
         }
 
         :global(.tabulator-cell textarea) {
