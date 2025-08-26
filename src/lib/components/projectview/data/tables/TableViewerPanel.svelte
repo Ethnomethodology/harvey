@@ -100,6 +100,7 @@
     async function deleteColumn(column) {
         try {
             await column.delete();
+            await tick(); // Wait for DOM update to ensure Tabulator's state is current
             await saveTableChanges();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
