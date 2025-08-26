@@ -588,9 +588,12 @@
                 await saveTableLayoutPrefs(relativePathForSave, tableLayoutSnapshot).catch(err => console.error(`Failed to save layout:`, err));
             }, 750);
             tabulatorInstance.on("columnResized", saveCurrentTableLayout);
+
+            // Event-driven layout saving for structural changes
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
+
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
                 const row = cell.getRow();
