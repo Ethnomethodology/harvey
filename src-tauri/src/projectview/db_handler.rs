@@ -795,6 +795,24 @@ pub fn load_table_styles(project_id: &str, table_path: &str) -> Result<Option<St
     Ok(result)
 }
 
+pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), CommandError> {
+    debug!("[DB] Deleting table styles for project_id {}: {}", project_id, table_path);
+    let db_path = get_db_path()?;
+    if !db_path.exists() {
+        debug!("[DB] Database file not found at {}. Nothing to delete for project_id {}, path {}", db_path.display(), project_id, table_path);
+        return Ok(());
+    }
+    let conn = Connection::open(&db_path)?;
+    let changes = conn.execute("DELETE FROM table_styles WHERE project_id = ?1 AND table_path = ?2", params![project_id, table_path])?;
+
+    if changes > 0 {
+        info!("[DB] Table styles deleted successfully for project_id {}: {} ({} rows affected)", project_id, table_path, changes);
+    } else {
+        debug!("[DB] No table styles found to delete for project_id {}: {}", project_id, table_path);
+    }
+    Ok(())
+}
+
 // Helper to convert Option<T> to dyn ToSql for rusqlite
 fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
     match opt {
