@@ -9,6 +9,7 @@
         saveTableLayoutPrefs,
         loadTableLayoutPrefs,
         renameTableHeader,
+        deleteTableColumn,
         saveTableStyles,
         loadTableStyles,
         saveTableHighlights,
@@ -42,7 +43,7 @@
         if (!tabulatorInstance || !currentLoadedPath) return;
 
         // Redraw rows to recalculate height after resize
-        tabulatorInstance.getRows().forEach(row => row.reformat());
+        tabulatorInstance.redraw(true);
 
         const baseDirForSave = get(project)?.baseDirectory;
         const relativePathForSave = getRelativePath(currentLoadedPath, baseDirForSave);
@@ -102,11 +103,32 @@
     }
 
     async function deleteColumn(column) {
+        const columnName = column.getField();
         try {
-            await column.delete();
-            await saveTableChanges();
+            // Step 1: Capture the current layout BEFORE doing anything else.
+            updateTableLayoutSnapshot();
+            const layoutBeforeDelete = tableLayoutSnapshot;
+
+            // Step 2: Call the backend to delete the column from the file.
+            await deleteTableColumn(tablePath, columnName);
+
+            // Step 3: Manually remove the deleted column from our captured layout.
+            if (layoutBeforeDelete.columns[columnName]) {
+                delete layoutBeforeDelete.columns[columnName];
+            }
+
+            // Step 4: Save the now-modified layout object.
+            const projectBaseDir = get(project)?.baseDirectory;
+            const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
+            if (relativeTablePath) {
+                await saveTableLayoutPrefs(relativeTablePath, layoutBeforeDelete);
+            }
+
+            // Step 5: Reload the table. It will now load the correct data AND the correct layout.
+            await initializeTable(tablePath, null, true);
+
         } catch (err) {
-            console.error("Error deleting column:", err);
+            console.error(`Error deleting column "${columnName}":`, err);
         }
     }
 
@@ -126,6 +148,7 @@
             });
 
             await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -777,6 +800,7 @@
               type="search"
               bind:value={searchTerm}
               on:input={handleSearch}
+              on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
@@ -796,9 +820,6 @@
               disabled={searchMatches.length === 0 || currentMatchIndex >= searchMatches.length - 1}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
-            </button>
-            <button class="text-xs px-2 py-1 border rounded bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50" on:click={() => { console.log('TODO: Add new row action'); alert('Add Row'); }} title="Add New Row">
-                Add Row
             </button>
          </div>
          {/if}
