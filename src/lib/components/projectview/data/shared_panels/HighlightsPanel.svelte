@@ -11,7 +11,6 @@
 
     export let itemPath = null;
     export let itemType = null;
-    $: console.log(`[HighlightsPanel] itemType prop is now: ${itemType}`);
 
     let showCommentsModal = false;
     let selectedHighlightId = null;
@@ -38,7 +37,6 @@
             activeHighlights = $project.currentImageAnnotations || [];
         } else if (itemType === 'tables') {
             activeHighlights = $project.currentTableHighlights || [];
-            console.log('[HighlightsPanel] itemType is tables, activeHighlights is:', activeHighlights);
         } else {
             activeHighlights = $project.currentDocumentHighlights || [];
         }
