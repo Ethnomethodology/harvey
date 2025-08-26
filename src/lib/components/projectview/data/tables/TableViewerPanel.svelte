@@ -95,30 +95,36 @@
 
     async function cutColumn(column) {
         await copyColumn(column);
-        // Since we're about to delete the column from the file, we don't need to worry about saving.
-        // The delete action will handle the refresh.
         await deleteColumn(column);
     }
 
     async function deleteColumn(column) {
         const columnName = column.getField();
         try {
-            // Call the backend to delete the column from the file
+            // Step 1: Capture the current layout BEFORE doing anything else.
+            updateTableLayoutSnapshot();
+            const layoutBeforeDelete = tableLayoutSnapshot;
+
+            // Step 2: Call the backend to delete the column from the file.
             await deleteTableColumn(tablePath, columnName);
 
-            // After successful deletion from the backend, reload the table to reflect changes.
-            // The `initializeTable` function will fetch the new data and re-render the table.
-            await initializeTable(tablePath, null, true);
+            // Step 3: Manually remove the deleted column from our captured layout.
+            if (layoutBeforeDelete.columns[columnName]) {
+                delete layoutBeforeDelete.columns[columnName];
+            }
 
-            // Also, update the layout snapshot in memory and save it.
-            // This ensures that if the user performs other layout actions before closing,
-            // the deleted column is not part of that saved layout.
-            updateTableLayoutSnapshot();
-            await saveCurrentTableLayoutImmediately();
+            // Step 4: Save the now-modified layout object.
+            const projectBaseDir = get(project)?.baseDirectory;
+            const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
+            if (relativeTablePath) {
+                await saveTableLayoutPrefs(relativeTablePath, layoutBeforeDelete);
+            }
+
+            // Step 5: Reload the table. It will now load the correct data AND the correct layout.
+            await initializeTable(tablePath, null, true);
 
         } catch (err) {
             console.error(`Error deleting column "${columnName}":`, err);
-            // Optionally, show a notification to the user
         }
     }
 
