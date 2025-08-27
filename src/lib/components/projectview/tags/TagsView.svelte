@@ -71,7 +71,7 @@
             isLoading = true;
             tagInfo = await invoke('get_tag_info', {
                 projectRootPathStr: $project.baseDirectory,
-                projectId: $project.projectUuid,
+                projectId: $project.id,
                 tagName: tagName,
             });
             if (tagInfo) {
@@ -111,7 +111,7 @@
             try {
                 await invoke('delete_tag', {
                     projectRootPathStr: $project.baseDirectory,
-                    projectId: $project.projectUuid,
+                    projectId: $project.id,
                     tagName: selectedTag,
                 });
                 selectedTag = null;
@@ -128,7 +128,7 @@
 
 <div class="flex h-full w-full">
     <!-- Left Panel: List of all tags -->
-    <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
+    <div class="w-1/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
@@ -149,7 +149,7 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-1/2 h-full p-4 overflow-y-auto">
+    <div class="w-2/5 h-full p-4 overflow-y-auto">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
@@ -176,7 +176,7 @@
     </div>
 
     <!-- Right Panel: Highlight content -->
-    <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4 border-l border-gray-200 dark:border-gray-600">
+    <div class="w-2/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-l border-gray-200 dark:border-gray-600">
         <h2 class="text-lg font-semibold mb-4">Highlight Content</h2>
         <p>Select a highlight to see its full content here.</p>
     </div>
