@@ -228,3 +228,87 @@ pub fn delete_tag(project_root_path_str: &str, project_id: &str, tag_name: Strin
 
     Ok(())
 }
+
+
+#[tauri::command]
+pub fn update_tag(
+    project_id: &str,
+    project_root_path_str: &str,
+    old_tag_name: String,
+    new_tag_name: String,
+    new_description: String,
+) -> Result<(), CommandError> {
+    info!(
+        "[Tags] Updating tag '{}' to '{}' with new description, for project_id: {}",
+        old_tag_name, new_tag_name, project_id
+    );
+    let project_root_path = Path::new(project_root_path_str);
+
+    // --- If tag name has changed, perform rename operations first ---
+    if old_tag_name != new_tag_name {
+        // 1. Rename tag in DB-based annotations
+        db_handler::rename_tag_in_all_annotations(project_id, &old_tag_name, &new_tag_name)?;
+        info!("[Tags] Renamed tag in DB annotations.");
+
+        // 2. Rename tag in file-based annotations
+        let docs_path = project_root_path.join("harvey_files").join("Documents");
+        if docs_path.is_dir() {
+            for entry in walkdir::WalkDir::new(docs_path).into_iter().filter_map(Result::ok) {
+                if entry.file_type().is_file() && entry.path().extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(content) = fs::read_to_string(entry.path()) {
+                        if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&content) {
+                            let mut modified = false;
+                            if let Some(highlights) = json_value.get_mut("highlights").and_then(|h| h.as_array_mut()) {
+                                for highlight_val in highlights.iter_mut() {
+                                    if let Ok(mut highlight) = serde_json::from_value::<Highlight>(highlight_val.clone()) {
+                                        if let Some(tags) = &mut highlight.tags {
+                                            if let Some(pos) = tags.iter().position(|t| t == &old_tag_name) {
+                                                tags[pos] = new_tag_name.clone();
+                                                modified = true;
+                                            }
+                                            let mut seen = HashSet::new();
+                                            tags.retain(|t| seen.insert(t.clone()));
+                                        }
+                                        if modified {
+                                            *highlight_val = serde_json::to_value(&highlight).unwrap();
+                                        }
+                                    }
+                                }
+                            }
+                            if modified {
+                                if let Ok(new_content) = serde_json::to_string_pretty(&json_value) {
+                                    if let Err(e) = fs::write(entry.path(), new_content) {
+                                        error!("[Tags] Failed to write updated json file {}: {}", entry.path().display(), e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            info!("[Tags] Renamed tag in file-based annotations.");
+        }
+
+        // 3. Rename the tag's metadata file
+        let old_metadata_path = get_tag_metadata_path(project_root_path, &old_tag_name);
+        if old_metadata_path.exists() {
+            let new_metadata_path = get_tag_metadata_path(project_root_path, &new_tag_name);
+            if new_metadata_path.exists() {
+                warn!("[Tags] Metadata for new tag name '{}' already exists. Overwriting is not ideal. Consider merging.", new_tag_name);
+            }
+            if let Err(e) = fs::rename(&old_metadata_path, &new_metadata_path) {
+                error!("[Tags] Failed to rename metadata file from {} to {}: {}", old_metadata_path.display(), new_metadata_path.display(), e);
+            } else {
+                info!("[Tags] Renamed metadata file.");
+            }
+        }
+    }
+
+    // --- Update the description in the metadata file (for the new name) ---
+    let mut metadata = load_tag_metadata(project_root_path, &new_tag_name)?;
+    metadata.description = new_description;
+    save_tag_metadata(project_root_path, &new_tag_name, &metadata)?;
+    info!("[Tags] Updated description for tag '{}'.", new_tag_name);
+
+    Ok(())
+}

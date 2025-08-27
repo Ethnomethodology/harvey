@@ -5,7 +5,7 @@ use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
 use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
-use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb}; // For function signatures
+use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb, Highlight}; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
