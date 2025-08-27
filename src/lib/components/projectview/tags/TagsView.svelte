@@ -7,7 +7,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, setTags } from '$lib/stores/tagStore.js';
     import { getAllTags } from '$lib/services/projectService.js';
-    import DataTopBar from '../data/DataTopBar.svelte';
+    import SimpleTopBar from '../shared/SimpleTopBar.svelte';
 
     let selectedTag = null;
     let tagInfo = null;
@@ -128,7 +128,7 @@
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
-    <DataTopBar />
+    <SimpleTopBar />
     <div class="flex h-full w-full p-1 gap-1">
         <!-- Left Panel: List of all tags -->
         <div class="w-1/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
