@@ -7,6 +7,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, setTags } from '$lib/stores/tagStore.js';
     import { getAllTags } from '$lib/services/projectService.js';
+    import DataTopBar from '../data/DataTopBar.svelte';
 
     let selectedTag = null;
     let tagInfo = null;
@@ -126,9 +127,11 @@
     }
 </script>
 
-<div class="flex h-full w-full">
-    <!-- Left Panel: List of all tags -->
-    <div class="w-1/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
+    <DataTopBar />
+    <div class="flex h-full w-full p-1 gap-1">
+        <!-- Left Panel: List of all tags -->
+        <div class="w-1/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
@@ -179,5 +182,6 @@
     <div class="w-2/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-l border-gray-200 dark:border-gray-600">
         <h2 class="text-lg font-semibold mb-4">Highlight Content</h2>
         <p>Select a highlight to see its full content here.</p>
+    </div>
     </div>
 </div>
