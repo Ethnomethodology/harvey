@@ -799,15 +799,14 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use crate::projectview::shared_types::{ProjectXml, TableEntryXml, FileMetadata};
+    use crate::projectview::shared_types::{ProjectXml};
     use crate::projectview::db_handler::{self, FileMetadataWithCustomFieldsFromDb};
-    use crate::welcome::config;
 
-    fn create_dummy_project_xml(project_dir: &Path, project_name: &str) -> PathBuf {
+    fn create_dummy_project_xml(project_dir: &Path, project_name: &str, project_uuid: &str) -> PathBuf {
         let project_xml_path = project_dir.join("project.xml");
         let project_data = ProjectXml {
             name: project_name.to_string(),
-            project_uuid: "test-uuid".to_string(),
+            project_uuid: project_uuid.to_string(),
             media_files: Default::default(),
             document_files: Default::default(),
             table_files: Default::default(),
@@ -820,23 +819,29 @@ mod tests {
         project_xml_path
     }
 
+    fn setup_test_environment() -> (tempfile::TempDir, PathBuf, PathBuf, rusqlite::Connection, String) {
+        let temp_dir = tempdir().unwrap();
+        let project_dir = temp_dir.path().to_path_buf();
+        let harvey_files_dir = project_dir.join(".harvey_files");
+        let tables_dir = harvey_files_dir.join("Tables");
+        fs::create_dir_all(&tables_dir).unwrap();
+
+        let dummy_table_path = project_dir.join("dummy.csv");
+        let mut f = fs::File::create(&dummy_table_path).unwrap();
+        f.write_all(b"header1,header2\nval1,val2").unwrap();
+
+        let (conn, project_id) = db_handler::setup_test_db_in_memory();
+
+        (temp_dir, project_dir, dummy_table_path, conn, project_id)
+    }
+
     #[tokio::test]
     async fn test_import_table_file_with_db_metadata() -> Result<(), Box<dyn std::error::Error>> {
-        let temp_project_dir = tempdir()?;
-        let project_base_path = temp_project_dir.path();
-
-        let temp_config_dir = tempdir()?;
-        let temp_db_dir_for_test = temp_config_dir.path().join(".harvey");
-        fs::create_dir_all(&temp_db_dir_for_test)?;
-
-        std::env::set_var("HARVEY_TEST_CONFIG_DIR", temp_config_dir.path().to_str().unwrap());
-
-        db_handler::init_db().expect("Failed to initialize test DB");
-
-        let project_xml_path = create_dummy_project_xml(project_base_path, "TestTableProject");
+        let (_temp_dir, project_dir, dummy_table_path, _conn, project_uuid) = setup_test_environment();
+        let project_xml_path = create_dummy_project_xml(&project_dir, "TestTableProject", &project_uuid);
         let project_xml_path_str = project_xml_path.to_string_lossy().to_string();
 
-        let source_table_dir = temp_project_dir.path().join("source_tables");
+        let source_table_dir = project_dir.join("source_tables");
         fs::create_dir_all(&source_table_dir)?;
         let dummy_table_path = source_table_dir.join("dummy_table.csv");
         let mut source_file = File::create(&dummy_table_path)?;
@@ -860,7 +865,7 @@ mod tests {
         let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_xml_content)?;
 
         let expected_table_name = final_table_abs_path.file_name().unwrap().to_str().unwrap();
-        let expected_relative_path = final_table_abs_path.strip_prefix(project_base_path)?.to_string_lossy().replace("\\", "/");
+        let expected_relative_path = final_table_abs_path.strip_prefix(&project_dir)?.to_string_lossy().replace("\\", "/");
 
         assert_eq!(updated_project_data.table_files.files.len(), 1, "Should be one table file in XML");
         let table_entry_xml = updated_project_data.table_files.files.get(0).unwrap();

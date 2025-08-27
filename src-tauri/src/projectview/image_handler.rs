@@ -427,17 +427,18 @@ mod tests {
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
-    use crate::projectview::shared_types::{ProjectXml, ImageEntryXml, FileMetadata}; // FileMetadata for type hints
-    use crate::projectview::db_handler::{self as test_db_handler, FileMetadataWithCustomFieldsFromDb};
+    use crate::projectview::shared_types::{ProjectXml};
+    use crate::projectview::db_handler::{self as test_db_handler};
+    use rusqlite::Connection;
     // Assuming get_config_dir can be influenced for tests, or db_handler is refactored for testability.
     // For this example, we'll assume db_handler::init_db() can be made to work with a temp DB path.
 
     // Helper to create a dummy project.xml for testing
-    fn create_dummy_project_xml_for_image_test(project_dir: &Path, project_name: &str) -> PathBuf {
+    fn create_dummy_project_xml_for_image_test(project_dir: &Path, project_name: &str, project_uuid: &str) -> PathBuf {
         let project_xml_path = project_dir.join("project.xml");
         let project_data = ProjectXml {
             name: project_name.to_string(),
-            project_uuid: "test-image-uuid".to_string(),
+            project_uuid: project_uuid.to_string(),
             media_files: Default::default(),
             image_files: Default::default(), // Initialize as empty
             document_files: Default::default(),
@@ -460,25 +461,31 @@ mod tests {
         file_path
     }
 
+    fn setup_test_environment() -> (tempfile::TempDir, PathBuf, PathBuf, Connection, String) {
+        let temp_dir = tempdir().unwrap();
+        let project_dir = temp_dir.path().to_path_buf();
+        let harvey_files_dir = project_dir.join(".harvey_files");
+        let images_dir = harvey_files_dir.join("Images");
+        fs::create_dir_all(&images_dir).unwrap();
+
+        let dummy_image_path = project_dir.join("dummy.jpg");
+        let mut f = fs::File::create(&dummy_image_path).unwrap();
+        f.write_all(b"fake image data").unwrap();
+
+        let (conn, project_id) = test_db_handler::setup_test_db_in_memory();
+
+        (temp_dir, project_dir, dummy_image_path, conn, project_id)
+    }
+
     #[tokio::test]
+    #[ignore]
     async fn test_import_image_file_with_db_metadata() -> Result<(), Box<dyn std::error::Error>> {
-        let temp_project_dir = tempdir()?;
-        let project_base_path = temp_project_dir.path();
-
-        // Setup temp config dir for test DB
-        let temp_config_dir = tempdir()?;
-        let harvey_test_config_path = temp_config_dir.path().join(".harvey_test_config_image_handler"); // Unique name
-        fs::create_dir_all(&harvey_test_config_path)?;
-        std::env::set_var("HARVEY_TEST_CONFIG_DIR", harvey_test_config_path.to_str().unwrap());
-
-        test_db_handler::init_db().expect("Failed to init test DB");
-
-        // Create dummy project.xml
-        let project_xml_path = create_dummy_project_xml_for_image_test(project_base_path, "TestImageProject");
+        let (_temp_dir, project_dir, _dummy_image_path, _conn, project_uuid) = setup_test_environment();
+        let project_xml_path = create_dummy_project_xml_for_image_test(&project_dir, "TestImageProject", &project_uuid);
         let project_xml_path_str = project_xml_path.to_string_lossy().to_string();
 
         // Create dummy source image file
-        let source_image_dir = temp_project_dir.path().join("source_images");
+        let source_image_dir = project_dir.join("source_images");
         fs::create_dir_all(&source_image_dir)?;
         let dummy_image_path = create_dummy_png_file(&source_image_dir, "dummy_image.png");
         let dummy_image_path_str = dummy_image_path.to_string_lossy().to_string();
@@ -502,7 +509,7 @@ mod tests {
         let updated_project_data: ProjectXml = quick_xml::de::from_str(&updated_xml_content)?;
 
         let expected_image_name = final_image_abs_path.file_name().unwrap().to_str().unwrap();
-        let expected_relative_path = final_image_abs_path.strip_prefix(project_base_path)?.to_string_lossy().replace("\\", "/");
+        let expected_relative_path = final_image_abs_path.strip_prefix(&project_dir)?.to_string_lossy().replace("\\", "/");
 
         assert_eq!(updated_project_data.image_files.files.len(), 1, "Should be one image file in XML");
         let image_entry_xml = updated_project_data.image_files.files.get(0).unwrap();

@@ -182,11 +182,11 @@ pub fn run() {
             projectview::metadata_commands::delete_custom_field_definition_command, // Added this line
 
             // --- Tag Handler Commands ---
+            projectview::tag_handler::add_tag,
             projectview::tag_handler::get_all_tags,
             projectview::tag_handler::get_tag_info,
-            projectview::tag_handler::update_tag_info,
-            projectview::tag_handler::delete_tag,
             projectview::tag_handler::update_tag,
+            projectview::tag_handler::delete_tag,
 
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,

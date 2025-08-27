@@ -2020,10 +2020,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
-    use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is in scope if needed for direct construction, though here we rely on its deserialization.
 
     #[tokio::test]
     async fn test_load_project_data_includes_uuid() {
