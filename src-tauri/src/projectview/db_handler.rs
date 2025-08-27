@@ -1445,6 +1445,45 @@ pub fn remove_tag_from_all_annotations(project_id: &str, tag_to_remove: &str) ->
     Ok(())
 }
 
+pub fn rename_tag_in_all_annotations(project_id: &str, old_tag_name: &str, new_tag_name: &str) -> Result<(), CommandError> {
+    debug!("[DB] Renaming tag '{}' to '{}' in all annotations for project_id {}", old_tag_name, new_tag_name, project_id);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("SELECT id, annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+    let rows = stmt.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })?;
+
+    for row in rows {
+        let (id, annotations_json): (i64, String) = row?;
+        if let Ok(mut highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            let mut modified = false;
+            for highlight in &mut highlights {
+                if let Some(tags) = &mut highlight.tags {
+                    if let Some(pos) = tags.iter().position(|t| t == old_tag_name) {
+                        tags[pos] = new_tag_name.to_string();
+                        modified = true;
+                    }
+                }
+            }
+
+            if modified {
+                let new_annotations_json = serde_json::to_string(&highlights)
+                    .map_err(|e| CommandError::JsonProcessing(format!("Failed to serialize modified highlights: {}", e)))?;
+
+                conn.execute(
+                    "UPDATE pdf_annotations SET annotations_json = ?1 WHERE id = ?2",
+                    params![new_annotations_json, id],
+                )?;
+            }
+        }
+    }
+
+    info!("[DB] Finished renaming tag '{}' to '{}' in annotations for project_id {}", old_tag_name, new_tag_name, project_id);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

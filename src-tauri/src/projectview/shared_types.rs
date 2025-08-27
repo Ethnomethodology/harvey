@@ -95,6 +95,22 @@ pub struct Highlight {
     pub timestamp: Option<String>,
 }
 
+// New struct for the source of a highlight
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HighlightSource {
+    pub file_path: String,
+    pub file_type: String, // e.g., "pdf", "image", "document"
+}
+
+// New struct to bundle a highlight with its source
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HighlightInfo {
+    #[serde(flatten)]
+    pub highlight: Highlight,
+    pub source: HighlightSource,
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
