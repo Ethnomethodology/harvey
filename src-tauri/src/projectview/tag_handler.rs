@@ -166,7 +166,13 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
     }
 
     let mut highlight_infos = Vec::new();
+    let mut seen_highlight_ids = HashSet::new();
+
     for (highlight, file_path) in highlights_with_tag {
+        if !seen_highlight_ids.insert(highlight.id.clone()) {
+            continue; // Skip if this highlight ID has already been processed
+        }
+
         let source_file_path = Path::new(&file_path);
         let file_name = source_file_path
             .file_name()
