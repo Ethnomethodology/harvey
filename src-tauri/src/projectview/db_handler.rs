@@ -1349,7 +1349,6 @@ pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) 
 // --- End Lexical Highlights Functions ---
 
 use std::collections::HashSet;
-use crate::projectview::shared_types::Highlight;
 
 pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
