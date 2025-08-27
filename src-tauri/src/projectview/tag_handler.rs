@@ -121,15 +121,15 @@ pub fn get_all_tags(project_root_path_str: &str, project_id: &str) -> Result<Vec
 pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: String) -> Result<TagInfo, CommandError> {
     info!("[Tags] Getting info for tag '{}' in project_id: {}", tag_name, project_id);
     let project_root_path = Path::new(project_root_path_str);
-    let mut highlights_with_tag = Vec::new();
+    let mut highlights_with_tag: Vec<(Highlight, String)> = Vec::new();
 
     // 1. Scan DB annotations
     match db_handler::get_all_highlights_for_project(project_id) {
         Ok(db_highlights) => {
-            for highlight in db_highlights {
+            for (highlight, doc_path) in db_highlights {
                 if let Some(tags) = &highlight.tags {
                     if tags.contains(&tag_name) {
-                        highlights_with_tag.push(highlight);
+                        highlights_with_tag.push((highlight, doc_path));
                     }
                 }
             }
@@ -144,15 +144,16 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
     let docs_path = Path::new(project_root_path_str).join("harvey_files").join("Documents");
     if docs_path.is_dir() {
         for entry in WalkDir::new(docs_path).into_iter().filter_map(Result::ok) {
-            if entry.file_type().is_file() && entry.path().extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Ok(content) = fs::read_to_string(entry.path()) {
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Ok(content) = fs::read_to_string(path) {
                      if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&content) {
                         if let Some(highlights_val) = json_value.get("highlights") {
                              if let Ok(highlights) = serde_json::from_value::<Vec<Highlight>>(highlights_val.clone()) {
                                 for highlight in highlights {
                                     if let Some(tags) = &highlight.tags {
                                         if tags.contains(&tag_name) {
-                                            highlights_with_tag.push(highlight);
+                                            highlights_with_tag.push((highlight, path.to_string_lossy().into_owned()));
                                         }
                                     }
                                 }
@@ -165,8 +166,8 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
     }
 
     let mut highlight_infos = Vec::new();
-    for highlight in highlights_with_tag {
-        let source_file_path = Path::new(&highlight.file_path);
+    for (highlight, file_path) in highlights_with_tag {
+        let source_file_path = Path::new(&file_path);
         let file_name = source_file_path
             .file_name()
             .unwrap_or_default()
@@ -179,8 +180,8 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
 
         let source = HighlightSource {
             file_name,
-            file_path: highlight.file_path.clone(),
-            file_type: get_file_type_from_path(&highlight.file_path),
+            file_path: file_path.clone(),
+            file_type: get_file_type_from_path(&file_path),
         };
 
         highlight_infos.push(HighlightInfo {

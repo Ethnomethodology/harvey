@@ -1410,22 +1410,24 @@ pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, Command
     Ok(sorted_tags)
 }
 
-pub fn get_all_highlights_for_project(project_id: &str) -> Result<Vec<Highlight>, CommandError> {
+pub fn get_all_highlights_for_project(project_id: &str) -> Result<Vec<(Highlight, String)>, CommandError> {
     debug!("[DB] Loading all highlights for project_id {}", project_id);
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)?;
 
-    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+    let mut stmt = conn.prepare("SELECT annotations_json, pdf_document_path FROM pdf_annotations WHERE project_id = ?1")?;
 
     let rows = stmt.query_map(params![project_id], |row| {
-        row.get(0)
+        Ok((row.get(0)?, row.get(1)?))
     })?;
 
     let mut all_highlights = Vec::new();
     for row in rows {
-        let annotations_json: String = row?;
+        let (annotations_json, doc_path): (String, String) = row?;
         if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
-            all_highlights.extend(highlights);
+            for highlight in highlights {
+                all_highlights.push((highlight, doc_path.clone()));
+            }
         }
     }
 

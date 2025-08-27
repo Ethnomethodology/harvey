@@ -99,6 +99,7 @@ pub struct Highlight {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HighlightSource {
     pub file_path: String,
+    pub file_name: String,
     pub file_type: String, // e.g., "pdf", "image", "document"
 }
 
@@ -108,6 +109,7 @@ pub struct HighlightInfo {
     #[serde(flatten)]
     pub highlight: Highlight,
     pub source: HighlightSource,
+    pub other_tags: Vec<String>,
 }
 
 
