@@ -2,11 +2,24 @@
 
 use serde::{Serialize, Deserialize};
 use crate::welcome::config::CommandError;
-use crate::projectview::shared_types::Highlight;
+use crate::projectview::shared_types::{Highlight, HighlightInfo, HighlightSource};
 use crate::projectview::db_handler;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+fn get_file_type_from_path(path_str: &str) -> String {
+    let path = Path::new(path_str);
+    match path.extension().and_then(|s| s.to_str()) {
+        Some("mp3") | Some("wav") | Some("m4a") | Some("ogg") => "audio".to_string(),
+        Some("mp4") | Some("mov") | Some("mkv") | Some("avi") => "video".to_string(),
+        Some("pdf") => "document".to_string(),
+        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") => "image".to_string(),
+        Some("csv") | Some("tsv") => "table".to_string(),
+        Some("txt") | Some("md") | Some("rtf") => "document".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
 use walkdir::WalkDir;
 use log::{error, info, warn};
 
@@ -15,7 +28,7 @@ pub struct TagInfo {
     pub name: String,
     pub description: String,
     pub highlight_count: usize,
-    pub highlights: Vec<Highlight>,
+    pub highlights: Vec<HighlightInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -127,7 +140,6 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
         }
     }
 
-
     // 2. Scan file-based annotations
     let docs_path = Path::new(project_root_path_str).join("harvey_files").join("Documents");
     if docs_path.is_dir() {
@@ -152,14 +164,40 @@ pub fn get_tag_info(project_root_path_str: &str, project_id: &str, tag_name: Str
         }
     }
 
+    let mut highlight_infos = Vec::new();
+    for highlight in highlights_with_tag {
+        let source_file_path = Path::new(&highlight.file_path);
+        let file_name = source_file_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let other_tags = highlight.tags.as_ref()
+            .map(|tags| tags.iter().filter(|t| **t != tag_name).cloned().collect())
+            .unwrap_or_else(Vec::new);
+
+        let source = HighlightSource {
+            file_name,
+            file_path: highlight.file_path.clone(),
+            file_type: get_file_type_from_path(&highlight.file_path),
+        };
+
+        highlight_infos.push(HighlightInfo {
+            source,
+            highlight,
+            other_tags,
+        });
+    }
+
     // 3. Load tag metadata
     let metadata = load_tag_metadata(project_root_path, &tag_name)?;
 
     let tag_info = TagInfo {
         name: tag_name.clone(),
         description: metadata.description,
-        highlight_count: highlights_with_tag.len(),
-        highlights: highlights_with_tag,
+        highlight_count: highlight_infos.len(),
+        highlights: highlight_infos,
     };
 
     Ok(tag_info)

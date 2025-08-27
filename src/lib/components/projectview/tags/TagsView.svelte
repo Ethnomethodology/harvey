@@ -220,10 +220,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each tagInfo.highlights as item (item.highlight.id)}
+                            {#each tagInfo.highlights as item (item.id)}
                                 <tr class="border-b dark:border-gray-700">
                                     <td class="p-2">
-                                        <div class="w-2 h-4 rounded" style="background-color: {item.highlight.color};"></div>
+                                        <div class="w-2 h-4 rounded" style="background-color: {item.color};"></div>
                                     </td>
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">
@@ -231,10 +231,10 @@
                                             <span>{item.source.file_path.split(/[\\/]/).pop()}</span>
                                         </div>
                                     </td>
-                                    <td class="p-2 truncate" title={item.highlight.text}>{item.highlight.text}</td>
+                                    <td class="p-2 truncate" title={item.text}>{item.text}</td>
                                     <td class="p-2">
-                                        {#if item.highlight.tags && item.highlight.tags.length > 1}
-                                            {item.highlight.tags.filter(t => t !== selectedTag).join(', ')}
+                                        {#if item.tags && item.tags.length > 1}
+                                            {item.tags.filter(t => t !== selectedTag).join(', ')}
                                         {/if}
                                     </td>
                                     <td class="p-2">

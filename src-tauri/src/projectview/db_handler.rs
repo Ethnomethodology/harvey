@@ -1350,6 +1350,35 @@ pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) 
 
 use std::collections::HashSet;
 
+pub fn get_highlights_by_tag(project_id: &str, tag_name: &str) -> Result<Vec<Highlight>, CommandError> {
+    debug!("[DB] Loading highlights for project_id {} with tag '{}'", project_id, tag_name);
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+
+    let rows = stmt.query_map(params![project_id], |row| {
+        row.get::<_, String>(0)
+    })?;
+
+    let mut tagged_highlights = Vec::new();
+    for row in rows {
+        let annotations_json = row?;
+        if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
+            for highlight in highlights {
+                if let Some(tags) = &highlight.tags {
+                    if tags.contains(&tag_name.to_string()) {
+                        tagged_highlights.push(highlight);
+                    }
+                }
+            }
+        }
+    }
+
+    info!("[DB] Found {} highlights for project_id {} with tag '{}'", tagged_highlights.len(), project_id, tag_name);
+    Ok(tagged_highlights)
+}
+
 pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
     let db_path = get_db_path()?;
