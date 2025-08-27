@@ -6,6 +6,7 @@
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, setTags } from '$lib/stores/tagStore.js';
+    import { getAllTags } from '$lib/services/projectService.js';
 
     let selectedTag = null;
     let tagInfo = null;
@@ -50,13 +51,10 @@
     }
 
     async function loadAllTags() {
-        if (!$project.xmlPath) return;
+        if (!$project.baseDirectory) return;
         try {
             isLoading = true;
-            const tags = await invoke('get_all_tags', {
-                projectRootPathStr: $project.baseDirectory,
-                projectId: $project.projectUuid,
-            });
+            const tags = await getAllTags($project.baseDirectory);
             setTags(tags);
         } catch (error) {
             console.error('Failed to load tags:', error);
