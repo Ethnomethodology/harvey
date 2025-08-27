@@ -51,10 +51,10 @@
     }
 
     async function loadAllTags() {
-        if (!$project.baseDirectory) return;
+        if (!$project.id || !$project.baseDirectory) return;
         try {
             isLoading = true;
-            const tags = await getAllTags($project.baseDirectory);
+            const tags = await getAllTags($project.id, $project.baseDirectory);
             setTags(tags);
         } catch (error) {
             console.error('Failed to load tags:', error);

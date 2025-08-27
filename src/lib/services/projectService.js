@@ -90,13 +90,13 @@ import {
 import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
 
-export async function getAllTags(projectRootPathStr) {
-    if (!projectRootPathStr) {
-        console.error('[ProjectService] getAllTags: Missing projectRootPathStr.');
-        throw new Error('Missing projectRootPathStr for getting all tags.');
+export async function getAllTags(projectId, projectRootPathStr) {
+    if (!projectId || !projectRootPathStr) {
+        console.error('[ProjectService] getAllTags: Missing projectId or projectRootPathStr.');
+        throw new Error('Missing required arguments for getting all tags.');
     }
     try {
-        const tags = await invoke("get_all_tags", { projectRootPathStr });
+        const tags = await invoke("get_all_tags", { projectId, projectRootPathStr });
         return tags;
     } catch (e) {
         console.error(`[ProjectService] Failed to get all tags from backend:`, e);
@@ -388,7 +388,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
         project.update((current) => ({ ...current, ...dataToSet }));
 
         try {
-            const tags = await getAllTags(loadedData.base_directory);
+            const tags = await getAllTags(loadedData.project_uuid, loadedData.base_directory);
             setTags(tags);
             console.log(`[ProjectService] Initialized global tag store with ${tags.length} tags.`);
         } catch (tagError) {
