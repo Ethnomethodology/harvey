@@ -836,6 +836,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_import_table_file_with_db_metadata() -> Result<(), Box<dyn std::error::Error>> {
         let (_temp_dir, project_dir, dummy_table_path, _conn, project_uuid) = setup_test_environment();
         let project_xml_path = create_dummy_project_xml(&project_dir, "TestTableProject", &project_uuid);

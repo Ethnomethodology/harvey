@@ -452,6 +452,18 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_tags_updated_at trigger.");
 
+    // Migration for adding color column to tags table
+    let mut stmt = conn.prepare("PRAGMA table_info(tags)")?;
+    let column_exists = stmt.query_map([], |row| {
+        let column_name: String = row.get(1)?;
+        Ok(column_name)
+    })?.any(|col| col.as_deref() == Ok("color"));
+
+    if !column_exists {
+        info!("[DB] Adding color column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN color TEXT", [])?;
+    }
+
     // highlights table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS highlights (
