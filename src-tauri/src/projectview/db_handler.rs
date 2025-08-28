@@ -493,6 +493,10 @@ pub fn init_db() -> Result<(), CommandError> {
         info!("[DB] Adding project_id column to highlights table.");
         conn.execute("ALTER TABLE highlights ADD COLUMN project_id TEXT", [])?;
     }
+    if !columns.contains(&"annotation_id".to_string()) {
+        info!("[DB] Adding annotation_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN annotation_id TEXT", [])?;
+    }
 
     // highlight_tags table
     conn.execute(
