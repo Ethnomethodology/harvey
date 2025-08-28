@@ -5,8 +5,7 @@
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
-    import { allTags, setTags } from '$lib/stores/tagStore.js';
-    import { getAllTags, updateTag } from '$lib/services/projectService.js';
+    import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
 
     const AUDIO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`;
@@ -38,9 +37,6 @@
     let isEditing = false;
     let tagNameInput = '';
 
-    onMount(async () => {
-        loadAllTags();
-    });
 
     afterUpdate(() => {
         if (tagInfo && tableContainer && !tabulatorInstance) {
@@ -73,37 +69,24 @@
         });
     }
 
-    async function loadAllTags() {
-        if (!$project.id || !$project.baseDirectory) return;
-        try {
-            isLoading = true;
-            const tags = await getAllTags($project.id, $project.baseDirectory);
-            setTags(tags);
-        } catch (error) {
-            console.error('Failed to load tags:', error);
-        } finally {
-            isLoading = false;
-        }
-    }
-
-    async function handleSelectTag(tagName) {
+    async function handleSelectTag(tag) {
         isEditing = false;
-        selectedTag = tagName;
+        selectedTag = tag;
         tagInfo = null;
         description = '';
         try {
             isLoading = true;
             tagInfo = await invoke('get_tag_info', {
-                projectRootPathStr: $project.baseDirectory,
                 projectId: $project.id,
-                tagName: tagName,
+                tagId: tag.id,
+                tagName: tag.name,
             });
             if (tagInfo) {
                 description = tagInfo.description;
                 tagNameInput = tagInfo.name;
             }
         } catch (error) {
-            console.error(`Failed to load tag info for ${tagName}:`, error);
+            console.error(`Failed to load tag info for ${tag.name}:`, error);
         } finally {
             isLoading = false;
         }
@@ -112,19 +95,18 @@
     async function handleSaveChanges() {
         if (!selectedTag) return;
         try {
-            await updateTag(
-                $project.id,
-                $project.baseDirectory,
-                selectedTag,
-                tagNameInput,
-                description
-            );
+            await updateTag(selectedTag.id, tagNameInput, null); // Color is not editable here yet
             isEditing = false;
-            await loadAllTags();
-            handleSelectTag(tagNameInput);
+            const newSelectedTag = $allTags.find(t => t.name === tagNameInput);
+            if (newSelectedTag) {
+                handleSelectTag(newSelectedTag);
+            } else {
+                selectedTag = null;
+                tagInfo = null;
+            }
             // Optionally, show a success notification
         } catch (error) {
-            console.error(`Failed to save changes for ${selectedTag}:`, error);
+            console.error(`Failed to save changes for ${selectedTag.name}:`, error);
             // Optionally, show an error notification
         }
     }
@@ -132,25 +114,20 @@
     async function handleDeleteTag() {
         if (!selectedTag) return;
 
-        const confirmed = await confirm(`Are you sure you want to delete the tag "${selectedTag}"? This will remove the tag from all associated highlights and cannot be undone.`, {
+        const confirmed = await confirm(`Are you sure you want to delete the tag "${selectedTag.name}"? This will remove the tag from all associated highlights and cannot be undone.`, {
             title: 'Confirm Deletion',
             type: 'warning',
         });
 
         if (confirmed) {
             try {
-                await invoke('delete_tag', {
-                    projectRootPathStr: $project.baseDirectory,
-                    projectId: $project.id,
-                    tagName: selectedTag,
-                });
+                await deleteTag(selectedTag.id);
                 selectedTag = null;
                 tagInfo = null;
                 description = '';
                 isEditing = false;
-                await loadAllTags();
             } catch (error) {
-                console.error(`Failed to delete tag ${selectedTag}:`, error);
+                console.error(`Failed to delete tag ${selectedTag.name}:`, error);
                 // Optionally, show an error notification
             }
         }
@@ -165,14 +142,14 @@
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
-                {#each $allTags as tag}
+                {#each $allTags as tag (tag.id)}
                     <li
                         class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                        class:bg-blue-200={selectedTag === tag}
-                        class:dark:bg-blue-800={selectedTag === tag}
+                        class:bg-blue-200={selectedTag?.id === tag.id}
+                        class:dark:bg-blue-800={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
                     >
-                        {tag}
+                        {tag.name}
                     </li>
                 {/each}
             </ul>

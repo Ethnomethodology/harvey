@@ -5,7 +5,7 @@
 
     import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
-    import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
+    import { allTags as allTagsStore, addTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
@@ -123,12 +123,20 @@
         handleHighlightsUpdate(newHighlights);
     }
 
-    function handleCreateTag(newTag, highlightId) {
-        addGlobalTag(newTag);
-        const highlight = activeHighlights.find(h => h.id === highlightId);
-        if (highlight && !(highlight.tags || []).includes(newTag)) {
-            const newTags = [...(highlight.tags || []), newTag];
-            handleTagsUpdate(highlightId, newTags);
+    async function handleCreateTag(newTag, highlightId) {
+        try {
+            // The addTag function from the store now handles the backend call and refreshing the store.
+            await addTag(newTag);
+
+            // After the store is updated, we can update the current highlight's tags.
+            const highlight = activeHighlights.find(h => h.id === highlightId);
+            if (highlight && !(highlight.tags || []).includes(newTag)) {
+                const newTags = [...(highlight.tags || []), newTag];
+                handleTagsUpdate(highlightId, newTags);
+            }
+        } catch (error) {
+            console.error('Failed to create tag:', error);
+            // Optionally, show a notification to the user
         }
     }
 
@@ -190,7 +198,7 @@
                                 </svg>
                                 <div class="w-full relative">
                                     <TagMultiSelect
-                                        allTags={$allTagsStore}
+                                        allTags={$allTagsStore.map(t => t.name)}
                                         assignedTags={highlight.tags}
                                         on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                                         on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}

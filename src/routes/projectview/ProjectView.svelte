@@ -37,6 +37,7 @@
         prepareImportedTranscriptView,
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
+    import { fetchAllTags } from '$lib/stores/tagStore.js';
     import {
         transcriptStore,
         toggleTranscribeModal,
@@ -140,7 +141,10 @@ async function onConfirmTranscriptionStart(event) {
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
 		if (xmlPath && xmlPath.trim() !== '') {
-			try { await loadProjectDataAndUpdateStore(xmlPath); }
+			try {
+                await loadProjectDataAndUpdateStore(xmlPath);
+                await fetchAllTags(); // Fetch all tags after project data is loaded
+            }
             catch (e) { console.error('[ProjectView] Error during initial project load:', e); }
 		} else {
 			project.update((p) => ({ ...p, isLoading: false, error: 'Project path is missing.', statusMessage: 'Error: Project path is missing.' }));

@@ -1,3 +1,16 @@
 
 > harvey@0.1.0 dev
 > vite dev
+
+
+  VITE v5.4.19  ready in 1493 ms
+
+  ➜  Local:   http://localhost:1420/
+Error: The following dependencies are imported but could not be resolved:
+
+  @tauri-apps/api/tauri (imported by /app/src/lib/components/projectview/data/shared_panels/HighlightsPanel.svelte?id=0)
+
+Are they installed?
+    at file:///app/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:50669:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///app/node_modules/vite/dist/node/chunks/dep-C6uTJdX2.js:50174:26

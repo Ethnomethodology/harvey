@@ -72,8 +72,6 @@ import {
     markMediaNoteTranscriptChangesDiscarded
 } from '$lib/stores/projectStore.js';
 
-import { setTags } from '$lib/stores/tagStore.js';
-
 import {
     transcriptStore,
     setTranscriptData,
@@ -89,20 +87,6 @@ import {
 
 import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
-
-export async function getAllTags(projectId, projectRootPathStr) {
-    if (!projectId || !projectRootPathStr) {
-        console.error('[ProjectService] getAllTags: Missing projectId or projectRootPathStr.');
-        throw new Error('Missing required arguments for getting all tags.');
-    }
-    try {
-        const tags = await invoke("get_all_tags", { projectId, projectRootPathStr });
-        return tags;
-    } catch (e) {
-        console.error(`[ProjectService] Failed to get all tags from backend:`, e);
-        throw e;
-    }
-}
 
 /**
  * Updates the name and description for a specific tag.
@@ -404,15 +388,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
         project.update((current) => ({ ...current, ...dataToSet }));
-
-        try {
-            const tags = await getAllTags(loadedData.project_uuid, loadedData.base_directory);
-            setTags(tags);
-            console.log(`[ProjectService] Initialized global tag store with ${tags.length} tags.`);
-        } catch (tagError) {
-            console.error('[ProjectService] Failed to get all tags from backend:', tagError);
-            setTags([]); // Ensure tags are cleared on error
-        }
 
         // Update project groups list
         try {
