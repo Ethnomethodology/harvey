@@ -481,6 +481,19 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized highlights table.");
 
+    // Migration for adding columns to highlights table
+    let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
+    let columns: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+
+    if !columns.contains(&"asset_id".to_string()) {
+        info!("[DB] Adding asset_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN asset_id TEXT", [])?;
+    }
+    if !columns.contains(&"project_id".to_string()) {
+        info!("[DB] Adding project_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN project_id TEXT", [])?;
+    }
+
     // highlight_tags table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS highlight_tags (
