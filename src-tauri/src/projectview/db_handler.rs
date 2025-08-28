@@ -1552,7 +1552,7 @@ pub fn get_tags_for_highlight(conn: &Connection, project_id: &str, highlight_id:
 pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
     debug!("[DB] Loading highlights for project_id {} with tag_id '{}'", project_id, tag_id);
     let mut stmt = conn.prepare("
-        SELECT h.id, h.text, GROUP_CONCAT(t.name), am.file_path
+        SELECT h.id, h.text, GROUP_CONCAT(t.name), am.file_path, h.annotation_id
         FROM highlights h
         LEFT JOIN highlight_tags ht ON h.id = ht.highlight_id
         LEFT JOIN tags t ON ht.tag_id = t.id
@@ -1573,6 +1573,10 @@ pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -
             timestamp: None,
         };
         let file_path: String = row.get(3)?;
+        // annotation_id is now column 4, but not directly used in the Highlight struct here.
+        // It's fetched, but we're not mapping it to the output tuple.
+        // This is okay if the frontend doesn't need it in this specific query's result.
+        // If it is needed, the return type of this function must change.
         Ok((highlight, file_path, tags))
     })?;
 
@@ -1582,6 +1586,7 @@ pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -
     }
 
     info!("[DB] Found {} highlights for project_id {} with tag_id '{}'", tagged_highlights.len(), project_id, tag_id);
+    debug!("[DB] Returning highlights: {:?}", tagged_highlights);
     Ok(tagged_highlights)
 }
 

@@ -54,18 +54,17 @@ pub fn get_tag_info(project_id: &str, tag_id: i64, tag_name: String) -> Result<T
     info!("[Tags] Getting info for tag '{}' in project_id: {}", tag_name, project_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    let highlights_with_tag: Vec<(Highlight, String)> = db_handler::get_highlights_by_tag(&conn, project_id, tag_id)?
-        .into_iter()
-        .map(|(h, s, _)| (h, s))
-        .collect();
+    let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, tag_id)?;
 
     let mut highlight_infos = Vec::new();
     let mut seen_highlight_ids = HashSet::new();
 
-    for (highlight, file_path) in highlights_with_tag {
+    for (mut highlight, file_path, tags) in highlights_with_tag {
         if !seen_highlight_ids.insert(highlight.id) {
             continue; // Skip if this highlight ID has already been processed
         }
+
+        highlight.tags = Some(tags);
 
         let source_file_path = Path::new(&file_path);
         let file_name = source_file_path
