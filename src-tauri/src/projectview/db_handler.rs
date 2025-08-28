@@ -1539,10 +1539,11 @@ pub fn get_tags_for_highlight(conn: &Connection, project_id: &str, highlight_id:
 pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
     debug!("[DB] Loading highlights for project_id {} with tag_id '{}'", project_id, tag_id);
     let mut stmt = conn.prepare("
-        SELECT h.id, h.asset_id, h.start_offset, h.end_offset, h.text, h.annotation_id, GROUP_CONCAT(t.name)
+        SELECT h.id, h.asset_id, h.start_offset, h.end_offset, h.text, h.annotation_id, GROUP_CONCAT(t.name), am.file_path
         FROM highlights h
         LEFT JOIN highlight_tags ht ON h.id = ht.highlight_id
         LEFT JOIN tags t ON ht.tag_id = t.id
+        LEFT JOIN asset_metadata am ON h.asset_id = am.asset_relative_path AND h.project_id = am.project_id
         WHERE h.project_id = ?1 AND h.id IN (SELECT highlight_id FROM highlight_tags WHERE tag_id = ?2)
         GROUP BY h.id
     ")?;
@@ -1558,8 +1559,8 @@ pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -
             comments: None,
             timestamp: None,
         };
-        let asset_id: String = row.get(1)?;
-        Ok((highlight, asset_id, tags))
+        let file_path: String = row.get(7)?;
+        Ok((highlight, file_path, tags))
     })?;
 
     let mut tagged_highlights = Vec::new();
