@@ -1539,7 +1539,7 @@ pub fn get_tags_for_highlight(conn: &Connection, project_id: &str, highlight_id:
 pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
     debug!("[DB] Loading highlights for project_id {} with tag_id '{}'", project_id, tag_id);
     let mut stmt = conn.prepare("
-        SELECT h.id, h.start_offset, h.end_offset, h.text, h.annotation_id, GROUP_CONCAT(t.name), am.file_path
+        SELECT h.id, h.text, h.annotation_id, GROUP_CONCAT(t.name), am.file_path
         FROM highlights h
         LEFT JOIN highlight_tags ht ON h.id = ht.highlight_id
         LEFT JOIN tags t ON ht.tag_id = t.id
@@ -1549,17 +1549,17 @@ pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -
     ")?;
 
     let rows = stmt.query_map(params![project_id, tag_id], |row| {
-        let tags_str: Option<String> = row.get(5)?;
+        let tags_str: Option<String> = row.get(3)?;
         let tags = tags_str.map_or(vec![], |s| s.split(',').map(|s| s.to_string()).collect());
         let highlight = Highlight {
             id: row.get(0)?,
-            text: row.get(3)?,
+            text: row.get(1)?,
             color: "".to_string(), // Color is not stored in the highlight table
             tags: Some(tags.clone()),
             comments: None,
             timestamp: None,
         };
-        let file_path: String = row.get(6)?;
+        let file_path: String = row.get(4)?;
         Ok((highlight, file_path, tags))
     })?;
 
