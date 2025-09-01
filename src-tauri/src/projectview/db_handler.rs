@@ -1540,6 +1540,7 @@ pub fn get_highlights_by_tag(
     let mut all_highlights = Vec::new();
 
     // 1. Get highlights from pdf_annotations (covers PDFs, images, lexical docs)
+    info!("[DB] Checking pdf_annotations for highlights with tag: {}", tag_name);
     let mut stmt_pdf = conn.prepare("SELECT pdf_document_path, annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
     let pdf_annotation_rows = stmt_pdf.query_map(params![project_id], |row| {
         Ok((row.get(0)?, row.get(1)?))
@@ -1547,14 +1548,31 @@ pub fn get_highlights_by_tag(
 
     for row in pdf_annotation_rows {
         let (doc_path, annotations_json): (String, String) = row?;
-        let annotations: Vec<Annotation> = match serde_json::from_str(&annotations_json) {
-            Ok(ann) => ann,
-            Err(_) => continue,
+        debug!("[DB] Processing annotations for doc: {}", doc_path);
+        debug!("[DB] Annotations JSON: {}", annotations_json);
+
+        let annotations: Vec<Annotation> = match serde_json::from_str::<Vec<Annotation>>(&annotations_json) {
+            Ok(ann) => {
+                debug!("[DB] Successfully parsed {} annotations.", ann.len());
+                ann
+            },
+            Err(e) => {
+                error!("[DB] Failed to parse annotations JSON for {}: {}", doc_path, e);
+                continue;
+            },
         };
 
         for annotation in annotations {
-            let has_tag = annotation.body.iter().any(|b| b.purpose.as_deref() == Some("tagging") && b.value == tag_name);
+            debug!("[DB] Checking annotation: {:?}", annotation);
+            let has_tag = annotation.body.iter().any(|b| {
+                let purpose_matches = b.purpose.as_deref() == Some("tagging");
+                let value_matches = b.value == tag_name;
+                debug!("[DB] Checking body: value='{}', purpose='{:?}'. Tag matches: {}", b.value, b.purpose, purpose_matches && value_matches);
+                purpose_matches && value_matches
+            });
+
             if has_tag {
+                info!("[DB] Found matching highlight in doc '{}' with tag '{}'", doc_path, tag_name);
                 let text = annotation.target.selector
                     .and_then(|selectors| selectors.into_iter().find(|s| s.selector_type == "TextQuoteSelector"))
                     .and_then(|s| s.exact)
@@ -1577,6 +1595,7 @@ pub fn get_highlights_by_tag(
     }
 
     // 2. Get highlights from table_styles (covers tables)
+    info!("[DB] Checking table_styles for highlights with tag: {}", tag_name);
     let mut stmt_table = conn.prepare("SELECT table_path, styles FROM table_styles WHERE project_id = ?1")?;
     let table_style_rows = stmt_table.query_map(params![project_id], |row| {
         Ok((row.get(0)?, row.get(1)?))
@@ -1584,14 +1603,25 @@ pub fn get_highlights_by_tag(
 
     for row in table_style_rows {
         let (table_path, styles_json): (String, String) = row?;
-        let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json) {
-            Ok(h) => h,
-            Err(_) => continue,
+        debug!("[DB] Processing table styles for: {}", table_path);
+        debug!("[DB] Styles JSON: {}", styles_json);
+
+        let table_highlights: Vec<Highlight> = match serde_json::from_str::<Vec<Highlight>>(&styles_json) {
+            Ok(h) => {
+                debug!("[DB] Successfully parsed {} highlights from table styles.", h.len());
+                h
+            },
+            Err(e) => {
+                error!("[DB] Failed to parse table styles JSON for {}: {}", table_path, e);
+                continue
+            },
         };
 
         for highlight in table_highlights {
+            debug!("[DB] Checking table highlight: {:?}", highlight);
             if let Some(tags) = &highlight.tags {
                 if tags.contains(&tag_name.to_string()) {
+                    info!("[DB] Found matching highlight in table '{}' with tag '{}'", table_path, tag_name);
                     all_highlights.push((highlight.clone(), table_path.clone(), tags.clone()));
                 }
             }
