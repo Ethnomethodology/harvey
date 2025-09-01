@@ -7,36 +7,6 @@ use crate::projectview::db_handler;
 use std::collections::HashSet;
 use std::path::Path;
 
-fn get_file_type_from_path(path_str: &str) -> String {
-    let path = Path::new(path_str);
-    let path_lower = path_str.to_lowercase();
-
-    if path_lower.contains("/transcripts/") && path_lower.contains("/media/") {
-        return "media_transcript".to_string();
-    }
-    if path_lower.contains("/transcripts/") {
-        return "imported_transcript".to_string();
-    }
-    if path_lower.contains("/documents/") {
-        return "document".to_string();
-    }
-    if path_lower.contains("/images/") {
-        return "image".to_string();
-    }
-    if path_lower.contains("/tables/") {
-        return "table".to_string();
-    }
-
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("mp3") | Some("wav") | Some("m4a") | Some("ogg") => "audio".to_string(),
-        Some("mp4") | Some("mov") | Some("mkv") | Some("avi") => "video".to_string(),
-        Some("pdf") => "document".to_string(),
-        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") => "image".to_string(),
-        Some("csv") | Some("tsv") => "table".to_string(),
-        Some("txt") | Some("md") | Some("rtf") => "document".to_string(),
-        _ => "unknown".to_string(),
-    }
-}
 use log::info;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -78,7 +48,7 @@ pub fn get_tag_info(project_id: &str, tag_id: i64, tag_name: String) -> Result<T
     let mut highlight_infos = Vec::new();
     let mut seen_highlight_ids = HashSet::new();
 
-    for (mut highlight, file_path, tags) in highlights_with_tag {
+    for (mut highlight, file_path, tags, asset_type) in highlights_with_tag {
         if !seen_highlight_ids.insert(highlight.id.clone()) {
             continue; // Skip if this highlight ID has already been processed
         }
@@ -99,7 +69,7 @@ pub fn get_tag_info(project_id: &str, tag_id: i64, tag_name: String) -> Result<T
         let source = HighlightSource {
             file_name,
             file_path: file_path.clone(),
-            file_type: get_file_type_from_path(&file_path),
+            file_type: asset_type,
         };
 
         highlight_infos.push(HighlightInfo {

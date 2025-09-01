@@ -1508,18 +1508,23 @@ pub fn get_highlights_by_tag(
     conn: &Connection,
     project_id: &str,
     tag_name: &str,
-) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
+) -> Result<Vec<(Highlight, String, Vec<String>, String)>, CommandError> {
     debug!("[DB] Aggregating highlights for project_id {} with tag_name '{}'", project_id, tag_name);
     let mut all_highlights = Vec::new();
 
     // 1. Get highlights from pdf_annotations (covers PDFs, images, lexical docs)
-    let mut stmt_pdf = conn.prepare("SELECT pdf_document_path, annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+    let mut stmt_pdf = conn.prepare("
+        SELECT pa.pdf_document_path, pa.annotations_json, am.asset_type
+        FROM pdf_annotations pa
+        JOIN asset_metadata am ON pa.pdf_document_path = am.asset_relative_path AND pa.project_id = am.project_id
+        WHERE pa.project_id = ?1
+    ")?;
     let pdf_annotation_rows = stmt_pdf.query_map(params![project_id], |row| {
-        Ok((row.get(0)?, row.get(1)?))
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
     })?;
 
     for row in pdf_annotation_rows {
-        let (doc_path, annotations_json): (String, String) = row?;
+        let (doc_path, annotations_json, asset_type): (String, String, String) = row?;
         let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
             Ok(val) => val,
             Err(_) => continue,
@@ -1536,8 +1541,6 @@ pub fn get_highlights_by_tag(
 
                 if tags_vec.contains(&tag_name.to_string()) {
                     let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-
-                    // Handle different structures for text and color
                     let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("[Image Highlight]").to_string();
                     let color = annotation_obj.get("color").and_then(|v| v.as_str())
                         .or_else(|| {
@@ -1557,47 +1560,39 @@ pub fn get_highlights_by_tag(
                         comments: None,
                         timestamp: None,
                     };
-                    all_highlights.push((highlight, doc_path.clone(), tags_vec));
+                    all_highlights.push((highlight, doc_path.clone(), tags_vec, asset_type.clone()));
                 }
             }
         }
     }
 
     // 2. Get highlights from table_styles (covers tables)
-    let mut stmt_table = conn.prepare("SELECT table_path, styles FROM table_styles WHERE project_id = ?1")?;
+    let mut stmt_table = conn.prepare("
+        SELECT ts.table_path, ts.styles, am.asset_type
+        FROM table_styles ts
+        JOIN asset_metadata am ON ts.table_path = am.file_path AND ts.project_id = am.project_id
+        WHERE ts.project_id = ?1
+    ")?;
     let table_style_rows = stmt_table.query_map(params![project_id], |row| {
-        Ok((row.get(0)?, row.get(1)?))
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
     })?;
 
     for row in table_style_rows {
-        let (table_path, styles_json): (String, String) = row?;
-        debug!("[DB] Processing table styles for: {}", table_path);
-        debug!("[DB] Styles JSON: {}", styles_json);
-
+        let (table_path, styles_json, asset_type): (String, String, String) = row?;
         let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json)
             .and_then(|s: String| serde_json::from_str::<Vec<Highlight>>(&s)) {
-            Ok(h) => {
-                debug!("[DB] Successfully parsed {} highlights from table styles.", h.len());
-                h
-            },
-            Err(e) => {
-                error!("[DB] Failed to parse table styles JSON for {}: {}", table_path, e);
-                continue
-            },
+            Ok(h) => h,
+            Err(_) => continue,
         };
 
         for highlight in table_highlights {
-            debug!("[DB] Checking table highlight: {:?}", highlight);
             if let Some(tags) = &highlight.tags {
                 if tags.contains(&tag_name.to_string()) {
-                    info!("[DB] Found matching highlight in table '{}' with tag '{}'", table_path, tag_name);
-                    all_highlights.push((highlight.clone(), table_path.clone(), tags.clone()));
+                    all_highlights.push((highlight.clone(), table_path.clone(), tags.clone(), asset_type.clone()));
                 }
             }
         }
     }
-
-    // TODO: Add logic for transcript highlights when their storage mechanism is implemented.
 
     info!("[DB] Found a total of {} highlights for project_id {} with tag_name '{}'", all_highlights.len(), project_id, tag_name);
     Ok(all_highlights)
