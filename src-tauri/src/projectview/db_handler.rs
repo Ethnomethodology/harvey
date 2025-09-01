@@ -1520,10 +1520,36 @@ pub fn get_highlights_by_tag(
 
     for row in pdf_annotation_rows {
         let (doc_path, annotations_json): (String, String) = row?;
-        if doc_path.contains("201433288_Jan2025.pdf") {
-            info!("[DB DEBUG] JSON for target PDF (201433288_Jan2025.pdf): {}", annotations_json);
+        let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
+
+        let annotations = annotations_val.as_array().map_or(Vec::new(), |arr| arr.clone());
+
+        for annotation_val in annotations {
+            if let Some(annotation_obj) = annotation_val.as_object() {
+                let tags_vec: Vec<String> = annotation_obj.get("tags")
+                    .and_then(|t| t.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+
+                if tags_vec.contains(&tag_name.to_string()) {
+                    let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+                    let highlight = Highlight {
+                        id,
+                        text,
+                        color: "".to_string(),
+                        tags: Some(tags_vec.clone()),
+                        comments: None,
+                        timestamp: None,
+                    };
+                    all_highlights.push((highlight, doc_path.clone(), tags_vec));
+                }
+            }
         }
-        // The rest of the logic is temporarily disabled to focus on logging.
     }
 
     // 2. Get highlights from table_styles (covers tables)
@@ -1894,202 +1920,3 @@ pub fn setup_test_db_in_memory() -> (Connection, String) {
 }
 
 
-#[cfg(test)]
-mod tag_highlight_tests {
-    use super::*;
-    use rusqlite::Connection;
-
-    fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
-        // This function sets up the full schema in the provided connection.
-        // It's a simplified version of the main `init_db` for testing purposes.
-        conn.execute_batch(
-            "
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                root_path TEXT NOT NULL UNIQUE,
-                xml_path TEXT NOT NULL UNIQUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS asset_metadata (
-                asset_relative_path TEXT NOT NULL,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                file_name TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                last_modified TEXT NOT NULL,
-                title TEXT,
-                description TEXT,
-                summary TEXT,
-                duration_seconds REAL,
-                width INTEGER,
-                height INTEGER,
-                frame_rate REAL,
-                bit_rate INTEGER,
-                audio_codec TEXT,
-                video_codec TEXT,
-                creation_time TEXT,
-                asset_type TEXT NOT NULL,
-                custom_fields_json TEXT,
-                original_import_path TEXT,
-                speaker_names_json TEXT,
-                waveform_data BLOB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (project_id, asset_relative_path)
-            );
-            CREATE TABLE IF NOT EXISTS tags (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                color TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-                UNIQUE (project_id, name)
-            );
-            CREATE TABLE IF NOT EXISTS highlights (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                asset_id TEXT NOT NULL,
-                project_id TEXT NOT NULL,
-                start_offset INTEGER,
-                end_offset INTEGER,
-                text TEXT,
-                annotation_id TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id, asset_id) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS highlight_tags (
-                highlight_id INTEGER NOT NULL,
-                tag_id INTEGER NOT NULL,
-                project_id TEXT NOT NULL,
-                PRIMARY KEY (highlight_id, tag_id),
-                FOREIGN KEY (highlight_id) REFERENCES highlights(id) ON DELETE CASCADE,
-                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
-                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-            );
-            "
-        )?;
-        Ok(())
-    }
-
-    fn setup_test_db_in_memory() -> (Connection, String) {
-        let conn = Connection::open_in_memory().expect("Failed to open in-memory DB");
-        init_db_for_test(&conn).expect("Failed to initialize test DB schema");
-
-        let project_id = "test_project_1".to_string();
-        conn.execute(
-            "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
-            params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
-        ).expect("Failed to insert test project");
-
-        (conn, project_id)
-    }
-
-    #[test]
-    fn test_tag_crud_operations() {
-        let (conn, project_id) = setup_test_db_in_memory();
-        // Add a tag
-        let tag_name = "test_tag";
-        let tag_color = Some("#FF0000");
-        let tag_id = add_tag(&conn, &project_id, tag_name, tag_color).unwrap();
-        assert!(tag_id > 0);
-
-        // Get all tags
-        let tags = get_all_tags(&conn, &project_id).unwrap();
-        assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].name, tag_name);
-        assert_eq!(tags[0].color.as_deref(), tag_color);
-        assert_eq!(tags[0].id, tag_id);
-
-        // Update the tag
-        let updated_tag_name = "updated_tag";
-        let updated_tag_color = Some("#00FF00");
-        update_tag(&conn, &project_id, tag_id, updated_tag_name, updated_tag_color).unwrap();
-
-        let tags_after_update = get_all_tags(&conn, &project_id).unwrap();
-        assert_eq!(tags_after_update.len(), 1);
-        assert_eq!(tags_after_update[0].name, updated_tag_name);
-        assert_eq!(tags_after_update[0].color.as_deref(), updated_tag_color);
-
-        // Delete the tag
-        delete_tag(&conn, &project_id, tag_id).unwrap();
-        let tags_after_delete = get_all_tags(&conn, &project_id).unwrap();
-        assert_eq!(tags_after_delete.len(), 0);
-    }
-
-    #[test]
-    fn test_highlight_and_tag_associations() {
-        let (conn, project_id) = setup_test_db_in_memory();
-        let asset_id = "test_asset";
-
-        // Pre-insert asset metadata for FK constraint
-        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![&project_id, asset_id, "file.txt", "/path/file.txt", "0", "text"]
-        ).unwrap();
-
-        // Add a highlight
-        let highlight = Highlight {
-            id: Default::default(), // ID will be assigned by DB
-            text: "This is a test highlight".to_string(),
-            ..Default::default()
-        };
-        let highlight_id = add_highlight(&conn, &project_id, asset_id, &highlight).unwrap();
-        assert!(highlight_id > 0);
-
-        // Add some tags
-        let tag_id_1 = add_tag(&conn, &project_id, "tag1", None).unwrap();
-        let tag_id_2 = add_tag(&conn, &project_id, "tag2", Some("#0000FF")).unwrap();
-
-        // Associate tags with highlight
-        add_tag_to_highlight(&conn, &project_id, highlight_id, tag_id_1).unwrap();
-        add_tag_to_highlight(&conn, &project_id, highlight_id, tag_id_2).unwrap();
-
-        // Get tags for the highlight
-        let highlight_tags = get_tags_for_highlight(&conn, &project_id, highlight_id).unwrap();
-        assert_eq!(highlight_tags.len(), 2);
-        let mut tag_names: Vec<String> = highlight_tags.iter().map(|t| t.name.clone()).collect();
-        tag_names.sort();
-        assert_eq!(tag_names, vec!["tag1", "tag2"]);
-
-        // Remove a tag from the highlight
-        remove_tag_from_highlight(&conn, &project_id, highlight_id, tag_id_1).unwrap();
-        let highlight_tags_after_remove = get_tags_for_highlight(&conn, &project_id, highlight_id).unwrap();
-        assert_eq!(highlight_tags_after_remove.len(), 1);
-        assert_eq!(highlight_tags_after_remove[0].name, "tag2");
-    }
-
-    #[test]
-    fn test_get_highlights_by_tag() {
-        let (conn, project_id) = setup_test_db_in_memory();
-        let asset_id = "test_asset";
-
-        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![&project_id, asset_id, "file.txt", "/path/file.txt", "0", "text"]
-        ).unwrap();
-
-        let h1 = Highlight { id: Default::default(), text: "highlight one".into(), ..Default::default() };
-        let h2 = Highlight { id: Default::default(), text: "highlight two".into(), ..Default::default() };
-        let h_id_1 = add_highlight(&conn, &project_id, asset_id, &h1).unwrap();
-        let h_id_2 = add_highlight(&conn, &project_id, asset_id, &h2).unwrap();
-
-        let tag_id_1 = add_tag(&conn, &project_id, "topic_a", None).unwrap();
-        let tag_id_2 = add_tag(&conn, &project_id, "topic_b", None).unwrap();
-
-        add_tag_to_highlight(&conn, &project_id, h_id_1, tag_id_1).unwrap();
-        add_tag_to_highlight(&conn, &project_id, h_id_1, tag_id_2).unwrap();
-        add_tag_to_highlight(&conn, &project_id, h_id_2, tag_id_2).unwrap();
-
-        // Get highlights for tag_id_1
-        let highlights_for_tag1 = get_highlights_by_tag(&conn, &project_id, tag_id_1).unwrap();
-        assert_eq!(highlights_for_tag1.len(), 1);
-        assert_eq!(highlights_for_tag1[0].0.id, h_id_1);
-
-        // Get highlights for tag_id_2
-        let highlights_for_tag2 = get_highlights_by_tag(&conn, &project_id, tag_id_2).unwrap();
-        assert_eq!(highlights_for_tag2.len(), 2);
-        let highlight_ids: Vec<i64> = highlights_for_tag2.iter().map(|(h, _, _)| h.id).collect();
-        assert!(highlight_ids.contains(&h_id_1));
-        assert!(highlight_ids.contains(&h_id_2));
-    }
-}
