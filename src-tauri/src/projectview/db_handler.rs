@@ -1556,13 +1556,28 @@ pub fn get_tags_for_highlight(conn: &Connection, project_id: &str, highlight_id:
 pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
     debug!("[DB] Loading highlights for project_id {} with tag_id '{}'", project_id, tag_id);
     let mut stmt = conn.prepare("
-        SELECT h.id, h.text, GROUP_CONCAT(t.name), am.file_path, h.annotation_id
-        FROM highlights h
-        LEFT JOIN highlight_tags ht ON h.id = ht.highlight_id
-        LEFT JOIN tags t ON ht.tag_id = t.id
-        LEFT JOIN asset_metadata am ON h.asset_id = am.asset_relative_path AND h.project_id = am.project_id
-        WHERE h.project_id = ?1 AND h.id IN (SELECT highlight_id FROM highlight_tags WHERE tag_id = ?2)
-        GROUP BY h.id
+        SELECT
+            h.id,
+            h.text,
+            GROUP_CONCAT(t.name),
+            -- Use COALESCE to pick the correct path.
+            -- Asset metadata is the primary source. Fallback to pdf_annotations path, then the asset_id itself.
+            COALESCE(am.file_path, pa.pdf_document_path, h.asset_id) as file_path,
+            h.annotation_id
+        FROM
+            highlights h
+        LEFT JOIN
+            highlight_tags ht ON h.id = ht.highlight_id
+        LEFT JOIN
+            tags t ON ht.tag_id = t.id
+        LEFT JOIN
+            asset_metadata am ON h.asset_id = am.asset_relative_path AND h.project_id = am.project_id
+        LEFT JOIN
+            pdf_annotations pa ON h.asset_id = pa.pdf_document_path AND h.project_id = pa.project_id
+        WHERE
+            h.project_id = ?1 AND ht.tag_id = ?2
+        GROUP BY
+            h.id
     ")?;
 
     let rows = stmt.query_map(params![project_id, tag_id], |row| {
@@ -1578,9 +1593,6 @@ pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -
         };
         let file_path: String = row.get(3)?;
         // annotation_id is now column 4, but not directly used in the Highlight struct here.
-        // It's fetched, but we're not mapping it to the output tuple.
-        // This is okay if the frontend doesn't need it in this specific query's result.
-        // If it is needed, the return type of this function must change.
         Ok((highlight, file_path, tags))
     })?;
 
