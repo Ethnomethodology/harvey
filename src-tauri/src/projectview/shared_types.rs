@@ -82,7 +82,7 @@ impl Default for SpeakersXml {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Highlight {
-    pub id: i64,
+    pub id: String,
     pub text: String,
     pub color: String,
     #[serde(default)]

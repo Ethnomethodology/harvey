@@ -1497,149 +1497,110 @@ pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, Com
 
 // --- Highlight Functions ---
 
-pub fn add_highlight(conn: &Connection, project_id: &str, asset_id: &str, highlight: &Highlight) -> Result<i64, CommandError> {
-    debug!("[DB] Adding highlight to project_id {}: asset_id={}", project_id, asset_id);
-    let mut stmt = conn.prepare("INSERT INTO highlights (project_id, asset_id, text) VALUES (?1, ?2, ?3)")?;
-    let id = stmt.insert(params![project_id, asset_id, highlight.text])?;
-    info!("[DB] Highlight added successfully with id {}: asset_id={}", id, asset_id);
-    Ok(id)
-}
-
-pub fn add_tag_to_highlight(conn: &Connection, project_id: &str, highlight_id: i64, tag_id: i64) -> Result<(), CommandError> {
-    debug!("[DB] Adding tag {} to highlight {} in project_id {}", tag_id, highlight_id, project_id);
-    conn.execute(
-        "INSERT INTO highlight_tags (project_id, highlight_id, tag_id) VALUES (?1, ?2, ?3)",
-        params![project_id, highlight_id, tag_id],
-    )?;
-    info!("[DB] Tag {} added to highlight {} successfully.", tag_id, highlight_id);
-    Ok(())
-}
-
-pub fn remove_tag_from_highlight(conn: &Connection, project_id: &str, highlight_id: i64, tag_id: i64) -> Result<(), CommandError> {
-    debug!("[DB] Removing tag {} from highlight {} in project_id {}", tag_id, highlight_id, project_id);
-    conn.execute(
-        "DELETE FROM highlight_tags WHERE project_id = ?1 AND highlight_id = ?2 AND tag_id = ?3",
-        params![project_id, highlight_id, tag_id],
-    )?;
-    info!("[DB] Tag {} removed from highlight {} successfully.", tag_id, highlight_id);
-    Ok(())
-}
-
-pub fn get_tags_for_highlight(conn: &Connection, project_id: &str, highlight_id: i64) -> Result<Vec<Tag>, CommandError> {
-    debug!("[DB] Loading tags for highlight {} in project_id {}", highlight_id, project_id);
-    let mut stmt = conn.prepare("
-        SELECT t.id, t.project_id, t.name, t.color
-        FROM tags t
-        JOIN highlight_tags ht ON t.id = ht.tag_id
-        WHERE ht.project_id = ?1 AND ht.highlight_id = ?2
-    ")?;
-
-    let tag_iter = stmt.query_map(params![project_id, highlight_id], |row| {
-        Ok(Tag {
-            id: row.get(0)?,
-            project_id: row.get(1)?,
-            name: row.get(2)?,
-            color: row.get(3)?,
-        })
-    })?;
-
-    let mut tags = Vec::new();
-    for tag_result in tag_iter {
-        tags.push(tag_result?);
-    }
-    info!("[DB] Loaded {} tags for highlight {}", tags.len(), highlight_id);
-    Ok(tags)
-}
+// NOTE: The following functions (add_highlight, add_tag_to_highlight, etc.) are part of a partial
+// refactor to move tags to a database. However, the application currently stores highlight and
+// tag information within JSON blobs in other tables (e.g., pdf_annotations). These functions
+// are unused for now but are kept for future completion of the refactor.
 
 // --- End Highlight Functions ---
 
-pub fn get_highlights_by_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
-    debug!("[DB] Loading highlights for project_id {} with tag_id '{}'", project_id, tag_id);
-    let mut stmt = conn.prepare("
-        SELECT
-            h.id,
-            h.text,
-            GROUP_CONCAT(t.name),
-            -- Use COALESCE to pick the correct path.
-            -- Asset metadata is the primary source. Fallback to pdf_annotations path, then the asset_id itself.
-            COALESCE(am.file_path, pa.pdf_document_path, h.asset_id) as file_path,
-            h.annotation_id
-        FROM
-            highlights h
-        LEFT JOIN
-            highlight_tags ht ON h.id = ht.highlight_id
-        LEFT JOIN
-            tags t ON ht.tag_id = t.id
-        LEFT JOIN
-            asset_metadata am ON h.asset_id = am.asset_relative_path AND h.project_id = am.project_id
-        LEFT JOIN
-            pdf_annotations pa ON h.asset_id = pa.pdf_document_path AND h.project_id = pa.project_id
-        WHERE
-            h.project_id = ?1 AND ht.tag_id = ?2
-        GROUP BY
-            h.id
-    ")?;
-
-    let rows = stmt.query_map(params![project_id, tag_id], |row| {
-        let tags_str: Option<String> = row.get(2)?;
-        let tags = tags_str.map_or(vec![], |s| s.split(',').map(|s| s.to_string()).collect());
-        let highlight = Highlight {
-            id: row.get(0)?,
-            text: row.get(1)?,
-            color: "".to_string(), // Color is not stored in the highlight table
-            tags: Some(tags.clone()),
-            comments: None,
-            timestamp: None,
-        };
-        let file_path: String = row.get(3)?;
-        // annotation_id is now column 4, but not directly used in the Highlight struct here.
-        Ok((highlight, file_path, tags))
-    })?;
-
-    let mut tagged_highlights = Vec::new();
-    for row in rows {
-        tagged_highlights.push(row?);
-    }
-
-    info!("[DB] Found {} highlights for project_id {} with tag_id '{}'", tagged_highlights.len(), project_id, tag_id);
-    debug!("[DB] Returning highlights: {:?}", tagged_highlights);
-    Ok(tagged_highlights)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AnnotationBody {
+    pub value: String,
+    pub purpose: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TargetSelector {
+    #[serde(rename = "type")]
+    pub selector_type: String,
+    pub exact: Option<String>,
+}
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Target {
+    pub source: String,
+    pub selector: Option<Vec<TargetSelector>>,
+}
 
-pub fn get_all_highlights_for_project(conn: &Connection, project_id: &str) -> Result<Vec<(Highlight, String)>, CommandError> {
-    debug!("[DB] Loading all highlights for project_id {}", project_id);
-    let mut stmt = conn.prepare("
-        SELECT h.id, h.asset_id, h.start_offset, h.end_offset, h.text, h.annotation_id, GROUP_CONCAT(t.name)
-        FROM highlights h
-        LEFT JOIN highlight_tags ht ON h.id = ht.highlight_id
-        LEFT JOIN tags t ON ht.tag_id = t.id
-        WHERE h.project_id = ?1
-        GROUP BY h.id
-    ")?;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Annotation {
+    #[serde(default)]
+    pub id: String,
+    pub body: Vec<AnnotationBody>,
+    pub target: Target,
+}
 
-    let rows = stmt.query_map(params![project_id], |row| {
-        let tags_str: Option<String> = row.get(6)?;
-        let tags = tags_str.map(|s| s.split(',').map(|s| s.to_string()).collect());
-        let highlight = Highlight {
-            id: row.get(0)?,
-            text: row.get(4)?,
-            color: "".to_string(), // Color is not stored in the highlight table
-            tags,
-            comments: None,
-            timestamp: None,
-        };
-        let asset_id: String = row.get(1)?;
-        Ok((highlight, asset_id))
+pub fn get_highlights_by_tag(
+    conn: &Connection,
+    project_id: &str,
+    tag_name: &str,
+) -> Result<Vec<(Highlight, String, Vec<String>)>, CommandError> {
+    debug!("[DB] Aggregating highlights for project_id {} with tag_name '{}'", project_id, tag_name);
+    let mut all_highlights = Vec::new();
+
+    // 1. Get highlights from pdf_annotations (covers PDFs, images, lexical docs)
+    let mut stmt_pdf = conn.prepare("SELECT pdf_document_path, annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
+    let pdf_annotation_rows = stmt_pdf.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?))
     })?;
 
-    let mut all_highlights = Vec::new();
-    for row in rows {
-        all_highlights.push(row?);
+    for row in pdf_annotation_rows {
+        let (doc_path, annotations_json): (String, String) = row?;
+        let annotations: Vec<Annotation> = match serde_json::from_str(&annotations_json) {
+            Ok(ann) => ann,
+            Err(_) => continue,
+        };
+
+        for annotation in annotations {
+            let has_tag = annotation.body.iter().any(|b| b.purpose.as_deref() == Some("tagging") && b.value == tag_name);
+            if has_tag {
+                let text = annotation.target.selector
+                    .and_then(|selectors| selectors.into_iter().find(|s| s.selector_type == "TextQuoteSelector"))
+                    .and_then(|s| s.exact)
+                    .unwrap_or_default();
+                let all_tags: Vec<String> = annotation.body.iter()
+                    .filter(|b| b.purpose.as_deref() == Some("tagging"))
+                    .map(|b| b.value.clone())
+                    .collect();
+                let highlight = Highlight {
+                    id: annotation.id,
+                    text,
+                    color: "".to_string(),
+                    tags: Some(all_tags.clone()),
+                    comments: None,
+                    timestamp: None,
+                };
+                all_highlights.push((highlight, doc_path.clone(), all_tags));
+            }
+        }
     }
 
-    info!("[DB] Found {} highlights for project_id {}", all_highlights.len(), project_id);
+    // 2. Get highlights from table_styles (covers tables)
+    let mut stmt_table = conn.prepare("SELECT table_path, styles FROM table_styles WHERE project_id = ?1")?;
+    let table_style_rows = stmt_table.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })?;
+
+    for row in table_style_rows {
+        let (table_path, styles_json): (String, String) = row?;
+        let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json) {
+            Ok(h) => h,
+            Err(_) => continue,
+        };
+
+        for highlight in table_highlights {
+            if let Some(tags) = &highlight.tags {
+                if tags.contains(&tag_name.to_string()) {
+                    all_highlights.push((highlight.clone(), table_path.clone(), tags.clone()));
+                }
+            }
+        }
+    }
+
+    // TODO: Add logic for transcript highlights when their storage mechanism is implemented.
+
+    info!("[DB] Found a total of {} highlights for project_id {} with tag_name '{}'", all_highlights.len(), project_id, tag_name);
     Ok(all_highlights)
 }
 

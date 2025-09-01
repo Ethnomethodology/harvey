@@ -51,16 +51,17 @@ pub fn get_all_tags(project_id: &str) -> Result<Vec<db_handler::Tag>, CommandErr
 
 #[tauri::command]
 pub fn get_tag_info(project_id: &str, tag_id: i64, tag_name: String) -> Result<TagInfo, CommandError> {
-    info!("[Tags] Getting info for tag '{}' in project_id: {}", tag_name, project_id);
+    info!("[Tags] Getting info for tag '{}' with id '{}' in project_id: {}", tag_name, tag_id, project_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
-    let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, tag_id)?;
+    // The new implementation of get_highlights_by_tag uses tag_name, not tag_id.
+    let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, &tag_name)?;
 
     let mut highlight_infos = Vec::new();
     let mut seen_highlight_ids = HashSet::new();
 
     for (mut highlight, file_path, tags) in highlights_with_tag {
-        if !seen_highlight_ids.insert(highlight.id) {
+        if !seen_highlight_ids.insert(highlight.id.clone()) {
             continue; // Skip if this highlight ID has already been processed
         }
 
