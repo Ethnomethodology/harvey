@@ -1548,40 +1548,45 @@ pub fn get_highlights_by_tag(
 
     for row in pdf_annotation_rows {
         let (doc_path, annotations_json): (String, String) = row?;
+        if doc_path == "harvey_files/Documents/201433288_Jan2025/201433288_Jan2025.pdf" {
+            info!("[DB DEBUG] Found target PDF, JSON is: {}", annotations_json);
+        }
         debug!("[DB] Processing annotations for doc: {}", doc_path);
         debug!("[DB] Annotations JSON: {}", annotations_json);
 
-        let annotations: Vec<Annotation> = match serde_json::from_str::<Vec<Annotation>>(&annotations_json) {
-            Ok(ann) => ann,
-            Err(_) => {
-                match serde_json::from_str::<serde_json::Value>(&annotations_json) {
-                    Ok(serde_json::Value::Object(map)) => {
-                        serde_json::from_value(map.into()).unwrap_or_default()
-                    },
-                    _ => continue,
-                }
+        let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
+            Ok(val) => val,
+            Err(e) => {
+                error!("[DB] Failed to parse annotations JSON for {}: {}", doc_path, e);
+                continue;
             }
         };
 
-        for annotation in annotations {
-            debug!("[DB] Checking annotation: {:?}", annotation);
-            let has_tag = annotation.body.iter().any(|b| {
-                let purpose_matches = b.purpose.as_deref() == Some("tagging");
-                let value_matches = b.value == tag_name;
-                debug!("[DB] Checking body: value='{}', purpose='{:?}'. Tag matches: {}", b.value, b.purpose, purpose_matches && value_matches);
-                purpose_matches && value_matches
-            });
+        let annotations: Vec<Annotation> = if annotations_val.is_array() {
+            serde_json::from_value(annotations_val).unwrap_or_default()
+        } else if annotations_val.is_object() {
+            // Assuming the array is nested under a key like "highlights" or "annotations"
+            annotations_val.get("highlights")
+                .or_else(|| annotations_val.get("annotations"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
+        for annotation in annotations {
+            let has_tag = annotation.body.iter().any(|b| b.value == tag_name);
             if has_tag {
-                info!("[DB] Found matching highlight in doc '{}' with tag '{}'", doc_path, tag_name);
                 let text = annotation.target.selector
                     .and_then(|selectors| selectors.into_iter().find(|s| s.selector_type == "TextQuoteSelector"))
                     .and_then(|s| s.exact)
                     .unwrap_or_default();
+
                 let all_tags: Vec<String> = annotation.body.iter()
                     .filter(|b| b.purpose.as_deref() == Some("tagging"))
                     .map(|b| b.value.clone())
                     .collect();
+
                 let highlight = Highlight {
                     id: annotation.id,
                     text,
