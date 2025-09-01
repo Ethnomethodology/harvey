@@ -1520,10 +1520,47 @@ pub fn get_highlights_by_tag(
 
     for row in pdf_annotation_rows {
         let (doc_path, annotations_json): (String, String) = row?;
-        if doc_path.contains("Adobe Express - file.png") {
-            info!("[DB DEBUG] JSON for target Image (Adobe Express - file.png): {}", annotations_json);
+        let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
+
+        let annotations = annotations_val.as_array().map_or(Vec::new(), |arr| arr.clone());
+
+        for annotation_val in annotations {
+            if let Some(annotation_obj) = annotation_val.as_object() {
+                let tags_vec: Vec<String> = annotation_obj.get("tags")
+                    .and_then(|t| t.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+
+                if tags_vec.contains(&tag_name.to_string()) {
+                    let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+                    // Handle different structures for text and color
+                    let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("[Image Highlight]").to_string();
+                    let color = annotation_obj.get("color").and_then(|v| v.as_str())
+                        .or_else(|| {
+                            annotation_obj.get("body")
+                                .and_then(|b| b.as_array())
+                                .and_then(|bodies| bodies.get(0))
+                                .and_then(|first_body| first_body.get("value"))
+                                .and_then(|v| v.as_str())
+                        })
+                        .unwrap_or_default().to_string();
+
+                    let highlight = Highlight {
+                        id,
+                        text,
+                        color,
+                        tags: Some(tags_vec.clone()),
+                        comments: None,
+                        timestamp: None,
+                    };
+                    all_highlights.push((highlight, doc_path.clone(), tags_vec));
+                }
+            }
         }
-        // The rest of the logic is temporarily disabled to focus on logging.
     }
 
     // 2. Get highlights from table_styles (covers tables)
