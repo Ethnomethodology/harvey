@@ -9,6 +9,24 @@ use std::path::Path;
 
 fn get_file_type_from_path(path_str: &str) -> String {
     let path = Path::new(path_str);
+    let path_lower = path_str.to_lowercase();
+
+    if path_lower.contains("/transcripts/") && path_lower.contains("/media/") {
+        return "media_transcript".to_string();
+    }
+    if path_lower.contains("/transcripts/") {
+        return "imported_transcript".to_string();
+    }
+    if path_lower.contains("/documents/") {
+        return "document".to_string();
+    }
+    if path_lower.contains("/images/") {
+        return "image".to_string();
+    }
+    if path_lower.contains("/tables/") {
+        return "table".to_string();
+    }
+
     match path.extension().and_then(|s| s.to_str()) {
         Some("mp3") | Some("wav") | Some("m4a") | Some("ogg") => "audio".to_string(),
         Some("mp4") | Some("mov") | Some("mkv") | Some("avi") => "video".to_string(),
