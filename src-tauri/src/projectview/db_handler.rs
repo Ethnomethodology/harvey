@@ -1552,14 +1552,15 @@ pub fn get_highlights_by_tag(
         debug!("[DB] Annotations JSON: {}", annotations_json);
 
         let annotations: Vec<Annotation> = match serde_json::from_str::<Vec<Annotation>>(&annotations_json) {
-            Ok(ann) => {
-                debug!("[DB] Successfully parsed {} annotations.", ann.len());
-                ann
-            },
-            Err(e) => {
-                error!("[DB] Failed to parse annotations JSON for {}: {}", doc_path, e);
-                continue;
-            },
+            Ok(ann) => ann,
+            Err(_) => {
+                match serde_json::from_str::<serde_json::Value>(&annotations_json) {
+                    Ok(serde_json::Value::Object(map)) => {
+                        serde_json::from_value(map.into()).unwrap_or_default()
+                    },
+                    _ => continue,
+                }
+            }
         };
 
         for annotation in annotations {
@@ -1606,7 +1607,8 @@ pub fn get_highlights_by_tag(
         debug!("[DB] Processing table styles for: {}", table_path);
         debug!("[DB] Styles JSON: {}", styles_json);
 
-        let table_highlights: Vec<Highlight> = match serde_json::from_str::<Vec<Highlight>>(&styles_json) {
+        let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json)
+            .and_then(|s: String| serde_json::from_str::<Vec<Highlight>>(&s)) {
             Ok(h) => {
                 debug!("[DB] Successfully parsed {} highlights from table styles.", h.len());
                 h
