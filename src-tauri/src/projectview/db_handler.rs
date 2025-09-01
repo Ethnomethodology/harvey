@@ -1537,11 +1537,12 @@ pub fn get_highlights_by_tag(
                 if tags_vec.contains(&tag_name.to_string()) {
                     let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                     let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let color = annotation_obj.get("color").and_then(|v| v.as_str()).unwrap_or_default().to_string();
 
                     let highlight = Highlight {
                         id,
                         text,
-                        color: "".to_string(),
+                        color,
                         tags: Some(tags_vec.clone()),
                         comments: None,
                         timestamp: None,
