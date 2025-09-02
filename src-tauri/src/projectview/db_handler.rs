@@ -1508,7 +1508,7 @@ pub fn get_highlights_by_tag(
     conn: &Connection,
     project_id: &str,
     tag_name: &str,
-) -> Result<Vec<(Highlight, String, Vec<String>, String)>, CommandError> {
+) -> Result<Vec<(Highlight, String, Vec<String>, Option<String>)>, CommandError> {
     debug!("[DB] Aggregating highlights for project_id {} with tag_name '{}'", project_id, tag_name);
     let mut all_highlights = Vec::new();
 
@@ -1516,7 +1516,7 @@ pub fn get_highlights_by_tag(
     let mut stmt_pdf = conn.prepare("
         SELECT pa.pdf_document_path, pa.annotations_json, am.asset_type
         FROM pdf_annotations pa
-        JOIN asset_metadata am ON pa.pdf_document_path = am.asset_relative_path AND pa.project_id = am.project_id
+        LEFT JOIN asset_metadata am ON pa.pdf_document_path = am.asset_relative_path AND pa.project_id = am.project_id
         WHERE pa.project_id = ?1
     ")?;
     let pdf_annotation_rows = stmt_pdf.query_map(params![project_id], |row| {
@@ -1524,7 +1524,7 @@ pub fn get_highlights_by_tag(
     })?;
 
     for row in pdf_annotation_rows {
-        let (doc_path, annotations_json, asset_type): (String, String, String) = row?;
+        let (doc_path, annotations_json, asset_type): (String, String, Option<String>) = row?;
         let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
             Ok(val) => val,
             Err(_) => continue,
@@ -1570,7 +1570,7 @@ pub fn get_highlights_by_tag(
     let mut stmt_table = conn.prepare("
         SELECT ts.table_path, ts.styles, am.asset_type
         FROM table_styles ts
-        JOIN asset_metadata am ON ts.table_path = am.file_path AND ts.project_id = am.project_id
+        LEFT JOIN asset_metadata am ON ts.table_path = am.file_path AND ts.project_id = am.project_id
         WHERE ts.project_id = ?1
     ")?;
     let table_style_rows = stmt_table.query_map(params![project_id], |row| {
@@ -1578,7 +1578,7 @@ pub fn get_highlights_by_tag(
     })?;
 
     for row in table_style_rows {
-        let (table_path, styles_json, asset_type): (String, String, String) = row?;
+        let (table_path, styles_json, asset_type): (String, String, Option<String>) = row?;
         let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json)
             .and_then(|s: String| serde_json::from_str::<Vec<Highlight>>(&s)) {
             Ok(h) => h,
