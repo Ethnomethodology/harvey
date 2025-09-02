@@ -74,17 +74,18 @@ fn determine_asset_type(
                 // Check both `media` and `Media` directories
                 for media_folder in ["media", "Media"].iter() {
                     let media_path_pattern = format!("assets/{}/{}%", media_folder, stem);
-                    match conn.query_row(
+                    if let Ok(parent_asset_type) = conn.query_row(
                         "SELECT asset_type FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path LIKE ?2 LIMIT 1",
                         rusqlite::params![project_id, media_path_pattern],
                         |row| row.get::<_, String>(0),
                     ) {
-                        Ok(parent_asset_type) => return parent_asset_type, // Found it
-                        Err(_) => continue, // Try next folder
+                        return parent_asset_type; // Found it, return audio/video
                     }
                 }
             }
         }
+        // If the loop completes without finding a parent, it's a standalone imported transcript.
+        return "imported_transcript".to_string();
     }
 
     // 2. Trust the database if it has a specific type
