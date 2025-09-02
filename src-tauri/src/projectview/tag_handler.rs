@@ -57,15 +57,15 @@ fn determine_asset_type(
     let path = Path::new(file_path_str);
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-    // 1. Highest priority: Robust path component checking
+    // 1. Highest priority: Robust, case-insensitive path component checking
     let mut is_transcript = false;
     for component in path.components() {
         if let Some(part) = component.as_os_str().to_str() {
-            match part {
-                "Tables" => return "table".to_string(),
-                "Documents" => return "document".to_string(),
-                "Images" => return "image".to_string(),
-                "Transcripts" | "transcripts" => {
+            match part.to_lowercase().as_str() {
+                "tables" => return "table".to_string(),
+                "documents" => return "document".to_string(),
+                "images" => return "image".to_string(),
+                "transcripts" => {
                     is_transcript = true;
                     break; // Found transcript folder, proceed to parent media check
                 }
