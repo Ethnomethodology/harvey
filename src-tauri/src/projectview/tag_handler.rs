@@ -57,21 +57,27 @@ fn determine_asset_type(
     let path = Path::new(file_path_str);
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-    // 1. Highest priority: Path-based overrides based on user feedback
-    if file_path_str.contains("/Tables/") || extension == "csv" || extension == "tsv" {
-        return "table".to_string();
+    // 1. Highest priority: Robust path component checking
+    let mut is_transcript = false;
+    for component in path.components() {
+        if let Some(part) = component.as_os_str().to_str() {
+            match part {
+                "Tables" => return "table".to_string(),
+                "Documents" => return "document".to_string(),
+                "Images" => return "image".to_string(),
+                "Transcripts" | "transcripts" => {
+                    is_transcript = true;
+                    break; // Found transcript folder, proceed to parent media check
+                }
+                _ => (),
+            }
+        }
     }
-    if file_path_str.contains("/Documents/") {
-        return "document".to_string();
-    }
-    if file_path_str.contains("/Images/") {
-        return "image".to_string();
-    }
-    // For transcripts, we need to find the parent media type
-    if file_path_str.contains("/Transcripts/") || file_path_str.contains("/transcripts/") {
+
+    // Handle transcripts (both generated and imported)
+    if is_transcript {
         if let Some(transcript_dir) = path.parent() {
             if let Some(stem) = transcript_dir.file_name().and_then(|s| s.to_str()) {
-                // Check both `media` and `Media` directories
                 for media_folder in ["media", "Media"].iter() {
                     let media_path_pattern = format!("assets/{}/{}%", media_folder, stem);
                     if let Ok(parent_asset_type) = conn.query_row(
@@ -79,13 +85,19 @@ fn determine_asset_type(
                         rusqlite::params![project_id, media_path_pattern],
                         |row| row.get::<_, String>(0),
                     ) {
-                        return parent_asset_type; // Found it, return audio/video
+                        // Found parent media, so it's a generated transcript
+                        return parent_asset_type;
                     }
                 }
             }
         }
-        // If the loop completes without finding a parent, it's a standalone imported transcript.
+        // If we confirmed it's in a transcript path but found no parent, it's a standalone imported transcript
         return "imported_transcript".to_string();
+    }
+
+    // Override for table file extensions if path check missed it
+    if extension == "csv" || extension == "tsv" {
+        return "table".to_string();
     }
 
     // 2. Trust the database if it has a specific type
@@ -95,14 +107,14 @@ fn determine_asset_type(
         }
     }
 
-    // 3. Fallback to extension for remaining cases
+    // 3. Fallback to extension for any remaining cases
     warn!("Could not determine asset type from path or DB for {}. Falling back to file extension.", file_path_str);
     match extension {
         "pdf" => "pdf".to_string(),
         "png" | "jpg" | "jpeg" | "gif" => "image".to_string(),
         "mp4" | "mov" | "avi" => "video".to_string(),
         "mp3" | "wav" | "m4a" => "audio".to_string(),
-        _ => "document".to_string(), // Default fallback
+        _ => "document".to_string(),
     }
 }
 
