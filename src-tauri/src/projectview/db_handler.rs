@@ -1579,11 +1579,9 @@ pub fn get_highlights_by_tag(
 
     for row in table_style_rows {
         let (table_path, styles_json, asset_type): (String, String, Option<String>) = row?;
-        let table_highlights: Vec<Highlight> = match serde_json::from_str(&styles_json)
-            .and_then(|s: String| serde_json::from_str::<Vec<Highlight>>(&s)) {
-            Ok(h) => h,
-            Err(_) => continue,
-        };
+        let table_highlights: Vec<Highlight> = serde_json::from_str(&styles_json)
+            .or_else(|_| serde_json::from_str(&styles_json).and_then(|s: String| serde_json::from_str(&s)))
+            .unwrap_or_else(|_| Vec::new());
 
         for highlight in table_highlights {
             if let Some(tags) = &highlight.tags {
@@ -1597,6 +1595,9 @@ pub fn get_highlights_by_tag(
     info!("[DB] Found a total of {} highlights for project_id {} with tag_name '{}'", all_highlights.len(), project_id, tag_name);
     Ok(all_highlights)
 }
+
+
+
 
 #[cfg(test)]
 mod tests {
@@ -1838,19 +1839,27 @@ mod tests {
 
 #[cfg(test)]
 pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
-    // This function sets up the full schema in the provided connection.
-    // It's a simplified version of the main `init_db` for testing purposes.
-    conn.execute_batch(
-        "
-        CREATE TABLE IF NOT EXISTS projects (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            root_path TEXT NOT NULL UNIQUE,
-            xml_path TEXT NOT NULL UNIQUE,
+    debug!("[DB] Initializing database for test");
+
+    // Updated pdf_annotations table definition
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS pdf_annotations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            pdf_document_path TEXT NOT NULL,
+            annotations_json TEXT NOT NULL,
+            document_type TEXT NOT NULL DEFAULT 'pdf',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS asset_metadata (
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, pdf_document_path, document_type)
+        )",
+        [],
+    )?;
+
+    // asset_metadata table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS asset_metadata (
             asset_relative_path TEXT NOT NULL,
             project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
             file_name TEXT NOT NULL,
@@ -1875,8 +1884,114 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (project_id, asset_relative_path)
-        );
-        CREATE TABLE IF NOT EXISTS tags (
+        )",
+        [],
+    )?;
+
+    // custom_field_definitions table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS custom_field_definitions (
+            project_id TEXT NOT NULL,
+            field_key TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            default_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY (project_id, field_key)
+        )",
+        [],
+    )?;
+
+    // table_layout_preferences table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_layout_preferences (
+            project_id TEXT NOT NULL,
+            table_asset_relative_path TEXT NOT NULL,
+            layout_json TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY (project_id, table_asset_relative_path),
+            FOREIGN KEY (project_id, table_asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
+        )",
+        [],
+    )?;
+
+    // table_styles table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_styles (
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            styles TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, table_path)
+        )",
+        [],
+    )?;
+
+    // projects table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root_path TEXT NOT NULL UNIQUE,
+            xml_path TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+
+    // file_groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS file_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_asset_path TEXT NOT NULL,
+            group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE,
+            UNIQUE (project_id, file_asset_path, group_id)
+        )",
+        [],
+    )?;
+
+    // media_transcript_data table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS media_transcript_data (
+            project_id TEXT NOT NULL,
+            asset_relative_path TEXT NOT NULL,
+            original_import_path TEXT,
+            speaker_names_json TEXT,
+            language_code TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_relative_path),
+            FOREIGN KEY (project_id, asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
+        )",
+        [],
+    )?;
+
+    // tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -1885,8 +2000,13 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
             UNIQUE (project_id, name)
-        );
-        CREATE TABLE IF NOT EXISTS highlights (
+        )",
+        [],
+    )?;
+
+    // highlights table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlights (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             asset_id TEXT NOT NULL,
             project_id TEXT NOT NULL,
@@ -1896,8 +2016,13 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             annotation_id TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (project_id, asset_id) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
-        );
-        CREATE TABLE IF NOT EXISTS highlight_tags (
+        )",
+        [],
+    )?;
+
+    // highlight_tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlight_tags (
             highlight_id INTEGER NOT NULL,
             tag_id INTEGER NOT NULL,
             project_id TEXT NOT NULL,
@@ -1905,8 +2030,8 @@ pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
             FOREIGN KEY (highlight_id) REFERENCES highlights(id) ON DELETE CASCADE,
             FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-        );
-        "
+        )",
+        [],
     )?;
     Ok(())
 }
@@ -1925,4 +2050,130 @@ pub fn setup_test_db_in_memory() -> (Connection, String) {
     (conn, project_id)
 }
 
+#[cfg(test)]
+mod get_highlights_by_tag_tests {
+    use super::*;
+    use rusqlite::Connection;
+    use serde_json::json;
 
+    fn setup_test_db_with_data() -> (Connection, String) {
+        let conn = Connection::open_in_memory().expect("Failed to open in-memory DB");
+        init_db_for_test(&conn).expect("Failed to initialize test DB");
+
+        let project_id = "test_project_1".to_string();
+        conn.execute(
+            "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
+        ).expect("Failed to insert test project");
+
+        // Insert mock data
+        let pdf_ann_json = json!([
+            {"id": "uuid-pdf-1", "text": "PDF highlight text", "tags": ["tag1", "tag2"], "color": "#FF0000"}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/my.pdf", &pdf_ann_json, "pdf"],
+        ).unwrap();
+        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/my.pdf", "my.pdf", "/abs/path/to/my.pdf", "0", "pdf"]
+        ).unwrap();
+
+
+        let lexical_ann_json = json!([
+            {"id": "uuid-lex-1", "text": "Lexical highlight", "tags": ["tag2"], "color": "#00FF00"}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/lexical.json", &lexical_ann_json, "lexical"],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/lexical.json", "lexical.json", "/abs/path/to/lexical.json", "0", "lexical"]
+        ).unwrap();
+
+
+        let image_ann_json = json!([
+            {"id": "uuid-img-1", "text": "[Image Highlight]", "tags": ["tag1"], "body": [{"value": "#0000FF"}]}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/image.png", &image_ann_json, "image"],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/image.png", "image.png", "/abs/path/to/image.png", "0", "image"]
+        ).unwrap();
+
+        let table_styles_inner = json!([
+            {"id": "uuid-tbl-1", "text": "Table cell text", "tags": ["tag1", "tag3"], "color": "#FFFF00"}
+        ]);
+        let table_styles_outer = serde_json::to_string(&table_styles_inner).unwrap();
+        conn.execute(
+            "INSERT INTO table_styles (project_id, table_path, styles) VALUES (?1, ?2, ?3)",
+            params![&project_id, "path/to/table.csv", &table_styles_outer],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/table.csv", "table.csv", "/abs/path/to/table.csv", "0", "table"]
+        ).unwrap();
+
+
+        (conn, project_id)
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag1() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag1").unwrap();
+        assert_eq!(highlights.len(), 3); // pdf, image, table
+
+        // Check PDF highlight
+        let pdf_highlight = highlights.iter().find(|h| h.0.id == "uuid-pdf-1").unwrap();
+        assert_eq!(pdf_highlight.0.text, "PDF highlight text");
+        assert_eq!(pdf_highlight.0.color, "#FF0000");
+        assert_eq!(pdf_highlight.3.as_deref(), Some("pdf"));
+
+        // Check Image highlight
+        let img_highlight = highlights.iter().find(|h| h.0.id == "uuid-img-1").unwrap();
+        assert_eq!(img_highlight.0.text, "[Image Highlight]");
+        assert_eq!(img_highlight.0.color, "#0000FF");
+        assert_eq!(img_highlight.3.as_deref(), Some("image"));
+
+        // Check Table highlight
+        let tbl_highlight = highlights.iter().find(|h| h.0.id == "uuid-tbl-1").unwrap();
+        assert_eq!(tbl_highlight.0.text, "Table cell text");
+        assert_eq!(tbl_highlight.0.color, "#FFFF00");
+        assert_eq!(tbl_highlight.3.as_deref(), Some("table"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag2() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag2").unwrap();
+        assert_eq!(highlights.len(), 2); // pdf, lexical
+
+        // Check PDF highlight
+        let pdf_highlight = highlights.iter().find(|h| h.0.id == "uuid-pdf-1").unwrap();
+        assert_eq!(pdf_highlight.0.text, "PDF highlight text");
+        assert_eq!(pdf_highlight.3.as_deref(), Some("pdf"));
+
+        // Check Lexical highlight
+        let lex_highlight = highlights.iter().find(|h| h.0.id == "uuid-lex-1").unwrap();
+        assert_eq!(lex_highlight.0.text, "Lexical highlight");
+        assert_eq!(lex_highlight.3.as_deref(), Some("lexical"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag3() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag3").unwrap();
+        assert_eq!(highlights.len(), 1); // table only
+        let tbl_highlight = &highlights[0];
+        assert_eq!(tbl_highlight.0.id, "uuid-tbl-1");
+        assert_eq!(tbl_highlight.3.as_deref(), Some("table"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_non_existent_tag() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
+        assert_eq!(highlights.len(), 0);
+    }
+}

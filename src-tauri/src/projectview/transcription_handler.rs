@@ -459,7 +459,7 @@ mod tests {
         assert!(final_transcript_path.exists(), "Transcript file should be created for test setup");
 
         // --- Test DB Setup (In-Memory) ---
-        let mut conn_test_db = Connection::open_in_memory()?;
+        let conn_test_db = Connection::open_in_memory()?;
         // Manually run the DDL for asset_metadata table and trigger for the test connection
         conn_test_db.execute_batch(
             "CREATE TABLE IF NOT EXISTS asset_metadata (

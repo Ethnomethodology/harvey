@@ -1981,7 +1981,7 @@ function groupDisjointBlocks(quads) {
         await tick();
 
         // Determine the initial page to load (current page in view)
-        const initialPageToLoad = (pdfViewer && pdfViewer.currentPageNumber) ? pdfViewer.currentPageNumber - 1 : 0; // 0-based
+        const initialPageToLoad = pdfViewer.currentPageNumber - 1; // 0-based
 
         try {
             await loadAnnotationsForPageRange(initialPageToLoad);
