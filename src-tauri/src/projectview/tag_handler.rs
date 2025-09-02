@@ -48,6 +48,63 @@ fn map_asset_type_to_icon_type(asset_type: &str) -> String {
     }
 }
 
+fn determine_asset_type(
+    asset_type_opt: &Option<String>,
+    file_path_str: &str,
+    conn: &Connection,
+    project_id: &str,
+) -> String {
+    let path = Path::new(file_path_str);
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+    // 1. Highest priority: Path-based overrides based on user feedback
+    if file_path_str.contains("/Tables/") || extension == "csv" || extension == "tsv" {
+        return "table".to_string();
+    }
+    if file_path_str.contains("/Documents/") {
+        return "document".to_string();
+    }
+    if file_path_str.contains("/Images/") {
+        return "image".to_string();
+    }
+    // For transcripts, we need to find the parent media type
+    if file_path_str.contains("/Transcripts/") || file_path_str.contains("/transcripts/") {
+        if let Some(transcript_dir) = path.parent() {
+            if let Some(stem) = transcript_dir.file_name().and_then(|s| s.to_str()) {
+                // Check both `media` and `Media` directories
+                for media_folder in ["media", "Media"].iter() {
+                    let media_path_pattern = format!("assets/{}/{}%", media_folder, stem);
+                    match conn.query_row(
+                        "SELECT asset_type FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path LIKE ?2 LIMIT 1",
+                        rusqlite::params![project_id, media_path_pattern],
+                        |row| row.get::<_, String>(0),
+                    ) {
+                        Ok(parent_asset_type) => return parent_asset_type, // Found it
+                        Err(_) => continue, // Try next folder
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Trust the database if it has a specific type
+    if let Some(db_type) = asset_type_opt {
+        if !db_type.is_empty() && db_type != "unknown" && db_type != "lexical" {
+            return db_type.clone();
+        }
+    }
+
+    // 3. Fallback to extension for remaining cases
+    warn!("Could not determine asset type from path or DB for {}. Falling back to file extension.", file_path_str);
+    match extension {
+        "pdf" => "pdf".to_string(),
+        "png" | "jpg" | "jpeg" | "gif" => "image".to_string(),
+        "mp4" | "mov" | "avi" => "video".to_string(),
+        "mp3" | "wav" | "m4a" => "audio".to_string(),
+        _ => "document".to_string(), // Default fallback
+    }
+}
+
 
 #[tauri::command]
 pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<TagInfo, CommandError> {
@@ -77,43 +134,7 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             .map(|tags| tags.iter().filter(|t| **t != tag_name).cloned().collect())
             .unwrap_or_else(Vec::new);
 
-        let mut final_asset_type = asset_type_opt.clone().unwrap_or_else(|| "unknown".to_string());
-
-		if final_asset_type == "unknown" || final_asset_type == "lexical" {
-			// This is likely a highlight on a transcript. The icon should reflect the parent media type.
-			if file_path.contains("/transcripts/") {
-				let path = Path::new(&file_path);
-				if let Some(transcript_dir) = path.parent() { // e.g., assets/transcripts/my-video
-					if let Some(stem) = transcript_dir.file_name().and_then(|s| s.to_str()) { // e.g., "my-video"
-						// Now find the corresponding media asset. The relative path would be like "assets/media/my-video.mp4"
-						let media_path_pattern = format!("assets/media/{}%", stem);
-						match conn.query_row(
-							"SELECT asset_type FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path LIKE ?2 LIMIT 1",
-							rusqlite::params![project_id, media_path_pattern],
-							|row| row.get(0),
-						) {
-							Ok(parent_asset_type) => {
-								info!("Found parent media asset type '{}' for transcript {}", &parent_asset_type, file_path);
-								final_asset_type = parent_asset_type
-							},
-							Err(e) => warn!("Could not find parent media asset for transcript {}: {}. Searched for pattern: {}", file_path, e, media_path_pattern),
-						}
-					}
-				}
-			} else if final_asset_type == "unknown" {
-				// Fallback for non-transcript files that are missing metadata for some reason. Guess from extension.
-				warn!("Asset metadata type is missing for {}. Falling back to file extension.", file_path);
-				let extension = Path::new(&file_path).extension().and_then(|s| s.to_str()).unwrap_or("");
-				final_asset_type = match extension {
-					"pdf" => "pdf".to_string(),
-                    "png" | "jpg" | "jpeg" | "gif" => "image".to_string(),
-					"mp4" | "mov" | "avi" => "video".to_string(),
-                    "mp3" | "wav" | "m4a" => "audio".to_string(),
-					"csv" | "tsv" => "table".to_string(),
-                    _ => "document".to_string(),
-				};
-			}
-		}
+        let final_asset_type = determine_asset_type(&asset_type_opt, &file_path, &conn, project_id);
 
         let source = HighlightSource {
             file_name,
