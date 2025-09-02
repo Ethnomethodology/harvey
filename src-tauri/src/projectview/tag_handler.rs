@@ -2,7 +2,7 @@
 
 use serde::{Serialize, Deserialize};
 use crate::welcome::config::CommandError;
-use crate::projectview::shared_types::{Highlight, HighlightInfo, HighlightSource};
+use crate::projectview::shared_types::{HighlightInfo, HighlightSource};
 use crate::projectview::db_handler;
 use std::collections::HashSet;
 use std::path::Path;
@@ -45,33 +45,14 @@ pub fn get_tag_info(project_id: &str, tag_id: i64, tag_name: String) -> Result<T
     // The new implementation of get_highlights_by_tag uses tag_name, not tag_id.
     let highlights_with_tag = db_handler::get_highlights_by_tag(&conn, project_id, &tag_name)?;
 
-fn get_file_type_from_path(path_str: &str) -> String {
-    let path = Path::new(path_str);
-    let path_lower = path_str.to_lowercase();
-
-    if path_lower.contains("/harvey_files/transcripts/") && path_lower.contains("/media/") {
-        return "media_transcript".to_string();
-    }
-    if path_lower.contains("/harvey_files/transcripts/") {
-        return "imported_transcript".to_string();
-    }
-    if path_lower.contains("/harvey_files/documents/") {
-        return "document".to_string();
-    }
-    if path_lower.contains("/harvey_files/images/") {
-        return "image".to_string();
-    }
-    if path_lower.contains("/harvey_files/tables/") {
-        return "table".to_string();
-    }
-
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("mp3") | Some("wav") | Some("m4a") | Some("ogg") => "audio".to_string(),
-        Some("mp4") | Some("mov") | Some("mkv") | Some("avi") => "video".to_string(),
-        Some("pdf") => "document".to_string(),
-        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") => "image".to_string(),
-        Some("csv") | Some("tsv") => "table".to_string(),
-        Some("txt") | Some("md") | Some("rtf") => "document".to_string(),
+fn map_asset_type_to_icon_type(asset_type: &str) -> String {
+    match asset_type {
+        "audio" => "audio".to_string(),
+        "video" => "video".to_string(),
+        "pdf" | "document" | "lexical" | "doc" => "document".to_string(),
+        "image" => "image".to_string(),
+        "table" => "table".to_string(),
+        "transcript" | "imported_transcript" => "imported_transcript".to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -97,7 +78,7 @@ fn get_file_type_from_path(path_str: &str) -> String {
             .map(|tags| tags.iter().filter(|t| **t != tag_name).cloned().collect())
             .unwrap_or_else(Vec::new);
 
-        let file_type = asset_type.unwrap_or_else(|| get_file_type_from_path(&file_path));
+        let file_type = map_asset_type_to_icon_type(&asset_type.unwrap_or_default());
 
         let source = HighlightSource {
             file_name,

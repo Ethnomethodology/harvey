@@ -1570,7 +1570,7 @@ pub fn get_highlights_by_tag(
     let mut stmt_table = conn.prepare("
         SELECT ts.table_path, ts.styles, am.asset_type
         FROM table_styles ts
-        LEFT JOIN asset_metadata am ON ts.table_path = am.file_path AND ts.project_id = am.project_id
+        LEFT JOIN asset_metadata am ON ts.table_path = am.asset_relative_path AND ts.project_id = am.project_id
         WHERE ts.project_id = ?1
     ")?;
     let table_style_rows = stmt_table.query_map(params![project_id], |row| {
