@@ -6,7 +6,9 @@
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
+    import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
+    import CommentsModal from '../modals/CommentsModal.svelte';
 
     const AUDIO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`;
     const VIDEO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-film w-4 h-4" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`;
@@ -31,6 +33,10 @@
         }
     }
 
+    function getComments(item) {
+        return item?.highlight?.comments || [];
+    }
+
     let selectedTag = null;
     let tagInfo = null;
     let isLoading = false;
@@ -39,6 +45,19 @@
     let tabulatorInstance = null;
     let isEditing = false;
     let tagNameInput = '';
+
+    let showCommentsModal = false;
+    let selectedHighlightForComments = null;
+
+    function openCommentsModal(highlightInfo) {
+        selectedHighlightForComments = highlightInfo;
+        showCommentsModal = true;
+    }
+
+    function closeModal() {
+        showCommentsModal = false;
+        selectedHighlightForComments = null;
+    }
 
 
     afterUpdate(() => {
@@ -65,6 +84,10 @@
                 { title: "Type", field: "color", width: 80, formatter: (cell) => {
                     const color = cell.getValue();
                     return `<div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:15px; background-color:${color}; margin-right: 5px;"></span>Highlight</div>`;
+                }},
+                { title: "Comments", field: "highlight", width: 100, formatter: (cell) => {
+                    const highlight = cell.getValue();
+                    return highlight?.comments?.length || 0;
                 }},
             ],
             height: "100%",
@@ -132,6 +155,37 @@
             } catch (error) {
                 console.error(`Failed to delete tag ${selectedTag.name}:`, error);
                 // Optionally, show an error notification
+            }
+        }
+    }
+
+    async function handleCommentAction(event) {
+        const { type, detail } = event;
+        const { highlightId, commentId, newText, comment } = detail;
+
+        const highlightInfo = tagInfo.highlights.find(h => h.highlight.id === highlightId);
+        if (!highlightInfo) return;
+
+        let docType = highlightInfo.source.file_type;
+        if (docType === 'document' && highlightInfo.source.file_path.toLowerCase().endsWith('.pdf')) {
+            docType = 'pdf';
+        }
+
+        if (type === 'addcomment') {
+            await addCommentToHighlight(highlightId, comment, docType);
+        } else if (type === 'deletecomment') {
+            await deleteComment(highlightId, commentId, docType);
+        } else if (type === 'editcomment') {
+            await updateComment(highlightId, commentId, newText, docType);
+        }
+
+        // Refresh the tag info to get the latest comments
+        if (selectedTag) {
+            await handleSelectTag(selectedTag);
+            // After refreshing, find the updated highlight and update selectedHighlightForComments
+            const updatedHighlightInfo = tagInfo.highlights.find(h => h.highlight.id === highlightId);
+            if (updatedHighlightInfo) {
+                selectedHighlightForComments = updatedHighlightInfo;
             }
         }
     }
@@ -221,9 +275,16 @@
                                                 <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
                                                 <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
                                               </svg></button>
-                                            <button title="Comments"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
-                                                <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
-                                              </svg></button>
+                                            <button title="Comments" on:click={() => openCommentsModal(item)} class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
+                                                    <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                                                </svg>
+                                                {#if getComments(item).length > 0}
+                                                    <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                                                        {getComments(item).length}
+                                                    </span>
+                                                {/if}
+                                            </button>
                                             <button title="Untag"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tag-slash" viewBox="0 0 16 16">
                                                 <path d="M2.293 2.293a1 1 0 0 1 1.414 0L8 6.586l4.293-4.293a1 1 0 1 1 1.414 1.414L9.414 8l4.293 4.293a1 1 0 0 1-1.414 1.414L8 9.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L6.586 8 2.293 3.707a1 1 0 0 1 0-1.414z"/>
                                               </svg></button>
@@ -253,3 +314,12 @@
     </div>
     </div>
 </div>
+<CommentsModal
+    bind:showModal={showCommentsModal}
+    comments={getComments(selectedHighlightForComments)}
+    highlightId={selectedHighlightForComments?.highlight?.id}
+    on:close={closeModal}
+    on:addcomment={(e) => handleCommentAction(e)}
+    on:deletecomment={(e) => handleCommentAction(e)}
+    on:editcomment={(e) => handleCommentAction(e)}
+/>

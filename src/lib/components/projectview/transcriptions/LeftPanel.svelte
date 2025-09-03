@@ -32,6 +32,18 @@
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
 
+    $: uniqueProjectFileTree = (() => {
+        const seen = new Set();
+        return projectFileTree.filter(node => {
+            const key = node.path || node.relativePath;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    })();
+
     // --- Function to handle opening a data ---
     function handleOpenData(item) {
         if (!item || item.file_type !== 'data') return;
@@ -205,7 +217,7 @@
 				<p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-2">Import a media file to begin.</p>
 			{:else}
 				<ul class="space-y-0.5">
-					{#each projectFileTree as node (node.path || node.relativePath) }
+					{#each uniqueProjectFileTree as node (node.path || node.relativePath) }
 						<TreeNode
 							{node}
 							{selectedMediaPath}
