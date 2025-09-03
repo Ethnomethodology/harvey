@@ -1546,18 +1546,21 @@ pub fn get_highlights_by_tag(
                         .or_else(|| {
                             annotation_obj.get("body")
                                 .and_then(|b| b.as_array())
-                                .and_then(|bodies| bodies.get(0))
+                                .and_then(|b| b.get(0))
                                 .and_then(|first_body| first_body.get("value"))
                                 .and_then(|v| v.as_str())
                         })
                         .unwrap_or_default().to_string();
+
+                    let comments_val = annotation_obj.get("comments").cloned();
+                    let comments: Option<Vec<serde_json::Value>> = comments_val.and_then(|v| serde_json::from_value(v).ok());
 
                     let highlight = Highlight {
                         id,
                         text,
                         color,
                         tags: Some(tags_vec.clone()),
-                        comments: None,
+                        comments,
                         timestamp: None,
                     };
                     all_highlights.push((highlight, doc_path.clone(), tags_vec, asset_type.clone()));
