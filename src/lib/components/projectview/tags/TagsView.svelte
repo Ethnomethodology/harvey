@@ -189,29 +189,27 @@
 
                 <h3 class="text-lg font-semibold mb-2">Highlights ({tagInfo.highlight_count})</h3>
                 <div class="h-96 overflow-y-auto">
-                    <table class="w-full text-sm text-left">
+                    <table class="w-full text-sm text-left min-w-full">
                         <thead class="bg-gray-200 dark:bg-gray-800 sticky top-0">
                             <tr>
-                                <th class="w-4 p-2"></th>
-                                <th class="p-2">File</th>
-                                <th class="p-2">Content</th>
-                                <th class="p-2">Other Tags</th>
-                                <th class="p-2">Actions</th>
+                                <th class="p-2" style="width: 20%;">File</th>
+                                <th class="p-2" style="width: 50%;">Content</th>
+                                <th class="p-2" style="width: 20%;">Other Tags</th>
+                                <th class="p-2" style="width: 10%;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {#each tagInfo.highlights as item (item.id)}
                                 <tr class="border-b dark:border-gray-700">
-                                    <td class="p-2">
-                                        <div class="w-2 h-4 rounded" style="background-color: {item.color};"></div>
-                                    </td>
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">
-                                            <span>{@html getIconForFileType(item.source.file_type)}</span>
+                                            <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: {item.color};">
+                                                <span>{@html getIconForFileType(item.source.file_type)}</span>
+                                            </div>
                                             <span>{item.source.file_path.split(/[\][\][/]/).pop()}</span>
                                         </div>
                                     </td>
-                                    <td class="p-2 truncate" title={item.text}>{item.text}</td>
+                                    <td class="p-2 whitespace-normal" title={item.text}>{item.text}</td>
                                     <td class="p-2">
                                         {#if item.tags && item.tags.length > 1}
                                             {item.tags.filter(t => t !== selectedTag).join(', ')}
