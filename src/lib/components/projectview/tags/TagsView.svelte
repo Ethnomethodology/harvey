@@ -24,6 +24,9 @@
             case 'image': return IMAGE_ICON;
             case 'table': return TABLE_ICON;
             case 'transcript': return TRANSCRIPT_ICON;
+            case 'imported_transcript': return TRANSCRIPT_ICON;
+            case 'audio_transcript': return AUDIO_ICON;
+            case 'video_transcript': return VIDEO_ICON;
             default: return UNKNOWN_ICON;
         }
     }
@@ -205,7 +208,7 @@
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">
                                             <span>{@html getIconForFileType(item.source.file_type)}</span>
-                                            <span>{item.source.file_path.split(/[\\/]/).pop()}</span>
+                                            <span>{item.source.file_path.split(/[\][\][/]/).pop()}</span>
                                         </div>
                                     </td>
                                     <td class="p-2 truncate" title={item.text}>{item.text}</td>

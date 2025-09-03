@@ -5,9 +5,10 @@ use crate::welcome::config::CommandError;
 use crate::projectview::shared_types::{HighlightInfo, HighlightSource};
 use crate::projectview::db_handler;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf}; // Added PathBuf
+use rusqlite::OptionalExtension; // Added OptionalExtension
 
-use log::{info, warn};
+use log::{info, warn, error};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TagInfo {
@@ -45,6 +46,8 @@ fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
         "pdf" => "document",
         "table" => "table",
         "imported_transcript" => "transcript",
+        "audio_transcript" => "audio_transcript",
+        "video_transcript" => "video_transcript",
         _ => "unknown",
     }
 }
@@ -52,18 +55,20 @@ fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
 fn determine_asset_type(
     asset_type_opt: &Option<String>,
     file_path_str: &str,
-    _conn: &Connection,
-    _project_id: &str,
+    conn: &Connection,
+    project_id: &str,
 ) -> String {
     info!("[Tags] determine_asset_type file_path_str: {}", file_path_str);
     let path = Path::new(file_path_str);
 
+    // 1. Check for imported_transcript (standalone)
     if let Some(db_type) = asset_type_opt {
         if db_type == "imported_transcript" {
             return db_type.clone();
         }
     }
 
+    // 2. Path-based check for imported_transcript (fallback if DB type is missing/wrong)
     if path.to_str().unwrap_or_default().contains("harvey_files/Transcripts") {
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             if ext == "json" {
@@ -72,12 +77,76 @@ fn determine_asset_type(
         }
     }
 
+    // 3. Check for media-associated transcripts (JSON files within harvey_files/Media/STEM/transcripts/)
+    let path_str_lower = file_path_str.to_lowercase();
+    if path_str_lower.contains("harvey_files/media/") && path_str_lower.contains("/transcripts/") && path_str_lower.ends_with(".json") {
+        // Extract the media stem from the path
+        // Example: /Users/dipanjan/Documents/Test Project/harvey_files/Media/20130922/transcripts/20130922_1.json
+        // We need "20130922"
+        let parts: Vec<&str> = file_path_str.split('/').collect();
+        if let Some(media_stem_index) = parts.iter().position(|&p| p.eq_ignore_ascii_case("media")) {
+            if parts.len() > media_stem_index + 1 {
+                let media_stem = parts[media_stem_index + 1];
+                // Construct the likely relative path to the actual media file
+                // This assumes a structure like harvey_files/Media/STEM/media/STEM.ext
+                // We need to find the actual media file within the media stem directory
+                let _media_stem_dir_path = PathBuf::from(file_path_str)
+                    .parent().and_then(|p| p.parent()) // Go up from transcripts/ to STEM/
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                // Construct the relative path to the media file within the project
+                // This is tricky because the media file name might not be the same as the stem.
+                // We need to query asset_metadata for assets within this media stem directory.
+                // A more robust way would be to pass the media_xml_identifier from the frontend.
+                // For now, let's try to find the media file based on the stem.
+
+                // This is a simplified approach. A more robust solution would involve
+                // querying the asset_metadata table for the media file associated with this stem.
+                // For now, let's assume the media file is named after the stem and is in the 'media' subdirectory.
+                let media_file_relative_path_prefix = format!("harvey_files/Media/{}/media/", media_stem);
+
+                // Query the asset_metadata table for assets whose relative path starts with this prefix
+                // and whose asset_type is 'media'. Then check the extension of that media file.
+                let mut stmt = conn.prepare(
+                    "SELECT asset_relative_path FROM asset_metadata
+                     WHERE project_id = ?1 AND asset_relative_path LIKE ?2 || '%'
+                     AND asset_type = 'media' LIMIT 1" // Changed asset_type to 'media'
+                ).unwrap(); // TODO: Handle unwrap gracefully
+
+                let result = stmt.query_row(
+                    rusqlite::params![project_id, media_file_relative_path_prefix],
+                    |row| {
+                        let media_asset_relative_path: String = row.get(0)?;
+                        Ok(media_asset_relative_path)
+                    }
+                ).optional().unwrap(); // TODO: Handle unwrap gracefully
+
+                if let Some(media_asset_relative_path) = result {
+                    let media_path = Path::new(&media_asset_relative_path);
+                    let extension = media_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                    return match extension {
+                        "mp3" | "wav" | "m4a" => "audio_transcript".to_string(),
+                        "mp4" | "mov" | "avi" => "video_transcript".to_string(),
+                        _ => "transcript".to_string(), // Fallback if media extension is unexpected
+                    };
+                } else {
+                    warn!("[Tags] Could not find associated media asset metadata for transcript: {}. Falling back to generic 'transcript'.", file_path_str);
+                    return "transcript".to_string();
+                }
+            }
+        }
+    }
+
+
+    // 4. Fallback to DB asset_type (if not imported_transcript)
     if let Some(db_type) = asset_type_opt {
         if !db_type.is_empty() && db_type != "unknown" && db_type != "lexical" {
             return db_type.clone();
         }
     }
 
+    // 5. Fallback to extension-based detection
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     match extension {
         "pdf" => "document".to_string(),
@@ -85,7 +154,7 @@ fn determine_asset_type(
         "mp4" | "mov" | "avi" => "video".to_string(),
         "mp3" | "wav" | "m4a" => "audio".to_string(),
         "csv" | "xlsx" => "table".to_string(),
-        _ => "document".to_string(),
+        _ => "document".to_string(), // Default for unknown JSONs or other files
     }
 }
 
@@ -141,6 +210,8 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
         highlight_count: highlight_infos.len(),
         highlights: highlight_infos,
     };
+
+    
 
     Ok(tag_info)
 }

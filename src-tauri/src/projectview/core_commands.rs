@@ -807,11 +807,24 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
-                transcript_children.push(FileEntry {
+                let media_asset_relative_path = media_entry.relative_path.clone().replace("\\", "/");
+                let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
+                let transcript_file_type = if let Some(metadata) = media_asset_metadata {
+                    match metadata.asset_type.as_str() {
+                        "audio" => "audio_transcript".to_string(),
+                        "video" => "video_transcript".to_string(),
+                        _ => "transcript".to_string(), // Fallback
+                    }
+                } else {
+                    warn!("[Backend Load XML] Could not load asset metadata for media: {}. Defaulting transcript type to 'transcript'.", media_asset_relative_path);
+                    "transcript".to_string()
+                };
+
+                 transcript_children.push(FileEntry {
                     name: transcript_file_name,
                     path: transcript_file_canonical,
                     relative_path: transcript_rel_path.clone().replace("\\", "/"),
-                    file_type: "transcript".to_string(),
+                    file_type: transcript_file_type,
                     is_directory: false,
                     parent_relative_path: format!("{}/{}", stem_rel_path, TRANSCRIPTS_SUBDIR).replace("\\", "/"),
                     depth: 5,
