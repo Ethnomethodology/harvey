@@ -34,7 +34,7 @@
     }
 
     function getComments(item) {
-        return item?.highlight?.comments || [];
+        return item?.comments || [];
     }
 
     let selectedTag = null;
@@ -48,6 +48,12 @@
 
     let showCommentsModal = false;
     let selectedHighlightForComments = null;
+
+    let processedHighlights = [];
+    $: processedHighlights = (tagInfo && tagInfo.highlights) ? tagInfo.highlights.map(item => ({
+        ...item,
+        comments: item.comments || []
+    })) : [];
 
     function openCommentsModal(highlightInfo) {
         selectedHighlightForComments = highlightInfo;
@@ -163,7 +169,7 @@
         const { type, detail } = event;
         const { highlightId, commentId, newText, comment } = detail;
 
-        const highlightInfo = tagInfo.highlights.find(h => h.highlight.id === highlightId);
+        const highlightInfo = processedHighlights.find(h => h.id === highlightId);
         if (!highlightInfo) return;
 
         let docType = highlightInfo.source.file_type;
@@ -183,7 +189,7 @@
         if (selectedTag) {
             await handleSelectTag(selectedTag);
             // After refreshing, find the updated highlight and update selectedHighlightForComments
-            const updatedHighlightInfo = tagInfo.highlights.find(h => h.highlight.id === highlightId);
+            const updatedHighlightInfo = processedHighlights.find(h => h.id === highlightId);
             if (updatedHighlightInfo) {
                 selectedHighlightForComments = updatedHighlightInfo;
             }
@@ -253,7 +259,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each tagInfo.highlights as item (item.id)}
+                            {#each processedHighlights as item (item.id)}
                                 <tr class="border-b dark:border-gray-700">
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">
@@ -317,7 +323,7 @@
 <CommentsModal
     bind:showModal={showCommentsModal}
     comments={getComments(selectedHighlightForComments)}
-    highlightId={selectedHighlightForComments?.highlight?.id}
+    highlightId={selectedHighlightForComments?.id}
     on:close={closeModal}
     on:addcomment={(e) => handleCommentAction(e)}
     on:deletecomment={(e) => handleCommentAction(e)}
