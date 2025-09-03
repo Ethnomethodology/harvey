@@ -23,7 +23,7 @@
             case 'document': return DOCUMENT_ICON;
             case 'image': return IMAGE_ICON;
             case 'table': return TABLE_ICON;
-            case 'imported_transcript': return TRANSCRIPT_ICON;
+            case 'transcript': return TRANSCRIPT_ICON;
             default: return UNKNOWN_ICON;
         }
     }
@@ -232,6 +232,10 @@
                             {/each}
                         </tbody>
                     </table>
+                </div>
+            {:else}
+                <div class="flex items-center justify-center h-full">
+                    <p class="text-gray-500">Select a tag to view its details.</p>
                 </div>
             {/if}
         {:else}

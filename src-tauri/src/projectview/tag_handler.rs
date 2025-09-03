@@ -36,84 +36,55 @@ pub fn get_all_tags(project_id: &str) -> Result<Vec<db_handler::Tag>, CommandErr
     db_handler::get_all_tags(&conn, project_id)
 }
 
-fn map_asset_type_to_icon_type(asset_type: &str) -> String {
+fn map_asset_type_to_icon_type(asset_type: &str) -> &str {
     match asset_type {
-        "audio" => "audio".to_string(),
-        "video" => "video".to_string(),
-        "pdf" | "document" | "lexical" | "doc" | "txt" | "md" => "document".to_string(),
-        "image" => "image".to_string(),
-        "table" => "table".to_string(),
-        "imported_transcript" => "imported_transcript".to_string(),
-        _ => "unknown".to_string(),
+        "video" => "video",
+        "audio" => "audio",
+        "image" => "image",
+        "document" => "document",
+        "pdf" => "document",
+        "table" => "table",
+        "imported_transcript" => "transcript",
+        _ => "unknown",
     }
 }
 
 fn determine_asset_type(
     asset_type_opt: &Option<String>,
     file_path_str: &str,
-    conn: &Connection,
-    project_id: &str,
+    _conn: &Connection,
+    _project_id: &str,
 ) -> String {
+    info!("[Tags] determine_asset_type file_path_str: {}", file_path_str);
     let path = Path::new(file_path_str);
-    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-    // 1. Highest priority: Robust, case-insensitive path component checking
-    let mut is_transcript = false;
-    for component in path.components() {
-        if let Some(part) = component.as_os_str().to_str() {
-            match part.to_lowercase().as_str() {
-                "tables" => return "table".to_string(),
-                "documents" => return "document".to_string(),
-                "images" => return "image".to_string(),
-                "transcripts" => {
-                    is_transcript = true;
-                    break; // Found transcript folder, proceed to parent media check
-                }
-                _ => (),
+    if let Some(db_type) = asset_type_opt {
+        if db_type == "imported_transcript" {
+            return db_type.clone();
+        }
+    }
+
+    if path.to_str().unwrap_or_default().contains("harvey_files/Transcripts") {
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            if ext == "json" {
+                return "imported_transcript".to_string();
             }
         }
     }
 
-    // Handle transcripts (both generated and imported)
-    if is_transcript {
-        if let Some(transcript_dir) = path.parent() {
-            if let Some(stem) = transcript_dir.file_name().and_then(|s| s.to_str()) {
-                for media_folder in ["media", "Media"].iter() {
-                    let media_path_pattern = format!("assets/{}/{}%", media_folder, stem);
-                    if let Ok(parent_asset_type) = conn.query_row(
-                        "SELECT asset_type FROM asset_metadata WHERE project_id = ?1 AND asset_relative_path LIKE ?2 LIMIT 1",
-                        rusqlite::params![project_id, media_path_pattern],
-                        |row| row.get::<_, String>(0),
-                    ) {
-                        // Found parent media, so it's a generated transcript
-                        return parent_asset_type;
-                    }
-                }
-            }
-        }
-        // If we confirmed it's in a transcript path but found no parent, it's a standalone imported transcript
-        return "imported_transcript".to_string();
-    }
-
-    // Override for table file extensions if path check missed it
-    if extension == "csv" || extension == "tsv" {
-        return "table".to_string();
-    }
-
-    // 2. Trust the database if it has a specific type
     if let Some(db_type) = asset_type_opt {
         if !db_type.is_empty() && db_type != "unknown" && db_type != "lexical" {
             return db_type.clone();
         }
     }
 
-    // 3. Fallback to extension for any remaining cases
-    warn!("Could not determine asset type from path or DB for {}. Falling back to file extension.", file_path_str);
+    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     match extension {
-        "pdf" => "pdf".to_string(),
+        "pdf" => "document".to_string(),
         "png" | "jpg" | "jpeg" | "gif" => "image".to_string(),
         "mp4" | "mov" | "avi" => "video".to_string(),
         "mp3" | "wav" | "m4a" => "audio".to_string(),
+        "csv" | "xlsx" => "table".to_string(),
         _ => "document".to_string(),
     }
 }
@@ -121,6 +92,7 @@ fn determine_asset_type(
 
 #[tauri::command]
 pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<TagInfo, CommandError> {
+    info!("[Tags] get_tag_info called for tag_name: {}", tag_name);
     info!("[Tags] Getting info for tag '{}' in project_id: {}", tag_name, project_id);
     let db_path = db_handler::get_db_path()?;
     let conn = Connection::open(&db_path)?;
@@ -148,11 +120,12 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             .unwrap_or_else(Vec::new);
 
         let final_asset_type = determine_asset_type(&asset_type_opt, &file_path, &conn, project_id);
+        info!("[Tags] Determined asset type for file '{}' is '{}'", file_path, final_asset_type);
 
         let source = HighlightSource {
             file_name,
             file_path: file_path.clone(),
-            file_type: map_asset_type_to_icon_type(&final_asset_type),
+            file_type: map_asset_type_to_icon_type(&final_asset_type).to_string(),
         };
 
         highlight_infos.push(HighlightInfo {
