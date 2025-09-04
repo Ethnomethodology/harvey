@@ -7,6 +7,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
     import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
+    import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
 
@@ -196,6 +197,12 @@
         if (anIndex !== -1) {
             processedHighlights[anIndex] = selectedHighlight;
             processedHighlights = [...processedHighlights];
+        }
+
+        if (docType === 'image') {
+            saveImageAnnotations();
+        } else if (docType === 'table') {
+            saveTableHighlights();
         }
     }
 
