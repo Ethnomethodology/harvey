@@ -46,25 +46,21 @@ pub fn delete_lexical_highlights(args: DeleteHighlightsArgs) -> Result<(), Comma
     db_handler::delete_lexical_highlights_from_db(args.project_id, args.document_path)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveHighlightChangesArgs {
+#[tauri::command]
+pub fn save_highlight_changes(
     project_id: String,
     file_path: String,
     doc_type: String,
     highlight: JsonValue,
-}
-
-#[tauri::command]
-pub fn save_highlight_changes(args: SaveHighlightChangesArgs) -> Result<(), CommandError> {
+) -> Result<(), CommandError> {
     info!(
         "Received request to save highlight changes for project_id: {}, path: {}, doc_type: {}",
-        args.project_id, args.file_path, args.doc_type
+        project_id, file_path, doc_type
     );
 
     // 1. Load existing highlights
     let existing_highlights_json =
-        db_handler::load_annotations_from_db(&args.project_id, &args.file_path, &args.doc_type)?;
+        db_handler::load_annotations_from_db(&project_id, &file_path, &doc_type)?;
 
     let mut highlights: Vec<JsonValue> = match existing_highlights_json {
         Some(json_str) => serde_json::from_str(&json_str).unwrap_or_else(|e| {
@@ -75,14 +71,14 @@ pub fn save_highlight_changes(args: SaveHighlightChangesArgs) -> Result<(), Comm
     };
 
     // 2. Find and update the highlight
-    let highlight_id_to_update = args.highlight.get("id").and_then(|id| id.as_str());
+    let highlight_id_to_update = highlight.get("id").and_then(|id| id.as_str());
 
     if let Some(id_to_update) = highlight_id_to_update {
         let mut found = false;
-        for highlight in highlights.iter_mut() {
-            if let Some(id) = highlight.get("id").and_then(|id| id.as_str()) {
+        for h in highlights.iter_mut() {
+            if let Some(id) = h.get("id").and_then(|id| id.as_str()) {
                 if id == id_to_update {
-                    *highlight = args.highlight.clone();
+                    *h = highlight.clone();
                     found = true;
                     break;
                 }
@@ -90,7 +86,7 @@ pub fn save_highlight_changes(args: SaveHighlightChangesArgs) -> Result<(), Comm
         }
         if !found {
             // If not found, it's a new highlight, so add it.
-            highlights.push(args.highlight);
+            highlights.push(highlight);
         }
     } else {
         return Err(CommandError::from("Highlight data is missing an 'id' field."));
@@ -103,9 +99,9 @@ pub fn save_highlight_changes(args: SaveHighlightChangesArgs) -> Result<(), Comm
 
     // 4. Save the updated JSON back to the database
     db_handler::save_annotations_to_db(
-        &args.project_id,
-        &args.file_path,
+        &project_id,
+        &file_path,
         &updated_highlights_json,
-        &args.doc_type,
+        &doc_type,
     )
 }
