@@ -54,13 +54,6 @@
         comments: item.comments || []
     })) : [];
 
-    $: if (selectedHighlight) {
-        const updatedHighlight = processedHighlights.find(h => h.id === selectedHighlight.id);
-        if (updatedHighlight) {
-            selectedHighlight = updatedHighlight;
-        }
-    }
-
     function showComments(highlightInfo) {
         selectedHighlight = highlightInfo;
     }
@@ -184,6 +177,17 @@
             await updateComment(highlightId, commentId, newText, docType);
         }
 
+        if (selectedTag) {
+            tagInfo = await invoke('get_tag_info', {
+                projectId: $project.id,
+                tagId: selectedTag.id,
+                tagName: selectedTag.name,
+            });
+            const updatedHighlight = processedHighlights.find(h => h.id === highlightId);
+            if (updatedHighlight) {
+                selectedHighlight = updatedHighlight;
+            }
+        }
     }
 
     async function handleUntag(item) {
