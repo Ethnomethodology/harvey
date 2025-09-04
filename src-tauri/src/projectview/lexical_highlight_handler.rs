@@ -16,8 +16,37 @@ pub struct SaveHighlightsArgs<'a> {
 }
 
 #[tauri::command]
-pub fn save_lexical_highlights(args: SaveHighlightsArgs) -> Result<(), CommandError> {
-    db_handler::save_lexical_highlights_to_db(args.project_id, args.document_path, args.highlights_json)
+pub fn save_lexical_highlights(
+    app_handle: AppHandle,
+    file_path: String,
+    doc_type: String,
+    highlights: Vec<LexicalHighlight>,
+) -> Result<(), String> {
+    let project_id = get_project_id_from_app_handle(&app_handle)?;
+    let db_path = get_project_db_path(&app_handle, &project_id)?;
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let mut doc_type_for_db = doc_type.clone();
+    if doc_type == "transcript" || doc_type == "imported_transcript" {
+        doc_type_for_db = "lexical".to_string();
+    }
+
+    // If we are migrating, we need to delete the old record.
+    if doc_type != doc_type_for_db {
+        conn.execute(
+            "DELETE FROM lexical_highlights WHERE file_path = ?1 AND doc_type = ?2",
+            params![&file_path, &doc_type],
+        ).optional().map_err(|e| e.to_string())?; // optional in case it doesn't exist
+    }
+
+    let highlights_json = serde_json::to_string(&highlights).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "REPLACE INTO lexical_highlights (file_path, doc_type, project_id, highlights) VALUES (?1, ?2, ?3, ?4)",
+        params![file_path, doc_type_for_db, project_id, highlights_json],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -46,66 +75,62 @@ pub fn delete_lexical_highlights(args: DeleteHighlightsArgs) -> Result<(), Comma
     db_handler::delete_lexical_highlights_from_db(args.project_id, args.document_path)
 }
 
+use rusqlite::{Connection, OptionalExtension};
+use crate::file_tree::get_project_id_from_app_handle;
+use tauri::AppHandle;
+
 #[tauri::command]
 pub fn save_highlight_changes(
-    project_id: String,
+    app_handle: AppHandle,
+    updated_highlight: LexicalHighlight,
     file_path: String,
-    mut doc_type: String,
-    highlight: JsonValue,
-) -> Result<(), CommandError> {
-    info!(
-        "Received request to save highlight changes for project_id: {}, path: {}, doc_type: {}",
-        project_id, file_path, doc_type
-    );
+    doc_type: String,
+) -> Result<(), String> {
+    let project_id = get_project_id_from_app_handle(&app_handle)?;
+    let db_path = get_project_db_path(&app_handle, &project_id)?;
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
+    let mut doc_type_for_db = doc_type.clone();
     if doc_type == "transcript" || doc_type == "imported_transcript" {
-        doc_type = "lexical".to_string();
+        doc_type_for_db = "lexical".to_string();
     }
 
-    // 1. Load existing highlights
-    let existing_highlights_json =
-        db_handler::load_annotations_from_db(&project_id, &file_path, &doc_type)?;
+    // Try to get existing highlights, preferring the normalized doc_type
+    let row: Option<(String, String)> = conn.query_row(
+        "SELECT highlights, doc_type FROM lexical_highlights WHERE file_path = ?1 AND doc_type IN (?2, ?3) ORDER BY doc_type = ?2 DESC",
+        params![&file_path, &doc_type_for_db, &doc_type],
+        |row| Ok((row.get(0)?, row.get(1)?))
+    ).optional().map_err(|e| e.to_string())?;
 
-    let mut highlights: Vec<JsonValue> = match existing_highlights_json {
-        Some(json_str) => serde_json::from_str(&json_str).unwrap_or_else(|e| {
-            error!("Failed to parse existing highlights JSON: {}. Starting with a new list.", e);
-            Vec::new()
-        }),
-        None => Vec::new(),
+    let mut highlights: Vec<LexicalHighlight> = if let Some((json, _)) = &row {
+        serde_json::from_str(json).map_err(|e| e.to_string())?
+    } else {
+        Vec::new()
     };
 
-    // 2. Find and update the highlight
-    let highlight_id_to_update = highlight.get("id").and_then(|id| id.as_str());
-
-    if let Some(id_to_update) = highlight_id_to_update {
-        let mut found = false;
-        for h in highlights.iter_mut() {
-            if let Some(id) = h.get("id").and_then(|id| id.as_str()) {
-                if id == id_to_update {
-                    *h = highlight.clone();
-                    found = true;
-                    break;
-                }
-            }
-        }
-        if !found {
-            // If not found, it's a new highlight, so add it.
-            highlights.push(highlight);
-        }
+    if let Some(pos) = highlights.iter().position(|h| h.id == updated_highlight.id) {
+        highlights[pos] = updated_highlight;
     } else {
-        return Err(CommandError::from("Highlight data is missing an 'id' field."));
+        highlights.push(updated_highlight);
     }
 
+    let updated_highlights_json = serde_json::to_string(&highlights).map_err(|e| e.to_string())?;
 
-    // 3. Serialize the updated highlights list back to JSON
-    let updated_highlights_json = serde_json::to_string(&highlights)
-        .map_err(|e| CommandError::from(format!("Failed to serialize updated highlights: {}", e)))?;
+    // If we found a record with the old, non-normalized doc_type, delete it to prepare for migration.
+    if let Some((_, found_doc_type)) = row {
+        if found_doc_type != doc_type_for_db {
+            conn.execute(
+                "DELETE FROM lexical_highlights WHERE file_path = ?1 AND doc_type = ?2",
+                params![&file_path, &found_doc_type],
+            ).map_err(|e| e.to_string())?;
+        }
+    }
 
-    // 4. Save the updated JSON back to the database
-    db_handler::save_annotations_to_db(
-        &project_id,
-        &file_path,
-        &updated_highlights_json,
-        &doc_type,
-    )
+    // Use REPLACE to either insert a new record or update an existing one with the normalized doc_type.
+    conn.execute(
+        "REPLACE INTO lexical_highlights (file_path, doc_type, project_id, highlights) VALUES (?1, ?2, ?3, ?4)",
+        params![file_path, doc_type_for_db, project_id, updated_highlights_json],
+    ).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
