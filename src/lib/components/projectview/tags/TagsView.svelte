@@ -161,32 +161,41 @@
         const { type, detail } = event;
         const { highlightId, commentId, newText, comment } = detail;
 
-        const highlightInfo = processedHighlights.find(h => h.id === highlightId);
-        if (!highlightInfo) return;
+        const highlightToUpdate = processedHighlights.find(h => h.id === highlightId);
+        if (!highlightToUpdate) return;
 
-        let docType = highlightInfo.source.file_type;
-        if (docType === 'document' && highlightInfo.source.file_path.toLowerCase().endsWith('.pdf')) {
+        let docType = highlightToUpdate.source.file_type;
+        if (docType === 'document' && highlightToUpdate.source.file_path.toLowerCase().endsWith('.pdf')) {
             docType = 'pdf';
         }
 
+        // Call the original store function to update the backend eventually
         if (type === 'addcomment') {
-            await addCommentToHighlight(highlightId, comment, docType);
+            addCommentToHighlight(highlightId, comment, docType);
+            if (!highlightToUpdate.comments) {
+                highlightToUpdate.comments = [];
+            }
+            highlightToUpdate.comments.push(comment);
         } else if (type === 'deletecomment') {
-            await deleteComment(highlightId, commentId, docType);
+            deleteComment(highlightId, commentId, docType);
+            highlightToUpdate.comments = highlightToUpdate.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
         } else if (type === 'editcomment') {
-            await updateComment(highlightId, commentId, newText, docType);
+            updateComment(highlightId, commentId, newText, docType);
+            const commentToUpdate = highlightToUpdate.comments.find(c => c.id === commentId);
+            if (commentToUpdate) {
+                commentToUpdate.text = newText;
+                commentToUpdate.updatedAt = new Date().toISOString();
+            }
         }
 
-        if (selectedTag) {
-            tagInfo = await invoke('get_tag_info', {
-                projectId: $project.id,
-                tagId: selectedTag.id,
-                tagName: selectedTag.name,
-            });
-            const updatedHighlight = processedHighlights.find(h => h.id === highlightId);
-            if (updatedHighlight) {
-                selectedHighlight = updatedHighlight;
-            }
+        // Trigger reactivity by reassigning the object
+        selectedHighlight = { ...highlightToUpdate };
+
+        // Also update the main list to reflect comment count changes, etc.
+        const anIndex = processedHighlights.findIndex(h => h.id === highlightId);
+        if (anIndex !== -1) {
+            processedHighlights[anIndex] = selectedHighlight;
+            processedHighlights = [...processedHighlights];
         }
     }
 
