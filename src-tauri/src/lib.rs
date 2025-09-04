@@ -187,6 +187,7 @@ pub fn run() {
             projectview::tag_handler::get_tag_info,
             projectview::tag_handler::update_tag,
             projectview::tag_handler::delete_tag,
+            projectview::tag_handler::remove_tag_from_highlight,
 
             // --- Project view TRANSCRIPTION commands ---
             projectview::transcription_commands::load_transcript_json,

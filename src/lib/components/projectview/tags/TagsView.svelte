@@ -187,6 +187,27 @@
             }
         }
     }
+
+    async function handleUntag(item) {
+        if (!selectedTag) return;
+
+        const confirmed = await confirm(`Are you sure you want to remove the tag "${selectedTag.name}" from this highlight?`);
+        if (!confirmed) return;
+
+        try {
+            await invoke('remove_tag_from_highlight', {
+                projectId: $project.id,
+                highlightId: item.highlight.id,
+                tagToRemove: selectedTag.name,
+                filePath: item.source.file_path,
+                docType: item.source.file_type,
+            });
+            // Refresh the view
+            await handleSelectTag(selectedTag);
+        } catch (error) {
+            console.error("Failed to remove tag from highlight:", error);
+        }
+    }
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
@@ -283,9 +304,7 @@
                                                     </span>
                                                 {/if}
                                             </button>
-                                            <button title="Untag"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tag-slash" viewBox="0 0 16 16">
-                                                <path d="M2.293 2.293a1 1 0 0 1 1.414 0L8 6.586l4.293-4.293a1 1 0 1 1 1.414 1.414L9.414 8l4.293 4.293a1 1 0 0 1-1.414 1.414L8 9.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L6.586 8 2.293 3.707a1 1 0 0 1 0-1.414z"/>
-                                              </svg></button>
+                                            <button title="Untag" on:click={() => handleUntag(item)}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tag-slash" viewBox="0 0 20 20"><path d="M1 14.742l4.945-.709L5.239 19l5.962-5.985-4.069-4.429L1 14.742zm17.664-9.221c.391-.393.5-.945 0-1.419l-2.826-2.839c-.279-.308-1.021-.392-1.412 0l-3.766 3.78 4.068 4.429 3.936-3.951zm.042 9.772l-14.001-14a.999.999 0 1 0-1.414 1.414l14.001 14a.996.996 0 0 0 1.414 0 .999.999 0 0 0 0-1.414z"/></svg></button>
                                         </div>
                                     </td>
                                 </tr>

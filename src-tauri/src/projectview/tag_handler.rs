@@ -231,3 +231,100 @@ pub fn delete_tag(project_id: &str, tag_id: i64) -> Result<(), CommandError> {
     let conn = Connection::open(&db_path)?;
     db_handler::delete_tag(&conn, project_id, tag_id)
 }
+
+#[tauri::command]
+pub fn remove_tag_from_highlight(
+    project_id: &str,
+    highlight_id: String,
+    tag_to_remove: String,
+    file_path: String,
+    doc_type: String,
+) -> Result<(), CommandError> {
+    info!(
+        "[Tags] Removing tag '{}' from highlight '{}' in file '{}' of type '{}'",
+        tag_to_remove, highlight_id, file_path, doc_type
+    );
+
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    // Determine the table and column to update based on doc_type
+    let (table_name, json_column, path_column) = match doc_type.as_str() {
+        // pdf_annotations stores highlights for multiple "types"
+        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+        "table" => ("table_styles", "styles", "table_path"),
+        _ => {
+            let err_msg = format!("Unsupported document type for tag removal: {}", doc_type);
+            error!("[Tags] {}", err_msg);
+            return Err(CommandError::Message(err_msg));
+        }
+    };
+
+    // 1. Load the existing JSON blob
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {} FROM {} WHERE project_id = ?1 AND {} = ?2",
+        json_column, table_name, path_column
+    ))?;
+
+    let json_string_opt: Option<String> = stmt
+        .query_row(params![project_id, file_path], |row| row.get(0))
+        .optional()?;
+
+    if let Some(json_str) = json_string_opt {
+        // 2. Parse and modify the JSON
+        let mut highlights: Vec<serde_json::Value> = match serde_json::from_str(&json_str) {
+            Ok(v) => v,
+            Err(e) => {
+                let err_msg = format!("Failed to parse JSON from DB for file {}: {}", file_path, e);
+                error!("[Tags] {}", err_msg);
+                return Err(CommandError::Message(err_msg));
+            }
+        };
+
+        let mut was_modified = false;
+        for highlight in highlights.iter_mut() {
+            if let Some(h_obj) = highlight.as_object_mut() {
+                if h_obj.get("id").and_then(|v| v.as_str()) == Some(&highlight_id) {
+                    if let Some(tags_val) = h_obj.get_mut("tags") {
+                        if let Some(tags_arr) = tags_val.as_array_mut() {
+                            let initial_len = tags_arr.len();
+                            tags_arr.retain(|t| t.as_str() != Some(&tag_to_remove));
+                            if tags_arr.len() < initial_len {
+                                was_modified = true;
+                            }
+                        }
+                    }
+                    break; // Found and processed the highlight, exit loop
+                }
+            }
+        }
+
+        // 3. Save the modified JSON back to the DB
+        if was_modified {
+            let new_json_string = serde_json::to_string(&highlights)?;
+            conn.execute(
+                &format!(
+                    "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
+                    table_name, json_column, path_column
+                ),
+                params![new_json_string, project_id, file_path],
+            )?;
+            info!(
+                "[Tags] Successfully removed tag and updated annotations for file: {}",
+                file_path
+            );
+        } else {
+            warn!(
+                "[Tags] Tag '{}' not found on highlight '{}' in file '{}'. No changes made.",
+                tag_to_remove, highlight_id, file_path
+            );
+        }
+    } else {
+        warn!(
+            "[Tags] No annotation/style entry found for file '{}'. Cannot remove tag.",
+            file_path
+        );
+    }
+
+    Ok(())
+}
