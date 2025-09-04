@@ -170,15 +170,6 @@
             docType = 'pdf';
         }
 
-        // Call the original store function to update the local state
-        if (type === 'addcomment') {
-            addCommentToHighlight(highlightId, comment, docType);
-        } else if (type === 'deletecomment') {
-            deleteComment(highlightId, commentId, docType);
-        } else if (type === 'editcomment') {
-            updateComment(highlightId, commentId, newText, docType);
-        }
-
         // Manually update the local state for immediate UI feedback
         let newComments;
         if (type === 'addcomment') {
@@ -204,6 +195,15 @@
         if (anIndex !== -1) {
             processedHighlights[anIndex] = updatedHighlightWithNewComments;
             processedHighlights = [...processedHighlights];
+        }
+
+        // Call the original store function to update the store which in turn will save the data
+        if (type === 'addcomment') {
+            addCommentToHighlight(highlightId, comment, docType);
+        } else if (type === 'deletecomment') {
+            deleteComment(highlightId, commentId, docType);
+        } else if (type === 'editcomment') {
+            updateComment(highlightId, commentId, newText, docType);
         }
 
         // Persist the changes
