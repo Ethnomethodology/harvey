@@ -1424,6 +1424,37 @@ export async function saveDocumentContent(filePath, jsonContent) {
     }
 }
 
+export async function saveHighlightChanges(highlight) {
+    if (!highlight || !highlight.id || !highlight.source || !highlight.source.file_path) {
+        console.error("[ProjectService] saveHighlightChanges: Invalid highlight object provided.", highlight);
+        throw new Error("Invalid highlight object provided for saving.");
+    }
+
+    const { source, ...highlightData } = highlight;
+    const filePath = source.file_path;
+    const docType = source.file_type;
+    const proj = get(project);
+
+    if (!proj.id) {
+        console.error("[ProjectService] saveHighlightChanges: Project ID is missing.");
+        throw new Error("Project ID is missing.");
+    }
+
+    try {
+        await invoke('save_highlight_changes', {
+            projectId: proj.id,
+            filePath: filePath,
+            docType: docType,
+            highlight: highlightData,
+        });
+        console.log(`[ProjectService] Highlight changes saved for ${filePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving highlight changes for ${filePath}:`, error);
+        notificationStore.add(`Error saving highlight changes: ${error.message || error}`, 'error');
+        throw error;
+    }
+}
+
 export async function saveImportedTranscriptContent(filePath, jsonContent) {
     if (!filePath || jsonContent === null || typeof jsonContent !== 'string') {
         const errorMsg = "Cannot save transcript: Missing path or invalid/missing JSON content.";

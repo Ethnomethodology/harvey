@@ -7,7 +7,7 @@
     import { project } from '$lib/stores/projectStore.js';
     import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
     import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
-    import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
+    import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
 
@@ -170,39 +170,48 @@
             docType = 'pdf';
         }
 
-        // Call the original store function to update the backend eventually
+        // Call the original store function to update the local state
         if (type === 'addcomment') {
             addCommentToHighlight(highlightId, comment, docType);
-            if (!highlightToUpdate.comments) {
-                highlightToUpdate.comments = [];
-            }
-            highlightToUpdate.comments.push(comment);
         } else if (type === 'deletecomment') {
             deleteComment(highlightId, commentId, docType);
-            highlightToUpdate.comments = highlightToUpdate.comments.filter(c => c.id !== commentId && c.parentId !== commentId);
         } else if (type === 'editcomment') {
             updateComment(highlightId, commentId, newText, docType);
-            const commentToUpdate = highlightToUpdate.comments.find(c => c.id === commentId);
-            if (commentToUpdate) {
-                commentToUpdate.text = newText;
-                commentToUpdate.updatedAt = new Date().toISOString();
-            }
         }
 
-        // Trigger reactivity by reassigning the object
-        selectedHighlight = { ...highlightToUpdate };
+        // Manually update the local state for immediate UI feedback
+        let newComments;
+        if (type === 'addcomment') {
+            newComments = [...(highlightToUpdate.comments || []), comment];
+        } else if (type === 'deletecomment') {
+            newComments = (highlightToUpdate.comments || []).filter(c => c.id !== commentId && c.parentId !== commentId);
+        } else if (type === 'editcomment') {
+            newComments = (highlightToUpdate.comments || []).map(c => {
+                if (c.id === commentId) {
+                    return { ...c, text: newText, updatedAt: new Date().toISOString() };
+                }
+                return c;
+            });
+        }
 
-        // Also update the main list to reflect comment count changes, etc.
+        const updatedHighlightWithNewComments = { ...highlightToUpdate, comments: newComments };
+
+        // This triggers the UI to update
+        selectedHighlight = updatedHighlightWithNewComments;
+
+        // Update the item in the main list
         const anIndex = processedHighlights.findIndex(h => h.id === highlightId);
         if (anIndex !== -1) {
-            processedHighlights[anIndex] = selectedHighlight;
+            processedHighlights[anIndex] = updatedHighlightWithNewComments;
             processedHighlights = [...processedHighlights];
         }
 
-        if (docType === 'image') {
-            saveImageAnnotations();
-        } else if (docType === 'table') {
-            saveTableHighlights();
+        // Persist the changes
+        try {
+            await projectService.saveHighlightChanges(updatedHighlightWithNewComments);
+        } catch (error) {
+            console.error("Failed to save highlight changes from TagsView:", error);
+            // Optionally, show a notification to the user
         }
     }
 
