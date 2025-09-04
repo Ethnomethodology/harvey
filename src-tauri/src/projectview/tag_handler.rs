@@ -6,7 +6,7 @@ use crate::projectview::shared_types::{HighlightInfo, HighlightSource};
 use crate::projectview::db_handler;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf}; // Added PathBuf
-use rusqlite::OptionalExtension; // Added OptionalExtension
+use rusqlite::{params, OptionalExtension}; // Added OptionalExtension
 
 use log::{info, warn, error};
 
