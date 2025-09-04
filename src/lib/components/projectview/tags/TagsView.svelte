@@ -157,9 +157,8 @@
         }
     }
 
-    async function handleCommentAction(event) {
-        const { type, detail } = event;
-        const { highlightId, commentId, newText, comment } = detail;
+    async function handleCommentAction(type, event) {
+        const { highlightId, commentId, newText, comment } = event.detail;
 
         const highlightInfo = processedHighlights.find(h => h.id === highlightId);
         if (!highlightInfo) return;
@@ -330,9 +329,9 @@
             <CommentsPanel
                 comments={getComments(selectedHighlight)}
                 highlightId={selectedHighlight.id}
-                on:addcomment={(e) => handleCommentAction(e)}
-                on:deletecomment={(e) => handleCommentAction(e)}
-                on:editcomment={(e) => handleCommentAction(e)}
+                on:addcomment={(e) => handleCommentAction('addcomment', e)}
+                on:deletecomment={(e) => handleCommentAction('deletecomment', e)}
+                on:editcomment={(e) => handleCommentAction('editcomment', e)}
             />
         {:else}
             <h2 class="text-lg font-semibold mb-4">Highlight Content</h2>
