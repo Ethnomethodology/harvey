@@ -54,6 +54,13 @@
         comments: item.comments || []
     })) : [];
 
+    $: if (selectedHighlight) {
+        const updatedHighlight = processedHighlights.find(h => h.id === selectedHighlight.id);
+        if (updatedHighlight) {
+            selectedHighlight = updatedHighlight;
+        }
+    }
+
     function showComments(highlightInfo) {
         selectedHighlight = highlightInfo;
     }
@@ -157,8 +164,9 @@
         }
     }
 
-    async function handleCommentAction(type, event) {
-        const { highlightId, commentId, newText, comment } = event.detail;
+    async function handleCommentAction(event) {
+        const { type, detail } = event;
+        const { highlightId, commentId, newText, comment } = detail;
 
         const highlightInfo = processedHighlights.find(h => h.id === highlightId);
         if (!highlightInfo) return;
@@ -176,15 +184,6 @@
             await updateComment(highlightId, commentId, newText, docType);
         }
 
-        // Refresh the tag info to get the latest comments
-        if (selectedTag) {
-            await handleSelectTag(selectedTag);
-            // After refreshing, find the updated highlight and update selectedHighlight
-            const updatedHighlight = processedHighlights.find(h => h.id === highlightId);
-            if (updatedHighlight) {
-                selectedHighlight = updatedHighlight;
-            }
-        }
     }
 
     async function handleUntag(item) {
@@ -329,9 +328,9 @@
             <CommentsPanel
                 comments={getComments(selectedHighlight)}
                 highlightId={selectedHighlight.id}
-                on:addcomment={(e) => handleCommentAction('addcomment', e)}
-                on:deletecomment={(e) => handleCommentAction('deletecomment', e)}
-                on:editcomment={(e) => handleCommentAction('editcomment', e)}
+                on:addcomment={(e) => handleCommentAction(e)}
+                on:deletecomment={(e) => handleCommentAction(e)}
+                on:editcomment={(e) => handleCommentAction(e)}
             />
         {:else}
             <h2 class="text-lg font-semibold mb-4">Highlight Content</h2>
