@@ -50,13 +50,17 @@ pub fn delete_lexical_highlights(args: DeleteHighlightsArgs) -> Result<(), Comma
 pub fn save_highlight_changes(
     project_id: String,
     file_path: String,
-    doc_type: String,
+    mut doc_type: String,
     highlight: JsonValue,
 ) -> Result<(), CommandError> {
     info!(
         "Received request to save highlight changes for project_id: {}, path: {}, doc_type: {}",
         project_id, file_path, doc_type
     );
+
+    if doc_type == "transcript" || doc_type == "imported_transcript" {
+        doc_type = "lexical".to_string();
+    }
 
     // 1. Load existing highlights
     let existing_highlights_json =
