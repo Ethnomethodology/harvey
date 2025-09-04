@@ -219,6 +219,7 @@ pub fn run() {
             projectview::lexical_highlight_handler::load_lexical_highlights,
             projectview::lexical_highlight_handler::save_lexical_highlights,
             projectview::lexical_highlight_handler::delete_lexical_highlights,
+            projectview::lexical_highlight_handler::save_highlight_changes,
 
             // --- Document Import Process Command ---
             projectview::document_handler::import_document,
