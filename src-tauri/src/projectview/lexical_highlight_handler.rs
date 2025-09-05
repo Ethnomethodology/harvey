@@ -2,6 +2,8 @@
 use super::db_handler;
 use crate::welcome::config::CommandError;
 use serde::Deserialize;
+use serde_json::Value as JsonValue;
+use log::{info, error};
 
 #[derive(Deserialize)]
 pub struct SaveHighlightsArgs<'a> {
