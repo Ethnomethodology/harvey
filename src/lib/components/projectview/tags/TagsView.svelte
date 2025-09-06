@@ -20,10 +20,6 @@
     const TRANSCRIPT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`;
     const UNKNOWN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>`;
 
-    function getHighlight(item) {
-        return item.highlight || item;
-    }
-
     function getIconForFileType(fileType) {
         switch (fileType) {
             case 'audio': return AUDIO_ICON;
@@ -39,15 +35,12 @@
         }
     }
 
-    function getComments(item) {
-        return item?.comments || [];
-    }
-
     let selectedTag = null;
     let tagInfo = null;
     let isLoading = false;
     let description = '';
     let tableContainer;
+    let paginationContainer;
     let tabulatorInstance = null;
     let isEditing = false;
     let searchQuery = '';
@@ -67,13 +60,30 @@
     }
 
     let processedHighlights = [];
-    $: processedHighlights = (tagInfo && tagInfo.highlights) ? tagInfo.highlights.map(item => {
-        const highlight = getHighlight(item);
-        return {
-            ...item,
-            comments: highlight.comments || []
-        };
-    }) : [];
+    $: {
+        if (tagInfo && tagInfo.highlights) {
+            processedHighlights = tagInfo.highlights.map(item => {
+                // The backend sometimes returns the highlight nested, sometimes not.
+                // This normalizes it.
+                const highlight = item.highlight || item;
+                return {
+                    ...highlight,
+                    // ensure other_tags is always an array
+                    other_tags: highlight.other_tags || [],
+                    // ensure comments is always an array
+                    comments: highlight.comments || [],
+                };
+            });
+        } else {
+            processedHighlights = [];
+        }
+
+        // Update table data when highlights change
+        if (tabulatorInstance) {
+            tabulatorInstance.setData(processedHighlights);
+        }
+    }
+
 
     function showComments(highlightInfo) {
         selectedHighlight = highlightInfo;
@@ -82,9 +92,7 @@
 
     afterUpdate(() => {
         if (tagInfo && tableContainer && !tabulatorInstance) {
-            initializeTable(tagInfo.highlights);
-        } else if (tagInfo && tabulatorInstance) {
-            tabulatorInstance.setData(tagInfo.highlights);
+            initializeTable(processedHighlights);
         } else if (!tagInfo && tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
@@ -106,15 +114,17 @@
             layout: "fitData",
             pagination: "local",
             paginationSize: 10,
+            paginationElement: paginationContainer,
             initialFilter: [
                 {field:"text", type:"like", value:searchQuery}
             ],
             columns: [
-                { title: "File", field: "source.file_path", formatter: (cell) => {
-                    const highlight = getHighlight(cell.getRow().getData());
+                { title: "File", field: "source.file_path", width: "20%", formatter: (cell) => {
+                    const highlight = cell.getRow().getData();
                     const filePath = highlight.source.file_path;
                     const fileName = filePath.split(/[\/]/).pop();
                     const icon = getIconForFileType(highlight.source.file_type);
+                    // TODO: Make this a clickable link to open the file
                     return `<div class="flex items-center space-x-2" title="${filePath}">
                                 <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: ${highlight.color};">
                                     <span>${icon}</span>
@@ -122,12 +132,20 @@
                                 <span>${fileName}</span>
                             </div>`;
                 }},
-                { title: "Content", field: "text", formatter: "textarea" },
-                { title: "Other Tags", field: "other_tags", formatter: (cell) => {
-                    const tags = cell.getValue();
-                    return tags ? tags.join(', ') : '';
+                { title: "Content", field: "text", width: "50%", formatter: (cell) => {
+                    const text = cell.getValue();
+                    return `<div class="whitespace-normal word-break-break-word">${text}</div>`;
                 }},
-                { title: "Actions", width: 100, formatter: (cell) => {
+                { title: "Other Tags", field: "other_tags", width: "20%", formatter: (cell) => {
+                    const tags = cell.getValue() || [];
+                    return tags.join(', ');
+                }},
+                { title: "Actions", width: "10%", hozAlign: "center", formatter: (cell) => {
+                    const highlight = cell.getRow().getData();
+                    const commentCount = highlight.comments.length;
+
+                    const commentPill = commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">${commentCount}</span>` : '';
+
                     return `<div class="flex items-center">
                                 <button title="Inspect" class="mr-4"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
                                     <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
@@ -137,6 +155,7 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
                                         <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
                                     </svg>
+                                    ${commentPill}
                                 </button>
                                 <button title="Untag">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
@@ -332,40 +351,44 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-3/4 h-full flex flex-col p-4">
+    <div class="w-3/4 h-full flex flex-col p-4 gap-4">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
             {:else if tagInfo}
-                <div class="flex flex-col" style="height: 20%;">
-                    {#if isEditing}
-                        <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
-                    {:else}
-                        <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
-                    {/if}
-                    <div class="mb-4 flex-grow">
-                        <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                        <textarea id="tag-description" class="mt-1 block w-full h-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}>
-                        </textarea>
-                    </div>
-                    <div class="flex space-x-2">
-                        {#if isEditing}
-                            <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
-                            <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
-                        {:else}
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
-                        {/if}
+                <div class="h-[20%] flex flex-col">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            {#if isEditing}
+                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
+                            {:else}
+                                <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
+                            {/if}
+                            <div class="mb-4">
+                                <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                                <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2 flex-shrink-0 ml-4">
+                            {#if isEditing}
+                                <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
+                                <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
+                                <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                            {:else}
+                                <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                            {/if}
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex flex-col mt-4" style="height: 80%;">
-                    <div class="flex justify-between items-center mb-2">
+                <div class="h-[80%] flex flex-col">
+                    <div class="flex justify-between items-center mb-2 flex-shrink-0">
                         <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
                         <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
                     </div>
-                    <div class="flex-grow overflow-y-auto" bind:this={tableContainer}>
+                    <div class="flex-grow overflow-auto" bind:this={tableContainer}>
                     </div>
+                    <div bind:this={paginationContainer} class="mt-2 flex-shrink-0"></div>
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full">
