@@ -299,7 +299,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each processedHighlights as item (item.id)}
+                            {#each processedHighlights as item (item.highlight.id)}
                                 <tr class="border-b dark:border-gray-700">
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">

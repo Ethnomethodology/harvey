@@ -1,0 +1,11 @@
+
+> harvey@0.1.0 tauri
+> tauri dev
+
+     Running BeforeDevCommand (`npm run dev`)
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+
+> harvey@0.1.0 dev
+> vite dev
+
+        Info Watching /app/src-tauri for changes...

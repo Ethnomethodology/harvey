@@ -240,6 +240,14 @@ pub fn remove_tag_from_highlight(
     file_path: String,
     doc_type: String,
 ) -> Result<(), CommandError> {
+    info!("--- ENTERING remove_tag_from_highlight ---");
+    info!("[Tags] Received project_id: {}", project_id);
+    info!("[Tags] Received highlight_id: {}", highlight_id);
+    info!("[Tags] Received tag_to_remove: {}", tag_to_remove);
+    info!("[Tags] Received file_path: {}", file_path);
+    info!("[Tags] Received doc_type: {}", doc_type);
+
+
     info!(
         "[Tags] Removing tag '{}' from highlight '{}' in file '{}' of type '{}'",
         tag_to_remove, highlight_id, file_path, doc_type
@@ -249,12 +257,27 @@ pub fn remove_tag_from_highlight(
     let conn = Connection::open(&db_path)?;
 
     // Determine the table and column to update based on doc_type
-    let (table_name, json_column, path_column) = match doc_type.as_str() {
-        // pdf_annotations stores highlights for multiple "types"
-        "document" | "pdf" | "image" | "lexical" | "imported_transcript" | "audio_transcript" | "video_transcript" => ("pdf_annotations", "annotations_json", "pdf_document_path"),
+    let normalized_doc_type = if doc_type == "transcript"
+        || doc_type == "imported_transcript"
+        || doc_type == "audio_transcript"
+        || doc_type == "video_transcript"
+    {
+        "lexical"
+    } else {
+        &doc_type
+    };
+
+    // Determine the table and column to update based on the normalized doc_type
+    let (table_name, json_column, path_column) = match normalized_doc_type {
+        "document" | "pdf" | "image" | "lexical" => {
+            ("pdf_annotations", "annotations_json", "pdf_document_path")
+        }
         "table" => ("table_styles", "styles", "table_path"),
         _ => {
-            let err_msg = format!("Unsupported document type for tag removal: {}", doc_type);
+            let err_msg = format!(
+                "Unsupported document type for tag removal: {}",
+                normalized_doc_type
+            );
             error!("[Tags] {}", err_msg);
             return Err(CommandError::Message(err_msg));
         }
