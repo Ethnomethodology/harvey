@@ -77,11 +77,6 @@
         } else {
             processedHighlights = [];
         }
-
-        // Update table data when highlights change
-        if (tabulatorInstance) {
-            tabulatorInstance.setData(processedHighlights);
-        }
     }
 
 
@@ -93,7 +88,12 @@
     afterUpdate(() => {
         if (tagInfo && tableContainer && !tabulatorInstance) {
             initializeTable(processedHighlights);
-        } else if (!tagInfo && tabulatorInstance) {
+        } else if (tabulatorInstance) {
+            // This ensures we only update data if the table exists
+            tabulatorInstance.setData(processedHighlights);
+        }
+
+        if (!tagInfo && tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
         }
@@ -101,7 +101,12 @@
 
     function handleSearch() {
         if (tabulatorInstance) {
-            tabulatorInstance.setFilter("text", "like", searchQuery);
+            const term = searchQuery.trim();
+            if (term) {
+                tabulatorInstance.setFilter("text", "like", term);
+            } else {
+                tabulatorInstance.clearFilter();
+            }
         }
     }
 
@@ -138,7 +143,13 @@
                 }},
                 { title: "Other Tags", field: "other_tags", width: "20%", formatter: (cell) => {
                     const tags = cell.getValue() || [];
-                    return tags.join(', ');
+                    if (tags.length === 0) return '';
+
+                    const tagElements = tags.map(tag =>
+                        `<span class="inline-block bg-gray-200 dark:bg-gray-600 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1">${tag}</span>`
+                    ).join('');
+
+                    return `<div class="flex flex-wrap items-center">${tagElements}</div>`;
                 }},
                 { title: "Actions", width: "10%", hozAlign: "center", formatter: (cell) => {
                     const highlight = cell.getRow().getData();
@@ -357,7 +368,7 @@
                 <p>Loading tag information...</p>
             {:else if tagInfo}
                 <div class="h-[20%] flex flex-col">
-                    <div class="flex justify-between items-start">
+                    <div>
                         <div>
                             {#if isEditing}
                                 <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
@@ -369,15 +380,15 @@
                                 <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
                             </div>
                         </div>
-                        <div class="flex space-x-2 flex-shrink-0 ml-4">
-                            {#if isEditing}
-                                <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
-                                <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                                <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
-                            {:else}
-                                <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
-                            {/if}
-                        </div>
+                    </div>
+                    <div class="flex space-x-2 mt-2">
+                        {#if isEditing}
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                        {:else}
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                        {/if}
                     </div>
                 </div>
 
