@@ -20,6 +20,10 @@
     const TRANSCRIPT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-square-text w-4 h-4" viewBox="0 0 16 16"><path d="M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-2.5a2 2 0 0 0-1.6.8L8 14.333 6.1 11.8a2 2 0 0 0-1.6-.8H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2.5a1 1 0 0 1 .8.4l1.9 2.533a1 1 0 0 0 1.6 0l1.9-2.533a1 1 0 0 1 .8-.4H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6m0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/></svg>`;
     const UNKNOWN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>`;
 
+    function getHighlight(item) {
+        return item.highlight || item;
+    }
+
     function getIconForFileType(fileType) {
         switch (fileType) {
             case 'audio': return AUDIO_ICON;
@@ -62,10 +66,13 @@
     }
 
     let processedHighlights = [];
-    $: processedHighlights = (tagInfo && tagInfo.highlights) ? tagInfo.highlights.map(item => ({
-        ...item,
-        comments: item.highlight.comments || []
-    })) : [];
+    $: processedHighlights = (tagInfo && tagInfo.highlights) ? tagInfo.highlights.map(item => {
+        const highlight = getHighlight(item);
+        return {
+            ...item,
+            comments: highlight.comments || []
+        };
+    }) : [];
 
     function showComments(highlightInfo) {
         selectedHighlight = highlightInfo;
@@ -236,12 +243,13 @@
         if (!confirmed) return;
 
         try {
+            const highlight = getHighlight(item);
             await invoke('remove_tag_from_highlight', {
                 projectId: $project.id,
-                highlightId: item.highlight.id,
+                highlightId: highlight.id,
                 tagToRemove: selectedTag.name,
-                filePath: item.highlight.source.file_path,
-                docType: item.highlight.source.file_type,
+                filePath: highlight.source.file_path,
+                docType: highlight.source.file_type,
             });
             // Refresh the view
             await handleSelectTag(selectedTag);
@@ -313,21 +321,21 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each processedHighlights as item (item.highlight.id)}
-                                {@const _ = console.log("item:", item)}
+                            {#each processedHighlights as item (getHighlight(item).id)}
+                                {@const highlight = getHighlight(item)}
                                 <tr class="border-b dark:border-gray-700">
-                                    <td class="p-2" title={item.highlight.source.file_path}>
+                                    <td class="p-2" title={highlight.source.file_path}>
                                         <div class="flex items-center space-x-2">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: {item.highlight.color};">
-                                                <span>{@html getIconForFileType(item.highlight.source.file_type)}</span>
+                                            <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: {highlight.color};">
+                                                <span>{@html getIconForFileType(highlight.source.file_type)}</span>
                                             </div>
-                                            <span>{item.highlight.source.file_path.split(/[\][\][/]/).pop()}</span>
+                                            <span>{highlight.source.file_path.split(/[\][\][/]/).pop()}</span>
                                         </div>
                                     </td>
-                                    <td class="p-2 whitespace-normal" title={item.highlight.text}>{item.highlight.text}</td>
+                                    <td class="p-2 whitespace-normal" title={highlight.text}>{highlight.text}</td>
                                     <td class="p-2">
-                                        {#if item.highlight.other_tags && item.highlight.other_tags.length > 0}
-                                            {item.highlight.other_tags.join(', ')}
+                                        {#if highlight.other_tags && highlight.other_tags.length > 0}
+                                            {highlight.other_tags.join(', ')}
                                         {/if}
                                     </td>
                                     <td class="p-2">
@@ -336,13 +344,13 @@
                                                 <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
                                                 <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
                                               </svg></button>
-                                            <button title="Comments" on:click={() => showComments(item.highlight)} class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4">
+                                            <button title="Comments" on:click={() => showComments(highlight)} class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
                                                     <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
                                                 </svg>
-                                                {#if getComments(item.highlight).length > 0}
+                                                {#if getComments(highlight).length > 0}
                                                     <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                                                        {getComments(item.highlight).length}
+                                                        {getComments(highlight).length}
                                                     </span>
                                                 {/if}
                                             </button>
@@ -384,7 +392,7 @@
         >
             {#if selectedHighlight}
                 <CommentsPanel
-                    comments={getComments(selectedHighlight)}
+                    comments={selectedHighlight.comments || []}
                     highlightId={selectedHighlight.id}
                     on:addcomment={(e) => handleCommentAction(e)}
                     on:deletecomment={(e) => handleCommentAction(e)}
