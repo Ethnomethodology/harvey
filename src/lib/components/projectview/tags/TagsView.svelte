@@ -106,6 +106,7 @@
                 tagId: tag.id,
                 tagName: tag.name,
             });
+            console.log("tagInfo:", tagInfo);
             if (tagInfo) {
                 description = tagInfo.description;
                 tagNameInput = tagInfo.name;
@@ -300,6 +301,7 @@
                         </thead>
                         <tbody>
                             {#each processedHighlights as item (item.highlight.id)}
+                                {@const _ = console.log("item:", item)}
                                 <tr class="border-b dark:border-gray-700">
                                     <td class="p-2" title={item.source.file_path}>
                                         <div class="flex items-center space-x-2">
