@@ -71,7 +71,14 @@
 </script>
 
 <div class="flex flex-col h-full">
-    <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Comments</h2>
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Comments</h2>
+        <button on:click={() => dispatch('close')} class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+            </svg>
+        </button>
+    </div>
 
     <div class="space-y-4 flex-grow overflow-y-auto pr-2">
         {#each comments.filter(c => !c.parentId) as comment}
