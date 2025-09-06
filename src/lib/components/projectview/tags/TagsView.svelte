@@ -50,6 +50,7 @@
     let tableContainer;
     let tabulatorInstance = null;
     let isEditing = false;
+    let searchQuery = '';
     let tagNameInput = '';
 
     let selectedHighlight = null;
@@ -90,24 +91,71 @@
         }
     });
 
+    function handleSearch() {
+        if (tabulatorInstance) {
+            tabulatorInstance.setFilter("text", "like", searchQuery);
+        }
+    }
+
     function initializeTable(data) {
+        if (tabulatorInstance) {
+            tabulatorInstance.destroy();
+        }
         tabulatorInstance = new Tabulator(tableContainer, {
             data: data,
             layout: "fitData",
+            pagination: "local",
+            paginationSize: 10,
+            initialFilter: [
+                {field:"text", type:"like", value:searchQuery}
+            ],
             columns: [
-                { title: "Text", field: "text", widthGrow: 3, formatter: "textarea" },
-                { title: "Source", field: "source", widthGrow: 1, formatter: (cell) => {
-                    // In a future step, we can resolve this to the actual file name.
-                    return "Placeholder Source";
+                { title: "File", field: "source.file_path", formatter: (cell) => {
+                    const highlight = getHighlight(cell.getRow().getData());
+                    const filePath = highlight.source.file_path;
+                    const fileName = filePath.split(/[\/]/).pop();
+                    const icon = getIconForFileType(highlight.source.file_type);
+                    return `<div class="flex items-center space-x-2" title="${filePath}">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: ${highlight.color};">
+                                    <span>${icon}</span>
+                                </div>
+                                <span>${fileName}</span>
+                            </div>`;
                 }},
-                { title: "Type", field: "color", width: 80, formatter: (cell) => {
-                    const color = cell.getValue();
-                    return `<div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:15px; background-color:${color}; margin-right: 5px;"></span>Highlight</div>`;
+                { title: "Content", field: "text", formatter: "textarea" },
+                { title: "Other Tags", field: "other_tags", formatter: (cell) => {
+                    const tags = cell.getValue();
+                    return tags ? tags.join(', ') : '';
                 }},
-                { title: "Comments", field: "comments", width: 100, formatter: (cell) => {
-                    const comments = cell.getValue();
-                    return comments?.length || 0;
-                }},
+                { title: "Actions", width: 100, formatter: (cell) => {
+                    return `<div class="flex items-center">
+                                <button title="Inspect" class="mr-4"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
+                                    <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
+                                    <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
+                                  </svg></button>
+                                <button title="Comments" class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
+                                        <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                                    </svg>
+                                </button>
+                                <button title="Untag">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
+                                      <path d="M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
+                                      <path d="M15.5 0.5 L 0.5 15.5"></path>
+                                    </svg>
+                                </button>
+                            </div>`;
+                },
+                cellClick: (e, cell) => {
+                    const highlight = cell.getRow().getData();
+                    const target = e.target.closest('button');
+                    if (!target) return;
+                    if (target.title === 'Comments') {
+                        showComments(highlight);
+                    } else if (target.title === 'Untag') {
+                        handleUntag(highlight);
+                    }
+                }}
             ],
             height: "100%",
             placeholder: "No highlights for this tag.",
@@ -284,90 +332,40 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-3/4 h-full p-4 overflow-y-auto">
+    <div class="w-3/4 h-full flex flex-col p-4">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
             {:else if tagInfo}
-                {#if isEditing}
-                    <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
-                {:else}
-                    <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
-                {/if}
-                <div class="mb-4">
-                    <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                    <textarea id="tag-description" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}>
-                    </textarea>
-                </div>
-                <div class="flex space-x-2 mb-4">
+                <div class="flex flex-col" style="height: 20%;">
                     {#if isEditing}
-                        <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
-                        <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                        <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                        <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
                     {:else}
-                        <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                        <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
                     {/if}
+                    <div class="mb-4 flex-grow">
+                        <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                        <textarea id="tag-description" class="mt-1 block w-full h-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}>
+                        </textarea>
+                    </div>
+                    <div class="flex space-x-2">
+                        {#if isEditing}
+                            <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                        {:else}
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                        {/if}
+                    </div>
                 </div>
 
-                <h3 class="text-lg font-semibold mb-2">Highlights ({tagInfo.highlight_count})</h3>
-                <div class="h-96 overflow-y-auto">
-                    <table class="w-full text-sm text-left min-w-full">
-                        <thead class="bg-gray-200 dark:bg-gray-800 sticky top-0">
-                            <tr>
-                                <th class="p-2" style="width: 20%;">File</th>
-                                <th class="p-2" style="width: 50%;">Content</th>
-                                <th class="p-2" style="width: 20%;">Other Tags</th>
-                                <th class="p-2" style="width: 10%;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each processedHighlights as item (getHighlight(item).id)}
-                                {@const highlight = getHighlight(item)}
-                                <tr class="border-b dark:border-gray-700">
-                                    <td class="p-2" title={highlight.source.file_path}>
-                                        <div class="flex items-center space-x-2">
-                                            <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: {highlight.color};">
-                                                <span>{@html getIconForFileType(highlight.source.file_type)}</span>
-                                            </div>
-                                            <span>{highlight.source.file_path.split(/[\][\][/]/).pop()}</span>
-                                        </div>
-                                    </td>
-                                    <td class="p-2 whitespace-normal" title={highlight.text}>{highlight.text}</td>
-                                    <td class="p-2">
-                                        {#if highlight.other_tags && highlight.other_tags.length > 0}
-                                            {highlight.other_tags.join(', ')}
-                                        {/if}
-                                    </td>
-                                    <td class="p-2">
-                                        <div class="flex items-center">
-                                            <button title="Inspect" class="mr-4"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
-                                                <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
-                                                <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
-                                              </svg></button>
-                                            <button title="Comments" on:click={() => showComments(highlight)} class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
-                                                    <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
-                                                </svg>
-                                                {#if getComments(highlight).length > 0}
-                                                    <span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                                                        {getComments(highlight).length}
-                                                    </span>
-                                                {/if}
-                                            </button>
-                                            <button title="Untag" on:click={() => handleUntag(item)}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
-                                                  <!-- Simplified single tag path -->
-                                                  <path d="M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
-                                                  <!-- Added slash line -->
-                                                  <path d="M15.5 0.5 L 0.5 15.5"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
+                <div class="flex flex-col mt-4" style="height: 80%;">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
+                    </div>
+                    <div class="flex-grow overflow-y-auto" bind:this={tableContainer}>
+                    </div>
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full">
