@@ -263,7 +263,7 @@
     <SimpleTopBar />
     <div class="flex h-full w-full p-1 gap-1">
         <!-- Left Panel: List of all tags -->
-        <div class="w-1/5 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
+        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
@@ -284,7 +284,7 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="flex-grow h-full p-4 overflow-y-auto">
+    <div class="w-3/4 h-full p-4 overflow-y-auto">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
@@ -387,7 +387,7 @@
     {#if isCommentsPanelOpen}
         <div class="fixed inset-0 bg-black bg-opacity-50 z-30" on:click={() => isCommentsPanelOpen = false}></div>
         <div
-            class="fixed top-0 right-0 h-full w-2/5 bg-gray-50 dark:bg-gray-700 p-4 border-l border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40"
+            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40 rounded-lg"
             transition:slide={{ duration: 300, axis: 'x' }}
         >
             {#if selectedHighlight}
