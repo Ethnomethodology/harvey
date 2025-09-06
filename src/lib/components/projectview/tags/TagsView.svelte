@@ -84,9 +84,9 @@
                     const color = cell.getValue();
                     return `<div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:15px; background-color:${color}; margin-right: 5px;"></span>Highlight</div>`;
                 }},
-                { title: "Comments", field: "highlight", width: 100, formatter: (cell) => {
-                    const highlight = cell.getValue();
-                    return highlight?.comments?.length || 0;
+                { title: "Comments", field: "comments", width: 100, formatter: (cell) => {
+                    const comments = cell.getValue();
+                    return comments?.length || 0;
                 }},
             ],
             height: "100%",
@@ -225,7 +225,7 @@
         try {
             await invoke('remove_tag_from_highlight', {
                 projectId: $project.id,
-                highlightId: item.highlight.id,
+                highlightId: item.id,
                 tagToRemove: selectedTag.name,
                 filePath: item.source.file_path,
                 docType: item.source.file_type,
@@ -300,7 +300,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each processedHighlights as item (item.highlight.id)}
+                        <tbody>
+                            {#each processedHighlights as item (item.id)}
                                 {@const _ = console.log("item:", item)}
                                 <tr class="border-b dark:border-gray-700">
                                     <td class="p-2" title={item.source.file_path}>
@@ -313,8 +314,8 @@
                                     </td>
                                     <td class="p-2 whitespace-normal" title={item.text}>{item.text}</td>
                                     <td class="p-2">
-                                        {#if item.tags && item.tags.length > 1}
-                                            {item.tags.filter(t => t !== selectedTag).join(', ')}
+                                        {#if item.other_tags && item.other_tags.length > 0}
+                                            {item.other_tags.join(', ')}
                                         {/if}
                                     </td>
                                     <td class="p-2">

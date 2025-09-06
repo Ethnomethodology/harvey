@@ -104,8 +104,15 @@ pub struct HighlightSource {
 // New struct to bundle a highlight with its source
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HighlightInfo {
-    #[serde(flatten)]
-    pub highlight: Highlight,
+    pub id: String,
+    pub text: String,
+    pub color: String,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub comments: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub timestamp: Option<String>,
     pub source: HighlightSource,
     pub other_tags: Vec<String>,
 }

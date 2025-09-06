@@ -198,8 +198,13 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
         };
 
         highlight_infos.push(HighlightInfo {
+            id: highlight.id,
+            text: highlight.text,
+            color: highlight.color,
+            tags: highlight.tags,
+            comments: highlight.comments,
+            timestamp: highlight.timestamp,
             source,
-            highlight,
             other_tags,
         });
     }
