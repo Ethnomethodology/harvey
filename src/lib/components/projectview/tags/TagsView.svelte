@@ -45,6 +45,7 @@
     let isEditing = false;
     let searchQuery = '';
     let tagNameInput = '';
+    let tableReady = false;
 
     let selectedHighlight = null;
     let isCommentsPanelOpen = false;
@@ -88,18 +89,25 @@
     afterUpdate(() => {
         if (tagInfo && tableContainer && !tabulatorInstance) {
             initializeTable(processedHighlights);
-        } else if (tabulatorInstance) {
-            // This ensures we only update data if the table exists
+        } else if (tabulatorInstance && tableReady) {
+            // This ensures we only update data if the table exists and is ready
             tabulatorInstance.setData(processedHighlights);
         }
 
         if (!tagInfo && tabulatorInstance) {
             tabulatorInstance.destroy();
             tabulatorInstance = null;
+            tableReady = false;
         }
     });
 
     function handleSearch() {
+        if (!searchQuery && searchQuery.trim() === '') {
+            if (tabulatorInstance) {
+                tabulatorInstance.clearFilter();
+            }
+            return;
+        }
         if (tabulatorInstance) {
             const term = searchQuery.trim();
             if (term) {
@@ -114,12 +122,13 @@
         if (tabulatorInstance) {
             tabulatorInstance.destroy();
         }
+        tableReady = false;
         tabulatorInstance = new Tabulator(tableContainer, {
             data: data,
             layout: "fitData",
             pagination: "local",
             paginationSize: 10,
-            paginationElement: paginationContainer,
+            paginationAddRow: "table",
             initialFilter: [
                 {field:"text", type:"like", value:searchQuery}
             ],
@@ -127,11 +136,11 @@
                 { title: "File", field: "source.file_path", width: "20%", formatter: (cell) => {
                     const highlight = cell.getRow().getData();
                     const filePath = highlight.source.file_path;
-                    const fileName = filePath.split(/[\/]/).pop();
+                    const fileName = filePath.split(/[\\/]/).pop();
                     const icon = getIconForFileType(highlight.source.file_type);
                     // TODO: Make this a clickable link to open the file
-                    return `<div class="flex items-center space-x-2" title="${filePath}">
-                                <div class="w-8 h-8 rounded-full flex items-center justify-center p-1" style="background-color: ${highlight.color};">
+                    return `<div class=\"flex items-center space-x-2\" title=\"${filePath}\">
+                                <div class=\"w-8 h-8 rounded-full flex items-center justify-center p-1\" style=\"background-color: ${highlight.color};\">
                                     <span>${icon}</span>
                                 </div>
                                 <span>${fileName}</span>
@@ -139,56 +148,62 @@
                 }},
                 { title: "Content", field: "text", width: "50%", formatter: (cell) => {
                     const text = cell.getValue();
-                    return `<div class="whitespace-normal word-break-break-word">${text}</div>`;
+                    return `<div class=\"whitespace-normal word-break-break-word\">${text}</div>`;
                 }},
                 { title: "Other Tags", field: "other_tags", width: "20%", formatter: (cell) => {
                     const tags = cell.getValue() || [];
                     if (tags.length === 0) return '';
 
                     const tagElements = tags.map(tag =>
-                        `<span class="inline-block bg-gray-200 dark:bg-gray-600 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1">${tag}</span>`
+                        `<span class=\"inline-block bg-gray-200 dark:bg-gray-600 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1 border border-gray-300 dark:border-gray-500\">${tag}</span>`
                     ).join('');
 
-                    return `<div class="flex flex-wrap items-center">${tagElements}</div>`;
+                    return `<div class=\"flex flex-wrap items-center\">${tagElements}</div>`;
                 }},
-                { title: "Actions", width: "10%", hozAlign: "center", formatter: (cell) => {
-                    const highlight = cell.getRow().getData();
-                    const commentCount = highlight.comments.length;
+                {
+                    title: "Actions", width: "10%", hozAlign: "center",
+                    formatter: (cell) => {
+                        const highlight = cell.getRow().getData();
+                        const commentCount = highlight.comments.length;
 
-                    const commentPill = commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">${commentCount}</span>` : '';
+                        const commentPill = commentCount > 0 ? `<span class=\"absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center\">${commentCount}</span>` : '';
 
-                    return `<div class="flex items-center">
-                                <button title="Inspect" class="mr-4"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
-                                    <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
-                                    <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
+                        return `<div class=\"flex items-center\">
+                                <button title=\"Inspect\" class=\"mr-4\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" class=\"bi bi-eye\" viewBox=\"0 0 16 16\">
+                                    <path d=\"M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
+                                    <path d=\"M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
                                   </svg></button>
-                                <button title="Comments" class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat" viewBox="0 0 16 16">
-                                        <path d="M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
+                                <button title=\"Comments\" class=\"relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 mr-4\">
+                                    <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" fill=\"currentColor\" class=\"bi bi-chat\" viewBox=\"0 0 16 16\">
+                                        <path d=\"M2.678 11.894a1 1 0 0 1 .287.801 11 11 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8 8 0 0 0 8 14c3.996 0 7-2.807 7-6s-3.004-6-7-6-7 2.808-7 6c0 1.468.617 2.83 1.678 3.894m-.493 3.905a22 22 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a10 10 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9 9 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105"/>
                                     </svg>
                                     ${commentPill}
                                 </button>
-                                <button title="Untag">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="red" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-tag-slash w-4 h-4" viewBox="0 0 16 16">
-                                      <path d="M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
-                                      <path d="M15.5 0.5 L 0.5 15.5"></path>
+                                <button title=\"Untag\">
+                                    <svg xmlns=\"http://www.w3.org/2000/svg\" fill=\"none\" stroke=\"red\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"bi bi-tag-slash w-4 h-4\" viewBox=\"0 0 16 16">
+                                      <path d=\"M2 1a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l4.586-4.586a1 1 0 0 0 0-1.414l-7-7A1 1 0 0 0 6.586 1zm4 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"></path>
+                                      <path d=\"M15.5 0.5 L 0.5 15.5"></path>
                                     </svg>
                                 </button>
                             </div>`;
-                },
-                cellClick: (e, cell) => {
-                    const highlight = cell.getRow().getData();
-                    const target = e.target.closest('button');
-                    if (!target) return;
-                    if (target.title === 'Comments') {
-                        showComments(highlight);
-                    } else if (target.title === 'Untag') {
-                        handleUntag(highlight);
+                    },
+                    cellClick: (e, cell) => {
+                        const highlight = cell.getRow().getData();
+                        const target = e.target.closest('button');
+                        if (!target) return;
+                        if (target.title === 'Comments') {
+                            showComments(highlight);
+                        } else if (target.title === 'Untag') {
+                            handleUntag(highlight);
+                        }
                     }
-                }}
+                }
             ],
             height: "100%",
             placeholder: "No highlights for this tag.",
+        });
+        tabulatorInstance.on("tableBuilt", () => {
+            tableReady = true;
         });
     }
 
@@ -238,7 +253,7 @@
     async function handleDeleteTag() {
         if (!selectedTag) return;
 
-        const confirmed = await confirm(`Are you sure you want to delete the tag "${selectedTag.name}"? This will remove the tag from all associated highlights and cannot be undone.`, {
+        const confirmed = await confirm(`Are you sure you want to delete the tag \"${selectedTag.name}\"? This will remove the tag from all associated highlights and cannot be undone.`, {
             title: 'Confirm Deletion',
             type: 'warning',
         });
@@ -317,7 +332,7 @@
     async function handleUntag(item) {
         if (!selectedTag) return;
 
-        const confirmed = await confirm(`Are you sure you want to remove the tag "${selectedTag.name}" from this highlight?`);
+        const confirmed = await confirm(`Are you sure you want to remove the tag \"${selectedTag.name}\" from this highlight?`);
         if (!confirmed) return;
 
         try {
@@ -392,14 +407,13 @@
                     </div>
                 </div>
 
-                <div class="h-[80%] flex flex-col">
+                <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
                         <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
                     </div>
                     <div class="flex-grow overflow-auto" bind:this={tableContainer}>
                     </div>
-                    <div bind:this={paginationContainer} class="mt-2 flex-shrink-0"></div>
                 </div>
             {:else}
                 <div class="flex items-center justify-center h-full">
