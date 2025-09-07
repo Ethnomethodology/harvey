@@ -148,12 +148,55 @@
 			message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
 		}
 	}
-	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier); const currentLang = $transcriptStore.selectedLanguage; const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier); if (localModelInfo && currentLang && currentLang !== 'en') { console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`); await showModelInfoDialog(localModelInfo); } } }
-	async function handleLanguageChange(event) { const selectedValue = event.target.value; const newLanguage = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected language:', newLanguage || 'None'); setSelectedLanguage(newLanguage); const currentModelIdentifier = $transcriptStore.selectedModelName; if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) { const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier); if (localModelInfo) { console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`); await showModelInfoDialog(localModelInfo); } } }
-	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return; let infoMessage = `Model Information: ${modelInfo.name}\n\n`; if (modelInfo.description && modelInfo.description.trim() !== '') { infoMessage += `${modelInfo.description}\n\n`; } else if (modelInfo.language && modelInfo.language.trim() !== '') { infoMessage += `Primary Language Focus: ${modelInfo.language}\n`; } else { infoMessage += "General purpose model.\n"; } if (modelInfo.size && modelInfo.size.trim() !== '') { infoMessage += `Size: ${modelInfo.size}`; } if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) { infoMessage += "\n\nNote: This is a multilingual model."; } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) { infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`; } infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`; await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' }); }
+	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue;
+ console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier);
+ const currentLang = $transcriptStore.selectedLanguage;
+ const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier);
+ if (localModelInfo && currentLang && currentLang !== 'en') {
+ console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`);
+ await showModelInfoDialog(localModelInfo);
+ }
+ }
+ }
+	async function handleLanguageChange(event) { const selectedValue = event.target.value;
+ const newLanguage = selectedValue === "" ? null : selectedValue;
+ console.log('TopBar: Selected language:', newLanguage || 'None');
+ setSelectedLanguage(newLanguage);
+ const currentModelIdentifier = $transcriptStore.selectedModelName;
+ if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) {
+ const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier);
+ if (localModelInfo) {
+ console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`);
+ await showModelInfoDialog(localModelInfo);
+ }
+ }
+ }
+	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return;
+ let infoMessage = `Model Information: ${modelInfo.name}\n\n`;
+ if (modelInfo.description && modelInfo.description.trim() !== '') {
+ infoMessage += `${modelInfo.description}\n\n`;
+ } else if (modelInfo.language && modelInfo.language.trim() !== '') {
+ infoMessage += `Primary Language Focus: ${modelInfo.language}\n`;
+ } else {
+ infoMessage += "General purpose model.\n";
+ }
+ if (modelInfo.size && modelInfo.size.trim() !== '') {
+ infoMessage += `Size: ${modelInfo.size}`;
+ }
+ if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) {
+ infoMessage += "\n\nNote: This is a multilingual model.";
+ } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) {
+ infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`;
+ }
+ infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`;
+ await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' });
+ }
 	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
 	function openSpeakersModal() { isSpeakersModalOpen = true; }
-	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail; console.log("TopBar: Confirmed speakers:", count, names, secondNames); updateSpeakerConfig(count, names, secondNames); }
+	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail;
+ console.log("TopBar: Confirmed speakers:", count, names, secondNames);
+ updateSpeakerConfig(count, names, secondNames);
+ }
 	function handleMediaSelectionChange(event) {
 		const selectedPath = event.target.value;
 		if (!selectedPath) { return; }
@@ -207,9 +250,9 @@
 	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
 	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
 	const SYSTEM_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>`;
-	$: themeIconHtml = $themePreference === 'light' ? MOON_ICON
-					 : $themePreference === 'dark' ? SYSTEM_ICON
-					 : SUN_ICON;
+	$: themeIconHtml = $themePreference === 'light' ? SUN_ICON
+					 : $themePreference === 'dark' ? MOON_ICON
+					 : SYSTEM_ICON;
 	$: nextThemeName = $themePreference === 'light' ? 'Dark'
 					 : $themePreference === 'dark' ? 'System'
 					 : 'Light';
@@ -341,16 +384,16 @@
 
 <SpeakersModal bind:showModal="{isSpeakersModalOpen}" currentSpeakers="{$transcriptStore.speakers}" on:confirm="{handleSpeakersConfirm}" />
 <ExportModal
-	bind:showModal="{isExportModalOpen}"
+	bind:showModal="{isExportModalOpen}" 
 	transcriptPath="{transcriptPathForExport}"
 	on:confirm="{handleExportConfirm}"
-	on:close="{() => isExportModalOpen = false}"
+	on:close={() => isExportModalOpen = false}
 />
 <LayoutSettingsModal
 	bind:showModal="{isLayoutSettingsModalOpen}"
 	currentLayoutKey="{$activeLayout}"
 	on:selectLayout="{handleLayoutSelected}"
-	on:close="{() => isLayoutSettingsModalOpen = false}"
+	on:close={() => isLayoutSettingsModalOpen = false}
 />
 
 <style lang="postcss">
