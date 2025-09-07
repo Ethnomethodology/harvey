@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/LeftPanel.svelte -->
 <script>
 	import { get } from 'svelte/store';
-	import { project } from '$lib/stores/projectStore.js';
+	import { project, HARVEY_FILES_DIR, MEDIA_DIR_NAME } from '$lib/stores/projectStore.js';
 	import { transcriptStore, selectMedia } from '$lib/stores/transcriptStore.js';
 	import { loadTranscriptFile, refreshProjectFiles, renameProjectItem, deleteProjectItem } from '$lib/services/projectService.js';
 	import TreeNode from './TreeNode.svelte';
@@ -33,6 +33,7 @@
 	$: projectFileTree = $project.files || [];
 
     $: uniqueProjectFileTree = (() => {
+        const mediaPathPrefix = `${$project.baseDirectory}/${HARVEY_FILES_DIR}/${MEDIA_DIR_NAME}`;
         const seen = new Set();
         return projectFileTree.filter(node => {
             const key = node.path || node.relativePath;
@@ -40,7 +41,14 @@
                 return false;
             }
             seen.add(key);
-            return true;
+            // Only include nodes that are directories or whose path starts with the mediaPathPrefix
+            // and are of type 'media' or 'directory_media_stem' or 'transcript'
+            const isMediaFileOrDirectory = node.file_type === 'media' || node.file_type === 'directory_media_stem' || node.file_type === 'transcript';
+            const isWithinMediaPath = node.path && node.path.startsWith(mediaPathPrefix);
+            const isRootMediaDirectory = node.path === mediaPathPrefix;
+
+            // Include the root media directory itself, and any media files/directories/transcripts within it
+            return (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory));
         });
     })();
 
