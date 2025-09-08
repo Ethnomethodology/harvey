@@ -851,7 +851,7 @@
     });
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden border-r border-gray-200 dark:border-gray-600">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
         <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
@@ -989,7 +989,7 @@
                             {#each $currentProjectGroupsList as group (group.id)}
                                 <li class="group">
                                     <div
-                                        class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                        class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                         class:bg-blue-100={$project.selectedGroupId === group.id}
                                         class:dark:bg-blue-800={$project.selectedGroupId === group.id}
                                         on:click={() => handleGroupSelected(group)}
@@ -1028,7 +1028,7 @@
             {#each CATEGORIES_BASE as category (category.type)}
                 <button
                     type="button"
-                    class="p-1.5 rounded-md focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
+                    class="p-1.5 focus:outline-none dark:focus:ring-offset-gray-800 focus:ring-offset-1"
                     class:hover:bg-gray-200={category.type !== activeCollapsedCategoryType}
                     class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
                     class:focus:ring-2={category.type !== activeCollapsedCategoryType}

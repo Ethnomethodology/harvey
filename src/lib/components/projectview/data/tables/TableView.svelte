@@ -26,12 +26,12 @@
 </script>
 
 <!-- Main container for the Table View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
     {#key itemPath}
         {#if itemPath}
             <TableViewerPanel tablePath={itemPath} hasHeaders={hasHeaders} />
         {:else}
-            <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
+            <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
                 <span>No table path provided to TableView.</span>
             </div>
         {/if}

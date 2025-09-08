@@ -575,16 +575,16 @@
 </script>
 
 <div
-  class="p-3 h-full flex flex-col text-base text-gray-900 dark:text-gray-200"
+  class="h-full flex flex-col text-base text-gray-900 dark:text-gray-200"
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
-    <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full">
+    <h3 class="font-semibold text-sm text-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600 pb-1 flex items-center justify-between w-full p-2">
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
             <!-- Transcript Dropdown using native select -->
             {#if $transcriptStore.selectedMediaFile}
                 <div class="relative inline-block">
                     <select
-                        class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                        class="block w-auto border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                                max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
                         value={$transcriptStore.activeTranscript?.path || ''}
                         on:change={(e) => switchTranscript(e.target.value)}
@@ -634,7 +634,7 @@
                 </button>
                 {#if showExportMenu}
                   <div class="fixed inset-0 z-0" on:click={() => showExportMenu = false}></div>
-                  <div class="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
+                  <div class="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-max whitespace-nowrap z-10">
                     <button
                       on:click={() => { showExportMenu = false; handleAddToDocumentsClick(); }}
                       class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
@@ -673,13 +673,14 @@
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
                     style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
-                    class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-gray-700 flex items-start gap-x-2"
+                    class="transition-colors duration-150 ease-in-out flex items-start gap-x-2 p-2 border-b"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
                     class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
                     class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex}
                     class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex}
                     class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
+                    class:dark:border-gray-700={seg.segmentIndex !== activeSegmentIndex}
                     class:bg-white={seg.segmentIndex !== activeSegmentIndex}
                     class:dark:bg-gray-800={seg.segmentIndex !== activeSegmentIndex}
                     class:hover:bg-blue-50={true}
@@ -804,7 +805,7 @@
 </div>
 
 <style lang="postcss">
-	.btn-icon { @apply p-1 rounded focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
+	.btn-icon { @apply p-1 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
 	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
     .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-gray-500; }
 	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }

@@ -354,9 +354,9 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
     <SimpleTopBar />
-    <div class="flex h-full w-full border border-gray-300 dark:border-gray-600 divide-x divide-gray-300 dark:divide-gray-600">
+    <div class="flex h-full w-full divide-x divide-gray-200 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
-        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700">
+        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
@@ -377,7 +377,7 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-3/4 h-full flex flex-col">
+    <div class="w-3/4 h-full flex flex-col p-4 gap-4">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
@@ -396,7 +396,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex mt-2">
+                    <div class="flex space-x-2 mt-2">
                         {#if isEditing}
                             <button class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
                             <button class="px-4 py-2 bg-red-600 text-white hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
@@ -433,7 +433,7 @@
     {#if isCommentsPanelOpen}
         <div class="fixed inset-0 bg-black bg-opacity-50 z-30" on:click={() => isCommentsPanelOpen = false}></div>
         <div
-            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40"
+            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40"
             transition:slide={{ duration: 300, axis: 'x' }}
         >
             {#if selectedHighlight}

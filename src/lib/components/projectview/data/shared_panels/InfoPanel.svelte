@@ -455,13 +455,13 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
-    <div class="text-sm font-semibold border-b p-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8">
-        <span>Metadata</span>
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden py-2">
+    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 mb-2">
+        <span class="ml-1">Metadata</span>
         {#if currentFileMetadata}
             <button
                 on:click={toggleEditMode}
-                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title={isEditing ? 'Cancel Edit' : 'Edit Metadata'}
             >
                 {@html isEditing ? CANCEL_ICON_SVG : EDIT_ICON_SVG}
@@ -469,66 +469,66 @@
         {/if}
     </div>
 
-    <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative p-2">
+    <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
         {#if currentFileMetadata}
             <div class="space-y-2">
-                <div>
+                <div class="mb-3">
                     <label for="fileNameInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Name:</label>
                     {#if isEditing}
-                        <input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" placeholder="Enter name without extension" autocorrect="off" autocomplete="off"/>
+                        <input type="text" id="fileNameInput" bind:value={editableMetadata.file_name} class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" placeholder="Enter name without extension" autocorrect="off" autocomplete="off"/>
                         {#if currentFileMetadata.file_name && currentFileMetadata.file_name.includes('.')}
                             <span class="mt-1 text-gray-500 dark:text-gray-400 text-xs block">
                                 Extension: {currentFileMetadata.file_name.substring(currentFileMetadata.file_name.lastIndexOf('.'))}
                             </span>
                         {/if}
                     {:else}
-                        <span id="fileNameInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.file_name || 'N/A'}</span>
+                        <span id="fileNameInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.file_name || 'N/A'}</span>
                     {/if}
                 </div>
 
-                <div>
+                <div class="mb-3">
                     <label for="filePathAbsolute" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">File Path:</label>
-                    <span id="filePathAbsolute" class="text-gray-900 dark:text-gray-100 break-all block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</span>
+                    <span id="filePathAbsolute" class="text-gray-900 dark:text-gray-100 break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.db_absolute_file_path || ''}</span>
                 </div>
 
                 {#if currentFileMetadata.creation_time}
-                <div>
+                <div class="mb-3">
                     <label for="createdAt" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Created At:</label>
-                    <span id="createdAt" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{new Date(currentFileMetadata.creation_time).toLocaleString()}</span>
+                    <span id="createdAt" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{new Date(currentFileMetadata.creation_time).toLocaleString()}</span>
                 </div>
                 {/if}
 
                 {#if currentFileMetadata.last_modified}
-                <div>
+                <div class="mb-3">
                     <label for="lastModified" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Last Modified:</label>
-                    <span id="lastModified" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{new Date(currentFileMetadata.last_modified).toLocaleString()}</span>
+                    <span id="lastModified" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{new Date(currentFileMetadata.last_modified).toLocaleString()}</span>
                 </div>
                 {/if}
 
-                <div>
+                <div class="mb-3">
                     <label for="titleInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Title:</label>
                     {#if isEditing}
-                        <input type="text" id="titleInput" bind:value={editableMetadata.title} class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"/>
+                        <input type="text" id="titleInput" bind:value={editableMetadata.title} class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"/>
                     {:else}
-                        <span id="titleInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.title || ''}</span>
+                        <span id="titleInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.title || ''}</span>
                     {/if}
                 </div>
 
-                <div>
+                <div class="mb-3">
                     <label for="descriptionInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Description:</label>
                     {#if isEditing}
-                        <textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
+                        <textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span id="descriptionInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || ''}</span>
+                        <span id="descriptionInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.description || ''}</span>
                     {/if}
                 </div>
 
-                <div>
+                <div class="mb-3">
                     <label for="summaryInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Summary:</label>
                     {#if isEditing}
-                        <textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
+                        <textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span id="summaryInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
+                        <span id="summaryInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
                     {/if}
                 </div>
 
@@ -538,8 +538,8 @@
                     {#if attachmentsField && attachmentsField.value}
                         {@const attachments = JSON.parse(attachmentsField.value)}
                         {#if Array.isArray(attachments) && attachments.length > 0}
-                            <hr class="border-t -mx-2 border-gray-300 dark:border-gray-700">
-                            <div class="pt-2">
+                            <hr class="my-4 border-gray-300 dark:border-gray-700">
+                            <div class="mb-3">
                                 <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Attachments</h3>
                                 <ul class="list-disc list-inside space-y-1 pl-1">
                                     {#each attachments as attachment, i (attachment)}
@@ -560,51 +560,49 @@
                 {/if}
 
                 {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(currentFileMetadata.customFields && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
-                    <hr class="border-t -mx-2 border-gray-300 dark:border-gray-700">
-                    <div class="pt-2 space-y-2">
-                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Technical Details</h3>
-                        {#if currentFileMetadata.duration_seconds}
-                            <div>
-                                <label for="durationInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Duration:</label>
-                                <span id="durationInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{formatDuration(currentFileMetadata.duration_seconds)}</span>
-                            </div>
-                        {/if}
-                        {#if currentFileMetadata.width && currentFileMetadata.height}
-                            <div>
-                                <label for="dimensionsInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Dimensions:</label>
-                                <span id="dimensionsInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.width} x {currentFileMetadata.height}</span>
-                            </div>
-                        {/if}
-                        {#if currentFileMetadata.frame_rate}
-                            <div>
-                                <label for="frameRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Frame Rate:</label>
-                                <span id="frameRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.frame_rate.toFixed(2)} fps</span>
-                            </div>
-                        {/if}
-                        {#if currentFileMetadata.bit_rate}
-                            <div>
-                                <label for="bitRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Bit Rate:</label>
-                                <span id="bitRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{formatBitrate(currentFileMetadata.bit_rate)}</span>
-                            </div>
-                        {/if}
-                        {#if currentFileMetadata.video_codec}
-                            <div>
-                                <label for="videoCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Video Codec:</label>
-                                <span id="videoCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.video_codec || ''}</span>
-                            </div>
-                        {/if}
-                        {#if currentFileMetadata.audio_codec}
-                            <div>
-                                <label for="audioCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Audio Codec:</label>
-                                <span id="audioCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.audio_codec || ''}</span>
-                            </div>
-                        {/if}
-                    </div>
+                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Technical Details</h3>
+                    {#if currentFileMetadata.duration_seconds}
+                        <div class="mb-3">
+                            <label for="durationInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Duration:</label>
+                            <span id="durationInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{formatDuration(currentFileMetadata.duration_seconds)}</span>
+                        </div>
+                    {/if}
+                    {#if currentFileMetadata.width && currentFileMetadata.height}
+                        <div class="mb-3">
+                            <label for="dimensionsInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Dimensions:</label>
+                            <span id="dimensionsInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.width} x {currentFileMetadata.height}</span>
+                        </div>
+                    {/if}
+                    {#if currentFileMetadata.frame_rate}
+                        <div class="mb-3">
+                            <label for="frameRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Frame Rate:</label>
+                            <span id="frameRateInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.frame_rate.toFixed(2)} fps</span>
+                        </div>
+                    {/if}
+                    {#if currentFileMetadata.bit_rate}
+                        <div class="mb-3">
+                            <label for="bitRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Bit Rate:</label>
+                            <span id="bitRateInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{formatBitrate(currentFileMetadata.bit_rate)}</span>
+                        </div>
+                    {/if}
+                    {#if currentFileMetadata.video_codec}
+                        <div class="mb-3">
+                            <label for="videoCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Video Codec:</label>
+                            <span id="videoCodecInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.video_codec || ''}</span>
+                        </div>
+                    {/if}
+                    {#if currentFileMetadata.audio_codec}
+                        <div class="mb-3">
+                            <label for="audioCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Audio Codec:</label>
+                            <span id="audioCodecInput" class="text-gray-900 dark:text-gray-100 block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px] break-words">{currentFileMetadata.audio_codec || ''}</span>
+                        </div>
+                    {/if}
                 {/if}
 
                 {#if currentAssetRelativePathForGroups && get(project).id}
-                    <hr class="border-t -mx-2 border-gray-300 dark:border-gray-700">
-                    <div class="pt-2">
+                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <div class="mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-1">Groups</h3>
                         {#if isLoadingFileGroups}
                             <p class="text-xs text-gray-400 dark:text-gray-500 italic">Loading groups...</p>
@@ -626,7 +624,7 @@
                             {#if fileAssignedGroups && fileAssignedGroups.length > 0}
                                 <div class="flex flex-wrap gap-1 mt-1">
                                     {#each fileAssignedGroups as group (group.id)}
-                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md">
                                             {group.name}
                                         </span>
                                     {/each}
@@ -639,13 +637,13 @@
                 {/if}
 
                 {#if $customFieldDefinitionsStore && ($customFieldDefinitionsStore.length > 0 || isEditing)}
-                    <hr class="border-t -mx-2 border-gray-300 dark:border-gray-700">
-                    <div class="flex justify-between items-center pt-2 mb-2">
+                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <div class="flex justify-between items-center mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
                         {#if isEditing}
                             <button
                                 on:click={() => showAddFieldModal = true}
-                                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 title="Add Custom Field Definition"
                                 aria-label="Add Custom Field Definition"
                             >
@@ -659,55 +657,51 @@
                 {/if}
 
                 {#if !isEditing}
-                    <div class="space-y-2">
-                        {#each displayableCustomFields as field, index (field.key + '-' + index)}
-                            <div>
-                                <label for={`custom-field-display-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
-                                <span id={`custom-field-display-${index}`} class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all' : 'break-words break-all'} block w-full border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">
-                                    {field.value || ''}
-                                </span>
-                            </div>
-                        {/each}
-                    </div>
+                    {#each displayableCustomFields as field, index (field.key + '-' + index)}
+                        <div class="mb-3">
+                            <label for={`custom-field-display-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
+                            <span id={`custom-field-display-${index}`} class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all' : 'break-words break-all'} block w-full rounded-md border border-gray-300 dark:border-gray-600 px-1.5 py-1 bg-gray-50 dark:bg-gray-700/30 min-h-[30px]">
+                                {field.value || ''}
+                            </span>
+                        </div>
+                    {/each}
                     {#if displayableCustomFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom field values set for this item. Edit to add.</p>
                     {/if}
                 {/if}
 
                 {#if isEditing}
-                    <div class="space-y-2">
-                        {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
-                            <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
-                                    <button
-                                        on:click={() => handleDeleteCustomField(field.key)}
-                                        title={`Delete '${field.name || field.key}' definition`}
-                                        class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 focus:outline-none focus:ring-1 focus:ring-red-500"
-                                    >
-                                        {@html TRASH_ICON_SVG}
-                                    </button>
-                                </div>
-                                {#if field.type === 'small_text'}
-                                    <input
-                                        type="text"
-                                        id={`custom-field-edit-${index}`}
-                                        bind:value={editableMetadata.customFields[index].value}
-                                        class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
-                                        placeholder={`Enter value for ${field.name || field.key}`}
-                                        autocorrect="off" autocomplete="off"/>
-                                {:else if field.type === 'long_text'}
-                                    <textarea
-                                        id={`custom-field-edit-${index}`}
-                                        rows="3"
-                                        bind:value={editableMetadata.customFields[index].value}
-                                        class="mt-0.5 block w-full border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
-                                        placeholder={`Enter value for ${field.name || field.key}`}
-                                        autocorrect="off" autocomplete="off"></textarea>
-                                {/if}
+                    {#each editableMetadata.customFields as field, index (field.key + '-' + index)}
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1">
+                                <label for={`custom-field-edit-${index}`} class="font-semibold text-gray-600 dark:text-gray-400">{field.name || field.key}:</label>
+                                <button
+                                    on:click={() => handleDeleteCustomField(field.key)}
+                                    title={`Delete '${field.name || field.key}' definition`}
+                                    class="p-0.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500"
+                                >
+                                    {@html TRASH_ICON_SVG}
+                                </button>
                             </div>
-                        {/each}
-                    </div>
+                            {#if field.type === 'small_text'}
+                                <input
+                                    type="text"
+                                    id={`custom-field-edit-${index}`}
+                                    bind:value={editableMetadata.customFields[index].value}
+                                    class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
+                                    placeholder={`Enter value for ${field.name || field.key}`}
+                                    autocorrect="off" autocomplete="off"/>
+                            {:else if field.type === 'long_text'}
+                                <textarea
+                                    id={`custom-field-edit-${index}`}
+                                    rows="3"
+                                    bind:value={editableMetadata.customFields[index].value}
+                                    class="mt-0.5 block w-full rounded-md border border-gray-300 dark:border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900"
+                                    placeholder={`Enter value for ${field.name || field.key}`}
+                                    autocorrect="off" autocomplete="off"></textarea>
+                            {/if}
+                        </div>
+                    {/each}
                      {#if editableMetadata.customFields.length === 0 && $customFieldDefinitionsStore && $customFieldDefinitionsStore.filter(def => { const scope = def.scope; let applicable = false; if (typeof scope === 'string') { if (scope.toLowerCase() === 'project') applicable = true; } else if (scope && typeof scope === 'object' && typeof scope.AssetType === 'string') { const assetTypeScope = scope.AssetType.toLowerCase(); if (assetTypeScope === itemType) applicable = true; else if (assetTypeScope === 'media' && (itemType === 'audio' || itemType === 'video' || itemType === 'media_note')) applicable = true; } return applicable; }).length > 0}
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">No custom fields have values for this item. Edit to add.</p>
                     {/if}
@@ -717,7 +711,7 @@
                     <div class="mt-4 flex justify-end items-center">
                         <button
                             on:click={handleSaveMetadata}
-                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
                         >
                             Save Changes
                         </button>
@@ -725,7 +719,7 @@
                 {/if}
             </div>
         {:else}
-            <p class="text-gray-500 dark:text-gray-400 italic p-2">
+            <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
                 Select an item to view its metadata.
             </p>
         {/if}

@@ -399,7 +399,7 @@
 <style lang="postcss">
 	/* Shared button style */
 	.ui-button-icon {
-		@apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
 	.ui-button-icon:disabled {
 		@apply opacity-50 cursor-not-allowed;
@@ -410,12 +410,12 @@
 
 	/* Select style adjustments */
 	.ui-select {
-		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed; /* Adjusted padding */
+		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed; /* Adjusted padding */
 	}
 
 	/* Basic style for the new checkbox */
 	.ui-checkbox {
-		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
+		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
 	}
 
 	.ui-select optgroup {

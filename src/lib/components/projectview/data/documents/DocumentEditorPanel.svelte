@@ -178,7 +178,7 @@
 
 </script>
 
-<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 overflow-hidden exported-transcript">
+<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden exported-transcript">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
     {:else if errorMessage && selectedPath}

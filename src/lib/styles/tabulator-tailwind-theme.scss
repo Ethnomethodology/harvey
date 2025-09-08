@@ -42,6 +42,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   background-color: var(--ui-select-bg); // Actual theme value
   border: 1px solid var(--ui-select-border);
   color: var(--ui-text-color);
+  border-radius: $borderRadius;
   font-size: $fontSize;
   font-family: $fontFamily;
   line-height: $lineHeight;
@@ -151,6 +152,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       margin: 0 2px;
       padding: $paddingSmall * 0.5 $paddingSmall;
       border: 1px solid var(--ui-select-border);
+      border-radius: $borderRadius / 2;
       background-color: var(--ui-select-bg);
       color: var(--ui-text-color);
       cursor: pointer;

@@ -25,7 +25,7 @@
 </script>
 
 <!-- Main container for the Media View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
     {#key itemPath}
         {#if itemPath}
             <MediaEditorPanel
@@ -34,7 +34,7 @@
                 on:requestTrimInTranscriptionTab={forwardEvent}
             />
         {:else}
-            <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
+            <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
                 <span>No media file path provided to MediaView.</span>
             </div>
         {/if}

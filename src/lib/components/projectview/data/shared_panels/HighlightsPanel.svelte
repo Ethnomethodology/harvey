@@ -169,8 +169,8 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
-    <div class="text-sm font-semibold border-b p-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8">
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden border-l border-gray-200 dark:border-gray-600">
+    <div class="text-sm font-semibold border-b border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 p-2">
         <span>Highlights</span>
     </div>
 

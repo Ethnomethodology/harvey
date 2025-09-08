@@ -853,7 +853,7 @@ export let compactMode = false; // New prop, defaults to false
 	}
 </script>
 
-<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 overflow-hidden">
 	<div
 		bind:this={waveformScrollContainerRef}
 		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-700 relative overflow-x-auto overflow-y-hidden h-full"
@@ -887,20 +887,20 @@ export let compactMode = false; // New prop, defaults to false
 			{@const trimEndPx = timeToVisiblePx(trimEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 left-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]" style:width="{Math.max(0, trimStartPx)}px"></div>
 			<div class="absolute top-0 bottom-0 right-0 bg-black/30 dark:bg-black/50 pointer-events-none z-[8]" style:left="{Math.min(visibleCanvasWidth, trimEndPx)}px"></div>
-			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimStartPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-left', e)} role="slider" aria-label="Trim start time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimStartTime}> <div class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimStartTime)} </div> </div>
-			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimEndPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-right', e)} role="slider" aria-label="Trim end time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimEndTime}> <div class="w-1 h-full bg-red-600 rounded-sm group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimEndTime)} </div> </div>
+			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimStartPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-left', e)} role="slider" aria-label="Trim start time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimStartTime}> <div class="w-1 h-full bg-red-600 group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimStartTime)} </div> </div>
+			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-10" style:left="{trimEndPx}px" on:mousedown|preventDefault={(e) => startTrimDrag('trim-right', e)} role="slider" aria-label="Trim end time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={trimEndTime}> <div class="w-1 h-full bg-red-600 group-hover:ring-2 group-hover:ring-red-400 transition-all"></div> <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-mono shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(trimEndTime)} </div> </div>
 		{/if}
 
 		{#if showTrimUI && isEditingSegment && visibleCanvasWidth > 0 && actualMediaDuration > 0}
 			{@const editStartPx = timeToVisiblePx(editSegmentStartTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			{@const editEndPx = timeToVisiblePx(editSegmentEndTime, actualMediaDuration, totalLogicalWidth, scrollOffsetPx)}
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30" style:left="{editStartPx}px" on:mousedown|preventDefault={(e) => startEditDrag('edit-left', e)} role="slider" aria-label="Segment start time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={editSegmentStartTime}>
-                <div class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"></div>
-                <div class="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(editSegmentStartTime)} </div>
+                <div class="w-1 h-full bg-blue-600 group-hover:ring-2 group-hover:ring-blue-400 transition-all"></div>
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(editSegmentStartTime)} </div>
             </div>
 			<div class="absolute top-0 bottom-0 -translate-x-1/2 w-2.5 flex items-center justify-center cursor-ew-resize group z-30" style:left="{editEndPx}px" on:mousedown|preventDefault={(e) => startEditDrag('edit-right', e)} role="slider" aria-label="Segment end time" aria-valuemin="0" aria-valuemax={actualMediaDuration} aria-valuenow={editSegmentEndTime}>
-                <div class="w-1 h-full bg-blue-600 rounded-sm group-hover:ring-2 group-hover:ring-blue-400 transition-all"></div>
-                <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono rounded shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(editSegmentEndTime)} </div>
+                <div class="w-1 h-full bg-blue-600 group-hover:ring-2 group-hover:ring-blue-400 transition-all"></div>
+                <div class="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 px-1.5 py-0.5 bg-blue-600 text-white text-[10px] font-mono shadow whitespace-nowrap pointer-events-none"> {formatTimestamp(editSegmentEndTime)} </div>
             </div>
 		{/if}
 	</div>
@@ -946,7 +946,6 @@ export let compactMode = false; // New prop, defaults to false
 	}
 	.waveform-scroll-container::-webkit-scrollbar-thumb {
 		background-color: transparent; /* Default: transparent */
-		border-radius: 4px;
 	}
 	.waveform-scroll-container:hover::-webkit-scrollbar-thumb {
 		background-color: #a0aec0; /* Light mode: gray-400 */
@@ -963,7 +962,7 @@ export let compactMode = false; // New prop, defaults to false
 		text-align: center;
 	}
 	.ui-button-icon-panelheader {
-		@apply p-1 rounded text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700;
+		@apply p-1 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700;
 	}
 	.w-5 { width: 1.25rem; }
 	.h-5 { height: 1.25rem; }
