@@ -1,8 +1,0 @@
-
-> harvey@0.1.0 tauri
-> tauri dev
-
-     Running BeforeDevCommand (`npm run dev`)
-
-> harvey@0.1.0 dev
-> vite dev
