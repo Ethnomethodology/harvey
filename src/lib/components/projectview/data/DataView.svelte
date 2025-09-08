@@ -174,7 +174,7 @@
 
 	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} />
 
-	<div class="flex flex-grow w-full min-h-0 p-1 gap-1">
+	<div class="flex flex-grow w-full min-h-0 border border-gray-300 dark:border-gray-600 divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<DataLeftPanel
@@ -188,7 +188,7 @@
         <div class="flex-grow h-full min-w-0">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
-                    <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    <div class="h-full bg-gray-200 dark:bg-gray-700 shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Select an item from the Data panel to view or edit.</span>
                     </div>
                 {:else if activeViewType === 'documents'}
@@ -213,7 +213,7 @@
                         on:requestviewchange={(event) => handleViewChangeRequest(event.detail)}
                     />
                 {:else}
-                    <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    <div class="h-full bg-gray-200 dark:bg-gray-700 shadow flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Selected view type '{activeViewType}' not recognized or item path invalid.</span>
                     </div>
                 {/if}

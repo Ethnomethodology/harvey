@@ -851,7 +851,7 @@
     });
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
         <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
@@ -863,7 +863,7 @@
                  class:pointer-events-none={$showSearchBox}>
                 <button
                     type="button"
-                    class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     on:click={handleToggleDataLeftPanel}
                     title={$panelStateStore.dataLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}>
                     {@html JOURNAL_ICON_SVG}
@@ -917,7 +917,7 @@
                         {#each filteredCategories as category (category.type)}
                             <li>
                                 <div
-                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
                                     on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
                                     <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
                                         <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
@@ -941,7 +941,7 @@
                                             <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
-                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                                        <div class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                                              class:bg-blue-100={fileItem.path === selectedItemPathInStore}
                                                              class:dark:bg-blue-800={fileItem.path === selectedItemPathInStore}
                                                              title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
@@ -1054,7 +1054,7 @@
     {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
-		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
+		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 
@@ -1144,7 +1144,7 @@
     {#if showGroupSubMenu && groupSubMenuItem}
         <div
             id="notes-left-panel-group-sub-menu"
-            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[150px]"
+            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[150px]"
             style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
             on:mouseenter={handleEnterGroupSubMenu}
             on:mouseleave={handleLeaveGroupSubMenu}
@@ -1167,7 +1167,7 @@
         {#if categoryContextMenuVisible && !$panelStateStore.dataLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[120px]"
         style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
         on:click|stopPropagation>
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
@@ -1300,7 +1300,7 @@
 {#if groupContextMenuVisible && groupContextMenuItem}
     <div
         id="notes-left-panel-group-item-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[120px]"
         style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
         on:click|stopPropagation>
         <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>

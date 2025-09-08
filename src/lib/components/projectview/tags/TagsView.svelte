@@ -354,15 +354,15 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
     <SimpleTopBar />
-    <div class="flex h-full w-full p-1 gap-1">
+    <div class="flex h-full w-full border border-gray-300 dark:border-gray-600 divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
-        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4 border-r border-gray-200 dark:border-gray-600">
+        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
                 {#each $allTags as tag (tag.id)}
                     <li
-                        class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                         class:bg-blue-200={selectedTag?.id === tag.id}
                         class:dark:bg-blue-800={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
@@ -377,7 +377,7 @@
     </div>
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-3/4 h-full flex flex-col p-4 gap-4">
+    <div class="w-3/4 h-full flex flex-col">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
@@ -386,23 +386,23 @@
                     <div>
                         <div>
                             {#if isEditing}
-                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
+                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 p-1" />
                             {:else}
                                 <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
                             {/if}
                             <div class="mb-4">
                                 <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
+                                <textarea id="tag-description" rows="2" class="mt-1 block w-full border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
                             </div>
                         </div>
                     </div>
-                    <div class="flex space-x-2 mt-2">
+                    <div class="flex mt-2">
                         {#if isEditing}
-                            <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
-                            <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                            <button class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
+                            <button class="px-4 py-2 bg-red-600 text-white hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
                         {:else}
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
                         {/if}
                     </div>
                 </div>
@@ -410,7 +410,7 @@
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
                         <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
                     </div>
                     <div class="flex-grow overflow-auto" bind:this={tableContainer}>
                     </div>
@@ -433,7 +433,7 @@
     {#if isCommentsPanelOpen}
         <div class="fixed inset-0 bg-black bg-opacity-50 z-30" on:click={() => isCommentsPanelOpen = false}></div>
         <div
-            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 p-4 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40 rounded-lg"
+            class="fixed top-4 right-4 bottom-4 w-1/3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-y-auto shadow-lg z-40"
             transition:slide={{ duration: 300, axis: 'x' }}
         >
             {#if selectedHighlight}

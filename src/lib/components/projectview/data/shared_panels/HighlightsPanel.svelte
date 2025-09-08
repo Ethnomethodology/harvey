@@ -169,16 +169,16 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden py-2">
-    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 mb-2">
-        <span class="ml-1">Highlights</span>
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
+    <div class="text-sm font-semibold border-b p-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8">
+        <span>Highlights</span>
     </div>
 
-    <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
+    <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative p-2">
         {#if processedHighlights.length > 0}
             <ul class="space-y-2">
                 {#each processedHighlights as highlight (highlight.id)}
-                    <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                    <li class="border bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
                             {#if itemType === 'images'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
@@ -206,7 +206,7 @@
                                 </div>
                             </div>
                             <div class="flex justify-end w-full mt-1">
-                                <button on:click={() => openCommentsModal(highlight)} class="relative p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+                                <button on:click={() => openCommentsModal(highlight)} class="relative p-1 hover:bg-gray-200 dark:hover:bg-gray-600">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-fill" viewBox="0 0 16 16">
                                         <path d="M8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6-.097 1.016-.417 2.13-.771 2.966-.079.186.074.394.273.362 2.256-.37 3.597-.938 4.18-1.234A9 9 0 0 0 8 15"/>
                                     </svg>
@@ -222,11 +222,11 @@
                 {/each}
             </ul>
         {:else if itemType === 'doc' || itemType === 'media' || itemType === 'imported_transcript' || itemType === 'images' || itemType === 'tables'}
-            <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
+            <p class="text-gray-500 dark:text-gray-400 italic p-2">
                 No highlights for this item.
             </p>
         {:else}
-            <p class="text-gray-500 dark:text-gray-400 italic px-1 py-2">
+            <p class="text-gray-500 dark:text-gray-400 italic p-2">
                 Highlights are not available for this item type.
             </p>
         {/if}
