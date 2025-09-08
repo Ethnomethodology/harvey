@@ -458,7 +458,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     />
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
         <!-- Main Content Area (Panels) -->
-        <div class="flex flex-grow min-h-0 w-full overflow-x-hidden border-t border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600">
+        <div class="flex flex-grow min-h-0 w-full overflow-x-hidden divide-x divide-gray-300 dark:divide-gray-600">
             {#if isLeftPanelVisible}
                 <div
                     class="w-[15%] h-full bg-white dark:bg-gray-800 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
@@ -489,7 +489,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
                 />
             </div>
-            <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 overflow-y-auto">
+            <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 overflow-y-auto border-t border-gray-300 dark:border-gray-600">
                  <EditableTranscript
                     bind:this={editableTranscriptRef}
                     bind:panelEditMode={panelEditModeActive}
@@ -504,7 +504,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
         <!-- Vertical Waveform Panel (Conditional) -->
         {#if currentWaveformLayout === 'vertical'}
-            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-200 dark:border-gray-600">
+            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out">
                 
                 {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                     <VerticalWaveform
@@ -528,7 +528,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         {/if}
 
         <!-- Right Panel: RichTextPreview -->
-        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-gray-800 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-200 dark:border-gray-600">
+        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-gray-800 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
@@ -546,7 +546,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     <!-- Horizontal Waveform Panel (Conditional) -->
     {#if currentWaveformLayout === 'horizontal'}
-        <div style="height: {horizontalWaveformContainerHeightPx}px;" class="border-t border-gray-200 dark:border-gray-600">
+        <div style="height: {horizontalWaveformContainerHeightPx}px;">
             
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform

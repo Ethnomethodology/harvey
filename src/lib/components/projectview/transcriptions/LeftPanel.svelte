@@ -258,9 +258,9 @@
 	{#if openSection === 'shortcuts'}
 		<div id="shortcuts-content" class="flex-grow overflow-y-auto min-h-0 p-3 text-xs" role="region" aria-live="polite">
             <ul class="space-y-1.5 text-gray-700 dark:text-gray-300">
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + E</span> <span>Edit Segment</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + S</span> <span>Save Transcript</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">F8</span> <span>Play / Pause</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + E</span> <span>Edit Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + S</span> <span>Save Transcript</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">F8</span> <span>Play / Pause</span> </li>
 			</ul>
 		</div>
 	{/if}
@@ -269,7 +269,7 @@
 	{#if contextMenuVisible && contextMenuItem}
 		<div
             id="context-menu-div"
-			class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[120px]"
+			class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
 			style="left: {contextMenuX}px; top: {contextMenuY}px;"
 			on:click|stopPropagation
 		>

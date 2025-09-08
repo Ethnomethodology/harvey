@@ -103,13 +103,15 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden border-l border-gray-200 dark:border-gray-600">
-    <div class="text-sm font-semibold border-b border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 p-2">
-        <span>Attachments</span>
+<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
+    <div class="p-2">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
+            Attachments
+        </h3>
     </div>
     <div class="flex-grow overflow-y-auto min-h-0">
         {#if isLoading}
-            <p class="text-xs text-gray-500 dark:text-gray-400 italic p-2">Loading...</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">Loading...</p>
         {:else if attachments.length > 0}
             <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                 {#each attachments as attachment, i (attachment)}
@@ -132,7 +134,7 @@
                 {/each}
             </ul>
         {:else}
-            <p class="text-xs text-gray-500 dark:text-gray-400 italic p-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400 italic px-2 py-4">
                 No attachments found for this document.
             </p>
         {/if}

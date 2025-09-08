@@ -60,6 +60,7 @@
     "@tailwindcss/vite": "4.0.0-alpha.13",
     "@tauri-apps/cli": "^2.0.0",
     "autoprefixer": "^10.4.21",
+    "electron": "^38.0.0",
     "postcss": "^8.5.3",
     "sass-embedded": "^1.89.2",
     "svelte": "^5.0.0-next.131",

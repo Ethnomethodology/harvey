@@ -174,7 +174,7 @@
 
 	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} />
 
-	<div class="flex flex-grow w-full min-h-0 border-t border-gray-200 dark:border-gray-600 divide-x divide-gray-200 dark:divide-gray-600">
+	<div class="flex flex-grow w-full min-h-0 divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">
 			<DataLeftPanel
