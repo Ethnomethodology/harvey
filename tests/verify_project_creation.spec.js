@@ -1,12 +1,20 @@
 import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'path';
+import fs from 'fs';
 
-test('Create project and capture tab screenshots', async () => {
+test.beforeAll(() => {
+  fs.mkdirSync(path.resolve('./temp/test-project'), { recursive: true });
+});
+
+test('Create project, open it, and screenshot each tab', async () => {
+  test.setTimeout(60000);
   const electronApp = await electron.launch({
-    args: ['./src-tauri/target/release/harvey'],
+    args: ['./src-tauri/target/release/harvey'], // Removed --enable-logging as it's not needed for the final test
   });
 
   const appWindow = await electronApp.firstWindow();
+
+  appWindow.on('console', console.log);
 
   // Wait for the app to be ready
   await appWindow.waitForSelector('text="Welcome to Harvey"');
@@ -25,7 +33,7 @@ test('Create project and capture tab screenshots', async () => {
     appWindow.waitForEvent('filechooser'),
     appWindow.click('button:has-text("Select Project Directory")'),
   ]);
-  await fileChooser.setFiles(path.resolve('./jules-scratch/test-project'));
+  await fileChooser.setFiles(path.resolve('./temp/test-project'));
 
 
   // Click the "Save" button
@@ -34,20 +42,16 @@ test('Create project and capture tab screenshots', async () => {
   // Wait for the project view to load by looking for the Data tab
   await appWindow.waitForSelector('button[aria-label="Data"]');
 
-  // Take a screenshot of the Data tab
-  await appWindow.screenshot({ path: 'jules-scratch/screenshot-data-before.png' });
+  // Define tabs to screenshot
+  const tabs = ["Data", "Transcriptions", "Documents", "Images", "Tables", "Tags"];
 
-  // Click the "Transcriptions" tab
-  await appWindow.click('button[aria-label="Transcriptions"]');
-  // Add a small delay to ensure tab content loads
-  await appWindow.waitForTimeout(500);
-  await appWindow.screenshot({ path: 'jules-scratch/screenshot-transcriptions-before.png' });
-
-  // Click the "Tags" tab
-  await appWindow.click('button[aria-label="Tags"]');
-  // Add a small delay to ensure tab content loads
-  await appWindow.waitForTimeout(500);
-  await appWindow.screenshot({ path: 'jules-scratch/screenshot-tags-before.png' });
+  for (const tab of tabs) {
+    console.log(`Clicking on ${tab} tab and taking screenshot...`);
+    await appWindow.click(`button[aria-label="${tab}"]`);
+    // Give some time for the tab content to render
+    await appWindow.waitForTimeout(1000);
+    await appWindow.screenshot({ path: `playwright-report/tab-${tab.toLowerCase()}-screenshot.png` });
+  }
 
   // Close the app
   await electronApp.close();
