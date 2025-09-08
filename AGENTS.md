@@ -1,43 +1,71 @@
-# Harvey Build Environment Setup
+## Agent Setup Guide for Google's Jules (Linux Environment)
 
-This document outlines the necessary steps to set up the build environment for the Harvey application on a Debian-based Linux system.
+This guide outlines the steps to set up and run the Harvey application and its Playwright tests within a Linux environment, such as Google's Jules.
 
-## System Dependencies
+### 1. System Dependencies (Tauri Prerequisites)
 
-First, ensure your package list is up to date:
+Ensure your Linux environment has the necessary Tauri prerequisites installed. These typically include:
+
+*   **System build tools:** `gcc`, `pkg-config`, `libssl-dev`, `libwebkit2gtk-4.0-dev`, `libappindicator3-dev`, `librsvg2-dev`, `patchelf`.
+*   **Node.js and npm/pnpm:** Ensure a compatible version is installed.
+
+For the most up-to-date and detailed list of prerequisites for your specific Linux distribution, please refer to the official Tauri documentation:
+[https://tauri.app/v1/guides/getting-started/prerequisites/#setting-up-linux](https://tauri.app/v1/guides/getting-started/prerequisites/#setting-up-linux)
+
+### 2. Install `tauri-driver`
+
+`tauri-driver` is essential for running Playwright tests with your Tauri application. Install it using Cargo:
 
 ```bash
-sudo apt-get update
+cargo install tauri-driver --locked
 ```
 
-Next, install the required libraries and build tools:
+### 3. Install Native WebDriver (WebKitWebDriver)
+
+Tauri leverages `WebKitWebDriver` on Linux for WebDriver testing. Verify its presence or install it:
+
+*   **Check if installed:**
+    ```bash
+    which WebKitWebDriver
+    ```
+
+*   **If not found (e.g., on Debian/Ubuntu-based systems):**
+    ```bash
+    sudo apt update
+    sudo apt install webkit2gtk-driver
+    ```
+    Ensure `WebKitWebDriver` is accessible in your system's `$PATH`.
+
+### 4. Project Setup
+
+Navigate to the project's root directory and install the JavaScript dependencies:
 
 ```bash
-sudo apt-get install -y build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev
+npm install
 ```
 
-## Building the Application
+### 5. Running Tests
 
-After installing the dependencies, you can build the Tauri application:
+To execute the Playwright tests, use the following command from the project root:
 
 ```bash
+npm test tests/verify_project_creation.spec.js
+```
+
+### 6. Running the Application
+
+To run the application in development mode:
+
+```bash
+npm run tauri dev
+```
+
+To build and run the production application:
+
+```bash
+npm run build
 npm run tauri build
-```
-
-## Troubleshooting
-
-If the build fails with errors related to `pkg-config` (e.g., "The system library ... was not found"), it may be because the `.pc` files for the libraries are not in the default search path.
-
-You can find the locations of the `.pc` files using the `dpkg -L` command. For example:
-
-```bash
-dpkg -L libwebkit2gtk-4.1-dev | grep ".pc"
-dpkg -L libsoup-3.0-dev | grep ".pc"
-```
-
-Once you have the paths, you may need to set the `PKG_CONFIG_PATH` environment variable before running the build command. For example:
-
-```bash
-export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
-npm run tauri build
+# The executable will be located in src-tauri/target/release/harvey (or similar, depending on your OS and build configuration)
+# You can then run it directly:
+# ./src-tauri/target/release/harvey
 ```
