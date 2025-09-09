@@ -17,3 +17,4 @@ vite.config.ts.timestamp-*
 /temp/
 /playwright-report/
 /test-results/
+/e2e-tests/screenshots/

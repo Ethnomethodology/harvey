@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from '@playwright/test';
+import { test, expect, webkit } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 
@@ -8,11 +8,11 @@ test.beforeAll(() => {
 
 test('Create project, open it, and screenshot each tab', async () => {
   test.setTimeout(60000);
-  const electronApp = await electron.launch({
-    args: ['./src-tauri/target/release/harvey'], // Removed --enable-logging as it's not needed for the final test
+  const browser = await webkit.launch({
+    executablePath: path.resolve('./src-tauri/target/release/harvey'),
   });
-
-  const appWindow = await electronApp.firstWindow();
+  const context = await browser.newContext();
+  const appWindow = await context.newPage();
 
   appWindow.on('console', console.log);
 
@@ -54,5 +54,5 @@ test('Create project, open it, and screenshot each tab', async () => {
   }
 
   // Close the app
-  await electronApp.close();
+  await browser.close();
 });
