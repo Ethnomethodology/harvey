@@ -70,6 +70,10 @@
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.4.19",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@wdio/cli": "^9.19.0",
+    "@wdio/local-runner": "^9.19.0",
+    "@wdio/mocha-framework": "^9.19.0",
+    "@wdio/spec-reporter": "^9.19.0"
   }
 }

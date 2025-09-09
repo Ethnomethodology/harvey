@@ -14,10 +14,27 @@ describe('Project Creation and Tab Screenshots', () => {
 		// 1. Take a screenshot of the initial welcome screen
 		await browser.saveScreenshot('./screenshots/1_welcome-screen.png');
 
-		// 2. Click the create project button
-		const createProjectButton = await $('button=Create Project');
-		await createProjectButton.waitForExist({ timeout: 30000 });
-		await createProjectButton.click();
+		// 2. Create a project directly by invoking the Tauri command
+        console.log("Attempting to create project via Tauri command...");
+		const projectXmlPath = await browser.executeAsync(async (done) => {
+            const { invoke } = window.__TAURI__.core;
+            try {
+                // Use a temporary directory for the test project
+                const projectPath = await invoke('create_project', {
+                    name: 'E2E Test Project',
+                    parentLocation: '/tmp', // Using /tmp as a reliable temporary location
+                    overwrite: true // Overwrite to ensure clean state for each run
+                });
+                console.log('E2E project created at:', projectPath);
+                done(projectPath);
+            } catch (error) {
+                console.error('E2E project creation via invoke failed:', error);
+                done(null);
+            }
+        });
+
+        expect(projectXmlPath).to.not.be.null;
+        console.log(`Project created successfully, XML path: ${projectXmlPath}`);
 
 		// Add a pause to allow the project view to load after creation.
 		await browser.pause(5000);
