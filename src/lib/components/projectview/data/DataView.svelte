@@ -185,7 +185,7 @@
 		</div>
 
         <!-- Main Content Area (Middle) -->
-        <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-gray-600">
+        <div class="flex-grow h-full min-w-0">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -236,7 +236,7 @@
 
         <!-- New Right Bar (Far Right) -->
         {#if activeViewType !== 'group_detail' && activeItemPath}
-            <div class="h-full flex-shrink-0 border-l border-gray-300 dark:border-gray-600">
+            <div class="h-full flex-shrink-0">
                 <RightBar on:tabchange={handleRightBarTabChange} itemType={activeItemTypeForInfoPanel} />
             </div>
         {/if}

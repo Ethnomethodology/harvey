@@ -851,7 +851,7 @@
     });
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
+<div class="h-full bg-white dark:bg-gray-800 shadow flex flex-col overflow-hidden border-r border-gray-300 dark:border-gray-600">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
         <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
@@ -917,7 +917,7 @@
                         {#each filteredCategories as category (category.type)}
                             <li>
                                 <div
-                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 rounded ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
+                                    class="flex items-center justify-between group mb-1 pr-1 py-1 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 ${categoryContextMenuVisible && categoryContextMenuType === category.type ? 'bg-gray-100 dark:bg-gray-600' : ''}"
                                     on:click={() => toggleCategory(category.type)} role="button" aria-expanded={categoryOpenState[category.type] ?? true} aria-controls={`category-content-${category.type}`} tabindex="0" on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCategory(category.type); }}>
                                     <div class="flex items-center space-x-1.5 text-gray-600 dark:text-gray-400">
                                         <span class="flex-shrink-0 w-4 h-4 flex items-center justify-center"> {@html categoryOpenState[category.type] ? CHEVRON_DOWN_SVG : CHEVRON_RIGHT_SVG} </span>
@@ -941,7 +941,7 @@
                                             <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
-                                                        <div class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                                        <div class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                                              class:bg-blue-100={fileItem.path === selectedItemPathInStore}
                                                              class:dark:bg-blue-800={fileItem.path === selectedItemPathInStore}
                                                              title="{fileItem.path || fileItem.relativePath}" role="button" tabindex="0"
@@ -989,7 +989,7 @@
                             {#each $currentProjectGroupsList as group (group.id)}
                                 <li class="group">
                                     <div
-                                        class="flex items-center justify-between w-full rounded px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                        class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                                         class:bg-blue-100={$project.selectedGroupId === group.id}
                                         class:dark:bg-blue-800={$project.selectedGroupId === group.id}
                                         on:click={() => handleGroupSelected(group)}

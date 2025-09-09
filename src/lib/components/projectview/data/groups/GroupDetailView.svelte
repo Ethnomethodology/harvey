@@ -515,7 +515,7 @@
 
 </script>
 
-<div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800 rounded-md shadow">
+<div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800 shadow">
     {#if groupData}
         <!-- Header -->
         <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
@@ -524,7 +524,7 @@
                 <button
                     on:click={() => isEditGroupModalOpen = true}
                     title="Edit group details"
-                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    class="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square w-4 h-4" viewBox="0 0 16 16">
                         <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
@@ -554,7 +554,7 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 hover:shadow-md dark:hover:bg-gray-700 cursor-pointer transition-shadow"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
@@ -564,7 +564,7 @@
                                     >
                                         <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
                                             {#if file.file_type === 'image' && file.full_path}
-                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain rounded"/>
+                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
                                             {:else}
                                                 {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
                                             {/if} <!-- Closes file.file_type === 'image' -->
@@ -572,7 +572,7 @@
                                         <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
                                         <button
                                             on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 rounded text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
                                             title="More options for {file.name}"
                                         >
                                             {@html CONTEXT_MENU_ICON_SVG}
@@ -623,7 +623,7 @@
 {#if showAddToGroupSubMenu && itemForAddToGroup}
   <div
     id="group-detail-add-to-group-submenu"
-    class="fixed z-[101] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[180px]"
+    class="fixed z-[101] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[180px]"
     style="left: {addToGroupSubMenuX}px; top: {addToGroupSubMenuY}px;"
     on:click|stopPropagation
     role="menu"

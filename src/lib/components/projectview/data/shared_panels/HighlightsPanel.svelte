@@ -169,7 +169,7 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden py-2">
+<div class="h-full bg-white dark:bg-gray-800 shadow flex flex-col overflow-hidden py-2">
     <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 mb-2">
         <span class="ml-1">Highlights</span>
     </div>
@@ -178,7 +178,7 @@
         {#if processedHighlights.length > 0}
             <ul class="space-y-2">
                 {#each processedHighlights as highlight (highlight.id)}
-                    <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                    <li class="border bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
                             {#if itemType === 'images'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
