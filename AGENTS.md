@@ -1,4 +1,4 @@
-<!-- # Harvey Build Environment Setup
+# Harvey Build Environment Setup
 
 This document outlines the necessary steps to set up the build environment for the Harvey application on a Debian-based Linux system.
 
@@ -57,4 +57,4 @@ On standard Debian systems, setting `PKG_CONFIG_PATH` is not usually necessary i
 ```bash
 export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
 npm run tauri build
-``` -->
+```
