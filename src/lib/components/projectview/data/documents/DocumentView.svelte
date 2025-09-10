@@ -46,7 +46,7 @@
 </script>
 
 <!-- Main container for the Document View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 shadow">
     {#key itemPath}
         {#if itemPath}
             {#if isPdf}
@@ -58,12 +58,12 @@
             {:else if isJsonDoc} <!-- Assuming .json documents are handled by DocumentEditorPanel -->
                 <DocumentEditorPanel />
             {:else} <!-- Fallback for other non-PDF, non-JSON document types -->
-                <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
+                <div class="h-full bg-gray-200 dark:bg-gray-700 shadow flex items-center justify-center text-gray-500">
                     <span>Viewing for this document type ({itemPath?.split('.').pop()}) not implemented.</span>
                 </div>
             {/if} 
         {:else}
-            <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
+            <div class="h-full bg-gray-200 dark:bg-gray-700 shadow flex items-center justify-center text-gray-500">
                 <span>No document path provided to DocumentView.</span>
             </div>
         {/if}

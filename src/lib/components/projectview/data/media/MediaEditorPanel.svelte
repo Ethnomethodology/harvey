@@ -318,7 +318,7 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 shadow">
     <div
         class="border-b border-gray-200 dark:border-gray-700 flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
@@ -360,12 +360,12 @@
                         Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
                     </p>
                     <div class="space-x-2">
-                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmDataTrim}>Trim</button>
-                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmDataTrim}>Trim</button>
+                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
                     </div>
                 </div>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-700 overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
@@ -658,7 +658,7 @@
     .lexical-editor-wrapper-style-placeholder {
         display: flex;
         flex-direction: column;
-        @apply border border-gray-300 dark:border-gray-600 rounded overflow-hidden;
+        @apply border border-gray-300 dark:border-gray-600 overflow-hidden;
     }
      .lexical-editor-wrapper-style-placeholder.is-disabled {
         @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-700 dark:border-gray-500 dark:opacity-70;

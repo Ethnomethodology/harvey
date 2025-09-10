@@ -2208,7 +2208,6 @@ function renderHighlightOverlay(quadPoints, color, id, pageIndex) {
             width: `${x2 - x1}px`, // x2-x1 is width
             height: `${y3 - y1}px`, // y3-y1 is height (y3 is bottom-left y)
             backgroundColor: color,
-            borderRadius: '2px',
             pointerEvents: 'auto' // Allow clicks on the overlay part
         });
         overlay.appendChild(rectEl);
@@ -2405,7 +2404,7 @@ function updateHighlightOverlayColor(id, color) {
 
 </script>
 
-<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 rounded-md shadow overflow-hidden">
+<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 shadow overflow-hidden">
 
 <div class="toolbar flex items-center flex-nowrap gap-x-0.5 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0 bg-white dark:bg-gray-800 shadow z-20">
     <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
@@ -2431,7 +2430,7 @@ function updateHighlightOverlayColor(id, color) {
             </svg>
         </button>
         {#if isZoomDropdownOpen}
-            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-y-auto max-h-60 py-1">
+            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-y-auto max-h-60 py-1">
                 {#each zoomOptions as option (option.value || option.label)}
                     {#if option.type === 'separator'}
                         <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
@@ -2503,7 +2502,7 @@ function updateHighlightOverlayColor(id, color) {
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
             {#if isNewHighlightDropdownOpen}
-            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden py-1">
+            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden py-1">
                 {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                     <div
                         class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -2591,7 +2590,7 @@ function updateHighlightOverlayColor(id, color) {
     {/if}
 
     {#if showSelectionToolbar}
-        <div class="floating-toolbar absolute bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-500 rounded shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
+        <div class="floating-toolbar absolute bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-500 shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
             bind:this={selectionToolbarElement}
             style:top="{selectionToolbarTop}px"
             style:left="{selectionToolbarLeft}px"
@@ -2633,7 +2632,7 @@ function updateHighlightOverlayColor(id, color) {
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input,
     .toolbar select.mini-toolbar-select {
-        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
+        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
         min-height: 24px; /* Explicit min-height from Lexical */
         /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
         /* vertical-align: middle; replaced by inline-flex items-center */
@@ -2685,11 +2684,10 @@ function updateHighlightOverlayColor(id, color) {
     z-index: 35 !important; /* Force it above textLayer (20) and annotationLayer (30 for PDF.js native) */
     mix-blend-mode: normal !important;
     padding: 1px 0;
-    border-radius: 1px;
 }
 
     .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
-    .floating-toolbar-button { @apply p-1 rounded border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
+    .floating-toolbar-button { @apply p-1 border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
     .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }

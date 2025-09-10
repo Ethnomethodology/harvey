@@ -396,12 +396,12 @@
     <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 shadow overflow-hidden">
     <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
         <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
             <button
                 class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs rounded-md
+                       border-gray-300 dark:border-gray-600 text-xs
                        focus:outline-none focus:ring-2 focus:ring-blue-500
                        {activeDrawingTool === 'rectangle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
@@ -412,7 +412,7 @@
             </button>
             <button
                 class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       border-gray-300 dark:border-gray-600 text-xs ml-2
                        focus:outline-none focus:ring-2 focus:ring-blue-500
                        {activeDrawingTool === 'circle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
@@ -423,7 +423,7 @@
             </button>
             <button
                 class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs rounded-md ml-2
+                       border-gray-300 dark:border-gray-600 text-xs ml-2
                        focus:outline-none focus:ring-2 focus:ring-blue-500
                        {activeDrawingTool === 'polygon' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}

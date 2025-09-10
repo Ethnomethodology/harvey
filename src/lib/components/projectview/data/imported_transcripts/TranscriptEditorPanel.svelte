@@ -567,7 +567,7 @@
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden imported-transcript-editor-panel">
+<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 shadow overflow-hidden imported-transcript-editor-panel">
     {#if isLoading && selectedPath === itemPath}
         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300">Loading transcript...</div>
     {:else if errorMessage && selectedPath === itemPath}
