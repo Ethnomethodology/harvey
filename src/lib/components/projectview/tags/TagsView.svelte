@@ -11,6 +11,7 @@
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
 
     const AUDIO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-music-note-beamed w-4 h-4" viewBox="0 0 16 16"><path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/><path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/><path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/></svg>`;
     const VIDEO_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-film w-4 h-4" viewBox="0 0 16 16"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm4 0v6h8V1zm8 8H4v6h8zM1 1v2h2V1zm2 3H1v2h2zM1 7v2h2V7zm2 3H1v2h2zm-2 3v2h2v-2zM15 1h-2v2h2zm-2 3v2h2V4zm2 3h-2v2h2zm-2 3v2h2v-2zm2 3h-2v2h2z"/></svg>`;
@@ -353,10 +354,11 @@
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
-    <SimpleTopBar />
+    <SimpleTopBar on:toggleLeftPanel={panelStateStore.toggleTagsLeftPanel} />
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
-        <div class="w-1/4 h-full bg-white dark:bg-gray-700 p-4">
+        {#if !$panelStateStore.tagsLeftPanelCollapsed}
+        <div class="w-1/4 h-full bg-white dark:bg-gray-700 p-4" transition:slide={{ axis: 'x' }}>
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
@@ -375,9 +377,11 @@
             <p>No tags found in this project.</p>
         {/if}
     </div>
+    {/if}
 
     <!-- Middle Panel: Tag details and highlights -->
-    <div class="w-3/4 h-full flex flex-col p-4 gap-4">
+    <!-- Middle Panel: Tag details and highlights -->
+        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'}">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
