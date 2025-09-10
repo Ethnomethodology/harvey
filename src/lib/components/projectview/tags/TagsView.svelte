@@ -141,7 +141,7 @@
                     const icon = getIconForFileType(highlight.source.file_type);
                     // TODO: Make this a clickable link to open the file
                     return `<div class=\"flex items-center space-x-2\" title=\"${filePath}\">
-                                <div class=\"w-8 h-8 rounded-full flex items-center justify-center p-1\" style=\"background-color: ${highlight.color};\">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square" style="background-color: ${highlight.color};">
                                     <span>${icon}</span>
                                 </div>
                                 <span>${fileName}</span>
