@@ -56,5 +56,8 @@
     }
     .hover-scale-effect {
         @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+        will-change: transform;
+        backface-visibility: hidden;
+        transform: translateZ(0);
     }
 </style>
