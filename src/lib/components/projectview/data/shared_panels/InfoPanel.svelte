@@ -624,7 +624,7 @@
                             {#if fileAssignedGroups && fileAssignedGroups.length > 0}
                                 <div class="flex flex-wrap gap-1 mt-1">
                                     {#each fileAssignedGroups as group (group.id)}
-                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                        <span class="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
                                             {group.name}
                                         </span>
                                     {/each}
