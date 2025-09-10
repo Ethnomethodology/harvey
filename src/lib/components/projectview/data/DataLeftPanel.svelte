@@ -1033,8 +1033,8 @@
                     class:dark:hover:bg-gray-700={category.type !== activeCollapsedCategoryType}
                     class:focus:ring-2={category.type !== activeCollapsedCategoryType}
                     class:focus:ring-blue-500={category.type !== activeCollapsedCategoryType}
-                    class:bg-blue-200={category.type === activeCollapsedCategoryType}
-                    class:dark:bg-blue-700={category.type === activeCollapsedCategoryType}
+                    class:border-l-4={category.type === activeCollapsedCategoryType}
+                    class:border-blue-500={category.type === activeCollapsedCategoryType}
                     class:text-gray-500={category.type !== activeCollapsedCategoryType}
                     class:dark:text-gray-400={category.type !== activeCollapsedCategoryType}
                     class:text-blue-600={category.type === activeCollapsedCategoryType}
