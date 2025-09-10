@@ -286,7 +286,7 @@
 	<div class="flex items-center space-x-1.5">
 		<!-- Toggle Left Panel Button -->
 		<button
-			class="ui-button-icon p-1.5"
+			class="ui-button-icon p-1.5 hover-scale-effect"
 			title="Toggle File Explorer Panel"
 			on:click={toggleLeftPanel}
 		>
@@ -323,7 +323,7 @@
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
-			<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openSpeakersModal}">
+			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
 				  </svg>
@@ -338,7 +338,7 @@
 
 		<!-- Transcribe Button -->
 			<button
-				class="ui-button-icon flex items-center space-x-0.5"
+				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
 				on:click="{handleTranscribeClick}"
 				title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
@@ -360,21 +360,21 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
+		<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
 		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
-			class="ui-button-icon p-1.5"
+			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -410,7 +410,7 @@
 
 	/* Select style adjustments */
 	.ui-select {
-		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed; /* Adjusted padding */
+		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-black dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-500; /* Adjusted padding */
 	}
 
 	/* Basic style for the new checkbox */
@@ -458,4 +458,7 @@
 		font-size: 0.65rem; /* ~10.4px */
 		line-height: 0.8rem; /* ~12.8px */
 	}
+    .hover-scale-effect {
+        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+    }
 </style>

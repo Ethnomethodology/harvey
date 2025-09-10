@@ -37,7 +37,7 @@
 
   <div class="flex items-center space-x-2 flex-shrink-0">
     <div class="flex-shrink-0">
-		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -53,5 +53,8 @@
     }
     .ui-button-icon svg {
         @apply w-4 h-4 flex-shrink-0;
+    }
+    .hover-scale-effect {
+        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
     }
 </style>

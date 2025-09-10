@@ -497,14 +497,14 @@
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
-        <button class="ui-button-icon flex items-center ml-2"
+        <button class="ui-button-icon flex items-center ml-2 hover-scale-effect"
             on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
         >
             <span class="text-xs">Transcribe</span>
         </button>
         {/if}
         {#if $project.activeDocumentEditorRef || $project.activeImportedTranscriptEditorRef}
-        <button class="ui-button-icon flex items-center ml-2" on:click={toggleLiveTranscription} title="Live Transcription">
+        <button class="ui-button-icon flex items-center ml-2 hover-scale-effect" on:click={toggleLiveTranscription} title="Live Transcription">
             {#if isLiveTranscriptionActive}
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-mic-fill" class:blinking-red-text={isLiveTranscriptionActive} viewBox="0 0 16 16">
                 <path d="M5 3a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z"/>
@@ -523,38 +523,23 @@
     <div class="flex items-center space-x-2 flex-shrink-0">
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <div class="relative inline-block mr-2"> <!-- Added mr-2 for spacing -->
-                <select
-                    class="block w-auto border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
-                           max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
-                    value={$project.activeTranscriptPathInDataTab || ''}
-                    on:change={(e) => switchTranscriptInDataTab(e.target.value)}
-                    title="Switch between available transcripts for this media file"
-                >
-                    {#if $displayedTranscripts.length === 0}
-                        <option value="" disabled>No Transcripts</option>
-                    {:else}
-                        {#each $displayedTranscripts as transcript (transcript.path)}
-                            <option value={transcript.path}>
-                                {transcript.displayLabel}
-                            </option>
-                        {/each}
-                    {/if}
-                </select>
-                <!-- Custom Chevron Icon -->
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                </div>
-            </div>
-            <button class="ui-button-icon flex items-center space-x-0.5" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
+            <select
+                class="ui-select"
+                on:change={(e) => switchTranscriptInDataTab(e.currentTarget.value)}
+            >
+                {#each $displayedTranscripts as transcript}
+                    <option value={transcript.path} selected={$project.activeTranscriptPathInDataTab === transcript.path}>
+                        {transcript.displayLabel}
+                    </option>
+                {/each}
+            </select>
+            <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
             </button>
         {/if}
         <button
-            class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs"
+            class="ui-button-icon flex items-center h-7 px-2 py-0.5 rounded text-xs hover-scale-effect"
             title={canSave ? "Save Changes (Ctrl+S)" : (autosaveEnabled ? "Autosave is ON" : "No changes to save")}
             disabled={!canSave}
             on:click={handleManualSave}
@@ -598,13 +583,13 @@
         {#if $isMediaEditorOpen}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="ui-button-icon p-1.5"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
         </button>
         {/if}
-		 <button on:click="{() => cycleThemePreference()}" class="ui-button-icon p-1.5" title="{themeTitle}"> <!-- Adjusted padding -->
+		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -623,8 +608,8 @@
     }
 
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component's style for ui-button-icon base */
+        @apply inline-flex items-center justify-center p-1.5 border border-black text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-white dark:hover:bg-gray-600 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-white disabled:hover:border-gray-400 disabled:hover:text-gray-700 disabled:dark:hover:bg-gray-700 disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
+        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component\`'s style for ui-button-icon base */
     }
     .ui-button-icon:disabled {
         @apply opacity-50 cursor-not-allowed;
@@ -633,7 +618,11 @@
         @apply w-4 h-4 flex-shrink-0; /* Matched to transcriptions/TopBar.svelte */
     }
 
-    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
+    .ui-select {
+        @apply block w-auto border border-black dark:border-gray-600 px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-blue-500 focus:outline-none focus:border-blue-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8;
+    }
+
+    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component\'s immediate needs for the theme button */
   
     .blinking-red {
         animation: blink 1s infinite;
@@ -673,7 +662,11 @@
          color: #d1fae5 !important;
      }
   
-  </style>
+    .hover-scale-effect {
+        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+    }
+</style>
+
 
 			<LayoutSettingsModal
 				bind:showModal="{isLayoutSettingsModalOpen}"
