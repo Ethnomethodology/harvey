@@ -172,7 +172,7 @@
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
 
-	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} />
+	<DataTopBar on:requestTranscriptionTabWithMediaAndDialog={forwardEvent} {tableViewRef} on:toggleLeftPanel={panelStateStore.toggleDataLeftPanel} />
 
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->

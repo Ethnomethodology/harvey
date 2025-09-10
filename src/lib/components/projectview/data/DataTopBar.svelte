@@ -490,12 +490,20 @@
   </script>
   
   <div
-    class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
     data-tauri-drag-region
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
-        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 pl-1 truncate" title={displayTitle}>{displayTitle}</span>
+        <button
+            class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
+            title="Toggle File Explorer Panel"
+            on:click={() => dispatch('toggleLeftPanel')}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
+                <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
+            </svg>
+        </button>
+        <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
         <button class="ui-button-icon flex items-center ml-2 hover-scale-effect"
             on:click={() => dispatch('requestTranscriptionTabWithMediaAndDialog', { mediaPath: $activeMediaFile.path })}
@@ -597,6 +605,10 @@
   </div>
   
   <style lang="postcss">
+    .ui-button-icon-no-border {
+		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+	}
+
     .blinking-red-text {
         animation: blink-text 1s infinite;
     }

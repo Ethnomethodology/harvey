@@ -163,10 +163,7 @@
         }
     }
 
-    function handleToggleDataLeftPanel() {
-        tooltipVisible = false;
-        panelStateStore.toggleDataLeftPanel();
-    }
+    
 
     function handleItemContextMenu(event, item) {
         event.preventDefault();
@@ -864,8 +861,7 @@
                 <button
                     type="button"
                     class="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    on:click={handleToggleDataLeftPanel}
-                    title={$panelStateStore.dataLeftPanelCollapsed ? 'Expand Data Panel' : 'Collapse Data Panel'}>
+                    title="Data Panel">
                     {@html JOURNAL_ICON_SVG}
                 </button>
                 <span>Data</span>
