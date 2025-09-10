@@ -455,9 +455,11 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden py-2">
-    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 mb-2">
-        <span class="ml-1">Metadata</span>
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
+    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+            <span>Metadata</span>
+        </div>
         {#if currentFileMetadata}
             <button
                 on:click={toggleEditMode}
