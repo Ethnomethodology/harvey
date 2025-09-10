@@ -525,7 +525,7 @@
         {#if $activeMediaFile}
             <div class="relative inline-block mr-2"> <!-- Added mr-2 for spacing -->
                 <select
-                    class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
+                    class="block w-auto border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
                            max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
                     value={$project.activeTranscriptPathInDataTab || ''}
                     on:change={(e) => switchTranscriptInDataTab(e.target.value)}
@@ -623,7 +623,7 @@
     }
 
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
         /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component's style for ui-button-icon base */
     }
     .ui-button-icon:disabled {

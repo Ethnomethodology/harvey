@@ -25,12 +25,12 @@
 </script>
 
 <!-- Main container for the Image View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 shadow">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800">
     {#key itemPath}
         {#if itemPath}
             <ImageViewerPanel imagePath={itemPath} />
         {:else}
-            <div class="h-full bg-gray-200 dark:bg-gray-700 shadow flex items-center justify-center text-gray-500">
+            <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
                 <span>No image path provided to ImageView.</span>
             </div>
         {/if}

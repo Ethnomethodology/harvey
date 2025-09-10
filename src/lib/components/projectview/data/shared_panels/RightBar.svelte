@@ -27,7 +27,7 @@
 
 </script>
 
-<div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2 shadow-md">
+<div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2">
     <button
         on:click={() => handleTabClick('metadata')}
         class="p-2 focus:outline-none transition-colors"

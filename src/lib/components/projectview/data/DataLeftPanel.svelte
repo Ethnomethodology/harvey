@@ -851,7 +851,7 @@
     });
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 shadow flex flex-col overflow-hidden border border-gray-300 dark:border-gray-600">
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
         <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-gray-600"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
@@ -1054,7 +1054,7 @@
     {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
-		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
+		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>
                 
@@ -1144,7 +1144,7 @@
     {#if showGroupSubMenu && groupSubMenuItem}
         <div
             id="notes-left-panel-group-sub-menu"
-            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[150px]"
+            class="fixed z-[51] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 py-1 text-xs min-w-[150px]"
             style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
             on:mouseenter={handleEnterGroupSubMenu}
             on:mouseleave={handleLeaveGroupSubMenu}
@@ -1167,7 +1167,7 @@
         {#if categoryContextMenuVisible && !$panelStateStore.dataLeftPanelCollapsed}
       <div
         id="notes-left-panel-category-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 py-1 text-xs min-w-[120px]"
         style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
         on:click|stopPropagation>
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
@@ -1300,7 +1300,7 @@
 {#if groupContextMenuVisible && groupContextMenuItem}
     <div
         id="notes-left-panel-group-item-context-menu"
-        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-xl py-1 text-xs min-w-[120px]"
+        class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 py-1 text-xs min-w-[120px]"
         style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
         on:click|stopPropagation>
         <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open</button>

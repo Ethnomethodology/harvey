@@ -103,7 +103,7 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 shadow flex flex-col overflow-hidden">
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
     <div class="p-2">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
             Attachments
