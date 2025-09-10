@@ -1832,7 +1832,7 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
+<div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 overflow-visible shadow-sm">
   {#if editable}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0">
       {#if toolbarConfig.undo}
