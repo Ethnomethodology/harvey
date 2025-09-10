@@ -584,8 +584,7 @@
             {#if $transcriptStore.selectedMediaFile}
                 <div class="relative inline-block">
                     <select
-                        class="block w-auto rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-700 focus:ring-indigo-500
-                               max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8"
+                        class="ui-select max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate"
                         value={$transcriptStore.activeTranscript?.path || ''}
                         on:change={(e) => switchTranscript(e.target.value)}
                     >
@@ -599,12 +598,6 @@
                             {/each}
                         {/if}
                     </select>
-                    <!-- Custom Chevron Icon -->
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
-                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
                 </div>
             {:else}
                 <span class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">No Media Selected</span>

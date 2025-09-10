@@ -619,7 +619,7 @@
     }
 
     .ui-select {
-        @apply block w-auto border border-gray-200 dark:border-gray-600 px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 hover:border-blue-500 focus:outline-none focus:border-blue-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8;
+        @apply block w-auto border border-gray-200 dark:border-gray-600 px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:border-blue-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8;
     }
 
     /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component\'s immediate needs for the theme button */
