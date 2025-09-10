@@ -853,7 +853,7 @@ export let compactMode = false; // New prop, defaults to false
 	}
 </script>
 
-<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+<div bind:this={componentRootRef} class="interactive-waveform-panel flex flex-row w-full h-full bg-white dark:bg-gray-800 border-x border-b border-gray-200 dark:border-gray-700 rounded overflow-hidden">
 	<div
 		bind:this={waveformScrollContainerRef}
 		class="waveform-scroll-container flex-grow bg-white dark:bg-gray-700 relative overflow-x-auto overflow-y-hidden h-full"
