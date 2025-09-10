@@ -583,13 +583,13 @@
         {#if $isMediaEditorOpen}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
+            class="p-1.5 rounded-full border-0 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
         </button>
         {/if}
-		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding -->
+		 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -608,7 +608,7 @@
     }
 
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-black text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-white dark:hover:bg-gray-600 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-white disabled:hover:border-gray-400 disabled:hover:text-gray-700 disabled:dark:hover:bg-gray-700 disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
+        @apply inline-flex items-center justify-center p-1.5 border border-black text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-white disabled:hover:border-gray-400 disabled:hover:text-gray-700 disabled:dark:hover:bg-blue-700 disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
         /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component\`'s style for ui-button-icon base */
     }
     .ui-button-icon:disabled {

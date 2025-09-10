@@ -356,7 +356,7 @@
     <SimpleTopBar />
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
-        <div class="w-1/4 h-full bg-gray-50 dark:bg-gray-700 p-4">
+        <div class="w-1/4 h-full bg-white dark:bg-gray-700 p-4">
         <h2 class="text-lg font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
             <ul>
