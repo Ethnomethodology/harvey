@@ -284,6 +284,7 @@
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
+        <button title="Import" aria-label="Import" class="group w-8 h-8 rounded-full flex items-center justify-center transition-colors bg-white focus:outline-none border-2 border-black dark:border-blue-400 hover:border-blue-500 dark:hover:border-blue-300 focus:outline-2 focus:outline-blue-500 dark:focus:outline-blue-400 mr-2" on:click={(e) => dispatch('requestImport', e)}> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6 text-black dark:text-blue-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-colors"> <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /> </svg> </button>
 		<!-- Toggle Left Panel Button -->
 		<button
 			class="ui-button-icon-no-border p-1.5 hover-scale-effect"
