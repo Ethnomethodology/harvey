@@ -172,8 +172,11 @@
 		ctx.clearRect(0, 0, TIMESCALE_WIDTH, logicalHeight);
 
 		const isDark = document.documentElement.classList.contains('dark');
+        ctx.fillStyle = isDark ? '#1F2937' : '#F3F4F6'; // gray-800 dark, gray-100 light
+        ctx.fillRect(0, 0, TIMESCALE_WIDTH, logicalHeight);
+
 		ctx.strokeStyle = '#d1d5db';
-		ctx.fillStyle = isDark ? '#ffffff' : '#6b7280';
+		ctx.fillStyle = isDark ? '#ffffff' : '#000000';
 		ctx.font = '10px sans-serif';
 		ctx.textAlign = 'right';
 		ctx.textBaseline = 'middle';
@@ -380,7 +383,7 @@
 	}
 
 	function resetScrollAndZoom(resetZoomToo = true) {
-		if (resetZoomToo) zoomLevel = 1;
+		if (resetZoomToo) zoomLevel = maxZoomLevel;
 		scrollOffsetPy = 0;
 		if (waveformAreaContainerRef) waveformAreaContainerRef.scrollTop = 0;
 		requestRedraw(true);

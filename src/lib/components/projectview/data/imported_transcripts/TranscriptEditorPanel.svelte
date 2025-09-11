@@ -567,7 +567,7 @@
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden imported-transcript-editor-panel">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 overflow-hidden imported-transcript-editor-panel">
     {#if isLoading && selectedPath === itemPath}
         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300">Loading transcript...</div>
     {:else if errorMessage && selectedPath === itemPath}
@@ -593,7 +593,7 @@
                      toolbarConfig={{
                         undo: true, redo: true, blockType: false,
                         bold: true, italic: true, underline: true, strikethrough: true,
-                                link: true, indent: true, outdent: true, align: true, // This line is changed
+                                link: true, indent: true, outdent: true, align: true,
                         textColor: true, highlight: true, clearFormatting: true,
                         search: true
                      }}

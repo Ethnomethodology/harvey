@@ -19,6 +19,7 @@ pub mod shared_utils;
 pub mod db_handler;
 pub mod waveform_utils;
 pub mod lexical_highlight_handler;
+pub mod tag_handler;
 
 // Re-export specific commands if needed, for now, direct paths are used in lib.rs
 // Example: pub use core_commands::load_project_data;

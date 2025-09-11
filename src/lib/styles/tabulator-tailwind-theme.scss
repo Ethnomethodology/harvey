@@ -133,6 +133,49 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
     }
   }
 
+  & .tabulator-footer {
+    background-color: var(--ui-optgroup-bg);
+    border-top: 1px solid var(--ui-select-border);
+    padding: $paddingSmall $paddingMedium;
+    font-size: $fontSize * 0.9;
+    color: var(--ui-text-color);
+
+    .tabulator-paginator {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .tabulator-page {
+      display: inline-block;
+      margin: 0 2px;
+      padding: $paddingSmall * 0.5 $paddingSmall;
+      border: 1px solid var(--ui-select-border);
+      border-radius: $borderRadius / 2;
+      background-color: var(--ui-select-bg);
+      color: var(--ui-text-color);
+      cursor: pointer;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: var(--ui-icon-hover-bg);
+      }
+
+      &.active {
+        background-color: var(--ui-option-hover-bg);
+        color: var(--ui-option-text);
+        font-weight: bold;
+      }
+
+      &[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background-color: var(--ui-disabled-bg);
+      }
+    }
+  }
+
   
   .tabulator-placeholder {
     display: flex;

@@ -72,8 +72,6 @@ import {
     markMediaNoteTranscriptChangesDiscarded
 } from '$lib/stores/projectStore.js';
 
-import { setTags } from '$lib/stores/tagStore.js';
-
 import {
     transcriptStore,
     setTranscriptData,
@@ -89,6 +87,24 @@ import {
 
 import notificationStore from '$lib/stores/notificationStore.js';
 import { getCloudConfig } from './configureActions.js';
+
+/**
+ * Updates the name and description for a specific tag.
+ * @param {string} projectId - The ID of the project.
+ * @param {string} projectRootPath - The root path of the project.
+ * @param {string} oldName - The current name of the tag.
+ * @param {string} newName - The new name for the tag.
+ * @param {string} newDescription - The new description for the tag.
+ */
+export async function updateTag(projectId, projectRootPath, oldName, newName, newDescription) {
+    return await invoke('update_tag', {
+        projectId,
+        projectRootPathStr: projectRootPath,
+        oldName,
+        newName,
+        newDescription,
+    });
+}
 
 export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     const currentProject = get(project);
@@ -372,15 +388,6 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
         project.update((current) => ({ ...current, ...dataToSet }));
-
-        try {
-            const tags = await invoke('get_all_tags', { projectId: loadedData.project_uuid });
-            setTags(tags);
-            console.log(`[ProjectService] Initialized global tag store with ${tags.length} tags.`);
-        } catch (tagError) {
-            console.error('[ProjectService] Failed to get all tags from backend:', tagError);
-            setTags([]); // Ensure tags are cleared on error
-        }
 
         // Update project groups list
         try {
@@ -1414,6 +1421,37 @@ export async function saveDocumentContent(filePath, jsonContent) {
     if (metadataSaveError) {
         // We don't throw here because the main content saved successfully.
         // The error will be handled by saveDocumentMetadata itself.
+    }
+}
+
+export async function saveHighlightChanges(highlight) {
+    if (!highlight || !highlight.id || !highlight.source || !highlight.source.file_path) {
+        console.error("[ProjectService] saveHighlightChanges: Invalid highlight object provided.", highlight);
+        throw new Error("Invalid highlight object provided for saving.");
+    }
+
+    const { source, ...highlightData } = highlight;
+    const filePath = source.file_path;
+    const docType = source.file_type;
+    const proj = get(project);
+
+    if (!proj.id) {
+        console.error("[ProjectService] saveHighlightChanges: Project ID is missing.");
+        throw new Error("Project ID is missing.");
+    }
+
+    try {
+        await invoke('save_highlight_changes', {
+            projectId: proj.id,
+            filePath: filePath,
+            docType: docType,
+            highlight: highlightData,
+        });
+        console.log(`[ProjectService] Highlight changes saved for ${filePath}`);
+    } catch (error) {
+        console.error(`[ProjectService] Error saving highlight changes for ${filePath}:`, error);
+        notificationStore.add(`Error saving highlight changes: ${error.message || error}`, 'error');
+        throw error;
     }
 }
 

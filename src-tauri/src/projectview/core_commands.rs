@@ -807,11 +807,24 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
-                transcript_children.push(FileEntry {
+                let media_asset_relative_path = media_entry.relative_path.clone().replace("\\", "/");
+                let media_asset_metadata = db_handler::load_asset_metadata(&project_data.project_uuid, &media_asset_relative_path)?;
+                let transcript_file_type = if let Some(metadata) = media_asset_metadata {
+                    match metadata.asset_type.as_str() {
+                        "audio" => "audio_transcript".to_string(),
+                        "video" => "video_transcript".to_string(),
+                        _ => "transcript".to_string(), // Fallback
+                    }
+                } else {
+                    warn!("[Backend Load XML] Could not load asset metadata for media: {}. Defaulting transcript type to 'transcript'.", media_asset_relative_path);
+                    "transcript".to_string()
+                };
+
+                 transcript_children.push(FileEntry {
                     name: transcript_file_name,
                     path: transcript_file_canonical,
                     relative_path: transcript_rel_path.clone().replace("\\", "/"),
-                    file_type: "transcript".to_string(),
+                    file_type: transcript_file_type,
                     is_directory: false,
                     parent_relative_path: format!("{}/{}", stem_rel_path, TRANSCRIPTS_SUBDIR).replace("\\", "/"),
                     depth: 5,
@@ -871,6 +884,177 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
             associated_transcripts: media_entry.transcripts.clone(), // Populate with transcripts from XML
             children: sub_folders,
         });
+    }
+    // Add imported transcript files to the main file_entries tree
+    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+
+        if transcript_abs_path.exists() && transcript_abs_path.is_file() {
+            let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+
+            file_entries.push(FileEntry {
+                name: transcript_file_name,
+                path: transcript_file_canonical,
+                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
+                depth: 3, // Assuming it's at the same level as media stems
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Imported transcript file listed in XML does not exist on disk: '{}'", transcript_abs_path.display());
+        }
+    }
+    // Add imported transcript files to the main file_entries tree
+    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+
+        if transcript_abs_path.exists() && transcript_abs_path.is_file() {
+            let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+
+            file_entries.push(FileEntry {
+                name: transcript_file_name,
+                path: transcript_file_canonical,
+                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
+                depth: 3, // Assuming it's at the same level as media stems
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Imported transcript file listed in XML does not exist on disk: '{}'", transcript_abs_path.display());
+        }
+    }
+    // Add imported transcript files to the main file_entries tree
+    for imported_transcript_entry in project_data.imported_transcript_files.files.iter() {
+        let transcript_abs_path = project_base_dir.join(&imported_transcript_entry.relative_path);
+
+        if transcript_abs_path.exists() && transcript_abs_path.is_file() {
+            let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
+
+            file_entries.push(FileEntry {
+                name: transcript_file_name,
+                path: transcript_file_canonical,
+                relative_path: imported_transcript_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "imported_transcript".to_string(), // Explicitly set to imported_transcript
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TRANSCRIPTS_DIR).replace("\\", "/"), // Assuming direct child of Transcripts folder
+                depth: 3, // Assuming it's at the same level as media stems
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Imported transcript file listed in XML does not exist on disk: '{}'", transcript_abs_path.display());
+        }
+    }
+
+    // Add document files to the main file_entries tree
+    for doc_entry in project_data.document_files.files.iter() {
+        let doc_abs_path = project_base_dir.join(&doc_entry.relative_path);
+
+        if doc_abs_path.exists() && doc_abs_path.is_file() {
+            let doc_file_name = doc_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let doc_file_canonical = fs::canonicalize(&doc_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| doc_abs_path.to_string_lossy().to_string());
+
+            let file_type = if doc_file_name.to_lowercase().ends_with(".pdf") {
+                "pdf".to_string()
+            } else {
+                "document".to_string()
+            };
+
+            file_entries.push(FileEntry {
+                name: doc_file_name,
+                path: doc_file_canonical,
+                relative_path: doc_entry.relative_path.clone().replace("\\", "/"),
+                file_type: file_type,
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, DOCS_DIR).replace("\\", "/"),
+                depth: 3,
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Document file listed in XML does not exist on disk: '{}'", doc_abs_path.display());
+        }
+    }
+
+    // Add table files to the main file_entries tree
+    for table_entry in project_data.table_files.files.iter() {
+        let table_abs_path = project_base_dir.join(&table_entry.relative_path);
+
+        if table_abs_path.exists() && table_abs_path.is_file() {
+            let table_file_name = table_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let table_file_canonical = fs::canonicalize(&table_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| table_abs_path.to_string_lossy().to_string());
+
+            file_entries.push(FileEntry {
+                name: table_file_name,
+                path: table_file_canonical,
+                relative_path: table_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "table".to_string(),
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, TABLES_DIR).replace("\\", "/"),
+                depth: 3,
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Table file listed in XML does not exist on disk: '{}'", table_abs_path.display());
+        }
+    }
+
+    // Add image files to the main file_entries tree
+    for image_entry in project_data.image_files.files.iter() {
+        let image_abs_path = project_base_dir.join(&image_entry.relative_path);
+
+        if image_abs_path.exists() && image_abs_path.is_file() {
+            let image_file_name = image_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let image_file_canonical = fs::canonicalize(&image_abs_path)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| image_abs_path.to_string_lossy().to_string());
+
+            file_entries.push(FileEntry {
+                name: image_file_name,
+                path: image_file_canonical,
+                relative_path: image_entry.relative_path.clone().replace("\\", "/"),
+                file_type: "image".to_string(),
+                is_directory: false,
+                parent_relative_path: format!("{}/{}", HARVEY_FILES_DIR, IMAGES_DIR).replace("\\", "/"),
+                depth: 3,
+                speakers: None,
+                media_xml_identifier: None,
+                associated_transcripts: Vec::new(),
+                children: Vec::new(),
+            });
+        } else {
+            warn!("[Backend Load XML] Image file listed in XML does not exist on disk: '{}'", image_abs_path.display());
+        }
     }
     file_entries.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -2020,10 +2204,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
-    use crate::projectview::shared_types::ProjectXml; // Ensure ProjectXml is in scope if needed for direct construction, though here we rely on its deserialization.
 
     #[tokio::test]
     async fn test_load_project_data_includes_uuid() {

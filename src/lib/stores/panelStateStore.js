@@ -8,6 +8,7 @@ const initialPanelState = {
     infoPanelCollapsed: false, // NEW - For the new combined InfoPanel, false = expanded by default
     activeInfoPanelTab: 'metadata', // NEW - Default active tab for the new InfoPanel/RightBar
     transcriptionPanelCollapsed: false, // For the main transcription settings/info panel in TranscriptionsView
+    tagsLeftPanelCollapsed: false, // Added
     // Add other panel states here as needed
 };
 
@@ -45,6 +46,13 @@ function toggleTranscriptionPanel() {
     }));
 }
 
+function toggleTagsLeftPanel() {
+    panelStateStore.update(state => ({
+        ...state,
+        tagsLeftPanelCollapsed: !state.tagsLeftPanelCollapsed
+    }));
+}
+
 export default {
     subscribe: panelStateStore.subscribe,
     toggleDataLeftPanel,
@@ -53,5 +61,6 @@ export default {
     // toggleLeftPanel, // REMOVED
     // toggleRightPanel, // REMOVED
     toggleTranscriptionPanel,
+    toggleTagsLeftPanel,
     set: panelStateStore.set
 };

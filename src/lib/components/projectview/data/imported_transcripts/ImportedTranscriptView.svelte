@@ -25,12 +25,12 @@
 </script>
 
 <!-- Main container for the Imported Transcript View - this will now be the main content panel -->
-<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800 rounded-md shadow">
+<div class="h-full flex-grow min-w-0 bg-white dark:bg-gray-800">
     {#key itemPath}
         {#if itemPath}
             <TranscriptEditorPanel itemPath={itemPath} />
         {:else}
-            <div class="h-full bg-gray-200 dark:bg-gray-700 rounded-md shadow flex items-center justify-center text-gray-500">
+            <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500">
                 <span>No transcript path provided to ImportedTranscriptView.</span>
             </div>
         {/if}

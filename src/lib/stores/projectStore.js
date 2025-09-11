@@ -8,8 +8,8 @@ import { addTag } from '$lib/stores/tagStore.js';
 export const groupContentNotification = writable(null);
 export const highlightsLastUpdated = writable(null);
 
-const HARVEY_FILES_DIR = "harvey_files";
-const MEDIA_DIR_NAME = 'Media';
+export const HARVEY_FILES_DIR = "harvey_files";
+export const MEDIA_DIR_NAME = 'Media';
 const MEDIA_SUBDIR = 'media';
 const TRANSCRIPTS_SUBDIR = 'transcripts';
 

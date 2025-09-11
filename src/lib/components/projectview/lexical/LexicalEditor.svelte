@@ -445,7 +445,7 @@
           listitem: 'mb-0.5 pl-1 relative list-item-checkbox',
         },
         quote: 'border-l-4 border-gray-300 dark:border-gray-600 pl-2 italic my-1',
-        code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 rounded text-sm block whitespace-pre-wrap',
+        code: 'bg-gray-100 dark:bg-gray-700 dark:text-gray-200 font-mono p-0.5 my-0.5 text-sm block whitespace-pre-wrap',
         link: 'text-blue-600 dark:text-blue-400 underline cursor-pointer hover:text-blue-800 dark:hover:text-blue-300',
         table: 'editor-table w-full border-collapse border dark:border-gray-700 my-2 table-fixed',
         tableCell: 'editor-table-cell border dark:border-gray-600 px-2 py-1 align-top min-w-[50px] relative',
@@ -1832,7 +1832,7 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 rounded-md overflow-visible border border-gray-200 dark:border-gray-700 shadow-sm">
+<div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 overflow-visible shadow-sm">
   {#if editable}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0">
       {#if toolbarConfig.undo}
@@ -1858,7 +1858,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-30 w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
                   class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1924,7 +1924,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
                 class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1952,7 +1952,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
                   class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1999,7 +1999,7 @@ $: if (editor && activeLayout) {
             <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
           </button>
           {#if isColorDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each colorOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -2030,7 +2030,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isHighlightDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each highlightOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -2192,7 +2192,7 @@ $: if (editor && activeLayout) {
 
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
-      @apply px-1.5 py-0.5 border border-gray-300 rounded bg-gray-100 text-gray-800
+      @apply px-1.5 py-0.5 border border-gray-300 bg-gray-100 text-gray-800
               hover:bg-gray-200 text-xs disabled:opacity-50 disabled:cursor-not-allowed
               focus:outline-none focus:ring-1 focus:ring-blue-500;
       margin-right: 2px;

@@ -13,3 +13,8 @@ vite.config.ts.timestamp-*
 /src-tauri/models/
 # Ignore personal VSCode settings
 /.vscode/
+.log
+/temp/
+/playwright-report/
+/test-results/
+/e2e-tests/screenshots/

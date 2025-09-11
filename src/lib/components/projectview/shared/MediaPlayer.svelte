@@ -768,15 +768,38 @@
         currentWaveformLoadId++;
         const loadId = currentWaveformLoadId;
 
+        const currentProject = get(project);
+        const projectId = currentProject.id;
+        const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
+
+        let decodedAudioBuffer = null;
+        let cachedPeaks = null;
+
         try {
             const fileData = await readFile(loadedPathFromProp);
             const arrayBuffer = fileData.buffer; // Get the underlying ArrayBuffer
 
-            // Decode audio on the main thread
+            // Always decode audio on the main thread to get the AudioBuffer for playback
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-            // Extract channel data and transfer to worker
+            // Check for cached waveform data in metadata
+            if (projectId && assetRelativePath) {
+                try {
+                    const metadata = await getAssetMetadata(assetRelativePath);
+                    if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
+                        cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+                        setAudioBuffer(decodedAudioBuffer, cachedPeaks);
+                        console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
+                        return; // Exit early, as peaks are loaded from cache
+                    }
+                } catch (e) {
+                    console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+                }
+            }
+
+            // If no cached data, proceed with generating peaks using the worker
+            console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Sending to worker for peak generation.`);
             const channelData = decodedAudioBuffer.getChannelData(0); // Assuming mono or taking first channel
             const transferableChannelData = new Float32Array(channelData); // Create a new Float32Array to transfer
             waveformWorker.postMessage({
@@ -789,10 +812,11 @@
                 id: loadId
             }, [transferableChannelData.buffer]); // Transfer the buffer of the new Float32Array
 
-            // Store decodedAudioBuffer locally for use in onmessage handler
+            // Store decodedAudioBuffer locally for use in onmessage handler when worker responds
             _tempDecodedAudioBuffer = decodedAudioBuffer;
+
         } catch (error) {
-            console.error(`[MediaPlayer] Error reading audio file for waveform:`, error);
+            console.error(`[MediaPlayer] Error reading or decoding audio file for waveform:`, error);
             if (!explicitMediaPath) {
                 setAudioBuffer(null, null);
             }

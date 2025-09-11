@@ -103,11 +103,9 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden">
-    <div class="p-2">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600 pb-2 mb-2">
-            Attachments
-        </h3>
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
+    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-9 mb-2">
+        <span class="ml-1">Attachments</span>
     </div>
     <div class="flex-grow overflow-y-auto min-h-0">
         {#if isLoading}

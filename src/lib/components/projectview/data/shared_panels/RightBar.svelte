@@ -27,10 +27,10 @@
 
 </script>
 
-<div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2 shadow-md">
+<div class="flex flex-col items-center w-8 h-full bg-white dark:bg-gray-700 py-2 space-y-2">
     <button
         on:click={() => handleTabClick('metadata')}
-        class="p-2 rounded-md focus:outline-none transition-colors"
+        class="p-2 focus:outline-none transition-colors"
         class:text-blue-600={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
         class:dark:text-blue-400={$panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed}
         class:hover:bg-gray-300={!($panelStateStore.activeInfoPanelTab === 'metadata' && !$panelStateStore.infoPanelCollapsed)}
@@ -44,7 +44,7 @@
 
     <button
         on:click={() => handleTabClick('highlights')}
-        class="p-2 rounded-md focus:outline-none transition-colors"
+        class="p-2 focus:outline-none transition-colors"
         class:text-blue-600={$panelStateStore.activeInfoPanelTab === 'highlights' && !$panelStateStore.infoPanelCollapsed}
         class:dark:text-blue-400={$panelStateStore.activeInfoPanelTab === 'highlights' && !$panelStateStore.infoPanelCollapsed}
         class:hover:bg-gray-300={!($panelStateStore.activeInfoPanelTab === 'highlights' && !$panelStateStore.infoPanelCollapsed)}
@@ -59,7 +59,7 @@
     {#if itemType === 'doc'}
         <button
             on:click={() => handleTabClick('attachments')}
-            class="p-2 rounded-md focus:outline-none transition-colors"
+            class="p-2 focus:outline-none transition-colors"
             class:text-blue-600={$panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed}
             class:dark:text-blue-400={$panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed}
             class:hover:bg-gray-300={!($panelStateStore.activeInfoPanelTab === 'attachments' && !$panelStateStore.infoPanelCollapsed)}

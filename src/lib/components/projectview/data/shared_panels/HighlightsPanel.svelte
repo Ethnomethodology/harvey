@@ -5,7 +5,7 @@
 
     import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations, saveTableHighlights } from '$lib/services/projectService.js';
-    import { allTags as allTagsStore, addTag as addGlobalTag } from '$lib/stores/tagStore.js';
+    import { allTags as allTagsStore, addTag } from '$lib/stores/tagStore.js';
     import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
@@ -123,12 +123,20 @@
         handleHighlightsUpdate(newHighlights);
     }
 
-    function handleCreateTag(newTag, highlightId) {
-        addGlobalTag(newTag);
-        const highlight = activeHighlights.find(h => h.id === highlightId);
-        if (highlight && !(highlight.tags || []).includes(newTag)) {
-            const newTags = [...(highlight.tags || []), newTag];
-            handleTagsUpdate(highlightId, newTags);
+    async function handleCreateTag(newTag, highlightId) {
+        try {
+            // The addTag function from the store now handles the backend call and refreshing the store.
+            await addTag(newTag);
+
+            // After the store is updated, we can update the current highlight's tags.
+            const highlight = activeHighlights.find(h => h.id === highlightId);
+            if (highlight && !(highlight.tags || []).includes(newTag)) {
+                const newTags = [...(highlight.tags || []), newTag];
+                handleTagsUpdate(highlightId, newTags);
+            }
+        } catch (error) {
+            console.error('Failed to create tag:', error);
+            // Optionally, show a notification to the user
         }
     }
 
@@ -161,16 +169,18 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 rounded-md shadow flex flex-col overflow-hidden py-2">
-    <div class="text-sm font-semibold border-b pb-1 px-1 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between h-8 mb-2">
-        <span class="ml-1">Highlights</span>
+<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
+    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+            <span>Highlights</span>
+        </div>
     </div>
 
     <div class="flex-grow overflow-y-auto overflow-x-hidden min-h-0 text-xs relative px-2">
         {#if processedHighlights.length > 0}
             <ul class="space-y-2">
                 {#each processedHighlights as highlight (highlight.id)}
-                    <li class="border rounded-md bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                    <li class="border bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
                             {#if itemType === 'images'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
@@ -190,7 +200,7 @@
                                 </svg>
                                 <div class="w-full relative">
                                     <TagMultiSelect
-                                        allTags={$allTagsStore}
+                                        allTags={$allTagsStore.map(t => t.name)}
                                         assignedTags={highlight.tags}
                                         on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
                                         on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}

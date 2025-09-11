@@ -178,7 +178,7 @@
 
 </script>
 
-<div class="prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-white dark:bg-gray-800 rounded-md shadow overflow-hidden exported-transcript">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 overflow-hidden exported-transcript">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
     {:else if errorMessage && selectedPath}
@@ -209,9 +209,9 @@
 </div>
 
 <style lang="postcss">
-	.btn-primary { @apply py-1.5 px-4 bg-blue-500 text-white border-none rounded-md cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400; }
+	.btn-primary { @apply py-1.5 px-4 bg-blue-500 text-white border-none cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400; }
 	.btn-primary:hover:not(:disabled) { @apply bg-blue-600; }
-    .btn-secondary { @apply py-1.5 px-4 bg-gray-200 text-gray-800 border border-gray-300 rounded-md cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
+    .btn-secondary { @apply py-1.5 px-4 bg-gray-200 text-gray-800 border border-gray-300 cursor-pointer text-sm font-medium transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed; }
 	.btn-secondary:hover:not(:disabled) { @apply bg-gray-300 border-gray-400; }
 	.btn-secondary:disabled { @apply bg-gray-100 text-gray-400 border-gray-200; }
     .btn-primary.text-xs, .btn-secondary.text-xs { @apply py-1 px-2; }

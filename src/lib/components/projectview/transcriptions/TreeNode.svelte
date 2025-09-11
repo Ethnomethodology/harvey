@@ -62,7 +62,7 @@
         if (node.file_type === 'media') {
             if (AUDIO_EXTENSIONS.has(ext)) return AUDIO_ICON;
 			if (VIDEO_EXTENSIONS.has(ext)) return VIDEO_ICON;
-        } else if (node.file_type === 'transcript') {
+        } else if (node.file_type === 'transcript' || node.file_type === 'imported_transcript') {
              return TRANSCRIPT_ICON;
         } else if (node.file_type === 'note') {
              return NOTE_ICON;

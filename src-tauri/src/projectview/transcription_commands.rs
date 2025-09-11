@@ -2316,8 +2316,6 @@ pub async fn cancel_transcription(
     Ok(())
 }
 
-use tauri::Manager;
-
 #[tauri::command]
 pub async fn start_live_transcription(
     app_handle: AppHandle,

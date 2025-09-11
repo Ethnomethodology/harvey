@@ -5,7 +5,7 @@ use std::fs;
 use crate::welcome::config::{get_config_dir, CommandError}; // Assuming this function gives PathBuf
 use log::{info, debug, error, warn};
 use serde::{Serialize, Deserialize}; // Added for the new struct
-use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb}; // For function signatures
+use crate::projectview::shared_types::{FileMetadata, FileGroupAssociationFromDb, Highlight}; // For function signatures
 
 const DB_FILE_NAME: &str = "harvey.sqlite";
 
@@ -424,6 +424,96 @@ pub fn init_db() -> Result<(), CommandError> {
     )?;
     info!("[DB] Initialized update_media_transcript_data_updated_at trigger.");
 
+    // tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized tags table.");
+
+    // Trigger for tags updated_at
+    conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS update_tags_updated_at
+        AFTER UPDATE ON tags
+        FOR EACH ROW
+        BEGIN
+            UPDATE tags SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;",
+        [],
+    )?;
+    info!("[DB] Initialized update_tags_updated_at trigger.");
+
+    // Migration for adding color column to tags table
+    let mut stmt = conn.prepare("PRAGMA table_info(tags)")?;
+    let column_exists = stmt.query_map([], |row| {
+        let column_name: String = row.get(1)?;
+        Ok(column_name)
+    })?.any(|col| col.as_deref() == Ok("color"));
+
+    if !column_exists {
+        info!("[DB] Adding color column to tags table.");
+        conn.execute("ALTER TABLE tags ADD COLUMN color TEXT", [])?;
+    }
+
+    // highlights table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            start_offset INTEGER,
+            end_offset INTEGER,
+            text TEXT,
+            annotation_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, asset_id) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized highlights table.");
+
+    // Migration for adding columns to highlights table
+    let mut stmt = conn.prepare("PRAGMA table_info(highlights)")?;
+    let columns: Vec<String> = stmt.query_map([], |row| row.get(1))?.collect::<Result<Vec<_>, _>>()?;
+
+    if !columns.contains(&"asset_id".to_string()) {
+        info!("[DB] Adding asset_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN asset_id TEXT", [])?;
+    }
+    if !columns.contains(&"project_id".to_string()) {
+        info!("[DB] Adding project_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN project_id TEXT", [])?;
+    }
+    if !columns.contains(&"annotation_id".to_string()) {
+        info!("[DB] Adding annotation_id column to highlights table.");
+        conn.execute("ALTER TABLE highlights ADD COLUMN annotation_id TEXT", [])?;
+    }
+
+    // highlight_tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlight_tags (
+            highlight_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            project_id TEXT NOT NULL,
+            PRIMARY KEY (highlight_id, tag_id),
+            FOREIGN KEY (highlight_id) REFERENCES highlights(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    info!("[DB] Initialized highlight_tags table.");
+
+
     info!("[DB] Database initialized successfully with all tables and triggers.");
     Ok(())
 }
@@ -814,7 +904,7 @@ pub fn delete_table_styles(project_id: &str, table_path: &str) -> Result<(), Com
 }
 
 // Helper to convert Option<T> to dyn ToSql for rusqlite
-fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
+pub fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
     match opt {
         Some(val) => Box::new(val),
         None => Box::new(rusqlite::types::Null),
@@ -822,14 +912,14 @@ fn to_sql_optional<T: ToSql + 'static>(opt: Option<T>) -> Box<dyn ToSql> {
 }
 
 // Helper to convert Option<&[u8]> to dyn ToSql for rusqlite
-fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql + '_> {
+pub fn to_sql_optional_blob(opt: Option<&[u8]>) -> Box<dyn ToSql + '_> {
     match opt {
         Some(val) => Box::new(val),
         None => Box::new(rusqlite::types::Null),
     }
 }
 // Helper to convert Option<&str> to dyn ToSql
-fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
+pub fn to_sql_optional_str(opt_str: Option<&str>) -> Box<dyn ToSql> {
     match opt_str {
         Some(s) => Box::new(s.to_string()), // Convert &str to String before boxing
         None => Box::new(rusqlite::types::Null),
@@ -1348,39 +1438,169 @@ pub fn delete_lexical_highlights_from_db(project_id: &str, document_path: &str) 
 
 // --- End Lexical Highlights Functions ---
 
-use std::collections::HashSet;
-use crate::projectview::shared_types::Highlight;
+// --- Tag Functions ---
 
-pub fn get_all_tags_for_project(project_id: &str) -> Result<Vec<String>, CommandError> {
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct Tag {
+    pub id: i64,
+    pub project_id: String,
+    pub name: String,
+    pub color: Option<String>,
+}
+
+pub fn add_tag(conn: &Connection, project_id: &str, name: &str, color: Option<&str>) -> Result<i64, CommandError> {
+    debug!("[DB] Adding tag to project_id {}: name={}, color={:?}", project_id, name, color);
+    let mut stmt = conn.prepare("INSERT INTO tags (project_id, name, color) VALUES (?1, ?2, ?3)")?;
+    let id = stmt.insert(params![project_id, name, color])?;
+    info!("[DB] Tag added successfully with id {}: name={}", id, name);
+    Ok(id)
+}
+
+pub fn delete_tag(conn: &Connection, project_id: &str, tag_id: i64) -> Result<(), CommandError> {
+    debug!("[DB] Deleting tag with id {} from project_id {}", tag_id, project_id);
+    conn.execute("DELETE FROM tags WHERE id = ?1 AND project_id = ?2", params![tag_id, project_id])?;
+    info!("[DB] Tag with id {} deleted successfully.", tag_id);
+    Ok(())
+}
+
+pub fn update_tag(conn: &Connection, project_id: &str, tag_id: i64, name: &str, color: Option<&str>) -> Result<(), CommandError> {
+    debug!("[DB] Updating tag with id {} in project_id {}: name={}, color={:?}", tag_id, project_id, name, color);
+    conn.execute(
+        "UPDATE tags SET name = ?1, color = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?3 AND project_id = ?4",
+        params![name, color, tag_id, project_id],
+    )?;
+    info!("[DB] Tag with id {} updated successfully.", tag_id);
+    Ok(())
+}
+
+pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, CommandError> {
     debug!("[DB] Loading all tags for project_id {}", project_id);
-    let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)?;
-
-    let mut stmt = conn.prepare("SELECT annotations_json FROM pdf_annotations WHERE project_id = ?1")?;
-
-    let rows = stmt.query_map(params![project_id], |row| {
-        row.get(0)
+    let mut stmt = conn.prepare("SELECT id, project_id, name, color FROM tags WHERE project_id = ?1 ORDER BY name ASC")?;
+    let tag_iter = stmt.query_map(params![project_id], |row| {
+        Ok(Tag {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            color: row.get(3)?,
+        })
     })?;
 
-    let mut all_tags = HashSet::new();
-    for row in rows {
-        let annotations_json: String = row?;
-        if let Ok(highlights) = serde_json::from_str::<Vec<Highlight>>(&annotations_json) {
-            for highlight in highlights {
-                if let Some(tags) = highlight.tags {
-                    for tag in tags {
-                        all_tags.insert(tag);
-                    }
+    let mut tags = Vec::new();
+    for tag_result in tag_iter {
+        tags.push(tag_result?);
+    }
+    info!("[DB] Loaded {} tags for project_id {}", tags.len(), project_id);
+    Ok(tags)
+}
+
+// --- End Tag Functions ---
+
+// --- Highlight Functions ---
+
+// NOTE: The following functions (add_highlight, add_tag_to_highlight, etc.) are part of a partial
+// refactor to move tags to a database. However, the application currently stores highlight and
+// tag information within JSON blobs in other tables (e.g., pdf_annotations). These functions
+// are unused for now but are kept for future completion of the refactor.
+
+// --- End Highlight Functions ---
+
+pub fn get_highlights_by_tag(
+    conn: &Connection,
+    project_id: &str,
+    tag_name: &str,
+) -> Result<Vec<(Highlight, String, Vec<String>, Option<String>)>, CommandError> {
+    debug!("[DB] Aggregating highlights for project_id {} with tag_name '{}'", project_id, tag_name);
+    let mut all_highlights = Vec::new();
+
+    // 1. Get highlights from pdf_annotations (covers PDFs, images, lexical docs)
+    let mut stmt_pdf = conn.prepare("
+        SELECT pa.pdf_document_path, pa.annotations_json, am.asset_type
+        FROM pdf_annotations pa
+        LEFT JOIN asset_metadata am ON pa.pdf_document_path = am.asset_relative_path AND pa.project_id = am.project_id
+        WHERE pa.project_id = ?1
+    ")?;
+    let pdf_annotation_rows = stmt_pdf.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?;
+
+    for row in pdf_annotation_rows {
+        let (doc_path, annotations_json, asset_type): (String, String, Option<String>) = row?;
+        let annotations_val: serde_json::Value = match serde_json::from_str(&annotations_json) {
+            Ok(val) => val,
+            Err(_) => continue,
+        };
+
+        let annotations = annotations_val.as_array().map_or(Vec::new(), |arr| arr.clone());
+
+        for annotation_val in annotations {
+            if let Some(annotation_obj) = annotation_val.as_object() {
+                let tags_vec: Vec<String> = annotation_obj.get("tags")
+                    .and_then(|t| t.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+
+                if tags_vec.contains(&tag_name.to_string()) {
+                    let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("[Image Highlight]").to_string();
+                    let color = annotation_obj.get("color").and_then(|v| v.as_str())
+                        .or_else(|| {
+                            annotation_obj.get("body")
+                                .and_then(|b| b.as_array())
+                                .and_then(|b| b.get(0))
+                                .and_then(|first_body| first_body.get("value"))
+                                .and_then(|v| v.as_str())
+                        })
+                        .unwrap_or_default().to_string();
+
+                    let comments_val = annotation_obj.get("comments").cloned();
+                    let comments: Option<Vec<serde_json::Value>> = comments_val.and_then(|v| serde_json::from_value(v).ok());
+
+                    let highlight = Highlight {
+                        id,
+                        text,
+                        color,
+                        tags: Some(tags_vec.clone()),
+                        comments,
+                        timestamp: None,
+                    };
+                    all_highlights.push((highlight, doc_path.clone(), tags_vec, asset_type.clone()));
                 }
             }
         }
     }
 
-    info!("[DB] Found {} unique tags for project_id {}", all_tags.len(), project_id);
-    let mut sorted_tags: Vec<String> = all_tags.into_iter().collect();
-    sorted_tags.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
-    Ok(sorted_tags)
+    // 2. Get highlights from table_styles (covers tables)
+    let mut stmt_table = conn.prepare("
+        SELECT ts.table_path, ts.styles, am.asset_type
+        FROM table_styles ts
+        LEFT JOIN asset_metadata am ON ts.table_path = am.asset_relative_path AND ts.project_id = am.project_id
+        WHERE ts.project_id = ?1
+    ")?;
+    let table_style_rows = stmt_table.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?;
+
+    for row in table_style_rows {
+        let (table_path, styles_json, asset_type): (String, String, Option<String>) = row?;
+        let table_highlights: Vec<Highlight> = serde_json::from_str(&styles_json)
+            .or_else(|_| serde_json::from_str(&styles_json).and_then(|s: String| serde_json::from_str(&s)))
+            .unwrap_or_else(|_| Vec::new());
+
+        for highlight in table_highlights {
+            if let Some(tags) = &highlight.tags {
+                if tags.contains(&tag_name.to_string()) {
+                    all_highlights.push((highlight.clone(), table_path.clone(), tags.clone(), asset_type.clone()));
+                }
+            }
+        }
+    }
+
+    info!("[DB] Found a total of {} highlights for project_id {} with tag_name '{}'", all_highlights.len(), project_id, tag_name);
+    Ok(all_highlights)
 }
+
+
+
 
 #[cfg(test)]
 mod tests {
@@ -1616,5 +1836,347 @@ mod tests {
 
         // Try renaming non-existent
         assert_eq!(rename_direct(&conn, &project_id, "non_existent.pdf", "another.pdf", "pdf").unwrap(), 0);
+    }
+
+}
+
+#[cfg(test)]
+pub fn init_db_for_test(conn: &Connection) -> Result<(), CommandError> {
+    debug!("[DB] Initializing database for test");
+
+    // Updated pdf_annotations table definition
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS pdf_annotations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            pdf_document_path TEXT NOT NULL,
+            annotations_json TEXT NOT NULL,
+            document_type TEXT NOT NULL DEFAULT 'pdf',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, pdf_document_path, document_type)
+        )",
+        [],
+    )?;
+
+    // asset_metadata table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS asset_metadata (
+            asset_relative_path TEXT NOT NULL,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            last_modified TEXT NOT NULL,
+            title TEXT,
+            description TEXT,
+            summary TEXT,
+            duration_seconds REAL,
+            width INTEGER,
+            height INTEGER,
+            frame_rate REAL,
+            bit_rate INTEGER,
+            audio_codec TEXT,
+            video_codec TEXT,
+            creation_time TEXT,
+            asset_type TEXT NOT NULL,
+            custom_fields_json TEXT,
+            original_import_path TEXT,
+            speaker_names_json TEXT,
+            waveform_data BLOB,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_relative_path)
+        )",
+        [],
+    )?;
+
+    // custom_field_definitions table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS custom_field_definitions (
+            project_id TEXT NOT NULL,
+            field_key TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            default_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY (project_id, field_key)
+        )",
+        [],
+    )?;
+
+    // table_layout_preferences table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_layout_preferences (
+            project_id TEXT NOT NULL,
+            table_asset_relative_path TEXT NOT NULL,
+            layout_json TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY (project_id, table_asset_relative_path),
+            FOREIGN KEY (project_id, table_asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
+        )",
+        [],
+    )?;
+
+    // table_styles table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS table_styles (
+            project_id TEXT NOT NULL,
+            table_path TEXT NOT NULL,
+            styles TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, table_path)
+        )",
+        [],
+    )?;
+
+    // projects table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            root_path TEXT NOT NULL UNIQUE,
+            xml_path TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+
+    // groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS groups (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+
+    // file_groups table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS file_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_asset_path TEXT NOT NULL,
+            group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, file_asset_path) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE,
+            UNIQUE (project_id, file_asset_path, group_id)
+        )",
+        [],
+    )?;
+
+    // media_transcript_data table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS media_transcript_data (
+            project_id TEXT NOT NULL,
+            asset_relative_path TEXT NOT NULL,
+            original_import_path TEXT,
+            speaker_names_json TEXT,
+            language_code TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_relative_path),
+            FOREIGN KEY (project_id, asset_relative_path)
+                REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE ON UPDATE CASCADE
+        )",
+        [],
+    )?;
+
+    // tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (project_id, name)
+        )",
+        [],
+    )?;
+
+    // highlights table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            start_offset INTEGER,
+            end_offset INTEGER,
+            text TEXT,
+            annotation_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id, asset_id) REFERENCES asset_metadata(project_id, asset_relative_path) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // highlight_tags table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS highlight_tags (
+            highlight_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            project_id TEXT NOT NULL,
+            PRIMARY KEY (highlight_id, tag_id),
+            FOREIGN KEY (highlight_id) REFERENCES highlights(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+pub fn setup_test_db_in_memory() -> (Connection, String) {
+    let conn = Connection::open_in_memory().expect("Failed to open in-memory DB");
+    init_db_for_test(&conn).expect("Failed to initialize test DB schema");
+
+    let project_id = "test_project_1".to_string();
+    conn.execute(
+        "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+        params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
+    ).expect("Failed to insert test project");
+
+    (conn, project_id)
+}
+
+#[cfg(test)]
+mod get_highlights_by_tag_tests {
+    use super::*;
+    use rusqlite::Connection;
+    use serde_json::json;
+
+    fn setup_test_db_with_data() -> (Connection, String) {
+        let conn = Connection::open_in_memory().expect("Failed to open in-memory DB");
+        init_db_for_test(&conn).expect("Failed to initialize test DB");
+
+        let project_id = "test_project_1".to_string();
+        conn.execute(
+            "INSERT INTO projects (id, name, root_path, xml_path) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "Test Project", "/fake/path", "/fake/path/project.xml"],
+        ).expect("Failed to insert test project");
+
+        // Insert mock data
+        let pdf_ann_json = json!([
+            {"id": "uuid-pdf-1", "text": "PDF highlight text", "tags": ["tag1", "tag2"], "color": "#FF0000"}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/my.pdf", &pdf_ann_json, "pdf"],
+        ).unwrap();
+        conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/my.pdf", "my.pdf", "/abs/path/to/my.pdf", "0", "pdf"]
+        ).unwrap();
+
+
+        let lexical_ann_json = json!([
+            {"id": "uuid-lex-1", "text": "Lexical highlight", "tags": ["tag2"], "color": "#00FF00"}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/lexical.json", &lexical_ann_json, "lexical"],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/lexical.json", "lexical.json", "/abs/path/to/lexical.json", "0", "lexical"]
+        ).unwrap();
+
+
+        let image_ann_json = json!([
+            {"id": "uuid-img-1", "text": "[Image Highlight]", "tags": ["tag1"], "body": [{"value": "#0000FF"}]}
+        ]).to_string();
+        conn.execute(
+            "INSERT INTO pdf_annotations (project_id, pdf_document_path, annotations_json, document_type) VALUES (?1, ?2, ?3, ?4)",
+            params![&project_id, "path/to/image.png", &image_ann_json, "image"],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/image.png", "image.png", "/abs/path/to/image.png", "0", "image"]
+        ).unwrap();
+
+        let table_styles_inner = json!([
+            {"id": "uuid-tbl-1", "text": "Table cell text", "tags": ["tag1", "tag3"], "color": "#FFFF00"}
+        ]);
+        let table_styles_outer = serde_json::to_string(&table_styles_inner).unwrap();
+        conn.execute(
+            "INSERT INTO table_styles (project_id, table_path, styles) VALUES (?1, ?2, ?3)",
+            params![&project_id, "path/to/table.csv", &table_styles_outer],
+        ).unwrap();
+         conn.execute("INSERT INTO asset_metadata (project_id, asset_relative_path, file_name, file_path, last_modified, asset_type) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![&project_id, "path/to/table.csv", "table.csv", "/abs/path/to/table.csv", "0", "table"]
+        ).unwrap();
+
+
+        (conn, project_id)
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag1() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag1").unwrap();
+        assert_eq!(highlights.len(), 3); // pdf, image, table
+
+        // Check PDF highlight
+        let pdf_highlight = highlights.iter().find(|h| h.0.id == "uuid-pdf-1").unwrap();
+        assert_eq!(pdf_highlight.0.text, "PDF highlight text");
+        assert_eq!(pdf_highlight.0.color, "#FF0000");
+        assert_eq!(pdf_highlight.3.as_deref(), Some("pdf"));
+
+        // Check Image highlight
+        let img_highlight = highlights.iter().find(|h| h.0.id == "uuid-img-1").unwrap();
+        assert_eq!(img_highlight.0.text, "[Image Highlight]");
+        assert_eq!(img_highlight.0.color, "#0000FF");
+        assert_eq!(img_highlight.3.as_deref(), Some("image"));
+
+        // Check Table highlight
+        let tbl_highlight = highlights.iter().find(|h| h.0.id == "uuid-tbl-1").unwrap();
+        assert_eq!(tbl_highlight.0.text, "Table cell text");
+        assert_eq!(tbl_highlight.0.color, "#FFFF00");
+        assert_eq!(tbl_highlight.3.as_deref(), Some("table"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag2() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag2").unwrap();
+        assert_eq!(highlights.len(), 2); // pdf, lexical
+
+        // Check PDF highlight
+        let pdf_highlight = highlights.iter().find(|h| h.0.id == "uuid-pdf-1").unwrap();
+        assert_eq!(pdf_highlight.0.text, "PDF highlight text");
+        assert_eq!(pdf_highlight.3.as_deref(), Some("pdf"));
+
+        // Check Lexical highlight
+        let lex_highlight = highlights.iter().find(|h| h.0.id == "uuid-lex-1").unwrap();
+        assert_eq!(lex_highlight.0.text, "Lexical highlight");
+        assert_eq!(lex_highlight.3.as_deref(), Some("lexical"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_tag3() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag3").unwrap();
+        assert_eq!(highlights.len(), 1); // table only
+        let tbl_highlight = &highlights[0];
+        assert_eq!(tbl_highlight.0.id, "uuid-tbl-1");
+        assert_eq!(tbl_highlight.3.as_deref(), Some("table"));
+    }
+
+    #[test]
+    fn test_get_highlights_for_non_existent_tag() {
+        let (conn, project_id) = setup_test_db_with_data();
+        let highlights = get_highlights_by_tag(&conn, &project_id, "tag_that_does_not_exist").unwrap();
+        assert_eq!(highlights.len(), 0);
     }
 }

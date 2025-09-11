@@ -45,6 +45,7 @@ env_logger = "0.11"
 base64 = "0.22" 
 uuid = { version = "1.6", features = ["v4", "serde"] } 
 regex = "1" # <--- MAKE SURE THIS LINE IS PRESENT AND CORRECT
+walkdir = "2"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 
 # --- Asynchronous Runtime ---

@@ -148,12 +148,55 @@
 			message(`Failed to export transcript: ${error?.message || error}`, { title: "Export Failed", type: "error" });
 		}
 	}
-	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier); const currentLang = $transcriptStore.selectedLanguage; const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier); if (localModelInfo && currentLang && currentLang !== 'en') { console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`); await showModelInfoDialog(localModelInfo); } } }
-	async function handleLanguageChange(event) { const selectedValue = event.target.value; const newLanguage = selectedValue === "" ? null : selectedValue; console.log('TopBar: Selected language:', newLanguage || 'None'); setSelectedLanguage(newLanguage); const currentModelIdentifier = $transcriptStore.selectedModelName; if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) { const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier); if (localModelInfo) { console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`); await showModelInfoDialog(localModelInfo); } } }
-	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return; let infoMessage = `Model Information: ${modelInfo.name}\n\n`; if (modelInfo.description && modelInfo.description.trim() !== '') { infoMessage += `${modelInfo.description}\n\n`; } else if (modelInfo.language && modelInfo.language.trim() !== '') { infoMessage += `Primary Language Focus: ${modelInfo.language}\n`; } else { infoMessage += "General purpose model.\n"; } if (modelInfo.size && modelInfo.size.trim() !== '') { infoMessage += `Size: ${modelInfo.size}`; } if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) { infoMessage += "\n\nNote: This is a multilingual model."; } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) { infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`; } infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`; await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' }); }
+	async function handleModelChange(event) { const selectedValue = event.target.value; if (selectedValue === '__manage__') { console.log('TopBar: Manage Models selected'); isManageModalOpen = true; event.target.value = $transcriptStore.selectedModelName || ""; } else { const newModelIdentifier = selectedValue === "" ? null : selectedValue;
+ console.log('TopBar: Selected model identifier:', newModelIdentifier || 'None'); setSelectedModel(newModelIdentifier);
+ const currentLang = $transcriptStore.selectedLanguage;
+ const localModelInfo = downloadedModelsList.find(m => m.name === newModelIdentifier);
+ if (localModelInfo && currentLang && currentLang !== 'en') {
+ console.log(`TopBar: Local model changed ('${newModelIdentifier}') while non-English language ('${currentLang}') active.`);
+ await showModelInfoDialog(localModelInfo);
+ }
+ }
+ }
+	async function handleLanguageChange(event) { const selectedValue = event.target.value;
+ const newLanguage = selectedValue === "" ? null : selectedValue;
+ console.log('TopBar: Selected language:', newLanguage || 'None');
+ setSelectedLanguage(newLanguage);
+ const currentModelIdentifier = $transcriptStore.selectedModelName;
+ if (newLanguage && newLanguage !== 'en' && currentModelIdentifier) {
+ const localModelInfo = downloadedModelsList.find(m => m.name === currentModelIdentifier);
+ if (localModelInfo) {
+ console.log(`TopBar: Non-English language ('${newLanguage}') selected while LOCAL model ('${currentModelIdentifier}') active.`);
+ await showModelInfoDialog(localModelInfo);
+ }
+ }
+ }
+	async function showModelInfoDialog(modelInfo) { if (!modelInfo) return;
+ let infoMessage = `Model Information: ${modelInfo.name}\n\n`;
+ if (modelInfo.description && modelInfo.description.trim() !== '') {
+ infoMessage += `${modelInfo.description}\n\n`;
+ } else if (modelInfo.language && modelInfo.language.trim() !== '') {
+ infoMessage += `Primary Language Focus: ${modelInfo.language}\n`;
+ } else {
+ infoMessage += "General purpose model.\n";
+ }
+ if (modelInfo.size && modelInfo.size.trim() !== '') {
+ infoMessage += `Size: ${modelInfo.size}`;
+ }
+ if (modelInfo.language && modelInfo.language.toLowerCase().includes('multilingual')) {
+ infoMessage += "\n\nNote: This is a multilingual model.";
+ } else if (modelInfo.language && !modelInfo.language.toLowerCase().startsWith('en')) {
+ infoMessage += `\n\nNote: This model is primarily optimized for ${modelInfo.language}.`;
+ }
+ infoMessage += `\n\nFor more details, refer to the source where the model was downloaded.`;
+ await message(infoMessage, { title: `Model Info: ${modelInfo.name}`, type: 'info', okLabel: 'OK' });
+ }
 	async function handleManageModalClose() { console.log("TopBar: Manage Models modal closed. Refreshing ALL configuration..."); await loadConfiguration(); } // loadConfiguration itself will update transcriptStore via setSelectedModel if needed
 	function openSpeakersModal() { isSpeakersModalOpen = true; }
-	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail; console.log("TopBar: Confirmed speakers:", count, names, secondNames); updateSpeakerConfig(count, names, secondNames); }
+	function handleSpeakersConfirm(event) { const { count, names, secondNames } = event.detail;
+ console.log("TopBar: Confirmed speakers:", count, names, secondNames);
+ updateSpeakerConfig(count, names, secondNames);
+ }
 	function handleMediaSelectionChange(event) {
 		const selectedPath = event.target.value;
 		if (!selectedPath) { return; }
@@ -207,9 +250,9 @@
 	const SUN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>`;
 	const MOON_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
 	const SYSTEM_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>`;
-	$: themeIconHtml = $themePreference === 'light' ? MOON_ICON
-					 : $themePreference === 'dark' ? SYSTEM_ICON
-					 : SUN_ICON;
+	$: themeIconHtml = $themePreference === 'light' ? SUN_ICON
+					 : $themePreference === 'dark' ? MOON_ICON
+					 : SYSTEM_ICON;
 	$: nextThemeName = $themePreference === 'light' ? 'Dark'
 					 : $themePreference === 'dark' ? 'System'
 					 : 'Light';
@@ -236,14 +279,14 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-3 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
 		<!-- Toggle Left Panel Button -->
 		<button
-			class="ui-button-icon p-1.5"
+			class="ui-button-icon-no-border p-1.5 hover-scale-effect"
 			title="Toggle File Explorer Panel"
 			on:click={toggleLeftPanel}
 		>
@@ -280,7 +323,7 @@
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
-			<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openSpeakersModal}">
+			<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openSpeakersModal}">
 				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
 				  </svg>
@@ -295,7 +338,7 @@
 
 		<!-- Transcribe Button -->
 			<button
-				class="ui-button-icon flex items-center space-x-0.5"
+				class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect"
 				on:click="{handleTranscribeClick}"
 				title="{isTranscribeDisabled ? 'Select media first' : 'Transcribe Media'}"
 				disabled="{isTranscribeDisabled}"
@@ -317,21 +360,21 @@
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
 	<div class="flex items-center space-x-1.5 flex-shrink-0">
 		<!-- Export Button -->
-		<button class="ui-button-icon flex items-center space-x-0.5" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
+		<button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{openExportModal}" title="Export Transcript" disabled="{isExportDisabled}">
 		   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
 		   <span class="text-xs">Export</span>
 		</button>
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
-			class="ui-button-icon p-1.5"
+			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="ui-button-icon p-1.5" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -341,22 +384,25 @@
 
 <SpeakersModal bind:showModal="{isSpeakersModalOpen}" currentSpeakers="{$transcriptStore.speakers}" on:confirm="{handleSpeakersConfirm}" />
 <ExportModal
-	bind:showModal="{isExportModalOpen}"
+	bind:showModal="{isExportModalOpen}" 
 	transcriptPath="{transcriptPathForExport}"
 	on:confirm="{handleExportConfirm}"
-	on:close="{() => isExportModalOpen = false}"
+	on:close={() => isExportModalOpen = false}
 />
 <LayoutSettingsModal
 	bind:showModal="{isLayoutSettingsModalOpen}"
 	currentLayoutKey="{$activeLayout}"
 	on:selectLayout="{handleLayoutSelected}"
-	on:close="{() => isLayoutSettingsModalOpen = false}"
+	on:close={() => isLayoutSettingsModalOpen = false}
 />
 
 <style lang="postcss">
 	/* Shared button style */
 	.ui-button-icon {
-		@apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-700 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+	}
+	.ui-button-icon-no-border {
+		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
 	.ui-button-icon:disabled {
 		@apply opacity-50 cursor-not-allowed;
@@ -365,23 +411,9 @@
 		@apply w-4 h-4; /* Adjusted icon size */
 	}
 
-	/* Select style adjustments */
-	.ui-select {
-		@apply block flex-shrink-0 pl-2 pr-7 py-1 text-xs border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed; /* Adjusted padding */
-	}
-
 	/* Basic style for the new checkbox */
 	.ui-checkbox {
 		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
-	}
-
-	.ui-select optgroup {
-		font-weight: bold;
-		font-style: italic;
-	}
-	.ui-select option.separator {
-		color: gray;
-		font-style: italic;
 	}
 
 	/* Ensure spinner icon gets correct color when disabled */
@@ -415,4 +447,10 @@
 		font-size: 0.65rem; /* ~10.4px */
 		line-height: 0.8rem; /* ~12.8px */
 	}
+    .hover-scale-effect {
+        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+        will-change: transform;
+        backface-visibility: hidden;
+        transform: translateZ(0);
+    }
 </style>
