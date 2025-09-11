@@ -3,6 +3,7 @@
     import { onMount, onDestroy, tick } from 'svelte';
     import { get, writable } from 'svelte/store';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     import {
         loadTableData,
         saveTableData,
@@ -722,6 +723,13 @@
 
     $: if (tablePath && tablePath !== currentLoadedPath) {
         initializeTable(tablePath);
+    }
+
+    $: if ($panelStateStore.tagsLeftPanelCollapsed !== undefined && tabulatorInstance) {
+        // Debounce this to avoid excessive redraws during rapid toggling
+        debounce(() => {
+            tabulatorInstance.redraw(true);
+        }, 100)();
     }
 
     async function handleSaveHeader() {
