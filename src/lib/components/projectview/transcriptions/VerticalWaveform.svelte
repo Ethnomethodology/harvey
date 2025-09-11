@@ -383,7 +383,7 @@
 	}
 
 	function resetScrollAndZoom(resetZoomToo = true) {
-		if (resetZoomToo) zoomLevel = 1;
+		if (resetZoomToo) zoomLevel = maxZoomLevel;
 		scrollOffsetPy = 0;
 		if (waveformAreaContainerRef) waveformAreaContainerRef.scrollTop = 0;
 		requestRedraw(true);

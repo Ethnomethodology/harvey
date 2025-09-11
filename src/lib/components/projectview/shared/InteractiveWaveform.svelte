@@ -85,7 +85,7 @@ export let compactMode = false; // New prop, defaults to false
 		if (currentAudioBuffer && currentAudioBuffer !== prevExternalAudioBufferForDuration) {
 			if (currentAudioBuffer.duration > 0) {
 				actualMediaDuration = currentAudioBuffer.duration;
-				zoomLevel = 1;
+				zoomLevel = maxZoomLevel;
 				scrollOffsetPx = 0;
 				requestRedraw(true);
 			} else {
