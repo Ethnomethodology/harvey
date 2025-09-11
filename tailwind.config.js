@@ -20,7 +20,7 @@ export default {
         error: 'rgb(var(--color-error) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['"JetBrains Mono"', 'monospace'],
+        sans: ['"Inter"', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
       fontSize: {
