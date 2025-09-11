@@ -155,7 +155,7 @@
         tableReady = false;
         tabulatorInstance = new Tabulator(tableContainer, {
             data: data,
-            layout: "fitData",
+            layout: "fitColumns",
             pagination: "local",
             paginationSize: 10,
             paginationAddRow: "table",
@@ -163,7 +163,7 @@
                 {field:"text", type:"like", value:searchQuery}
             ],
             columns: [
-                { title: "File", field: "source.file_path", width: "20%", formatter: (cell) => {
+                { title: "File", field: "source.file_path", widthGrow: 2, formatter: (cell) => {
                     const highlight = cell.getRow().getData();
                     const filePath = highlight.source.file_path;
                     const fileName = filePath.split(/[\\/]/).pop();
@@ -176,11 +176,11 @@
                                 <span>${fileName}</span>
                             </div>`;
                 }},
-                { title: "Content", field: "text", width: "50%", formatter: (cell) => {
+                { title: "Content", field: "text", widthGrow: 5, formatter: (cell) => {
                     const text = cell.getValue();
                     return `<div class=\"whitespace-normal word-break-break-word\">${text}</div>`;
                 }},
-                { title: "Other Tags", field: "other_tags", width: "20%", formatter: (cell) => {
+                { title: "Other Tags", field: "other_tags", widthGrow: 2, formatter: (cell) => {
                     const tags = cell.getValue() || [];
                     if (tags.length === 0) return '';
 
