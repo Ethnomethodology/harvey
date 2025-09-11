@@ -878,9 +878,9 @@ async function onConfirmTranscriptionStart(event) {
 					<TagsView bind:this={tagsViewRef} />
 				{/if}
 			</div>
-			<BottomBar />
 		</div>
 	</div>
+    <BottomBar />
 
 	<TranscribeConfirmModal
         bind:this={transcribeModalRef}
