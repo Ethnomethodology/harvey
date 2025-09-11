@@ -383,7 +383,6 @@
 </script>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
-    <SimpleTopBar on:toggleLeftPanel={panelStateStore.toggleTagsLeftPanel} />
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}

@@ -448,14 +448,6 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 </script>
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
-    <TopBar
-        bind:this={topBarRef}
-        bind:editMode={panelEditModeActive}
-        on:requestTranscription={handleRequestTranscriptionEvent}
-        on:save={handleSaveTranscript}
-        on:toggleEditMode={handleToggleEditMode}
-        on:toggleLeftPanel={toggleLeftPanel}
-    />
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
