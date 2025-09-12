@@ -36,8 +36,8 @@
 >
   <div class="flex items-center min-w-0">
         <div class="w-12 h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="group w-full h-full flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none" on:click={(e) => dispatch('requestImport', e)}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+            <button title="Import" aria-label="Import" class="ui-button-import" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
             </button>
