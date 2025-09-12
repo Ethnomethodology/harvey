@@ -13,6 +13,9 @@
 @layer base {
   :root {
     /* ---------- Light theme ---------- */
+    --app-bg:             #ffffff;
+    --app-panel-bg:       #f3f4f6; /* gray-100 */
+
     --ui-icon-color:      #6b7280;
     --ui-text-color:      #374151;
     --ui-select-bg:       #ffffff;
@@ -28,29 +31,31 @@
     --ui-disabled-text:   #9ca3af;
     --ui-disabled-bg:     #f9fafb;
 
-    --app-bg-dark:        #1e1e1e;
     --ui-select-hover-bg: #DBEAFE; /* blue-100 */
     --ui-select-hover-text: #1D4ED8; /* blue-700 */
   }
 
   .dark {
     /* ---------- Dark theme ---------- */
-    --ui-icon-color:      #ffffff;
-    --ui-text-color:      #ffffff;
-    --ui-select-bg:       #1e1e1e;
-    --ui-select-border:   #3c3c3c;
-    --ui-icon-hover-bg:   #3c3c3c;
-    --ui-option-text:     #ffffff;
-    --ui-option-bg:       #1e1e1e;
-    --ui-option-hover-bg: #3c3c3c;
-    --ui-optgroup-text:   #d1d5db;
-    --ui-optgroup-bg:     #4b5563;
-    --ui-separator-text:  #6b7280;
-    --ui-separator-bg:    #374151;
-    --ui-disabled-text:   #6b7280;
-    --ui-disabled-bg:     #4b5563;
-    --ui-select-hover-bg: #2563EB; /* blue-600 */
-    --ui-select-hover-text: #EFF6FF; /* blue-50 */
+    --app-bg:             theme('colors.dark-bg-primary');
+    --app-panel-bg:       theme('colors.dark-bg-secondary');
+
+    --ui-icon-color:      theme('colors.dark-text-primary');
+    --ui-text-color:      theme('colors.dark-text-primary');
+    --ui-select-bg:       theme('colors.dark-bg-secondary');
+    --ui-select-border:   theme('colors.dark-bg-tertiary');
+    --ui-icon-hover-bg:   theme('colors.dark-bg-tertiary');
+    --ui-option-text:     theme('colors.dark-text-primary');
+    --ui-option-bg:       theme('colors.dark-bg-secondary');
+    --ui-option-hover-bg: theme('colors.dark-bg-tertiary');
+    --ui-optgroup-text:   theme('colors.dark-text-secondary');
+    --ui-optgroup-bg:     theme('colors.dark-bg-secondary');
+    --ui-separator-text:  theme('colors.dark-text-tertiary');
+    --ui-separator-bg:    theme('colors.dark-bg-tertiary');
+    --ui-disabled-text:   theme('colors.dark-text-tertiary');
+    --ui-disabled-bg:     theme('colors.dark-bg-secondary');
+    --ui-select-hover-bg: theme('colors.dark-accent-secondary');
+    --ui-select-hover-text: theme('colors.dark-accent-text');
   }
 }
 
@@ -64,7 +69,7 @@
     color: var(--ui-icon-color);
     @apply p-1.5 rounded inline-flex items-center justify-center
            focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
-           dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
+           dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
 
@@ -81,7 +86,7 @@
     color: var(--ui-icon-color);
     @apply p-1.5 rounded-full w-8 h-8 inline-flex items-center justify-center
            focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
-           dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
+           dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
 
@@ -172,11 +177,15 @@
 /*---------------------------------------------------------
   Global styles (optional)
 ---------------------------------------------------------*/
+body {
+  background-color: var(--app-bg);
+  color: var(--ui-text-color);
+}
 
 /* Interactive waveform background colors */
 .interactive-waveform {
   background-color: #ffffff;
 }
 .dark .interactive-waveform {
-  background-color: #3c3c3c;
+  background-color: var(--app-panel-bg);
 }
