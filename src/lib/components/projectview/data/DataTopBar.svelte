@@ -495,8 +495,8 @@
     on:requestTranscriptionTabWithMediaAndDialog
   >
     <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
-        <div class="w-12 h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import" on:click={(e) => dispatch('requestImport', e)}>
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
@@ -631,7 +631,7 @@
 
     .ui-button-icon {
         @apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-white disabled:hover:border-gray-400 disabled:hover:text-gray-700 disabled:dark:hover:bg-blue-700 disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
-        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component\`'s style for ui-button-icon base */
+        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component`'s style for ui-button-icon base */
     }
     .ui-button-icon:disabled {
         @apply opacity-50 cursor-not-allowed;
@@ -640,11 +640,22 @@
         @apply w-4 h-4 flex-shrink-0; /* Matched to transcriptions/TopBar.svelte */
     }
 
+    .ui-button-import {
+        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
+        @apply bg-white dark:bg-gray-700;
+        @apply text-gray-700 dark:text-gray-300;
+        @apply border border-gray-300 dark:border-gray-600;
+        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:text-blue-500 dark:hover:text-blue-400;
+        @apply hover:border-blue-500 dark:hover:border-blue-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+    }
+
     .ui-select {
         @apply block w-auto border border-gray-200 dark:border-gray-600 px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:border-blue-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8;
     }
 
-    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component\'s immediate needs for the theme button */
+    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
   
     .blinking-red {
         animation: blink 1s infinite;

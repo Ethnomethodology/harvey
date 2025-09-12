@@ -35,8 +35,8 @@
   data-tauri-drag-region
 >
   <div class="flex items-center min-w-0">
-        <div class="w-12 h-10 flex items-center justify-center flex-shrink-0">
-            <button title="Import" aria-label="Import" class="ui-button-import" on:click={(e) => dispatch('requestImport', e)}>
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
@@ -66,6 +66,16 @@
     .ui-button-icon-no-border {
 		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
+    .ui-button-import {
+        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
+        @apply bg-white dark:bg-gray-700;
+        @apply text-gray-700 dark:text-gray-300;
+        @apply border border-gray-300 dark:border-gray-600;
+        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:text-blue-500 dark:hover:text-blue-400;
+        @apply hover:border-blue-500 dark:hover:border-blue-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+    }
     .ui-button-icon {
         @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
     }
