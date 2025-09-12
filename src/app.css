@@ -67,10 +67,6 @@
            dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
 
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
-  }
-
-  .ui-button-import {
-    @apply ui-button-icon w-8 h-8 rounded-full;
 
     &:disabled {
       color: var(--ui-disabled-text);
@@ -79,6 +75,23 @@
     }
 
     & svg { @apply w-5 h-5; }
+  }
+
+  .ui-button-import {
+    color: var(--ui-icon-color);
+    @apply p-1.5 rounded-full w-8 h-8 inline-flex items-center justify-center
+           focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+           dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
+
+    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    &:disabled {
+      color: var(--ui-disabled-text);
+      background-color: transparent;
+      @apply opacity-50 cursor-not-allowed;
+    }
+
+    & svg { @apply size-6; }
   }
 
   /* ---------- select dropdown ---------- */
