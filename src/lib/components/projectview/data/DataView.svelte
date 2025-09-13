@@ -185,7 +185,7 @@
         <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-gray-600">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
-                    <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Select an item from the Data panel to view or edit.</span>
                     </div>
                 {:else if activeViewType === 'documents'}
@@ -210,7 +210,7 @@
                         on:requestviewchange={(event) => handleViewChangeRequest(event.detail)}
                     />
                 {:else}
-                    <div class="h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span>Selected view type '{activeViewType}' not recognized or item path invalid.</span>
                     </div>
                 {/if}
