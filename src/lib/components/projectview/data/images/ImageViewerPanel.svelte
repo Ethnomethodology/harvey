@@ -396,7 +396,7 @@
     <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
+<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-primary shadow overflow-hidden">
     <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-dark-bg-tertiary flex-shrink-0 text-xs">
         <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
             <button
@@ -573,7 +573,7 @@
         background-color: theme('colors.gray.300');
     }
     :global(html.dark) .osd-viewer-container {
-        background-color: theme('colors.dark-bg-form-field');
+        background-color: theme('colors.dark-bg-primary');
     }
     .opacity-0 { opacity: 0; }
 

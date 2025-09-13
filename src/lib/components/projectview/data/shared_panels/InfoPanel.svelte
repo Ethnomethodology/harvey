@@ -512,7 +512,7 @@
                     {#if isEditing}
                         <input type="text" id="titleInput" bind:value={editableMetadata.title} class="mt-0.5 block w-full border border-gray-300 dark:border-dark-bg-tertiary focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-dark-bg-tertiary dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"/>
                     {:else}
-                        <span id="titleInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{currentFileMetadata.title || ''}</span>
+                        <span id="titleInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{currentFileMetadata.title || ''}</span>
                     {/if}
                 </div>
 
@@ -521,7 +521,7 @@
                     {#if isEditing}
                         <textarea id="descriptionInput" bind:value={editableMetadata.description} rows="3" class="mt-0.5 block w-full border border-gray-300 dark:border-dark-bg-tertiary focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-dark-bg-form-field dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span id="descriptionInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px]">{currentFileMetadata.description || ''}</span>
+                        <span id="descriptionInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px]">{currentFileMetadata.description || ''}</span>
                     {/if}
                 </div>
 
@@ -530,7 +530,7 @@
                     {#if isEditing}
                         <textarea id="summaryInput" bind:value={editableMetadata.summary} rows="2" class="mt-0.5 block w-full border border-gray-300 dark:border-dark-bg-tertiary focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-dark-bg-form-field dark:text-white px-1.5 py-1 text-xs bg-white text-gray-900" autocorrect="off" autocomplete="off"></textarea>
                     {:else}
-                        <span id="summaryInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px]">{currentFileMetadata.summary || ''}</span>
+                        <span id="summaryInput" class="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words break-all block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px]">{currentFileMetadata.summary || ''}</span>
                     {/if}
                 </div>
 
@@ -567,37 +567,37 @@
                     {#if currentFileMetadata.duration_seconds}
                         <div class="mb-3">
                             <label for="durationInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Duration:</label>
-                        <span id="durationInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{formatDuration(currentFileMetadata.duration_seconds)}</span>
+                        <span id="durationInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{formatDuration(currentFileMetadata.duration_seconds)}</span>
                         </div>
                     {/if}
                     {#if currentFileMetadata.width && currentFileMetadata.height}
                         <div class="mb-3">
                             <label for="dimensionsInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Dimensions:</label>
-                            <span id="dimensionsInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{currentFileMetadata.width} x {currentFileMetadata.height}</span>
+                            <span id="dimensionsInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{currentFileMetadata.width} x {currentFileMetadata.height}</span>
                         </div>
                     {/if}
                     {#if currentFileMetadata.frame_rate}
                         <div class="mb-3">
                             <label for="frameRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Frame Rate:</label>
-                            <span id="frameRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{currentFileMetadata.frame_rate.toFixed(2)} fps</span>
+                            <span id="frameRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{currentFileMetadata.frame_rate.toFixed(2)} fps</span>
                         </div>
                     {/if}
                     {#if currentFileMetadata.bit_rate}
                         <div class="mb-3">
                             <label for="bitRateInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Bit Rate:</label>
-                            <span id="bitRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{formatBitrate(currentFileMetadata.bit_rate)}</span>
+                            <span id="bitRateInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{formatBitrate(currentFileMetadata.bit_rate)}</span>
                         </div>
                     {/if}
                     {#if currentFileMetadata.video_codec}
                         <div class="mb-3">
                             <label for="videoCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Video Codec:</label>
-                            <span id="videoCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{currentFileMetadata.video_codec || ''}</span>
+                            <span id="videoCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{currentFileMetadata.video_codec || ''}</span>
                         </div>
                     {/if}
                     {#if currentFileMetadata.audio_codec}
                         <div class="mb-3">
                             <label for="audioCodecInput" class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">Audio Codec:</label>
-                            <span id="audioCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px] break-words">{currentFileMetadata.audio_codec || ''}</span>
+                            <span id="audioCodecInput" class="text-gray-900 dark:text-gray-100 block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px] break-words">{currentFileMetadata.audio_codec || ''}</span>
                         </div>
                     {/if}
                 {/if}
@@ -662,7 +662,7 @@
                     {#each displayableCustomFields as field, index (field.key + '-' + index)}
                         <div class="mb-3">
                             <label for={`custom-field-display-${index}`} class="font-semibold text-gray-600 dark:text-gray-400 block mb-1">{field.name || field.key}:</label>
-                            <span id={`custom-field-display-${index}`} class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all' : 'break-words break-all'} block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field/30 min-h-[30px]">
+                            <span id={`custom-field-display-${index}`} class="text-gray-900 dark:text-gray-100 {field.type === 'long_text' ? 'whitespace-pre-wrap break-words break-all' : 'break-words break-all'} block w-full border border-gray-300 dark:border-dark-bg-tertiary px-1.5 py-1 bg-gray-50 dark:bg-dark-bg-form-field min-h-[30px]">
                                 {field.value || ''}
                             </span>
                         </div>
