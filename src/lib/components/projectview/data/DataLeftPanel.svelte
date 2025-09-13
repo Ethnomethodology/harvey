@@ -848,7 +848,7 @@
     });
 </script>
 
-<div class="h-full bg-white dark:bg-dark-bg-primary flex flex-col overflow-hidden">
+<div class="h-full bg-white dark:bg-dark-bg-secondary flex flex-col overflow-hidden">
     {#if !$panelStateStore.dataLeftPanelCollapsed}
         <h2 class="relative flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 px-1 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary"
             class:mb-3={!$panelStateStore.dataLeftPanelCollapsed}
