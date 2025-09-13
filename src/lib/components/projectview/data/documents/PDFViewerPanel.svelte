@@ -2404,7 +2404,7 @@ function updateHighlightOverlayColor(id, color) {
 
 </script>
 
-<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary shadow overflow-hidden">
+<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-form-field shadow overflow-hidden">
 
 <div class="toolbar flex items-center flex-nowrap gap-x-0.5 border-b border-gray-300 dark:border-dark-bg-tertiary p-1 flex-shrink-0 bg-white dark:bg-dark-bg-secondary shadow z-20">
     <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
@@ -2665,7 +2665,7 @@ function updateHighlightOverlayColor(id, color) {
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
-    .pdfViewerContainer { @apply p-4 bg-gray-300 dark:bg-gray-700; height: 100%; width: 100%; overflow: auto; position: absolute; inset: 0; -webkit-overflow-scrolling: touch; }
+    .pdfViewerContainer { @apply p-4 bg-gray-300 dark:bg-dark-bg-form-field; height: 100%; width: 100%; overflow: auto; position: absolute; inset: 0; -webkit-overflow-scrolling: touch; }
 
     :global(#viewer .page) { position: relative !important; z-index: 1; }
     :global(#viewer .canvasWrapper) { z-index: 1; }
