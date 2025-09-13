@@ -13,6 +13,7 @@ export default {
         'dark-bg-secondary': '#1a1a1a',  // For panels, cards, and other content areas
         'dark-bg-tertiary': '#2a2a2a',   // For hovered items, borders, and separators
         'dark-bg-form-field': '#262626', // For form fields
+        'dark-bg-icon-bar': '#272727',   // For the far-left icon bar
 
         'dark-text-primary': '#e6e6e6',      // Main text color (slightly off-white)
         'dark-text-secondary': '#9a9a9a',  // Lighter text for inactive/secondary info
