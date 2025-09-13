@@ -169,8 +169,8 @@
     }
 </script>
 
-<div class="h-full bg-white dark:bg-gray-800 flex flex-col overflow-hidden">
-    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
+<div class="h-full bg-white dark:bg-dark-bg-secondary flex flex-col overflow-hidden">
+    <div class="text-sm font-semibold border-b px-1 h-9 border-gray-300 dark:border-dark-bg-tertiary text-gray-700 dark:text-gray-300 flex-shrink-0 flex items-center justify-between mb-2">
         <div class="flex items-center space-x-2">
             <span>Highlights</span>
         </div>
@@ -180,7 +180,7 @@
         {#if processedHighlights.length > 0}
             <ul class="space-y-2">
                 {#each processedHighlights as highlight (highlight.id)}
-                    <li class="border bg-white dark:bg-gray-700" style="border-left-color: {highlight.color}; border-left-width: 4px;">
+                    <li class="border bg-white dark:bg-dark-bg-tertiary" style="border-left-color: {highlight.color}; border-left-width: 4px;">
                         <div class="p-2">
                             {#if itemType === 'images'}
                                 <p class="font-semibold text-black dark:text-white">{highlight.title || 'No Title'}</p>
@@ -192,7 +192,7 @@
                                 <p class="font-semibold text-black dark:text-white">{highlight.text}</p>
                             {/if}
                         </div>
-                        <div class="border-t border-gray-200 dark:border-gray-600 px-2 py-1 flex flex-col">
+                        <div class="border-t border-gray-200 dark:border-dark-bg-tertiary px-2 py-1 flex flex-col">
                             <div class="flex items-center w-full">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tags-fill mr-2 flex-shrink-0" viewBox="0 0 16 16">
                                     <path d="M2 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 2 6.586zm3.5 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/>
