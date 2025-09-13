@@ -170,7 +170,7 @@
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
 	<div class="flex flex-grow w-full min-h-0">
         <!-- Far Left Panel (File/Data Browser) -->
 		<div class="{ $panelStateStore.dataLeftPanelCollapsed ? 'w-12' : 'w-[15%]' } h-full flex-shrink-0 transition-all duration-300 ease-in-out">

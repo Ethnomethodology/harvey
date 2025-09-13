@@ -178,7 +178,7 @@
 
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-primary overflow-hidden exported-transcript">
+<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field overflow-hidden exported-transcript">
     {#if isLoading}
         <div class="flex-grow flex items-center justify-center text-gray-500">Loading document...</div>
     {:else if errorMessage && selectedPath}

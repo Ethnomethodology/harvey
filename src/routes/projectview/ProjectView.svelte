@@ -857,7 +857,7 @@ async function onConfirmTranscriptionStart(event) {
 			</div>
 		</div>
 
-		<div class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden min-w-0">
+		<div class="flex flex-col flex-1 h-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden min-w-0">
 			<div class="flex flex-col flex-grow min-h-0 overflow-hidden">
 				{#if selectedTab === 'transcriptions'}
 					<TranscriptionsView

@@ -786,7 +786,7 @@
 </div>
 {/if}
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-primary shadow overflow-hidden">
+<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
      <div class="flex items-center justify-between px-2 h-9 border-b border-gray-200 dark:border-dark-bg-tertiary dark:bg-dark-bg-secondary flex-shrink-0">
         <div class="flex items-center space-x-2">
             <button id="history-undo" class="p-1 border bg-gray-200 hover:bg-gray-300 dark:bg-dark-bg-tertiary dark:hover:bg-dark-bg-secondary" title="Undo">
