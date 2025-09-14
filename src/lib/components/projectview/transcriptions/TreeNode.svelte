@@ -118,11 +118,12 @@ const QUESTION_ICON = `
 <li class="text-xs select-none">
     <!-- Clickable/Hoverable Row -->
     <div
-        class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-accent-background-hover border-l-2 border-transparent"
         class:cursor-pointer="{!node.is_directory}"
         class:cursor-default="{node.is_directory}"
         class:bg-blue-100="{shouldHighlight}"
-        class:dark:bg-blue-900="{shouldHighlight}"
+        class:dark:bg-accent-primary="{shouldHighlight}"
+        class:dark:border-accent-primary="{shouldHighlight}"
         on:click="{handleRowClick}"
         on:dblclick="{handleRowDoubleClick}"
         on:contextmenu="{handleRowContextMenu}"
@@ -148,7 +149,7 @@ const QUESTION_ICON = `
 		<span
 			class="text-left w-full px-1 py-0.5 truncate"
             class:text-blue-700="{shouldHighlight}"
-            class:dark:text-blue-300="{shouldHighlight}"
+            class:dark:text-text-primary="{shouldHighlight}"
             class:font-medium="{node.is_directory}"
             class:text-gray-800="{!shouldHighlight && !node.is_directory}"
             class:dark:text-gray-200="{!shouldHighlight && !node.is_directory}"

@@ -8,21 +8,40 @@ export default {
   theme: {
     extend: {
       colors: {
-        // New Dark Theme Palette
-        'dark-bg-primary': '#0d0d0d',    // For main layout bars (top, bottom, side)
-        'dark-bg-secondary': '#1a1a1a',  // For panels, cards, and other content areas
-        'dark-bg-tertiary': '#2a2a2a',   // For hovered items, borders, and separators
-        'dark-bg-form-field': '#262626', // For form fields
-        'dark-bg-icon-bar': '#272727',   // For the far-left icon bar
-        'dark-bg-lexical-editor': '#343434', // For the background of the lexical editor document
+        // New Dark Theme Palette (using CSS variables)
+        'surface-1': 'var(--color-surface-1)',
+        'surface-2': 'var(--color-surface-2)',
+        'surface-3': 'var(--color-surface-3)',
+        'border': 'var(--color-border)',
 
-        'dark-text-primary': '#e6e6e6',      // Main text color (slightly off-white)
-        'dark-text-secondary': '#9a9a9a',  // Lighter text for inactive/secondary info
-        'dark-text-tertiary': '#6b7280',   // Even lighter text for disabled/tertiary info
+        'text-primary': 'var(--color-text-primary)',
+        'text-secondary': 'var(--color-text-secondary)',
+        'text-disabled': 'var(--color-text-disabled)',
+        'text-accent': 'var(--color-text-accent)',
 
-        'dark-accent-primary': '#3B82F6', // A vibrant blue for interactive elements
-        'dark-accent-secondary': '#2563EB', // A slightly darker blue for hover states on accents
-        'dark-accent-text': '#EFF6FF',     // Text color for on-accent elements
+        'accent-primary': 'var(--color-accent-primary)',
+        'accent-primary-hover': 'var(--color-accent-primary-hover)',
+        'accent-background-hover': 'var(--color-accent-background-hover)',
+
+        'status-success': 'var(--color-status-success)',
+        'status-warning': 'var(--color-status-warning)',
+        'status-error': 'var(--color-status-error)',
+
+        // --- Mappings from old names for compatibility ---
+        'dark-bg-primary': 'var(--color-surface-1)',
+        'dark-bg-secondary': 'var(--color-surface-2)',
+        'dark-bg-tertiary': 'var(--color-surface-3)',
+        'dark-bg-form-field': 'var(--color-surface-1)',
+        'dark-bg-icon-bar': 'var(--color-surface-3)',
+        'dark-bg-lexical-editor': 'var(--color-surface-2)',
+
+        'dark-text-primary': 'var(--color-text-primary)',
+        'dark-text-secondary': 'var(--color-text-secondary)',
+        'dark-text-tertiary': 'var(--color-text-disabled)',
+
+        'dark-accent-primary': 'var(--color-accent-primary)',
+        'dark-accent-secondary': 'var(--color-accent-primary-hover)',
+        'dark-accent-text': 'var(--color-text-primary)',
       },
       gridTemplateColumns: {
         '20': 'repeat(20, minmax(0, 1fr))'

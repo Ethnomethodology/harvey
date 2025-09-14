@@ -36,26 +36,50 @@
   }
 
   .dark {
-    /* ---------- Dark theme ---------- */
-    --app-bg:             theme('colors.dark-bg-primary');
-    --app-panel-bg:       theme('colors.dark-bg-secondary');
+    /* ---------- New Dark Theme ---------- */
+    /* --- Base and Surface Colors --- */
+    --color-surface-1: #0d0d0d;
+    --color-surface-2: #1a1a1a;
+    --color-surface-3: #242424;
+    --color-border: #333333;
 
-    --ui-icon-color:      theme('colors.dark-text-primary');
-    --ui-text-color:      theme('colors.dark-text-primary');
-    --ui-select-bg:       theme('colors.dark-bg-secondary');
-    --ui-select-border:   theme('colors.dark-bg-tertiary');
-    --ui-icon-hover-bg:   theme('colors.dark-bg-tertiary');
-    --ui-option-text:     theme('colors.dark-text-primary');
-    --ui-option-bg:       theme('colors.dark-bg-secondary');
-    --ui-option-hover-bg: theme('colors.dark-bg-tertiary');
-    --ui-optgroup-text:   theme('colors.dark-text-secondary');
-    --ui-optgroup-bg:     theme('colors.dark-bg-secondary');
-    --ui-separator-text:  theme('colors.dark-text-tertiary');
-    --ui-separator-bg:    theme('colors.dark-bg-tertiary');
-    --ui-disabled-text:   theme('colors.dark-text-tertiary');
-    --ui-disabled-bg:     theme('colors.dark-bg-secondary');
-    --ui-select-hover-bg: theme('colors.dark-accent-secondary');
-    --ui-select-hover-text: theme('colors.dark-accent-text');
+    /* --- Text and Content Colors --- */
+    --color-text-primary: #E0E0E0;
+    --color-text-secondary: #A0A0A0;
+    --color-text-disabled: #616161;
+    --color-text-accent: #4A90E2;
+
+    /* --- Interactive & Accent Colors --- */
+    --color-accent-primary: #4A90E2;
+    --color-accent-primary-hover: #63a4ff;
+    --color-accent-background-hover: rgba(74, 144, 226, 0.1);
+
+    /* --- Semantic / Status Colors --- */
+    --color-status-success: #66BB6A;
+    --color-status-warning: #FFCA28;
+    --color-status-error: #EF5350;
+
+    /* ---------- Mappings to old variables for compatibility ---------- */
+    --app-bg: var(--color-surface-1);
+    --app-panel-bg: var(--color-surface-2);
+
+    --ui-icon-color: var(--color-text-secondary);
+    --ui-text-color: var(--color-text-primary);
+    --ui-select-bg: var(--color-surface-1);
+    --ui-select-border: var(--color-border);
+    --ui-icon-hover-bg: rgba(255, 255, 255, 0.1);
+    --ui-option-text: var(--color-text-primary);
+    --ui-option-bg: var(--color-surface-1);
+    --ui-option-hover-bg: var(--color-accent-background-hover);
+    --ui-optgroup-text: var(--color-text-secondary);
+    --ui-optgroup-bg: var(--color-surface-3);
+    --ui-separator-text: var(--color-text-secondary);
+    --ui-separator-bg: var(--color-surface-3);
+    --ui-disabled-text: var(--color-text-disabled);
+    --ui-disabled-bg: var(--color-surface-2);
+
+    --ui-select-hover-bg: var(--color-accent-primary);
+    --ui-select-hover-text: var(--color-text-primary);
   }
 }
 

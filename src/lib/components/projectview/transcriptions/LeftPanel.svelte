@@ -205,7 +205,7 @@
 	<!-- Media Files Accordion Header -->
 	<div class="border-b border-gray-300 dark:border-gray-700 flex-shrink-0">
 		<div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-accent-background-hover"
 			on:click="{() => toggleSection('files')}"
 			aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
@@ -243,7 +243,7 @@
 	<!-- Shortcuts Accordion Header -->
 	<div class="flex-shrink-0 border-gray-300 dark:border-gray-700 {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
          <div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-accent-background-hover"
 			on:click="{() => toggleSection('shortcuts')}"
 			aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"
@@ -258,9 +258,9 @@
 	{#if openSection === 'shortcuts'}
 		<div id="shortcuts-content" class="flex-grow overflow-y-auto min-h-0 p-3 text-xs" role="region" aria-live="polite">
             <ul class="space-y-1.5 text-gray-700 dark:text-gray-300">
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + E</span> <span>Edit Segment</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">Ctrl + S</span> <span>Save Transcript</span> </li>
-				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded text-gray-800 dark:text-gray-200 mr-3 text-[11px] min-w-[60px] text-center">F8</span> <span>Play / Pause</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-surface-3 px-1.5 py-0.5 rounded text-gray-800 dark:text-text-primary mr-3 text-[11px] min-w-[60px] text-center">Ctrl + E</span> <span>Edit Segment</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-surface-3 px-1.5 py-0.5 rounded text-gray-800 dark:text-text-primary mr-3 text-[11px] min-w-[60px] text-center">Ctrl + S</span> <span>Save Transcript</span> </li>
+				<li class="flex items-center"> <span class="font-mono bg-gray-200 dark:bg-surface-3 px-1.5 py-0.5 rounded text-gray-800 dark:text-text-primary mr-3 text-[11px] min-w-[60px] text-center">F8</span> <span>Play / Pause</span> </li>
 			</ul>
 		</div>
 	{/if}
@@ -269,21 +269,21 @@
 	{#if contextMenuVisible && contextMenuItem}
 		<div
             id="context-menu-div"
-			class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]"
+			class="fixed z-50 bg-white dark:bg-surface-3 border border-gray-300 dark:border-border rounded-md shadow-xl py-1 text-xs min-w-[120px]"
 			style="left: {contextMenuX}px; top: {contextMenuY}px;"
 			on:click|stopPropagation
 		>
             {#if !contextMenuItem.is_directory}
                 {#if contextMenuItem.file_type === 'media'}
-				    <button on:click|stopPropagation="{(e) => handleMenuAction('Load')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Load Media</button>
-                    <hr class="my-1 border-gray-200 dark:border-gray-600" />
+				    <button on:click|stopPropagation="{(e) => handleMenuAction('Load')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-accent-background-hover text-gray-800 dark:text-gray-200">Load Media</button>
+                    <hr class="my-1 border-gray-200 dark:border-border" />
                 {/if}
                 {#if contextMenuItem.file_type === 'note'}
-				    <button on:click|stopPropagation="{(e) => handleMenuAction('OpenNote')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Open Note</button>
-                    <hr class="my-1 border-gray-200 dark:border-gray-600" />
+				    <button on:click|stopPropagation="{(e) => handleMenuAction('OpenNote')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-accent-background-hover text-gray-800 dark:text-gray-200">Open Note</button>
+                    <hr class="my-1 border-gray-200 dark:border-border" />
                 {/if}
 				{#if ['media', 'transcript', 'data', 'other'].includes(contextMenuItem.file_type)}
-					<button on:click|stopPropagation="{(e) => handleMenuAction('Rename')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Rename…</button>
+					<button on:click|stopPropagation="{(e) => handleMenuAction('Rename')}" class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-accent-background-hover text-gray-800 dark:text-gray-200">Rename…</button>
 					<button on:click|stopPropagation="{(e) => handleMenuAction('Delete')}" class="block w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 dark:text-red-500">Delete…</button>
 				{/if}
 			{:else}
