@@ -1146,7 +1146,7 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md"
 		style="position: relative; z-index: 105;"
 	>
 		<!-- Timeline with Tooltip -->
@@ -1412,86 +1412,79 @@
 	</div>
 {/if}
 <style>
+	/*
+	REMOVED: #video-container-wrapper:fullscreen and #video-container-wrapper:fullscreen video styles
+	as fullscreen functionality is removed.
+	*/
+
 	.btn-control {
-		padding: 0.35rem;
-		background: #e5e7eb;
-		color: #1f2937;
-		border: 1px solid #d1d5db;
-		border-radius: 0.25rem;
+		padding: 0.35rem; /* Slightly smaller padding for denser controls */
+		background: #e5e7eb; /* bg-gray-200 */
+		color: #1f2937; /* text-gray-800 */
+		border: 1px solid #d1d5db; /* border-gray-300 */
+		border-radius: 0.25rem; /* rounded-sm for a bit tighter look */
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+		transition: background-color 0.15s ease-in-out;
 	}
 	.dark .btn-control {
-		background: transparent;
-		color: var(--color-text-secondary);
-		border: 1px solid transparent;
+		background: #4b5563; /* dark:bg-gray-600 */
+		border-color: #6b7280; /* dark:border-gray-500 */
+		color: #f3f4f6; /* dark:text-gray-100 */
 	}
 	.btn-control:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
-	.dark .btn-control:disabled {
-		opacity: 0.5;
-		color: var(--color-text-disabled);
-	}
 	.btn-control:hover:not(:disabled) {
-		background: #d1d5db;
+		background: #d1d5db; /* hover:bg-gray-300 */
 	}
 	.dark .btn-control:hover:not(:disabled) {
-		background: var(--color-accent-background-hover);
-		color: var(--color-text-primary);
+		background: #6b7280; /* dark:hover:bg-gray-500 */
 	}
-	.btn-control svg {
+	.btn-control svg { /* Default icon size */
 		width: 1.15em;
 		height: 1.15em;
 	}
-	.size-5 {
+	.size-5 { /* For specific icons if needed, like trim */
         width: 1.25rem;
         height: 1.25rem;
     }
 
+
 	.btn-action {
-		padding: 0.35rem 0.75rem;
-		background: #3b82f6;
+		padding: 0.35rem 0.75rem; /* Slightly smaller */
+		background: #3b82f6; /* bg-blue-500 */
 		color: white;
 		border: none;
-		border-radius: 0.25rem;
+		border-radius: 0.25rem; /* rounded-sm */
 		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
+		font-size: 0.875rem; /* text-sm */
+		font-weight: 500; /* font-medium */
 		white-space: nowrap;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.25rem; /* space-x-1 equivalent */
 		transition: background-color 0.15s;
 	}
-    .dark .btn-action {
-        background: var(--color-accent-primary);
-        color: var(--color-text-primary);
-    }
 	.btn-action:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
-		background: #9ca3af;
+		background: #9ca3af; /* bg-gray-400 */
 	}
-    .dark .btn-action:disabled {
-        background: var(--color-accent-primary);
-        color: var(--color-text-disabled);
-        opacity: 0.5;
-    }
 	.btn-action:hover:not(:disabled) {
-		background: #2563eb;
+		background: #2563eb; /* hover:bg-blue-600 */
 	}
-    .dark .btn-action:hover:not(:disabled) {
-        background: var(--color-accent-primary-hover);
-    }
+	.dark .btn-action:disabled {
+		background: #6b7280; /* dark:bg-gray-500 */
+		opacity: 0.5;
+	}
 
 	.btn-action-trim {
 		padding: 0.35rem 0.75rem;
-		background: var(--color-status-success);
+		background: #10b981; /* bg-emerald-500 */
 		color: white;
 		border: none;
 		border-radius: 0.25rem;
@@ -1501,11 +1494,11 @@
 		transition: background-color 0.15s;
 	}
 	.btn-action-trim:hover {
-		opacity: 0.85;
+		background: #059669; /* hover:bg-emerald-600 */
 	}
 	.btn-action-cancel {
 		padding: 0.35rem 0.75rem;
-		background: var(--color-status-error);
+		background: #ef4444; /* bg-red-500 */
 		color: white;
 		border: none;
 		border-radius: 0.25rem;
@@ -1515,17 +1508,22 @@
 		transition: background-color 0.15s;
 	}
 	.btn-action-cancel:hover {
-		opacity: 0.85;
+		background: #dc2626; /* hover:bg-red-600 */
 	}
 
 	.animate-pulse {
 		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 	}
 	@keyframes pulse {
-		0%, 100% { opacity: 0.6; }
-		50% { opacity: 0.3; }
+		0%,
+		100% {
+			opacity: 0.6;
+		}
+		50% {
+			opacity: 0.3;
+		}
 	}
-	.sr-only {
+	.sr-only { /* Screen reader only */
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -1537,19 +1535,20 @@
 		border-width: 0;
 	}
 
-	.video-progress {
+	/* Custom styling for range inputs */
+	.video-progress { /* Keep existing styles if they work, or adjust */
 		-webkit-appearance: none;
 		appearance: none;
 		width: 100%;
-		height: 0.5rem;
-		border-radius: 0.25rem;
-		background: #d1d5db;
+		height: 0.5rem; /* 8px */
+		border-radius: 0.25rem; /* 4px */
+		background: #d1d5db; /* bg-gray-300 */
 		outline: none;
 		opacity: 0.9;
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .video-progress {
-		background: var(--color-surface-2);
+		background: #4b5563; /* dark:bg-gray-600 */
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1557,64 +1556,65 @@
 	.video-progress::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		width: 1rem;
-		height: 1rem;
+		width: 1rem; /* 16px */
+		height: 1rem; /* 16px */
 		border-radius: 50%;
-		background: #3b82f6;
+		background: #3b82f6; /* theme color, e.g. blue-500 */
 		cursor: pointer;
-		border: 2px solid white;
+		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
 	.dark .video-progress::-webkit-slider-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
 	}
 	.video-progress::-moz-range-thumb {
-		width: 0.875rem;
-		height: 0.875rem;
+		width: 0.875rem; /* 14px */
+		height: 0.875rem; /* 14px */
 		border-radius: 50%;
 		background: #3b82f6;
 		cursor: pointer;
 		border: 1px solid white;
 	}
 	.dark .video-progress::-moz-range-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb;
+		border-color: #374151;
 	}
 
 	.volume-slider {
 		-webkit-appearance: none;
 		appearance: none;
-		height: 0.5rem;
-		border-radius: 0.25rem;
-		background: #d1d5db;
+		/* width: 100%; */ /* Already has w-16 */
+		height: 0.5rem; /* 8px */
+		border-radius: 0.25rem; /* 4px */
+		background: #d1d5db; /* bg-gray-300 */
 		outline: none;
 		opacity: 0.9;
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .volume-slider {
-		background: var(--color-surface-2);
+		background: #4b5563; /* dark:bg-gray-600 */
 	}
 	.volume-slider:hover {
 		opacity: 1;
 	}
 	.volume-slider::-webkit-slider-thumb {
-		width: 0.875rem;
-		height: 0.875rem;
+		width: 0.875rem; /* 14px */
+		height: 0.875rem; /* 14px */
 	}
 	.dark .volume-slider::-webkit-slider-thumb {
-		background: var(--color-text-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
 	}
 	.volume-slider::-moz-range-thumb {
-		width: 0.75rem;
-		height: 0.75rem;
+		width: 0.75rem; /* 12px */
+		height: 0.75rem; /* 12px */
 		border-radius: 50%;
-		background: #e0e0e0;
+		background: #3b82f6;
 		cursor: pointer;
 		border: 1px solid white;
 	}
 	.dark .volume-slider::-moz-range-thumb {
-		background: var(--color-text-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb;
+		border-color: #374151;
 	}
 </style>
