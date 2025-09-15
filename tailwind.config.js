@@ -31,7 +31,7 @@ export default {
         'dark-bg-primary': 'var(--color-surface-1)',
         'dark-bg-secondary': 'var(--color-surface-2)',
         'dark-bg-tertiary': 'var(--color-surface-3)',
-        'dark-bg-form-field': 'var(--color-surface-1)',
+        'dark-bg-form-field': 'var(--color-surface-2)',
         'dark-bg-icon-bar': 'var(--color-surface-3)',
         'dark-bg-lexical-editor': 'var(--color-surface-2)',
 
