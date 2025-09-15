@@ -97,6 +97,17 @@
 
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
 
+    .dark &:not(:disabled) {
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: transparent;
+    }
+
+    .dark &:hover:not(:disabled) {
+      background-color: var(--color-accent-background-hover);
+      border-color: var(--color-accent-primary);
+    }
+
     &:disabled {
       color: var(--ui-disabled-text);
       background-color: transparent;
@@ -113,6 +124,17 @@
            dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
     &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    .dark &:not(:disabled) {
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: transparent;
+    }
+
+    .dark &:hover:not(:disabled) {
+      background-color: var(--color-accent-background-hover);
+      border-color: var(--color-accent-primary);
+    }
 
     &:disabled {
       color: var(--ui-disabled-text);
@@ -146,7 +168,7 @@
     background-size: 1em 1em;
     background-position: right 0.25rem center;
 
-    &:hover:not(:disabled) { background-color: var(--ui-select-hover-bg); color: var(--ui-select-hover-text); border-color: #3B82F6; /* blue-500 */ }
+    &:hover:not(:disabled) { background-color: transparent; color: white; border-color: var(--ui-select-border); }
 
     &:disabled {
       color: var(--ui-disabled-text);
