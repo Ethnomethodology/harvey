@@ -68,7 +68,7 @@
 	}
 </script>
 
-<div class="relative" bind:this={rootElement}>
+<div class="relative bg-white dark:bg-surface-2" bind:this={rootElement}>
 	<div
         class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-border rounded-md min-h-[30px] w-full"
         on:click={() => isEditable && toggleDropdown()}

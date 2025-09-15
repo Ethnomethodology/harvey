@@ -182,7 +182,7 @@
 		</div>
 
         <!-- Main Content Area (Middle) -->
-        <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-gray-600">
+        <div class="flex-grow h-full min-w-0 border-l border-gray-300 dark:border-border">
             {#key activeItemPath + activeViewType}
                 {#if activeViewType === 'placeholder' || !activeItemPath}
                     <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -219,7 +219,7 @@
 
         <!-- New Info Panel (Right of Main Content, Left of RightBar) -->
         {#if !$panelStateStore.infoPanelCollapsed && activeItemPath && activeViewType !== 'group_detail'}
-            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-600" transition:slide="{{ duration: 300, axis: 'x' }}">
+            <div class="w-[20.588%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border" transition:slide="{{ duration: 300, axis: 'x' }}">
                 {#if $panelStateStore.activeInfoPanelTab === 'metadata'}
                     <InfoPanel itemPath={activeItemPath} itemType={activeItemTypeForInfoPanel} refreshKey={infoPanelRefreshKey} />
                 {:else if $panelStateStore.activeInfoPanelTab === 'highlights'}
@@ -233,7 +233,7 @@
 
         <!-- New Right Bar (Far Right) -->
         {#if activeViewType !== 'group_detail' && activeItemPath}
-            <div class="h-full flex-shrink-0 border-l border-gray-300 dark:border-gray-600">
+            <div class="h-full flex-shrink-0">
                 <RightBar on:tabchange={handleRightBarTabChange} itemType={activeItemTypeForInfoPanel} />
             </div>
         {/if}
