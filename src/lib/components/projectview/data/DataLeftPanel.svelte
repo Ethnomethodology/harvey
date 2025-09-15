@@ -878,7 +878,7 @@
 
             <!-- Search Input Overlay -->
             <div id="data-search-container"
-                 class="absolute inset-0 flex items-center bg-white dark:bg-gray-800 transition-opacity duration-300 ease-out"
+                 class="absolute inset-0 flex items-center bg-white dark:bg-dark-bg-secondary transition-opacity duration-300 ease-out"
                  class:opacity-100={$showSearchBox}
                  class:opacity-0={!$showSearchBox}
                  class:pointer-events-auto={$showSearchBox}
@@ -892,7 +892,7 @@
                     autocapitalize="off"
                     spellcheck="false"
                     placeholder="Search..."
-                    class="w-full h-full bg-transparent border-none focus:ring-0 text-sm pl-2 pr-8 text-gray-900 dark:text-gray-100"
+                    class="w-full h-full bg-transparent border-none focus:ring-0 text-sm pl-2 pr-8 text-gray-900 dark:text-text-primary"
                 />
                 {#if $searchQuery.trim() !== ''}
                     <button
