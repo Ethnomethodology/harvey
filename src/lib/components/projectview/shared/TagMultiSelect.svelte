@@ -70,7 +70,7 @@
 
 <div class="relative" bind:this={rootElement}>
 	<div
-        class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-gray-600 rounded-md min-h-[30px] w-full"
+        class="flex flex-wrap items-center gap-1 mb-2 p-1 border border-gray-300 dark:border-border rounded-md min-h-[30px] w-full"
         on:click={() => isEditable && toggleDropdown()}
         class:cursor-pointer={isEditable}
         class:cursor-not-allowed={!isEditable}
@@ -80,17 +80,17 @@
         on:keydown={(e) => { if (isEditable && (e.key === 'Enter' || e.key === ' ')) toggleDropdown()}}
     >
 		{#if assignedTags.length === 0}
-			<span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1">No tags assigned.</span>
+			<span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1">No tags assigned.</span>
 		{:else}
             {#each assignedTags as tag (tag)}
                 <span
-                    class="flex items-center bg-blue-100 dark:bg-blue-700 text-blue-800 dark:text-blue-200 text-xs font-medium px-2 py-0.5 rounded-full"
+                    class="flex items-center bg-blue-100 dark:bg-accent-primary text-blue-800 dark:text-white text-xs font-medium px-2 py-0.5 rounded-full"
                 >
                     {tag}
                     {#if isEditable}
                     <button
                         on:click|stopPropagation={() => removeTag(tag)}
-                        class="ml-1.5 text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
+                        class="ml-1.5 text-blue-600 dark:text-white/70 hover:text-blue-800 dark:hover:text-white"
                         aria-label="Remove {tag}"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3">
@@ -102,27 +102,27 @@
             {/each}
         {/if}
         {#if isEditable && assignedTags.length > 0}
-            <span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 flex-grow text-left">Add tag...</span>
+            <span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1 flex-grow text-left">Add tag...</span>
         {/if}
 	</div>
 
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			class="absolute z-10 mt-1 w-full bg-white dark:bg-surface-2 border border-gray-300 dark:border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
 		>
 			<div class="p-2">
 				<input
 					type="text"
 					bind:value={searchTerm}
 					placeholder="Search or add new..."
-					class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-500 rounded-md dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-2 py-1.5 text-xs bg-white dark:bg-surface-3 text-gray-700 dark:text-text-primary border border-gray-300 dark:border-border rounded-md focus:ring-accent-primary focus:border-accent-primary"
 				/>
 			</div>
 			<ul>
 				{#each filteredAvailableTags as tag (tag)}
 					<li
 						on:click={() => addTag(tag)}
-						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200"
+						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer text-gray-700 dark:text-text-primary"
 					>
 						{tag}
 					</li>
@@ -131,7 +131,7 @@
                 {#if isEditable && searchTerm && !allTags.includes(searchTerm)}
                 <li
                     on:click={handleCreateNewTag}
-                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-t border-gray-200 dark:border-gray-600"
+                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-accent-primary hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer border-t border-gray-200 dark:border-t-border"
                 >
                     + Create new tag "{searchTerm}"
                 </li>
