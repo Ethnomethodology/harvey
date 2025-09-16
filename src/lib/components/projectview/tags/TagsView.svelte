@@ -389,7 +389,7 @@
         <div class="w-1/4 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
         <h2 class="text-sm font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
-            <ul class="text-sm">
+            <ul class="text-xs">
                 {#each $allTags as tag (tag.id)}
                     <li
                         class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"

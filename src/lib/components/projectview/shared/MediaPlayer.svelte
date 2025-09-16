@@ -1088,7 +1088,7 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-surface-3 h-full">
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800 h-full">
 	<div
 		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
@@ -1146,7 +1146,7 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md"
 		style="position: relative; z-index: 105;"
 	>
 		<!-- Timeline with Tooltip -->
@@ -1154,7 +1154,7 @@
 			<input
 				type="range"
 				bind:this={progressBarElement}
-				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-border video-progress"
+				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
 				min="0"
 				max={displayDuration > 0 ? displayDuration : 0}
 				bind:value={displayTime}
@@ -1332,7 +1332,7 @@
 			<!-- Volume Slider -->
 			<input
 				type="range"
-				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-border volume-slider"
+				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
 				min="0"
 				max="1"
 				step="0.05"
@@ -1431,8 +1431,8 @@
 	}
 	.dark .btn-control {
 		background: transparent;
-		border-color: var(--color-border);
-		color: var(--color-text-primary);
+		border-color: #6b7280; /* dark:border-gray-500 */
+		color: white;
 	}
 	.btn-control:disabled {
 		opacity: 0.5;
@@ -1442,9 +1442,7 @@
 		background: #d1d5db; /* hover:bg-gray-300 */
 	}
 	.dark .btn-control:hover:not(:disabled) {
-		background: var(--color-accent-background-hover);
-		border-color: var(--color-accent-primary);
-		color: var(--color-text-primary);
+		background: #6b7280; /* dark:hover:bg-gray-500 */
 	}
 	.btn-control svg { /* Default icon size */
 		width: 1.15em;
@@ -1550,7 +1548,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .video-progress {
-		background: var(--color-border);
+		background: #4b5563; /* dark:bg-gray-600 */
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1566,8 +1564,8 @@
 		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
 	.dark .video-progress::-webkit-slider-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
 	}
 	.video-progress::-moz-range-thumb {
 		width: 0.875rem; /* 14px */
@@ -1578,8 +1576,8 @@
 		border: 1px solid white;
 	}
 	.dark .video-progress::-moz-range-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb;
+		border-color: #374151;
 	}
 
 	.volume-slider {
@@ -1594,7 +1592,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .volume-slider {
-		background: var(--color-border);
+		background: #4b5563; /* dark:bg-gray-600 */
 	}
 	.volume-slider:hover {
 		opacity: 1;
@@ -1604,8 +1602,8 @@
 		height: 0.875rem; /* 14px */
 	}
 	.dark .volume-slider::-webkit-slider-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb; /* dark theme color */
+		border-color: #374151; /* dark border for thumb */
 	}
 	.volume-slider::-moz-range-thumb {
 		width: 0.75rem; /* 12px */
@@ -1616,7 +1614,7 @@
 		border: 1px solid white;
 	}
 	.dark .volume-slider::-moz-range-thumb {
-		background: var(--color-accent-primary);
-		border-color: var(--color-surface-3);
+		background: #2563eb;
+		border-color: #374151;
 	}
 </style>
