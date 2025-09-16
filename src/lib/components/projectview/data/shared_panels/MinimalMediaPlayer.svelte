@@ -75,7 +75,7 @@
 
     <div class="flex items-center space-x-2 text-xs">
         <span class="text-gray-600 dark:text-text-secondary w-10 text-right">{formatTime(currentTime)}</span>
-        <input type="range" class="w-full h-1 bg-gray-300 dark:bg-border rounded-lg appearance-none cursor-pointer" value={duration > 0 ? (currentTime / duration) * 100 : 0} on:input={handleSeek}>
+        <input type="range" class="w-full h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={duration > 0 ? (currentTime / duration) * 100 : 0} on:input={handleSeek} style="--progress: {duration > 0 ? (currentTime / duration) : 0};">
         <span class="text-gray-600 dark:text-text-secondary w-10">{formatTime(duration)}</span>
     </div>
 
@@ -93,7 +93,7 @@
 
     <div class="flex items-center justify-center space-x-2 mt-2">
         <span class="text-gray-600 dark:text-text-secondary">{@html VOLUME_HIGH_ICON}</span>
-        <input type="range" class="w-1/3 h-1 bg-gray-300 dark:bg-border rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
+        <input type="range" class="w-1/3 h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
     </div>
 </div>
 {/if}

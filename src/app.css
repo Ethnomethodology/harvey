@@ -91,11 +91,15 @@
   /* ---------- icon button ---------- */
   .ui-button-icon {
     color: var(--ui-icon-color);
+    border: 1px solid var(--ui-select-border);
     @apply p-1.5 rounded inline-flex items-center justify-center
            focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
            dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
-    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+    &:hover:not(:disabled) { 
+      background-color: var(--ui-icon-hover-bg);
+      border-color: var(--ui-select-border);
+    }
 
     .dark &:not(:disabled) {
       color: var(--color-text-primary);
@@ -104,8 +108,8 @@
     }
 
     .dark &:hover:not(:disabled) {
-      background-color: var(--color-accent-background-hover);
-      border-color: var(--color-accent-primary);
+      background-color: var(--color-border);
+      border-color: var(--color-border);
     }
 
     &:disabled {
