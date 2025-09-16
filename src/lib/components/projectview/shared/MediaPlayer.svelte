@@ -1188,7 +1188,7 @@
 			<!-- Play/Pause Button -->
 			<button
 				on:click={handleTogglePlay}
-				class="btn-control bg-blue-500 dark:bg-accent-primary"
+				class="btn-control"
 				disabled={!localMediaUrl || isLoadingMedia}
 				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
 			>
@@ -1432,7 +1432,7 @@
 	.dark .btn-control {
 		background: transparent;
 		border-color: var(--color-border);
-		color: var(--color-text-secondary);
+		color: var(--color-text-primary);
 	}
 	.btn-control:disabled {
 		opacity: 0.5;
@@ -1550,7 +1550,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .video-progress {
-		background: #4b5563; /* dark:bg-gray-600 */
+		background: var(--color-border);
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1566,8 +1566,8 @@
 		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
 	.dark .video-progress::-webkit-slider-thumb {
-		background: #2563eb; /* dark theme color */
-		border-color: #374151; /* dark border for thumb */
+		background: var(--color-accent-primary);
+		border-color: var(--color-surface-3);
 	}
 	.video-progress::-moz-range-thumb {
 		width: 0.875rem; /* 14px */
@@ -1578,8 +1578,8 @@
 		border: 1px solid white;
 	}
 	.dark .video-progress::-moz-range-thumb {
-		background: #2563eb;
-		border-color: #374151;
+		background: var(--color-accent-primary);
+		border-color: var(--color-surface-3);
 	}
 
 	.volume-slider {
@@ -1594,7 +1594,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .volume-slider {
-		background: #4b5563; /* dark:bg-gray-600 */
+		background: var(--color-border);
 	}
 	.volume-slider:hover {
 		opacity: 1;
@@ -1604,8 +1604,8 @@
 		height: 0.875rem; /* 14px */
 	}
 	.dark .volume-slider::-webkit-slider-thumb {
-		background: #2563eb; /* dark theme color */
-		border-color: #374151; /* dark border for thumb */
+		background: var(--color-accent-primary);
+		border-color: var(--color-surface-3);
 	}
 	.volume-slider::-moz-range-thumb {
 		width: 0.75rem; /* 12px */
@@ -1616,7 +1616,7 @@
 		border: 1px solid white;
 	}
 	.dark .volume-slider::-moz-range-thumb {
-		background: #2563eb;
-		border-color: #374151;
+		background: var(--color-accent-primary);
+		border-color: var(--color-surface-3);
 	}
 </style>
