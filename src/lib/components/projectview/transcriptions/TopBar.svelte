@@ -279,7 +279,7 @@
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
+	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-surface-3"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
@@ -304,7 +304,7 @@
 
 		<!-- Media Selection Dropdown -->
 		<select
-			class="ui-select text-sm text-gray-700 dark:text-gray-200 flex-shrink-0 w-40"
+			class="ui-select flex-shrink-0 w-40"
 			on:change="{handleMediaSelectionChange}"
 			bind:value="{selectedMediaValue}"
 			disabled="{$project.isLoading || mediaFilesForDropdown.length === 0}"
@@ -320,7 +320,7 @@
 
 		<!-- Transcription Mode -->
 		<select
-			class="ui-select text-sm text-gray-700 dark:text-gray-200 flex-shrink-0 w-45"
+			class="ui-select flex-shrink-0 w-45"
 			bind:value="{transcriptionMode}"
 			title="Select Transcription Mode"
 		>
@@ -374,14 +374,14 @@
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
-			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
+			class="ui-button-theme"
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="ui-button-theme" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>

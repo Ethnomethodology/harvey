@@ -145,13 +145,43 @@
     & svg { @apply size-6; }
   }
 
+  /* ---------- theme button ---------- */
+  .ui-button-theme {
+    color: var(--ui-icon-color);
+    @apply p-1.5 rounded inline-flex items-center justify-center
+           focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+           dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
+
+    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    .dark &:not(:disabled) {
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: var(--color-surface-2); /* #1a1a1a */
+    }
+
+    .dark &:hover:not(:disabled) {
+      background-color: var(--color-accent-background-hover);
+      border-color: var(--color-accent-primary);
+    }
+
+    &:disabled {
+      color: var(--ui-disabled-text);
+      background-color: transparent;
+      @apply opacity-50 cursor-not-allowed;
+    }
+
+    & svg { @apply w-5 h-5; }
+  }
+
   /* ---------- select dropdown ---------- */
   .ui-select {
     background-color: var(--ui-select-bg);
     border: 1px solid var(--ui-select-border);
+    color: var(--ui-text-color);
 
     @apply block w-fit max-w-full
-           rounded-md text-sm font-medium
+           rounded-md text-sm
            pl-2 pr-6 py-1 leading-tight
            appearance-none bg-no-repeat
            focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
@@ -182,6 +212,7 @@
 
   /* -- White caret override for dark mode -- */
   .dark .ui-select {
+    color: var(--color-text-primary);
     background-image: url('data:image/svg+xml;utf8,\
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23ffffff">\
 <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>\
@@ -189,6 +220,8 @@
   }
   .dark .ui-select:focus {
     border-color: transparent;
+    outline: none;
+    box-shadow: none;
   }
 
   /* ---------- option / optgroup ---------- */

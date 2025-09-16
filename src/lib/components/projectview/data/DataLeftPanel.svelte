@@ -909,7 +909,7 @@
             <div class="flex flex-col flex-grow overflow-hidden">
                 <!-- Top 2/3 for Categories -->
                 <div class="flex-grow overflow-y-auto min-h-0 px-2" style="flex-basis: 66.66%;">
-                    <ul class="space-y-2 text-xs">
+                    <ul class="space-y-2 text-sm">
                         {#each filteredCategories as category (category.type)}
                             <li>
                                 <div
