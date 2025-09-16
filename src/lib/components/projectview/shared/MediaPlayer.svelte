@@ -1430,7 +1430,7 @@
 		transition: background-color 0.15s ease-in-out;
 	}
 	.dark .btn-control {
-		background: var(--color-surface-2);
+		background: transparent;
 		border-color: var(--color-border);
 		color: var(--color-text-primary);
 	}
