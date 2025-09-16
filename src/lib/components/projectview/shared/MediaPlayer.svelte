@@ -1088,7 +1088,7 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800 h-full">
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-surface-3 h-full">
 	<div
 		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
@@ -1146,7 +1146,7 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
 		style="position: relative; z-index: 105;"
 	>
 		<!-- Timeline with Tooltip -->
@@ -1154,7 +1154,7 @@
 			<input
 				type="range"
 				bind:this={progressBarElement}
-				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
+				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-border video-progress"
 				min="0"
 				max={displayDuration > 0 ? displayDuration : 0}
 				bind:value={displayTime}
@@ -1188,7 +1188,7 @@
 			<!-- Play/Pause Button -->
 			<button
 				on:click={handleTogglePlay}
-				class="btn-control"
+				class="btn-control bg-blue-500 dark:bg-accent-primary"
 				disabled={!localMediaUrl || isLoadingMedia}
 				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
 			>
@@ -1332,7 +1332,7 @@
 			<!-- Volume Slider -->
 			<input
 				type="range"
-				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
+				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-border volume-slider"
 				min="0"
 				max="1"
 				step="0.05"
@@ -1430,9 +1430,9 @@
 		transition: background-color 0.15s ease-in-out;
 	}
 	.dark .btn-control {
-		background: #4b5563; /* dark:bg-gray-600 */
-		border-color: #6b7280; /* dark:border-gray-500 */
-		color: #f3f4f6; /* dark:text-gray-100 */
+		background: transparent;
+		border-color: var(--color-border);
+		color: var(--color-text-secondary);
 	}
 	.btn-control:disabled {
 		opacity: 0.5;
@@ -1442,7 +1442,9 @@
 		background: #d1d5db; /* hover:bg-gray-300 */
 	}
 	.dark .btn-control:hover:not(:disabled) {
-		background: #6b7280; /* dark:hover:bg-gray-500 */
+		background: var(--color-accent-background-hover);
+		border-color: var(--color-accent-primary);
+		color: var(--color-text-primary);
 	}
 	.btn-control svg { /* Default icon size */
 		width: 1.15em;
