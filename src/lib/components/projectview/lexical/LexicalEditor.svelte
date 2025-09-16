@@ -1834,7 +1834,7 @@ $: if (editor && activeLayout) {
 
 <div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-gray-800 overflow-visible shadow-sm">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0 bg-gray-100 dark:bg-surface-3">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -1858,10 +1858,10 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isBlockDropdownOpen}
-            <div class="absolute mt-1 z-30 w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-64 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each blockTypeOptions as option}
                 <div
-                  class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  class="px-3 py-1 flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => selectBlockType(option.value)}
                   role="menuitem"
                   tabindex="-1"
@@ -1924,10 +1924,10 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isInsertDropdownOpen}
-            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each insertOptions as option}
               <div
-                class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                class="px-3 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                 on:click={option.action}
                 role="menuitem"
                 tabindex="-1"
@@ -1952,10 +1952,10 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isAlignDropdownOpen}
-            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-40 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each alignmentOptions as option}
                 <div
-                  class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  class="px-3 py-1 flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => alignElement(option.value)}
                   role="menuitem"
                   tabindex="-1"
@@ -1999,10 +1999,10 @@ $: if (editor && activeLayout) {
             <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
           </button>
           {#if isColorDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each colorOptions as option}
                 <div
-                  class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => applyTextColor(option.value)}
                   role="menuitemradio"
                   aria-checked={selectedTextColor === option.value}
@@ -2030,10 +2030,10 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isHighlightDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
               {#each highlightOptions as option}
                 <div
-                  class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
                   on:click={() => applyHighlightColor(option.value)}
                   role="menuitemradio"
                   aria-checked={selectedHighlightColor === option.value}
@@ -2192,24 +2192,35 @@ $: if (editor && activeLayout) {
 
 <style lang="postcss">
   .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
-      @apply px-1.5 py-0.5 border border-gray-300 bg-gray-100 text-gray-800
-              hover:bg-gray-200 text-xs disabled:opacity-50 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-1 focus:ring-blue-500;
+      @apply p-1.5 rounded inline-flex items-center justify-center
+             focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+             dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
+             text-xs disabled:opacity-50 disabled:cursor-not-allowed;
+      color: var(--ui-icon-color);
+      border: 1px solid var(--ui-select-border);
+      background-color: transparent; /* Default for light mode, will be overridden by dark mode or specific hover */
       margin-right: 2px;
       line-height: 1.2;
       min-height: 24px;
-      display: inline-flex;
-      align-items: center;
+  }
+
+  .toolbar button.mini-toolbar-button:hover:not(:disabled),
+  .toolbar select.mini-toolbar-select:hover:not(:disabled) {
+      background-color: var(--ui-icon-hover-bg);
+      border-color: var(--ui-select-border);
   }
 
   html.dark .toolbar button.mini-toolbar-button,
   html.dark .toolbar select.mini-toolbar-select {
-      @apply bg-gray-700 border-gray-600 text-gray-200;
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: transparent;
   }
 
   html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
   html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
-      @apply bg-gray-600;
+      background-color: var(--color-border);
+      border-color: var(--color-border);
   }
 
   html.dark .toolbar button.mini-toolbar-button.active {
