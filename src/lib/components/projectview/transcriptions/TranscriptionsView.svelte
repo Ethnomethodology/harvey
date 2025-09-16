@@ -453,7 +453,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
             {#if isLeftPanelVisible}
                 <div
-                    class="w-[15%] h-full bg-white dark:bg-surface-3 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
+                    class="w-[15%] h-full bg-white dark:bg-surface-2 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                     transition:slide="{{ duration: 300, axis: 'x' }}"
                 >
                     <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} on:requestLoadItem={handleRequestLoadItem} />

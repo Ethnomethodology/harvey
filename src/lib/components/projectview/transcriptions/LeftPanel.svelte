@@ -200,7 +200,7 @@
 </script>
 
 <!-- Main Container -->
-<div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200">
+<div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200 text-xs">
 
 	<!-- Media Files Accordion Header -->
 	<div class="border-b border-gray-300 dark:border-gray-700 flex-shrink-0">

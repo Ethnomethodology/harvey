@@ -147,12 +147,11 @@
 
   /* ---------- select dropdown ---------- */
   .ui-select {
-    color: var(--ui-text-color);
     background-color: var(--ui-select-bg);
-    border-color: var(--ui-select-border);
+    border: 1px solid var(--ui-select-border);
 
     @apply block w-fit max-w-full
-           border rounded-md shadow-sm text-xs font-medium
+           rounded-md text-sm font-medium
            pl-2 pr-6 py-1 leading-tight
            appearance-none bg-no-repeat
            focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
@@ -168,7 +167,11 @@
     background-size: 1em 1em;
     background-position: right 0.25rem center;
 
-    &:hover:not(:disabled) { background-color: transparent; color: white; border-color: var(--ui-select-border); }
+    &:hover:not(:disabled) {
+        background-color: var(--ui-select-hover-bg);
+        color: var(--ui-select-hover-text);
+        border-color: var(--ui-select-border);
+    }
 
     &:disabled {
       color: var(--ui-disabled-text);
@@ -183,6 +186,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23ffffff">\
 <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>\
 </svg>');
+  }
+  .dark .ui-select:focus {
+    border-color: transparent;
   }
 
   /* ---------- option / optgroup ---------- */

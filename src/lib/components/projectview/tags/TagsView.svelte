@@ -386,10 +386,10 @@
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
-        <div class="w-1/4 h-full bg-white dark:bg-gray-700 p-4" transition:slide={{ axis: 'x' }}>
-        <h2 class="text-lg font-semibold mb-4">All Tags</h2>
+        <div class="w-1/4 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
+        <h2 class="text-sm font-semibold mb-4">All Tags</h2>
         {#if $allTags.length > 0}
-            <ul>
+            <ul class="text-xs">
                 {#each $allTags as tag (tag.id)}
                     <li
                         class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"

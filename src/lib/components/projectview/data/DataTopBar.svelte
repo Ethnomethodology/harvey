@@ -490,7 +490,7 @@
   </script>
   
   <div
-    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-dark-bg-primary border-b border-gray-200 dark:border-dark-bg-tertiary"
+    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
     data-tauri-drag-region
     on:requestTranscriptionTabWithMediaAndDialog
   >
@@ -542,7 +542,7 @@
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
             <select
-                class="ui-select"
+                class="ui-select text-sm text-gray-700 dark:text-gray-200"
                 on:change={(e) => switchTranscriptInDataTab(e.currentTarget.value)}
             >
                 {#each $displayedTranscripts as transcript}
@@ -601,13 +601,13 @@
         {#if $isMediaEditorOpen}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
         </button>
         {/if}
-		 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
+				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -652,10 +652,6 @@
         @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 dark:disabled:hover:!bg-transparent;
     }
 
-    .ui-select {
-        @apply block w-auto px-3 py-1 text-sm font-medium rounded-md text-white border border-gray-200 dark:border-gray-600 bg-transparent dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed;
-        &:hover:not(:disabled) { background-color: transparent; color: white; border-color: var(--ui-select-border); }
-    }
 
     /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
   
