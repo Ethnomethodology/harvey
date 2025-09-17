@@ -538,7 +538,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     <!-- Horizontal Waveform Panel (Conditional) -->
     {#if currentWaveformLayout === 'horizontal'}
-        <div style="height: {horizontalWaveformContainerHeightPx}px;" class="border-t border-gray-200 dark:border-gray-700">
+        <div style="height: {horizontalWaveformContainerHeightPx}px;" class="border-t border-gray-200 dark:border-border">
             
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform

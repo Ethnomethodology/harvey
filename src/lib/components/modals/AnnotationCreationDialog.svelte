@@ -83,7 +83,7 @@
 
 <div
     bind:this={dialogElement}
-    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl p-4"
+    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; min-width: 250px;"
 >
     <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">{isEditing ? 'Edit Annotation' : 'New Annotation'}</h3>
@@ -93,7 +93,7 @@
         <input
             type="text"
             id="annotation-title"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
             bind:value={title}
             placeholder="Enter title"
         />
@@ -103,7 +103,7 @@
         <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
         <textarea
             id="annotation-description"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
             bind:value={description}
             placeholder="Enter description"
             rows="3"

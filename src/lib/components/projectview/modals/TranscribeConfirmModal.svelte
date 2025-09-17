@@ -237,7 +237,7 @@
 						{/if}
 					</div>
 				</div>
-				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+				<div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-border">
 					<button class="btn-secondary" on:click={handleCloseAndReset}>Cancel</button>
 					<button class="btn-primary" on:click={handleConfirm} disabled={!modalSelectedModel || !modalSelectedLanguage}>Start Transcription</button>
 				</div>

@@ -687,7 +687,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
     .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
     .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
-    .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-gray-600 rounded overflow-hidden; }
+    .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-border rounded overflow-hidden; }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) { flex-grow: 1; min-height: 0; border: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden; }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; padding: 8px;}
     .lexical-editor-wrapper-style.is-disabled { @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-600 dark:border-gray-500 dark:opacity-70; pointer-events: none; }

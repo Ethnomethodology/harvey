@@ -203,7 +203,7 @@
 <div class="h-full flex flex-col bg-inherit text-gray-800 dark:text-gray-200 text-xs">
 
 	<!-- Media Files Accordion Header -->
-	<div class="border-b border-gray-300 dark:border-gray-700 flex-shrink-0">
+	<div class="border-b border-gray-300 dark:border-border flex-shrink-0">
 		<div
 			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
 			on:click="{() => toggleSection('files')}"
@@ -241,7 +241,7 @@
 	{/if}
 
 	<!-- Shortcuts Accordion Header -->
-	<div class="flex-shrink-0 border-gray-300 dark:border-gray-700 {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
+	<div class="flex-shrink-0 border-gray-300 dark:border-border {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
          <div
 			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
 			on:click="{() => toggleSection('shortcuts')}"

@@ -934,7 +934,7 @@
                                 {#if categoryOpenState[category.type]}
                                     <div id={`category-content-${category.type}`} role="region">
                                         {#if (category.type === 'video' || category.type === 'audio' || category.type === 'document' || category.type === 'table' || category.type === 'image' || category.type === 'imported_transcript') && category.files.length > 0}
-                                            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600">
+                                            <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-border">
                                                 {#each category.files as fileItem (fileItem.path || fileItem.relativePath)}
                                                     <li class="group">
                                                         <div class="flex items-center justify-between w-full px-1.5 py-1 text-left hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary cursor-pointer"
@@ -961,14 +961,14 @@
                                      </div>
                                 {/if}
                             </li>
-                            <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-gray-700 my-1"> {/if} -->
+                            <!-- {#if category.type !== 'Videos'} <hr class="border-gray-200 dark:border-border my-1"> {/if} -->
                         {/each}
                     </ul>
                     {#if $project.isLoading} <p class="text-xs text-gray-500 dark:text-gray-400 italic px-1 py-2">Loading project data...</p> {/if}
                 </div>
 
                 <!-- Separator 1: Below Data section -->
-                <hr class="border-gray-200 dark:border-gray-600 my-2 mx-0">
+                <hr class="border-gray-200 dark:border-border my-2 mx-0">
 
                 <!-- Bottom 1/3 for Groups -->
                 <div class="flex-grow overflow-y-auto min-h-0 px-2 pt-2" style="flex-basis: 33.33%;">
@@ -980,7 +980,7 @@
                         </span>
                         Groups
                     </h3>
-                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-gray-600 text-xs">
+                    <ul class="ml-2 space-y-0.5 border-l border-gray-200 dark:border-border text-xs">
                         {#if $currentProjectGroupsList && $currentProjectGroupsList.length > 0}
                             {#each $currentProjectGroupsList as group (group.id)}
                                 <li class="group">

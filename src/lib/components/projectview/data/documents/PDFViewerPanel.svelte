@@ -2430,10 +2430,10 @@ function updateHighlightOverlayColor(id, color) {
             </svg>
         </button>
         {#if isZoomDropdownOpen}
-            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-y-auto max-h-60 py-1">
+            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-lg overflow-y-auto max-h-60 py-1">
                 {#each zoomOptions as option (option.value || option.label)}
                     {#if option.type === 'separator'}
-                        <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
+                        <div class="my-1 border-t border-gray-200 dark:border-border"></div>
                     {:else}
                         <div
                             class="px-3 py-1.5 text-xs flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
@@ -2502,7 +2502,7 @@ function updateHighlightOverlayColor(id, color) {
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
             {#if isNewHighlightDropdownOpen}
-            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden py-1">
+            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-border shadow-lg overflow-hidden py-1">
                 {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                     <div
                         class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -2632,7 +2632,7 @@ function updateHighlightOverlayColor(id, color) {
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input,
     .toolbar select.mini-toolbar-select {
-        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
+        @apply px-1.5 py-0.5 border border-gray-300 dark:border-border bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
         min-height: 24px; /* Explicit min-height from Lexical */
         /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
         /* vertical-align: middle; replaced by inline-flex items-center */

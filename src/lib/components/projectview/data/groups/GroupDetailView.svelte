@@ -518,7 +518,7 @@
 <div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800">
     {#if groupData}
         <!-- Header -->
-        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+        <div class="mb-4 pb-2 border-b border-gray-300 dark:border-border">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
                 <button
@@ -554,7 +554,7 @@
                             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {#each filesInCategory as file (file.relative_path)}
                                     <div
-                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-gray-700 dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-border dark:hover:bg-gray-700 cursor-pointer transition-shadow"
                                         on:dblclick={() => handleFileDoubleClick(file)}
                                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
                                         on:contextmenu={(e) => handleFileContextMenu(e, file)}
@@ -623,14 +623,14 @@
 {#if showAddToGroupSubMenu && itemForAddToGroup}
   <div
     id="group-detail-add-to-group-submenu"
-    class="fixed z-[101] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 py-1 text-xs min-w-[180px]"
+    class="fixed z-[101] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border py-1 text-xs min-w-[180px]"
     style="left: {addToGroupSubMenuX}px; top: {addToGroupSubMenuY}px;"
     on:click|stopPropagation
     role="menu"
   >
     <button on:click|stopPropagation={handleNewGroupClickInGroupView} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">New group...</button>
     {#if projectGroupsForMenu.length > 0}
-      <hr class="my-1 border-gray-200 dark:border-gray-600" />
+      <hr class="my-1 border-gray-200 dark:border-border" />
       {#each projectGroupsForMenu as group (group.id)}
         <button on:click|stopPropagation={() => handleAddFileToExistingGroupInGroupView(group)} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 truncate" title={group.name}>
           {group.name}

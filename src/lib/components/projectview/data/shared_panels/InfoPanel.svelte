@@ -540,7 +540,7 @@
                     {#if attachmentsField && attachmentsField.value}
                         {@const attachments = JSON.parse(attachmentsField.value)}
                         {#if Array.isArray(attachments) && attachments.length > 0}
-                            <hr class="my-4 border-gray-300 dark:border-gray-700">
+                            <hr class="my-4 border-gray-300 dark:border-border">
                             <div class="mb-3">
                                 <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Attachments</h3>
                                 <ul class="list-disc list-inside space-y-1 pl-1">
@@ -562,7 +562,7 @@
                 {/if}
 
                 {#if (currentFileMetadata.duration_seconds || currentFileMetadata.width || currentFileMetadata.video_codec || currentFileMetadata.audio_codec || currentFileMetadata.bit_rate) && !(currentFileMetadata.customFields && currentFileMetadata.customFields.some(cf => cf.key === '_isScreenshot' && cf.value === true))}
-                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <hr class="my-4 border-gray-300 dark:border-border">
                     <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-2">Technical Details</h3>
                     {#if currentFileMetadata.duration_seconds}
                         <div class="mb-3">
@@ -603,7 +603,7 @@
                 {/if}
 
                 {#if currentAssetRelativePathForGroups && get(project).id}
-                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <hr class="my-4 border-gray-300 dark:border-border">
                     <div class="mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider mb-1">Groups</h3>
                         {#if isLoadingFileGroups}
@@ -639,7 +639,7 @@
                 {/if}
 
                 {#if $customFieldDefinitionsStore && ($customFieldDefinitionsStore.length > 0 || isEditing)}
-                    <hr class="my-4 border-gray-300 dark:border-gray-700">
+                    <hr class="my-4 border-gray-300 dark:border-border">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 tracking-wider">Custom Fields</h3>
                         {#if isEditing}

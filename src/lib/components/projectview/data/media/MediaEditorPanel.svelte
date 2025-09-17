@@ -320,7 +320,7 @@
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-gray-800">
     <div
-        class="border-b border-gray-200 dark:border-gray-700 flex flex-col
+        class="border-b border-gray-200 dark:border-border flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
     >
         {#if mediaPath}
@@ -658,7 +658,7 @@
     .lexical-editor-wrapper-style-placeholder {
         display: flex;
         flex-direction: column;
-        @apply border border-gray-300 dark:border-gray-600 overflow-hidden;
+        @apply border border-gray-300 dark:border-border overflow-hidden;
     }
      .lexical-editor-wrapper-style-placeholder.is-disabled {
         @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-700 dark:border-gray-500 dark:opacity-70;

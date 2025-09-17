@@ -42,7 +42,7 @@
 
 {#if show}
 <div
-    class="annotation-dialog absolute z-[1001] bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl p-4"
+    class="annotation-dialog absolute z-[1001] bg-white dark:bg-gray-700 border border-gray-300 dark:border-border rounded-md shadow-xl p-4"
     style="left: {x}px; top: {y}px;"
     tabindex="-1"
     on:introstart={(e) => e.target.focus()}
@@ -53,7 +53,7 @@
         <input
             type="text"
             id="annotation-title"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-border dark:text-white"
             bind:value={title}
         />
     </div>
@@ -62,7 +62,7 @@
         <textarea
             id="annotation-description"
             rows="3"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-border dark:text-white"
             bind:value={description}
         ></textarea>
     </div>

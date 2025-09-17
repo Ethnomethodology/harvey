@@ -578,7 +578,7 @@
                 bind:checked={autosaveEnabled}
                 on:change={handleToggleChange}
               >
-              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
+              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-border peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
               <span
                 class="absolute top-0 bottom-0 flex items-center text-xs font-medium text-gray-700 dark:text-gray-300 pointer-events-none"
                 class:left-1={autosaveEnabled}
@@ -630,7 +630,7 @@
     }
 
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-transparent disabled:hover:border-gray-400 disabled:hover:text-gray-700 dark:disabled:hover:!bg-transparent disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
+        @apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-border text-sm font-medium text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-transparent disabled:hover:border-gray-400 disabled:hover:text-gray-700 dark:disabled:hover:!bg-transparent disabled:dark:hover:border-border disabled:dark:hover:text-gray-300;
         /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component`'s style for ui-button-icon base */
     }
     .ui-button-icon:disabled {
@@ -644,12 +644,12 @@
         @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
         @apply bg-transparent;
         @apply text-gray-700 dark:text-white;
-        @apply border border-gray-300 dark:border-gray-600;
+        @apply border border-gray-300 dark:border-border;
         @apply hover:bg-blue-100 dark:hover:bg-blue-700;
         @apply hover:text-blue-500 dark:hover:text-blue-400;
         @apply hover:border-blue-500 dark:hover:border-blue-500;
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
-        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 dark:disabled:hover:!bg-transparent;
+        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-border dark:disabled:hover:!bg-transparent;
     }
 
 
@@ -683,9 +683,7 @@
      :global(html.dark) .dark\:text-gray-200 {
           color: #e5e7eb !important;
      }
-     :global(html.dark) .dark\:border-gray-600 {
-          border-color: #4b5563 !important;
-     }
+     
      :global(html.dark) .dark\:bg-green-700 {
          background-color: #047857 !important;
      }
