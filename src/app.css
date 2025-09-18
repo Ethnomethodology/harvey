@@ -65,8 +65,8 @@
     --app-bg: var(--color-surface-1);
     --app-panel-bg: var(--color-surface-2);
 
-    --ui-icon-color: var(--color-text-secondary);
-    --ui-text-color: var(--color-text-primary);
+    --ui-icon-color: rgba(255, 255, 255);
+    --ui-text-color: rgba(255, 255, 255);
     --ui-select-bg: var(--color-surface-1);
     --ui-select-border: var(--color-border);
     --ui-icon-hover-bg: rgba(255, 255, 255, 0.1);
