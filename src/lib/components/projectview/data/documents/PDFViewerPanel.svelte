@@ -2408,7 +2408,7 @@ function updateHighlightOverlayColor(id, color) {
 
 <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 z-20">
     <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
-    <input type="number" class="mini-toolbar-input w-12 text-center" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
+    <input type="number" class="mini-toolbar-input w-12 text-center mx-0.5" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
     <span class="text-xs px-1 text-gray-600 dark:text-gray-400"> of {numPages || '?'} </span>
     <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     <div class="separator"></div>
@@ -2630,46 +2630,49 @@ function updateHighlightOverlayColor(id, color) {
 <style lang="postcss">
     .pdf-viewer-panel-root { height: 100%; }
 
+    /* --- Base for all toolbar items --- */
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input {
         @apply p-1.5 rounded inline-flex items-center justify-center
                 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
                 dark:focus:ring-offset-surface-3 transition duration-150 ease-in-out
                 text-xs disabled:opacity-50 disabled:cursor-not-allowed;
-        color: var(--color-text-primary);
-        border: 1px solid transparent;
-        background-color: transparent;
-        margin-right: 2px;
         line-height: 1.2;
         min-height: 24px;
+        margin-right: 2px;
     }
 
-    .toolbar input.mini-toolbar-input {
-        border-color: var(--color-border);
-        background-color: var(--color-bg-primary);
+    /* --- Button Styles --- */
+    .toolbar button.mini-toolbar-button {
+        color: var(--ui-icon-color);
+        border: 1px solid transparent;
+        background-color: transparent;
     }
-
-    html.dark .toolbar input.mini-toolbar-input {
-        background-color: var(--color-surface-2);
-    }
-
     .toolbar button.mini-toolbar-button:hover:not(:disabled) {
-        background-color: var(--color-bg-hover);
-        border-color: transparent;
+        background-color: var(--ui-icon-hover-bg);
+        border-color: var(--ui-select-border);
     }
-
+    html.dark .toolbar button.mini-toolbar-button {
+        color: var(--color-text-primary);
+    }
     html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled) {
-        background-color: var(--color-surface-2);
-    }
-
-    .toolbar input.mini-toolbar-input {
-        border-color: #d1d5db; /* gray-300 */
-    }
-
-    html.dark .toolbar input.mini-toolbar-input {
+        background-color: var(--color-border);
         border-color: var(--color-border);
     }
 
+    /* --- Input Styles --- */
+    .toolbar input.mini-toolbar-input {
+        color: var(--ui-text-color);
+        background-color: var(--ui-select-bg);
+        border: 1px solid var(--ui-select-border);
+    }
+    html.dark .toolbar input.mini-toolbar-input {
+        color: var(--color-text-primary);
+        background-color: var(--color-surface-2);
+        border-color: var(--color-border);
+    }
+
+    /* --- Active State for Buttons --- */
     .toolbar button.mini-toolbar-button.active {
       @apply bg-blue-200 dark:bg-blue-800;
     }
