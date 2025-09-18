@@ -96,7 +96,7 @@
   .ui-button-icon {
     color: var(--ui-icon-color);
     border: 1px solid var(--ui-select-border);
-    @apply p-1.5 rounded inline-flex items-center justify-center
+    @apply p-1 rounded inline-flex items-center justify-center
            focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
            dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
@@ -122,7 +122,7 @@
       @apply opacity-50 cursor-not-allowed;
     }
 
-    & svg { @apply w-5 h-5; }
+    & svg { @apply w-4 h-4; }
   }
 
   .ui-button-import {
