@@ -397,12 +397,13 @@
 </svelte:head>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-dark-bg-tertiary flex-shrink-0 text-xs dark:bg-surface-3">
-        <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
+    <div class="mini-toolbar">
+        <div id="image-annotation-toolbar-container" class="flex items-center h-full space-x-2">
             <button
                 class="mini-toolbar-button"
                 class:active={activeDrawingTool === 'rectangle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
+                title="Draw Rectangle"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
@@ -412,6 +413,7 @@
                 class="mini-toolbar-button"
                 class:active={activeDrawingTool === 'circle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+                title="Draw Circle"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
@@ -421,6 +423,7 @@
                 class="mini-toolbar-button"
                 class:active={activeDrawingTool === 'polygon'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+                title="Draw Polygon"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <polygon 
@@ -594,5 +597,9 @@
 
     :global(.openseadragon-container div) {
         box-sizing: content-box;
+    }
+
+    .mini-toolbar-button.active {
+        @apply bg-blue-500 text-white;
     }
 </style>

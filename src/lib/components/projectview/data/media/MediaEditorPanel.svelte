@@ -318,7 +318,7 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-primary">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800">
     <div
         class="border-b border-gray-200 dark:border-border flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
@@ -350,7 +350,7 @@
     </div>
 
     <div
-        class="min-h-0 overflow-hidden {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
+        class="min-h-0 overflow-hidden bg-white dark:bg-dark-bg-form-field {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
         class:flex-grow={isDataPlayerVideoHidden}
     >
         {#if showDataTrimUI && mediaPath}
@@ -674,7 +674,7 @@
         left: 0;
         width: 100%;
         z-index: 100;
-        background-color: var(--color-bg-surface-3, #1f2937);
+        background-color: var(--color-bg-app-dark, #1f2937);
         padding: 0.5rem;
         border-top: 1px solid var(--color-border-strong, #374151);
         box-shadow: 0 -2px 10px rgba(0,0,0,0.1);

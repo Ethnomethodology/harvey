@@ -2191,44 +2191,8 @@ $: if (editor && activeLayout) {
 
 
 <style lang="postcss">
-  .toolbar button.mini-toolbar-button, .toolbar select.mini-toolbar-select {
-      @apply p-1.5 rounded inline-flex items-center justify-center
-             focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
-             dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
-             text-xs disabled:opacity-50 disabled:cursor-not-allowed;
-      color: var(--ui-icon-color);
-      border: 1px solid var(--ui-select-border);
-      background-color: transparent; /* Default for light mode, will be overridden by dark mode or specific hover */
-      margin-right: 2px;
-      line-height: 1.2;
-      min-height: 24px;
-  }
-
-  .toolbar button.mini-toolbar-button:hover:not(:disabled),
-  .toolbar select.mini-toolbar-select:hover:not(:disabled) {
-      background-color: var(--ui-icon-hover-bg);
-      border-color: var(--ui-select-border);
-  }
-
-  html.dark .toolbar button.mini-toolbar-button,
-  html.dark .toolbar select.mini-toolbar-select {
-      color: var(--color-text-primary);
-      border: 1px solid var(--color-border);
-      background-color: transparent;
-  }
-
-  html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
-  html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
-      background-color: var(--color-border);
-      border-color: var(--color-border);
-  }
-
   html.dark .toolbar button.mini-toolbar-button.active {
     @apply bg-blue-500 text-white;
-  }
-
-  .lexical-placeholder-theme-class {
-      /* Styles for the placeholder text */
   }
 
   .editor-table {
@@ -2256,9 +2220,4 @@ $: if (editor && activeLayout) {
   .indent-outdent-icon {
       transform: scaleX(-1); /* Flips the icon horizontally */
   }
-
-  button.active {
-    @apply bg-gray-300 dark:bg-gray-500;
-  }
-
 </style>
