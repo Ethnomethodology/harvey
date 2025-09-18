@@ -2406,9 +2406,9 @@ function updateHighlightOverlayColor(id, color) {
 
 <div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-form-field shadow overflow-hidden">
 
-<div class="toolbar flex items-center flex-nowrap gap-x-0.5 border-b border-gray-300 dark:border-dark-bg-tertiary p-1 flex-shrink-0 bg-white dark:bg-dark-bg-secondary shadow z-20">
+<div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 z-20">
     <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
-    <input type="number" class="mini-toolbar-input w-12 text-center mx-0.5" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
+    <input type="number" class="mini-toolbar-input w-12 text-center" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
     <span class="text-xs px-1 text-gray-600 dark:text-gray-400"> of {numPages || '?'} </span>
     <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     <div class="separator"></div>
@@ -2629,39 +2629,55 @@ function updateHighlightOverlayColor(id, color) {
 
 <style lang="postcss">
     .pdf-viewer-panel-root { height: 100%; }
+
     .toolbar button.mini-toolbar-button,
-    .toolbar input.mini-toolbar-input,
-    .toolbar select.mini-toolbar-select {
-        @apply px-1.5 py-0.5 border border-gray-300 dark:border-border bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
-        min-height: 24px; /* Explicit min-height from Lexical */
-        /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
-        /* vertical-align: middle; replaced by inline-flex items-center */
+    .toolbar input.mini-toolbar-input {
+        @apply p-1.5 rounded inline-flex items-center justify-center
+                focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+                dark:focus:ring-offset-surface-3 transition duration-150 ease-in-out
+                text-xs disabled:opacity-50 disabled:cursor-not-allowed;
+        color: var(--color-text-primary);
+        border: 1px solid transparent;
+        background-color: transparent;
+        margin-right: 2px;
+        line-height: 1.2;
+        min-height: 24px;
     }
 
-    /* Ensure specific button instances that are part of a group don't have excessive right margin */
-    .quick-highlight-group .mini-toolbar-button {
-        @apply mr-0; /* Reset margin for grouped buttons */
-    }
-    /* Add a specific active style for generic buttons if needed, separate from quick-highlight */
-    .toolbar button.mini-toolbar-button.active-generic { /* Example for a generic active state */
-        @apply bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-200;
+    .toolbar input.mini-toolbar-input {
+        border-color: var(--color-border);
+        background-color: var(--color-bg-primary);
     }
 
-
-    .toolbar select.mini-toolbar-select {
-        @apply appearance-none pr-8; /* pr-8 is for arrow, keep it */
-        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23666' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
-        background-repeat: no-repeat;
-        background-position: right 0.75rem center;
-        background-size: 1rem;
+    html.dark .toolbar input.mini-toolbar-input {
+        background-color: var(--color-surface-2);
     }
 
-    :global(html.dark) .toolbar select.mini-toolbar-select {
-        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23ccc' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
+    .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: var(--color-bg-hover);
+        border-color: transparent;
     }
 
-    /* .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; } */ /* py-0.5 from base handles this */
-    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle; } /* Changed mx-1.5 to mx-1 */
+    html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled) {
+        background-color: var(--color-surface-2);
+    }
+
+    .toolbar input.mini-toolbar-input {
+        border-color: #d1d5db; /* gray-300 */
+    }
+
+    html.dark .toolbar input.mini-toolbar-input {
+        border-color: var(--color-border);
+    }
+
+    .toolbar button.mini-toolbar-button.active {
+      @apply bg-blue-200 dark:bg-blue-800;
+    }
+
+    .separator {
+        @apply w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1;
+    }
+
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
