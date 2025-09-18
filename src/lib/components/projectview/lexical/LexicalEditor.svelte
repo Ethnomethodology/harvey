@@ -2262,6 +2262,6 @@ $: if (editor && activeLayout) {
   }
 
   .separator {
-    @apply w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1;
+    @apply h-5 border-l border-gray-300 dark:border-border mx-1;
   }
 </style>
