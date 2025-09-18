@@ -214,14 +214,6 @@
     background-color: var(--ui-optgroup-bg);
     @apply font-semibold px-2 pt-1;
   }
-  .ui-select option.separator {
-    color: var(--ui-separator-text);
-    background-color: var(--ui-separator-bg);
-    @apply italic font-normal px-2 py-1 cursor-default;
-
-    &:hover,
-    &:checked { background-color: var(--ui-separator-bg); }
-  }
 
   /* ---------- inline helper text ---------- */
   .ui-text {

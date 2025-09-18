@@ -2686,8 +2686,6 @@ function updateHighlightOverlayColor(id, color) {
     :global(html.dark) .toolbar select.mini-toolbar-select {
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23ccc' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
     }
-
-    .toolbar .separator { @apply h-5 border-l border-gray-300 dark:border-border mx-1 inline-block align-middle; }
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
@@ -2714,7 +2712,6 @@ function updateHighlightOverlayColor(id, color) {
 
     .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
     .floating-toolbar-button { @apply p-1 border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
-    .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
 </style>

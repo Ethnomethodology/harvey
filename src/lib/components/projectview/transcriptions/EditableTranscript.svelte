@@ -694,6 +694,5 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .lexical-editor-wrapper-style.is-disabled > :global(.lexical-editor-root > .lexical-wrapper > .lexical-content) { @apply cursor-not-allowed; }
     .lexical-editor-wrapper-style :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100; min-height: unset !important; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
-    .lexical-editor-wrapper-style :global(.toolbar .separator) {margin-left: 0.05rem; margin-right: 0.05rem;}
     .editable-transcript-controls { /* Class added */ }
 </style>

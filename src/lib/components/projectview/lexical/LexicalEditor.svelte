@@ -2227,10 +2227,6 @@ $: if (editor && activeLayout) {
     @apply bg-blue-500 text-white;
   }
 
-  .separator {
-    @apply h-5 border-l border-gray-300 dark:border-border mx-1;
-  }
-
   .lexical-placeholder-theme-class {
       /* Styles for the placeholder text */
   }
