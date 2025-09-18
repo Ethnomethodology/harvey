@@ -787,7 +787,7 @@
 {/if}
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="mini-toolbar justify-between">
+    <div class="mini-toolbar">
         <div class="flex items-center space-x-2">
             <button id="history-undo" class="mini-toolbar-button" title="Undo">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
@@ -803,7 +803,7 @@
             </button>
         </div>
         {#if !isLoading && !error}
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center space-x-2 ml-auto">
             <input
               type="search"
               bind:value={searchTerm}
