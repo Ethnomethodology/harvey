@@ -397,10 +397,10 @@
 </svelte:head>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="mini-toolbar">
-        <div id="image-annotation-toolbar-container" class="flex items-center h-full space-x-2">
+    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-dark-bg-secondary">
+        <div id="image-annotation-toolbar-container" class="flex items-center space-x-2">
             <button
-                class="mini-toolbar-button"
+                class="p-1 rounded border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
                 class:active={activeDrawingTool === 'rectangle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
                 title="Draw Rectangle"
@@ -410,7 +410,7 @@
                 </svg>
             </button>
             <button
-                class="mini-toolbar-button"
+                class="p-1 rounded border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
                 class:active={activeDrawingTool === 'circle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
                 title="Draw Circle"
@@ -420,7 +420,7 @@
                 </svg>
             </button>
             <button
-                class="mini-toolbar-button"
+                class="p-1 rounded border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600"
                 class:active={activeDrawingTool === 'polygon'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
                 title="Draw Polygon"
@@ -599,7 +599,7 @@
         box-sizing: content-box;
     }
 
-    .mini-toolbar-button.active {
+    button.active {
         @apply bg-blue-500 text-white;
     }
 </style>

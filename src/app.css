@@ -229,27 +229,6 @@
     @apply w-px h-5 mx-1;
     border-left: 1px solid var(--separator-color);
   }
-
-  .mini-toolbar-button, .mini-toolbar-input, .mini-toolbar-select {
-      @apply p-1.5 rounded inline-flex items-center justify-center focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500 dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out text-xs disabled:opacity-50 disabled:cursor-not-allowed;
-      color: var(--ui-icon-color);
-      border: 1px solid var(--ui-select-border);
-      background-color: transparent;
-      margin-right: 2px;
-      line-height: 1.2;
-      min-height: 24px;
-  }
-
-  .mini-toolbar-button:hover:not(:disabled),
-  .mini-toolbar-input:hover:not(:disabled),
-  .mini-toolbar-select:hover:not(:disabled) {
-      background-color: var(--ui-icon-hover-bg);
-      border-color: var(--ui-select-border);
-  }
-
-  .mini-toolbar-button.active {
-      @apply bg-gray-300 dark:bg-gray-500;
-  }
 }
 
 /*---------------------------------------------------------
