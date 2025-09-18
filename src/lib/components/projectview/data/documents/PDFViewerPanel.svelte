@@ -2715,7 +2715,4 @@ function updateHighlightOverlayColor(id, color) {
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
 
-    .separator {
-        @apply h-5 border-l border-gray-300 dark:border-border mx-1;
-    }
 </style>
