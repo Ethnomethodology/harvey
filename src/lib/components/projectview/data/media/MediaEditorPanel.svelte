@@ -318,7 +318,7 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-surface-1">
+<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800">
     <div
         class="border-b border-gray-200 dark:border-border flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
@@ -397,10 +397,10 @@
             </div>
         {:else if transcriptLoadError && mediaPath}
             {#if isFileNotFoundInfo}
-                <div class="flex-grow flex flex-col items-center justify-center bg-surface-2 text-text-accent p-4 text-center">
+                <div class="flex-grow flex flex-col items-center justify-center text-blue-600 dark:text-blue-400 p-4 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                     <p class="font-semibold">No Transcription Yet</p>
-                    <p class="text-xs mt-1 text-text-secondary">
+                    <p class="text-xs mt-1">
                         To generate a transcript, you can use the main "Transcribe" feature in the Transcriptions tab.
                     </p>
                 </div>
