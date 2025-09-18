@@ -397,13 +397,11 @@
 </svelte:head>
 
 <div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
-    <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-dark-bg-tertiary flex-shrink-0 text-xs">
+    <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-dark-bg-tertiary flex-shrink-0 text-xs dark:bg-surface-3">
         <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-dark-bg-tertiary text-xs
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'rectangle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-dark-bg-secondary text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary'}"
+                class="mini-toolbar-button"
+                class:active={activeDrawingTool === 'rectangle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -411,10 +409,8 @@
                 </svg>
             </button>
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-dark-bg-tertiary text-xs ml-2
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'circle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-dark-bg-secondary text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary'}"
+                class="mini-toolbar-button"
+                class:active={activeDrawingTool === 'circle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -422,10 +418,8 @@
                 </svg>
             </button>
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-dark-bg-tertiary text-xs ml-2
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'polygon' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-dark-bg-secondary text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary'}"
+                class="mini-toolbar-button"
+                class:active={activeDrawingTool === 'polygon'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
