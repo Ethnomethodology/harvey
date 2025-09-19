@@ -629,16 +629,7 @@
         100% { color: #f87171; }
     }
 
-    .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-border text-sm font-medium text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:border-blue-500 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-transparent disabled:hover:border-gray-400 disabled:hover:text-gray-700 dark:disabled:hover:!bg-transparent disabled:dark:hover:border-border disabled:dark:hover:text-gray-300;
-        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component`'s style for ui-button-icon base */
-    }
-    .ui-button-icon:disabled {
-        @apply opacity-50 cursor-not-allowed;
-    }
-    .ui-button-icon svg {
-        @apply w-4 h-4 flex-shrink-0; /* Matched to transcriptions/TopBar.svelte */
-    }
+
 
     .ui-button-import {
         @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
