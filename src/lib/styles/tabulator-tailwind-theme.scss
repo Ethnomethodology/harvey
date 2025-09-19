@@ -189,19 +189,18 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   }
 }
 
-/* Dark theme overrides */
+/* Dark Theme Overrides for TagsView Table */
 .dark .tabulator {
-  .tabulator-header,
-  .tabulator-footer {
-    background-color: var(--color-surface-3) !important;
-    color: var(--color-text-primary) !important;
+  .tabulator-header {
+    background-color: var(--color-surface-3);
+    color: var(--ui-text-color);
   }
 
   .tabulator-row {
-    background-color: var(--color-surface-2) !important;
+    background-color: var(--color-surface-2);
+  }
 
-    &.tabulator-selectable:hover {
-      background-color: var(--color-border) !important;
-    }
+  .tabulator-footer {
+    background-color: var(--color-surface-3);
   }
 }
