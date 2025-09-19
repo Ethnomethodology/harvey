@@ -35,12 +35,6 @@
     --ui-select-hover-text: var(--ui-text-color);
 
     --separator-color:    var(--ui-select-border);
-
-    /* -- Tabulator custom variables -- */
-    --tabulator-header-bg: #f3f4f6;
-    --tabulator-header-text: #374151;
-    --tabulator-row-bg: #ffffff;
-    --tabulator-footer-bg: #f3f4f6;
   }
 
   .dark {
@@ -90,12 +84,6 @@
     --ui-select-hover-text: var(--color-text-primary);
 
     --separator-color:    var(--color-border);
-
-    /* -- Tabulator custom variables -- */
-    --tabulator-header-bg: var(--color-surface-3);
-    --tabulator-header-text: var(--color-text-primary);
-    --tabulator-row-bg: var(--color-surface-2);
-    --tabulator-footer-bg: var(--color-surface-3);
   }
 }
 
