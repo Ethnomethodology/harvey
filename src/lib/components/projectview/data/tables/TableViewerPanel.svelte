@@ -407,13 +407,17 @@
                 editor: "textarea",
                 editorParams:{ verticalNavigation:"editor", shiftEnterSubmit:true },
                 formatter: (cell) => {
-                    const row = cell.getRow();
-                    const rowIndex = row.getData().harvey_internal_id;
+                    const rowIndex = cell.getRow().getData().harvey_internal_id;
                     const colField = cell.getField();
                     const cellKey = `cell-${rowIndex}-${colField}`;
                     const cellElement = cell.getElement();
                     const cellColor = tableStyles.cellStyles[cellKey];
                     cellElement.style.backgroundColor = cellColor || "";
+                    if (cellColor) {
+                        cellElement.classList.add('highlighted-cell');
+                    } else {
+                        cellElement.classList.remove('highlighted-cell');
+                    }
                     cell.getElement().style.whiteSpace = "pre-wrap";
                     return cell.getValue();
                 },
@@ -538,7 +542,13 @@
                 rowFormatter: (row) => {
                     const rowIndex = row.getData().harvey_internal_id;
                     const rowColor = tableStyles.rowStyles[rowIndex];
-                    row.getElement().style.backgroundColor = rowColor || "";
+                    const rowElement = row.getElement();
+                    rowElement.style.backgroundColor = rowColor || "";
+                    if (rowColor) {
+                        rowElement.classList.add('highlighted-row');
+                    } else {
+                        rowElement.classList.remove('highlighted-row');
+                    }
                 },
                 rowContextMenu: (e, row) => {
                     const ranges = tabulatorInstance.getRanges();
@@ -904,5 +914,12 @@
             color: inherit;
             font-family: inherit;
             font-size: inherit;
+        }
+
+        :global(html.dark .tabulator-row.highlighted-row .tabulator-cell) {
+            color: #111827 !important;
+        }
+        :global(html.dark .tabulator-cell.highlighted-cell) {
+            color: #111827 !important;
         }
 </style>
