@@ -49,8 +49,8 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   overflow: hidden;
 
   .tabulator-header {
-    background-color: var(--app-bg);
-    color: #000000;
+    background-color: var(--tabulator-header-bg);
+    color: var(--tabulator-header-text);
     border-bottom: none;
     font-weight: 600;
 
@@ -101,7 +101,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   }
 
   .tabulator-row {
-    background-color: var(--ui-select-bg); // Actual theme value
+    background-color: var(--tabulator-row-bg); // Actual theme value
     border-bottom: 1px solid var(--ui-select-border); // Actual theme value
     display: flex; // ADDED
     align-items: stretch; // ADDED
@@ -133,7 +133,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   }
 
   & .tabulator-footer {
-    background-color: var(--ui-optgroup-bg);
+    background-color: var(--tabulator-footer-bg);
     border-top: 1px solid var(--ui-select-border);
     padding: $paddingSmall $paddingMedium;
     font-size: $fontSize * 0.9;
@@ -185,23 +185,6 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       color: var(--ui-text-color); // Actual theme value
       opacity: 0.7;
       font-style: italic;
-    }
-  }
-}
-
-/* Dark theme overrides */
-.dark .tabulator {
-  .tabulator-header,
-  .tabulator-footer {
-    background-color: var(--color-surface-3);
-    color: var(--color-text-primary);
-  }
-
-  .tabulator-row {
-    background-color: var(--color-surface-2);
-
-    &.tabulator-selectable:hover {
-      background-color: var(--color-border);
     }
   }
 }
