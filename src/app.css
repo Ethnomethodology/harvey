@@ -31,8 +31,8 @@
     --ui-disabled-text:   #9ca3af;
     --ui-disabled-bg:     #f9fafb;
 
-    --ui-select-hover-bg: #DBEAFE; /* blue-100 */
-    --ui-select-hover-text: #1D4ED8; /* blue-700 */
+    --ui-select-hover-bg: #e5e7eb; /* gray-200 */
+    --ui-select-hover-text: var(--ui-text-color);
 
     --separator-color:    var(--ui-select-border);
   }
@@ -80,7 +80,7 @@
     --ui-disabled-text: var(--color-text-disabled);
     --ui-disabled-bg: var(--color-surface-2);
 
-    --ui-select-hover-bg: var(--color-accent-primary);
+    --ui-select-hover-bg: var(--color-border);
     --ui-select-hover-text: var(--color-text-primary);
 
     --separator-color:    var(--color-border);
