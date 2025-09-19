@@ -49,13 +49,13 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   overflow: hidden;
 
   .tabulator-header {
-    background-color: var(--ui-optgroup-bg); // Actual theme value
+    background-color: var(--app-bg);
     color: var(--ui-optgroup-text);
-    border-bottom: 1px solid var(--ui-select-border); // Actual theme value
+    border-bottom: none;
     font-weight: 600;
 
     .tabulator-col {
-      border-right: 1px solid var(--ui-select-border); // Actual theme value
+      border-right: 1px solid var(--ui-select-border);
 
       .tabulator-col-content {
         padding: $paddingSmall $paddingMedium;
@@ -129,7 +129,6 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       padding: $paddingSmall $paddingMedium;
       line-height: $lineHeight;
       color: var(--ui-text-color); // Ensure cells get the theme text color
-      &:last-child { border-right: none; }
     }
   }
 
