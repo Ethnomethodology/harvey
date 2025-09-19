@@ -69,7 +69,7 @@
     --ui-text-color: rgba(255, 255, 255);
     --ui-select-bg: var(--color-surface-1);
     --ui-select-border: var(--color-border);
-    --ui-icon-hover-bg: rgba(255, 255, 255, 0.1);
+    --ui-icon-hover-bg: var(--color-border);
     --ui-option-text: var(--color-text-primary);
     --ui-option-bg: var(--color-surface-1);
     --ui-option-hover-bg: var(--color-accent-background-hover);
