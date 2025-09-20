@@ -391,7 +391,7 @@
 	:global(.dark .tabulator-row) {
 		background-color: var(--color-surface-2);
 	}
-	:global(.dark .tabulator .tabulator-row:hover) {
+	:global(.dark .tabulator-row:hover) {
 		background-color: var(--color-surface-3);
 	}
 	:global(.dark .tabulator-footer) {
