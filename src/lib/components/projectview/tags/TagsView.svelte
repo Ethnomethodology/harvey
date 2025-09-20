@@ -385,18 +385,9 @@
 </script>
 
 <style>
-	:global(.dark .tabulator-header) {
-		background-color: var(--color-surface-3);
-	}
-	:global(.dark .tabulator-row) {
-		background-color: var(--color-surface-2);
-	}
-	:global(.dark .tabulator-row:hover) {
-		background-color: var(--color-surface-3);
-	}
-	:global(.dark .tabulator-footer) {
-		background-color: var(--color-surface-3);
-	}
+    .dark .middle-panel-dark-override {
+        background-color: #0d0d0d;
+    }
 </style>
 
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
@@ -426,7 +417,7 @@
 
     <!-- Middle Panel: Tag details and highlights -->
     <!-- Middle Panel: Tag details and highlights -->
-        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'}">
+        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'} middle-panel-dark-override">
         {#if selectedTag}
             {#if isLoading}
                 <p>Loading tag information...</p>
@@ -437,7 +428,7 @@
                             {#if isEditing}
                                 <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
                             {:else}
-                                <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
+                                <h2 class="text-xl font-bold mb-2 dark:text-white">{tagInfo.name}</h2>
                             {/if}
                             <div class="mb-4">
                                 <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
@@ -458,7 +449,7 @@
 
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
-                        <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
+                        <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
                         <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
                     </div>
                     <div class="flex-grow overflow-auto" bind:this={tableContainer}>
