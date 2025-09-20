@@ -1309,8 +1309,8 @@
 <style lang="postcss">
 	.overflow-y-auto::-webkit-scrollbar { @apply w-[6px] h-[6px]; }
 	.overflow-y-auto::-webkit-scrollbar-track { @apply bg-transparent; }
-	.overflow-y-auto::-webkit-scrollbar-thumb { @apply rounded bg-gray-400/50 dark:bg-gray-500/50; }
-	.overflow-y-auto::-webkit-scrollbar-thumb:hover { @apply bg-gray-500/70 dark:bg-gray-400/70; }
+	.overflow-y-auto::-webkit-scrollbar-thumb { @apply rounded bg-gray-400 bg-opacity-50 dark:bg-gray-500 dark:bg-opacity-50; }
+	.overflow-y-auto::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 bg-opacity-70 dark:bg-gray-400 dark:bg-opacity-70; }
 	.overflow-y-auto { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
 	:root { --scrollbar-thumb: rgba(156, 163, 175, 0.5); --scrollbar-track: transparent; }
 	html.dark { --scrollbar-thumb: rgba(107, 114, 128, 0.5); }

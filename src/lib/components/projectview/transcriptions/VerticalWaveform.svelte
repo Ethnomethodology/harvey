@@ -558,7 +558,7 @@
 		display: block;
 	}
 	.overlay-message {
-		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 pointer-events-none z-30;
+		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white bg-opacity-80 dark:bg-gray-900 dark:bg-opacity-80 text-gray-600 dark:text-gray-300 pointer-events-none z-30;
 		text-align: center;
 	}
 	.ui-button-icon-panelheader { /* Standardized button style for panel headers */

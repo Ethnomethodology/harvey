@@ -8,6 +8,17 @@ export default {
   theme: {
     extend: {
       colors: {
+        gray: {
+          100: 'var(--color-text-primary)',
+          200: 'var(--color-text-primary)',
+          300: 'var(--color-text-secondary)',
+          400: 'var(--color-text-disabled)',
+          500: 'var(--color-border)',
+          600: 'var(--color-border)',
+          700: 'var(--color-surface-3)',
+          800: 'var(--color-surface-2)',
+          900: 'var(--color-surface-1)',
+        },
         // New Dark Theme Palette (using CSS variables)
         'surface-1': 'var(--color-surface-1)',
         'surface-2': 'var(--color-surface-2)',
