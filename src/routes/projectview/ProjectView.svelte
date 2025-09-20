@@ -920,21 +920,21 @@ async function onConfirmTranscriptionStart(event) {
 
 
     {#if importMenuVisible}
-        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
-            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Audio</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Document</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Image</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Table</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Transcript</button>
-            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">Video</button>
+        <div id="import-context-menu-div" class="fixed z-50 bg-white dark:bg-surface-2 border border-gray-300 dark:border-border rounded-md shadow-xl py-1 text-xs min-w-[120px]" style="left: {importMenuX}px; top: {importMenuY}px;" on:click|stopPropagation role="menu" tabindex="0" on:keydown={(e) => { if (e.key === 'Escape') closeImportMenu(); }}>
+            <button on:click={(event) => handleImportMenuAction(event, 'audio')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Audio</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'document')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Document</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'image')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Image</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'table')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Table</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'transcript')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Transcript</button>
+            <button on:click={(event) => handleImportMenuAction(event, 'video')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Video</button>
         </div>
     {/if}
 
     {#if showLoadingOverlay}
         <div class="absolute inset-0 z-[110] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div class="flex flex-col items-center p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+            <div class="flex flex-col items-center p-6 bg-white dark:bg-surface-2 rounded-lg shadow-xl">
                  <Loader class="w-12 h-12 text-blue-500 animate-spin mb-3" />
-                 <p class="text-sm text-gray-700 dark:text-gray-300">{$project.statusMessage || 'Loading...'}</p>
+                 <p class="text-sm text-gray-700 dark:text-d-gray-300">{$project.statusMessage || 'Loading...'}</p>
             </div>
         </div>
     {/if}

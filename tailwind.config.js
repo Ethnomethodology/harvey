@@ -8,7 +8,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        gray: {
+        'd-gray': {
           100: 'var(--color-text-primary)',
           200: 'var(--color-text-primary)',
           300: 'var(--color-text-secondary)',

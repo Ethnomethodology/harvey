@@ -1365,13 +1365,13 @@
 {#if showSubtitleMenu}
 	<div
 		bind:this={subtitleMenuRef}
-		class="subtitle-menu fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[150px]"
+		class="subtitle-menu fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[150px]"
 		style="left: {subtitleMenuPosition.x}px; top: {subtitleMenuPosition.y}px;"
 	>
 		{#if !(availableSubtitles.length === 1 && availableSubtitles[0].isInfo)}
 			<button
 				on:click={() => selectSubtitleTrack(null)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={!activeSubtitleTrackPath}
 				class:dark:bg-blue-800={!activeSubtitleTrackPath}
 			>
@@ -1381,10 +1381,10 @@
 		{#each availableSubtitles as sub (sub.path || sub.name)}
 			<button
 				on:click={() => sub.isInfo ? null : selectSubtitleTrack(sub)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={!sub.isInfo && activeSubtitleTrackPath === sub.path}
 				class:dark:bg-blue-800={!sub.isInfo && activeSubtitleTrackPath === sub.path}
-				class:text-gray-500={sub.isInfo} class:dark:text-gray-400={sub.isInfo} class:italic={sub.isInfo}
+				class:text-gray-500={sub.isInfo} class:dark:text-d-gray-400={sub.isInfo} class:italic={sub.isInfo}
 				class:cursor-default={sub.isInfo}
 				disabled={sub.isInfo}
 			>
@@ -1397,14 +1397,14 @@
 {#if showPlaybackSpeedMenu}
 	<div
 		bind:this={playbackSpeedMenuRef}
-		class="fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[80px]"
+		class="fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[80px]"
 		style="left: {playbackSpeedMenuPosition.x}px; top: {playbackSpeedMenuPosition.y}px;"
 		role="menu"
 	>
 		{#each playbackRates as rate (rate)}
 			<button
 				on:click={() => selectPlaybackRate(rate)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={selectedPlaybackRate === rate}
 				class:dark:bg-blue-800={selectedPlaybackRate === rate}
 				role="menuitemradio"

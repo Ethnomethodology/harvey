@@ -439,9 +439,9 @@
 
     <div class="flex-grow overflow-hidden min-h-0 relative">
         {#if isLoading && !error}
-            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 z-10 bg-white/50 dark:bg-gray-800/50">Loading image viewer...</div>
+            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400 z-10 bg-white/50 dark:bg-d-gray-800/50">Loading image viewer...</div>
         {:else if error}
-            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-gray-800/80">{error}</div>
+            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-d-gray-800/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
             <!-- SVG overlay for drawing and displaying annotations -->

@@ -229,9 +229,9 @@
      }
 
     :global(.lexical-wrapper)::-webkit-scrollbar { @apply w-[8px] h-[8px]; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-gray-800 rounded-lg; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-500 rounded-lg border-2 border-solid border-gray-100 dark:border-gray-800; }
-	:global(.lexical-wrapper)::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-400; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-track { @apply bg-gray-100 dark:bg-d-gray-800 rounded-lg; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-d-gray-500 rounded-lg border-2 border-solid border-gray-100 dark:border-d-gray-800; }
+	:global(.lexical-wrapper)::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-d-gray-400; }
 	:global(.lexical-wrapper) { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
 	:root { --scrollbar-thumb: rgba(160, 174, 192, 1); --scrollbar-track: rgba(243, 244, 246, 1); }
 	html.dark { --scrollbar-thumb: rgba(107, 114, 128, 1); --scrollbar-track: rgba(31, 41, 55, 1); }

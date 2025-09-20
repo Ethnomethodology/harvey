@@ -83,27 +83,27 @@
 
 <div
     bind:this={dialogElement}
-    class="absolute z-[1001] bg-white dark:bg-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
+    class="absolute z-[1001] bg-white dark:bg-d-gray-800 border border-gray-300 dark:border-border rounded-lg shadow-xl p-4"
     style="left: {x}px; top: {y}px; min-width: 250px;"
 >
     <h3 class="text-lg font-semibold mb-3 text-gray-900 dark:text-white">{isEditing ? 'Edit Annotation' : 'New Annotation'}</h3>
 
     <div class="mb-3">
-        <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+        <label for="annotation-title" class="block text-sm font-medium text-gray-700 dark:text-d-gray-300">Title</label>
         <input
             type="text"
             id="annotation-title"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-d-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
             bind:value={title}
             placeholder="Enter title"
         />
     </div>
 
     <div class="mb-3">
-        <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+        <label for="annotation-description" class="block text-sm font-medium text-gray-700 dark:text-d-gray-300">Description</label>
         <textarea
             id="annotation-description"
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-d-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
             bind:value={description}
             placeholder="Enter description"
             rows="3"
@@ -111,12 +111,12 @@
     </div>
 
     <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Color</label>
+        <label class="block text-sm font-medium text-gray-700 dark:text-d-gray-300 mb-2">Color</label>
         <div class="flex space-x-2">
             {#each highlightOptions as option}
                 <button
                     title={option.label}
-                    class="w-6 h-6 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                    class="w-6 h-6 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-d-gray-800"
                     class:border-blue-500={selectedColor === option.value}
                     class:dark:border-blue-400={selectedColor === option.value}
                     style="background-color: {option.value};"
@@ -138,7 +138,7 @@
         {/if}
         <div class="flex space-x-2">
             <button
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-d-gray-300 bg-gray-200 dark:bg-d-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-d-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                 on:click={handleCancel}
             >
                 Cancel
