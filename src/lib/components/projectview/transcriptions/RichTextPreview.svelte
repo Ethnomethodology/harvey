@@ -575,7 +575,7 @@
 </script>
 
 <div
-  class="p-3 h-full flex flex-col text-base text-gray-900 dark:text-d-gray-200"
+  class="p-3 h-full flex flex-col text-base text-gray-900 dark:text-white dark:bg-surface-1"
   style="font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;"
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-d-gray-300 border-b border-gray-300 dark:border-d-gray-600 pb-1 flex items-center justify-between w-full">
