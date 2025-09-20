@@ -394,10 +394,10 @@
                     <li
                         class="p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                         class:bg-blue-200={selectedTag?.id === tag.id}
-                        class:dark:bg-accent-primary={selectedTag?.id === tag.id}
+                        class:dark:bg-blue-800={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
                     >
-                        <span class:dark:text-white={selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
+                        <span class:dark:!text-blue-200={selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
                     </li>
                 {/each}
             </ul>
