@@ -187,7 +187,7 @@
                     if (tags.length === 0) return '';
 
                     const tagElements = tags.map(tag =>
-                        `<span class=\"inline-block bg-gray-200 dark:bg-gray-600 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1 border border-gray-300 dark:border-gray-500\">${tag}</span>`
+                        `<span class=\"inline-block bg-gray-200 dark:bg-surface-3 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-text-primary mr-2 mb-1 border border-gray-300 dark:border-border\">${tag}</span>`
                     ).join('');
 
                     return `<div class=\"flex flex-wrap items-center\">${tagElements}</div>`;
@@ -384,55 +384,48 @@
     }
 </script>
 
-<style>
-    .dark .middle-panel-dark-override {
-        background-color: #0d0d0d;
-    }
-</style>
-
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
-    <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
+    <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-border">
         <!-- Left Panel: List of all tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
         <div class="w-1/4 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
-        <h2 class="text-sm font-semibold mb-4">All Tags</h2>
+        <h2 class="text-sm font-semibold mb-4 dark:text-text-primary">All Tags</h2>
         {#if $allTags.length > 0}
             <ul class="text-xs">
                 {#each $allTags as tag (tag.id)}
                     <li
-                        class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-accent-background-hover"
                         class:bg-blue-200={selectedTag?.id === tag.id}
-                        class:dark:bg-blue-800={selectedTag?.id === tag.id}
+                        class:dark:bg-accent-primary={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
                     >
-                        {tag.name}
+                        <span class:dark:text-white={selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
                     </li>
                 {/each}
             </ul>
         {:else}
-            <p>No tags found in this project.</p>
+            <p class="dark:text-text-secondary">No tags found in this project.</p>
         {/if}
     </div>
     {/if}
 
     <!-- Middle Panel: Tag details and highlights -->
-    <!-- Middle Panel: Tag details and highlights -->
-        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'} middle-panel-dark-override">
+        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'} bg-white dark:bg-surface-1">
         {#if selectedTag}
             {#if isLoading}
-                <p>Loading tag information...</p>
+                <p class="dark:text-text-primary">Loading tag information...</p>
             {:else if tagInfo}
                 <div class="h-[20%] flex flex-col">
                     <div>
                         <div>
                             {#if isEditing}
-                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
+                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-surface-3 border border-gray-300 dark:border-border rounded-md p-1 dark:text-text-primary" />
                             {:else}
-                                <h2 class="text-xl font-bold mb-2 dark:text-white">{tagInfo.name}</h2>
+                                <h2 class="text-xl font-bold mb-2 dark:text-text-primary">{tagInfo.name}</h2>
                             {/if}
                             <div class="mb-4">
-                                <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
+                                <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-text-secondary">Description</label>
+                                <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" bind:value={description} readonly={!isEditing}></textarea>
                             </div>
                         </div>
                     </div>
@@ -440,17 +433,17 @@
                         {#if isEditing}
                             <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
                             <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300 dark:bg-surface-3 dark:text-text-primary dark:hover:bg-border" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
                         {:else}
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300 dark:bg-surface-3 dark:text-text-primary dark:hover:bg-border" on:click={() => isEditing = true}>Edit</button>
                         {/if}
                     </div>
                 </div>
 
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
-                        <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
+                        <h3 class="text-lg font-semibold dark:text-text-primary">Highlights ({tagInfo.highlight_count})</h3>
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary">
                     </div>
                     <div class="flex-grow overflow-auto" bind:this={tableContainer}>
                     </div>
