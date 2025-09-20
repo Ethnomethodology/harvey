@@ -394,7 +394,7 @@
             <ul class="text-xs">
                 {#each $allTags as tag (tag.id)}
                     <li
-                        class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-accent-background-hover"
+                        class="p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                         class:bg-blue-200={selectedTag?.id === tag.id}
                         class:dark:bg-accent-primary={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
