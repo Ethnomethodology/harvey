@@ -52,6 +52,7 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
     background-color: transparent;
     color: var(--ui-text-color);
     border-bottom: 1px solid var(--ui-select-border);
+    border-top: 1px solid var(--ui-select-border);
     font-weight: 600;
 
     .tabulator-col {
@@ -77,6 +78,9 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
         }
       }
       &:last-child { border-right: none; }
+      &:first-child {
+        border-left: 1px solid var(--ui-select-border);
+      }
 
       // Overrides for sortable columns using actual theme values
       &.tabulator-sortable {
@@ -129,6 +133,9 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       padding: $paddingSmall $paddingMedium;
       line-height: $lineHeight;
       color: var(--ui-text-color); // Ensure cells get the theme text color
+      &:first-child {
+        border-left: 1px solid var(--ui-select-border);
+      }
     }
   }
 
