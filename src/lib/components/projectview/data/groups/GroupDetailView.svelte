@@ -515,11 +515,11 @@
 
 </script>
 
-<div class="p-4 h-full flex flex-col bg-white dark:bg-gray-800">
+<div class="p-4 h-full flex flex-col bg-white dark:bg-surface-2">
     {#if groupData}
         <!-- Header -->
         <div class="mb-4 pb-2 border-b border-gray-300 dark:border-border">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
                 <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">{groupData.name}</h2>
                 <button
                     on:click={() => isEditGroupModalOpen = true}
@@ -546,45 +546,43 @@
             {:else if errorMessage}
                 <p class="text-red-500 dark:text-red-400 text-center py-8">Error: {errorMessage}</p>
             {:else}
-                {#each CATEGORY_ORDER as category} <!-- UNCOMMENTED outer loop -->
+                {#each CATEGORY_ORDER as category}
                     {@const filesInCategory = categorizedFiles[category.key]}
+                    {#if filesInCategory && filesInCategory.length > 0}
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">{category.name}</h3>
-                        {#if filesInCategory && filesInCategory.length > 0}
-                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                                {#each filesInCategory as file (file.relative_path)}
-                                    <div
-                                        class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-border dark:hover:bg-gray-700 cursor-pointer transition-shadow"
-                                        on:dblclick={() => handleFileDoubleClick(file)}
-                                        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
-                                        on:contextmenu={(e) => handleFileContextMenu(e, file)}
-                                        role="button"
-                                        tabindex="0"
-                                        title={file.name}
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                            {#each filesInCategory as file (file.relative_path)}
+                                <div
+                                    class="thumbnail-item flex flex-col items-center p-3 border border-gray-200 dark:border-border dark:hover:bg-gray-700 cursor-pointer transition-shadow"
+                                    on:dblclick={() => handleFileDoubleClick(file)}
+                                    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileDoubleClick(file); }}
+                                    on:contextmenu={(e) => handleFileContextMenu(e, file)}
+                                    role="button"
+                                    tabindex="0"
+                                    title={file.name}
+                                >
+                                    <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                        {#if file.file_type === 'image' && file.full_path}
+                                            <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
+                                        {:else}
+                                            {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
+                                        {/if}
+                                    </div>
+                                    <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
+                                    <button
+                                        on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
+                                        class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="More options for {file.name}"
                                     >
-                                        <div class="w-20 h-20 mb-2 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                                            {#if file.file_type === 'image' && file.full_path}
-                                                <img src={convertFileSrc(file.full_path)} alt={file.name} class="max-w-full max-h-full object-contain"/>
-                                            {:else}
-                                                {@html GENERIC_ICONS[category.key] || GENERIC_ICONS['others']}
-                                            {/if} <!-- Closes file.file_type === 'image' -->
-                                        </div>
-                                        <p class="text-sm text-center text-gray-700 dark:text-gray-300 w-full h-10 overflow-hidden leading-tight">{file.name}</p>
-                                        <button
-                                            on:click|stopPropagation|preventDefault={(e) => handleFileContextMenu(e, file)}
-                                            class="absolute top-1 right-1 p-0.5 bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 text-gray-700 dark:text-gray-300 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="More options for {file.name}"
-                                        >
-                                            {@html CONTEXT_MENU_ICON_SVG}
-                                        </button>
-                                    </div> <!-- Closes thumbnail-item div -->
-                                {/each} <!-- Closes filesInCategory loop -->
-                            </div>
-                        {:else if !isLoading} <!-- Only show "No files" if not loading -->
-                            <p class="text-sm text-gray-400 dark:text-gray-500 italic">No {category.name.toLowerCase()} in this group.</p>
-                        {/if}
+                                        {@html CONTEXT_MENU_ICON_SVG}
+                                    </button>
+                                </div>
+                            {/each}
+                        </div>
                     </div>
-                {/each} <!-- End of UNCOMMENTED outer loop -->
+                    {/if}
+                {/each}
 
                 {@const totalFiles = Object.values(categorizedFiles).reduce((sum, arr) => sum + arr.length, 0)}
                 {#if totalFiles === 0 && !isLoading}
