@@ -384,6 +384,21 @@
     }
 </script>
 
+<style>
+	:global(.dark .tabulator-header) {
+		background-color: var(--color-surface-3);
+	}
+	:global(.dark .tabulator-row) {
+		background-color: var(--color-surface-2);
+	}
+	:global(.dark .tabulator .tabulator-row:hover) {
+		background-color: var(--color-surface-3);
+	}
+	:global(.dark .tabulator-footer) {
+		background-color: var(--color-surface-3);
+	}
+</style>
+
 <div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
     <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
         <!-- Left Panel: List of all tags -->
