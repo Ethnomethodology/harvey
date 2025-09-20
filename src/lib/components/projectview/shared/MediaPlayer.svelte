@@ -1138,7 +1138,7 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400">
+		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
 				<span>No media selected or media failed to load</span>
 			</div>
 		{/if}
@@ -1218,7 +1218,7 @@
 			</button>
 
 			<!-- Time Display -->
-			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
+			<span class="text-xs font-mono text-gray-600 dark:text-d-gray-400 tabular-nums whitespace-nowrap">
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
 

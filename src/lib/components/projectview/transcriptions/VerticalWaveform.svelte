@@ -135,7 +135,7 @@
 				const dpr = window.devicePixelRatio || 1;
 				ctx.save();
 				ctx.scale(dpr, dpr);
-				ctx.fillStyle = '#6b7280';
+				ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#A3A3A3' : '#6b7280';
 				ctx.font = `10px sans-serif`;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
@@ -172,11 +172,11 @@
 		ctx.clearRect(0, 0, TIMESCALE_WIDTH, logicalHeight);
 
 		const isDark = document.documentElement.classList.contains('dark');
-        ctx.fillStyle = isDark ? '#1F2937' : '#F3F4F6'; // gray-800 dark, gray-100 light
+        ctx.fillStyle = isDark ? '#171717' : '#F3F4F6'; // d-gray-800 dark, gray-100 light
         ctx.fillRect(0, 0, TIMESCALE_WIDTH, logicalHeight);
 
-		ctx.strokeStyle = '#d1d5db';
-		ctx.fillStyle = isDark ? '#ffffff' : '#000000';
+		ctx.strokeStyle = isDark ? '#404040' : '#d1d5db';
+		ctx.fillStyle = isDark ? '#E5E5E5' : '#000000';
 		ctx.font = '10px sans-serif';
 		ctx.textAlign = 'right';
 		ctx.textBaseline = 'middle';
@@ -207,7 +207,7 @@
 		ctx.beginPath();
 		ctx.moveTo(TIMESCALE_WIDTH - 0.5, 0);
 		ctx.lineTo(TIMESCALE_WIDTH - 0.5, logicalHeight);
-		ctx.strokeStyle = '#d1d5db';
+		ctx.strokeStyle = isDark ? '#404040' : '#d1d5db';
 		ctx.lineWidth = 1;
 		ctx.stroke();
 		ctx.restore();
@@ -236,7 +236,8 @@
 		ctx.save();
 		ctx.scale(dpr, dpr);
 		ctx.clearRect(0, 0, waveformCanvasWidth, logicalHeight);
-		drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, '#9ca3af');
+        const isDark = document.documentElement.classList.contains('dark');
+		drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
 		ctx.restore();
 
 		lastDrawnTime = currentTime;
@@ -493,8 +494,8 @@
 
 </script>
 
-<div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-border rounded overflow-hidden">
-	<div class="flex-shrink-0 px-2 py-1.5 flex items-center justify-end space-x-1.5 border-b border-gray-300 dark:border-gray-600 w-full">
+<div bind:this={componentContainer} class="vertical-waveform-panel flex flex-col w-full h-full bg-white dark:bg-d-gray-800 border border-gray-200 dark:border-border rounded overflow-hidden">
+	<div class="flex-shrink-0 px-2 py-1.5 flex items-center justify-end space-x-1.5 border-b border-gray-300 dark:border-d-gray-600 w-full">
 		<button class="ui-button-icon-panelheader" title="Zoom In Waveform" aria-label="Zoom In Waveform" on:click={zoomIn} disabled={!canZoomIn}>
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
@@ -552,17 +553,17 @@
 		background-color: #fff; /* Match panel bg */
 	}
 	.dark .timescale-canvas-vertical {
-		background-color: #1f2937; /* Match panel bg dark */
+		background-color: theme('colors.d-gray.800'); /* Match panel bg dark */
 	}
 	.waveform-canvas-vertical {
 		display: block;
 	}
 	.overlay-message {
-		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white bg-opacity-80 dark:bg-gray-900 dark:bg-opacity-80 text-gray-600 dark:text-gray-300 pointer-events-none z-30;
+		@apply absolute top-0 left-0 w-full h-full flex items-center justify-center text-xs p-1 bg-white bg-opacity-80 dark:bg-d-gray-900 dark:bg-opacity-80 text-gray-600 dark:text-d-gray-300 pointer-events-none z-30;
 		text-align: center;
 	}
 	.ui-button-icon-panelheader { /* Standardized button style for panel headers */
-		@apply p-1 rounded text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-gray-700;
+		@apply p-1 rounded text-gray-600 dark:text-d-gray-400 bg-gray-100 dark:bg-d-gray-700 hover:bg-gray-200 dark:hover:bg-d-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-d-gray-800 focus:bg-gray-200 dark:focus:bg-d-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100 dark:disabled:hover:bg-d-gray-700;
 	}
 
 	.waveform-scroll-container {
@@ -573,7 +574,7 @@
 		scrollbar-color: #a0aec0 #e2e8f0;
 	}
 	.dark .waveform-scroll-container:hover {
-		scrollbar-color: #6b7280 #3c3c3c;
+		scrollbar-color: theme('colors.d-gray.500') theme('colors.d-gray.800');
 	}
 	.waveform-scroll-container::-webkit-scrollbar {
 		width: 8px;
@@ -590,13 +591,13 @@
 		background-color: #a0aec0;
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-thumb {
-		background-color: #4a5568;
+		background-color: theme('colors.d-gray.600');
 	}
 	.waveform-scroll-container:hover::-webkit-scrollbar-track {
 		background: #e2e8f0;
 	}
 	.dark .waveform-scroll-container:hover::-webkit-scrollbar-track {
-		background: #3c3c3c;
+		background: theme('colors.d-gray.800');
 	}
 	.vertical-seek-bar {
 		position: absolute;
