@@ -16,6 +16,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
@@ -542,16 +543,13 @@
     <div class="flex items-center space-x-2 flex-shrink-0">
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <select
-                class="ui-select text-sm text-gray-700 dark:text-gray-200"
-                on:change={(e) => switchTranscriptInDataTab(e.currentTarget.value)}
-            >
-                {#each $displayedTranscripts as transcript}
-                    <option value={transcript.path} selected={$project.activeTranscriptPathInDataTab === transcript.path}>
-                        {transcript.displayLabel}
-                    </option>
-                {/each}
-            </select>
+            <Dropdown
+                containerClasses="w-48"
+                options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
+                value={$project.activeTranscriptPathInDataTab}
+                on:change={(e) => switchTranscriptInDataTab(e.detail)}
+                placeholder="Select Transcript"
+            />
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>

@@ -21,6 +21,7 @@
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
 	import { activeLayout, leftPanelVisible } from '$lib/stores/layoutStore.js';
 	import { languageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
@@ -303,30 +304,24 @@
 		</button>
 
 		<!-- Media Selection Dropdown -->
-		<select
-			class="ui-select text-sm text-gray-700 dark:text-gray-200 flex-shrink-0 w-40"
-			on:change="{handleMediaSelectionChange}"
-			bind:value="{selectedMediaValue}"
-			disabled="{$project.isLoading || mediaFilesForDropdown.length === 0}"
-			title="{mediaFilesForDropdown.length > 0 ? 'Select Media File' : ($project.isLoading ? 'Loading project...' : 'No media files found')}"
-		>
-			<option value="" disabled>
-				{#if $project.isLoading}Loading...{:else if mediaFilesForDropdown.length === 0}No Media{:else}Select Media{/if}
-			</option>
-			{#each mediaFilesForDropdown as mediaFile (mediaFile.path)}
-				<option value="{mediaFile.path}">{mediaFile.name}</option>
-			{/each}
-		</select>
+		<Dropdown
+			containerClasses="w-40"
+			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
+			bind:value={selectedMediaValue}
+			on:change={(e) => handleMediaSelectionChange({ target: { value: e.detail }})}
+			placeholder={$project.isLoading ? 'Loading...' : (mediaFilesForDropdown.length === 0 ? 'No Media' : 'Select Media')}
+			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
+		/>
 
 		<!-- Transcription Mode -->
-		<select
-			class="ui-select text-sm text-gray-700 dark:text-gray-200 flex-shrink-0 w-45"
-			bind:value="{transcriptionMode}"
-			title="Select Transcription Mode"
-		>
-			<option value="automatic">Automatic Transcription</option>
-			<option value="manual">Manual Transcription</option>
-		</select>
+		<Dropdown
+			containerClasses="w-48"
+			options={[
+				{ value: 'automatic', label: 'Automatic Transcription' },
+				{ value: 'manual', label: 'Manual Transcription' },
+			]}
+			bind:value={transcriptionMode}
+		/>
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
