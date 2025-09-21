@@ -6,12 +6,14 @@
   export let value = '';
   export let placeholder = 'Select an option';
   export let containerClasses = '';
+  export let disabled = false;
 
   let isOpen = false;
   let dropdownElement;
   const dispatch = createEventDispatcher();
 
   function selectOption(optionValue) {
+    if (disabled) return;
     value = optionValue;
     dispatch('change', value);
     isOpen = false;
@@ -44,44 +46,31 @@
   <div>
     <button
       type="button"
-      class="btn btn-sm btn-outline w-full justify-between font-normal text-left"
-      on:click={() => (isOpen = !isOpen)}
+      class="ui-select w-full flex justify-between items-center"
+      on:click={() => { if (!disabled) isOpen = !isOpen; }}
       aria-haspopup="true"
       aria-expanded={isOpen}
+      {disabled}
     >
       <span class="truncate">{selectedLabel}</span>
-      <svg
-        class="h-5 w-5 flex-shrink-0"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 20 20"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path
-          fill-rule="evenodd"
-          d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-          clip-rule="evenodd"
-        />
-      </svg>
     </button>
   </div>
 
   {#if isOpen}
     <div
       transition:fly={{ y: -5, duration: 100 }}
-      class="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg bg-base-100 ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+      class="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg z-10"
+      style="background-color: var(--ui-option-bg); border: 1px solid var(--ui-select-border);"
       role="menu"
       aria-orientation="vertical"
-      aria-labelledby="options-menu"
     >
       <div class="py-1" role="none">
         {#each options as option}
           <button
-            class="btn btn-sm btn-ghost w-full justify-start font-normal text-left"
+            class="dropdown-option block w-full text-left px-3 py-1.5 text-sm"
+            style="color: var(--ui-option-text);"
             role="menuitem"
             on:click={() => selectOption(option.value)}
-            class:bg-primary={value === option.value}
-            class:text-primary-content={value === option.value}
           >
             {option.label}
           </button>
@@ -90,3 +79,9 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .dropdown-option:hover {
+    background-color: var(--ui-option-hover-bg);
+  }
+</style>
