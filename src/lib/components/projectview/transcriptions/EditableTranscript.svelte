@@ -705,7 +705,13 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-border rounded overflow-hidden; }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) { flex-grow: 1; min-height: 0; border: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden; }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; padding: 8px;}
-    .lexical-editor-wrapper-style.is-disabled { @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-dark-bg-tertiary dark:border-dark-bg-tertiary dark:opacity-70; pointer-events: none; }
+    .lexical-editor-wrapper-style.is-disabled {
+		@apply border-transparent dark:border-transparent;
+		pointer-events: none;
+	}
+	.lexical-editor-wrapper-style.is-disabled :global(.lexical-editor-root) {
+		@apply bg-transparent dark:bg-transparent;
+	}
     .lexical-editor-wrapper-style.is-disabled > :global(.lexical-editor-root > .lexical-wrapper > .lexical-content) { @apply cursor-not-allowed; }
     .lexical-editor-wrapper-style :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100; min-height: unset !important; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
