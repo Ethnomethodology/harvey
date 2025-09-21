@@ -198,8 +198,7 @@
  console.log("TopBar: Confirmed speakers:", count, names, secondNames);
  updateSpeakerConfig(count, names, secondNames);
  }
-	function handleMediaSelectionChange(event) {
-		const selectedPath = event.target.value;
+	function handleMediaSelectionChange(selectedPath) {
 		if (!selectedPath) { return; }
 		const currentDropdownList = mediaFilesForDropdown;
 		const selectedFileEntry = currentDropdownList.find(f => f.path === selectedPath);
@@ -308,7 +307,7 @@
 			containerClasses="w-40"
 			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
 			bind:value={selectedMediaValue}
-			on:change={(e) => handleMediaSelectionChange({ target: { value: e.detail }})}
+			on:change={(e) => handleMediaSelectionChange(e.detail)}
 			placeholder={$project.isLoading ? 'Loading...' : (mediaFilesForDropdown.length === 0 ? 'No Media' : 'Select Media')}
 			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
 		/>
