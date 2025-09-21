@@ -1050,7 +1050,19 @@
     {/if}
 
 				{#if contextMenuVisible && contextMenuItem && !$panelStateStore.dataLeftPanelCollapsed}
-		<div id="notes-left-panel-context-menu" class="fixed z-50 bg-white dark:bg-dark-bg-secondary border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[150px]" style="left: {contextMenuX}px; top: {contextMenuY}px;" on:click|stopPropagation>
+		<div
+            id="notes-left-panel-context-menu"
+            class="fixed z-50 bg-white dark:bg-dark-bg-secondary border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[150px]"
+            style="left: {contextMenuX}px; top: {contextMenuY}px;"
+            on:click|stopPropagation
+            role="menu"
+            tabindex="-1"
+            on:keydown={(e) => {
+                if (e.key === 'Escape') {
+                    closeContextMenu();
+                }
+            }}
+        >
             {#if contextMenuItem.file_type === 'media'}
                 <button on:click|stopPropagation={() => { handleContextMenuAction('Open'); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-700 text-gray-800 dark:text-d-gray-200">Open</button>
                 
@@ -1144,7 +1156,15 @@
             style="left: {groupSubMenuX}px; top: {groupSubMenuY}px;"
             on:mouseenter={handleEnterGroupSubMenu}
             on:mouseleave={handleLeaveGroupSubMenu}
-            on:click|stopPropagation>
+            on:click|stopPropagation
+            role="menu"
+            tabindex="-1"
+            on:keydown={(e) => {
+                if (e.key === 'Escape') {
+                    closeGroupSubMenu();
+                }
+            }}
+        >
             <button on:click|stopPropagation={() => { handleNewGroupClick(); }} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary text-gray-800 dark:text-d-gray-200">New group...</button>
             <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />
             {#if localProjectGroupsForSubMenu && localProjectGroupsForSubMenu.length > 0}
@@ -1165,7 +1185,15 @@
         id="notes-left-panel-category-context-menu"
         class="fixed z-50 bg-white dark:bg-dark-bg-secondary border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[120px]"
         style="left: {categoryContextMenuX}px; top: {categoryContextMenuY}px;"
-        on:click|stopPropagation>
+        on:click|stopPropagation
+        role="menu"
+        tabindex="-1"
+        on:keydown={(e) => {
+            if (e.key === 'Escape') {
+                closeCategoryContextMenu();
+            }
+        }}
+    >
         {#if categoryContextMenuType === 'document' || categoryContextMenuType === 'table'}
           <button
             on:click|stopPropagation={() => {
@@ -1298,7 +1326,15 @@
         id="notes-left-panel-group-item-context-menu"
         class="fixed z-50 bg-white dark:bg-dark-bg-secondary border border-gray-300 dark:border-dark-bg-tertiary py-1 text-xs min-w-[120px]"
         style="left: {groupContextMenuX}px; top: {groupContextMenuY}px;"
-        on:click|stopPropagation>
+        on:click|stopPropagation
+        role="menu"
+        tabindex="-1"
+        on:keydown={(e) => {
+            if (e.key === 'Escape') {
+                closeGroupContextMenu();
+            }
+        }}
+    >
         <button on:click={() => handleGroupContextMenuAction('Open')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary text-gray-800 dark:text-d-gray-200">Open</button>
         <button on:click={() => handleGroupContextMenuAction('Rename')} class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary text-gray-800 dark:text-d-gray-200">Rename...</button>
         <hr class="my-1 border-gray-200 dark:border-dark-bg-tertiary" />

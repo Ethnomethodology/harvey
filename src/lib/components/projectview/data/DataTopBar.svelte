@@ -505,6 +505,7 @@
         <button
             class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
             title="Toggle File Explorer Panel"
+            aria-label="Toggle File Explorer Panel"
             on:click={() => dispatch('toggleLeftPanel')}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
                 <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
@@ -641,45 +642,6 @@
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
         @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-border dark:disabled:hover:!bg-transparent;
     }
-
-
-    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component's immediate needs for the theme button */
-  
-    .blinking-red {
-        animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-        0% { background-color: #f87171; }
-        50% { background-color: #ef4444; }
-        100% { background-color: #f87171; }
-    }
-
-    :global(html.dark) .dark\:bg-gray-800 {
-         background-color: #1f2937 !important;
-    }
-    :global(html.dark) .dark\:border-gray-700 {
-         border-color: #374151 !important;
-    }
-     :global(html.dark) .dark\:bg-gray-700 {
-         background-color: #374151 !important;
-     }
-     :global(html.dark) .dark\:hover\:bg-gray-600 {
-          background-color: #4b5563 !important;
-     }
-     :global(html.dark) .dark\:text-gray-300 {
-         color: #d1d5db !important;
-     }
-     :global(html.dark) .dark\:text-gray-200 {
-          color: #e5e7eb !important;
-     }
-     
-     :global(html.dark) .dark\:bg-green-700 {
-         background-color: #047857 !important;
-     }
-     :global(html.dark) .dark\:text-green-100 {
-         color: #d1fae5 !important;
-     }
   
     .hover-scale-effect {
         /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */

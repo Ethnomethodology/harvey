@@ -607,7 +607,7 @@
 
 </div> <!-- End Main Container -->
 
-<style>
+<style lang="postcss">
 	/* Shared button styles */
 	.btn-blue, .btn-delete, .btn-cancel, .btn-retry, .btn-blue-small { /* Added btn-blue-small */
 		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;

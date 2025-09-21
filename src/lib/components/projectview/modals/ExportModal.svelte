@@ -208,10 +208,12 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="export-modal-title"
+		tabindex="-1"
 	>
 		<div
 			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
+			role="document"
 		>
 			<h2 id="export-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5 truncate" title="{modalTitle}">
 				{modalTitle}
@@ -256,8 +258,8 @@
 				<!-- Layout Options (Conditional for DOCX and MD) -->
 				{#if exportFormat === 'docx' || exportFormat === 'md'}
 				<div class="pt-2">
-						<label class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">{exportFormat.toUpperCase()} Layout:</label>
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+						<div id="layout-label" class="block font-medium text-gray-700 dark:text-gray-300 mb-1.5">{exportFormat.toUpperCase()} Layout:</div>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-labelledby="layout-label">
 							{#each DOCX_LAYOUT_OPTIONS as layout (layout.id)}
 								<button
 									type="button"
@@ -362,14 +364,8 @@
 		 background-size: 1rem 1rem; /* 16px */
 		 background-position: right 0.5rem center;
 	 }
-	 .dark select.input-field {
-		 background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%23d1d5db%22%3E%3Cpath%20d%3D%22M7.293%209.293a1%201%200%20011.414%200L12%2012.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20fill-rule%3D%22evenodd%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E');
-	 }
 
 	 select.input-field option[disabled] {
 		 color: #9ca3af; /* gray-400 */
-	 }
-	  .dark select.input-field option[disabled] {
-		 color: #6b7280; /* gray-500 */
 	 }
 </style>

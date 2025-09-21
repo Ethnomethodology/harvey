@@ -58,6 +58,8 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="manage-models-title"
+		tabindex="-1"
+		on:keydown={handleKeydown}
 	>
 		<div
 			class="bg-white rounded-lg shadow-xl w-full max-w-3xl m-4 flex flex-col max-h-[80vh]"
