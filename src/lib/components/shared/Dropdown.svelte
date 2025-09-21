@@ -67,13 +67,13 @@
       <div class="py-1" role="none">
         {#each options as option}
           <button
-            class="dropdown-option block w-full text-left px-3 py-1.5 text-sm"
+            class="dropdown-option block w-full text-left px-3 py-1.5 text-sm truncate"
             style="color: var(--ui-option-text);"
             role="menuitem"
             on:click={() => selectOption(option.value)}
             title={option.label}
           >
-            <span class="truncate">{option.label}</span>
+            {option.label}
           </button>
         {/each}
       </div>
