@@ -160,7 +160,7 @@
     border: 1px solid var(--ui-select-border);
 
     @apply block w-fit max-w-full
-           rounded-md text-xs font-medium
+           rounded-md text-sm font-medium
            pl-2 pr-6 py-1 leading-tight
            appearance-none bg-no-repeat
            focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
@@ -218,6 +218,18 @@
     color: var(--ui-optgroup-text);
     background-color: var(--ui-optgroup-bg);
     @apply font-semibold px-2 pt-1;
+  }
+
+  /* ---------- custom dropdown component ---------- */
+  .ui-dropdown-menu {
+    background-color: var(--ui-option-bg);
+    border: 1px solid var(--ui-select-border);
+  }
+  .ui-dropdown-menu .dropdown-option {
+    color: var(--ui-option-text);
+  }
+  .ui-dropdown-menu .dropdown-option:hover {
+    background-color: var(--ui-option-hover-bg);
   }
 
   /* ---------- inline helper text ---------- */

@@ -111,7 +111,7 @@
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
-  export let backgroundClass = 'bg-white dark:bg-surface-2'; // New prop
+  export let backgroundClass = 'bg-white dark:bg-surface-2';
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];

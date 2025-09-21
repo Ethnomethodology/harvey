@@ -59,16 +59,14 @@
   {#if isOpen}
     <div
       transition:fly={{ y: -5, duration: 100 }}
-      class="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg z-10"
-      style="background-color: var(--ui-option-bg); border: 1px solid var(--ui-select-border);"
+      class="ui-dropdown-menu origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg z-10"
       role="menu"
       aria-orientation="vertical"
     >
       <div class="py-1" role="none">
         {#each options as option}
           <button
-            class="dropdown-option block w-full text-left px-3 py-1.5 text-xs font-normal truncate"
-            style="color: var(--ui-option-text);"
+            class="dropdown-option"
             role="menuitem"
             on:click={() => selectOption(option.value)}
             title={option.label}
@@ -82,7 +80,7 @@
 </div>
 
 <style>
-  .dropdown-option:hover {
-    background-color: var(--ui-option-hover-bg);
+  .dropdown-option {
+    @apply block w-full text-left px-3 py-1.5 text-xs font-normal truncate;
   }
 </style>

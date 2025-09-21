@@ -570,7 +570,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" backgroundClass="{!editEnabled ? 'bg-transparent dark:bg-transparent' : 'bg-white dark:bg-surface-2'}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -601,7 +601,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" backgroundClass="{!editEnabled ? 'bg-transparent dark:bg-transparent' : 'bg-white dark:bg-surface-2'}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -632,7 +632,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" backgroundClass="{!editEnabled ? 'bg-transparent dark:bg-transparent' : 'bg-white dark:bg-surface-2'}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -663,7 +663,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                      <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
                         <div class='lexical-editor-wrapper-style w-full {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                              {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" backgroundClass="{!editEnabled ? 'bg-transparent dark:bg-transparent' : 'bg-white dark:bg-surface-2'}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
                              {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                              {/if}
@@ -679,53 +679,55 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
 	.input-field {
-		@apply text-center p-0; /* Base overrides for timestamp inputs */
-	}
-
-	/* --- Light Mode --- */
-	.input-field:disabled {
-		@apply bg-transparent border-0 text-gray-800;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white border border-gray-300 text-gray-900 rounded;
+		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
 	}
 
-	/* --- Dark Mode --- */
-	:global(html.dark) .input-field:disabled {
-		@apply bg-transparent border-0 text-gray-300;
-	}
-	:global(html.dark) .input-field:not(:disabled) {
-		@apply bg-gray-800 border border-gray-600 text-gray-200 rounded;
-	}
-
-	.select-field { @apply border border-gray-300 rounded bg-white text-gray-900 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
     .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
     .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
-    .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-border rounded overflow-hidden; }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root) { flex-grow: 1; min-height: 0; border: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden; }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; padding: 8px;}
+
+    .lexical-editor-wrapper-style {
+        display: flex;
+        flex-direction: column;
+        @apply rounded overflow-hidden;
+    }
+    .lexical-editor-wrapper-style:not(.is-disabled) {
+        @apply border border-gray-300 dark:border-border bg-white dark:bg-surface-3;
+    }
     .lexical-editor-wrapper-style.is-disabled {
-		@apply border-transparent dark:border-transparent;
-		pointer-events: none;
-	}
-	.lexical-editor-wrapper-style.is-disabled :global(.lexical-editor-root) {
-		@apply bg-transparent dark:bg-transparent;
-	}
-    .lexical-editor-wrapper-style.is-disabled > :global(.lexical-editor-root > .lexical-wrapper > .lexical-content) { @apply cursor-not-allowed; }
-    .lexical-editor-wrapper-style :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100; min-height: unset !important; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
+        @apply border-transparent dark:border-transparent bg-transparent;
+    }
+
+    .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
+        flex-grow: 1;
+        min-height: 0;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden;
+    }
+    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
+        overflow-y: auto;
+        height: 100%;
+        padding: 8px;
+    }
+
+    .lexical-editor-wrapper-style :global(.lexical-content) {
+        @apply leading-normal whitespace-pre-wrap break-words;
+        min-height: unset !important;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12pt;
+        line-height: 1.5;
+    }
+    .lexical-editor-wrapper-style:not(.is-disabled) :global(.lexical-content) {
+        @apply text-gray-900 dark:text-text-primary;
+    }
+    .lexical-editor-wrapper-style.is-disabled :global(.lexical-content) {
+        @apply text-gray-800 dark:text-text-primary cursor-not-allowed;
+    }
+
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
-    .editable-transcript-controls { /* Class added */ }
-
-    :global(.dark .segment-active), :global(.dark .segment-active *) {
-        color: white !important;
-    }
-    :global(.dark .segment-active .input-field) {
-        --tw-text-opacity: 1 !important;
-        color: white !important;
-    }
-     :global(.dark .segment-active .input-field::placeholder) {
-        color: rgba(255, 255, 255, 0.5) !important;
-    }
-
 </style>
