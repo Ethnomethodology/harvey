@@ -457,6 +457,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let textEditorContainerStyle = 'flex-grow'; // Default
     let isLayout1Active = false; // Flag for Layout1 specific structure
 
+    $: speakerOptions = [
+        { value: 'Unknown', label: 'Unknown' },
+        ...($transcriptStore.speakers.names.map(name => ({ value: name, label: name })))
+    ];
+
     $: {
         const layoutKey = $activeLayout;
         isLayout1Active = layoutKey === 'Layout1';
