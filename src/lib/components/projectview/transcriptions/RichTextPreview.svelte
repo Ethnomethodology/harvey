@@ -12,6 +12,7 @@
     import { listen } from '@tauri-apps/api/event'; // Added for Tauri event listener
     import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
     // Virtualization state
     let scrollTop = 0;
@@ -580,25 +581,16 @@
 >
     <h3 class="font-semibold mb-2 text-sm text-gray-700 dark:text-d-gray-300 border-b border-gray-300 dark:border-d-gray-600 pb-1 flex items-center justify-between w-full">
         <div class="flex items-center"> <!-- leftAndMiddleControlsGroup -->
-            <!-- Transcript Dropdown using native select -->
+            <!-- Transcript Dropdown using custom component -->
             {#if $transcriptStore.selectedMediaFile}
-                <div class="relative inline-block">
-                    <select
-                        class="ui-select max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate"
-                        value={$transcriptStore.activeTranscript?.path || ''}
-                        on:change={(e) => switchTranscript(e.target.value)}
-                    >
-                        {#if $displayedTranscripts.length === 0}
-                            <option value="" disabled>No Transcripts</option>
-                        {:else}
-                            {#each $displayedTranscripts as transcript (transcript.path)}
-                                <option value={transcript.path}>
-                                    {transcript.displayLabel}
-                                </option>
-                            {/each}
-                        {/if}
-                    </select>
-                </div>
+				<Dropdown
+					containerClasses="max-w-[150px] sm:max-w-[200px] md:max-w-[250px]"
+					options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
+					value={$transcriptStore.activeTranscript?.path || ''}
+					on:change={(e) => switchTranscript(e.detail)}
+					placeholder="No Transcripts"
+					disabled={$displayedTranscripts.length === 0}
+				/>
             {:else}
                 <span class="px-3 py-1 text-xs text-gray-500 dark:text-d-gray-400 italic">No Media Selected</span>
             {/if}
