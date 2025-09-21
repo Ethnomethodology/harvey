@@ -496,7 +496,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-dark-bg-secondary rounded-md shadow-sm overflow-hidden editable-transcript-controls">
+<div class="p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls">
     {#if !isEditorVisible}
         {#if segments.length === 0} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> No transcript loaded or transcript is empty. </div>
         {:else} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> Select a segment to start editing. </div> {/if}
@@ -679,7 +679,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
     /* Styles remain unchanged */
-    .input-field { @apply box-border px-1.5 py-1 border border-gray-300 rounded bg-white text-gray-900 dark:bg-dark-bg-secondary dark:text-white dark:border-dark-bg-tertiary appearance-none transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-dark-bg-tertiary dark:disabled:text-gray-400 dark:disabled:border-dark-bg-tertiary; }
+    .input-field { @apply box-border px-1.5 py-1 border border-gray-300 rounded bg-white text-gray-900 dark:bg-surface-1 dark:text-gray-100 dark:border-border appearance-none transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-surface-3 dark:disabled:text-gray-400 dark:disabled:border-border; }
     .select-field { @apply border border-gray-300 rounded bg-white text-gray-900 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
     .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
