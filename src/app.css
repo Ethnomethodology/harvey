@@ -160,7 +160,7 @@
     border: 1px solid var(--ui-select-border);
 
     @apply block w-fit max-w-full
-           rounded-md text-sm font-medium
+           rounded-md text-xs font-medium
            pl-2 pr-6 py-1 leading-tight
            appearance-none bg-no-repeat
            focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
