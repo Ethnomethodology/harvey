@@ -111,6 +111,7 @@
   export let enableTableCellResize = false;
   export let enableSearch = false;
   export let enableFloatingToolbar = true;
+  export let backgroundClass = 'bg-white dark:bg-surface-2'; // New prop
   export let documentPath = null;
   export let initialHighlights = [];
   export let documentHighlights = [];
@@ -1832,7 +1833,7 @@ $: if (editor && activeLayout) {
 }
 </script>
 
-<div class="lexical-editor-root h-full flex flex-col bg-white dark:bg-surface-2 overflow-visible shadow-sm">
+<div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm">
   {#if editable}
     <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md">
       {#if toolbarConfig.undo}
