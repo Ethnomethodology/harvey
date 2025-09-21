@@ -678,30 +678,27 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 </div>
 
 <style lang="postcss">
-    .input-field {
-        @apply box-border px-1.5 py-1 border rounded appearance-none transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500;
-    }
-    /* Light Mode */
-    .input-field {
-        @apply bg-white border-gray-300 text-gray-900;
-    }
-    .input-field:disabled {
-        @apply bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed;
-    }
-    /* Dark Mode */
-    .dark .input-field {
-        background-color: var(--color-surface-2);
-        border-color: var(--color-surface-3);
-        color: white;
-    }
-    .dark .input-field:disabled {
-        background-color: var(--color-surface-3);
-        border-color: var(--color-surface-2);
-        color: white;
-        @apply cursor-not-allowed;
-    }
+	.input-field {
+		@apply text-center p-0; /* Base overrides for timestamp inputs */
+	}
 
-    .select-field { @apply border border-gray-300 rounded bg-white text-gray-900 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
+	/* --- Light Mode --- */
+	.input-field:disabled {
+		@apply bg-transparent border-0 text-gray-800;
+	}
+	.input-field:not(:disabled) {
+		@apply bg-white border border-gray-300 text-gray-900 rounded;
+	}
+
+	/* --- Dark Mode --- */
+	:global(html.dark) .input-field:disabled {
+		@apply bg-transparent border-0 text-gray-300;
+	}
+	:global(html.dark) .input-field:not(:disabled) {
+		@apply bg-gray-800 border border-gray-600 text-gray-200 rounded;
+	}
+
+	.select-field { @apply border border-gray-300 rounded bg-white text-gray-900 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
     .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
     .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
