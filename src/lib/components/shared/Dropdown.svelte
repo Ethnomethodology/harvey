@@ -71,8 +71,9 @@
             style="color: var(--ui-option-text);"
             role="menuitem"
             on:click={() => selectOption(option.value)}
+            title={option.label}
           >
-            {option.label}
+            <span class="truncate">{option.label}</span>
           </button>
         {/each}
       </div>
