@@ -67,7 +67,7 @@
       <div class="py-1" role="none">
         {#each options as option}
           <button
-            class="dropdown-option block w-full text-left px-3 py-1.5 text-xs truncate"
+            class="dropdown-option block w-full text-left px-3 py-1.5 text-xs font-normal truncate"
             style="color: var(--ui-option-text);"
             role="menuitem"
             on:click={() => selectOption(option.value)}
