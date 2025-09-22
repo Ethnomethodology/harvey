@@ -772,4 +772,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         border-color: var(--color-surface-2) !important;
         color: white !important;
     }
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled span) {
+        color: white !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
+        color: white !important;
+    }
 </style>
