@@ -766,4 +766,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-content) {
         color: white !important;
     }
+
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled) {
+        background-color: var(--color-surface-3) !important;
+        border-color: var(--color-surface-2) !important;
+        color: white !important;
+    }
 </style>
