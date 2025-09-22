@@ -679,13 +679,13 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
 	.input-field {
-		@apply text-center bg-transparent border-0 p-0 text-gray-800;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-white;
 	}
 	.input-field:disabled {
-		@apply dark:bg-surface-3 dark:border-surface-2 dark:text-white;
+		@apply dark:bg-[var(--color-surface-3)] dark:border dark:border-[var(--color-surface-2)] dark:text-white;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white dark:bg-surface-2 dark:border-surface-3 dark:text-white border border-gray-300 text-gray-900 rounded;
+		@apply bg-white dark:bg-[var(--color-surface-2)] border border-gray-300 dark:border-[var(--color-surface-3)] text-gray-900 dark:text-white rounded;
 	}
 
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
@@ -698,10 +698,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         @apply rounded overflow-hidden;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
-        @apply border dark:border-surface-3 bg-white dark:bg-surface-2 border-gray-300;
+        @apply border border-gray-300 dark:border-[var(--color-surface-3)] bg-white dark:bg-[var(--color-surface-2)];
     }
     .lexical-editor-wrapper-style.is-disabled {
-		@apply border-transparent dark:border-surface-2 dark:bg-surface-3;
+        @apply border-transparent dark:border dark:border-[var(--color-surface-2)] dark:bg-[var(--color-surface-3)];
     }
 
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
@@ -726,10 +726,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         line-height: 1.5;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) :global(.lexical-content) {
-        @apply text-gray-900 dark:text-text-primary;
+        @apply text-gray-900 dark:text-white;
     }
     .lexical-editor-wrapper-style.is-disabled :global(.lexical-content) {
-        @apply text-gray-800 dark:text-text-primary cursor-not-allowed;
+        @apply text-gray-800 dark:text-white cursor-not-allowed;
     }
 
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
