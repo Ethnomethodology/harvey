@@ -679,10 +679,13 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
 	.input-field {
-		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800;
+	}
+	.input-field:disabled {
+		@apply dark:bg-surface-3 dark:border-surface-2 dark:text-white;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
+		@apply bg-white dark:bg-surface-2 dark:border-surface-3 dark:text-white border border-gray-300 text-gray-900 rounded;
 	}
 
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
@@ -695,10 +698,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         @apply rounded overflow-hidden;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
-        @apply border border-gray-300 dark:border-border bg-white dark:bg-surface-3;
+        @apply border dark:border-surface-3 bg-white dark:bg-surface-2 border-gray-300;
     }
     .lexical-editor-wrapper-style.is-disabled {
-        @apply border-transparent dark:border-transparent bg-transparent;
+		@apply border-transparent dark:border-surface-2 dark:bg-surface-3;
     }
 
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
