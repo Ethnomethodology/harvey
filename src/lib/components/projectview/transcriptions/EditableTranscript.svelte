@@ -506,7 +506,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
                 <button on:click="{handleEditSaveClick}"
-                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400'
                         title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
                         aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
@@ -688,8 +688,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 	}
 
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
-    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
-    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
+    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
+    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-surface-2 dark:hover:bg-accent-background-hover dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
 
     .lexical-editor-wrapper-style {
         display: flex;
