@@ -679,13 +679,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 <style lang="postcss">
 	.input-field {
-		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-white;
-	}
-	.input-field:disabled {
-		@apply dark:bg-[var(--color-surface-3)] dark:border dark:border-[var(--color-surface-2)] dark:text-white;
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
 	}
 	.input-field:not(:disabled) {
-		@apply bg-white dark:bg-[var(--color-surface-2)] border border-gray-300 dark:border-[var(--color-surface-3)] text-gray-900 dark:text-white rounded;
+		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
 	}
 
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
@@ -698,10 +695,10 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         @apply rounded overflow-hidden;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
-        @apply border border-gray-300 dark:border-[var(--color-surface-3)] bg-white dark:bg-[var(--color-surface-2)];
+        @apply border border-gray-300 dark:border-border bg-white dark:bg-surface-3;
     }
     .lexical-editor-wrapper-style.is-disabled {
-        @apply border-transparent dark:border dark:border-[var(--color-surface-2)] dark:bg-[var(--color-surface-3)];
+        @apply border-transparent dark:border-transparent bg-transparent;
     }
 
     .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
@@ -726,11 +723,38 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         line-height: 1.5;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) :global(.lexical-content) {
-        @apply text-gray-900 dark:text-white;
+        @apply text-gray-900 dark:text-text-primary;
     }
     .lexical-editor-wrapper-style.is-disabled :global(.lexical-content) {
-        @apply text-gray-800 dark:text-white cursor-not-allowed;
+        @apply text-gray-800 dark:text-text-primary cursor-not-allowed;
     }
 
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
+
+    :global(html.dark .input-field:disabled) {
+        background-color: var(--color-surface-3);
+        border: 1px solid var(--color-surface-2);
+        color: white;
+    }
+    :global(html.dark .input-field:not(:disabled)) {
+        background-color: var(--color-surface-2);
+        border: 1px solid var(--color-surface-3);
+        color: white;
+    }
+
+    :global(html.dark .lexical-editor-wrapper-style.is-disabled) {
+        background-color: var(--color-surface-3);
+        border: 1px solid var(--color-surface-2) !important;
+    }
+    :global(html.dark .lexical-editor-wrapper-style.is-disabled .lexical-content) {
+        color: white;
+    }
+
+    :global(html.dark .lexical-editor-wrapper-style:not(.is-disabled)) {
+        background-color: var(--color-surface-2);
+        border: 1px solid var(--color-surface-3);
+    }
+    :global(html.dark .lexical-editor-wrapper-style:not(.is-disabled) .lexical-content) {
+        color: white;
+    }
 </style>
