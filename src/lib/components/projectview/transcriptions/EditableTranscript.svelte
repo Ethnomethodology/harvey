@@ -496,7 +496,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls">
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls"
+     class:read-mode="{!editEnabled}"
+     class:edit-mode="{editEnabled}">
     {#if !isEditorVisible}
         {#if segments.length === 0} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> No transcript loaded or transcript is empty. </div>
         {:else} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> Select a segment to start editing. </div> {/if}
@@ -539,7 +541,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
                         <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
-                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" backgroundClass="{!editEnabled ? 'bg-transparent dark:bg-[var(--color-surface-3)]' : 'bg-white dark:bg-[var(--color-surface-2)]'}" />
+                                <LexicalEditor bind:this="{lexicalEditorInstance}" initialJson="{initialJsonForEditor}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{handleEditorUpdate}" enableFloatingToolbar="{false}" />
                             {:else}
                                 <div class='p-2 text-gray-400 italic text-center flex-grow flex items-center justify-center'>Loading editor...</div>
                             {/if}
@@ -742,19 +744,21 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         color: white;
     }
 
-    :global(html.dark .lexical-editor-wrapper-style.is-disabled) {
-        background-color: var(--color-surface-3);
+    /* Read Mode */
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled) {
+        background-color: var(--color-surface-3) !important;
         border: 1px solid var(--color-surface-2) !important;
     }
-    :global(html.dark .lexical-editor-wrapper-style.is-disabled .lexical-content) {
-        color: white;
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled .lexical-content) {
+        color: white !important;
     }
 
-    :global(html.dark .lexical-editor-wrapper-style:not(.is-disabled)) {
-        background-color: var(--color-surface-2);
-        border: 1px solid var(--color-surface-3);
+    /* Edit Mode */
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style:not(.is-disabled)) {
+        background-color: var(--color-surface-2) !important;
+        border: 1px solid var(--color-surface-3) !important;
     }
-    :global(html.dark .lexical-editor-wrapper-style:not(.is-disabled) .lexical-content) {
-        color: white;
+     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style:not(.is-disabled) .lexical-content) {
+        color: white !important;
     }
 </style>
