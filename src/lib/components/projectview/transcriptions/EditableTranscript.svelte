@@ -768,14 +768,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     }
 
     :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled) {
-        background-color: var(--color-surface-3) !important;
-        border-color: var(--color-surface-2) !important;
-        color: white !important;
+        background-color: var(--color-surface-3);
+        border-color: var(--color-surface-2);
+        color: white;
+        opacity: 1;
     }
     :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled span) {
-        color: white !important;
+        color: white;
     }
     :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
-        color: white !important;
+        color: white;
     }
 </style>
