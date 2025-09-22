@@ -697,7 +697,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         @apply rounded overflow-hidden;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
-        @apply border border-gray-300 dark:border-border bg-white dark:bg-surface-3;
+        @apply border border-gray-300 dark:border-border bg-white dark:bg-transparent;
     }
     .lexical-editor-wrapper-style.is-disabled {
         @apply border-transparent dark:border-transparent bg-transparent;
@@ -710,6 +710,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         border-radius: 0 !important;
         box-shadow: none !important;
         overflow: hidden;
+        background-color: transparent !important;
     }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
         overflow-y: auto;
@@ -745,20 +746,24 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     }
 
     /* Read Mode */
-    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled) {
-        background-color: var(--color-surface-3) !important;
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style) {
         border: 1px solid var(--color-surface-2) !important;
     }
-    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled .lexical-content) {
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-wrapper) {
+        background-color: var(--color-surface-3) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-content) {
         color: white !important;
     }
 
     /* Edit Mode */
-    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style:not(.is-disabled)) {
-        background-color: var(--color-surface-2) !important;
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style) {
         border: 1px solid var(--color-surface-3) !important;
     }
-     :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style:not(.is-disabled) .lexical-content) {
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-wrapper) {
+        background-color: var(--color-surface-2) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-content) {
         color: white !important;
     }
 </style>
