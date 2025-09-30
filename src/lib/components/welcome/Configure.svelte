@@ -331,7 +331,7 @@
 
 				<!-- Model List Section -->
 				<div class="flex-grow space-y-3">
-					<div class="sticky top-0 z-10 mb-3 border-b border-gray-200 bg-white pb-2 pt-1">
+					<div class="sticky top-0 z-50 mb-3 border-b border-gray-200 bg-gray-50 pb-2 pt-1">
 						<h3 class="text-lg font-medium text-gray-900">
 							Available Models (whisper.cpp / ggml)
 						</h3>
