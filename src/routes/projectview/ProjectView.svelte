@@ -3,7 +3,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { get } from 'svelte/store';
-	import { listen } from '@tauri-apps/api/event';
+	import { emit, listen } from '@tauri-apps/api/event';
 	import {
 		loadProjectDataAndUpdateStore,
 		handleConfirmStartTranscription,
@@ -190,6 +190,8 @@ async function onConfirmTranscriptionStart(event) {
             removeCloseRequestListener = null;
         }
 	});
+
+	
 
 	function handleGlobalKeys(event) {
         const proj = get(project);

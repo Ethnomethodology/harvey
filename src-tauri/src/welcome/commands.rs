@@ -232,9 +232,8 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  
 
 
- // --- NEW Theme Preference Commands ---
 
- /// Gets the saved theme preference ("light", "dark", "system", or None).
+/// Gets the saved theme preference ("light", "dark", "system", or None).
  #[command]
  pub async fn get_theme_preference() -> Result<Option<String>, CommandError> {
     log::info!("Config: get_theme_preference called.");

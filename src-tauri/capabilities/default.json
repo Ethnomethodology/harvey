@@ -4,6 +4,7 @@
   "description": "Default capability set for the main application window and project windows.",
   "windows": [
     "main",
+    "project",
     "project-*"
   ],
   "permissions": [
