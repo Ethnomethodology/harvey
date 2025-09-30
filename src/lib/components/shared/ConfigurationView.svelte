@@ -71,20 +71,29 @@
 				return currentDownloaded.some((m) => m?.name === modelName) ? 'complete' : 'not_downloaded';
 			};
 			const status = getStatus(name);
-			const getText = (modelName) => {
-				const progress = downloadProgress[modelName];
+			const progress = downloadProgress[name];
+
+			const getProgressPercent = () => {
+				if (status !== 'downloading' || !progress || !progress.totalBytes || progress.totalBytes <= 0) {
+					return 0;
+				}
+				return Math.min(100, Math.max(0, (progress.downloadedBytes / progress.totalBytes) * 100));
+			}
+
+			const getText = () => {
 				if (status !== 'downloading' || !progress) return '';
 				const downloadedMB = (progress.downloadedBytes / (1024 * 1024)).toFixed(1);
 				if (progress.totalBytes && progress.totalBytes > 0) {
-					const percentage = Math.min(100, Math.max(0, (progress.downloadedBytes / progress.totalBytes) * 100)).toFixed(0);
+					const percentage = getProgressPercent().toFixed(0);
 					const totalMB = (progress.totalBytes / (1024 * 1024)).toFixed(1);
 					return `${percentage}% (${downloadedMB} / ${totalMB} MB)`;
 				} else {
 					return `${downloadedMB} MB`;
 				}
 			};
-			const progressText = getText(name);
-			newData[name] = { status, progressText };
+			const progressText = getText();
+			const progressPercent = getProgressPercent();
+			newData[name] = { status, progressText, progressPercent };
 		}
 		modelDisplayData = newData;
 	}
@@ -181,15 +190,6 @@
 	});
 
 	// --- Helper Functions ---
-	function calculateProgress(modelName) {
-		// (No changes)
-		const progress = downloadProgress[modelName];
-		const status = modelDisplayData[modelName]?.status;
-		if (status !== 'downloading' || !progress || !progress.totalBytes || progress.totalBytes <= 0) {
-			return 0;
-		}
-		return Math.min(100, Math.max(0, (progress.downloadedBytes / progress.totalBytes) * 100));
-	}
 	async function openLink(url) {
 		// (No changes)
 		if (!url) return;
@@ -206,7 +206,8 @@
 			const newLocation = selected;
 			if (newLocation === downloadLocation) { console.log('Selected location is the same as the current one.'); statusMessage = 'Selected location is the same as current.'; setTimeout(() => (statusMessage = ''), 3000); return; }
 			let currentModelsInOldLocation = [];
-			try { currentModelsInOldLocation = await getDownloadedModels(); downloadedModels = currentModelsInOldLocation; } catch (refreshErr) { console.error("Failed to refresh downloaded models before move confirmation:", refreshErr); configError = `Error checking current models: ${refreshErr.message || refreshErr}`; return; }
+			try { currentModelsInOldLocation = await getDownloadedModels(); downloadedModels = currentModelsInOldLocation; } catch (refreshErr) { console.error("Failed to refresh downloaded models before move confirmation:", refreshErr); configError = `Error checking current models: ${refreshErr.message || refreshErr}`;
+ return; }
 			const modelsToMove = currentModelsInOldLocation.length > 0 && downloadLocation;
 			let confirmed = true;
 			if (modelsToMove) { confirmed = await ask(`Change download location to:\n${newLocation}\n\nThis will move ${currentModelsInOldLocation.length} downloaded model(s) from the current location to the new one. Proceed?`, { title: 'Confirm Location Change & Move', type: 'warning', okLabel: 'Yes, Move Files', cancelLabel: 'Cancel' }); } else { confirmed = await ask(`Set download location to:\n${newLocation}\n\nNew models will be downloaded here.`, { title: 'Confirm Location Change', type: 'info', okLabel: 'Confirm', cancelLabel: 'Cancel' }); }
@@ -341,16 +342,15 @@
 						<!-- Placeholder if needed -->
 					{:else}
 						{#each availableModels as model (model.name)}
-							{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '' }}
+							{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
                             {@const status = display.status}
                             {@const isDownloadEnabled = !isBusy && downloadLocation && downloadLocation.trim() !== '' && model.download_url}
                             {@const isDeleteEnabled = !isBusy}
                             {@const isCancelEnabled = status === 'downloading'}
                             <div class="bg-white p-4 rounded-lg shadow border border-gray-200 relative overflow-hidden">
                                 {#if status === 'downloading'}
-                                    {@const progressPercent = calculateProgress(model.name)}
-                                    <div class="absolute top-0 left-0 bottom-0 bg-blue-100 bg-opacity-75 transition-all duration-150 ease-linear pointer-events-none" style:width={`${progressPercent}%`}></div>
-                                    <div class="absolute top-0 left-0 bottom-0 border-r-2 border-blue-300 transition-all duration-150 ease-linear pointer-events-none" style:width={`${progressPercent}%`}></div>
+                                    <div class="absolute top-0 left-0 bottom-0 bg-blue-100 bg-opacity-75 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
+                                    <div class="absolute top-0 left-0 bottom-0 border-r-2 border-blue-300 transition-all duration-150 ease-linear pointer-events-none" style:width={`${display.progressPercent}%`}></div>
                                 {/if}
                                 <div class="relative z-10">
                                     <div class="flex justify-between items-start mb-2">
