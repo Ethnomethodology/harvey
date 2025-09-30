@@ -522,7 +522,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 {#if isLayout1Active}
                     <!-- Layout 1: Single Row Table -->
                     <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-<div class='flex-shrink-0 text-left py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+<div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
 </div>
                         <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
@@ -778,5 +778,33 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     }
     :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
         color: white;
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border-color: #d1d5db; /* border-gray-300 */
+        color: #111827; /* text-gray-900 */
+        opacity: 1;
+    }
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled span) {
+        color: #111827; /* text-gray-900 */
+    }
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
+        color: #111827; /* text-gray-900 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .input-field:disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        color: #111827; /* text-gray-900 */
+        border: 1px solid #d1d5db; /* border-gray-300 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border: 1px solid #d1d5db !important; /* border-gray-300 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled .lexical-content) {
+        color: #111827 !important; /* text-gray-900 */
     }
 </style>
