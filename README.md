@@ -20,12 +20,13 @@ Privacy is the core of Harvey's design. All core AI functionalities, like transc
 ## Key Features
 
 * **Offline AI Processing**:
-    * **Transcription & Diarization**: Use state-of-the-art speech-to-text models (e.g., OpenAI's Whisper) locally for complete data privacy.
+    * **Transcription & Diarization**: Use state-of-the-art speech-to-text models (e.g., OpenAI's Whisper) locally to transcribe your audio and video files for complete data privacy.
     * **Translation**: Translate generated transcripts to English using local AI models.
 * **Interactive Transcript Editor**:
     * Rich-text editor linked directly to media playback.
     * Adjust timestamps and manage speaker labels with ease.
 * **Comprehensive Data Management**:
+    * **Audios and Videos**: Import, play, and trim your audio and video files.
     * **Documents**: Create, edit, and annotate rich-text documents and field notes.
     * **PDFs**: View and annotate PDF documents with robust text-based tools.
     * **Images**: Import, view, and annotate images.
@@ -111,4 +112,11 @@ For more detailed information, please refer to the guides in the `Docs/` folder,
 1. Download the `.msi` installer file from [GitHub Releases](https://github.com/Ethnomethodology/harvey/releases).
 2. Run the downloaded `.msi` file.
 3. Ensure you have administrative privileges to complete the installation.
+
+### Linux
+Installation guide is coming soon.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE.md).
 
