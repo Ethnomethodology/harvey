@@ -31,12 +31,3 @@ export const languageOptions = [
     { value: 'vi', label: 'Vietnamese' }, { value: 'cy', label: 'Welsh' },
 ];
 
-export const cloudModelLabels = {
-    'google-2.0-flash': 'Google 2.0 Flash',
-    'gemini-2.0-flash-live-001': 'Gemini 2.0 Flash Live',
-};
-
-export function getCloudModelLabel(modelId) {
-    if (!modelId) return 'Unknown Cloud Model';
-    return cloudModelLabels[modelId] || modelId;
-}

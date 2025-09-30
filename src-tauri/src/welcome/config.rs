@@ -60,13 +60,7 @@ pub struct Config {
     #[serde(rename = "downloaded_models", default)]
     pub downloaded_models: Vec<ModelInfo>,
 
-    // --- Cloud Configuration Fields ---
-    #[serde(rename = "cloudApiKey", default, skip_serializing_if = "Option::is_none")]
-    pub cloud_api_key: Option<String>,
-    #[serde(rename = "cloudModel", default, skip_serializing_if = "Option::is_none")]
-    pub cloud_model: Option<String>,
-    #[serde(rename = "cloudConsent", default, skip_serializing_if = "Option::is_none")]
-    pub cloud_consent: Option<bool>,
+    
 
     // --- NEW: Theme Preference Field ---
     #[serde(rename = "themePreference", default, skip_serializing_if = "Option::is_none")]
@@ -74,13 +68,7 @@ pub struct Config {
     // --- End NEW Fields ---
 }
 
-// Struct for Cloud Config Payload (Unchanged)
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct CloudConfigPayload {
-    pub api_key: Option<String>,
-    pub model: Option<String>,
-    pub consent: Option<bool>,
-}
+
 
 #[derive(Debug, Serialize)]
 pub enum CommandError {

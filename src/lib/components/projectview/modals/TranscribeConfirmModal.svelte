@@ -4,14 +4,11 @@
 	import { get } from 'svelte/store';
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
-	// Only import getCloudModelLabel, languageOptions will come as a prop
-	import { getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
 	import SpeakersModal from './SpeakersModal.svelte';
 
 	// Props
 	export let fileName = '';
 	export let downloadedModelsList = [];
-	export let cloudConfig = null;
 	export let languageOptions = []; // Expect languageOptions as a prop, default to empty array
 	export let speakers = { count: 0, names: [], translatedNames: [] };
 
@@ -74,7 +71,7 @@
 
 	// When the modal is about to show the confirm view, initialize local states from the store
 	$: if (showModal && !isTranscribing && jobStatus === null) {
-		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : (cloudConfig?.model || ''));
+		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTranslateToEnglish = $transcriptStore.translateToEnglish;
 		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
@@ -171,14 +168,7 @@
 								{/each}
 							</optgroup>
 							{/if}
-							{#if cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model}
-								{@const configuredCloudModelId = cloudConfig.model}
-								{@const configuredCloudModelLabel = getCloudModelLabel(configuredCloudModelId)}
-								<optgroup label="Cloud Models">
-									<option value="{configuredCloudModelId}">{configuredCloudModelLabel} ☁️</option>
-								</optgroup>
-							{/if}
-							{#if downloadedModelsList.length === 0 && !(cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model)}
+							{#if downloadedModelsList.length === 0}
 								<option value="" disabled>No models available</option>
 							{/if}
 						</select>

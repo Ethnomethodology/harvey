@@ -22,10 +22,7 @@
             silentlyRefreshProjectData,
             loadTranscriptFile
 	} from '$lib/services/projectService.js';
-	import {
-		getDownloadedModels,
-		getCloudConfig
-	} from '$lib/services/configureActions.js';
+	import { getDownloadedModels } from '$lib/services/configureActions.js';
 	import {
 		languageOptions
 	} from '$lib/constants/transcriptionOptions.js';
@@ -92,34 +89,17 @@
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
-	let cloudConfig = null;
+	
 	let isLoadingTranscriptionConfig = true;
 
 async function loadTranscriptionConfigData() {
 		isLoadingTranscriptionConfig = true;
 		try {
-			const [localModelsResult, cloudConfigResult] = await Promise.allSettled([
-				getDownloadedModels(),
-				getCloudConfig()
-			]);
-
-			if (localModelsResult.status === 'fulfilled') {
-				downloadedModelsList = localModelsResult.value;
-			} else {
-				console.error("[ProjectView] Failed to load local models for modal", localModelsResult.reason);
-				downloadedModelsList = [];
-			}
-
-			if (cloudConfigResult.status === 'fulfilled') {
-				cloudConfig = cloudConfigResult.value;
-			} else {
-				console.error("[ProjectView] Failed to load cloud config for modal", cloudConfigResult.reason);
-				cloudConfig = null;
-			}
+			const localModelsResult = await getDownloadedModels();
+			downloadedModelsList = localModelsResult;
 		} catch (e) {
 			console.error("[ProjectView] Error during transcription configuration loading for modal:", e);
 			downloadedModelsList = [];
-			cloudConfig = null;
 		} finally {
 			isLoadingTranscriptionConfig = false;
 		}
@@ -890,7 +870,7 @@ async function onConfirmTranscriptionStart(event) {
         speakers={$transcriptStore.speakers}
         jobId={$transcriptStore.transcriptionJobId}
 		downloadedModelsList={downloadedModelsList}
-		cloudConfig={cloudConfig}
+		
 		languageOptions={languageOptions}
 		initialDiarizationEnabled={$transcriptStore.diarizationEnabledForNextJob}
         on:confirmStart={onConfirmTranscriptionStart}

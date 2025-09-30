@@ -9,7 +9,7 @@
 
 	// --- Service Imports ---
 	import { requestTranscription } from '$lib/services/projectService.js';
-	import { getDownloadedModels, getCloudConfig, exportTranscript } from '$lib/services/configureActions.js';
+	import { getDownloadedModels, exportTranscript } from '$lib/services/configureActions.js';
 
 	// --- Tauri Imports ---
 	import { message } from '@tauri-apps/plugin-dialog';
@@ -20,13 +20,13 @@
 	import ExportModal from '../modals/ExportModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
 	import { activeLayout, leftPanelVisible } from '$lib/stores/layoutStore.js';
-	import { languageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
 	let downloadedModelsList = [];
-	let cloudConfig = null;
+	
 	let isLoadingModels = true;
 	let isManageModalOpen = false;
 	let isSpeakersModalOpen = false;
@@ -44,27 +44,13 @@
 	// --- Load Configuration ---
 	async function loadConfiguration() {
         isLoadingModels = true;
-        cloudConfig = null;
         try {
-            const [localModelsResult, cloudConfigResult] = await Promise.allSettled([ getDownloadedModels(), getCloudConfig() ]);
-            if (localModelsResult.status === 'fulfilled') {
-                downloadedModelsList = localModelsResult.value;
-                console.log("TopBar: Loaded local models:", downloadedModelsList);
-            } else {
-                console.error("TopBar: Failed to load local models", localModelsResult.reason);
-                downloadedModelsList = []; // Ensure it's an array on error
-            }
-            if (cloudConfigResult.status === 'fulfilled') {
-                cloudConfig = cloudConfigResult.value;
-                console.log("TopBar: Loaded cloud config:", cloudConfig);
-            } else {
-                console.error("TopBar: Failed to load cloud config", cloudConfigResult.reason);
-                cloudConfig = null; // Ensure it's null on error
-            }
+            const localModelsResult = await getDownloadedModels();
+            downloadedModelsList = localModelsResult;
+            console.log("TopBar: Loaded local models:", downloadedModelsList);
         } catch (e) {
             console.error("TopBar: Error during configuration loading:", e);
             downloadedModelsList = [];
-            cloudConfig = null;
         } finally {
             isLoadingModels = false;
             validateSelectedModel();
@@ -75,9 +61,6 @@
             // Set default model if none selected
             if (!currentTranscriptState.selectedModelName) {
                 let defaultModel = downloadedModelsList[0]?.name; // Try first local model
-                if (!defaultModel && cloudConfig?.consent && cloudConfig?.model) {
-                    defaultModel = cloudConfig.model; // Try configured cloud model
-                }
                 if (defaultModel) {
                     console.log(`[TopBar] No model selected, setting default: ${defaultModel}`);
                     setSelectedModel(defaultModel);
@@ -101,7 +84,7 @@
 
 
 	// --- Validate Selected Model ---
-	function validateSelectedModel() { const currentSelectedModel = $transcriptStore.selectedModelName; if (!currentSelectedModel) return; let isModelValid = false; if (downloadedModelsList.some(m => m.name === currentSelectedModel)) { isModelValid = true; } else if ( cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model && cloudConfig.model === currentSelectedModel ) { isModelValid = true; } if (!isModelValid) { console.warn(`TopBar: Previously selected model "${currentSelectedModel}" no longer valid. Resetting selection.`); setSelectedModel(null); } }
+	
 
 	// --- Lifecycle ---
 	onMount(async () => { await loadConfiguration(); });

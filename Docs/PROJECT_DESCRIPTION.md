@@ -1,7 +1,7 @@
 # Project Harvey 1.0: Module Breakdown
 
 ## Harvey 1.0: An Overview
-Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Project Harvey 1.0 is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using local AI models, editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
 
 Harvey 1.0 is designed with privacy as a priority; core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring their data remains on their device. It is an application built by researchers, for researchers.
 
@@ -22,9 +22,7 @@ Harvey 1.0 is designed with privacy as a priority; core AI functionalities like 
 ## Key Features
 
 *   **Comprehensive Project Management**: Create, open, import, and manage multimedia research projects using `.harvey` project files.
-*   **Media Transcription (Dual Mode)**:
-    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing, ensuring data privacy as models run locally after a one-time download.
-    *   **Cloud-Powered**: Leverage cloud-based transcription services (e.g., Google Gemini) for high-accuracy transcription with an internet connection.
+*   **Media Transcription**:
 *   **Interactive Transcript Editor**: Edit and refine transcripts with a rich-text editor (Lexical-based) linked to media playback, including timestamp adjustment and speaker labeling.
 *   **Versatile Document Handling**:
     *   **Rich Text Documents**: Create and edit data and documents with formatting, tables, and lists.
@@ -32,7 +30,7 @@ Harvey 1.0 is designed with privacy as a priority; core AI functionalities like 
     *   **Table Viewing**: Import and view CSV and XLSX files with interactive features like sorting and filtering.
     *   **Image Handling & Annotation**: Import, view (using OpenSeadragon), and annotate (using Annotorious) various image formats. Annotations can be saved and reloaded, managed by the backend `image_handler.rs`.
 *   **Asset Management**: Organize various project assets including media files, transcripts, documents, images, and tables within a structured project environment.
-*   **Configurable Settings**: Customize application behavior, including transcription model selection, API key management for cloud services, download locations, and UI themes (light/dark/system) via `config.xml`.
+*   **Configurable Settings**: Customize application behavior, including transcription model selection, download locations, and UI themes (light/dark/system) via `config.xml`.
 *   **Cross-Platform**: Designed to run on Windows, macOS, and Linux.
 *   **Data Export**: Export transcripts to common formats (e.g., DOCX).
 *   **Background Processing**: Handles intensive tasks like model downloads and transcriptions in the background with progress tracking and cancellation support.
@@ -49,7 +47,7 @@ User interactions in the SvelteKit frontend typically trigger functions within U
     *   **`project.harvey` (XML)**: Each project has a root XML file (e.g., `my_project.harvey`). This file defines the project's name, structure, and metadata about its associated files and assets (media, documents, tables, images, imported transcripts, etc.). It acts as the primary manifest for the project.
     *   *(Self-correction: The original README used `project.xml` in some places, and the term "project XML" was used generically. It's now clarified that `.harvey` is the specific project manifest file extension, containing XML data. This file is central to defining project structure and assets.)*
 *   **Application-Wide Configuration**:
-    *   **`config.xml` (User Configuration Directory)**: Stores global application settings, such as recent project paths, download locations for AI models, cloud API keys, and theme preferences. This file is typically located in the user's application configuration directory (e.g., `~/.config/harvey_de_sitter/config.xml` on Linux, or platform-equivalent paths on Windows/macOS).
+    *   **`config.xml` (User Configuration Directory)**: Stores global application settings, such as recent project paths, download locations for AI models, and theme preferences. This file is typically located in the user's application configuration directory (e.g., `~/.config/harvey_de_sitter/config.xml` on Linux, or platform-equivalent paths on Windows/macOS).
 *   **Annotations Data**:
     *   **`harvey_annotations.sqlite` (User Configuration Directory)**: An SQLite database used to store detailed annotations for various document types (e.g., PDFs, images). This approach keeps annotation data separate from the main project file, allowing for efficient management of potentially complex annotation information. Annotations are linked to specific documents via their file paths and a `document_type` identifier.
 *   **Project Assets**:
@@ -66,16 +64,16 @@ This document provides a detailed breakdown of the SvelteKit frontend components
 * **Frontend Components**:
     * `WelcomeScreen.svelte`: Main entry point for project management and application configuration.
     * `ProjectList.svelte` & `ProjectItem.svelte`: Display the list of recent projects.
-    * `Configure.svelte`: UI for application settings (download locations, API keys, models, theme).
+    * `Configure.svelte`: UI for application settings (download locations, models, theme).
     * `RenameModal.svelte`: Modal for renaming projects.
     * `actions.js`: Contains client-side logic for invoking backend commands related to this section.
 * **Functionality**:
     * Manages the creation, opening, renaming, listing, importing, and deletion of transcription projects.
-    * Handles global application configuration, including download paths for transcription models, cloud API (Gemini) keys, theme preferences, and management of downloaded models.
+    * Handles global application configuration, including download paths for transcription models, theme preferences, and management of downloaded models.
 * **Associated Backend (`src-tauri/src/welcome/`)**:
     * `commands.rs`:
         * Project actions: `load_recent_projects`, `create_project`, `rename_project`, `remove_project_from_list`, `open_project`, `import_project`, `delete_project`, `locate_in_finder`.
-        * Configuration: `ensure_directory`, `save_download_location`, `get_download_location`, `get_downloaded_models`, `delete_model`, `download_model_command`, `cancel_download_command`, `change_download_location_and_move_models`, `get_cloud_config`, `save_cloud_config`, `get_theme_preference`, `set_theme_preference`.
+        * Configuration: `ensure_directory`, `save_download_location`, `get_download_location`, `get_downloaded_models`, `delete_model`, `download_model_command`, `cancel_download_command`, `change_download_location_and_move_models`,  `get_theme_preference`, `set_theme_preference`.
     * `config.rs`: Handles the reading and writing of the global `config.xml` file which stores recent projects and settings.
 
 ---
@@ -133,7 +131,7 @@ This is the main multi-tab interface for working within a project.
     * `SpeakersModal.svelte`: `projectview/transcription_commands.rs` (`save_speaker_config`).
     * `TranscribeConfirmModal.svelte`:
         * Local Transcription: `projectview/local_handler/transcription.rs` (`run_transcription`, `cancel_transcription`).
-        * Cloud Transcription: `projectview/cloud_handler/cloud_transcribe.rs` (`run_cloud_transcription`, `cancel_cloud_transcription`).
+        
     * Other modals primarily manage frontend state or simple confirmations.
 
 ---
@@ -245,7 +243,7 @@ This section handles transcripts generated *within* Harvey from audio/video medi
     * `RichTextPreview.svelte`'s "Convert Media Transcript to Document" feature would invoke commands in `projectview/document_commands.rs` to create a new Lexical JSON document in the `Documents/` folder.
     * Transcription and Diarization (initiated from this view):
         * Local: `projectview/local_handler/transcription.rs` (`run_transcription`, `cancel_transcription`), also uses `local_handler/transcription.rs` for FFmpeg and diarize-cli sidecar operations.
-        * Cloud: `projectview/cloud_handler/cloud_transcribe.rs` (`run_cloud_transcription`, `cancel_cloud_transcription`).
+        
 
 ---
 
@@ -255,7 +253,7 @@ This section outlines key JavaScript/TypeScript modules that provide core fronte
 
 * **Frontend Components/Modules**:
     * `services/projectService.js`: This service is the **primary communication bridge** between the SvelteKit frontend components and the Rust backend. It encapsulates almost all `invoke` calls to Tauri's backend command handlers. Its critical role is to abstract these backend interactions for the UI components, managing the flow of data and responses for a wide range of application functionalities. This includes, but is not limited to, project creation/loading, media import, initiating transcription requests, document saving/loading, and handling PDF/image annotation operations. It essentially centralizes the frontend's side of the frontend-backend contract.
-    * `services/configureActions.js`: Contains functions for managing application configuration (models, API keys, themes, download location) and initiating actions like transcript export.
+    * `services/configureActions.js`: Contains functions for managing application configuration (models, themes, download location) and initiating actions like transcript export.
     * `stores/projectStore.js`: Manages the core reactive state for the currently loaded project and general application UI. Its responsibilities include:
         *   **Project Configuration**: Storing the project name, XML path, and base directory.
         *   **File System Representation**: Holding the hierarchical list of project files and assets (`files`, `documentFiles`, `tableFiles`, `imageFiles`, `importedTranscriptFiles`, `documentMetadataFiles`).

@@ -151,8 +151,7 @@ pub fn run() {
             welcome::commands::download_model_command,
             welcome::commands::cancel_download_command,
             welcome::commands::change_download_location_and_move_models,
-            welcome::commands::get_cloud_config,
-            welcome::commands::save_cloud_config,
+            
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
 
@@ -233,8 +232,7 @@ pub fn run() {
             projectview::local_handler::transcription::run_transcription,
             // projectview::local_handler::transcription::cancel_transcription, // Moved
             projectview::transcription_commands::cancel_transcription, // New location
-            projectview::cloud_handler::cloud_transcribe::run_cloud_transcription,
-            projectview::cloud_handler::cloud_transcribe::cancel_cloud_transcription,
+            
 
             // --- Project view TABLE commands ---
             projectview::table_handler::import_table_file,
