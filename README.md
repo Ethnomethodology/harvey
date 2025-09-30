@@ -1,30 +1,41 @@
 # Harvey
 
-## Overview/Core Purpose
+## Overview
 
-Harvey is a comprehensive desktop application designed for researchers, journalists, and individuals who work with multimedia content. The application is particularly aimed at academic and qualitative researchers. It provides a robust suite of tools for managing projects, transcribing audio and video files using both local AI models and cloud-based services (e.g., Google Gemini), editing transcripts with a feature-rich text editor, and handling various related documents and media such as PDFs, text files, images, and tables. The application aims to streamline the workflow of analyzing qualitative data by integrating these functionalities into a cohesive, cross-platform experience (Windows, macOS, Linux) built with Tauri and Rust for performance and reliability.
+Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment:
 
-Harvey is designed with privacy as a priority. Core AI functionalities like transcription and diarization run locally on the user's computer. Users download the necessary AI models once and can then use them repeatedly offline, ensuring data remains on their device.
+* **Transcribe** audio and video with local AI models.
+* **Translate** transcripts into English.
+* **Edit** and **annotate** transcripts, documents, PDFs, and images.
+* **Manage** all your project files in one place.
 
-It's an application built by researchers, for researchers.
+Harvey is named in honor of Sociologist [**Harvey Sacks**](https://emcawiki.net/bibtex/browser.php?author=Harvey+Sacks&bib=emca.bib) (1935-1975), whose foundational work revolutionized social research methods.
+
+### Privacy First
+
+Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run **100% locally** on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.
+
+> It's an application built *by researchers, for researchers*.
 
 ## Key Features
 
-*   **Comprehensive Project Management**: Create, open, import, and manage multimedia research projects using `.harvey` project files.
-*   **Media Transcription (Dual Mode)**:
-    *   **Local AI**: Perform transcription and diarization using downloaded speech-to-text models (e.g., Whisper variants) for offline processing, ensuring data privacy.
-    *   **Cloud-Powered**: Leverage cloud-based transcription services (e.g., Google Gemini) for high-accuracy transcription with an internet connection.
-*   **Interactive Transcript Editor**: Edit and refine transcripts with a rich-text editor (Lexical-based) linked to media playback, including timestamp adjustment and speaker labeling.
-*   **Versatile Document Handling**:
-    *   **Rich Text Documents**: Create and edit notes and documents with formatting, tables, and lists.
-    *   **PDF Viewing & Annotation**: Open and view PDF documents, with robust text-based annotation capabilities.
-    *   **Table Viewing**: Import and view CSV and XLSX files with interactive features.
-    *   **Image Handling & Annotation**: Import, view (OpenSeadragon), and annotate (Annotorious) various image formats.
-*   **Asset Management**: Organize various project assets including media files, transcripts, documents, images, and tables.
-*   **Configurable Settings**: Customize application behavior, including transcription model selection, API key management, and UI themes.
-*   **Cross-Platform**: Runs on Windows, macOS, and Linux.
-*   **Data Export**: Export transcripts to common formats (e.g., DOCX).
-*   **Background Processing**: Handles intensive tasks like model downloads and transcriptions in the background.
+* **Offline AI Processing**:
+    * **Transcription & Diarization**: Use state-of-the-art speech-to-text models (e.g., OpenAI's Whisper) locally for complete data privacy.
+    * **Translation**: Translate generated transcripts to English using local AI models.
+* **Interactive Transcript Editor**:
+    * Rich-text editor linked directly to media playback.
+    * Adjust timestamps and manage speaker labels with ease.
+* **Comprehensive Data Management**:
+    * **Documents**: Create, edit, and annotate rich-text documents and field notes.
+    * **PDFs**: View and annotate PDF documents with robust text-based tools.
+    * **Images**: Import, view, and annotate images.
+    * **Tables**: View and edit CSV and XLSX files.
+* **Project & Asset Organization**:
+    * Manage all your media files, documents, and transcripts across multiple projects.
+* **User-Friendly & Customizable**:
+    * **Cross-Platform**: Works seamlessly on Windows, macOS, and Linux.
+    * **Configurable**: Customize transcription models, application themes, and more.
+    * **Data Export**: Export transcripts to common formats like DOCX and CSV.
 
 ## Contributing to Harvey
 
@@ -33,9 +44,9 @@ We warmly welcome contributions to Project Harvey from everyone in the open-sour
 Project Harvey is particularly interested in fostering a collaborative environment that embraces innovative coding paradigms. We encourage contributions from users of "vibe coding" and "agentic coding" platforms (such as those being explored with Google Jules, for example). We see these approaches as exciting ways to build software:
 
 *   **Vibe Coding**: This is about setting the general direction or 'vibe' for a feature. You might have a clear outcome in mind but perhaps not all the technical steps. AI tools can help you flesh out the specifics, and you refine the code iteratively. It's a partnership where you guide the AI to achieve your vision.
-*   **Agentic Coding**: Here, the AI acts more like an autonomous agent. It can take on more complex tasks, almost like a junior developer, capable of planning and executing coding steps with a degree of independence based on your higher-level goals.
+*   **Agentic Coding**: Here, the AI acts more like an autonomous agent. It can take on more complex tasks, capable of planning and executing coding steps with a degree of independence based on your higher-level goals.
 
-From its inception, Project Harvey has been significantly developed using AI tools, including Gemini, Google AI Studio, and explorations with Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
+From its inception, Project Harvey has been significantly developed using AI tools, including Gemini, Google AI Studio, and Google Jules. We believe this AI-assisted approach can make development more accessible and efficient, and we encourage contributors to explore and adopt similar methods.
 
 We are always keen to hear from our users and contributors about:
 
