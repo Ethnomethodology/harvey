@@ -1133,3 +1133,10 @@ export function setTranslateToEnglish(value) {
 export function setDiarizationPreference(value) {
     transcriptStore.update(ts => ({ ...ts, diarizationEnabledForNextJob: !!value }));
 }
+
+export function setSpeakerConfig(newSpeakerConfig) {
+    transcriptStore.update((ts) => ({
+        ...ts,
+        speakers: newSpeakerConfig,
+    }));
+}
