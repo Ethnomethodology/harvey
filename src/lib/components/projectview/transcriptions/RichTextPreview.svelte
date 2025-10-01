@@ -696,19 +696,19 @@
                     {#if $activeLayout === 'Layout1'}
                     <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 text-gray-500 dark:text-d-gray-400 select-none text-sm py-1" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
                         {#if showTimestampCol}
-                        <div class="flex-shrink-0 text-gray-600 dark:text-d-gray-400 text-left leading-tight text-sm py-1" style="flex-basis: 15%; max-width: 15%;">
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;">
                             <span class="select-none" title="Start time">{seg.startTime}</span>
-                            <span class="text-gray-400 dark:text-d-gray-500 select-none block sm:inline">-</span>
+                            <span class="dark:text-white">-</span>
                             <span class="select-none" title="End time">{seg.endTime}</span>
                         </div>
                         {/if}
                         {#if showSpeakerCol}
-                        <div class="flex-shrink-0 text-gray-800 dark:text-d-gray-200 font-semibold text-sm py-1 truncate" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
                             {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}
                         </div>
                         {/if}
@@ -729,7 +729,7 @@
                         <div class="flex items-center gap-x-2">
                             {#if showSegmentNumberCol && $activeLayout !== 'Layout3'}
                             <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;">
-                                <span class="truncate text-gray-500 dark:text-d-gray-400 select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                                <span class="truncate text-gray-500 dark:text-white select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                                     {String(seg.segmentIndex + 1)}
                                 </span>
                             </div>
@@ -840,7 +840,19 @@
     .dark .btn-switch-active {
         @apply bg-blue-600 text-white;
     }
-    .btn-switch-inactive {
-        @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-d-gray-700 dark:text-d-gray-200 dark:hover:bg-d-gray-600;
-    }
-</style>
+    	.btn-switch-inactive {
+            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-d-gray-700 dark:text-d-gray-200 dark:hover:bg-d-gray-600;
+        }
+    
+    	:global(.dark .speech-rich-text) {
+    		color: white;
+    	}
+    
+    		:global(.dark .speech-rich-text [style*="background-color"]) {
+    			color: black;
+    		}
+    	
+    		:global(.dark .speech-rich-text [style*="background-color: transparent"]) {
+    			color: white;
+    		}
+    	</style>
