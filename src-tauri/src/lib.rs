@@ -76,6 +76,7 @@ pub fn run() {
                  }
             }
             #[cfg(target_os = "macos")]
+            {
             
 
             // log::info!("[SETUP] Preparing to set up global shortcuts..."); // Removed
@@ -128,6 +129,7 @@ pub fn run() {
             // log::info!("[SETUP] F8 shortcut registered."); // Removed
             app_mut_ref.global_shortcut().register(f9_shortcut)?;
             log::info!("Global media shortcuts (F7, F8, F9) registration process completed successfully."); // Added concise summary
+            }
 
             Ok(())
          })
