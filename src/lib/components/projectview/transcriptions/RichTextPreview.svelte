@@ -739,15 +739,15 @@
                             </div>
                             {/if}
                             {#if showTimestampCol || $activeLayout === 'Layout3'}
-                            <div class="flex-1 text-gray-600 dark:text-d-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
+                            <div class="flex-1 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
                                 {#if $activeLayout === 'Layout3'}
-                                    <span class="select-none text-gray-600 dark:text-d-gray-400" title="Timestamp & Speaker">
+                                    <span class="select-none text-gray-600 dark:text-white" title="Timestamp & Speaker">
                                         {seg.startTime} – {seg.endTime}
                                         <span class="ml-1">{seg.speaker}</span>
                                     </span>
                                 {:else}
                                     <span class="select-none" title="Start time">{seg.startTime}</span>
-                                    <span class="text-gray-400 dark:text-d-gray-500 select-none">–</span>
+                                    <span class="text-gray-400 dark:text-white select-none">–</span>
                                     <span class="select-none" title="End time">{seg.endTime}</span>
                                 {/if}
                             </div>
