@@ -84,7 +84,7 @@
             {#each comments.filter(c => !c.parentId) as comment}
                 <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 relative group">
                     {#if editingCommentId === comment.id}
-                        <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-gray-600" rows="3"></textarea>
+                        <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-800 text-black dark:text-white border-gray-300 dark:border-border" rows="3"></textarea>
                         <div class="mt-2 flex justify-end gap-2">
                             <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
                             <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
@@ -99,7 +99,7 @@
                                     </svg>
                                 </button>
                                 {#if activeMenuId === comment.id}
-                                    <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                                    <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-border">
                                         {#if !comment.parentId}
                                         <button on:click={() => handleAction('reply', comment)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Reply</button>
                                         {/if}
@@ -116,7 +116,7 @@
                 {#each comments.filter(r => r.parentId === comment.id) as reply}
                     <div class="ml-8 p-3 rounded-lg bg-gray-200 dark:bg-gray-600 relative group">
                         {#if editingCommentId === reply.id}
-                            <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-600" rows="2"></textarea>
+                            <textarea bind:value={editingText} class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-border" rows="2"></textarea>
                             <div class="mt-2 flex justify-end gap-2">
                                 <button on:click={handleCancelEdit} class="px-3 py-1 rounded text-xs bg-gray-300 dark:bg-gray-500 hover:bg-gray-400 dark:hover:bg-gray-400">Cancel</button>
                                 <button on:click={handleSaveEdit} class="px-3 py-1 rounded text-xs bg-blue-600 text-white hover:bg-blue-700">Save</button>
@@ -131,7 +131,7 @@
                                         </svg>
                                     </button>
                                     {#if activeMenuId === reply.id}
-                                        <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                                        <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-border">
                                             <button on:click={() => handleAction('edit', reply)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Edit</button>
                                             <button on:click={() => handleAction('delete', reply)} class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">Delete</button>
                                         </div>
@@ -153,7 +153,7 @@
             {#if replyingToCommentId}
                 <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
                     Replying to:
-                    <blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-2 my-1 text-gray-500 italic truncate">
+                    <blockquote class="border-l-4 border-gray-300 dark:border-border pl-2 my-1 text-gray-500 italic truncate">
                         {replyingToCommentText}
                     </blockquote>
                     <button on:click={cancelReply} class="text-blue-500 hover:underline text-xs">(Cancel Reply)</button>
@@ -161,7 +161,7 @@
             {/if}
             <textarea
                 bind:value={newCommentText}
-                class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-gray-600"
+                class="w-full p-2 border rounded-md bg-white dark:bg-gray-700 text-black dark:text-white border-gray-300 dark:border-border"
                 placeholder={replyingToCommentId ? 'Add a reply...' : 'Add a comment...'}
                 rows="3"
             ></textarea>

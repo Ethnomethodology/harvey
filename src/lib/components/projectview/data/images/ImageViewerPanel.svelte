@@ -396,37 +396,34 @@
     <!-- Removed Annotorious CSS links -->
 </svelte:head>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 shadow overflow-hidden">
-    <div class="flex items-center justify-between px-1 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 text-xs">
-        <div id="image-annotation-toolbar-container" class="flex items-center h-9 border border-transparent">
+<div class="flex flex-col h-full w-full bg-white dark:bg-dark-bg-form-field shadow overflow-hidden">
+    <div class="flex items-center justify-between h-9 px-2 border-b border-gray-200 dark:border-dark-bg-tertiary bg-gray-100 dark:bg-surface-3">
+        <div id="image-annotation-toolbar-container" class="flex items-center space-x-2">
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'rectangle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'rectangle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'rectangle' ? null : 'rectangle')}
+                title="Draw Rectangle"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/>
                 </svg>
             </button>
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs ml-2
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'circle' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'circle'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'circle' ? null : 'circle')}
+                title="Draw Circle"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
                 </svg>
             </button>
             <button
-                class="inline-flex items-center justify-center px-2 py-1 border
-                       border-gray-300 dark:border-gray-600 text-xs ml-2
-                       focus:outline-none focus:ring-2 focus:ring-blue-500
-                       {activeDrawingTool === 'polygon' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+                class="ui-button-icon"
+                class:active={activeDrawingTool === 'polygon'}
                 on:click={() => activeDrawingTool = (activeDrawingTool === 'polygon' ? null : 'polygon')}
+                title="Draw Polygon"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <polygon 
@@ -442,9 +439,9 @@
 
     <div class="flex-grow overflow-hidden min-h-0 relative">
         {#if isLoading && !error}
-            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 z-10 bg-white/50 dark:bg-gray-800/50">Loading image viewer...</div>
+            <div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400 z-10 bg-white/50 dark:bg-d-gray-800/50">Loading image viewer...</div>
         {:else if error}
-            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-gray-800/80">{error}</div>
+            <div class="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 p-4 text-center z-10 bg-white/80 dark:bg-d-gray-800/80">{error}</div>
         {/if}
         <div bind:this={osdViewerElement} class="w-full h-full osd-viewer-container" class:opacity-0={isLoading || error}>
             <!-- SVG overlay for drawing and displaying annotations -->
@@ -573,7 +570,7 @@
         background-color: theme('colors.gray.300');
     }
     :global(html.dark) .osd-viewer-container {
-        background-color: theme('colors.gray.700');
+        background-color: theme('colors.dark-bg-form-field');
     }
     .opacity-0 { opacity: 0; }
 
@@ -600,5 +597,9 @@
 
     :global(.openseadragon-container div) {
         box-sizing: content-box;
+    }
+
+    button.active {
+        @apply bg-blue-500 text-white;
     }
 </style>

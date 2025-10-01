@@ -31,24 +31,24 @@
 </script>
 
 <div
-  class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+  class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
   data-tauri-drag-region
 >
-  <div class="flex items-center min-w-0">
-        <button
-            class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
-            title="Toggle Tags Panel"
-            on:click={() => dispatch('toggleLeftPanel')}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
-                <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
-            </svg>
-        </button>
+  <div class="flex items-center space-x-1.5 min-w-0">
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+            </button>
+        </div>
+        
       <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
   </div>
 
   <div class="flex items-center space-x-2 flex-shrink-0">
     <div class="flex-shrink-0">
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-accent-background-hover dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -57,10 +57,21 @@
 
 <style lang="postcss">
     .ui-button-icon-no-border {
-		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 disabled:hover:bg-transparent dark:disabled:hover:!bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
+    .ui-button-import {
+        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
+        @apply bg-transparent;
+        @apply text-gray-700 dark:text-white;
+        @apply border border-gray-300 dark:border-gray-600;
+        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:text-blue-500 dark:hover:text-blue-400;
+        @apply hover:border-blue-500 dark:hover:border-blue-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 dark:disabled:hover:!bg-transparent;
+    }
     .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+        @apply inline-flex items-center justify-center p-1.5 border border-transparent text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 disabled:hover:bg-transparent dark:disabled:hover:!bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
     }
     .ui-button-icon:disabled {
         @apply opacity-50 cursor-not-allowed;

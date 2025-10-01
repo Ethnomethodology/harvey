@@ -23,7 +23,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
-    import { leftPanelVisible } from '$lib/stores/layoutStore.js';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Added
     import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Added for horizontal waveform
@@ -59,10 +59,7 @@
     let leftPanelRef;
 
     // Reactive state for left panel visibility from store
-    let isLeftPanelVisible;
-    const unsubscribeLeftPanelVisible = leftPanelVisible.subscribe(value => {
-        isLeftPanelVisible = value;
-    });
+    
 
     let currentWaveformLayout; // Will be updated by store subscription
     const unsubscribeWaveformLayout = waveformLayoutStore.subscribe(value => {
@@ -71,24 +68,23 @@
     });
 
     onDestroy(() => {
-        if (unsubscribeLeftPanelVisible) unsubscribeLeftPanelVisible();
         if (unsubscribeWaveformLayout) unsubscribeWaveformLayout();
     });
 
     // Reactive statements for panel widths
     $: middlePanelWidthClass = (() => {
         if (currentWaveformLayout === 'vertical') {
-            return isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
         } else { // 'horizontal' or 'none'
-            return isLeftPanelVisible ? 'w-[42.5%]' : 'w-[50%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
         }
     })();
 
     $: rightPanelWidthClass = (() => {
         if (currentWaveformLayout === 'vertical') {
-            return isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
         } else { // 'horizontal' or 'none'
-            return isLeftPanelVisible ? 'w-[42.5%]' : 'w-[50%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
         }
     })();
 
@@ -329,9 +325,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
-    function toggleLeftPanel() {
-        leftPanelVisible.toggle();
-    }
+    
 
     // Handlers for UnsavedChangesModal
     async function handleModalSave() {
@@ -448,20 +442,12 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 </script>
 
 <div class="flex flex-col h-screen w-full overflow-hidden">
-    <TopBar
-        bind:this={topBarRef}
-        bind:editMode={panelEditModeActive}
-        on:requestTranscription={handleRequestTranscriptionEvent}
-        on:save={handleSaveTranscript}
-        on:toggleEditMode={handleToggleEditMode}
-        on:toggleLeftPanel={toggleLeftPanel}
-    />
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
-            {#if isLeftPanelVisible}
+            {#if !$panelStateStore.transcriptionPanelCollapsed}
                 <div
-                    class="w-[15%] h-full bg-white dark:bg-gray-800 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
+                    class="w-[15%] h-full bg-white dark:bg-surface-2 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                     transition:slide="{{ duration: 300, axis: 'x' }}"
                 >
                     <LeftPanel bind:this={leftPanelRef} on:requestopentab={forwardLeftPanelEvents} on:requestmediaselection={forwardLeftPanelEvents} on:requestLoadItem={handleRequestLoadItem} />
@@ -469,8 +455,8 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
             {/if}
 
             <!-- Middle Panel: MediaPlayer and EditableTranscript -->
-            <div class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-600">
-                <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-gray-800 flex flex-col">
+            <div class="{middlePanelWidthClass} h-full flex flex-col transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
+                <div class="{isMediaPlayerHidden ? '' : ($transcriptStore.englishSegments && $transcriptStore.englishSegments.length > 0 && $transcriptStore.originalSegments && $transcriptStore.originalSegments.length > 0 ? 'h-[calc(50%-1.75rem)]' : 'h-1/2')} bg-white dark:bg-surface-1 flex flex-col">
                     <MediaPlayer
                         bind:this={mediaPlayerRef}
                     bind:isTrimming={isMediaPlayerTrimming}
@@ -489,7 +475,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     on:trimModeCancelled={handleMediaPlayerTrimModeCancelled}
                 />
             </div>
-            <div class="flex-grow min-h-0 bg-white dark:bg-gray-800 overflow-y-auto border-t border-gray-300 dark:border-gray-600">
+            <div class="flex-grow min-h-0 bg-white dark:bg-surface-1 overflow-y-auto border-t border-gray-300 dark:border-border">
                  <EditableTranscript
                     bind:this={editableTranscriptRef}
                     bind:panelEditMode={panelEditModeActive}
@@ -504,7 +490,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
         <!-- Vertical Waveform Panel (Conditional) -->
         {#if currentWaveformLayout === 'vertical'}
-            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-gray-600">
+            <div bind:clientWidth={verticalWaveformWidthPx} class="w-[5%] h-full flex-shrink-0 transition-all duration-300 ease-in-out border-l border-gray-300 dark:border-border">
                 
                 {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                     <VerticalWaveform
@@ -516,11 +502,11 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                         on:navigate={handlePanelNavigate}
                     />
                 {:else if $transcriptStore.selectedMediaFile}
-                    <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 p-1">
+                    <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-d-gray-500 bg-white dark:bg-surface-1 p-1">
                         Waveform still loading...
                     </div>
                 {:else}
-                    <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 p-1">
+                    <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-d-gray-500 bg-white dark:bg-surface-1 p-1">
                         Select media.
                     </div>
                 {/if}
@@ -528,7 +514,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         {/if}
 
         <!-- Right Panel: RichTextPreview -->
-        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-gray-800 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-gray-600">
+        <div class="{rightPanelWidthClass} h-full bg-white dark:bg-surface-1 overflow-y-auto transition-all duration-300 ease-in-out flex flex-col border-l border-gray-300 dark:border-border">
              <RichTextPreview
                 bind:this={richTextPreviewRef}
                 bind:previewEditMode={panelEditModeActive}
@@ -546,7 +532,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
 
     <!-- Horizontal Waveform Panel (Conditional) -->
     {#if currentWaveformLayout === 'horizontal'}
-        <div style="height: {horizontalWaveformContainerHeightPx}px;" class="border-t border-gray-200 dark:border-gray-700">
+        <div style="height: {horizontalWaveformContainerHeightPx}px;" class="border-t border-gray-200 dark:border-border">
             
             {#if $transcriptStore.selectedMediaFile && ($transcriptStore.audioBuffer || $transcriptStore.audioBufferPeaks)}
                 <InteractiveWaveform
@@ -566,11 +552,11 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     on:segmentupdate={handleWaveformSegmentUpdate}
                 />
             {:else if $transcriptStore.selectedMediaFile}
-                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 p-1">
+                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-d-gray-500 bg-white dark:bg-surface-1 p-1">
                     Waveform still loading...
                 </div>
             {:else}
-                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 p-1">
+                <div class="flex items-center justify-center h-full text-xs text-gray-400 dark:text-d-gray-500 bg-white dark:bg-surface-1 p-1">
                     Select media to display waveform.
                 </div>
             {/if}

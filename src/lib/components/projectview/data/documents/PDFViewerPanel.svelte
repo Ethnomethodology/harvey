@@ -83,7 +83,7 @@ import { get } from 'svelte/store';
     `;
 
     const removeHighlightIconSVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-d-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
         </svg>
     `;
@@ -2404,12 +2404,12 @@ function updateHighlightOverlayColor(id, color) {
 
 </script>
 
-<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-gray-900 shadow overflow-hidden">
+<div class="pdf-viewer-panel-root prose prose-sm dark:prose-invert max-w-none flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-form-field shadow overflow-hidden">
 
-<div class="toolbar flex items-center flex-nowrap gap-x-0.5 border-b border-gray-300 dark:border-gray-600 p-1 flex-shrink-0 bg-white dark:bg-gray-800 shadow z-20">
+<div class="toolbar flex items-center flex-nowrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md z-20">
     <button class="mini-toolbar-button" on:click={goToPrevPage} title="Previous page" disabled={currentPageNum <= 1 || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd" /></svg></button>
-    <input type="number" class="mini-toolbar-input w-12 text-center mx-0.5" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
-    <span class="text-xs px-1 text-gray-600 dark:text-gray-400"> of {numPages || '?'} </span>
+    <input type="number" class="mini-toolbar-input w-12 text-center" bind:value={pageNumInput} min="1" max={numPages || 1} aria-label="Current page number" on:change={handlePageInputChange} on:blur={handlePageInputBlur} disabled={loading || !pdfDoc} />
+    <span class="text-xs px-1 text-gray-600 dark:text-d-gray-400"> of {numPages || '?'} </span>
     <button class="mini-toolbar-button" on:click={goToNextPage} title="Next page" disabled={currentPageNum >= numPages || loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" /></svg></button>
     <div class="separator"></div>
     <button class="mini-toolbar-button" on:click={zoomOut} title="Zoom out" disabled={loading || !pdfDoc}><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10Z" clip-rule="evenodd" /></svg></button>
@@ -2430,16 +2430,16 @@ function updateHighlightOverlayColor(id, color) {
             </svg>
         </button>
         {#if isZoomDropdownOpen}
-            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-y-auto max-h-60 py-1">
+            <div class="absolute top-full mt-1 left-0 z-30 w-48 bg-white dark:bg-surface-2 border border-gray-300 dark:border-border shadow-lg overflow-y-auto max-h-60 py-1">
                 {#each zoomOptions as option (option.value || option.label)}
                     {#if option.type === 'separator'}
-                        <div class="my-1 border-t border-gray-200 dark:border-gray-700"></div>
+                        <div class="my-1 border-t border-gray-200 dark:border-border"></div>
                     {:else}
                         <div
-                            class="px-3 py-1.5 text-xs flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
+                            class="px-3 py-1.5 text-xs flex justify-between items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700 focus:bg-gray-100 dark:focus:bg-d-gray-700 focus:outline-none"
                             class:font-semibold={String(currentScaleValue) === option.value}
                             class:bg-gray-200={String(currentScaleValue) === option.value}
-                            class:dark:bg-gray-600={String(currentScaleValue) === option.value}
+                            class:dark:bg-d-gray-600={String(currentScaleValue) === option.value}
                             on:click={() => selectZoomLevel(option.value)}
                             role="menuitemradio"
                             aria-checked={String(currentScaleValue) === option.value}
@@ -2468,7 +2468,7 @@ function updateHighlightOverlayColor(id, color) {
     <!-- New Quick Highlight UI -->
     <div class="quick-highlight-group inline-flex items-center" role="group">
         <button
-            class="mini-toolbar-button rounded-e-none border-r border-gray-300 dark:border-r-gray-600"
+            class="mini-toolbar-button rounded-e-none border-r border-gray-300 dark:border-r-d-gray-600"
             class:active={isQuickHighlightActive}
             title="Quick Highlight - {isQuickHighlightActive ? 'On' : 'Off'}"
             on:click={() => {
@@ -2502,10 +2502,10 @@ function updateHighlightOverlayColor(id, color) {
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
             {#if isNewHighlightDropdownOpen}
-            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden py-1">
+            <div class="absolute top-full mt-1 right-0 z-30 w-40 bg-white dark:bg-surface-2 border border-gray-300 dark:border-border shadow-lg overflow-hidden py-1">
                 {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                     <div
-                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                        class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
                         role="menuitem"
                         tabindex="-1"
                         on:click={() => {
@@ -2516,12 +2516,12 @@ function updateHighlightOverlayColor(id, color) {
                         }}
                         on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = opt.value; quickHighlightMode = 'highlight'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
                     >
-                        <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={opt.value}></span>
+                        <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={opt.value}></span>
                         <span>{opt.label}</span>
                     </div>
                 {/each}
                 <div
-                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-d-gray-700"
                     role="menuitem"
                     tabindex="-1"
                     on:click={() => {
@@ -2532,7 +2532,7 @@ function updateHighlightOverlayColor(id, color) {
                     }}
                     on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { quickHighlightColor = 'rgba(255, 255, 255, 1)'; quickHighlightMode = 'remove'; isNewHighlightDropdownOpen = false; isQuickHighlightActive = true; e.preventDefault();}}}
                 >
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500" style:background-color={'rgba(255, 255, 255, 1)'}></span>
                     <span>None</span>
                 </div>
             </div>
@@ -2575,7 +2575,7 @@ function updateHighlightOverlayColor(id, color) {
     {/if}
 </div>
 
-<div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-gray-700 relative pdf-viewer-wrapper">
+<div bind:this={pdfViewerWrapperElement} class="flex-grow overflow-hidden bg-gray-200 dark:bg-dark-bg-primary relative pdf-viewer-wrapper">
     {#if error}
         <div class="absolute inset-0 flex items-center justify-center p-4 z-40 pointer-events-none"><div class="text-red-700 dark:text-red-300 p-4 bg-red-100 dark:bg-red-900/80 rounded border border-red-400 dark:border-red-600 max-w-lg text-center shadow-lg"><p class="font-semibold mb-2">Error:</p><p class="text-sm break-words">{@html error}</p></div></div>
     {:else if loading || isLoadingInitialAnnotations}
@@ -2590,7 +2590,7 @@ function updateHighlightOverlayColor(id, color) {
     {/if}
 
     {#if showSelectionToolbar}
-        <div class="floating-toolbar absolute bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-500 shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
+        <div class="floating-toolbar absolute bg-white dark:bg-surface-2 border border-gray-400 dark:border-border shadow-lg px-1 py-0.5 flex items-center space-x-0.5 transition-opacity duration-100"
             bind:this={selectionToolbarElement}
             style:top="{selectionToolbarTop}px"
             style:left="{selectionToolbarLeft}px"
@@ -2600,11 +2600,11 @@ function updateHighlightOverlayColor(id, color) {
             on:mouseenter={handleToolbarMouseEnter}
             on:mouseleave={handleToolbarMouseLeave} >
 
-            {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
+            {#each highlightColors as color}
                 <button class="floating-toolbar-button"
                     title="{toolbarMode === 'click' ? `Change highlight to ${opt.label}` : `Highlight selection ${opt.label}`}"
                     on:click|stopPropagation={() => { handleHighlightAction(opt.value); }}>
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 block" style:background-color={opt.value}></span>
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500 block" style:background-color={opt.value}></span>
                 </button>
             {/each}
             <div class="separator !mx-0.5"></div>
@@ -2614,7 +2614,7 @@ function updateHighlightOverlayColor(id, color) {
                 {#if toolbarMode === 'click'}
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="w-4 h-4 text-red-600 dark:text-red-400" viewBox="0 0 16 16"> <path d="M5.5 5.5A.5.5 0 0 1 6 5h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5m2.5 3a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5"/> <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/> </svg>
                 {:else}
-                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-gray-500 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></span>
+                    <span class="w-4 h-4 rounded-full border border-gray-400 dark:border-d-gray-500 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500 dark:text-d-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg></span>
                 {/if}
             </button>
         </div>
@@ -2632,21 +2632,48 @@ function updateHighlightOverlayColor(id, color) {
     .toolbar button.mini-toolbar-button,
     .toolbar input.mini-toolbar-input,
     .toolbar select.mini-toolbar-select {
-        @apply px-1.5 py-0.5 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-xs text-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 inline-flex items-center mr-0.5 leading-tight;
-        min-height: 24px; /* Explicit min-height from Lexical */
-        /* height: 28px; */ /* Keeping existing height for now, can be adjusted if needed */
-        /* vertical-align: middle; replaced by inline-flex items-center */
+      @apply p-1.5 rounded inline-flex items-center justify-center
+             focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+             dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out
+             text-xs disabled:opacity-50 disabled:cursor-not-allowed;
+      color: var(--ui-icon-color);
+      border: 1px solid var(--ui-select-border);
+      background-color: transparent;
+      margin-right: 2px;
+      line-height: 1.2;
+      min-height: 24px;
+    }
+
+    .toolbar button.mini-toolbar-button:hover:not(:disabled),
+    .toolbar input.mini-toolbar-input:hover:not(:disabled),
+    .toolbar select.mini-toolbar-select:hover:not(:disabled) {
+        background-color: var(--ui-icon-hover-bg);
+        border-color: var(--ui-select-border);
+    }
+
+    html.dark .toolbar button.mini-toolbar-button,
+    html.dark .toolbar input.mini-toolbar-input,
+    html.dark .toolbar select.mini-toolbar-select {
+        color: var(--color-text-primary);
+        border: 1px solid var(--color-border);
+        background-color: transparent;
+    }
+
+    html.dark .toolbar button.mini-toolbar-button:hover:not(:disabled),
+    html.dark .toolbar input.mini-toolbar-input:hover:not(:disabled),
+    html.dark .toolbar select.mini-toolbar-select:hover:not(:disabled) {
+        background-color: var(--color-border);
+        border-color: var(--color-border);
+    }
+
+    .toolbar button.mini-toolbar-button.active {
+      @apply bg-gray-300 dark:bg-d-gray-500;
     }
 
     /* Ensure specific button instances that are part of a group don't have excessive right margin */
     .quick-highlight-group .mini-toolbar-button {
         @apply mr-0; /* Reset margin for grouped buttons */
     }
-    /* Add a specific active style for generic buttons if needed, separate from quick-highlight */
-    .toolbar button.mini-toolbar-button.active-generic { /* Example for a generic active state */
-        @apply bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600 text-blue-800 dark:text-blue-200;
-    }
-
 
     .toolbar select.mini-toolbar-select {
         @apply appearance-none pr-8; /* pr-8 is for arrow, keep it */
@@ -2659,13 +2686,10 @@ function updateHighlightOverlayColor(id, color) {
     :global(html.dark) .toolbar select.mini-toolbar-select {
         background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='%23ccc' viewBox='0 0 20 20'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.94l3.71-4.71a.75.75 0 111.08 1.04l-4.25 5a.75.75 0 01-1.08 0l-4.25-5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/></svg>");
     }
-
-    /* .toolbar input.mini-toolbar-input { padding-top: 0; padding-bottom: 0; } */ /* py-0.5 from base handles this */
-    .toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1 inline-block align-middle; } /* Changed mx-1.5 to mx-1 */
     .mini-toolbar-input[type=number]::-webkit-inner-spin-button, .mini-toolbar-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mini-toolbar-input[type=number] { -moz-appearance: textfield; }
     .pdf-viewer-wrapper { position: relative; flex-grow: 1; overflow: hidden; }
-    .pdfViewerContainer { @apply p-4 bg-gray-300 dark:bg-gray-700; height: 100%; width: 100%; overflow: auto; position: absolute; inset: 0; -webkit-overflow-scrolling: touch; }
+    .pdfViewerContainer { @apply p-4 bg-gray-300 dark:bg-dark-bg-form-field; height: 100%; width: 100%; overflow: auto; position: absolute; inset: 0; -webkit-overflow-scrolling: touch; }
 
     :global(#viewer .page) { position: relative !important; z-index: 1; }
     :global(#viewer .canvasWrapper) { z-index: 1; }
@@ -2687,8 +2711,8 @@ function updateHighlightOverlayColor(id, color) {
 }
 
     .floating-toolbar { align-items: center; gap: 2px; padding: 2px 4px; z-index: 50; }
-    .floating-toolbar-button { @apply p-1 border border-transparent hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
-    .floating-toolbar .separator { @apply w-px h-4 bg-gray-300 dark:bg-gray-500 mx-1; }
+    .floating-toolbar-button { @apply p-1 border border-transparent hover:bg-gray-200 dark:hover:bg-d-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent; line-height: 1; cursor: pointer; }
 
     .w-3 { width: 0.75rem; } .h-3 { height: 0.75rem; } .w-4 { width: 1rem; } .h-4 { height: 1rem; } .w-12 { width: 3rem; } .w-24 { width: 6rem; } .w-28 { width: 7rem; }
+
 </style>

@@ -86,7 +86,7 @@ import {
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
-import { getCloudConfig } from './configureActions.js';
+
 
 /**
  * Updates the name and description for a specific tag.

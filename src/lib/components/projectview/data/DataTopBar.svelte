@@ -16,6 +16,7 @@
     import { createEventDispatcher, onMount, onDestroy } from 'svelte';
     import { listen } from '@tauri-apps/api/event';
     import LiveTranscribeModelModal from '../modals/LiveTranscribeModelModal.svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
     const dispatch = createEventDispatcher();
     export let tableViewRef = null;
@@ -490,19 +491,19 @@
   </script>
   
   <div
-    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+    class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
     data-tauri-drag-region
     on:requestTranscriptionTabWithMediaAndDialog
   >
-    <div class="flex items-center min-w-0"> <!-- Added min-w-0 for truncate to work -->
-        <button
-            class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
-            title="Toggle File Explorer Panel"
-            on:click={() => dispatch('toggleLeftPanel')}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
-                <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
-            </svg>
-        </button>
+    <div class="flex items-center space-x-1.5 min-w-0"> <!-- Added min-w-0 for truncate to work -->
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+            </button>
+        </div>
+        
         <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
         {#if $activeMediaFile}
         <button class="ui-button-icon flex items-center ml-2 space-x-0.5 hover-scale-effect"
@@ -534,16 +535,13 @@
     <div class="flex items-center space-x-2 flex-shrink-0">
         <!-- Transcript Dropdown -->
         {#if $activeMediaFile}
-            <select
-                class="ui-select"
-                on:change={(e) => switchTranscriptInDataTab(e.currentTarget.value)}
-            >
-                {#each $displayedTranscripts as transcript}
-                    <option value={transcript.path} selected={$project.activeTranscriptPathInDataTab === transcript.path}>
-                        {transcript.displayLabel}
-                    </option>
-                {/each}
-            </select>
+            <Dropdown
+                containerClasses="w-48"
+                options={$displayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
+                value={$project.activeTranscriptPathInDataTab}
+                on:change={(e) => switchTranscriptInDataTab(e.detail)}
+                placeholder="Select Transcript"
+            />
             <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click="{() => isExportModalOpen = true}" title="Export Transcript" >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"> <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /> </svg>
                 <span class="text-xs">Export</span>
@@ -571,7 +569,7 @@
                 bind:checked={autosaveEnabled}
                 on:change={handleToggleChange}
               >
-              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
+              <div class="w-11 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-[24px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-border peer-checked:bg-gray-400 dark:peer-checked:bg-gray-500"></div>
               <span
                 class="absolute top-0 bottom-0 flex items-center text-xs font-medium text-gray-700 dark:text-gray-300 pointer-events-none"
                 class:left-1={autosaveEnabled}
@@ -594,13 +592,13 @@
         {#if $isMediaEditorOpen}
         <button
             on:click="{() => openLayoutSettingsModal()}"
-            class="p-1.5 rounded-full border-0 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
+            class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
             title="Change Transcript View Layout"
         >
             {@html LAYOUT_ICON_SVG}
         </button>
         {/if}
-		 		 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-white text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
+				 <button on:click="{() => cycleThemePreference()}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}"> <!-- Adjusted padding --> <!-- Adjusted padding -->
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -609,7 +607,7 @@
   
   <style lang="postcss">
     .ui-button-icon-no-border {
-		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 disabled:hover:bg-transparent dark:disabled:hover:!bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
 	}
 
     .blinking-red-text {
@@ -622,63 +620,21 @@
         100% { color: #f87171; }
     }
 
-    .ui-button-icon {
-        @apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 hover:text-blue-500 focus:outline-none focus:border-blue-500 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-400 disabled:dark:border-gray-600 disabled:hover:bg-white disabled:hover:border-gray-400 disabled:hover:text-gray-700 disabled:dark:hover:bg-blue-700 disabled:dark:hover:border-gray-600 disabled:dark:hover:text-gray-300;
-        /* Removed specific px-2, py-1, text-xs variants as they are not present in the target component\`'s style for ui-button-icon base */
-    }
-    .ui-button-icon:disabled {
-        @apply opacity-50 cursor-not-allowed;
-    }
-    .ui-button-icon svg {
-        @apply w-4 h-4 flex-shrink-0; /* Matched to transcriptions/TopBar.svelte */
-    }
 
-    .ui-select {
-        @apply block w-auto border border-gray-200 dark:border-gray-600 px-3 py-1 bg-white dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:border-blue-500 max-w-[150px] sm:max-w-[200px] md:max-w-[250px] truncate appearance-none pr-8;
-    }
 
-    /* Removed #theme-toggle-button svg and w-5,h-5,w-6,h-6,w-8,h-8 as they are not used by the active theme button or are general utility classes not specific to this component\'s immediate needs for the theme button */
-  
-    .blinking-red {
-        animation: blink 1s infinite;
+    .ui-button-import {
+        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
+        @apply bg-transparent;
+        @apply text-gray-700 dark:text-white;
+        @apply border border-gray-300 dark:border-border;
+        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:border-blue-500 dark:hover:border-blue-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+        @apply disabled:hover:bg-transparent disabled:hover:border-gray-300 dark:disabled:hover:border-border dark:disabled:hover:!bg-transparent;
     }
-
-    @keyframes blink {
-        0% { background-color: #f87171; }
-        50% { background-color: #ef4444; }
-        100% { background-color: #f87171; }
-    }
-
-    :global(html.dark) .dark\:bg-gray-800 {
-         background-color: #1f2937 !important;
-    }
-    :global(html.dark) .dark\:border-gray-700 {
-         border-color: #374151 !important;
-    }
-     :global(html.dark) .dark\:bg-gray-700 {
-         background-color: #374151 !important;
-     }
-     :global(html.dark) .dark\:hover\:bg-gray-600 {
-          background-color: #4b5563 !important;
-     }
-     :global(html.dark) .dark\:text-gray-300 {
-         color: #d1d5db !important;
-     }
-     :global(html.dark) .dark\:text-gray-200 {
-          color: #e5e7eb !important;
-     }
-     :global(html.dark) .dark\:border-gray-600 {
-          border-color: #4b5563 !important;
-     }
-     :global(html.dark) .dark\:bg-green-700 {
-         background-color: #047857 !important;
-     }
-     :global(html.dark) .dark\:text-green-100 {
-         color: #d1fae5 !important;
-     }
   
     .hover-scale-effect {
-        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+        /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */
         will-change: transform;
         backface-visibility: hidden;
         transform: translateZ(0);

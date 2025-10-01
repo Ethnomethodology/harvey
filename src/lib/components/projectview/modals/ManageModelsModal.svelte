@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/ManageModelsModal.svelte -->
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
-	import Configure from '$lib/components/welcome/Configure.svelte'; // Import the configure component
+	import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte'; // Import the configure component
 
 	export let showModal = false;
 
@@ -58,6 +58,8 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="manage-models-title"
+		tabindex="-1"
+		on:keydown={handleKeydown}
 	>
 		<div
 			class="bg-white rounded-lg shadow-xl w-full max-w-3xl m-4 flex flex-col max-h-[80vh]"
@@ -91,7 +93,7 @@
 			<!-- Modal Body (Contains Configure Component) -->
 			<div class="flex-grow overflow-y-auto">
 				<!-- Bind the isBusy state from Configure -->
-				<Configure bind:isBusy={isConfigureBusy} />
+				<ConfigurationView bind:isBusy={isConfigureBusy} />
 			</div>
 
 			<!-- Modal Footer -->

@@ -9,7 +9,7 @@
 
 	// --- Service Imports ---
 	import { requestTranscription } from '$lib/services/projectService.js';
-	import { getDownloadedModels, getCloudConfig, exportTranscript } from '$lib/services/configureActions.js';
+	import { getDownloadedModels, exportTranscript } from '$lib/services/configureActions.js';
 
 	// --- Tauri Imports ---
 	import { message } from '@tauri-apps/plugin-dialog';
@@ -19,13 +19,14 @@
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
-	import { activeLayout, leftPanelVisible } from '$lib/stores/layoutStore.js';
-	import { languageOptions, getCloudModelLabel } from '$lib/constants/transcriptionOptions.js';
+	import { activeLayout } from '$lib/stores/layoutStore.js';
+	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	// --- Local state ---
 	const dispatch = createEventDispatcher();
 	let downloadedModelsList = [];
-	let cloudConfig = null;
+	
 	let isLoadingModels = true;
 	let isManageModalOpen = false;
 	let isSpeakersModalOpen = false;
@@ -43,30 +44,16 @@
 	// --- Load Configuration ---
 	async function loadConfiguration() {
         isLoadingModels = true;
-        cloudConfig = null;
         try {
-            const [localModelsResult, cloudConfigResult] = await Promise.allSettled([ getDownloadedModels(), getCloudConfig() ]);
-            if (localModelsResult.status === 'fulfilled') {
-                downloadedModelsList = localModelsResult.value;
-                console.log("TopBar: Loaded local models:", downloadedModelsList);
-            } else {
-                console.error("TopBar: Failed to load local models", localModelsResult.reason);
-                downloadedModelsList = []; // Ensure it's an array on error
-            }
-            if (cloudConfigResult.status === 'fulfilled') {
-                cloudConfig = cloudConfigResult.value;
-                console.log("TopBar: Loaded cloud config:", cloudConfig);
-            } else {
-                console.error("TopBar: Failed to load cloud config", cloudConfigResult.reason);
-                cloudConfig = null; // Ensure it's null on error
-            }
+            const localModelsResult = await getDownloadedModels();
+            downloadedModelsList = localModelsResult;
+            console.log("TopBar: Loaded local models:", downloadedModelsList);
         } catch (e) {
             console.error("TopBar: Error during configuration loading:", e);
             downloadedModelsList = [];
-            cloudConfig = null;
         } finally {
             isLoadingModels = false;
-            validateSelectedModel();
+            // validateSelectedModel();
 
             // --- ADDED: Set Default Model and Language ---
             const currentTranscriptState = get(transcriptStore); // Get current state non-reactively
@@ -74,9 +61,6 @@
             // Set default model if none selected
             if (!currentTranscriptState.selectedModelName) {
                 let defaultModel = downloadedModelsList[0]?.name; // Try first local model
-                if (!defaultModel && cloudConfig?.consent && cloudConfig?.model) {
-                    defaultModel = cloudConfig.model; // Try configured cloud model
-                }
                 if (defaultModel) {
                     console.log(`[TopBar] No model selected, setting default: ${defaultModel}`);
                     setSelectedModel(defaultModel);
@@ -100,7 +84,7 @@
 
 
 	// --- Validate Selected Model ---
-	function validateSelectedModel() { const currentSelectedModel = $transcriptStore.selectedModelName; if (!currentSelectedModel) return; let isModelValid = false; if (downloadedModelsList.some(m => m.name === currentSelectedModel)) { isModelValid = true; } else if ( cloudConfig?.consent && cloudConfig.api_key && cloudConfig.model && cloudConfig.model === currentSelectedModel ) { isModelValid = true; } if (!isModelValid) { console.warn(`TopBar: Previously selected model "${currentSelectedModel}" no longer valid. Resetting selection.`); setSelectedModel(null); } }
+	
 
 	// --- Lifecycle ---
 	onMount(async () => { await loadConfiguration(); });
@@ -197,8 +181,7 @@
  console.log("TopBar: Confirmed speakers:", count, names, secondNames);
  updateSpeakerConfig(count, names, secondNames);
  }
-	function handleMediaSelectionChange(event) {
-		const selectedPath = event.target.value;
+	function handleMediaSelectionChange(selectedPath) {
 		if (!selectedPath) { return; }
 		const currentDropdownList = mediaFilesForDropdown;
 		const selectedFileEntry = currentDropdownList.find(f => f.path === selectedPath);
@@ -271,55 +254,45 @@
 		// Modal closes itself on selection
 	}
 
-	function toggleLeftPanel() {
-		leftPanelVisible.toggle();
-	}
+	
 
 </script>
 
 <!-- Top Bar Structure -->
 <div
-	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+	class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
 	data-tauri-drag-region
 >
 	<!-- Left Controls: Toggle Panel, Media Select, Model Select, Language Select, Speakers, Transcribe -->
 	<div class="flex items-center space-x-1.5">
-		<!-- Toggle Left Panel Button -->
-		<button
-			class="ui-button-icon-no-border p-1.5 hover-scale-effect"
-			title="Toggle File Explorer Panel"
-			on:click={toggleLeftPanel}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
-				<path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
-			 </svg>
-		</button>
+        <div class="h-10 flex items-center justify-center flex-shrink-0">
+            <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+            </button>
+        </div>
+		
 
 		<!-- Media Selection Dropdown -->
-		<select
-			class="ui-select flex-shrink-0 w-40"
-			on:change="{handleMediaSelectionChange}"
-			bind:value="{selectedMediaValue}"
-			disabled="{$project.isLoading || mediaFilesForDropdown.length === 0}"
-			title="{mediaFilesForDropdown.length > 0 ? 'Select Media File' : ($project.isLoading ? 'Loading project...' : 'No media files found')}"
-		>
-			<option value="" disabled>
-				{#if $project.isLoading}Loading...{:else if mediaFilesForDropdown.length === 0}No Media{:else}Select Media{/if}
-			</option>
-			{#each mediaFilesForDropdown as mediaFile (mediaFile.path)}
-				<option value="{mediaFile.path}">{mediaFile.name}</option>
-			{/each}
-		</select>
+		<Dropdown
+			containerClasses="w-40"
+			options={mediaFilesForDropdown.map(f => ({ value: f.path, label: f.name }))}
+			bind:value={selectedMediaValue}
+			on:change={(e) => handleMediaSelectionChange(e.detail)}
+			placeholder={$project.isLoading ? 'Loading...' : (mediaFilesForDropdown.length === 0 ? 'No Media' : 'Select Media')}
+			disabled={$project.isLoading || mediaFilesForDropdown.length === 0}
+		/>
 
 		<!-- Transcription Mode -->
-		<select
-			class="ui-select flex-shrink-0 w-45"
-			bind:value="{transcriptionMode}"
-			title="Select Transcription Mode"
-		>
-			<option value="automatic">Automatic Transcription</option>
-			<option value="manual">Manual Transcription</option>
-		</select>
+		<Dropdown
+			containerClasses="w-48"
+			options={[
+				{ value: 'automatic', label: 'Automatic Transcription' },
+				{ value: 'manual', label: 'Manual Transcription' },
+			]}
+			bind:value={transcriptionMode}
+		/>
 
 		<!-- Speakers Button -->
 		<div class="relative inline-flex items-center" title="Configure number of speakers and their names">
@@ -367,14 +340,14 @@
 		<!-- Layout Settings Button -->
 		<button
 			on:click="{openLayoutSettingsModal}"
-			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105"
+			class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
 			title="Change Transcript View Layout"
 		>
 			{@html LAYOUT_ICON_SVG}
 		</button>
 
 		<!-- Theme Toggle Button -->
-		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-blue-100 hover:text-blue-500 dark:hover:bg-blue-700 dark:hover:text-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors transition-transform hover:scale-105" title="{themeTitle}">
+		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
 	</div>
@@ -398,12 +371,19 @@
 
 <style lang="postcss">
 	/* Shared button style */
-	.ui-button-icon {
-		@apply inline-flex items-center justify-center p-1.5 border border-gray-200 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 dark:hover:bg-blue-700 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-	}
 	.ui-button-icon-no-border {
-		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-blue-100 hover:text-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+		@apply inline-flex items-center justify-center p-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-white bg-transparent hover:bg-blue-100 dark:hover:bg-blue-700 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:disabled:hover:!bg-transparent;
 	}
+	.ui-button-import {
+        @apply w-8 h-8 rounded-full flex items-center justify-center transition-colors;
+        @apply bg-transparent;
+        @apply text-gray-700 dark:text-white;
+        @apply border border-gray-300 dark:border-gray-600;
+        @apply hover:bg-blue-100 dark:hover:bg-blue-700;
+        @apply hover:border-blue-500 dark:hover:border-blue-500;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+        @apply dark:disabled:hover:!bg-transparent;
+    }
 	.ui-button-icon:disabled {
 		@apply opacity-50 cursor-not-allowed;
 	}
@@ -448,7 +428,7 @@
 		line-height: 0.8rem; /* ~12.8px */
 	}
     .hover-scale-effect {
-        @apply transition-transform hover:scale-105 disabled:hover:scale-100;
+        /* @apply transition-transform hover:scale-105 disabled:hover:scale-100; */
         will-change: transform;
         backface-visibility: hidden;
         transform: translateZ(0);

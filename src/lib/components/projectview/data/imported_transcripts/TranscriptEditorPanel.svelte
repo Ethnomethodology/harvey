@@ -567,9 +567,9 @@
 </script>
 
 <!-- Template Section (Unchanged) -->
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800 overflow-hidden imported-transcript-editor-panel">
+<div class="flex flex-col h-full w-full bg-white dark:bg-surface-2 overflow-hidden imported-transcript-editor-panel">
     {#if isLoading && selectedPath === itemPath}
-        <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300">Loading transcript...</div>
+        <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300">Loading transcript...</div>
     {:else if errorMessage && selectedPath === itemPath}
          <div class="flex-grow flex flex-col items-center justify-center text-red-500 p-4 text-center">
              <p class="font-semibold">Error Loading Transcript</p>
@@ -577,7 +577,7 @@
              <p class="text-xs mt-2">The original file could not be loaded or converted correctly.</p>
          </div>
     {:else if !selectedPath}
-         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300">No transcript selected or loaded.</div>
+         <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300">No transcript selected or loaded.</div>
     {:else}
         <div class="flex-grow min-h-0 overflow-hidden">
             {#key selectedPath}

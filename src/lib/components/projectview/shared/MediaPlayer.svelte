@@ -1088,7 +1088,7 @@
 
 </script>
 
-<div class="p-1 flex flex-col bg-gray-50 dark:bg-gray-800 h-full">
+<div class="p-1 flex flex-col bg-gray-50 dark:bg-surface-2 h-full">
 	<div
 		class="w-full flex-grow min-h-0 bg-black relative cursor-pointer"
 		class:hidden={isVideoMinimized}
@@ -1138,7 +1138,7 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400">
+		<div class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-d-gray-400">
 				<span>No media selected or media failed to load</span>
 			</div>
 		{/if}
@@ -1146,7 +1146,7 @@
 
 	<!-- Custom Controls Bar -->
 	<div
-		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-gray-700 rounded-b-md border border-gray-300 dark:border-gray-600 shadow-md"
+		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
 		style="position: relative; z-index: 105;"
 	>
 		<!-- Timeline with Tooltip -->
@@ -1154,7 +1154,7 @@
 			<input
 				type="range"
 				bind:this={progressBarElement}
-				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 video-progress"
+				class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-text-secondary video-progress"
 				min="0"
 				max={displayDuration > 0 ? displayDuration : 0}
 				bind:value={displayTime}
@@ -1163,6 +1163,7 @@
 				on:mouseleave={handleMouseLeaveProgressBar}
 				disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
 				aria-label="Video progress bar"
+				style="--progress: {displayDuration > 0 ? displayTime / displayDuration : 0};"
 			/>
 			<span
 				bind:this={progressTooltipElement}
@@ -1177,7 +1178,7 @@
 			<!-- Rewind Button -->
 			<button
 				on:click={rewind10s}
-				class="btn-control"
+				class="ui-button-icon"
 				title="Rewind 10s"
 				aria-label="Rewind 10 seconds"
 				disabled={!localMediaUrl || isLoadingMedia}
@@ -1188,7 +1189,7 @@
 			<!-- Play/Pause Button -->
 			<button
 				on:click={handleTogglePlay}
-				class="btn-control"
+				class="ui-button-icon"
 				disabled={!localMediaUrl || isLoadingMedia}
 				aria-label={displayIsPlaying ? 'Pause' : 'Play'}
 			>
@@ -1208,7 +1209,7 @@
 			<!-- Forward Button -->
 			<button
 				on:click={forward10s}
-				class="btn-control"
+				class="ui-button-icon"
 				title="Forward 10s"
 				aria-label="Forward 10 seconds"
 				disabled={!localMediaUrl || isLoadingMedia || !localDuration}
@@ -1217,14 +1218,14 @@
 			</button>
 
 			<!-- Time Display -->
-			<span class="text-xs font-mono text-gray-600 dark:text-gray-400 tabular-nums whitespace-nowrap">
+			<span class="text-xs font-mono text-gray-600 dark:text-d-gray-400 tabular-nums whitespace-nowrap">
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
 
 			<!-- Loop Button (if showLoopPauseButton is true) -->
 			{#if showLoopPauseButton}
 			<button
-				class="btn-control inline-flex items-center space-x-1 text-sm"
+				class="ui-button-icon inline-flex items-center space-x-1 text-sm"
 				on:click={toggleLoop}
 				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
 			>
@@ -1255,7 +1256,7 @@
 			<button
 				bind:this={playbackSpeedButtonElement}
 				on:click={togglePlaybackSpeedMenu}
-				class="btn-control text-xs min-w-[48px]"
+				class="ui-button-icon text-xs min-w-[48px]"
 				title="Playback Speed"
 				aria-label="Select playback speed"
 				aria-haspopup="true"
@@ -1268,7 +1269,7 @@
 			<!-- Screenshot Button -->
 			<button
 				on:click={handleScreenshot}
-				class="btn-control"
+				class="ui-button-icon"
 				title="Take screenshot"
 				aria-label="Take screenshot of current video frame"
 				disabled={!localMediaUrl || isLoadingMedia || !projectId}
@@ -1280,7 +1281,7 @@
 			{#if showDataTrimButton}
 				<button
 					on:click={handleDataTrimClick}
-					class="btn-control"
+					class="ui-button-icon"
 					title="Trim this media"
 					disabled={isLoadingMedia || !isMediaReadyForProcessing}
 				>
@@ -1294,7 +1295,7 @@
 					<button on:click={confirmTrim} class="btn-action-trim text-xs" title="Confirm Trim">Trim</button>
 					<button on:click={cancelTrimMode} class="btn-action-cancel text-xs" title="Cancel Trim">Cancel</button>
 				{:else}
-					<button on:click={enterTrimMode} class="btn-control" title="Trim Media" disabled={isTrimDisabled}>
+					<button on:click={enterTrimMode} class="ui-button-icon" title="Trim Media" disabled={isTrimDisabled}>
 						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
 							<path stroke-linecap="round" stroke-linejoin="round" d="m7.848 8.25 1.536.887M7.848 8.25a3 3 0 1 1-5.196-3 3 3 0 0 1 5.196 3Zm1.536.887a2.165 2.165 0 0 1 1.083 1.839c.005.351.054.695.14 1.024M9.384 9.137l2.077 1.199M7.848 15.75l1.536-.887m-1.536.887a3 3 0 1 1-5.196 3 3 3 0 0 1 5.196-3Zm1.536-.887a2.165 2.165 0 0 0 1.083-1.838c.005-.352.054-.695.14-1.025m-1.223 2.863 2.077-1.199m0-3.328a4.323 4.323 0 0 1 2.068-1.379l5.325-1.628a4.5 4.5 0 0 1 2.48-.044l.803.215-7.794 4.5m-2.882-1.664A4.33 4.33 0 0 0 10.607 12m3.736 0 7.794 4.5-.802.215a4.5 4.5 0 0 1-2.48-.043l-5.326-1.629a4.324 4.324 0 0 1-2.068-1.379M14.343 12l-2.882 1.664" />
 						</svg>
@@ -1310,7 +1311,7 @@
 			<button
 				bind:this={ccButtonElement}
 				on:click={handleSelectSubtitles}
-				class="btn-control"
+				class="ui-button-icon"
 				title="Select Subtitles"
 				aria-label="Select Subtitles"
 				disabled={!localMediaUrl || isLoadingMedia}
@@ -1322,7 +1323,7 @@
 			<!-- Mute Button -->
 			<button
 				on:click={toggleMute}
-				class="btn-control"
+				class="ui-button-icon"
 				disabled={!localMediaUrl || isLoadingMedia}
 				aria-label={isMuted ? 'Unmute' : 'Mute'}
 			>
@@ -1332,7 +1333,7 @@
 			<!-- Volume Slider -->
 			<input
 				type="range"
-				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 volume-slider"
+				class="w-16 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-text-secondary volume-slider"
 				min="0"
 				max="1"
 				step="0.05"
@@ -1340,12 +1341,13 @@
 				on:input={handleVolumeChange}
 				disabled={!localMediaUrl || isLoadingMedia || !videoElement}
 				aria-label="Volume control"
+				style="--progress: {currentVolume};"
 			/>
 
 			<!-- Minimize/Maximize Video Button -->
 			<button
 				on:click={toggleMinimizeVideo}
-				class="btn-control"
+				class="ui-button-icon"
 				title={isVideoMinimized ? 'Show Media' : 'Hide Media'}
 				aria-label={isVideoMinimized ? 'Show Media' : 'Hide Media'}
 				disabled={!localMediaUrl || isLoadingMedia}
@@ -1363,13 +1365,13 @@
 {#if showSubtitleMenu}
 	<div
 		bind:this={subtitleMenuRef}
-		class="subtitle-menu fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[150px]"
+		class="subtitle-menu fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[150px]"
 		style="left: {subtitleMenuPosition.x}px; top: {subtitleMenuPosition.y}px;"
 	>
 		{#if !(availableSubtitles.length === 1 && availableSubtitles[0].isInfo)}
 			<button
 				on:click={() => selectSubtitleTrack(null)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={!activeSubtitleTrackPath}
 				class:dark:bg-blue-800={!activeSubtitleTrackPath}
 			>
@@ -1379,10 +1381,10 @@
 		{#each availableSubtitles as sub (sub.path || sub.name)}
 			<button
 				on:click={() => sub.isInfo ? null : selectSubtitleTrack(sub)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={!sub.isInfo && activeSubtitleTrackPath === sub.path}
 				class:dark:bg-blue-800={!sub.isInfo && activeSubtitleTrackPath === sub.path}
-				class:text-gray-500={sub.isInfo} class:dark:text-gray-400={sub.isInfo} class:italic={sub.isInfo}
+				class:text-gray-500={sub.isInfo} class:dark:text-d-gray-400={sub.isInfo} class:italic={sub.isInfo}
 				class:cursor-default={sub.isInfo}
 				disabled={sub.isInfo}
 			>
@@ -1395,14 +1397,14 @@
 {#if showPlaybackSpeedMenu}
 	<div
 		bind:this={playbackSpeedMenuRef}
-		class="fixed z-50 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg py-1 text-xs min-w-[80px]"
+		class="fixed z-50 bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border rounded-md shadow-lg py-1 text-xs min-w-[80px]"
 		style="left: {playbackSpeedMenuPosition.x}px; top: {playbackSpeedMenuPosition.y}px;"
 		role="menu"
 	>
 		{#each playbackRates as rate (rate)}
 			<button
 				on:click={() => selectPlaybackRate(rate)}
-				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+				class="block w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-d-gray-600 text-gray-800 dark:text-d-gray-200"
 				class:bg-blue-100={selectedPlaybackRate === rate}
 				class:dark:bg-blue-800={selectedPlaybackRate === rate}
 				role="menuitemradio"
@@ -1417,99 +1419,7 @@
 	as fullscreen functionality is removed.
 	*/
 
-	.btn-control {
-		padding: 0.35rem; /* Slightly smaller padding for denser controls */
-		background: #e5e7eb; /* bg-gray-200 */
-		color: #1f2937; /* text-gray-800 */
-		border: 1px solid #d1d5db; /* border-gray-300 */
-		border-radius: 0.25rem; /* rounded-sm for a bit tighter look */
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		transition: background-color 0.15s ease-in-out;
-	}
-	.dark .btn-control {
-		background: #4b5563; /* dark:bg-gray-600 */
-		border-color: #6b7280; /* dark:border-gray-500 */
-		color: #f3f4f6; /* dark:text-gray-100 */
-	}
-	.btn-control:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.btn-control:hover:not(:disabled) {
-		background: #d1d5db; /* hover:bg-gray-300 */
-	}
-	.dark .btn-control:hover:not(:disabled) {
-		background: #6b7280; /* dark:hover:bg-gray-500 */
-	}
-	.btn-control svg { /* Default icon size */
-		width: 1.15em;
-		height: 1.15em;
-	}
-	.size-5 { /* For specific icons if needed, like trim */
-        width: 1.25rem;
-        height: 1.25rem;
-    }
-
-
-	.btn-action {
-		padding: 0.35rem 0.75rem; /* Slightly smaller */
-		background: #3b82f6; /* bg-blue-500 */
-		color: white;
-		border: none;
-		border-radius: 0.25rem; /* rounded-sm */
-		cursor: pointer;
-		font-size: 0.875rem; /* text-sm */
-		font-weight: 500; /* font-medium */
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem; /* space-x-1 equivalent */
-		transition: background-color 0.15s;
-	}
-	.btn-action:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		background: #9ca3af; /* bg-gray-400 */
-	}
-	.btn-action:hover:not(:disabled) {
-		background: #2563eb; /* hover:bg-blue-600 */
-	}
-	.dark .btn-action:disabled {
-		background: #6b7280; /* dark:bg-gray-500 */
-		opacity: 0.5;
-	}
-
-	.btn-action-trim {
-		padding: 0.35rem 0.75rem;
-		background: #10b981; /* bg-emerald-500 */
-		color: white;
-		border: none;
-		border-radius: 0.25rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition: background-color 0.15s;
-	}
-	.btn-action-trim:hover {
-		background: #059669; /* hover:bg-emerald-600 */
-	}
-	.btn-action-cancel {
-		padding: 0.35rem 0.75rem;
-		background: #ef4444; /* bg-red-500 */
-		color: white;
-		border: none;
-		border-radius: 0.25rem;
-		cursor: pointer;
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition: background-color 0.15s;
-	}
-	.btn-action-cancel:hover {
-		background: #dc2626; /* hover:bg-red-600 */
-	}
+	
 
 	.animate-pulse {
 		animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -1548,7 +1458,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .video-progress {
-		background: #4b5563; /* dark:bg-gray-600 */
+		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
 	}
 	.video-progress:hover {
 		opacity: 1;
@@ -1564,8 +1474,8 @@
 		border: 2px solid white; /* Optional: add a border to the thumb */
 	}
 	.dark .video-progress::-webkit-slider-thumb {
-		background: #2563eb; /* dark theme color */
-		border-color: #374151; /* dark border for thumb */
+		background: var(--color-accent-primary);
+		border-color: transparent;
 	}
 	.video-progress::-moz-range-thumb {
 		width: 0.875rem; /* 14px */
@@ -1576,8 +1486,8 @@
 		border: 1px solid white;
 	}
 	.dark .video-progress::-moz-range-thumb {
-		background: #2563eb;
-		border-color: #374151;
+		background: var(--color-accent-primary);
+		border-color: transparent;
 	}
 
 	.volume-slider {
@@ -1592,7 +1502,7 @@
 		transition: opacity .15s ease-in-out;
 	}
 	.dark .volume-slider {
-		background: #4b5563; /* dark:bg-gray-600 */
+		background: linear-gradient(to right, var(--color-text-primary) calc(var(--progress, 0) * 100%), var(--color-text-secondary) calc(var(--progress, 0) * 100%));
 	}
 	.volume-slider:hover {
 		opacity: 1;
@@ -1602,8 +1512,8 @@
 		height: 0.875rem; /* 14px */
 	}
 	.dark .volume-slider::-webkit-slider-thumb {
-		background: #2563eb; /* dark theme color */
-		border-color: #374151; /* dark border for thumb */
+		background: var(--color-accent-primary);
+		border-color: transparent;
 	}
 	.volume-slider::-moz-range-thumb {
 		width: 0.75rem; /* 12px */
@@ -1614,7 +1524,7 @@
 		border: 1px solid white;
 	}
 	.dark .volume-slider::-moz-range-thumb {
-		background: #2563eb;
-		border-color: #374151;
+		background: var(--color-accent-primary);
+		border-color: transparent;
 	}
 </style>

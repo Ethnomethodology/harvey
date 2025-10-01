@@ -7,6 +7,7 @@
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js'; // Added (though not directly used for column widths here, good for reference)
     import { confirm } from '@tauri-apps/plugin-dialog';
+    import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 
     // --- Lexical Imports --- (Keep as is)
@@ -54,11 +55,13 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let localStart = '';
     let localEnd = '';
     let localSpeaker = '';
-    let showSpeakerDropdown = false;
-    let speakerDropdownRef;
-    function handleClickOutsideSpeaker(event) { if (showSpeakerDropdown && speakerDropdownRef && !speakerDropdownRef.contains(event.target)) { showSpeakerDropdown = false; } }
-    function toggleSpeakerDropdown() { if (editEnabled) showSpeakerDropdown = !showSpeakerDropdown; }
-    function selectSpeaker(name) { localSpeaker = name; handleSpeakerChange(); showSpeakerDropdown = false; }
+    function handleSpeakerSelectionChange(event) {
+        const newSpeaker = event.detail;
+        if (newSpeaker !== localSpeaker) {
+            localSpeaker = newSpeaker;
+            handleSpeakerChange();
+        }
+    }
     let lexicalEditorInstance;
     let currentEditorJson = null;
     let initialJsonForEditor = null;
@@ -214,7 +217,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     /* --- Lifecycle & Store Subscription --- */
     let unsubscribeTranscriptStore;
     onMount(() => {
-        isMounted = true; window.addEventListener('click', handleClickOutsideSpeaker); window.addEventListener('keydown', handleSegmentNavShortcut, true);
+        isMounted = true; window.addEventListener('keydown', handleSegmentNavShortcut, true);
         unsubscribeTranscriptStore = transcriptStore.subscribe((ts) => {
             if (!isMounted) return;
 
@@ -299,7 +302,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     });
     onDestroy(() => {
         isMounted = false;
-        window.removeEventListener('click', handleClickOutsideSpeaker);
         window.removeEventListener('keydown', handleSegmentNavShortcut, true);
         unsubscribeTranscriptStore && unsubscribeTranscriptStore();
         cleanupPlainTextConverter();
@@ -455,6 +457,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     let textEditorContainerStyle = 'flex-grow'; // Default
     let isLayout1Active = false; // Flag for Layout1 specific structure
 
+    $: speakerOptions = [
+        { value: 'Unknown', label: 'Unknown' },
+        ...($transcriptStore.speakers.names.map(name => ({ value: name, label: name })))
+    ];
+
     $: {
         const layoutKey = $activeLayout;
         isLayout1Active = layoutKey === 'Layout1';
@@ -489,7 +496,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-gray-800 rounded-md shadow-sm overflow-hidden editable-transcript-controls">
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls"
+     class:read-mode="{!editEnabled}"
+     class:edit-mode="{editEnabled}">
     {#if !isEditorVisible}
         {#if segments.length === 0} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> No transcript loaded or transcript is empty. </div>
         {:else} <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-400 p-4"> Select a segment to start editing. </div> {/if}
@@ -497,7 +506,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         <div class="flex flex-col flex-grow min-h-0 h-full">
             <div class="relative py-1 flex-shrink-0 mb-4">
                 <button on:click="{handleEditSaveClick}"
-                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                        class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white'
                         title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
                         aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
@@ -513,24 +522,22 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 {#if isLayout1Active}
                     <!-- Layout 1: Single Row Table -->
                     <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-<div class='flex-shrink-0 text-left py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+<div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
 </div>
                         <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
                             <input id='startTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
                             <input id='endTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5' bind:this="{speakerDropdownRef}">
-                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                            </button>
-                            {#if showSpeakerDropdown}
-                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
-                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
-                            </ul>
-                            {/if}
+                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5'>
+                            <Dropdown
+                                options={speakerOptions}
+                                bind:value={localSpeaker}
+                                on:change={handleSpeakerSelectionChange}
+                                disabled={!editEnabled}
+                                placeholder="Select Speaker"
+                                containerClasses="w-full"
+                            />
                         </div>
                         <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
@@ -546,24 +553,22 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                        <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
                             <input id='startTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <span class='text-gray-400 dark:text-white'>–</span>
                             <input id='endTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
-                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
-                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                            </button>
-                            {#if showSpeakerDropdown}
-                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
-                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
-                            </ul>
-                            {/if}
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
+                            <Dropdown
+                                options={speakerOptions}
+                                bind:value={localSpeaker}
+                                on:change={handleSpeakerSelectionChange}
+                                disabled={!editEnabled}
+                                placeholder="Select Speaker"
+                                containerClasses="w-full"
+                            />
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
@@ -579,22 +584,20 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                          <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                        <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
                             <input id='startTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <span class='text-gray-400 dark:text-white'>–</span>
                             <input id='endTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
-                        <div class='relative {speakerContainerStyle}' bind:this="{speakerDropdownRef}">
-                            <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                            </button>
-                            {#if showSpeakerDropdown}
-                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
-                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
-                            </ul>
-                            {/if}
+                        <div class='relative {speakerContainerStyle}'>
+                            <Dropdown
+                                options={speakerOptions}
+                                bind:value={localSpeaker}
+                                on:change={handleSpeakerSelectionChange}
+                                disabled={!editEnabled}
+                                placeholder="Select Speaker"
+                                containerClasses="w-full"
+                            />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
@@ -612,24 +615,22 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                        <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
                             <input id='startTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <span class='text-gray-400 dark:text-white'>–</span>
                             <input id='endTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
-                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
-                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                            </button>
-                            {#if showSpeakerDropdown}
-                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
-                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
-                            </ul>
-                            {/if}
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
+                             <Dropdown
+                                options={speakerOptions}
+                                bind:value={localSpeaker}
+                                on:change={handleSpeakerSelectionChange}
+                                disabled={!editEnabled}
+                                placeholder="Select Speaker"
+                                containerClasses="w-full"
+                            />
                         </div>
                         <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
                             {#if currentIndex !== -1 && initialJsonForEditor}
@@ -645,22 +646,20 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
-                        <div class='flex-shrink-0 text-gray-600 dark:text-gray-400 text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
+                        <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
                             <input id='startTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <span class='text-gray-400 dark:text-gray-500'>–</span>
+                            <span class='text-gray-400 dark:text-white'>–</span>
                             <input id='endTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}" bind:this="{speakerDropdownRef}">
-                             <button type='button' class='input-field w-full truncate whitespace-nowrap font-semibold flex items-center justify-between' on:click="{toggleSpeakerDropdown}" title="{localSpeaker}" disabled="{!editEnabled}" aria-label='Select Speaker'>
-                                <span class='truncate'>{localSpeaker.length > 13 ? localSpeaker.slice(0, 13) + '...' : localSpeaker}</span>
-                                <svg xmlns='http://www.w3.org/2000/svg' class='w-4 h-4 ml-1' fill='none' viewBox='0 0 24 24' stroke='currentColor' stroke-width='2'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' /></svg>
-                            </button>
-                            {#if showSpeakerDropdown}
-                            <ul class='absolute z-10 mt-1 w-full max-h-40 overflow-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg'>
-                                <li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker('Unknown')}" title='Unknown'>Unknown</li>
-                                {#each $transcriptStore.speakers.names as name (name)}<li class='px-2 py-1 truncate hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' on:click="{() => selectSpeaker(name)}" title="{name}">{name.length > 12 ? name.slice(0, 12) + '...' : name}</li>{/each}
-                            </ul>
-                            {/if}
+                        <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
+                             <Dropdown
+                                options={speakerOptions}
+                                bind:value={localSpeaker}
+                                on:change={handleSpeakerSelectionChange}
+                                disabled={!editEnabled}
+                                placeholder="Select Speaker"
+                                containerClasses="w-full"
+                            />
                         </div>
                     </div>
                      <div class="flex items-start gap-x-1 flex-grow min-h-0 w-full">
@@ -681,19 +680,131 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 </div>
 
 <style lang="postcss">
-    /* Styles remain unchanged */
-    .input-field { @apply box-border px-1.5 py-1 border border-gray-300 rounded bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 appearance-none transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
-    .select-field { @apply border border-gray-300 rounded bg-white text-gray-900 text-sm dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 transition duration-150 ease-in-out focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed disabled:border-gray-300 dark:disabled:bg-gray-600 dark:disabled:text-gray-400 dark:disabled:border-gray-500; }
+	.input-field {
+		@apply text-center bg-transparent border-0 p-0 text-gray-800 dark:text-text-secondary;
+	}
+	.input-field:not(:disabled) {
+		@apply bg-white dark:bg-surface-3 border border-gray-300 dark:border-border text-gray-900 dark:text-text-primary rounded;
+	}
+
     .size-6 { @apply w-6 h-6; } .size-5 { @apply w-5 h-5; }
-    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
-    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
-    .lexical-editor-wrapper-style { display: flex; flex-direction: column; @apply border border-gray-300 dark:border-gray-600 rounded overflow-hidden; }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root) { flex-grow: 1; min-height: 0; border: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: hidden; }
-    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) { overflow-y: auto; height: 100%; padding: 8px;}
-    .lexical-editor-wrapper-style.is-disabled { @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-600 dark:border-gray-500 dark:opacity-70; pointer-events: none; }
-    .lexical-editor-wrapper-style.is-disabled > :global(.lexical-editor-root > .lexical-wrapper > .lexical-content) { @apply cursor-not-allowed; }
-    .lexical-editor-wrapper-style :global(.lexical-content) { @apply leading-normal whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100; min-height: unset !important; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;}
+    .btn-icon { @apply p-1 rounded hover:bg-gray-200 dark:bg-transparent dark:border dark:border-[var(--color-border)] dark:hover:bg-[var(--color-border)] focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent; }
+    .btn-nav-vertical { @apply p-1 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-transparent dark:text-white dark:border dark:border-[var(--color-border)] dark:hover:bg-[var(--color-border)] rounded-md disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-400 dark:focus:ring-blue-500 dark:ring-offset-gray-800 focus:bg-gray-200 dark:focus:bg-gray-600 transition-colors flex items-center justify-center; }
+
+    .lexical-editor-wrapper-style {
+        display: flex;
+        flex-direction: column;
+        @apply rounded overflow-hidden;
+    }
+    .lexical-editor-wrapper-style:not(.is-disabled) {
+        @apply border border-gray-300 dark:border-border bg-white dark:bg-transparent;
+    }
+    .lexical-editor-wrapper-style.is-disabled {
+        @apply border-transparent dark:border-transparent bg-transparent;
+    }
+
+    .lexical-editor-wrapper-style > :global(.lexical-editor-root) {
+        flex-grow: 1;
+        min-height: 0;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden;
+        background-color: transparent !important;
+    }
+    .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
+        overflow-y: auto;
+        height: 100%;
+        padding: 8px;
+    }
+
+    .lexical-editor-wrapper-style :global(.lexical-content) {
+        @apply leading-normal whitespace-pre-wrap break-words;
+        min-height: unset !important;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 12pt;
+        line-height: 1.5;
+    }
+    .lexical-editor-wrapper-style:not(.is-disabled) :global(.lexical-content) {
+        @apply text-gray-900 dark:text-text-primary;
+    }
+    .lexical-editor-wrapper-style.is-disabled :global(.lexical-content) {
+        @apply text-gray-800 dark:text-text-primary cursor-not-allowed;
+    }
+
     .lexical-editor-wrapper-style :global(.lexical-content p) { @apply mt-0 mb-0; }
-    .lexical-editor-wrapper-style :global(.toolbar .separator) {margin-left: 0.05rem; margin-right: 0.05rem;}
-    .editable-transcript-controls { /* Class added */ }
+
+    :global(html.dark .input-field:disabled) {
+        background-color: var(--color-surface-3);
+        border: 1px solid var(--color-surface-2);
+        color: white;
+    }
+    :global(html.dark .input-field:not(:disabled)) {
+        background-color: var(--color-surface-2);
+        border: 1px solid var(--color-surface-3);
+        color: white;
+    }
+
+    /* Read Mode */
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style) {
+        border: 1px solid var(--color-surface-2) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-wrapper) {
+        background-color: var(--color-surface-3) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .lexical-content) {
+        color: white !important;
+    }
+
+    /* Edit Mode */
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-editor-wrapper-style) {
+        border: 1px solid var(--color-surface-3) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-wrapper) {
+        background-color: var(--color-surface-2) !important;
+    }
+    :global(html.dark .editable-transcript-wrapper.edit-mode .lexical-content) {
+        color: white !important;
+    }
+
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled) {
+        background-color: var(--color-surface-3);
+        border-color: var(--color-surface-2);
+        color: white;
+        opacity: 1;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled span) {
+        color: white;
+    }
+    :global(html.dark .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
+        color: white;
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border-color: #d1d5db; /* border-gray-300 */
+        color: #111827; /* text-gray-900 */
+        opacity: 1;
+    }
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled span) {
+        color: #111827; /* text-gray-900 */
+    }
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .ui-select:disabled svg) {
+        color: #111827; /* text-gray-900 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .input-field:disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        color: #111827; /* text-gray-900 */
+        border: 1px solid #d1d5db; /* border-gray-300 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled) {
+        background-color: #f9fafb; /* bg-gray-50 */
+        border: 1px solid #d1d5db !important; /* border-gray-300 */
+    }
+
+    :global(html:not(.dark) .editable-transcript-wrapper.read-mode .lexical-editor-wrapper-style.is-disabled .lexical-content) {
+        color: #111827 !important; /* text-gray-900 */
+    }
 </style>

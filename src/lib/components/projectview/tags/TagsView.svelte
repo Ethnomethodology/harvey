@@ -11,6 +11,7 @@
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
     import CommentsPanel from './CommentsPanel.svelte';
+    import EditTagModal from '../modals/EditTagModal.svelte';
     import panelStateStore from '$lib/stores/panelStateStore.js';
 
     let unsubscribePanelState;
@@ -72,6 +73,7 @@
 
     let selectedHighlight = null;
     let isCommentsPanelOpen = false;
+    let isEditModalOpen = false;
 
     $: {
         if (typeof document !== 'undefined') {
@@ -168,10 +170,12 @@
                     const filePath = highlight.source.file_path;
                     const fileName = filePath.split(/[\\/]/).pop();
                     const icon = getIconForFileType(highlight.source.file_type);
+                    const isDarkMode = document.documentElement.classList.contains('dark');
+                    const iconTextColor = (highlight.color && isDarkMode) ? '#111827' : 'currentColor';
                     // TODO: Make this a clickable link to open the file
                     return `<div class=\"flex items-center space-x-2\" title=\"${filePath}\">
                                 <div class="w-8 h-8 rounded-full flex items-center justify-center p-1 flex-shrink-0 aspect-square" style="background-color: ${highlight.color};">
-                                    <span>${icon}</span>
+                                    <span style="color: ${iconTextColor};">${icon}</span>
                                 </div>
                                 <span>${fileName}</span>
                             </div>`;
@@ -185,7 +189,7 @@
                     if (tags.length === 0) return '';
 
                     const tagElements = tags.map(tag =>
-                        `<span class=\"inline-block bg-gray-200 dark:bg-gray-600 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-2 mb-1 border border-gray-300 dark:border-gray-500\">${tag}</span>`
+                        `<span class=\"inline-block bg-gray-200 dark:bg-surface-3 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 dark:text-text-primary mr-2 mb-1 border border-gray-300 dark:border-border\">${tag}</span>`
                     ).join('');
 
                     return `<div class=\"flex flex-wrap items-center\">${tagElements}</div>`;
@@ -261,44 +265,40 @@
         }
     }
 
-    async function handleSaveChanges() {
-        if (!selectedTag) return;
+    async function handleSaveTag(event) {
+        const { id, name, description } = event.detail;
         try {
-            await updateTag(selectedTag.id, tagNameInput, null); // Color is not editable here yet
-            isEditing = false;
-            const newSelectedTag = $allTags.find(t => t.name === tagNameInput);
+            await updateTag(id, name, description);
+            isEditModalOpen = false;
+            // Find the updated tag in the store to refresh the view
+            const newSelectedTag = $allTags.find(t => t.id === id);
             if (newSelectedTag) {
                 handleSelectTag(newSelectedTag);
             } else {
-                selectedTag = null;
-                tagInfo = null;
+                // If the tag name changed, we might need to re-find it
+                const renamedTag = $allTags.find(t => t.name === name);
+                if (renamedTag) {
+                    handleSelectTag(renamedTag);
+                } else {
+                    selectedTag = null;
+                    tagInfo = null;
+                }
             }
-            // Optionally, show a success notification
         } catch (error) {
-            console.error(`Failed to save changes for ${selectedTag.name}:`, error);
-            // Optionally, show an error notification
+            console.error(`Failed to save changes for tag ${name}:`, error);
         }
     }
 
-    async function handleDeleteTag() {
-        if (!selectedTag) return;
-
-        const confirmed = await confirm(`Are you sure you want to delete the tag "${selectedTag.name}"? This will remove the tag from all associated highlights and cannot be undone.`, {
-            title: 'Confirm Deletion',
-            type: 'warning',
-        });
-
-        if (confirmed) {
-            try {
-                await deleteTag(selectedTag.id);
-                selectedTag = null;
-                tagInfo = null;
-                description = '';
-                isEditing = false;
-            } catch (error) {
-                console.error(`Failed to delete tag ${selectedTag.name}:`, error);
-                // Optionally, show an error notification
-            }
+    async function handleDeleteTagFromModal(event) {
+        const { id } = event.detail;
+        try {
+            await deleteTag(id);
+            isEditModalOpen = false;
+            selectedTag = null;
+            tagInfo = null;
+            description = '';
+        } catch (error) {
+            console.error(`Failed to delete tag:`, error);
         }
     }
 
@@ -382,70 +382,69 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-app-bg-dark overflow-hidden">
-    <SimpleTopBar on:toggleLeftPanel={panelStateStore.toggleTagsLeftPanel} />
-    <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-gray-600">
+<div class="flex flex-col h-full w-full bg-gray-100 dark:bg-dark-bg-primary overflow-hidden">
+    <div class="flex h-full w-full divide-x divide-gray-300 dark:divide-border">
         <!-- Left Panel: List of all tags -->
         {#if !$panelStateStore.tagsLeftPanelCollapsed}
-        <div class="w-1/4 h-full bg-white dark:bg-gray-700 p-4" transition:slide={{ axis: 'x' }}>
-        <h2 class="text-lg font-semibold mb-4">All Tags</h2>
+        <div class="w-1/4 h-full bg-white dark:bg-surface-2 p-4" transition:slide={{ axis: 'x' }}>
+        <h2 class="text-sm font-semibold mb-4 dark:text-text-primary">All Tags</h2>
         {#if $allTags.length > 0}
-            <ul>
+            <ul class="text-xs">
                 {#each $allTags as tag (tag.id)}
                     <li
-                        class="p-2 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                        class="p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
                         class:bg-blue-200={selectedTag?.id === tag.id}
                         class:dark:bg-blue-800={selectedTag?.id === tag.id}
                         on:click={() => handleSelectTag(tag)}
                     >
-                        {tag.name}
+                        <span class:dark:!text-blue-200={selectedTag?.id === tag.id} class="dark:text-text-secondary">{tag.name}</span>
                     </li>
                 {/each}
             </ul>
         {:else}
-            <p>No tags found in this project.</p>
+            <p class="dark:text-text-secondary">No tags found in this project.</p>
         {/if}
     </div>
     {/if}
 
     <!-- Middle Panel: Tag details and highlights -->
-    <!-- Middle Panel: Tag details and highlights -->
-        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'}">
+        <div class="h-full flex flex-col p-4 gap-4 {$panelStateStore.tagsLeftPanelCollapsed ? 'w-full' : 'w-3/4'} bg-white dark:bg-surface-1">
         {#if selectedTag}
             {#if isLoading}
-                <p>Loading tag information...</p>
+                <p class="dark:text-text-primary">Loading tag information...</p>
             {:else if tagInfo}
                 <div class="h-[20%] flex flex-col">
-                    <div>
-                        <div>
-                            {#if isEditing}
-                                <input type="text" bind:value={tagNameInput} class="text-xl font-bold mb-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-1" />
-                            {:else}
-                                <h2 class="text-xl font-bold mb-2">{tagInfo.name}</h2>
-                            {/if}
-                            <div class="mb-4">
-                                <label for="tag-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                <textarea id="tag-description" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600" bind:value={description} readonly={!isEditing}></textarea>
-                            </div>
-                        </div>
+                    <div class="flex items-center space-x-2">
+                        <h2 class="text-xl font-bold dark:text-white">{tagInfo.name}</h2>
+                        <button on:click={() => isEditModalOpen = true} class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square w-4 h-4" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"></path><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"></path></svg>
+                        </button>
                     </div>
-                    <div class="flex space-x-2 mt-2">
-                        {#if isEditing}
-                            <button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" on:click={handleSaveChanges}>Save</button>
-                            <button class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700" on:click={handleDeleteTag}>Delete</button>
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => {isEditing = false; tagNameInput = tagInfo.name; description = tagInfo.description;}}>Cancel</button>
+                    <div class="mt-2">
+                        {#if description}
+                            <p class="text-sm text-gray-600 dark:text-white whitespace-pre-wrap">{description}</p>
                         {:else}
-                            <button class="px-4 py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300" on:click={() => isEditing = true}>Edit</button>
+                            <p class="text-sm text-gray-500 italic dark:text-white">No description provided.</p>
                         {/if}
                     </div>
                 </div>
 
+{#if isEditModalOpen}
+    <EditTagModal
+        showModal={isEditModalOpen}
+        tag={selectedTag}
+        on:close={() => isEditModalOpen = false}
+        on:save={handleSaveTag}
+        on:delete={handleDeleteTagFromModal}
+    />
+{/if}
+
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
-                        <h3 class="text-lg font-semibold">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-gray-800 dark:border-gray-600">
+                        <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary">
                     </div>
-                    <div class="flex-grow overflow-auto" bind:this={tableContainer}>
+                    <div class="flex-grow overflow-auto border border-gray-300 dark:border-border rounded-md" bind:this={tableContainer}>
                     </div>
                 </div>
             {:else}

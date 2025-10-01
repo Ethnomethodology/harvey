@@ -155,21 +155,21 @@
 	<!-- Dropdown -->
 	{#if showDropdown}
 		<div
-			class="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto"
+			class="absolute z-10 mt-1 w-full bg-white dark:bg-surface-2 border border-gray-300 dark:border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
 		>
 			<div class="p-2">
 				<input
 					type="text"
 					bind:value={searchTerm}
 					placeholder="Search or add new..."
-					class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-500 rounded-md dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+					class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-d-gray-500 rounded-md dark:bg-d-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500"
 				/>
 			</div>
 			<ul>
 				{#each filteredAvailableGroups as group (group.id)}
 					<li
 						on:click={() => addGroup(group)}
-						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-gray-700 dark:text-gray-200"
+						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-d-gray-700 cursor-pointer text-gray-700 dark:text-d-gray-200"
 					>
 						{group.name}
 					</li>
@@ -182,7 +182,7 @@
                 {#if isEditable}
                 <li
                     on:click={handleCreateNewGroup}
-                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-t border-gray-200 dark:border-gray-600"
+                    class="px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-d-gray-700 cursor-pointer border-t border-gray-200 dark:border-border"
                 >
                     + Create new group {searchTerm ? `"${searchTerm}"` : ''}
                 </li>

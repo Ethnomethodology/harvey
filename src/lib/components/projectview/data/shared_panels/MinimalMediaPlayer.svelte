@@ -62,7 +62,7 @@
 </script>
 
 {#if src}
-<div class="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+<div class="p-2 border-t border-gray-200 dark:border-border bg-gray-50 dark:bg-surface-3">
     <audio
         bind:this={audio}
         on:play={() => isPlaying = true}
@@ -74,26 +74,26 @@
     ></audio>
 
     <div class="flex items-center space-x-2 text-xs">
-        <span class="text-gray-600 dark:text-gray-300 w-10 text-right">{formatTime(currentTime)}</span>
-        <input type="range" class="w-full h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" value={duration > 0 ? (currentTime / duration) * 100 : 0} on:input={handleSeek}>
-        <span class="text-gray-600 dark:text-gray-300 w-10">{formatTime(duration)}</span>
+        <span class="text-gray-600 dark:text-text-secondary w-10 text-right">{formatTime(currentTime)}</span>
+        <input type="range" class="w-full h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={duration > 0 ? (currentTime / duration) * 100 : 0} on:input={handleSeek} style="--progress: {duration > 0 ? (currentTime / duration) : 0};">
+        <span class="text-gray-600 dark:text-text-secondary w-10">{formatTime(duration)}</span>
     </div>
 
     <div class="flex items-center justify-center space-x-4 mt-1">
-        <button on:click={() => dispatch('previous')} class="p-1 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white" title="Previous">
+        <button on:click={() => dispatch('previous')} class="p-1 text-gray-600 dark:text-text-secondary hover:text-black dark:hover:text-text-primary" title="Previous">
             {@html PREVIOUS_ICON}
         </button>
-        <button on:click={togglePlay} class="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600" title={isPlaying ? 'Pause' : 'Play'}>
+        <button on:click={togglePlay} class="p-2 bg-blue-500 dark:bg-accent-primary text-white rounded-full hover:bg-blue-600 dark:hover:bg-accent-primary-hover" title={isPlaying ? 'Pause' : 'Play'}>
             {@html isPlaying ? PAUSE_ICON : PLAY_ICON}
         </button>
-        <button on:click={() => dispatch('next')} class="p-1 text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white" title="Next">
+        <button on:click={() => dispatch('next')} class="p-1 text-gray-600 dark:text-text-secondary hover:text-black dark:hover:text-text-primary" title="Next">
             {@html NEXT_ICON}
         </button>
     </div>
 
     <div class="flex items-center justify-center space-x-2 mt-2">
-        <span class="text-gray-600 dark:text-gray-300">{@html VOLUME_HIGH_ICON}</span>
-        <input type="range" class="w-1/3 h-1 bg-gray-300 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
+        <span class="text-gray-600 dark:text-text-secondary">{@html VOLUME_HIGH_ICON}</span>
+        <input type="range" class="w-1/3 h-1 bg-gray-300 dark:bg-text-secondary rounded-lg appearance-none cursor-pointer" value={volume * 100} on:input={handleVolumeChange}>
     </div>
 </div>
 {/if}

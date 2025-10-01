@@ -99,7 +99,7 @@
                                 </svg>
                             </button>
                             {#if activeMenuId === comment.id}
-                                <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                                <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-border">
                                     {#if !comment.parentId}
                                     <button on:click={() => handleAction('reply', comment)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Reply</button>
                                     {/if}
@@ -131,7 +131,7 @@
                                     </svg>
                                 </button>
                                 {#if activeMenuId === reply.id}
-                                    <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700">
+                                    <div class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-900 rounded-md shadow-lg z-10 border border-gray-200 dark:border-border">
                                         <button on:click={() => handleAction('edit', reply)} class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Edit</button>
                                         <button on:click={() => handleAction('delete', reply)} class="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-800">Delete</button>
                                     </div>

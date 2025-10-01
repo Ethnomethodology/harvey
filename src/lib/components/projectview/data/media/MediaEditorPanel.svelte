@@ -318,9 +318,9 @@
     }
 </script>
 
-<div class="flex flex-col h-full w-full bg-white dark:bg-gray-800">
+<div class="flex flex-col h-full w-full bg-white dark:bg-surface-2">
     <div
-        class="border-b border-gray-200 dark:border-gray-700 flex flex-col
+        class="border-b border-gray-200 dark:border-border flex flex-col
                {!isDataPlayerVideoHidden ? 'h-1/2' : 'h-auto flex-shrink-0'}"
     >
         {#if mediaPath}
@@ -343,20 +343,20 @@
                 class="{!isDataPlayerVideoHidden ? 'flex-grow min-h-0' : ''}"
             />
         {:else}
-            <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <div class="w-full h-full bg-black flex items-center justify-center text-gray-500 dark:text-d-gray-400">
                 <span>Media player requires a path.</span>
             </div>
         {/if}
     </div>
 
     <div
-        class="min-h-0 overflow-hidden {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
+        class="min-h-0 overflow-hidden bg-white dark:bg-dark-bg-form-field {!isDataPlayerVideoHidden ? 'h-1/2' : ''}"
         class:flex-grow={isDataPlayerVideoHidden}
     >
         {#if showDataTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">
-                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                    <p class="text-xs text-gray-600 dark:text-d-gray-400">
                         Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
                     </p>
                     <div class="space-x-2">
@@ -365,7 +365,7 @@
                     </div>
                 </div>
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
-                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                    <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-d-gray-700 overflow-hidden">
                         <InteractiveWaveform
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
@@ -384,7 +384,7 @@
                         />
                     </div>
                 {:else}
-                    <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-500">
+                    <div class="w-full h-[100px] flex items-center justify-center bg-gray-100 dark:bg-d-gray-700 rounded text-xs text-gray-500">
                         Audio data not available for waveform.
                     </div>
                 {/if}
@@ -392,7 +392,7 @@
         {/if}
 
         {#if isTranscriptLoading && mediaPath}
-            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
+            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
                 Loading data for <span class="font-semibold ml-1">{transcriptName}</span>...
             </div>
         {:else if transcriptLoadError && mediaPath}
@@ -412,7 +412,7 @@
                 </div>
             {/if}
         {:else if !mediaPath}
-            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-gray-300 p-4">
+            <div class="flex-grow flex items-center justify-center text-gray-500 dark:text-d-gray-300 p-4">
                 Select an audio or video file from the Data panel to view its player and data.
             </div>
         {:else}
@@ -658,10 +658,10 @@
     .lexical-editor-wrapper-style-placeholder {
         display: flex;
         flex-direction: column;
-        @apply border border-gray-300 dark:border-gray-600 overflow-hidden;
+        @apply border border-gray-300 dark:border-border overflow-hidden;
     }
      .lexical-editor-wrapper-style-placeholder.is-disabled {
-        @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-gray-700 dark:border-gray-500 dark:opacity-70;
+        @apply bg-gray-100 border-gray-300 opacity-70 dark:bg-d-gray-700 dark:border-d-gray-500 dark:opacity-70;
     }
 
     .flex-grow.min-h-0 {

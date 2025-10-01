@@ -64,7 +64,7 @@
           {#each colors as color}
             <button
               type="button"
-              class="w-6 h-6 rounded-full border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900"
+              class="w-6 h-6 rounded-full border border-gray-300 dark:border-border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-900"
               style:background-color={color}
               class:ring-2={selectedColor === color}
               class:ring-blue-500={selectedColor === color}
@@ -77,7 +77,7 @@
   
          <div class="flex items-center mb-6">
              <span class="w-8 h-8 rounded mr-3 border border-gray-400" style:background-color={selectedColor}></span>
-             <input type="text" bind:value={selectedColor} class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+             <input type="text" bind:value={selectedColor} class="w-full px-3 py-1 border border-gray-300 dark:border-border rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
          </div>
   
         <div class="flex justify-end space-x-3">

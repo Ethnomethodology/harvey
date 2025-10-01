@@ -49,13 +49,14 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
   overflow: hidden;
 
   .tabulator-header {
-    background-color: var(--ui-optgroup-bg); // Actual theme value
-    color: var(--ui-optgroup-text);
-    border-bottom: 1px solid var(--ui-select-border); // Actual theme value
+    background-color: transparent;
+    color: var(--ui-text-color);
+    border-bottom: 1px solid var(--ui-select-border);
+    border-top: 1px solid var(--ui-select-border);
     font-weight: 600;
 
     .tabulator-col {
-      border-right: 1px solid var(--ui-select-border); // Actual theme value
+      border-right: 1px solid var(--ui-select-border);
 
       .tabulator-col-content {
         padding: $paddingSmall $paddingMedium;
@@ -77,12 +78,15 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
         }
       }
       &:last-child { border-right: none; }
+      &:first-child {
+        border-left: 1px solid var(--ui-select-border);
+      }
 
       // Overrides for sortable columns using actual theme values
       &.tabulator-sortable {
         &:hover { background-color: var(--ui-icon-hover-bg); }
         &[aria-sort] {
-          background-color: var(--ui-option-hover-bg);
+          background-color: var(--color-surface-3);
           color: var(--ui-optgroup-text); // Use actual theme text color for sorted header
           .tabulator-col-content .tabulator-arrow {
              border-top-color: var(--ui-optgroup-text);
@@ -129,7 +133,9 @@ $rowSelectedBackgroundColor: var(--ui-option-hover-bg);
       padding: $paddingSmall $paddingMedium;
       line-height: $lineHeight;
       color: var(--ui-text-color); // Ensure cells get the theme text color
-      &:last-child { border-right: none; }
+      &:first-child {
+        border-left: 1px solid var(--ui-select-border);
+      }
     }
   }
 

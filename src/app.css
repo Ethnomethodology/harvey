@@ -13,10 +13,14 @@
 @layer base {
   :root {
     /* ---------- Light theme ---------- */
-    --ui-icon-color:      #6b7280;
-    --ui-text-color:      #374151;
+    --app-bg:             #ffffff;
+    --app-panel-bg:       #f3f4f6; /* gray-100 */
+
+    --ui-icon-color:      #000000;
+    --ui-text-color:      #000000;
     --ui-select-bg:       #ffffff;
     --ui-select-border:   #d1d5db;
+    --color-border:       #d1d5db; /* gray-300 */
     --ui-icon-hover-bg:   #e5e7eb;
     --ui-option-text:     #1f2937;
     --ui-option-bg:       #ffffff;
@@ -28,29 +32,59 @@
     --ui-disabled-text:   #9ca3af;
     --ui-disabled-bg:     #f9fafb;
 
-    --app-bg-dark:        #1e1e1e;
-    --ui-select-hover-bg: #DBEAFE; /* blue-100 */
-    --ui-select-hover-text: #1D4ED8; /* blue-700 */
+    --ui-select-hover-bg: #e5e7eb; /* gray-200 */
+    --ui-select-hover-text: var(--ui-text-color);
+
+    --separator-color:    var(--ui-select-border);
   }
 
   .dark {
-    /* ---------- Dark theme ---------- */
-    --ui-icon-color:      #ffffff;
-    --ui-text-color:      #ffffff;
-    --ui-select-bg:       #1e1e1e;
-    --ui-select-border:   #3c3c3c;
-    --ui-icon-hover-bg:   #3c3c3c;
-    --ui-option-text:     #ffffff;
-    --ui-option-bg:       #1e1e1e;
-    --ui-option-hover-bg: #3c3c3c;
-    --ui-optgroup-text:   #d1d5db;
-    --ui-optgroup-bg:     #4b5563;
-    --ui-separator-text:  #6b7280;
-    --ui-separator-bg:    #374151;
-    --ui-disabled-text:   #6b7280;
-    --ui-disabled-bg:     #4b5563;
-    --ui-select-hover-bg: #2563EB; /* blue-600 */
-    --ui-select-hover-text: #EFF6FF; /* blue-50 */
+    /* ---------- New Dark Theme ---------- */
+    /* --- Base and Surface Colors --- */
+    --color-surface-1: #0d0d0d;
+    --color-surface-2: #1a1a1a;
+    --color-surface-3: #242424;
+    --color-border: #333333;
+
+    /* --- Text and Content Colors --- */
+    --color-text-primary: #E0E0E0;
+    --color-text-secondary: #A0A0A0;
+    --color-text-disabled: #616161;
+    --color-text-accent: #4A90E2;
+
+    /* --- Interactive & Accent Colors --- */
+    --color-accent-primary: #4A90E2;
+    --color-accent-primary-hover: #63a4ff;
+    --color-accent-background-hover: rgba(74, 144, 226, 0.1);
+
+    /* --- Semantic / Status Colors --- */
+    --color-status-success: #66BB6A;
+    --color-status-warning: #FFCA28;
+    --color-status-error: #EF5350;
+
+    /* ---------- Mappings to old variables for compatibility ---------- */
+    --app-bg: var(--color-surface-1);
+    --app-panel-bg: var(--color-surface-2);
+
+    --ui-icon-color: rgba(255, 255, 255);
+    --ui-text-color: rgba(255, 255, 255);
+    --ui-select-bg: var(--color-surface-1);
+    --ui-select-border: var(--color-border);
+    --ui-icon-hover-bg: var(--color-border);
+    --ui-option-text: var(--color-text-primary);
+    --ui-option-bg: var(--color-surface-1);
+    --ui-option-hover-bg: var(--color-accent-background-hover);
+    --ui-optgroup-text: var(--color-text-secondary);
+    --ui-optgroup-bg: var(--color-surface-3);
+    --ui-separator-text: var(--color-text-secondary);
+    --ui-separator-bg: var(--color-surface-3);
+    --ui-disabled-text: var(--color-text-disabled);
+    --ui-disabled-bg: var(--color-surface-2);
+
+    --ui-select-hover-bg: var(--color-border);
+    --ui-select-hover-text: var(--color-text-primary);
+
+    --separator-color:    var(--color-border);
   }
 }
 
@@ -62,11 +96,26 @@
   /* ---------- icon button ---------- */
   .ui-button-icon {
     color: var(--ui-icon-color);
-    @apply p-1.5 rounded inline-flex items-center justify-center
+    border: 1px solid var(--ui-select-border);
+    @apply p-1 rounded inline-flex items-center justify-center
            focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
-           dark:focus:ring-offset-[--app-bg-dark] transition duration-150 ease-in-out;
+           dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
 
-    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+    &:hover:not(:disabled) { 
+      background-color: var(--ui-icon-hover-bg);
+      border-color: var(--ui-select-border);
+    }
+
+    .dark &:not(:disabled) {
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: transparent;
+    }
+
+    .dark &:hover:not(:disabled) {
+      background-color: var(--color-border);
+      border-color: var(--color-border);
+    }
 
     &:disabled {
       color: var(--ui-disabled-text);
@@ -74,17 +123,44 @@
       @apply opacity-50 cursor-not-allowed;
     }
 
-    & svg { @apply w-5 h-5; }
+    & svg { @apply w-4 h-4; }
+  }
+
+  .ui-button-import {
+    color: var(--ui-icon-color);
+    @apply p-1.5 rounded-full w-8 h-8 inline-flex items-center justify-center
+           focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-blue-500
+           dark:focus:ring-offset-[var(--app-bg)] transition duration-150 ease-in-out;
+
+    &:hover:not(:disabled) { background-color: var(--ui-icon-hover-bg); }
+
+    .dark &:not(:disabled) {
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      background-color: transparent;
+    }
+
+    .dark &:hover:not(:disabled) {
+      background-color: var(--color-accent-background-hover);
+      border-color: var(--color-accent-primary);
+    }
+
+    &:disabled {
+      color: var(--ui-disabled-text);
+      background-color: transparent;
+      @apply opacity-50 cursor-not-allowed;
+    }
+
+    & svg { @apply size-6; }
   }
 
   /* ---------- select dropdown ---------- */
   .ui-select {
-    color: var(--ui-text-color);
     background-color: var(--ui-select-bg);
-    border-color: var(--ui-select-border);
+    border: 1px solid var(--ui-select-border);
 
     @apply block w-fit max-w-full
-           border rounded-md shadow-sm text-xs font-medium
+           rounded-md text-sm font-medium
            pl-2 pr-6 py-1 leading-tight
            appearance-none bg-no-repeat
            focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
@@ -100,7 +176,11 @@
     background-size: 1em 1em;
     background-position: right 0.25rem center;
 
-    &:hover:not(:disabled) { background-color: var(--ui-select-hover-bg); color: var(--ui-select-hover-text); border-color: #3B82F6; /* blue-500 */ }
+    &:hover:not(:disabled) {
+        background-color: var(--ui-select-hover-bg);
+        color: var(--ui-select-hover-text);
+        border-color: var(--ui-select-border);
+    }
 
     &:disabled {
       color: var(--ui-disabled-text);
@@ -115,6 +195,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23ffffff">\
 <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>\
 </svg>');
+  }
+  .dark .ui-select:focus {
+    border-color: transparent;
   }
 
   /* ---------- option / optgroup ---------- */
@@ -136,13 +219,17 @@
     background-color: var(--ui-optgroup-bg);
     @apply font-semibold px-2 pt-1;
   }
-  .ui-select option.separator {
-    color: var(--ui-separator-text);
-    background-color: var(--ui-separator-bg);
-    @apply italic font-normal px-2 py-1 cursor-default;
 
-    &:hover,
-    &:checked { background-color: var(--ui-separator-bg); }
+  /* ---------- custom dropdown component ---------- */
+  .ui-dropdown-menu {
+    background-color: var(--ui-option-bg);
+    border: 1px solid var(--ui-select-border);
+  }
+  .ui-dropdown-menu .dropdown-option {
+    color: var(--ui-option-text);
+  }
+  .ui-dropdown-menu .dropdown-option:hover {
+    background-color: var(--ui-option-hover-bg);
   }
 
   /* ---------- inline helper text ---------- */
@@ -150,16 +237,25 @@
     color: var(--ui-text-color);
     @apply text-sm font-medium;
   }
+
+  .separator {
+    @apply w-px h-5 mx-1;
+    border-left: 1px solid var(--separator-color);
+  }
 }
 
 /*---------------------------------------------------------
   Global styles (optional)
 ---------------------------------------------------------*/
+body {
+  background-color: var(--app-bg);
+  color: var(--ui-text-color);
+}
 
 /* Interactive waveform background colors */
 .interactive-waveform {
   background-color: #ffffff;
 }
 .dark .interactive-waveform {
-  background-color: #3c3c3c;
+  background-color: var(--app-panel-bg);
 }

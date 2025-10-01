@@ -15,7 +15,7 @@
 
 {#if visible}
   <div
-    class="absolute bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg p-2 rounded-md z-50 text-xs text-gray-800 dark:text-gray-200 max-w-xs"
+    class="absolute bg-white dark:bg-d-gray-700 border border-gray-300 dark:border-border shadow-lg p-2 rounded-md z-50 text-xs text-gray-800 dark:text-d-gray-200 max-w-xs"
     style="left: {x}px; top: {y}px; pointer-events: none;"
   >
     {#if categoryName}

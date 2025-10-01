@@ -124,34 +124,6 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 		throw new Error(`Failed to move models/update location: ${error?.message || error}`);
 	}
 }
-export async function getCloudConfig() {
-  console.log('[ConfigureActions] Fetching cloud config from backend...');
-  try {
-	const config = await invoke('get_cloud_config');
-	// console.log('[ConfigureActions] Received cloud config:', config);
-	return {
-		api_key: config?.api_key ?? null,
-		model: config?.model ?? null,
-		consent: config?.consent ?? false,
-	};
-  } catch (error) {
-	console.error('[ConfigureActions] Error invoking get_cloud_config:', error);
-	throw new Error(`Failed to load cloud configuration: ${error?.message || error}`);
-  }
-}
-export async function saveCloudConfig(payload) {
-  console.log('[ConfigureActions] Saving cloud config to backend:', { ...payload, api_key: payload.api_key ? '***' : null });
-   if (typeof payload !== 'object' || payload === null) {
-	  throw new Error("Invalid payload provided for saveCloudConfig.");
-   }
-  try {
-	await invoke('save_cloud_config', { payload: payload });
-	console.log('[ConfigureActions] Cloud config saved successfully.');
-  } catch (error) {
-	console.error('[ConfigureActions] Error invoking save_cloud_config:', error);
-	throw new Error(`Failed to save cloud configuration: ${error?.message || error}`);
-  }
-}
 
 // --- Export Action ---
 /**

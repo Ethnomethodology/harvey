@@ -70,10 +70,13 @@
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="layout-settings-modal-title"
+		tabindex="-1"
+		on:keydown={handleKeydown}
 	>
 		<div
 			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
+			role="document"
 		>
 			<h2 id="layout-settings-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-5">
 				View Settings

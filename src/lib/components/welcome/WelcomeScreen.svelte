@@ -13,7 +13,7 @@
   } from './actions.js';
   import ProjectList from './ProjectList.svelte';
   import RenameModal from './RenameModal.svelte';
-  import Configure from './Configure.svelte'; // New configuration component
+  import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
 
   // --- Reactive State Variables ---
   let recentProjects = [];
@@ -191,7 +191,7 @@
         {/if}
       </div>
     {:else if activeTab === 'configure'}
-      <Configure />
+      <ConfigurationView />
     {:else if activeTab === 'about'}
       <!-- For demonstration, we'll just show a simple About text -->
       <div class="flex-grow overflow-y-auto bg-white p-6 rounded-lg border border-gray-200 shadow-inner">
