@@ -1,5 +1,6 @@
 <script>
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import { updateSpeakerConfig } from '$lib/stores/transcriptStore.js';
 
 	// Props
 	export let showModal = false;
@@ -44,19 +45,23 @@
 			updateLocalNames(renderedCount, Array.isArray(currentSpeakers.names) ? [...currentSpeakers.names] : []);
 
 			// Initialize second-language names if present
-			updateLocalSecondNames(renderedCount, currentSpeakers.translatedNames);
+			if (Array.isArray(currentSpeakers.translatedNames) && currentSpeakers.translatedNames.some(name => name && name.trim() !== '')) {
+				addSecondNames = true;
+				updateLocalSecondNames(renderedCount, currentSpeakers.translatedNames);
+			} else {
+				addSecondNames = false;
+				updateLocalSecondNames(renderedCount, []);
+			}
 
 			// NEW: Enable confirm immediately ONLY if opening with a valid, non-zero count
 			listGenerated = initialCount > 0 && initialCount === localCount;
 
-			console.log('Modal state initialized/reset:', { localCount, renderedCount, localNames, listGenerated });
 		} else {
 			// Default if currentSpeakers is somehow null/undefined
 			localCount = 0;
 			renderedCount = 0;
 			localNames = [];
 			listGenerated = false;
-			console.log('Modal state initialized (default):', { localCount, renderedCount, localNames, listGenerated });
 		}
 
 		// Mark initialization complete *after* setting initial state
@@ -125,21 +130,7 @@
 
 
 	// Handle direct edit of a speaker name
-	function handleNameInput(index, event) {
-		// Ensure index is valid for the *currently rendered* names
-		if(index >= 0 && index < localNames.length) {
-			localNames[index] = event.target.value;
-			// Force reactivity update for the array
-			 localNames = localNames;
-		}
-	}
-
-	function handleSecondNameInput(index, event) {
-	  if (index >= 0 && index < localSecondNames.length) {
-	    localSecondNames[index] = event.target.value;
-	    localSecondNames = localSecondNames;
-	  }
-	}
+	
 
 
 	// --- Modal Actions ---
@@ -154,7 +145,10 @@
 
 		const finalNames = localNames.map((name, i) => (name && name.trim() !== '') ? name.trim() : `Speaker ${i + 1}`);
 		const finalSecondNames = localSecondNames.map(n => n?.trim() || '');
-		dispatch('confirm', { count: renderedCount, names: finalNames, secondNames: finalSecondNames });
+		
+		updateSpeakerConfig(renderedCount, finalNames, finalSecondNames);
+
+		dispatch('confirm', { count: renderedCount, names: finalNames, translatedNames: finalSecondNames });
 		closeModal();
 	}
 
@@ -246,20 +240,17 @@
 								</span>
 								<input
 									type="text"
-									value={localNames[i] || ''}
-									on:input={(e) => handleNameInput(i, e)}
+									bind:value={localNames[i]}
 									placeholder={`Speaker ${i + 1}`}
 									class="input-field flex-grow min-w-0"
 								/>
 								{#if addSecondNames}
 								  <input
-									type="text"
-									bind:value={localSecondNames[i]}
-									on:input={(e) => handleSecondNameInput(i, e)}
-									placeholder={`Speaker ${i + 1} (2nd lang)`}
-									class="input-field flex-grow min-w-0"
-								  />
-								{/if}
+								  									  type="text"
+								  									  bind:value={localSecondNames[i]}
+								  									  placeholder={`Speaker ${i + 1} (2nd lang)`}
+								  									  class="input-field flex-grow min-w-0"
+								  								  />								{/if}
 							</div>
 						{/each}
 					</div>

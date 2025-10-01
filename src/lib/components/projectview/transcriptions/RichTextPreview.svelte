@@ -344,6 +344,7 @@
     let scrollAnimationId = null; // ID for the requestAnimationFrame loop
     let isProgrammaticScroll = false;
     let expectedScrollTop = -1; // The scroll position our animation expects to be at.
+	let hoveredSegment = -1;
 
     // Scroll and highlight logic
     $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
@@ -358,7 +359,7 @@
             const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
 
-            const shouldScroll = $transcriptStore.player.isPlaying || (activeSegmentIndex !== karaokeScrollIndex);
+            const shouldScroll = true;
 
             if (shouldScroll) {
                 const viewportTop = currentDomScrollTop;
@@ -657,6 +658,9 @@
                 <div
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
+                    class:hovering={hoveredSegment === seg.segmentIndex}
+                    on:mouseenter={() => hoveredSegment = seg.segmentIndex}
+                    on:mouseleave={() => hoveredSegment = -1}
                     style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
@@ -668,7 +672,7 @@
                     class:bg-white={seg.segmentIndex !== activeSegmentIndex}
                     class:dark:bg-d-gray-800={seg.segmentIndex !== activeSegmentIndex}
                     class:hover:bg-blue-50={true}
-                    class:dark:hover:bg-blue-900={true}
+                    class:dark:hover:bg-blue-800={true}
                     class:cursor-pointer={true}
                     on:click={() => handleSegmentClick(seg.segmentIndex)}
                     tabindex={0}
@@ -696,19 +700,19 @@
                     {#if $activeLayout === 'Layout1'}
                     <div class="flex flex-row items-start gap-x-2 flex-grow min-w-0 w-full">
                         {#if showSegmentNumberCol}
-                        <div class="flex-shrink-0 text-gray-500 dark:text-d-gray-400 select-none text-sm py-1" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 5%; max-width: 5%;" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                             {String(seg.segmentIndex + 1)}
                         </div>
                         {/if}
                         {#if showTimestampCol}
-                        <div class="flex-shrink-0 text-gray-600 dark:text-d-gray-400 text-left leading-tight text-sm py-1" style="flex-basis: 15%; max-width: 15%;">
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;">
                             <span class="select-none" title="Start time">{seg.startTime}</span>
-                            <span class="text-gray-400 dark:text-d-gray-500 select-none block sm:inline">-</span>
+                            <span class="dark:text-white">-</span>
                             <span class="select-none" title="End time">{seg.endTime}</span>
                         </div>
                         {/if}
                         {#if showSpeakerCol}
-                        <div class="flex-shrink-0 text-gray-800 dark:text-d-gray-200 font-semibold text-sm py-1 truncate" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
+                        <div class="flex-shrink-0 dark:text-white" style="flex-basis: 15%; max-width: 15%;" title={seg.speaker}>
                             {seg.speaker.length > 15 ? seg.speaker.slice(0,13) + '...' : seg.speaker}
                         </div>
                         {/if}
@@ -729,21 +733,21 @@
                         <div class="flex items-center gap-x-2">
                             {#if showSegmentNumberCol && $activeLayout !== 'Layout3'}
                             <div class="flex-shrink-0" style="flex-basis: 1.880rem; max-width: 1.880rem; min-width: 1.880rem;">
-                                <span class="truncate text-gray-500 dark:text-d-gray-400 select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
+                                <span class="truncate text-gray-500 dark:text-white select-none text-sm" title={`Segment Number ${String(seg.segmentIndex + 1)}`}>
                                     {String(seg.segmentIndex + 1)}
                                 </span>
                             </div>
                             {/if}
                             {#if showTimestampCol || $activeLayout === 'Layout3'}
-                            <div class="flex-1 text-gray-600 dark:text-d-gray-400 text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
+                            <div class="flex-1 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1 text-sm min-w-0">
                                 {#if $activeLayout === 'Layout3'}
-                                    <span class="select-none text-gray-600 dark:text-d-gray-400" title="Timestamp & Speaker">
+                                    <span class="select-none text-gray-600 dark:text-white" title="Timestamp & Speaker">
                                         {seg.startTime} – {seg.endTime}
                                         <span class="ml-1">{seg.speaker}</span>
                                     </span>
                                 {:else}
                                     <span class="select-none" title="Start time">{seg.startTime}</span>
-                                    <span class="text-gray-400 dark:text-d-gray-500 select-none">–</span>
+                                    <span class="text-gray-400 dark:text-white select-none">–</span>
                                     <span class="select-none" title="End time">{seg.endTime}</span>
                                 {/if}
                             </div>
@@ -840,7 +844,30 @@
     .dark .btn-switch-active {
         @apply bg-blue-600 text-white;
     }
-    .btn-switch-inactive {
-        @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-d-gray-700 dark:text-d-gray-200 dark:hover:bg-d-gray-600;
-    }
-</style>
+    	.btn-switch-inactive {
+            @apply bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-d-gray-700 dark:text-d-gray-200 dark:hover:bg-d-gray-600;
+        }
+    
+    	:global(.dark .speech-rich-text) {
+    		color: white;
+    	}
+    
+    		:global(.dark .speech-rich-text [style*="background-color"]) {
+    			color: black;
+    		}
+    	
+    			:global(.dark .speech-rich-text [style*="background-color: transparent"]) {
+    				color: white;
+    			}
+    		
+    			:global(html.dark .segment-block.hovering .speech-rich-text),
+    			:global(html.dark .segment-block.hovering .speech-rich-text *),
+    			:global(html.dark .segment-block.hovering .speech-plain-text),
+    			:global(html.dark .segment-block.hovering .speech-plain-text *),
+    			:global(html.dark .segment-block.hovering .flex-shrink-0),
+    			:global(html.dark .segment-block.hovering .flex-shrink-0 *),
+    			:global(html.dark .segment-block.hovering .flex-1),
+    			:global(html.dark .segment-block.hovering .flex-1 *) {
+    				color: black !important;
+    			}
+    		</style>

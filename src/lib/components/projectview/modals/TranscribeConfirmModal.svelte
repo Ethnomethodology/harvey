@@ -69,8 +69,9 @@
 	$: currentErrorMessage = $transcriptStore.transcriptionErrorMessage;
 	$: currentJobId = $transcriptStore.transcriptionJobId;
 
+	let isInitialized = false;
 	// When the modal is about to show the confirm view, initialize local states from the store
-	$: if (showModal && !isTranscribing && jobStatus === null) {
+	$: if (showModal && !isTranscribing && jobStatus === null && !isInitialized) {
 		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
 		modalTranslateToEnglish = $transcriptStore.translateToEnglish;
@@ -78,6 +79,12 @@
 		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
 		// Use a deep copy to prevent direct mutation of the prop or store value until confirmed.
 		modalSpeakersConfig = JSON.parse(JSON.stringify(speakers || { count: 0, names: [], translatedNames: [] }));
+		isInitialized = true;
+	}
+
+	// Reset the initialization flag when the modal is closed
+	$: if (!showModal) {
+		isInitialized = false;
 	}
 
 	// --- Title Logic ---

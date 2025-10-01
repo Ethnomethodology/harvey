@@ -783,6 +783,21 @@ export let compactMode = false; // New prop, defaults to false
 			}, 100);
 		});
 	}
+	export function scrollToTime(time) {
+	    if (!isMounted || !waveformScrollContainerRef || actualMediaDuration <= 0) return;
+
+	    const logicalX = timeToLogicalPx(time, actualMediaDuration, totalLogicalWidth);
+	    let newScrollOffset = logicalX - visibleCanvasWidth / 2; // Center it
+
+	    const newMaxScroll = Math.max(0, totalLogicalWidth - visibleCanvasWidth);
+	    newScrollOffset = Math.max(0, Math.min(newScrollOffset, newMaxScroll));
+
+	    if (Math.abs(newScrollOffset - scrollOffsetPx) > 0.5) {
+	        scrollOffsetPx = Math.round(newScrollOffset);
+	        requestRedraw(true);
+	    }
+	}
+
 	function zoomIn() { handleZoom('in'); }
 	function zoomOut() { handleZoom('out'); }
 

@@ -27,9 +27,9 @@
 
 	let scrollOffsetPy = 0;
 
-	let zoomLevel = 1;
-	const minZoomLevel = 1;
 	const maxZoomLevel = 10;
+	const minZoomLevel = 1;
+	let zoomLevel = maxZoomLevel;
 	const zoomStep = 1.2;
 
 	let lastDrawnTime = -1;
@@ -367,6 +367,25 @@
 		requestRedraw(true);
 	}
 
+	export function scrollToTime(time) {
+	    if (!isMounted || !waveformAreaContainerRef || duration <= 0) return;
+
+	    const logicalY = timeToLogicalPy(time, duration, visibleCanvasHeight);
+	    let newScrollTop = logicalY - visibleCanvasHeight / 2; // Center it
+
+	    const contentLogicalHeight = visibleCanvasHeight * zoomLevel;
+	    const maxScroll = Math.max(0, contentLogicalHeight - visibleCanvasHeight);
+	    newScrollTop = Math.max(0, Math.min(newScrollTop, maxScroll));
+
+	    if (Math.abs(newScrollTop - scrollOffsetPy) > 1) {
+	        isProgrammaticScroll = true;
+	        waveformAreaContainerRef.scrollTop = newScrollTop;
+	        tick().then(() => {
+	            isProgrammaticScroll = false;
+	        });
+	    }
+	}
+
 	function zoomIn() { handleZoom('in'); }
 	function zoomOut() { handleZoom('out'); }
 
@@ -393,6 +412,27 @@
 	let prevAudioBuffer = audioBuffer;
 	let prevDuration = duration;
 	let prevStorePeaks = $transcriptStore.audioBufferPeaks;
+
+	$: if (isMounted) {
+		let resetNeeded = false;
+		if (audioBuffer !== prevAudioBuffer) {
+			resetNeeded = true;
+			prevAudioBuffer = audioBuffer;
+		}
+		if (duration !== prevDuration) {
+			resetNeeded = true;
+			prevDuration = duration;
+		}
+		if (!audioBuffer && $transcriptStore.audioBufferPeaks !== prevStorePeaks) {
+			resetNeeded = true;
+			prevStorePeaks = $transcriptStore.audioBufferPeaks;
+		}
+		if (resetNeeded) {
+			resetScrollAndZoom(true);
+		} else {
+			requestRedraw();
+		}
+	}
 
 	$: if (isMounted) {
 		let resetNeeded = false;
