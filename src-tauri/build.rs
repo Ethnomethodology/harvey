@@ -115,7 +115,8 @@ fn main() {
     let pandoc_dest_path = sidecar_dir.join(&pandoc_final_name);
     if !pandoc_dest_path.exists() {
         let pandoc_asset_part = match target.as_str() {
-            "aarch64-apple-darwin" | "x86_64-apple-darwin" => "macOS",
+            "aarch64-apple-darwin" => "arm64-macOS",
+            "x86_64-apple-darwin" => "x86_64-macOS",
             "x86_64-pc-windows-msvc" => "windows-x86_64",
             "aarch64-pc-windows-msvc" => "windows-arm64",
             "x86_64-unknown-linux-gnu" => "linux-amd64",
