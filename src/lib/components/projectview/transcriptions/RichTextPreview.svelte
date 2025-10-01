@@ -344,6 +344,7 @@
     let scrollAnimationId = null; // ID for the requestAnimationFrame loop
     let isProgrammaticScroll = false;
     let expectedScrollTop = -1; // The scroll position our animation expects to be at.
+	let hoveredSegment = -1;
 
     // Scroll and highlight logic
     $: if (activeSegmentIndex !== -1 && isMounted && previewScrollContainerRef && activeSegmentIndex !== karaokeScrollIndex) {
@@ -657,6 +658,9 @@
                 <div
                     id={`segment-${seg.segmentIndex}`}
                     class:segment-block={true}
+                    class:hovering={hoveredSegment === seg.segmentIndex}
+                    on:mouseenter={() => hoveredSegment = seg.segmentIndex}
+                    on:mouseleave={() => hoveredSegment = -1}
                     style="min-height: {ESTIMATED_SEGMENT_HEIGHT}px;"
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
@@ -668,7 +672,7 @@
                     class:bg-white={seg.segmentIndex !== activeSegmentIndex}
                     class:dark:bg-d-gray-800={seg.segmentIndex !== activeSegmentIndex}
                     class:hover:bg-blue-50={true}
-                    class:dark:hover:bg-blue-900={true}
+                    class:dark:hover:bg-blue-800={true}
                     class:cursor-pointer={true}
                     on:click={() => handleSegmentClick(seg.segmentIndex)}
                     tabindex={0}
@@ -852,7 +856,18 @@
     			color: black;
     		}
     	
-    		:global(.dark .speech-rich-text [style*="background-color: transparent"]) {
-    			color: white;
-    		}
-    	</style>
+    			:global(.dark .speech-rich-text [style*="background-color: transparent"]) {
+    				color: white;
+    			}
+    		
+    			:global(html.dark .segment-block.hovering .speech-rich-text),
+    			:global(html.dark .segment-block.hovering .speech-rich-text *),
+    			:global(html.dark .segment-block.hovering .speech-plain-text),
+    			:global(html.dark .segment-block.hovering .speech-plain-text *),
+    			:global(html.dark .segment-block.hovering .flex-shrink-0),
+    			:global(html.dark .segment-block.hovering .flex-shrink-0 *),
+    			:global(html.dark .segment-block.hovering .flex-1),
+    			:global(html.dark .segment-block.hovering .flex-1 *) {
+    				color: black !important;
+    			}
+    		</style>
