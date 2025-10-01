@@ -359,7 +359,7 @@
             const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
             const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
 
-            const shouldScroll = $transcriptStore.player.isPlaying || (activeSegmentIndex !== karaokeScrollIndex);
+            const shouldScroll = true;
 
             if (shouldScroll) {
                 const viewportTop = currentDomScrollTop;

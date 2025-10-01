@@ -140,6 +140,12 @@
             if (mediaPlayerRef) {
                 mediaPlayerRef.seekTo(segment.start_time);
             }
+			if (verticalWaveformRef) {
+				verticalWaveformRef.scrollToTime(segment.start_time);
+			}
+			if (horizontalWaveformRef) {
+				horizontalWaveformRef.scrollToTime(segment.start_time);
+			}
         } else {
             console.warn(`[TranscriptionsView] Invalid segment data for index ${index} on click.`);
         }
