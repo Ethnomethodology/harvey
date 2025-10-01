@@ -14,9 +14,6 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         arch: [x64, arm64]
-        exclude:
-          - os: windows-latest
-            arch: arm64
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -38,14 +35,29 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }}
 
+      - name: Set target triple
+        id: set_target
+        run: |
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            if [ "${{ matrix.arch }}" = "x64" ]; then
+              echo "triple=x86_64-apple-darwin" >> $GITHUB_OUTPUT
+            else
+              echo "triple=aarch64-apple-darwin" >> $GITHUB_OUTPUT
+            fi
+          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+            if [ "${{ matrix.arch }}" = "x64" ]; then
+              echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
+            else
+              echo "triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT
+            fi
+          fi
+        shell: bash
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: >-
-            ${{ matrix.os == 'macos-latest' && matrix.arch == 'x64' && 'x86_64-apple-darwin' ||
-               matrix.os == 'macos-latest' && matrix.arch == 'arm64' && 'aarch64-apple-darwin' ||
-               matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' }}
+          target: ${{ steps.set_target.outputs.triple }}
           override: true
 
       - name: Install Node.js & npm
@@ -66,18 +78,18 @@ jobs:
         env:
           TAURI_SKIP_SIGNING: "true"
         run: |
-          echo "Building for target: ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}"
+          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now handle downloading all sidecars..."
           
-          cargo tauri build --target ${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'msi/*.msi' }}
-            src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') || (matrix.os == 'windows-latest' && matrix.arch == 'x64' && 'x86_64-pc-windows-msvc') }}/release/bundle/${{ matrix.os == 'macos-latest' && 'dmg/*.dmg' || 'nsis/*.exe' }}
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'msi/*.msi' }}
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ matrix.os == 'macos-latest' && 'dmg/*.dmg' || 'nsis/*.exe' }}
 
       - name: Ensure GitHub Release exists
         id: ensure_release
@@ -110,7 +122,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         id: find_msi
         run: |
-          msi_path=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi)
+          msi_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/msi/*.msi)
           msi_name=$(basename "$msi_path")
           echo "msi_path=$msi_path" >> $GITHUB_OUTPUT
           echo "msi_name=$msi_name" >> $GITHUB_OUTPUT
@@ -131,7 +143,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         id: find_nsis
         run: |
-          exe_path=$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe)
+          exe_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/*.exe)
           exe_name=$(basename "$exe_path")
           echo "nsis_path=$exe_path" >> $GITHUB_OUTPUT
           echo "nsis_name=$exe_name" >> $GITHUB_OUTPUT
@@ -157,7 +169,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
+          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
           asset_name: ${{ steps.zip_windows_nsis.outputs.zip_name }}
           asset_content_type: application/zip
 
@@ -165,7 +177,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         id: find_dmg
         run: |
-          dmg_path=$(ls src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/dmg/*.dmg)
+          dmg_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/dmg/*.dmg)
           dmg_name=$(basename "$dmg_path")
           echo "dmg_path=$dmg_path" >> $GITHUB_OUTPUT
           echo "dmg_name=$dmg_name" >> $GITHUB_OUTPUT
@@ -188,7 +200,7 @@ jobs:
         env:
           DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
         run: |
-          BUNDLE_DIR="src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle"
+          BUNDLE_DIR="src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle"
           cd "$BUNDLE_DIR"
           zip_name="${DMG_NAME%.dmg}.zip"
           zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
@@ -202,6 +214,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/${{ matrix.os == 'macos-latest' && (matrix.arch == 'x64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin') }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
+          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
           asset_name: ${{ steps.zip_macos_app.outputs.zip_name }}
           asset_content_type: application/zip
