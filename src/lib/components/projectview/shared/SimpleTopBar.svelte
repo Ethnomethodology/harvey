@@ -34,7 +34,7 @@
   class="flex items-center justify-between px-1 h-10 flex-shrink-0 bg-white dark:bg-surface-1 border-b border-gray-200 dark:border-dark-bg-tertiary"
   data-tauri-drag-region
 >
-  <div class="flex items-center min-w-0">
+  <div class="flex items-center space-x-1.5 min-w-0">
         <div class="h-10 flex items-center justify-center flex-shrink-0">
             <button title="Import" aria-label="Import" class="ui-button-import hover-scale-effect ml-1 mr-1" on:click={(e) => dispatch('requestImport', e)}>
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
@@ -42,14 +42,7 @@
                 </svg>
             </button>
         </div>
-        <button
-            class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
-            title="Toggle Tags Panel"
-            on:click={() => dispatch('toggleLeftPanel')}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
-                <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
-            </svg>
-        </button>
+        
       <span class="font-semibold text-lg text-gray-700 dark:text-gray-200 truncate" title={displayTitle}>{displayTitle}</span>
   </div>
 

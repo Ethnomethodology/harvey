@@ -19,7 +19,7 @@
 	import SpeakersModal from '../modals/SpeakersModal.svelte';
 	import ExportModal from '../modals/ExportModal.svelte';
 	import LayoutSettingsModal from '../modals/LayoutSettingsModal.svelte';
-	import { activeLayout, leftPanelVisible } from '$lib/stores/layoutStore.js';
+	import { activeLayout } from '$lib/stores/layoutStore.js';
 	import { languageOptions } from '$lib/constants/transcriptionOptions.js';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
@@ -53,7 +53,7 @@
             downloadedModelsList = [];
         } finally {
             isLoadingModels = false;
-            validateSelectedModel();
+            // validateSelectedModel();
 
             // --- ADDED: Set Default Model and Language ---
             const currentTranscriptState = get(transcriptStore); // Get current state non-reactively
@@ -254,9 +254,7 @@
 		// Modal closes itself on selection
 	}
 
-	function toggleLeftPanel() {
-		leftPanelVisible.toggle();
-	}
+	
 
 </script>
 
@@ -274,16 +272,7 @@
                 </svg>
             </button>
         </div>
-		<!-- Toggle Left Panel Button -->
-		<button
-			class="ui-button-icon-no-border p-1.5 hover-scale-effect mr-2"
-			title="Toggle File Explorer Panel"
-			on:click={toggleLeftPanel}
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layout-sidebar" viewBox="0 0 16 16">
-				<path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2z"/>
-			 </svg>
-		</button>
+		
 
 		<!-- Media Selection Dropdown -->
 		<Dropdown

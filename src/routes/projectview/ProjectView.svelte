@@ -385,9 +385,13 @@ async function onConfirmTranscriptionStart(event) {
 
 	async function handleTabClick(tabName) {
         if (selectedTab === tabName) {
-            const projState = get(project);
-            if (!projState.isDocumentLoading && !projState.isImportedTranscriptLoading && !projState.isMediaNoteTranscriptLoading && !projState.isTranscribing && !projState.isImportingAsset) {
-                 project.update(p => ({...p, isLoading: false}));
+            // If the same tab is clicked, toggle the corresponding panel
+            if (tabName === 'data') {
+                panelStateStore.toggleDataLeftPanel();
+            } else if (tabName === 'transcriptions') {
+                panelStateStore.toggleTranscriptionPanel();
+            } else if (tabName === 'tags') {
+                panelStateStore.toggleTagsLeftPanel();
             }
             return;
         }
@@ -819,7 +823,6 @@ async function onConfirmTranscriptionStart(event) {
 		{#if selectedTab === 'data'}
 			<DataTopBar
 				tableViewRef={dataViewRef?.tableViewRef}
-				on:toggleLeftPanel={() => panelStateStore.toggleDataLeftPanel()}
 				on:requestTranscriptionTabWithMediaAndDialog={handleRequestTranscriptionTabWithMediaAndDialog}
                 on:requestImport={handleImportMediaInSidebar}
 			/>
@@ -829,7 +832,7 @@ async function onConfirmTranscriptionStart(event) {
                 on:requestImport={handleImportMediaInSidebar}
 			/>
 		{:else if selectedTab === 'tags'}
-			<SimpleTopBar on:toggleLeftPanel={() => panelStateStore.toggleTagsLeftPanel()} on:requestImport={handleImportMediaInSidebar} />
+			<SimpleTopBar on:requestImport={handleImportMediaInSidebar} />
 		{/if}
 	</div>
 

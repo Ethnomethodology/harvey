@@ -23,7 +23,7 @@
 
     import TopBar from './TopBar.svelte';
     import LeftPanel from './LeftPanel.svelte';
-    import { leftPanelVisible } from '$lib/stores/layoutStore.js';
+    import panelStateStore from '$lib/stores/panelStateStore.js';
     import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Added
     import MediaPlayer from '../shared/MediaPlayer.svelte';
     import InteractiveWaveform from '../shared/InteractiveWaveform.svelte'; // Added for horizontal waveform
@@ -59,10 +59,7 @@
     let leftPanelRef;
 
     // Reactive state for left panel visibility from store
-    let isLeftPanelVisible;
-    const unsubscribeLeftPanelVisible = leftPanelVisible.subscribe(value => {
-        isLeftPanelVisible = value;
-    });
+    
 
     let currentWaveformLayout; // Will be updated by store subscription
     const unsubscribeWaveformLayout = waveformLayoutStore.subscribe(value => {
@@ -71,24 +68,23 @@
     });
 
     onDestroy(() => {
-        if (unsubscribeLeftPanelVisible) unsubscribeLeftPanelVisible();
         if (unsubscribeWaveformLayout) unsubscribeWaveformLayout();
     });
 
     // Reactive statements for panel widths
     $: middlePanelWidthClass = (() => {
         if (currentWaveformLayout === 'vertical') {
-            return isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
         } else { // 'horizontal' or 'none'
-            return isLeftPanelVisible ? 'w-[42.5%]' : 'w-[50%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
         }
     })();
 
     $: rightPanelWidthClass = (() => {
         if (currentWaveformLayout === 'vertical') {
-            return isLeftPanelVisible ? 'w-[40%]' : 'w-[47.5%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[40%]' : 'w-[47.5%]';
         } else { // 'horizontal' or 'none'
-            return isLeftPanelVisible ? 'w-[42.5%]' : 'w-[50%]';
+            return !$panelStateStore.transcriptionPanelCollapsed ? 'w-[42.5%]' : 'w-[50%]';
         }
     })();
 
@@ -329,9 +325,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
         }
     }
 
-    function toggleLeftPanel() {
-        leftPanelVisible.toggle();
-    }
+    
 
     // Handlers for UnsavedChangesModal
     async function handleModalSave() {
@@ -451,7 +445,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     <div class="flex flex-col flex-grow min-h-0 w-full overflow-hidden">
         <!-- Main Content Area (Panels) -->
         <div class="flex flex-grow min-h-0 w-full overflow-x-hidden">
-            {#if isLeftPanelVisible}
+            {#if !$panelStateStore.transcriptionPanelCollapsed}
                 <div
                     class="w-[15%] h-full bg-white dark:bg-surface-2 overflow-y-auto flex-shrink-0 transition-all duration-300 ease-in-out"
                     transition:slide="{{ duration: 300, axis: 'x' }}"
