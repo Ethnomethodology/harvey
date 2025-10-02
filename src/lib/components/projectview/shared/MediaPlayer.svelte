@@ -18,19 +18,27 @@
 	import { handleTrimMediaConfirm, refreshProjectFiles, getAssetMetadata } from '$lib/services/projectService.js';
 	let waveformWorker = new Worker(new URL('$lib/workers/waveformWorker.js', import.meta.url), { type: 'module' });
 	let currentWaveformLoadId = 0;
-	let _tempDecodedAudioBuffer = null; // New variable to store the decoded audio buffer temporarily
+	let waveformLoadData = new Map();
 
 	function initializeWaveformWorker() {
 		waveformWorker.onmessage = async (event) => {
 			const { type, payload, id } = event.data;
 			if (id !== currentWaveformLoadId) {
 				console.log(`[MediaPlayer] Discarding old waveform data (ID: ${id}, current: ${currentWaveformLoadId})`);
+                waveformLoadData.delete(id);
 				return; // Ignore old responses
+			}
+
+			const audioBuffer = waveformLoadData.get(id);
+			waveformLoadData.delete(id);
+
+			if (!audioBuffer) {
+				console.error(`[MediaPlayer] Could not find audioBuffer for loadId ${id}`);
+				return;
 			}
 
 			if (type === 'DECODE_AUDIO_COMPLETE') {
 				const { peaks } = payload;
-				const audioBuffer = _tempDecodedAudioBuffer; // Use the stored audioBuffer
 				localAudioBuffer = audioBuffer; // Set local buffer for this component instance
 				if (!explicitMediaPath) {
 					// For the main player, we proceed to handle global state and caching.
@@ -81,7 +89,6 @@
 						}
 					}
 				}
-				_tempDecodedAudioBuffer = null; // Clear the temporary storage
 			} else if (type === 'DECODE_AUDIO_ERROR') {
 				console.error(`[MediaPlayer] Error from waveform worker (ID: ${id}):`, payload.error);
 				// Handle error, e.g., clear waveform, show message
@@ -765,7 +772,6 @@
         }
 
         // Increment ID for new request
-        currentWaveformLoadId++;
         const loadId = currentWaveformLoadId;
 
         const currentProject = get(project);
@@ -813,9 +819,10 @@
             }, [transferableChannelData.buffer]); // Transfer the buffer of the new Float32Array
 
             // Store decodedAudioBuffer locally for use in onmessage handler when worker responds
-            _tempDecodedAudioBuffer = decodedAudioBuffer;
+            waveformLoadData.set(loadId, decodedAudioBuffer);
 
         } catch (error) {
+            waveformLoadData.delete(loadId);
             console.error(`[MediaPlayer] Error reading or decoding audio file for waveform:`, error);
             if (!explicitMediaPath) {
                 setAudioBuffer(null, null);
