@@ -151,6 +151,7 @@ pub fn run() {
             welcome::commands::get_downloaded_models,
             welcome::commands::delete_model,
             welcome::commands::download_model_command,
+            welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
             welcome::commands::change_download_location_and_move_models,
             

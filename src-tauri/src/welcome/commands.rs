@@ -25,6 +25,150 @@ use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
 
+// --- Structs for Translation Model Download ---
+#[derive(Clone, serde::Serialize)]
+struct TranslationDownloadProgress {
+  model_name: String,
+  file_name: String,
+  downloaded_bytes: u64,
+  total_bytes: Option<u64>,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct TranslationErrorPayload {
+  model_name: String,
+  error_message: String,
+}
+
+// --- Translation Model Download Command ---
+#[command]
+pub async fn download_translation_model_command(
+    app: AppHandle,
+    cancellation_state: State<'_, DownloadCancellationState>,
+    model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
+    download_location: String,
+) -> Result<(), CommandError> {
+    log::info!("CMD: download_translation_model: {} -> {}", model_info.name, download_location);
+    let model_name = model_info.name.clone();
+    let target_dir = PathBuf::from(&download_location);
+
+    if download_location.trim().is_empty() {
+        return Err(CommandError::from(format!("Download location is empty for '{}'.", model_name)));
+    }
+    if !target_dir.exists() {
+        log::info!("Target directory {:?} does not exist. Creating...", target_dir);
+        fs::create_dir_all(&target_dir)?;
+    } else if !target_dir.is_dir() {
+        return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
+    }
+
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag));
+    log::info!("Cancellation token stored for translation model {}", model_name);
+
+    let download_result = download_and_save_translation_files(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await;
+
+    if cancellation_state.0.remove(&model_name).is_some() {
+        log::info!("Removed cancellation token for translation model {}", model_name);
+    } else {
+        log::warn!("Cancellation token for {} was already removed.", model_name);
+    }
+
+    match download_result {
+        Ok(_) => {
+            log::info!("Successfully downloaded all files for translation model {}", model_name);
+            app.emit("translation-download-complete", &model_name).map_err(|e| CommandError::from(format!("Failed to emit completion event: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("An error occurred during download for translation model {}: {}", model_name, e);
+            let _ = app.emit("translation-download-error", &TranslationErrorPayload {
+                model_name: model_name.clone(),
+                error_message: format!("{}", e),
+            }).map_err(|emit_err| log::error!("Failed to emit error event: {}", emit_err));
+            Err(e)
+        }
+    }
+}
+
+async fn download_and_save_translation_files(
+    app: AppHandle,
+    cancel_flag: Arc<AtomicBool>,
+    model_info: ModelInfo,
+    download_base_location: String,
+) -> Result<(), CommandError> {
+    let model_name = model_info.name.clone();
+    let repo_url = model_info.download_url.as_ref().filter(|url| !url.trim().is_empty()).ok_or_else(|| CommandError::from(format!("Model '{}' is missing a repository URL.", model_name)))?;
+
+    let model_dest_dir = PathBuf::from(&download_base_location).join(&model_name);
+    if !model_dest_dir.exists() {
+        fs::create_dir_all(&model_dest_dir)?;
+    }
+
+    // List of files required for MarianMT models
+    let required_files = vec!["config.json", "pytorch_model.bin", "source.spm", "target.spm", "vocab.json"];
+    let client = reqwest::Client::new();
+
+    app.emit("translation-download-start", &model_name)?;
+
+    for file_name in required_files {
+        if cancel_flag.load(Ordering::Relaxed) {
+            log::info!("Download cancelled for model {} before starting file {}.", model_name, file_name);
+            return Err(CommandError::from(format!("Download for {} was cancelled.", model_name)));
+        }
+
+        let file_url = format!("{}/resolve/main/{}", repo_url, file_name);
+        let file_dest_path = model_dest_dir.join(file_name);
+        let temp_file_path = model_dest_dir.join(format!("{}.part", file_name));
+
+        if file_dest_path.exists() {
+            log::info!("File {} already exists for model {}. Skipping.", file_name, model_name);
+            continue;
+        }
+
+        log::info!("Starting download of {} for model {}", file_name, model_name);
+        let mut response = client.get(&file_url).send().await?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to download file {}: Status {} for URL {}", file_name, response.status(), file_url).into());
+        }
+
+        let total_size = response.content_length();
+        let mut downloaded: u64 = 0;
+        let mut stream = response.bytes_stream();
+        let mut temp_file = File::create(&temp_file_path)?;
+
+        while let Some(item) = stream.next().await {
+            if cancel_flag.load(Ordering::Relaxed) {
+                log::info!("Download of {} for {} cancelled mid-stream.", file_name, model_name);
+                return Err(CommandError::from(format!("Download for {} was cancelled.", model_name)));
+            }
+            let chunk = item?;
+            temp_file.write_all(&chunk)?;
+            downloaded += chunk.len() as u64;
+            app.emit("translation-download-progress", &TranslationDownloadProgress {
+                model_name: model_name.clone(),
+                file_name: file_name.to_string(),
+                downloaded_bytes: downloaded,
+                total_bytes: total_size,
+            })?;
+        }
+
+        fs::rename(&temp_file_path, &file_dest_path)?;
+        log::info!("Finished downloading {}. Renamed .part file.", file_name);
+    }
+
+    // After all files are downloaded, update the main config
+    let mut config = read_config()?;
+    if !config.downloaded_models.iter().any(|m| m.name == model_name) {
+        config.downloaded_models.push(model_info);
+        write_config(&config)?;
+    }
+
+    Ok(())
+}
+
+
 // --- Structs (DownloadProgress, ErrorPayload) - Unchanged ---
 #[derive(Clone, serde::Serialize)]
 struct DownloadProgress {

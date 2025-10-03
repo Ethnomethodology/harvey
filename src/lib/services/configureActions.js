@@ -125,6 +125,66 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 	}
 }
 
+// --- Translation Model Actions ---
+export async function downloadTranslationModel(model, downloadLocation) {
+  if (!model?.download_url) {
+    const errorMsg = `Translation model "${model?.name || 'Unknown'}" is missing a repository URL.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+  if (!downloadLocation || downloadLocation.trim() === '') {
+    const errorMsg = `Download location is not set. Cannot download translation model.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+  console.log(`Attempting to download translation model: ${model.name} from ${model.download_url} to ${downloadLocation}`);
+  try {
+    await invoke('download_translation_model_command', {
+      modelInfo: model,
+      downloadLocation: downloadLocation
+    });
+    console.log(`Download command invoked for translation model: ${model.name}`);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking download_translation_model_command for ${model.name}:`, error);
+    throw new Error(`Failed to start translation model download: ${error?.message || error}`);
+  }
+}
+
+export async function deleteTranslationModel(model) {
+  console.log(`Attempting to delete translation model: ${model.name}`);
+  try {
+    if (!model?.name) {
+      const errorMsg = `Cannot delete translation model without a name.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    // This uses the same backend `delete_model` command, which is fine as it just deletes the folder.
+    await invoke('delete_model', { modelToDelete: model });
+    console.log("Translation model deletion command invoked:", model.name);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking delete_model for translation model ${model.name}:`, error);
+    throw new Error(`Failed to delete translation model: ${error?.message || error}`);
+  }
+}
+
+export async function cancelTranslationModelDownload(modelName) {
+	if (!modelName) {
+		console.error("Cannot cancel download without a model name.");
+		return;
+	}
+	console.log(`Requesting cancellation for translation model: ${modelName}`);
+	try {
+        // This uses the same backend `cancel_download_command`, which is fine as it works by model name.
+		await invoke('cancel_download_command', { modelName: modelName });
+		console.log(`Cancellation command invoked for ${modelName}.`);
+	} catch (error) {
+		console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
+		throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+	}
+}
+
 // --- Export Action ---
 /**
  * Exports the current transcript segments to a specified file path and format.
