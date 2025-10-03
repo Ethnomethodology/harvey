@@ -366,13 +366,12 @@
         if (!confirmed) return;
 
         try {
-            const highlight = getHighlight(item);
             await invoke('remove_tag_from_highlight', {
                 projectId: $project.id,
-                highlightId: highlight.id,
+                highlightId: item.id,
                 tagToRemove: selectedTag.name,
-                filePath: highlight.source.file_path,
-                docType: highlight.source.file_type,
+                filePath: item.source.file_path,
+                docType: item.source.file_type,
             });
             // Refresh the view
             await handleSelectTag(selectedTag);

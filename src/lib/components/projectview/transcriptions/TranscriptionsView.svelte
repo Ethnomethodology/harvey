@@ -472,6 +472,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     bind:editSegmentStartTime={currentEditSegmentStart}
                     bind:editSegmentEndTime={currentEditSegmentEnd}
                     projectId={$project.id}
+                    xmlPath={$project.xmlPath}
                     bind:isVideoMinimized={isMediaPlayerHidden}
                     showLoopPauseButton={true}
                     showDataTranscribeButton={false}
@@ -502,7 +503,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     <VerticalWaveform
                         bind:this={verticalWaveformRef}
                         audioBuffer={$transcriptStore.audioBuffer}
-                        peaks={$transcriptStore.audioBufferPeaks}
+                        externalPeaks={$transcriptStore.audioBufferPeaks}
                         currentTime={$transcriptStore.player.currentTime}
                         duration={$transcriptStore.player.duration}
                         on:navigate={handlePanelNavigate}

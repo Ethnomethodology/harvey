@@ -3,6 +3,7 @@
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 
 	export let audioBuffer = null;
+	export let externalPeaks = null;
 	export let currentTime = 0;
 	export let duration = 0;
 
@@ -88,6 +89,72 @@
 		const logicalPy = py + currentScrollOffsetPy;
 		const proportion = Math.max(0, Math.min(1, logicalPy / contentLogicalHeight));
 		return proportion * mediaDuration;
+	}
+
+	function drawVerticalWaveformFromPeaks(ctx, peaks, canvasLogicalHeight, canvasWidth, color) {
+		if (!ctx || !peaks || canvasLogicalHeight <= 0 || canvasWidth <= 0) return;
+
+		const midX = canvasWidth / 2;
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 1;
+
+		const numPeakBlocks = peaks.length / 2;
+		const peaksPerLogicalPixel = numPeakBlocks / canvasLogicalHeight;
+
+		ctx.beginPath();
+
+		for (let y = 0; y < canvasLogicalHeight; y++) {
+			const peakBlockStartIndex = Math.floor(y * peaksPerLogicalPixel);
+			const peakBlockEndIndex = Math.floor((y + 1) * peaksPerLogicalPixel);
+
+			let minPeak = 0.0;
+			let maxPeak = 0.0;
+
+			if (peakBlockStartIndex < peakBlockEndIndex) {
+				minPeak = peaks[peakBlockStartIndex * 2];
+				maxPeak = peaks[peakBlockStartIndex * 2 + 1];
+				for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
+					if (peaks[i * 2] < minPeak) minPeak = peaks[i * 2];
+					if (peaks[i * 2 + 1] > maxPeak) maxPeak = peaks[i * 2 + 1];
+				}
+			} else {
+				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+				if (targetBlock * 2 + 1 < peaks.length) {
+					minPeak = peaks[targetBlock * 2];
+					maxPeak = peaks[targetBlock * 2 + 1];
+				}
+			}
+
+			const xLeft = midX + minPeak * midX;
+			if (y === 0) ctx.moveTo(xLeft, y + 0.5);
+			else ctx.lineTo(xLeft, y + 0.5);
+		}
+		ctx.stroke();
+
+		ctx.beginPath();
+		for (let y = canvasLogicalHeight - 1; y >= 0; y--) {
+			const peakBlockStartIndex = Math.floor(y * peaksPerLogicalPixel);
+			const peakBlockEndIndex = Math.floor((y + 1) * peaksPerLogicalPixel);
+
+			let maxPeak = 0.0;
+
+			if (peakBlockStartIndex < peakBlockEndIndex) {
+				maxPeak = peaks[peakBlockStartIndex * 2 + 1];
+				for (let i = peakBlockStartIndex + 1; i < peakBlockEndIndex; i++) {
+					if (peaks[i * 2 + 1] > maxPeak) maxPeak = peaks[i * 2 + 1];
+				}
+			} else {
+				const targetBlock = Math.min(numPeakBlocks - 1, peakBlockStartIndex);
+				if (targetBlock * 2 + 1 < peaks.length) {
+					maxPeak = peaks[targetBlock * 2 + 1];
+				}
+			}
+
+			const xRight = midX + maxPeak * midX;
+			if (y === canvasLogicalHeight - 1) ctx.moveTo(xRight, y + 0.5);
+			else ctx.lineTo(xRight, y + 0.5);
+		}
+		ctx.stroke();
 	}
 
 	function drawVerticalWaveform(ctx, buffer, canvasLogicalHeight, canvasWidth, color) {
@@ -215,11 +282,12 @@
 
 	function drawWaveformUI() {
 		const buf = audioBuffer;
+		const peaks = externalPeaks;
 		const mediaDur = duration;
 		const dpr = window.devicePixelRatio || 1;
 		const logicalHeight = visibleCanvasHeight * zoomLevel;
 
-		if (!waveformCanvas || !buf || mediaDur <= 0 || logicalHeight <= 0 || waveformCanvasWidth <= 0) {
+		if (!waveformCanvas || (!buf && !peaks) || mediaDur <= 0 || logicalHeight <= 0 || waveformCanvasWidth <= 0) {
 			if (waveformCanvas) { waveformCanvas.width = 0; waveformCanvas.height = 0; }
 			return;
 		}
@@ -237,7 +305,13 @@
 		ctx.scale(dpr, dpr);
 		ctx.clearRect(0, 0, waveformCanvasWidth, logicalHeight);
         const isDark = document.documentElement.classList.contains('dark');
-		drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
+
+		if (peaks) {
+			drawVerticalWaveformFromPeaks(ctx, peaks, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
+		} else if (buf) {
+			drawVerticalWaveform(ctx, buf, logicalHeight, waveformCanvasWidth, isDark ? '#737373' : '#9ca3af');
+		}
+
 		ctx.restore();
 
 		lastDrawnTime = currentTime;
@@ -331,7 +405,7 @@
 
 	function handleContainerClick(event) {
 		const mediaDur = duration;
-		if (!waveformAreaContainerRef || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
+		if (!waveformAreaContainerRef || !$transcriptStore.audioBufferPeaks || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
 		if (event.target === timescaleCanvas) return;
 
@@ -345,7 +419,7 @@
 	}
 
 	async function handleZoom(direction) {
-		if ((!audioBuffer && !$transcriptStore.audioBufferPeaks) || !waveformAreaContainerRef || !visibleCanvasHeight) return;
+		if (!$transcriptStore.audioBufferPeaks || !waveformAreaContainerRef || !visibleCanvasHeight) return;
 
 		const oldZoomLevel = zoomLevel;
 		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;

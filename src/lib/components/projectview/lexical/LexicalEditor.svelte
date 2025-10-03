@@ -209,21 +209,15 @@
     }
 
     function handleClickOutsideSearch(event) {
-      console.log('[handleClickOutsideSearch] Triggered. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm, 'target:', event.target);
       if (showSearchBox && searchTerm === '') {
         const isClickInsideSearchUi = searchUiContainerElement && searchUiContainerElement.contains(event.target);
         const isClickOnSearchToggleButton = searchToggleButtonElement && searchToggleButtonElement.contains(event.target);
 
-        console.log('[handleClickOutsideSearch] Conditions met (showSearchBox && searchTerm === ""). isClickInsideSearchUi:', isClickInsideSearchUi, 'isClickOnSearchToggleButton:', isClickOnSearchToggleButton);
-
         if (!isClickInsideSearchUi && !isClickOnSearchToggleButton) {
-          console.log('[handleClickOutsideSearch] Hiding search box because click was outside UI and toggle button, and search term is empty.');
           showSearchBox = false;
         } else {
-          console.log('[handleClickOutsideSearch] Not hiding search box. Click was inside UI or on toggle button, or search term is not empty.');
         }
       } else {
-        console.log('[handleClickOutsideSearch] Conditions not met for hiding. showSearchBox:', showSearchBox, 'searchTerm:', searchTerm);
       }
     }
 

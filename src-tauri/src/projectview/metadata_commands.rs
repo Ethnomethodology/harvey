@@ -108,6 +108,7 @@ pub async fn update_asset_metadata_command(
     // The main save_asset_metadata call, which might save some of the fields if they were part of that table.
     // This call uses the `sanitized_metadata_for_db` which is the `metadata_payload` after some internal adjustments.
     // The `save_asset_metadata` function from db_handler.rs should be used here.
+    info!("[CMD] Saving waveform data to DB...");
     db_handler::save_asset_metadata(
         &project_id_for_db,
         &sanitized_metadata_for_db,

@@ -1541,7 +1541,39 @@ pub fn get_highlights_by_tag(
 
                 if tags_vec.contains(&tag_name.to_string()) {
                     let id = annotation_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-                    let text = annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("[Image Highlight]").to_string();
+                    let text = if asset_type.as_deref() == Some("image") {
+                        let title = annotation_obj.get("body")
+                            .and_then(|b| b.as_array())
+                            .and_then(|bodies| bodies.iter().find(|body| 
+                                body.get("purpose").and_then(|p| p.as_str()) == Some("commenting") &&
+                                body.get("type").and_then(|t| t.as_str()) == Some("Title")
+                            ))
+                            .and_then(|title_body| title_body.get("value"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+
+                        let description = annotation_obj.get("body")
+                            .and_then(|b| b.as_array())
+                            .and_then(|bodies| bodies.iter().find(|body| 
+                                body.get("purpose").and_then(|p| p.as_str()) == Some("commenting") &&
+                                body.get("type").and_then(|t| t.as_str()) == Some("Description")
+                            ))
+                            .and_then(|desc_body| desc_body.get("value"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+
+                        if !title.is_empty() && !description.is_empty() {
+                            format!("Title: {}, Description: {}", title, description)
+                        } else if !title.is_empty() {
+                            format!("Title: {}", title)
+                        } else if !description.is_empty() {
+                            format!("Description: {}", description)
+                        } else {
+                            "[Image Highlight]".to_string()
+                        }
+                    } else {
+                        annotation_obj.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                    };
                     let color = annotation_obj.get("color").and_then(|v| v.as_str())
                         .or_else(|| {
                             annotation_obj.get("body")
