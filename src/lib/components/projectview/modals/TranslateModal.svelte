@@ -1,5 +1,6 @@
 <script>
 	import { createEventDispatcher, onMount } from 'svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte'; // Import the Dropdown component
 
 	export let showModal = false;
 	export let availableTranscripts = [];
@@ -15,11 +16,28 @@
 		{ value: 'ja', label: 'Japanese' },
 	];
 
+    let transcriptOptions = [];
+
+    $: {
+        // Reactively update transcriptOptions when availableTranscripts changes
+        if (availableTranscripts.length > 0) {
+            transcriptOptions = availableTranscripts.map(t => ({
+                value: t.relative_path,
+                label: t.name || t.relative_path
+            }));
+            // If selectedTranscript is not set or is no longer valid, set it to the first actual transcript
+            if (!selectedTranscript || !availableTranscripts.some(t => t.relative_path === selectedTranscript)) {
+                selectedTranscript = availableTranscripts[0].relative_path;
+            }
+        } else {
+            transcriptOptions = [];
+            selectedTranscript = '';
+        }
+    }
+
     onMount(() => {
         console.log("DEBUG: TranslateModal received transcripts:", availableTranscripts);
-        if (availableTranscripts.length > 0) {
-            selectedTranscript = availableTranscripts[0].relative_path;
-        }
+        // Initial selection logic is now handled reactively by the $: block
     });
 
 	function handleConfirm() {
@@ -64,30 +82,35 @@
                 {:else}
                     <div class="space-y-1">
                         <label for="transcriptSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcript to Translate:</label>
-                        <select id="transcriptSelect" class="ui-select w-full" bind:value={selectedTranscript}>
-                            {#each availableTranscripts as transcript, index (transcript.relative_path || `${transcript.name || 'unnamed'}-${index}`)}
-                                <option value="{transcript.relative_path}">{transcript.name || transcript.relative_path}</option>
-                            {/each}
-                        </select>
+                        <Dropdown
+                            containerClasses="w-full"
+                            options={transcriptOptions}
+                            bind:value={selectedTranscript}
+                            on:change={(e) => selectedTranscript = e.detail}
+                            placeholder={availableTranscripts.length === 0 ? "No Transcripts Available" : "Select a Transcript"}
+                            disabled={availableTranscripts.length === 0}
+                        />
                     </div>
                 {/if}
 
                 <div class="space-y-1">
                     <label for="fromLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translate From:</label>
-                    <select id="fromLanguageSelect" class="ui-select w-full" bind:value={fromLanguage}>
-                        {#each languageOptions as lang (lang.value)}
-                            <option value="{lang.value}">{lang.label}</option>
-                        {/each}
-                    </select>
+                    <Dropdown
+                        containerClasses="w-full"
+                        options={languageOptions}
+                        bind:value={fromLanguage}
+                        on:change={(e) => fromLanguage = e.detail}
+                    />
                 </div>
 
                 <div class="space-y-1">
                     <label for="toLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translate To:</label>
-                    <select id="toLanguageSelect" class="ui-select w-full" bind:value={toLanguage}>
-                        {#each languageOptions as lang (lang.value)}
-                            <option value="{lang.value}">{lang.label}</option>
-                        {/each}
-                    </select>
+                    <Dropdown
+                        containerClasses="w-full"
+                        options={languageOptions}
+                        bind:value={toLanguage}
+                        on:change={(e) => toLanguage = e.detail}
+                    />
                 </div>
             </div>
 

@@ -342,6 +342,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
+                    let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
@@ -352,15 +353,22 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
                         absolutePath = `${base}/${rel}`;
+                        if (!name) { // If name is not provided by backend, derive from relativePath
+                            name = t.relativePath.split(/[\\/]/).pop();
+                        }
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
                         console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                            name = t.relativePath;
+                        }
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
                         relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code // Pass the language code
+                        language_code: t.language_code, // Pass the language code
+                        name: name // Add the name property
                     };
                 });
               }
@@ -470,6 +478,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
               if (node.file_type === 'media' && node.transcripts) {
                  node.transcripts = node.transcripts.map(t => {
                     let absolutePath = null;
+                    let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
@@ -480,15 +489,22 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
                         absolutePath = `${base}/${rel}`;
+                        if (!name) { // If name is not provided by backend, derive from relativePath
+                            name = t.relativePath.split(/[\\/]/).pop();
+                        }
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
                         console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                            name = t.relativePath;
+                        }
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
                         relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code // Pass the language code
+                        language_code: t.language_code, // Pass the language code
+                        name: name // Add the name property
                     };
                 });
               }
