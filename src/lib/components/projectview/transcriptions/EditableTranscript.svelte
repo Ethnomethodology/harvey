@@ -97,11 +97,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     /* --- Render UI --- */
     async function renderSegmentUI(idx) {
         if (!isMounted) return;
-        console.log(`[EditableTranscript] renderSegmentUI called with index: ${idx}`);
 
         if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length) {
             const needsClear = currentIndex !== -1;
-            console.log(`[EditableTranscript] Index ${idx} invalid or segments empty. Clearing UI. Needs clear: ${needsClear}`);
             currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = '';
             initialJsonForEditor = defaultEmptyJsonString; // Ensure it's set for potential editor reset
             currentEditorJson = defaultEmptyJsonString;
@@ -118,7 +116,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         targetIndexForLoad = -1;
 
         if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
-            console.error(`[EditableTranscript] Invalid segment data at index ${idx}:`, seg);
             localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error';
             initialJsonForEditor = defaultEmptyJsonString;
         } else {
@@ -180,9 +177,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             version: 1
                         }
                     };
-                    initialJsonForEditor = JSON.stringify(sanitizedEditorState);
+                    initialJsonForEditor = defaultEmptyJsonString;
                 } catch (e) {
-                    console.error(`[EditableTranscript] Error sanitizing segment text for index ${idx}:`, e, ". Using default empty JSON.");
                     initialJsonForEditor = defaultEmptyJsonString;
                 }
             } else {
@@ -195,11 +191,9 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         if (lexicalEditorInstance) {
             // If the editor instance exists, update its content directly.
             // This avoids re-creating the entire component, which is more performant.
-            console.log(`[EditableTranscript] Calling updateContent for index ${idx}`);
             lexicalEditorInstance.updateContent(initialJsonForEditor);
         } else if (isEditorVisible) {
             // Editor will be created by Svelte due to #if block, and will use initialJsonForEditor prop
-            console.log(`[EditableTranscript] Editor instance not yet available for index ${idx}, will mount with initialJson.`);
         }
 
         dispatchEditState();
@@ -212,7 +206,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     export function loadSegmentSilent(i) { if (i >= 0 && i < segments.length) { if (i !== currentIndex) { targetIndexForLoad = i; renderSegmentUI(i); } } else { targetIndexForLoad = -1; if (i !== currentIndex) renderSegmentUI(i); } }
     export function updateTimesFromExternal(newStartTime, newEndTime) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return; let changed = false; const currentSeg = segments[currentIndex]; if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
     export function focusEditor() { /* Lexical focus */ }
-    export function forceReloadFromStore() { if (isMounted && currentIndex >= 0 && currentIndex < segments.length) { console.log(`[EditableTranscript] Force reload segment ${currentIndex}.`); renderSegmentUI(currentIndex); } }
+    export function forceReloadFromStore() { if (isMounted && currentIndex >= 0 && currentIndex < segments.length) { renderSegmentUI(currentIndex); } }
 
     /* --- Lifecycle & Store Subscription --- */
     let unsubscribeTranscriptStore;
@@ -237,7 +231,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             // Scenario 1: Structural change (segments array reference or length changed)
             // This covers new transcript loads, undo/redo, segment insert/delete.
             if (segmentsArrayReferenceChanged || segmentsLengthChanged) {
-                console.log(`[EditableTranscript Sub] Structural change detected. New length: ${newSegments.length}, StoreIdx: ${currentStoreIndex}`);
                 // If segments become empty, ensure transcript is not dirty.
                 if (newSegments.length === 0) {
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false }));
@@ -249,7 +242,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             // Scenario 2: Player seeking while NOT in edit mode, and the segment index has changed.
             // This is for navigation through the transcript without explicit editing.
             else if (!editEnabled && currentStoreIndex !== currentIndex) {
-                console.log(`[EditableTranscript Sub] Player index changed to ${currentStoreIndex} while not editing.`);
                 if (currentStoreIndex >= 0 && currentStoreIndex < segments.length) {
                     // Load the new segment silently (without dispatching navigation events)
                     loadSegmentSilent(currentStoreIndex);
@@ -283,7 +275,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 const endChanged = Math.abs(parseTimestamp(localEnd) - currentSegmentEnd) > 0.0001;
 
                 if (textContentChanged || speakerChanged || startChanged || endChanged) {
-                    console.log(`[EditableTranscript Sub] Active segment content changed. Re-rendering index: ${currentIndex}`);
                     renderSegmentUI(currentIndex);
                 }
             }
@@ -337,9 +328,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         currentEditorJson = event.detail.jsonString;
 	}
     export function commitCurrentSegmentEdits() {
-        console.log("[EditableTranscript] commitCurrentSegmentEdits called.");
         if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) {
-            console.warn("Commit skipped: Not ready or not in edit mode.");
             return false;
         }
 
@@ -388,12 +377,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
               jsonString = jsonStringRaw;
             }
 
-            console.log('[DEBUG save]', {
-                idx: currentIndex,
-                first120: jsonString.slice(0, 120),
-                typeof: typeof jsonString
-            });
-
             // validate it contains a Lexical root
             try {
                 const parsed = JSON.parse(jsonString);
@@ -401,11 +384,6 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     throw new Error("Invalid JSON structure (missing root)");
                 }
             } catch (e) {
-                console.warn("Commit skipped: currentEditorJson invalid.", e);
-                console.error(
-                    "Invalid JSON:",
-                    jsonString ? jsonString.substring(0, 200) + "..." : "null"
-                );
                 return false;
             }
             if (jsonString !== segmentInStore.text) {
@@ -433,9 +411,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
         if (hasChanges) {
             updateSegment(currentIndex, changes);
-            console.log("[EditableTranscript] Committed changes segment", currentIndex, "Transcript dirty state after commit:", get(transcriptStore).transcriptDirty);
         } else {
-            console.log("[EditableTranscript] No changes detected for segment", currentIndex);
         }
         return hasChanges;
     }
