@@ -81,20 +81,24 @@ export let compactMode = false; // New prop, defaults to false
 	$: currentSegmentsToDisplay = externalSegments ?? $transcriptStore.segments;
 	$: activeSegmentIndexForDisplay = externalCurrentSegmentIndex ?? $transcriptStore.player.currentSegmentIndex;
 
+	$: console.log('[InteractiveWaveform] externalDuration:', externalDuration);
+	$: console.log('[InteractiveWaveform] currentAudioBuffer:', currentAudioBuffer);
+	$: console.log('[InteractiveWaveform] actualMediaDuration:', actualMediaDuration);
+
 	$: {
-		if (currentAudioBuffer && currentAudioBuffer !== prevExternalAudioBufferForDuration) {
-			if (currentAudioBuffer.duration > 0) {
-				actualMediaDuration = currentAudioBuffer.duration;
+		let newDuration = 0;
+		if (currentAudioBuffer) {
+			newDuration = currentAudioBuffer.duration;
+		} else if (externalDuration > 0) {
+			newDuration = externalDuration;
+		}
+
+		if (newDuration !== actualMediaDuration) {
+			actualMediaDuration = newDuration;
+			if (newDuration > 0) {
 				zoomLevel = maxZoomLevel;
 				scrollOffsetPx = 0;
-				requestRedraw(true);
-			} else {
-				actualMediaDuration = 0;
 			}
-			prevExternalAudioBufferForDuration = currentAudioBuffer;
-		} else if (!currentAudioBuffer && prevExternalAudioBufferForDuration) {
-			actualMediaDuration = 0;
-			prevExternalAudioBufferForDuration = null;
 			requestRedraw(true);
 		}
 	}
@@ -749,10 +753,10 @@ export let compactMode = false; // New prop, defaults to false
 
 	}
 
-	function handleCanvasClick(e) { const dur = actualMediaDuration; if (isTrimming || isEditingSegment || !segmentWaveformCanvas || !currentAudioBuffer || dur <= 0 || !waveformScrollContainerRef || visibleCanvasWidth <= 0 || totalLogicalWidth <= 0) return; const rect = waveformScrollContainerRef.getBoundingClientRect(); const clickX = e.clientX - rect.left; const time = pxToTime(clickX, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); if (!autoScrollEnabled) { autoScrollEnabled = true; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } dispatch('navigate', { time: time }); }
+	function handleCanvasClick(e) { const dur = actualMediaDuration; if (isTrimming || isEditingSegment || !segmentWaveformCanvas || dur <= 0 || !waveformScrollContainerRef || visibleCanvasWidth <= 0 || totalLogicalWidth <= 0) return; const rect = waveformScrollContainerRef.getBoundingClientRect(); const clickX = e.clientX - rect.left; const time = pxToTime(clickX, dur, totalLogicalWidth, visibleCanvasWidth, scrollOffsetPx); if (!autoScrollEnabled) { autoScrollEnabled = true; clearTimeout(autoScrollEnableTimer); autoScrollEnableTimer = null; } dispatch('navigate', { time: time }); }
 
 	function handleZoom(direction) {
-		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !currentAudioBuffer || !actualMediaDuration) {
+		if (!visibleCanvasWidth || visibleCanvasWidth <= 0 || !actualMediaDuration) {
 			return;
 		}
 		const oldZoomLevel = zoomLevel;
@@ -1068,12 +1072,12 @@ export let compactMode = false; // New prop, defaults to false
 		{/if}
 	</div>
 	<div class="flex-shrink-0 flex flex-col items-center justify-center space-y-1 px-2 py-1 border-l border-gray-200 dark:border-border bg-white dark:bg-d-gray-800">
-		<button class="ui-button-icon-panelheader" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+		<button class="ui-button-icon-panelheader" title="Zoom In Waveform (Ctrl+Scroll)" aria-label="Zoom In Waveform" on:click="{zoomIn}" disabled="{!canZoomIn || visibleCanvasWidth <= 0}">
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM10.5 7.5v6m3-3h-6" />
 			</svg>
 		</button>
-		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || !currentAudioBuffer || visibleCanvasWidth <= 0}">
+		<button class="ui-button-icon-panelheader" title="Zoom Out Waveform (Ctrl+Scroll)" aria-label="Zoom Out Waveform" on:click="{zoomOut}" disabled="{!canZoomOut || visibleCanvasWidth <= 0}">
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
 				<path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607ZM13.5 10.5h-6" />
 			</svg>

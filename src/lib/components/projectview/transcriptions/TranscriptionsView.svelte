@@ -472,6 +472,7 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
                     bind:editSegmentStartTime={currentEditSegmentStart}
                     bind:editSegmentEndTime={currentEditSegmentEnd}
                     projectId={$project.id}
+                    xmlPath={$project.xmlPath}
                     bind:isVideoMinimized={isMediaPlayerHidden}
                     showLoopPauseButton={true}
                     showDataTranscribeButton={false}

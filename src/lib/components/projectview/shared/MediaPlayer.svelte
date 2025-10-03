@@ -65,7 +65,7 @@
 					console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Using newly generated peaks.`);
 					setAudioBuffer(audioBuffer, peaks ? new Float32Array(peaks) : null); // Set buffer and newly generated peaks
 
-					if (projectId && assetRelativePath && currentProject.xmlPath && peaks) {
+					if (projectId && assetRelativePath && xmlPath && peaks) {
 						try {
 							const u8_peaks = new Uint8Array(new Float32Array(peaks).buffer);
 							const s = $transcriptStore.selectedMediaFile;
@@ -78,7 +78,7 @@
 							};
 
 							await invoke('update_asset_metadata_command', {
-								projectXmlPathStr: currentProject.xmlPath,
+								projectXmlPathStr: xmlPath,
 								assetRelativePath: assetRelativePath,
 								metadataPayload: metadataPayload,
 								customFieldsPayload: null,
@@ -123,6 +123,7 @@
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
     export let projectId = null; // Added for explicit project ID passing
+    export let xmlPath = null;
 
 	export let explicitMediaPath = null; // New prop to directly set the media source for this instance
 
@@ -771,38 +772,43 @@
             return;
         }
 
-        // Increment ID for new request
         const loadId = currentWaveformLoadId;
-
         const currentProject = get(project);
         const projectId = currentProject.id;
         const assetRelativePath = $transcriptStore.selectedMediaFile?.relative_path;
 
-        let decodedAudioBuffer = null;
-        let cachedPeaks = null;
+        // 1. Check for cached waveform data first
+        if (projectId && assetRelativePath) {
+            try {
+                console.log('[MediaPlayer] Checking for cached waveform data...');
+                const metadata = await getAssetMetadata(assetRelativePath);
+                if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
+                    console.log('[MediaPlayer] Cached waveform data found.');
+                    const cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
+                    // Set the peaks, but not the audio buffer. The buffer will be loaded on demand.
+                    setAudioBuffer(null, cachedPeaks);
+                    if (metadata.duration_seconds) {
+                        setPlayerDuration(metadata.duration_seconds);
+                    }
+                    console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
+                    return; // Exit early
+                } else {
+                    console.log('[MediaPlayer] No cached waveform data found.');
+                }
+            } catch (e) {
+                console.log('[MediaPlayer] Error fetching metadata for waveform:', e);
+                console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
+            }
+        }
 
+        // 2. If no cached data, proceed with decoding
         try {
             const fileData = await readFile(loadedPathFromProp);
             const arrayBuffer = fileData.buffer; // Get the underlying ArrayBuffer
 
             // Always decode audio on the main thread to get the AudioBuffer for playback
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-            // Check for cached waveform data in metadata
-            if (projectId && assetRelativePath) {
-                try {
-                    const metadata = await getAssetMetadata(assetRelativePath);
-                    if (metadata && metadata.waveform_data && metadata.waveform_data.length > 0) {
-                        cachedPeaks = new Float32Array(new Uint8Array(metadata.waveform_data).buffer);
-                        setAudioBuffer(decodedAudioBuffer, cachedPeaks);
-                        console.log(`[MediaPlayer] Waveform loaded from cache for ${assetRelativePath}.`);
-                        return; // Exit early, as peaks are loaded from cache
-                    }
-                } catch (e) {
-                    console.warn(`[MediaPlayer] Error fetching metadata for waveform, will generate new one. Error:`, e);
-                }
-            }
+            const decodedAudioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
             // If no cached data, proceed with generating peaks using the worker
             console.log(`[MediaPlayer] No cached waveform data found for ${assetRelativePath}. Sending to worker for peak generation.`);

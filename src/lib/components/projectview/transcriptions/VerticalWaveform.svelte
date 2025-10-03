@@ -331,7 +331,7 @@
 
 	function handleContainerClick(event) {
 		const mediaDur = duration;
-		if (!waveformAreaContainerRef || (!audioBuffer && !$transcriptStore.audioBufferPeaks) || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
+		if (!waveformAreaContainerRef || !$transcriptStore.audioBufferPeaks || mediaDur <= 0 || visibleCanvasHeight <= 0) return;
 
 		if (event.target === timescaleCanvas) return;
 
@@ -345,7 +345,7 @@
 	}
 
 	async function handleZoom(direction) {
-		if ((!audioBuffer && !$transcriptStore.audioBufferPeaks) || !waveformAreaContainerRef || !visibleCanvasHeight) return;
+		if (!$transcriptStore.audioBufferPeaks || !waveformAreaContainerRef || !visibleCanvasHeight) return;
 
 		const oldZoomLevel = zoomLevel;
 		let newZoomLevel = direction === 'in' ? oldZoomLevel * zoomStep : oldZoomLevel / zoomStep;
