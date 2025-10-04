@@ -178,7 +178,10 @@ pub async fn translate_transcript_command(
                 let mut translated_tokens = Vec::new();
 
                 for _ in 0..512 { // Max length
-                    let decoder_input_array = Array::from_shape_vec((1, decoder_input_ids.len()), decoder_input_ids.clone()).unwrap();
+                    // The decoder input should only be the last generated token
+                    let last_token_id = *decoder_input_ids.last().unwrap();
+                    let decoder_input_array = Array::from_shape_vec((1, 1), vec![last_token_id]).unwrap();
+
                     let owned_encoder_states = encoder_hidden_states.view().to_owned();
 
                     let cow_decoder_input = CowArray::from(decoder_input_array).into_dyn();
