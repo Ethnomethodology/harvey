@@ -181,14 +181,19 @@ pub async fn translate_transcript_command(
                     // The decoder input should only be the last generated token
                     let last_token_id = *decoder_input_ids.last().unwrap();
                     let decoder_input_array = Array::from_shape_vec((1, 1), vec![last_token_id]).unwrap();
-
-                    let owned_encoder_states = encoder_hidden_states.view().to_owned();
-
                     let cow_decoder_input = CowArray::from(decoder_input_array).into_dyn();
-                    let cow_encoder_states = CowArray::from(owned_encoder_states).into_dyn();
+
+                    // The `encoder_hidden_states` is 3D, but the model expects a 4D tensor for `past_key_values`.
+                    // We unsqueeze it to add a dimension to resolve the rank mismatch error.
+                    let owned_encoder_states_view = encoder_hidden_states.view();
+                    let reshaped_encoder_states = owned_encoder_states_view.clone().insert_axis(ndarray::Axis(1));
+                    let cow_encoder_states = CowArray::from(reshaped_encoder_states.to_owned()).into_dyn();
+
                     let cow_attention_mask_decoder = CowArray::from(attention_mask_array.clone()).into_dyn();
 
-                    // Correct order: attention_mask, input_ids, encoder_states
+                    // The model expects a complex past_key_values structure. The following order is a
+                    // pragmatic attempt to satisfy the model's input validation based on the sequence of
+                    // errors encountered.
                     let decoder_inputs = vec![
                         OrtValue::from_array(decoder_session.allocator(), &cow_attention_mask_decoder).unwrap(),
                         OrtValue::from_array(decoder_session.allocator(), &cow_decoder_input).unwrap(),
