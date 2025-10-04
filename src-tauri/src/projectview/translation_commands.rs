@@ -94,13 +94,13 @@ pub async fn translate_transcript_command(
 
     let environment = Arc::new(Environment::builder().with_name("test").build().map_err(|e| e.to_string())?);
 
-    let encoder_model_path = model_path.join("encoder_model.onnx");
+    let encoder_model_path = model_path.join("onnx/encoder_model.onnx");
     info!("[Translate] Loading encoder model from: {}", encoder_model_path.display());
     let encoder_session = SessionBuilder::new(&environment)
         .and_then(|builder| builder.with_model_from_file(&encoder_model_path))
         .map_err(|e| e.to_string())?;
 
-    let decoder_model_path = model_path.join("decoder_with_past_model.onnx");
+    let decoder_model_path = model_path.join("onnx/decoder_with_past_model.onnx");
     info!("[Translate] Loading decoder model from: {}", decoder_model_path.display());
     let decoder_session = SessionBuilder::new(&environment)
         .and_then(|builder| builder.with_model_from_file(&decoder_model_path))
@@ -116,7 +116,7 @@ pub async fn translate_transcript_command(
     let target_tokenizer = SentencePieceTokenizer::from_file(target_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
     let target_vocab = target_tokenizer.vocab();
 
-    let generation_config_path = model_path.join("generation_config.json");
+    let generation_config_path = model_path.join("config.json");
     info!("[Translate] Loading generation config from: {}", generation_config_path.display());
     let generation_config_content = fs::read_to_string(generation_config_path).map_err(|e| e.to_string())?;
     let generation_config: GenerationConfig = serde_json::from_str(&generation_config_content).map_err(|e| e.to_string())?;
