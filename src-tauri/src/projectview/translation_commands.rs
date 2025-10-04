@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use ort::{Environment, SessionBuilder, Value as OrtValue, tensor::OrtOwnedTensor};
 use rust_tokenizers::tokenizer::{SentencePieceTokenizer, Tokenizer, TruncationStrategy};
-use rust_tokenizers::vocab::{SentencePieceVocab, Vocab};
+use rust_tokenizers::vocab::{Vocab};
 use ndarray::{Array, CowArray, s};
 use crate::welcome::config::{read_config, get_default_download_location};
 use log::{info, debug, error};
@@ -95,14 +95,13 @@ pub async fn translate_transcript_command(transcript_path: String, source_lang: 
 
     let source_vocab_path = model_path.join("source.spm");
     let target_vocab_path = model_path.join("target.spm");
-    let vocab_path = model_path.join("vocab.json");
+
     debug!("Loading source tokenizer from: {}", source_vocab_path.display());
     debug!("Loading target tokenizer from: {}", target_vocab_path.display());
-    debug!("Loading vocabulary from: {}", vocab_path.display());
 
-    let tokenizer_vocab = SentencePieceVocab::from_file(vocab_path.to_str().unwrap()).map_err(|e| e.to_string())?;
     let source_tokenizer = SentencePieceTokenizer::from_file(source_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
     let target_tokenizer = SentencePieceTokenizer::from_file(target_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
+    let target_vocab = target_tokenizer.vocab();
 
     let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
     let mut lexical_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
@@ -144,7 +143,7 @@ pub async fn translate_transcript_command(transcript_path: String, source_lang: 
                 let encoder_outputs: Vec<OrtValue> = encoder_session.run(inputs).map_err(|e| e.to_string())?;
                 let encoder_hidden_states: OrtOwnedTensor<f32, _> = encoder_outputs[0].try_extract().unwrap();
 
-                let mut decoder_input_ids = vec![tokenizer_vocab.token_to_id("<pad>")];
+                let mut decoder_input_ids = vec![target_vocab.token_to_id(&format!("<pad>"))];
                 let mut translated_tokens = Vec::new();
 
                 for _ in 0..512 { // Max length
@@ -171,7 +170,7 @@ pub async fn translate_transcript_command(transcript_path: String, source_lang: 
                         .map(|(index, _)| index)
                         .unwrap_or(0) as i64;
 
-                    if next_token_id == tokenizer_vocab.token_to_id("</s>") {
+                    if next_token_id == target_vocab.token_to_id("</s>") {
                         break;
                     }
 
