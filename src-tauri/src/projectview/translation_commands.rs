@@ -133,6 +133,12 @@ pub async fn translate_transcript_command(transcript_path: String, source_lang: 
             let mut translated_texts = Vec::new();
 
             for (i, text) in texts_to_translate.iter().enumerate() {
+                if text.trim().is_empty() {
+                    debug!("Segment {} is empty, skipping translation.", i + 1);
+                    translated_texts.push(String::new());
+                    continue;
+                }
+
                 debug!("Translating segment {}: '{}'", i + 1, text);
                 let tokenized_input = source_tokenizer.encode(text, None, 512, &TruncationStrategy::LongestFirst, 0);
                 let input_ids = tokenized_input.token_ids.iter().map(|&x| x as i64).collect::<Vec<i64>>();
