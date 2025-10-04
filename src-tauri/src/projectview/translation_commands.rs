@@ -9,6 +9,7 @@ use rust_tokenizers::vocab::{Vocab};
 use ndarray::{Array, CowArray, s};
 use crate::welcome::config::{read_config, get_default_download_location};
 use log::{info, debug, error};
+use super::transcription_commands::save_transcript_json;
 
 fn extract_plain_text_from_lexical(node: &Value) -> String {
     let mut text = String::new();
@@ -57,7 +58,12 @@ fn create_lexical_with_text(text: &str) -> Value {
 }
 
 #[command]
-pub async fn translate_transcript_command(transcript_path: String, source_lang: String, target_lang: String) -> Result<String, String> {
+pub async fn translate_transcript_command(
+    project_xml_path: String,
+    transcript_path: String,
+    source_lang: String,
+    target_lang: String
+) -> Result<String, String> {
     info!("Starting translation for transcript: {}", transcript_path);
     debug!("Source language: {}, Target language: {}", source_lang, target_lang);
 
@@ -210,8 +216,21 @@ pub async fn translate_transcript_command(transcript_path: String, source_lang: 
 
     let new_path = transcript_path.replace(".json", &format!(".{}.json", target_lang));
     let new_content = serde_json::to_string_pretty(&lexical_json).map_err(|e| e.to_string())?;
-    fs::write(&new_path, new_content).map_err(|e| e.to_string())?;
+    fs::write(&new_path, &new_content).map_err(|e| e.to_string())?;
+    info!("Translation file saved to: {}", new_path);
 
-    info!("Translation complete. Saved to: {}", new_path);
+    info!("Registering new transcript in project metadata...");
+    save_transcript_json(
+        project_xml_path,
+        new_path.clone(),
+        new_content,
+        Some(target_lang),
+    ).await.map_err(|e| {
+        let err_msg = format!("Failed to register translated transcript in project XML: {}", e);
+        error!("{}", err_msg);
+        err_msg
+    })?;
+
+    info!("Translation and registration complete for: {}", new_path);
     Ok(new_path)
 }

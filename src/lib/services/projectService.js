@@ -1979,8 +1979,17 @@ export async function renameTableHeader(tablePath, oldHeader, newHeader) {
 }
 
 export async function requestTranslation(transcriptPath, fromLanguage, toLanguage) {
+    const currentProject = get(project);
+    const projectXmlPath = currentProject.xmlPath;
+
+    if (!projectXmlPath) {
+        await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
+        return;
+    }
+
     try {
         const newTranscriptPath = await invoke('translate_transcript_command', {
+            projectXmlPath: projectXmlPath,
             transcriptPath,
             sourceLang: fromLanguage,
             targetLang: toLanguage,
