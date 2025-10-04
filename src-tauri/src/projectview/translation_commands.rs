@@ -137,12 +137,7 @@ pub async fn translate_transcript_command(
                 if let Some(cells) = row.get("children").and_then(|c| c.as_array()) {
                     if cells.len() > 3 {
                         if let Some(text_cell) = cells.get(3) {
-                            let lexical_segment: Value = json!({
-                                "root": {
-                                    "children": text_cell.get("children").unwrap_or(&Value::Array(vec![])).clone()
-                                }
-                            });
-                            let extracted_text = extract_plain_text_from_lexical(&lexical_segment);
+                            let extracted_text = extract_plain_text_from_lexical(text_cell);
                             info!("[Translate] Extracted source text: '{}'", extracted_text);
                             texts_to_translate.push(extracted_text);
                         }
