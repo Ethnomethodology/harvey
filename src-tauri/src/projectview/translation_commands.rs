@@ -19,14 +19,13 @@ struct GenerationConfig {
 
 fn extract_plain_text_from_lexical(node: &Value) -> String {
     let mut text = String::new();
-    if let Some(node_type) = node.get("type").and_then(|v| v.as_str()) {
-        if node_type == "text" || node_type == "extended-text" {
-            if let Some(node_text) = node.get("text").and_then(|v| v.as_str()) {
-                text.push_str(node_text);
-            }
-        }
+
+    // If the node has a "text" field, append it. This is a more aggressive search.
+    if let Some(node_text) = node.get("text").and_then(|v| v.as_str()) {
+        text.push_str(node_text);
     }
 
+    // Recursively search for text in child nodes.
     if let Some(children) = node.get("children").and_then(|v| v.as_array()) {
         for child in children {
             text.push_str(&extract_plain_text_from_lexical(child));
