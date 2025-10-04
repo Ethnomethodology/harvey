@@ -10,6 +10,12 @@ use ndarray::{Array, CowArray, s};
 use crate::welcome::config::{read_config, get_default_download_location};
 use log::{info, debug, error};
 use super::transcription_commands::save_transcript_json;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct GenerationConfig {
+    decoder_start_token_id: i64,
+}
 
 fn extract_plain_text_from_lexical(node: &Value) -> String {
     let mut text = String::new();
@@ -109,6 +115,11 @@ pub async fn translate_transcript_command(
     let target_tokenizer = SentencePieceTokenizer::from_file(target_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
     let target_vocab = target_tokenizer.vocab();
 
+    let generation_config_path = model_path.join("generation_config.json");
+    let generation_config_content = fs::read_to_string(generation_config_path).map_err(|e| e.to_string())?;
+    let generation_config: GenerationConfig = serde_json::from_str(&generation_config_content).map_err(|e| e.to_string())?;
+    let decoder_start_token_id = generation_config.decoder_start_token_id;
+
     let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
     let mut lexical_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
@@ -155,7 +166,7 @@ pub async fn translate_transcript_command(
                 let encoder_outputs: Vec<OrtValue> = encoder_session.run(inputs).map_err(|e| e.to_string())?;
                 let encoder_hidden_states: OrtOwnedTensor<f32, _> = encoder_outputs[0].try_extract().unwrap();
 
-                let mut decoder_input_ids = vec![target_vocab.token_to_id(&format!("<pad>"))];
+                let mut decoder_input_ids = vec![decoder_start_token_id];
                 let mut translated_tokens = Vec::new();
 
                 for _ in 0..512 { // Max length
