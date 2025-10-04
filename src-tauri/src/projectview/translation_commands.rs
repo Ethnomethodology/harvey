@@ -187,11 +187,12 @@ pub async fn translate_transcript_command(
 
                     let decoder_inputs = vec![
                         OrtValue::from_array(decoder_session.allocator(), &cow_decoder_input).unwrap(),
-                        OrtValue::from_array(decoder_session.allocator(), &cow_encoder_states).unwrap(),
                         OrtValue::from_array(decoder_session.allocator(), &cow_attention_mask_decoder).unwrap(),
+                        OrtValue::from_array(decoder_session.allocator(), &cow_encoder_states).unwrap(),
                     ];
 
-                    let decoder_outputs: Vec<OrtValue> = decoder_session.run(decoder_inputs).map_err(|e| e.to_string())?;
+                    let decoder_outputs: Vec<OrtValue> = decoder_session.run(decoder_inputs)
+                        .map_err(|e| format!("Failed to run inference on model: {}", e))?;
                     let logits: OrtOwnedTensor<f32, _> = decoder_outputs[0].try_extract().unwrap();
                     let logits_view = logits.view();
                     let last_token_logits = logits_view.slice(s![0, -1, ..]);
