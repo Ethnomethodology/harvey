@@ -188,9 +188,10 @@ pub async fn translate_transcript_command(
                     let cow_encoder_states = CowArray::from(owned_encoder_states).into_dyn();
                     let cow_attention_mask_decoder = CowArray::from(attention_mask_array.clone()).into_dyn();
 
+                    // Correct order: attention_mask, input_ids, encoder_states
                     let decoder_inputs = vec![
-                        OrtValue::from_array(decoder_session.allocator(), &cow_decoder_input).unwrap(),
                         OrtValue::from_array(decoder_session.allocator(), &cow_attention_mask_decoder).unwrap(),
+                        OrtValue::from_array(decoder_session.allocator(), &cow_decoder_input).unwrap(),
                         OrtValue::from_array(decoder_session.allocator(), &cow_encoder_states).unwrap(),
                     ];
 
