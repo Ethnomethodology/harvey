@@ -158,9 +158,18 @@ pub async fn translate_transcript_command(
                 info!("[Translate] Translating segment {}: '{}'", i + 1, text);
                 let tokenized_input = source_tokenizer.encode(text, None, 512, &TruncationStrategy::LongestFirst, 0);
                 let input_ids = tokenized_input.token_ids.iter().map(|&x| x as i64).collect::<Vec<i64>>();
-                let array = Array::from_shape_vec((1, input_ids.len()), input_ids).unwrap();
-                let input_tensor = CowArray::from(array).into_dyn();
-                let inputs = vec![OrtValue::from_array(encoder_session.allocator(), &input_tensor).unwrap()];
+                let attention_mask = vec![1i64; input_ids.len()];
+
+                let input_ids_array = Array::from_shape_vec((1, input_ids.len()), input_ids).unwrap();
+                let attention_mask_array = Array::from_shape_vec((1, attention_mask.len()), attention_mask).unwrap();
+
+                let dyn_input_ids = input_ids_array.into_dyn();
+                let dyn_attention_mask = attention_mask_array.clone().into_dyn();
+
+                let inputs = vec![
+                    OrtValue::from_array(encoder_session.allocator(), &dyn_input_ids).unwrap(),
+                    OrtValue::from_array(encoder_session.allocator(), &dyn_attention_mask).unwrap(),
+                ];
 
                 let encoder_outputs: Vec<OrtValue> = encoder_session.run(inputs).map_err(|e| e.to_string())?;
                 let encoder_hidden_states: OrtOwnedTensor<f32, _> = encoder_outputs[0].try_extract().unwrap();
@@ -172,12 +181,14 @@ pub async fn translate_transcript_command(
                     let decoder_input_array = Array::from_shape_vec((1, decoder_input_ids.len()), decoder_input_ids.clone()).unwrap();
                     let owned_encoder_states = encoder_hidden_states.view().to_owned();
 
-                    let decoder_input_tensor = CowArray::from(decoder_input_array).into_dyn();
-                    let encoder_states_tensor = CowArray::from(owned_encoder_states).into_dyn();
+                    let dyn_decoder_input = decoder_input_array.into_dyn();
+                    let dyn_encoder_states = owned_encoder_states.into_dyn();
+                    let dyn_attention_mask_decoder = attention_mask_array.clone().into_dyn();
 
                     let decoder_inputs = vec![
-                        OrtValue::from_array(decoder_session.allocator(), &decoder_input_tensor).unwrap(),
-                        OrtValue::from_array(decoder_session.allocator(), &encoder_states_tensor).unwrap(),
+                        OrtValue::from_array(decoder_session.allocator(), &dyn_decoder_input).unwrap(),
+                        OrtValue::from_array(decoder_session.allocator(), &dyn_encoder_states).unwrap(),
+                        OrtValue::from_array(decoder_session.allocator(), &dyn_attention_mask_decoder).unwrap(),
                     ];
 
                     let decoder_outputs: Vec<OrtValue> = decoder_session.run(decoder_inputs).map_err(|e| e.to_string())?;
