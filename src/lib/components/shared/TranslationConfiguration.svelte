@@ -23,20 +23,12 @@
 
 	const availableModels = [
         {
-            name: 'opus-mt-jap-en',
-            language: 'Japanese to English',
-            size: '~300 MB',
-            description: 'Translate Japanese text to English.',
-            download_url: `${HUGGING_FACE_MODEL_URL}/Helsinki-NLP/opus-mt-jap-en`,
-            info_url: `${HUGGING_FACE_MODEL_URL}/Helsinki-NLP/opus-mt-jap-en`,
-        },
-        {
-            name: 'opus-mt-en-jap',
-            language: 'English to Japanese',
-            size: '~300 MB',
-            description: 'Translate English text to Japanese.',
-            download_url: `${HUGGING_FACE_MODEL_URL}/Helsinki-NLP/opus-mt-en-jap`,
-            info_url: `${HUGGING_FACE_MODEL_URL}/Helsinki-NLP/opus-mt-en-jap`,
+            name: 'onnx-community/opus-mt-ja-en',
+            language: 'Japanese to English (ONNX)',
+            size: '~75 MB',
+            description: 'Translate Japanese text to English using an optimized ONNX model.',
+            download_url: `${HUGGING_FACE_MODEL_URL}/onnx-community/opus-mt-ja-en`,
+            info_url: `${HUGGING_FACE_MODEL_URL}/onnx-community/opus-mt-ja-en`,
         },
 	];
 

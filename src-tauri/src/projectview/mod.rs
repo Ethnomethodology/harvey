@@ -11,7 +11,9 @@ pub mod table_handler;
 pub mod image_handler;
 pub mod transcription_handler; // For imported transcripts
 pub mod pdf_annotation_handler; // ADDED
+pub mod translation_commands;
 pub mod local_handler;
+
 
 pub mod export_handler;
 pub mod shared_types;

@@ -19,20 +19,27 @@
     let transcriptOptions = [];
 
     $: {
+        console.log("availableTranscripts", availableTranscripts);
+        console.log("selectedTranscript before", selectedTranscript);
         // Reactively update transcriptOptions when availableTranscripts changes
         if (availableTranscripts.length > 0) {
             transcriptOptions = availableTranscripts.map(t => ({
-                value: t.relative_path,
+                value: t.relativePath,
                 label: t.name || t.relative_path
             }));
+            console.log("transcriptOptions", transcriptOptions);
+            const isSelectedTranscriptValid = availableTranscripts.some(t => t.relative_path === selectedTranscript);
+            console.log("isSelectedTranscriptValid", isSelectedTranscriptValid);
             // If selectedTranscript is not set or is no longer valid, set it to the first actual transcript
-            if (!selectedTranscript || !availableTranscripts.some(t => t.relative_path === selectedTranscript)) {
-                selectedTranscript = availableTranscripts[0].relative_path;
+if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
+                console.log("Resetting selectedTranscript");
+                selectedTranscript = availableTranscripts[0].relativePath;
             }
         } else {
             transcriptOptions = [];
             selectedTranscript = '';
         }
+        console.log("selectedTranscript after", selectedTranscript);
     }
 
     onMount(() => {
@@ -43,7 +50,10 @@
 	function handleConfirm() {
 		// TODO: Implement actual translation logic
 		console.log(`Start translation for ${selectedTranscript} from ${fromLanguage} to ${toLanguage}`);
-		dispatch('confirm', { transcript: selectedTranscript, from: fromLanguage, to: toLanguage });
+        console.log("availableTranscripts in handleConfirm", availableTranscripts);
+        const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
+        console.log("selectedTranscriptObject", selectedTranscriptObject);
+		dispatch('confirm', { transcript: selectedTranscriptObject, from: fromLanguage, to: toLanguage });
 	}
 
 	function handleClose() {
@@ -86,7 +96,6 @@
                             containerClasses="w-full"
                             options={transcriptOptions}
                             bind:value={selectedTranscript}
-                            on:change={(e) => selectedTranscript = e.detail}
                             placeholder={availableTranscripts.length === 0 ? "No Transcripts Available" : "Select a Transcript"}
                             disabled={availableTranscripts.length === 0}
                         />

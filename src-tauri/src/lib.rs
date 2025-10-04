@@ -201,6 +201,8 @@ pub fn run() {
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,
+            projectview::translation_commands::translate_transcript_command,
+            
 
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,

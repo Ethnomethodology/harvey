@@ -8,7 +8,7 @@
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
-	import { requestTranscription } from '$lib/services/projectService.js';
+	import { requestTranscription, requestTranslation } from '$lib/services/projectService.js';
 	import { getDownloadedModels, exportTranscript } from '$lib/services/configureActions.js';
 
 	// --- Tauri Imports ---
@@ -427,7 +427,7 @@
     on:confirm={(e) => {
         console.log('Translation confirmed:', e.detail);
         isTranslateModalOpen = false;
-        // TODO: dispatch translation job
+        requestTranslation(e.detail.transcript.path, e.detail.from, e.detail.to);
     }}
 />
 

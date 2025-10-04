@@ -91,6 +91,16 @@ pub async fn download_translation_model_command(
     }
 }
 
+#[derive(Deserialize)]
+struct HuggingFaceApiResponse {
+    siblings: Vec<HuggingFaceApiFile>,
+}
+
+#[derive(Deserialize)]
+struct HuggingFaceApiFile {
+    rfilename: String,
+}
+
 async fn download_and_save_translation_files(
     app: AppHandle,
     cancel_flag: Arc<AtomicBool>,
@@ -105,21 +115,50 @@ async fn download_and_save_translation_files(
         fs::create_dir_all(&model_dest_dir)?;
     }
 
-    // List of files required for MarianMT models
-    let required_files = vec!["config.json", "pytorch_model.bin", "source.spm", "target.spm", "vocab.json"];
     let client = reqwest::Client::new();
 
     app.emit("translation-download-start", &model_name)?;
 
-    for file_name in required_files {
+    let api_url = format!("https://huggingface.co/api/models/{}", model_name);
+    let response = client.get(&api_url).send().await?;
+    if !response.status().is_success() {
+        return Err(format!("Failed to get file list from Hugging Face API for {}: Status {}", model_name, response.status()).into());
+    }
+
+    let api_response: HuggingFaceApiResponse = response.json().await?;
+    let files = api_response.siblings;
+
+    let required_files = vec![
+        "onnx/encoder_model.onnx",
+        "onnx/decoder_model.onnx",
+        "onnx/decoder_with_past_model.onnx",
+        "config.json",
+        "vocab.json",
+        "source.spm",
+        "target.spm",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "tokenizer.json",
+    ];
+
+    for file in files {
+        let file_name = file.rfilename;
+        if !required_files.contains(&file_name.as_str()) {
+            continue;
+        }
+
         if cancel_flag.load(Ordering::Relaxed) {
-            log::info!("Download cancelled for model {} before starting file {}.", model_name, file_name);
+            log::info!("Download cancelled for model {} before starting file {}.", model_name, &file_name);
             return Err(CommandError::from(format!("Download for {} was cancelled.", model_name)));
         }
 
         let file_url = format!("{}/resolve/main/{}", repo_url, file_name);
-        let file_dest_path = model_dest_dir.join(file_name);
+        let file_dest_path = model_dest_dir.join(&file_name);
         let temp_file_path = model_dest_dir.join(format!("{}.part", file_name));
+
+        if let Some(parent_dir) = file_dest_path.parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
 
         if file_dest_path.exists() {
             log::info!("File {} already exists for model {}. Skipping.", file_name, model_name);
@@ -127,7 +166,7 @@ async fn download_and_save_translation_files(
         }
 
         log::info!("Starting download of {} for model {}", file_name, model_name);
-        let mut response = client.get(&file_url).send().await?;
+        let response = client.get(&file_url).send().await?;
 
         if !response.status().is_success() {
             return Err(format!("Failed to download file {}: Status {} for URL {}", file_name, response.status(), file_url).into());

@@ -34,6 +34,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] } 
 quick-xml = { version = "0.36", features = ["serialize", "serde"] }
 
+# --- NLP ---
+ort = "1.16.3"
+rust_tokenizers = "7.0.1"
+ndarray = "0.15.4"
+
 # --- Utilities ---
 chrono = { version = "0.4", features = ["serde"] }
 directories = "5.0"

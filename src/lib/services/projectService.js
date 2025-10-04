@@ -1977,3 +1977,18 @@ export async function renameTableHeader(tablePath, oldHeader, newHeader) {
         throw error;
     }
 }
+
+export async function requestTranslation(transcriptPath, fromLanguage, toLanguage) {
+    try {
+        const newTranscriptPath = await invoke('translate_transcript_command', {
+            transcriptPath,
+            sourceLang: fromLanguage,
+            targetLang: toLanguage,
+        });
+        await refreshProjectFiles(newTranscriptPath);
+        await loadTranscriptFile(newTranscriptPath);
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        await message(`Error translating transcript: ${errorMessage}`, { title: 'Translation Error', type: 'error' });
+    }
+}
