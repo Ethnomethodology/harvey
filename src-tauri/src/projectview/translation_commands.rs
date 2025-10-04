@@ -143,7 +143,9 @@ pub async fn translate_transcript_command(
                                     "children": text_cell.get("children").unwrap_or(&Value::Array(vec![])).clone()
                                 }
                             });
-                            texts_to_translate.push(extract_plain_text_from_lexical(&lexical_segment));
+                            let extracted_text = extract_plain_text_from_lexical(&lexical_segment);
+                            info!("[Translate] Extracted source text: '{}'", extracted_text);
+                            texts_to_translate.push(extracted_text);
                         }
                     }
                 }
@@ -205,6 +207,7 @@ pub async fn translate_transcript_command(
                 }
 
                 let translated_text = target_tokenizer.decode(&translated_tokens, true, true);
+                info!("[Translate] Raw translated tokens: {:?}", translated_tokens);
                 info!("[Translate] Translated segment {}: '{}'", i + 1, translated_text);
                 translated_texts.push(translated_text);
             }
