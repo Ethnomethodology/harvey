@@ -8,7 +8,7 @@ use rust_tokenizers::tokenizer::{SentencePieceTokenizer, Tokenizer, TruncationSt
 use rust_tokenizers::vocab::{Vocab};
 use ndarray::{Array, CowArray, s};
 use crate::welcome::config::{read_config, get_default_download_location};
-use log::{info, debug, error};
+use log::{info, error};
 use super::transcription_commands::save_transcript_json;
 use serde::Deserialize;
 
@@ -71,8 +71,8 @@ pub async fn translate_transcript_command(
     target_lang: String
 ) -> Result<String, String> {
     info!("[Translate] Starting translation for transcript: {}", transcript_path);
-    debug!("[Translate] Project XML path: {}", project_xml_path);
-    debug!("[Translate] Source language: {}, Target language: {}", source_lang, target_lang);
+    info!("[Translate] Project XML path: {}", project_xml_path);
+    info!("[Translate] Source language: {}, Target language: {}", source_lang, target_lang);
 
     let config = read_config().map_err(|e| e.to_string())?;
     let download_location = if !config.download_location.trim().is_empty() {
@@ -80,11 +80,11 @@ pub async fn translate_transcript_command(
     } else {
         get_default_download_location().map_err(|e| e.to_string())?
     };
-    debug!("[Translate] Using download location: {}", download_location);
+    info!("[Translate] Using download location: {}", download_location);
 
     let model_name = format!("onnx-community/opus-mt-{}-{}", source_lang, target_lang);
     let model_path = Path::new(&download_location).join(&model_name);
-    debug!("[Translate] Model path: {}", model_path.display());
+    info!("[Translate] Model path: {}", model_path.display());
 
     if !model_path.exists() {
         let err_msg = format!("Model '{}' not found at '{}'", model_name, model_path.display());
@@ -94,14 +94,14 @@ pub async fn translate_transcript_command(
 
     let environment = Arc::new(Environment::builder().with_name("test").build().map_err(|e| e.to_string())?);
 
-    let encoder_model_path = model_path.join("onnx/encoder_model.onnx");
-    debug!("[Translate] Loading encoder model from: {}", encoder_model_path.display());
+    let encoder_model_path = model_path.join("encoder_model.onnx");
+    info!("[Translate] Loading encoder model from: {}", encoder_model_path.display());
     let encoder_session = SessionBuilder::new(&environment)
         .and_then(|builder| builder.with_model_from_file(&encoder_model_path))
         .map_err(|e| e.to_string())?;
 
-    let decoder_model_path = model_path.join("onnx/decoder_with_past_model.onnx");
-    debug!("[Translate] Loading decoder model from: {}", decoder_model_path.display());
+    let decoder_model_path = model_path.join("decoder_with_past_model.onnx");
+    info!("[Translate] Loading decoder model from: {}", decoder_model_path.display());
     let decoder_session = SessionBuilder::new(&environment)
         .and_then(|builder| builder.with_model_from_file(&decoder_model_path))
         .map_err(|e| e.to_string())?;
@@ -109,19 +109,19 @@ pub async fn translate_transcript_command(
     let source_vocab_path = model_path.join("source.spm");
     let target_vocab_path = model_path.join("target.spm");
 
-    debug!("[Translate] Loading source tokenizer from: {}", source_vocab_path.display());
-    debug!("[Translate] Loading target tokenizer from: {}", target_vocab_path.display());
+    info!("[Translate] Loading source tokenizer from: {}", source_vocab_path.display());
+    info!("[Translate] Loading target tokenizer from: {}", target_vocab_path.display());
 
     let source_tokenizer = SentencePieceTokenizer::from_file(source_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
     let target_tokenizer = SentencePieceTokenizer::from_file(target_vocab_path.to_str().unwrap(), false).map_err(|e| e.to_string())?;
     let target_vocab = target_tokenizer.vocab();
 
     let generation_config_path = model_path.join("generation_config.json");
-    debug!("[Translate] Loading generation config from: {}", generation_config_path.display());
+    info!("[Translate] Loading generation config from: {}", generation_config_path.display());
     let generation_config_content = fs::read_to_string(generation_config_path).map_err(|e| e.to_string())?;
     let generation_config: GenerationConfig = serde_json::from_str(&generation_config_content).map_err(|e| e.to_string())?;
     let decoder_start_token_id = generation_config.decoder_start_token_id;
-    debug!("[Translate] Decoder start token ID: {}", decoder_start_token_id);
+    info!("[Translate] Decoder start token ID: {}", decoder_start_token_id);
 
     let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
     let mut lexical_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
@@ -148,18 +148,18 @@ pub async fn translate_transcript_command(
                     }
                 }
             }
-            debug!("[Translate] Found {} text segments to translate.", texts_to_translate.len());
+            info!("[Translate] Found {} text segments to translate.", texts_to_translate.len());
 
             let mut translated_texts = Vec::new();
 
             for (i, text) in texts_to_translate.iter().enumerate() {
                 if text.trim().is_empty() {
-                    debug!("[Translate] Segment {} is empty, skipping translation.", i + 1);
+                    info!("[Translate] Segment {} is empty, skipping translation.", i + 1);
                     translated_texts.push(String::new());
                     continue;
                 }
 
-                debug!("[Translate] Translating segment {}: '{}'", i + 1, text);
+                info!("[Translate] Translating segment {}: '{}'", i + 1, text);
                 let tokenized_input = source_tokenizer.encode(text, None, 512, &TruncationStrategy::LongestFirst, 0);
                 let input_ids = tokenized_input.token_ids.iter().map(|&x| x as i64).collect::<Vec<i64>>();
                 let array = Array::from_shape_vec((1, input_ids.len()), input_ids).unwrap();
@@ -205,7 +205,7 @@ pub async fn translate_transcript_command(
                 }
 
                 let translated_text = target_tokenizer.decode(&translated_tokens, true, true);
-                debug!("[Translate] Translated segment {}: '{}'", i + 1, translated_text);
+                info!("[Translate] Translated segment {}: '{}'", i + 1, translated_text);
                 translated_texts.push(translated_text);
             }
 
