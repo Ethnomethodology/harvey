@@ -38,6 +38,7 @@ quick-xml = { version = "0.36", features = ["serialize", "serde"] }
 ort = "1.16.3"
 rust_tokenizers = "7.0.1"
 ndarray = "0.15.4"
+ndarray-stats = "0.5.1"
 
 # --- Utilities ---
 chrono = { version = "0.4", features = ["serde"] }
