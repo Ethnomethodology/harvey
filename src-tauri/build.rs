@@ -73,7 +73,7 @@ fn main() {
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
-    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream"];
+    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream", "translator-sidecar"];
 
     for binary_name in &harvey_binaries {
         let final_binary_name = format!("{}-{}{}", binary_name, target, extension);

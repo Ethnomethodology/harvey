@@ -18,3 +18,4 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /e2e-tests/screenshots/
+/notebooks/

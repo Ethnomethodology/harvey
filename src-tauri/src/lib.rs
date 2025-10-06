@@ -1,9 +1,10 @@
 // src-tauri/src/lib.rs
+use tauri::Manager;
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
-use tauri::{Manager}; // Ensure Manager is used for app.handle()
+// use tauri::{Manager}; // Ensure Manager is used for app.handle()
 use tauri_plugin_global_shortcut::{
     self, // Keep or remove 'self' based on preference for qualification
     Code, // For Shortcut::new(..., Code::F7)
