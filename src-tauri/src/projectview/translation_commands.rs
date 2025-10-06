@@ -87,12 +87,18 @@ pub async fn translate_transcript_command(
     }
 
     // 2. Execute sidecar script for translation
-    let model_name = format!("Xenova/opus-mt-{}-{}", source_lang, target_lang);
-    info!("[Translate JS] Using model: {}", model_name);
+    let model_dir_name = format!("opus-mt-{}-{}", source_lang, target_lang);
+    let model_path = std::path::Path::new(&download_location)
+        .join("onnx-community")
+        .join(model_dir_name);
+
+    let model_path_str = model_path.to_string_lossy().to_string();
+
+    info!("[Translate JS] Using model path: {}", &model_path_str);
 
     let (mut rx, mut child) = app_handle.shell().sidecar("translator-sidecar")
         .map_err(|e| format!("Failed to create sidecar command: {}. This is a packaging issue.", e))? 
-        .args([&model_name, &download_location])
+        .args([&model_path_str, &download_location])
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}. The sidecar executable may be missing or have permission issues.", e))?;
 
