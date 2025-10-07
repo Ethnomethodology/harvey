@@ -15,6 +15,7 @@
 	import FfmpegPanel from './FfmpegPanel.svelte';
 	import PythonPanel from './PythonPanel.svelte';
 	import PandocPanel from './PandocPanel.svelte';
+	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 
@@ -197,6 +198,7 @@
 					<FfmpegPanel />
 					<PandocPanel />
 					<PythonPanel />
+					<PythonLibrariesPanel />
 				</div>
             </div>
 		{:else if activeTab === 'transcription'}

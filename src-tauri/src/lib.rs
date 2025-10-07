@@ -159,6 +159,8 @@ pub fn run() {
             welcome::commands::get_platform_info,
             welcome::commands::check_python_installed,
             welcome::commands::check_pandoc_installed,
+            welcome::commands::check_python_libraries_installed,
+            welcome::commands::install_python_libraries,
             
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,

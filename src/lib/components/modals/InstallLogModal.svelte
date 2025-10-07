@@ -1,0 +1,74 @@
+<script>
+    import { createEventDispatcher } from 'svelte';
+
+    export let showModal = false;
+    export let logs = [];
+    export let isInstalling = true;
+
+    const dispatch = createEventDispatcher();
+
+    function closeModal() {
+        if (!isInstalling) {
+            dispatch('close');
+        }
+    }
+
+    let logContainer;
+
+    $: if (logs && logContainer) {
+        // Auto-scroll to the bottom
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+</script>
+
+{#if showModal}
+<div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+    on:click|self={closeModal}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="log-modal-title"
+>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col" on:click|stopPropagation>
+        <h2 id="log-modal-title" class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+            Installation Logs
+        </h2>
+
+        <div bind:this={logContainer} class="log-container bg-gray-100 dark:bg-gray-900 p-3 rounded-md text-xs font-mono border border-gray-300 dark:border-gray-700 h-64 overflow-y-auto">
+            {#each logs as log (log)}
+                <p class="whitespace-pre-wrap">{log}</p>
+            {/each}
+            {#if isInstalling}
+                <div class="flex items-center">
+                    <div class="spinner animate-spin"></div>
+                    <p class="ml-2">Installation in progress...</p>
+                </div>
+            {/if}
+        </div>
+
+        <div class="mt-6 flex justify-end">
+            <button
+                type="button"
+                class="btn-secondary"
+                on:click={closeModal}
+                disabled={isInstalling}
+            >
+                {isInstalling ? 'Installing...' : 'Close'}
+            </button>
+        </div>
+    </div>
+</div>
+{/if}
+
+<style>
+    .log-container {
+        scrollbar-width: thin;
+    }
+    .spinner {
+        border: 2px solid rgba(0, 0, 0, 0.1);
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border-left-color: #09f;
+    }
+</style>

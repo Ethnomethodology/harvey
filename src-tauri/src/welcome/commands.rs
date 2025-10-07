@@ -26,6 +26,7 @@ use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
 use crate::welcome::checkers;
+use crate::welcome::python_env;
 
 // --- Structs for Translation Model Download ---
 #[derive(Clone, serde::Serialize)]
@@ -467,4 +468,14 @@ pub async fn check_python_installed(app: AppHandle) -> Result<bool, CommandError
 pub async fn check_pandoc_installed(app: AppHandle) -> Result<bool, CommandError> {
     let shell = app.shell();
     checkers::check_pandoc_installed(&shell).await
+}
+
+#[command]
+pub async fn check_python_libraries_installed() -> Result<bool, CommandError> {
+    python_env::check_python_libraries_installed().await
+}
+
+#[command]
+pub async fn install_python_libraries(app: AppHandle) -> Result<(), CommandError> {
+    python_env::install_python_libraries(app).await
 }
