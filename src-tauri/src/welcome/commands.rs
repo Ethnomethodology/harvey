@@ -18,6 +18,7 @@ use std::{
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 use tauri::{AppHandle, command, Emitter, State};
+use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
 use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
@@ -443,3 +444,28 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
     Ok(())
  }
  // --- End Theme Preference Commands ---
+
+ #[command]
+ pub async fn check_ffmpeg_installed(app: AppHandle) -> Result<bool, CommandError> {
+    log::info!("Checking for FFmpeg installation...");
+    let shell = app.shell();
+    match shell.sidecar("ffmpeg")?.args(["-version"]).output().await {
+        Ok(output) => {
+            if output.status.success() {
+                log::info!("FFmpeg found.");
+                Ok(true)
+            } else {
+                log::warn!(
+                    "FFmpeg command ran but failed with status: {:?}. Stderr: {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                Ok(false)
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to execute FFmpeg command: {}. It might not be installed or not in the PATH.", e);
+            Ok(false)
+        }
+    }
+}

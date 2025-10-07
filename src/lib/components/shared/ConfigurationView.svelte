@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { invoke } from '@tauri-apps/api/core';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import {
@@ -19,6 +20,7 @@
 	let configError = '';
 	let isMovingModels = false;
 	let statusMessage = '';
+	let isFfmpegInstalled = true;
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
@@ -29,9 +31,11 @@
 		configError = '';
 		statusMessage = '';
 		try {
+			isFfmpegInstalled = await invoke('check_ffmpeg_installed');
 			downloadLocation = await getDownloadLocation();
 		} catch (e) {
 			console.error('Error loading download location:', e);
+			isFfmpegInstalled = false;
 			configError = `Failed to load configuration: ${e.message || e}`;
 		} finally {
 			isLoadingConfig = false;
@@ -153,6 +157,16 @@
 						<span class="font-medium">Error:</span> {configError}
 					</p>
                 {/if}
+
+				{#if !isFfmpegInstalled}
+					<p
+						class="text-red-600 bg-red-100 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0"
+					>
+						<span class="font-medium">Dependency Error:</span> FFmpeg is not installed or could not be
+						found in your system's PATH. FFmpeg is required for all audio and video processing.
+						Please install it to continue.
+					</p>
+				{/if}
 
                 <div class="mb-6 flex-shrink-0">
                     <label for="download-location-input" class="block text-sm font-medium text-gray-700 mb-1">
