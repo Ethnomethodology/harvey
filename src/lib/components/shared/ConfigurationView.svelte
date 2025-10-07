@@ -13,6 +13,7 @@
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
 	import FfmpegPanel from './FfmpegPanel.svelte';
+	import PythonPanel from './PythonPanel.svelte';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 
@@ -193,6 +194,7 @@
 				<div class="mb-6">
 					<h3 class="text-lg font-medium text-gray-900 mb-2">Required Tools</h3>
 					<FfmpegPanel />
+					<PythonPanel />
 				</div>
             </div>
 		{:else if activeTab === 'transcription'}

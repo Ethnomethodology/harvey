@@ -157,6 +157,7 @@ pub fn run() {
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::check_ffmpeg_installed,
             welcome::commands::get_platform_info,
+            welcome::commands::check_python_installed,
             
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,

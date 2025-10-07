@@ -25,6 +25,7 @@ use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
 use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
+use crate::welcome::checkers;
 
 // --- Structs for Translation Model Download ---
 #[derive(Clone, serde::Serialize)]
@@ -451,26 +452,13 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  // --- End Theme Preference Commands ---
 
  #[command]
- pub async fn check_ffmpeg_installed(app: AppHandle) -> Result<bool, CommandError> {
-    log::info!("Checking for FFmpeg installation...");
+pub async fn check_ffmpeg_installed(app: AppHandle) -> Result<bool, CommandError> {
     let shell = app.shell();
-    match shell.sidecar("ffmpeg")?.args(["-version"]).output().await {
-        Ok(output) => {
-            if output.status.success() {
-                log::info!("FFmpeg found.");
-                Ok(true)
-            } else {
-                log::warn!(
-                    "FFmpeg command ran but failed with status: {:?}. Stderr: {}",
-                    output.status,
-                    String::from_utf8_lossy(&output.stderr)
-                );
-                Ok(false)
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to execute FFmpeg command: {}. It might not be installed or not in the PATH.", e);
-            Ok(false)
-        }
-    }
+    checkers::check_ffmpeg_installed(&shell).await
+}
+
+#[command]
+pub async fn check_python_installed(app: AppHandle) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    checkers::check_python_installed(&shell).await
 }
