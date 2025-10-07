@@ -92,6 +92,11 @@ pub async fn download_translation_model_command(
     }
 }
 
+#[command]
+pub async fn get_platform_info() -> Result<String, CommandError> {
+    Ok(std::env::consts::OS.to_string())
+}
+
 #[derive(Deserialize)]
 struct HuggingFaceApiResponse {
     siblings: Vec<HuggingFaceApiFile>,

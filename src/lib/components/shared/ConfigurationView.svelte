@@ -12,6 +12,7 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
+	import FfmpegPanel from './FfmpegPanel.svelte';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 
@@ -20,7 +21,6 @@
 	let configError = '';
 	let isMovingModels = false;
 	let statusMessage = '';
-	let isFfmpegInstalled = true;
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
@@ -31,11 +31,9 @@
 		configError = '';
 		statusMessage = '';
 		try {
-			isFfmpegInstalled = await invoke('check_ffmpeg_installed');
 			downloadLocation = await getDownloadLocation();
 		} catch (e) {
 			console.error('Error loading download location:', e);
-			isFfmpegInstalled = false;
 			configError = `Failed to load configuration: ${e.message || e}`;
 		} finally {
 			isLoadingConfig = false;
@@ -158,16 +156,6 @@
 					</p>
                 {/if}
 
-				{#if !isFfmpegInstalled}
-					<p
-						class="text-red-600 bg-red-100 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0"
-					>
-						<span class="font-medium">Dependency Error:</span> FFmpeg is not installed or could not be
-						found in your system's PATH. FFmpeg is required for all audio and video processing.
-						Please install it to continue.
-					</p>
-				{/if}
-
                 <div class="mb-6 flex-shrink-0">
                     <label for="download-location-input" class="block text-sm font-medium text-gray-700 mb-1">
 						Local Model Download Location
@@ -201,6 +189,11 @@
                         <p class="text-xs text-indigo-600 mt-1">{statusMessage}</p>
                     {/if}
                 </div>
+
+				<div class="mb-6">
+					<h3 class="text-lg font-medium text-gray-900 mb-2">Required Tools</h3>
+					<FfmpegPanel />
+				</div>
             </div>
 		{:else if activeTab === 'transcription'}
 			<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
