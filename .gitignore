@@ -19,3 +19,4 @@ vite.config.ts.timestamp-*
 /test-results/
 /e2e-tests/screenshots/
 /notebooks/
+/harvey-sidecars/
