@@ -471,11 +471,13 @@ pub async fn check_pandoc_installed(app: AppHandle) -> Result<bool, CommandError
 }
 
 #[command]
-pub async fn check_python_libraries_installed() -> Result<bool, CommandError> {
-    python_env::check_python_libraries_installed().await
+pub async fn check_python_libraries_installed(app: AppHandle) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    python_env::check_python_libraries_installed(&shell).await
 }
 
 #[command]
 pub async fn install_python_libraries(app: AppHandle) -> Result<(), CommandError> {
-    python_env::install_python_libraries(app).await
+    let shell = app.shell();
+    python_env::install_python_libraries(&app, &shell).await
 }
