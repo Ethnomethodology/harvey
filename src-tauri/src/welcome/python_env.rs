@@ -54,34 +54,65 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
 
     if !venv_path.exists() {
         app.emit("installation-log", LogPayload { message: "Creating virtual environment...".into() }).unwrap();
-        let output = shell.command(python3_command)
+        let (mut rx, _child) = shell.command(python3_command)
             .args(&["-m", "venv", venv_path.to_str().unwrap()])
-            .output()
-            .await?;
-        if !output.status.success() {
-            let error_message = format!("Failed to create virtual environment: {}", String::from_utf8_lossy(&output.stderr));
-            app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
-            return Err(CommandError::Message(error_message));
+            .env("PYTHONUNBUFFERED", "1")
+            .spawn()?;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                }
+                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    if payload.code != Some(0) {
+                        let error_message = format!("Failed to create virtual environment.");
+                        app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                        return Err(CommandError::Message(error_message));
+                    }
+                    break;
+                }
+                _ => {}
+            }
         }
-         app.emit("installation-log", LogPayload { message: "Virtual environment created successfully.".into() }).unwrap();
+        app.emit("installation-log", LogPayload { message: "Virtual environment created successfully.".into() }).unwrap();
     }
 
     let python_path = get_python_path()?;
     let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
     for package in &packages {
         app.emit("installation-log", LogPayload { message: format!("Installing {}...", package) }).unwrap();
-        let output = shell.command(python_path.to_str().unwrap())
+        let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
             .args(&["-m", "pip", "install", package])
-            .output()
-            .await?;
-        if !output.status.success() {
-            let error_message = format!("Failed to install {}: {}", package, String::from_utf8_lossy(&output.stderr));
-            app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
-            return Err(CommandError::Message(error_message));
+            .env("PYTHONUNBUFFERED", "1")
+            .spawn()?;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                }
+                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    if payload.code != Some(0) {
+                        let error_message = format!("Failed to install {}: {}", package, "pip install failed");
+                        app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                        return Err(CommandError::Message(error_message));
+                    }
+                    break;
+                }
+                _ => {}
+            }
         }
         app.emit("installation-log", LogPayload { message: format!("Successfully installed {}.", package) }).unwrap();
     }
 
     app.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
+    app.emit("installation-finished", ()).unwrap();
     Ok(())
 }

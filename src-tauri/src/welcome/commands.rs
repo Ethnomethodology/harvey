@@ -85,6 +85,7 @@ pub async fn download_translation_model_command(
 
     window.emit("translation-download-start", &model_name).unwrap();
 
+    let mut success = false;
     while let Some(event) = rx.recv().await {
         match event {
             tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
@@ -100,6 +101,7 @@ pub async fn download_translation_model_command(
             tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                 if payload.code == Some(0) {
                     window.emit("translation-download-complete", &model_name).unwrap();
+                    success = true;
                 } else {
                     window.emit("translation-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
                 }
@@ -109,7 +111,13 @@ pub async fn download_translation_model_command(
         }
     }
 
-    Ok(())
+    window.emit("translation-download-finished", ()).unwrap();
+
+    if success {
+        Ok(())
+    } else {
+        Err(CommandError::Message("Translation model download failed.".to_string()))
+    }
 }
 
 #[command]

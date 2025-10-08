@@ -11,7 +11,8 @@
 	let showInstallModal = false;
 	let installLogs = [];
 	let isInstalling = false;
-	let unlisten;
+	let unlistenLog;
+    let unlistenFinished;
 
 	async function checkStatus() {
 		try {
@@ -26,7 +27,14 @@
 		}
 	}
 
-	onMount(checkStatus);
+	onMount(async () => {
+        await checkStatus();
+
+        unlistenFinished = await listen('installation-finished', () => {
+            isInstalling = false;
+            checkStatus(); // Re-check status after installation attempt
+        });
+    });
 
 	async function handleInstall() {
 		showInstallModal = true;
@@ -34,27 +42,29 @@
 		installLogs = [];
 
 		try {
-			unlisten = await listen('installation-log', (event) => {
+			unlistenLog = await listen('installation-log', (event) => {
 				installLogs = [...installLogs, event.payload.message];
 			});
 
 			await invoke('install_python_libraries');
-			await checkStatus(); // Re-check status after installation attempt
 		} catch (e) {
 			console.error('Error installing Python libraries:', e);
 			installLogs = [...installLogs, `Error: ${e.message || e}`];
+            isInstalling = false; // Set to false on error
 		} finally {
-			isInstalling = false;
-			if (unlisten) {
-				unlisten();
+			if (unlistenLog) {
+				unlistenLog();
 			}
 		}
 	}
 
 	onDestroy(() => {
-		if (unlisten) {
-			unlisten();
+		if (unlistenLog) {
+			unlistenLog();
 		}
+        if (unlistenFinished) {
+            unlistenFinished();
+        }
 	});
 </script>
 

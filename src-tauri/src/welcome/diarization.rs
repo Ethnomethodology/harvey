@@ -4,7 +4,6 @@ use std::fs;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
-use dirs;
 
 // Helper to read the HuggingFace token
 fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String> {
@@ -68,30 +67,41 @@ pub async fn download_diarization_model<R: Runtime>(
 
     app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
 
-    let output = shell
+    let (mut rx, _child) = shell
         .command(python_path.to_string_lossy().to_string())
         .args(&[script_path.to_string_lossy().to_string(), token])
-        .output()
-        .await
+        .spawn()
         .map_err(|e| e.to_string())?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    for line in stdout.lines() {
-        app_handle.emit("diarization-installation-log", LogPayload { message: line.to_string() }).unwrap();
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                app_handle.emit("diarization-installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                app_handle.emit("diarization-installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model downloaded successfully.".into() }).unwrap();
+                    success = true;
+                } else {
+                    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model download failed.".into() }).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    for line in stderr.lines() {
-        app_handle.emit("diarization-installation-log", LogPayload { message: line.to_string() }).unwrap();
-    }
+    app_handle.emit("diarization-installation-finished", ()).unwrap();
 
-    if !output.status.success() {
-        app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model download failed.".into() }).unwrap();
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    if success {
+        Ok(())
+    } else {
+        Err("Diarization model download failed.".to_string())
     }
-
-    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model downloaded successfully.".into() }).unwrap();
-    Ok(())
 }
 
 #[tauri::command]

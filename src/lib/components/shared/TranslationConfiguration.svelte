@@ -34,9 +34,10 @@
     $: isBusy = isAnyModelDownloading;
 
 	let unlistenStart = null;
-	let unlistenProgress = null;
+	let unlistenLog = null;
 	let unlistenComplete = null;
 	let unlistenError = null;
+    let unlistenFinished = null;
 
 	onMount(async () => {
 		configError = '';
@@ -55,13 +56,10 @@
 				showLogModal = true;
 			});
 
-			unlistenProgress = await listen('translation-download-progress', (event) => {
-                const { model_name, file_name, downloaded_bytes, total_bytes } = event.payload;
+			unlistenLog = await listen('translation-download-log', (event) => {
+                const { model_name, log_line } = event.payload;
 				if (downloadStatus[model_name] === 'downloading') {
-					const downloadedMB = (downloaded_bytes / (1024 * 1024)).toFixed(1);
-					const totalMB = total_bytes ? (total_bytes / (1024 * 1024)).toFixed(1) : '??';
-					const percentage = total_bytes ? ((downloaded_bytes / total_bytes) * 100).toFixed(0) : '0';
-					modalLogs = [...modalLogs, `Downloading ${file_name}: ${percentage}% (${downloadedMB} / ${totalMB} MB)`];
+					modalLogs = [...modalLogs, log_line];
 				}
 			});
 
@@ -72,7 +70,6 @@
 					downloadedModels = await getDownloadedModels();
 				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
 				modalLogs = [...modalLogs, `Download complete for ${modelName}.`];
-				isDownloading = false;
 			});
 
 			unlistenError = await listen('translation-download-error', (event) => {
@@ -83,6 +80,10 @@
 				modalLogs = [...modalLogs, `Error downloading ${model_name}: ${error_message}`];
 				isDownloading = false;
 			});
+
+            unlistenFinished = await listen('translation-download-finished', () => {
+                isDownloading = false;
+            });
 		} catch (err) {
 			configError = 'Could not set up download monitoring.';
 		}
@@ -90,9 +91,10 @@
 
 	onDestroy(() => {
 		if (unlistenStart) unlistenStart();
-		if (unlistenProgress) unlistenProgress();
+		if (unlistenLog) unlistenLog();
 		if (unlistenComplete) unlistenComplete();
 		if (unlistenError) unlistenError();
+        if (unlistenFinished) unlistenFinished();
 	});
 
 	async function handleDownload() {
@@ -104,6 +106,7 @@
             await downloadTranslationModel(fromLanguage, toLanguage, downloadLocation);
         } catch (err) {
 			alert(`Failed to start download for ${fromLanguage}-${toLanguage}: ${err.message || err}`);
+            isDownloading = false; // Set to false on error
 		}
     }
 

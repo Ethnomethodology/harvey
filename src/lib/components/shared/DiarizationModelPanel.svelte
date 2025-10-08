@@ -14,7 +14,8 @@
   let cachePath = '';
   let showInstallModal = false;
   let installLogs = [];
-  let unlisten;
+  let unlistenLog;
+  let unlistenFinished;
 
   async function checkAccessStatus() {
     isLoading = true;
@@ -49,7 +50,7 @@
     error = '';
 
     try {
-      unlisten = await listen('diarization-installation-log', (event) => {
+      unlistenLog = await listen('diarization-installation-log', (event) => {
         installLogs = [...installLogs, event.payload.message];
       });
 
@@ -59,19 +60,29 @@
       console.error('Error downloading diarization model:', e);
       error = `Failed to download model: ${e.message || e}`;
       installLogs = [...installLogs, `Error: ${e.message || e}`];
+      isDownloading = false; // Set to false on error
     } finally {
-      isDownloading = false;
-      if (unlisten) {
-        unlisten();
+      if (unlistenLog) {
+        unlistenLog();
       }
     }
   }
 
-  onMount(checkAccessStatus);
+  onMount(async () => {
+    await checkAccessStatus();
+
+    unlistenFinished = await listen('diarization-installation-finished', () => {
+        isDownloading = false;
+        checkAccessStatus(); // Re-check status after download attempt
+    });
+  });
 
   onDestroy(() => {
-    if (unlisten) {
-      unlisten();
+    if (unlistenLog) {
+      unlistenLog();
+    }
+    if (unlistenFinished) {
+        unlistenFinished();
     }
   });
 
