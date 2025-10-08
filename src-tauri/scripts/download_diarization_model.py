@@ -10,7 +10,7 @@ def download_model(token):
         print("Attempting to download/load speaker diarization pipeline...")
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=token
+            token=token
         )
         print("Successfully loaded pipeline. Model is cached.")
     except Exception as e:

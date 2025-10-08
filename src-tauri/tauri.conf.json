@@ -55,7 +55,7 @@
     "license": "MIT",
     "resources": [
       "third_party_licenses",
-      "scripts"
+      "scripts/*"
     ]
   }
 }

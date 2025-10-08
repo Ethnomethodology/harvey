@@ -66,7 +66,7 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     }
 
     let python_path = get_python_path()?;
-    let packages = ["pyannote.audio", "transformers", "sacremoses"];
+    let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses"];
     for package in &packages {
         app.emit("installation-log", LogPayload { message: format!("Installing {}...", package) }).unwrap();
         let output = shell.command(python_path.to_str().unwrap())

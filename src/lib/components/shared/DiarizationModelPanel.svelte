@@ -1,8 +1,10 @@
 <!-- src/lib/components/shared/DiarizationModelPanel.svelte -->
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
+  import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   let isPanelOpen = false;
   let hasAccess = false;
@@ -10,6 +12,9 @@
   let isDownloading = false;
   let error = '';
   let cachePath = '';
+  let showInstallModal = false;
+  let installLogs = [];
+  let unlisten;
 
   async function checkAccessStatus() {
     isLoading = true;
@@ -17,7 +22,8 @@
     try {
       hasAccess = await invoke('check_diarization_model_access');
       if (hasAccess) {
-        getCachePath(); // If we have access, try to get the path
+        await getCachePath(); // If we have access, try to get the path
+        cachePath = cachePath;
       }
     } catch (e) {
       console.error('Error checking diarization model access status:', e);
@@ -37,21 +43,38 @@
       }
   }
 
-  async function downloadDiarizationModel() {
+  async function handleDownload() {
+    showInstallModal = true;
     isDownloading = true;
+    installLogs = [];
     error = '';
+
     try {
+      unlisten = await listen('diarization-installation-log', (event) => {
+        installLogs = [...installLogs, event.payload.message];
+      });
+
       await invoke('download_diarization_model');
       await checkAccessStatus(); // This will re-check access and get the cache path
     } catch (e) {
       console.error('Error downloading diarization model:', e);
       error = `Failed to download model: ${e.message || e}`;
+      installLogs = [...installLogs, `Error: ${e.message || e}`];
     } finally {
       isDownloading = false;
+      if (unlisten) {
+        unlisten();
+      }
     }
   }
 
   onMount(checkAccessStatus);
+
+  onDestroy(() => {
+    if (unlisten) {
+      unlisten();
+    }
+  });
 
   function openLink(url) {
     openExternal(url).catch((err) => console.error(`Failed to open link: ${err}`));
@@ -107,28 +130,30 @@
     </ol>
 
     <div class="flex items-center space-x-2">
-        <button on:click={downloadDiarizationModel} class="btn-blue" disabled={hasAccess || isDownloading}>
-            {#if isDownloading}
-                Downloading...
-            {:else if hasAccess}
-                Model Downloaded
-            {:else}
-                Download Model
-            {/if}
-        </button>
+        {#if !hasAccess}
+            <button on:click={handleDownload} class="btn-blue" disabled={isDownloading}>
+                {#if isDownloading}
+                    Downloading...
+                {:else}
+                    Download Model
+                {/if}
+            </button>
+        {/if}
     </div>
 
     {#if hasAccess && cachePath}
-        <p class="text-xs text-gray-500 mt-2">
-            Model files are located in: <code>{cachePath}</code>
+        <p class="text-green-600 mt-2">
+            Model downloaded at <code>{cachePath}</code>
         </p>
     {/if}
 
-    {#if error}
+    {#if error && !showInstallModal}
       <p class="text-red-600 mt-4">{error}</p>
     {/if}
   </div>
 {/if}
+
+<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isDownloading} title="Diarization Model Download" inProgressText="Download in progress..." buttonInProgressText="Downloading..." />
 
 <style lang="postcss">
 	.btn-blue {

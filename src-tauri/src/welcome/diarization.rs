@@ -2,7 +2,7 @@
 use super::python_env::get_python_path;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
 use dirs;
 
@@ -21,34 +21,36 @@ fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String>
     })
 }
 
-// Heuristic to find the model directory within the HuggingFace cache
-fn get_diarization_model_path() -> Result<PathBuf, String> {
-    let cache_dir = dirs::home_dir()
-        .ok_or("Could not find home directory")?
-        .join(".cache")
-        .join("huggingface")
-        .join("hub");
+#[tauri::command]
+pub async fn check_diarization_model_access<R: Runtime>(
+    app_handle: AppHandle<R>,
+) -> Result<bool, String> {
+    let python_path = get_python_path().map_err(|e| e.to_string())?;
+    let shell = app_handle.shell();
 
-    if cache_dir.exists() {
-        for entry in fs::read_dir(cache_dir).map_err(|e| e.to_string())? {
-            if let Ok(entry) = entry {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.starts_with("models--pyannote--speaker-diarization-3.1") {
-                        return Ok(entry.path());
-                    }
-                }
-            }
-        }
+    let script_path = app_handle
+        .path()
+        .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+
+    let output = shell
+        .command(python_path.to_string_lossy().to_string())
+        .args(&[script_path.to_string_lossy().to_string()])
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    Err("Model directory not found in cache.".to_string())
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(stdout == "cached")
 }
 
-#[tauri::command]
-pub fn check_diarization_model_access() -> Result<bool, String> {
-    match get_diarization_model_path() {
-        Ok(model_path) => Ok(model_path.join("config.yaml").exists()),
-        Err(_) => Ok(false),
-    }
+#[derive(Clone, serde::Serialize)]
+struct LogPayload {
+  message: String,
 }
 
 #[tauri::command]
@@ -64,6 +66,8 @@ pub async fn download_diarization_model<R: Runtime>(
         .resolve("scripts/download_diarization_model.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
 
+    app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
+
     let output = shell
         .command(python_path.to_string_lossy().to_string())
         .args(&[script_path.to_string_lossy().to_string(), token])
@@ -71,10 +75,22 @@ pub async fn download_diarization_model<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?;
 
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    for line in stdout.lines() {
+        app_handle.emit("diarization-installation-log", LogPayload { message: line.to_string() }).unwrap();
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    for line in stderr.lines() {
+        app_handle.emit("diarization-installation-log", LogPayload { message: line.to_string() }).unwrap();
+    }
+
     if !output.status.success() {
+        app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model download failed.".into() }).unwrap();
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
+    app_handle.emit("diarization-installation-log", LogPayload { message: "Diarization model downloaded successfully.".into() }).unwrap();
     Ok(())
 }
 

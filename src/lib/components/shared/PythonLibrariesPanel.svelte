@@ -124,7 +124,7 @@
 	</div>
 {/if}
 
-<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} />
+<InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} title="Installation Logs" inProgressText="Installation in progress..." buttonInProgressText="Installing..." />
 
 <style lang="postcss">
 	.btn-blue-small {

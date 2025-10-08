@@ -1,9 +1,12 @@
 <script>
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 
     export let showModal = false;
     export let logs = [];
     export let isInstalling = true;
+    export let title = "Installation Logs";
+    export let inProgressText = "Installation in progress...";
+    export let buttonInProgressText = "Installing...";
 
     function closeModal() {
         if (!isInstalling) {
@@ -17,19 +20,35 @@
         // Auto-scroll to the bottom
         logContainer.scrollTop = logContainer.scrollHeight;
     }
+
+    function handleKeydown(event) {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
+    }
+
+    onMount(() => {
+        window.addEventListener('keydown', handleKeydown);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener('keydown', handleKeydown);
+    });
 </script>
 
 {#if showModal}
 <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
     on:click|self={closeModal}
+    on:keydown={handleKeydown}
     role="dialog"
     aria-modal="true"
     aria-labelledby="log-modal-title"
+    tabindex="-1"
 >
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col" on:click|stopPropagation>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl flex flex-col" on:click|stopPropagation role="presentation">
         <h2 id="log-modal-title" class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-            Installation Logs
+            {title}
         </h2>
 
         <div bind:this={logContainer} class="log-container bg-gray-100 dark:bg-gray-900 p-3 rounded-md text-xs font-mono border border-gray-300 dark:border-gray-700 h-64 overflow-y-auto">
@@ -39,7 +58,7 @@
             {#if isInstalling}
                 <div class="flex items-center">
                     <div class="spinner animate-spin"></div>
-                    <p class="ml-2">Installation in progress...</p>
+                    <p class="ml-2">{inProgressText}</p>
                 </div>
             {/if}
         </div>
@@ -51,7 +70,7 @@
                 on:click={closeModal}
                 disabled={isInstalling}
             >
-                {isInstalling ? 'Installing...' : 'Close'}
+                {isInstalling ? buttonInProgressText : 'Close'}
             </button>
         </div>
     </div>
