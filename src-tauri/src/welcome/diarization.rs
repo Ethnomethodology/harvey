@@ -1,7 +1,7 @@
 // src-tauri/src/welcome/diarization.rs
 use super::python_env::get_python_path;
 use std::fs;
-use std::path::PathBuf;
+
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
 use dirs;

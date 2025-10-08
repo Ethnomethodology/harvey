@@ -5,7 +5,7 @@
     export let logs = [];
     export let isInstalling = true;
     export let title = "Installation Logs";
-    export let inProgressText = "Installation in progress...";
+    export let inProgressText = "Downloading...";
     export let buttonInProgressText = "Installing...";
 
     function closeModal() {

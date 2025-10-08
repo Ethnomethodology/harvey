@@ -1,3 +1,4 @@
+
 use tauri::{command, AppHandle};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
@@ -50,12 +51,14 @@ fn create_lexical_with_text(text: &str) -> Value {
     })
 }
 
+
+
 #[command]
 pub async fn translate_transcript_command(
     app_handle: AppHandle,
     project_xml_path: String,
     transcript_path: String,
-    source_lang: String,
+    model_name: String,
     target_lang: String
 ) -> Result<String, String> {
     info!("[Translate JS] Starting translation for transcript: {}", transcript_path);
@@ -87,18 +90,11 @@ pub async fn translate_transcript_command(
     }
 
     // 2. Execute sidecar script for translation
-    let model_dir_name = format!("opus-mt-{}-{}", source_lang, target_lang);
-    let model_path = std::path::Path::new(&download_location)
-        .join("onnx-community")
-        .join(model_dir_name);
-
-    let model_path_str = model_path.to_string_lossy().to_string();
-
-    info!("[Translate JS] Using model path: {}", &model_path_str);
+    info!("[Translate JS] Using model: {}", &model_name);
 
     let (mut rx, mut child) = app_handle.shell().sidecar("translator-sidecar")
         .map_err(|e| format!("Failed to create sidecar command: {}. This is a packaging issue.", e))? 
-        .args([&model_path_str, &download_location])
+        .args([&model_name, &download_location])
         .spawn()
         .map_err(|e| format!("Failed to spawn sidecar: {}. The sidecar executable may be missing or have permission issues.", e))?;
 

@@ -17,7 +17,7 @@ use std::{
     path::{PathBuf, Path},
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
-use tauri::{AppHandle, command, Emitter, State};
+use tauri::{AppHandle, command, Emitter, State, Manager};
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
@@ -47,7 +47,6 @@ struct TranslationErrorPayload {
 #[command]
 pub async fn download_translation_model_command(
     app: AppHandle,
-    cancellation_state: State<'_, DownloadCancellationState>,
     model_info: ModelInfo, // Re-using ModelInfo, `download_url` is the repo URL
     download_location: String,
 ) -> Result<(), CommandError> {
@@ -65,33 +64,52 @@ pub async fn download_translation_model_command(
         return Err(CommandError::from(format!("Target path {:?} is not a directory.", target_dir)));
     }
 
-    let cancel_flag = Arc::new(AtomicBool::new(false));
-    cancellation_state.0.insert(model_name.clone(), Arc::clone(&cancel_flag));
-    log::info!("Cancellation token stored for translation model {}", model_name);
+    let script_path = app.path().resource_dir().unwrap().join("scripts/download_translation_model.py");
 
-    let download_result = download_and_save_translation_files(app.clone(), cancel_flag.clone(), model_info.clone(), download_location.clone()).await;
-
-    if cancellation_state.0.remove(&model_name).is_some() {
-        log::info!("Removed cancellation token for translation model {}", model_name);
+    let token_path = app.path().app_config_dir().unwrap().join("hf_token");
+    let token = if token_path.exists() {
+        fs::read_to_string(token_path).unwrap_or_default()
     } else {
-        log::warn!("Cancellation token for {} was already removed.", model_name);
+        String::new()
+    };
+
+    let python_path = python_env::get_python_path()?;
+
+    let (mut rx, _child) = app.shell()
+        .command(python_path.to_str().unwrap())
+        .args(&[script_path.to_str().unwrap(), &model_name, &download_location, &token])
+        .spawn()
+        .map_err(|e| format!("Failed to spawn python script: {}", e))?;
+
+    let window = app.get_webview_window("main").unwrap();
+
+    window.emit("translation-download-start", &model_name).unwrap();
+
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::info!("[Python] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                log::error!("[Python] {}", &line_str);
+                window.emit("translation-download-log", serde_json::json!({ "model_name": &model_name, "log_line": &line_str })).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    window.emit("translation-download-complete", &model_name).unwrap();
+                } else {
+                    window.emit("translation-download-error", serde_json::json!({ "model_name": &model_name, "error_message": "Download script failed" })).unwrap();
+                }
+                break;
+            }
+            _ => {}
+        }
     }
 
-    match download_result {
-        Ok(_) => {
-            log::info!("Successfully downloaded all files for translation model {}", model_name);
-            app.emit("translation-download-complete", &model_name).map_err(|e| CommandError::from(format!("Failed to emit completion event: {}", e)))?;
-            Ok(())
-        }
-        Err(e) => {
-            log::error!("An error occurred during download for translation model {}: {}", model_name, e);
-            let _ = app.emit("translation-download-error", &TranslationErrorPayload {
-                model_name: model_name.clone(),
-                error_message: format!("{}", e),
-            }).map_err(|emit_err| log::error!("Failed to emit error event: {}", emit_err));
-            Err(e)
-        }
-    }
+    Ok(())
 }
 
 #[command]
@@ -109,111 +127,7 @@ struct HuggingFaceApiFile {
     rfilename: String,
 }
 
-async fn download_and_save_translation_files(
-    app: AppHandle,
-    cancel_flag: Arc<AtomicBool>,
-    model_info: ModelInfo,
-    download_base_location: String,
-) -> Result<(), CommandError> {
-    let model_name = model_info.name.clone();
-    let repo_url = model_info.download_url.as_ref().filter(|url| !url.trim().is_empty()).ok_or_else(|| CommandError::from(format!("Model '{}' is missing a repository URL.", model_name)))?;
 
-    let model_dest_dir = PathBuf::from(&download_base_location).join(&model_name);
-    if !model_dest_dir.exists() {
-        fs::create_dir_all(&model_dest_dir)?;
-    }
-
-    let client = reqwest::Client::new();
-
-    app.emit("translation-download-start", &model_name)?;
-
-    let api_url = format!("https://huggingface.co/api/models/{}", model_name);
-    let response = client.get(&api_url).send().await?;
-    if !response.status().is_success() {
-        return Err(format!("Failed to get file list from Hugging Face API for {}: Status {}", model_name, response.status()).into());
-    }
-
-    let api_response: HuggingFaceApiResponse = response.json().await?;
-    let files = api_response.siblings;
-
-    let required_files = vec![
-        "onnx/encoder_model.onnx",
-        "onnx/decoder_model.onnx",
-        "onnx/decoder_with_past_model.onnx",
-        "config.json",
-        "vocab.json",
-        "source.spm",
-        "target.spm",
-        "special_tokens_map.json",
-        "tokenizer_config.json",
-        "tokenizer.json",
-    ];
-
-    for file in files {
-        let file_name = file.rfilename;
-        if !required_files.contains(&file_name.as_str()) {
-            continue;
-        }
-
-        if cancel_flag.load(Ordering::Relaxed) {
-            log::info!("Download cancelled for model {} before starting file {}.", model_name, &file_name);
-            return Err(CommandError::from(format!("Download for {} was cancelled.", model_name)));
-        }
-
-        let file_url = format!("{}/resolve/main/{}", repo_url, file_name);
-        let file_dest_path = model_dest_dir.join(&file_name);
-        let temp_file_path = model_dest_dir.join(format!("{}.part", file_name));
-
-        if let Some(parent_dir) = file_dest_path.parent() {
-            fs::create_dir_all(parent_dir)?;
-        }
-
-        if file_dest_path.exists() {
-            log::info!("File {} already exists for model {}. Skipping.", file_name, model_name);
-            continue;
-        }
-
-        log::info!("Starting download of {} for model {}", file_name, model_name);
-        let response = client.get(&file_url).send().await?;
-
-        if !response.status().is_success() {
-            return Err(format!("Failed to download file {}: Status {} for URL {}", file_name, response.status(), file_url).into());
-        }
-
-        let total_size = response.content_length();
-        let mut downloaded: u64 = 0;
-        let mut stream = response.bytes_stream();
-        let mut temp_file = File::create(&temp_file_path)?;
-
-        while let Some(item) = stream.next().await {
-            if cancel_flag.load(Ordering::Relaxed) {
-                log::info!("Download of {} for {} cancelled mid-stream.", file_name, model_name);
-                return Err(CommandError::from(format!("Download for {} was cancelled.", model_name)));
-            }
-            let chunk = item?;
-            temp_file.write_all(&chunk)?;
-            downloaded += chunk.len() as u64;
-            app.emit("translation-download-progress", &TranslationDownloadProgress {
-                model_name: model_name.clone(),
-                file_name: file_name.to_string(),
-                downloaded_bytes: downloaded,
-                total_bytes: total_size,
-            })?;
-        }
-
-        fs::rename(&temp_file_path, &file_dest_path)?;
-        log::info!("Finished downloading {}. Renamed .part file.", file_name);
-    }
-
-    // After all files are downloaded, update the main config
-    let mut config = read_config()?;
-    if !config.downloaded_models.iter().any(|m| m.name == model_name) {
-        config.downloaded_models.push(model_info);
-        write_config(&config)?;
-    }
-
-    Ok(())
-}
 
 
 // --- Structs (DownloadProgress, ErrorPayload) - Unchanged ---

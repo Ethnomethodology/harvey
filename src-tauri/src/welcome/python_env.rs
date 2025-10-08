@@ -26,11 +26,12 @@ pub async fn check_python_libraries_installed<R: Runtime>(shell: &Shell<R>) -> R
     }
 
     let python_path = get_python_path()?;
-    let packages = ["pyannote.audio", "transformers", "sacremoses"];
+    let packages = ["pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
     for package in &packages {
         log::info!("Checking for package: {}", package);
+        let import_name = if package == &"pyannote.audio" { "pyannote" } else { package };
         let output = shell.command(python_path.to_str().unwrap())
-            .args(&["-c", &format!("import {}", package)])
+            .args(&["-c", &format!("import {}", import_name)])
             .output()
             .await?;
         if !output.status.success() {
@@ -66,7 +67,7 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     }
 
     let python_path = get_python_path()?;
-    let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses"];
+    let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
     for package in &packages {
         app.emit("installation-log", LogPayload { message: format!("Installing {}...", package) }).unwrap();
         let output = shell.command(python_path.to_str().unwrap())

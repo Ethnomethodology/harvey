@@ -126,27 +126,27 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 }
 
 // --- Translation Model Actions ---
-export async function downloadTranslationModel(model, downloadLocation) {
-  if (!model?.download_url) {
-    const errorMsg = `Translation model "${model?.name || 'Unknown'}" is missing a repository URL.`;
-    console.error(errorMsg);
-    throw new Error(errorMsg);
-  }
+export async function downloadTranslationModel(from, to, downloadLocation) {
+  const model_name = `Helsinki-NLP/opus-mt-${from}-${to}`;
+  const modelInfo = {
+    name: model_name,
+    download_url: `https://huggingface.co/${model_name}`
+  };
   if (!downloadLocation || downloadLocation.trim() === '') {
     const errorMsg = `Download location is not set. Cannot download translation model.`;
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
-  console.log(`Attempting to download translation model: ${model.name} from ${model.download_url} to ${downloadLocation}`);
+  console.log(`Attempting to download translation model: ${model_name} to ${downloadLocation}`);
   try {
     await invoke('download_translation_model_command', {
-      modelInfo: model,
+      modelInfo: modelInfo,
       downloadLocation: downloadLocation
     });
-    console.log(`Download command invoked for translation model: ${model.name}`);
+    console.log(`Download command invoked for translation model: ${model_name}`);
     return true;
   } catch (error) {
-    console.error(`Error invoking download_translation_model_command for ${model.name}:`, error);
+    console.error(`Error invoking download_translation_model_command for ${model_name}:`, error);
     throw new Error(`Failed to start translation model download: ${error?.message || error}`);
   }
 }
