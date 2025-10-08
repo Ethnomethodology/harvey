@@ -194,7 +194,7 @@
                 </div>
 
 				<div class="mb-6">
-					<h3 class="text-lg font-medium text-gray-900 mb-2">Required Tools</h3>
+					<h3 class="block text-sm font-medium text-gray-700 mb-1">Required Tools</h3>
 					<FfmpegPanel />
 					<PandocPanel />
 					<PythonPanel />

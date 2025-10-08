@@ -5,11 +5,9 @@
     export let logs = [];
     export let isInstalling = true;
 
-    const dispatch = createEventDispatcher();
-
     function closeModal() {
         if (!isInstalling) {
-            dispatch('close');
+            showModal = false;
         }
     }
 

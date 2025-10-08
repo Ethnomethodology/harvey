@@ -35,7 +35,7 @@
 		class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
 	>
 		<div class="flex items-center">
-			<h3 class="text-lg font-medium text-gray-900">FFmpeg</h3>
+			<h3 class="block text-sm font-medium text-gray-700">FFmpeg</h3>
 		</div>
 		<div class="flex items-center">
 			{#if isLoading}
