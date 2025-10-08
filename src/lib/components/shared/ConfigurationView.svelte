@@ -12,9 +12,7 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
-	import FfmpegPanel from './FfmpegPanel.svelte';
 	import PythonPanel from './PythonPanel.svelte';
-	import PandocPanel from './PandocPanel.svelte';
 	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 
@@ -196,8 +194,6 @@
 
 				<div class="mb-6">
 					<h3 class="block text-sm font-medium text-gray-700 mb-1">Required Tools</h3>
-					<FfmpegPanel />
-					<PandocPanel />
 					<PythonPanel />
 					<PythonLibrariesPanel />
 					<HuggingFacePanel />

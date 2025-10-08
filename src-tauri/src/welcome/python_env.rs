@@ -111,7 +111,7 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     }
     app.emit("installation-log", LogPayload { message: "pip upgraded successfully.".into() }).unwrap();
 
-    let packages = ["ffmpeg-python", "torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
+    let packages = ["ffmpeg-python", "pypandoc", "torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let mut pip_args = vec!["-m", "pip", "install"];

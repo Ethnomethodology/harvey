@@ -375,21 +375,9 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  // --- End Theme Preference Commands ---
 
  #[command]
-pub async fn check_ffmpeg_installed(app: AppHandle) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    checkers::check_ffmpeg_installed(&shell).await
-}
-
-#[command]
 pub async fn check_python_installed(app: AppHandle) -> Result<bool, CommandError> {
     let shell = app.shell();
     checkers::check_python_installed(&shell).await
-}
-
-#[command]
-pub async fn check_pandoc_installed(app: AppHandle) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    checkers::check_pandoc_installed(&shell).await
 }
 
 #[command]

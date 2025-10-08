@@ -26,15 +26,6 @@ async fn run_check<R: Runtime>(shell: &Shell<R>, command: &str, args: &[&str]) -
     }
 }
 
-pub async fn check_pandoc_installed<R: Runtime>(shell: &Shell<R>) -> Result<bool, CommandError> {
-    log::info!("Checking for Pandoc installation...");
-    run_check(shell, "pandoc", &["--version"]).await
-}
-
-pub async fn check_ffmpeg_installed<R: Runtime>(shell: &Shell<R>) -> Result<bool, CommandError> {
-    log::info!("Checking for FFmpeg installation...");
-    run_check(shell, "ffmpeg", &["-version"]).await
-}
 
 pub async fn check_python_installed<R: Runtime>(shell: &Shell<R>) -> Result<bool, CommandError> {
     log::info!("Checking for Python 3 installation...");
