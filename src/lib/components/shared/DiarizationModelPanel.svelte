@@ -23,7 +23,6 @@
       hasAccess = await invoke('check_diarization_model_access');
       if (hasAccess) {
         await getCachePath(); // If we have access, try to get the path
-        cachePath = cachePath;
       }
     } catch (e) {
       console.error('Error checking diarization model access status:', e);
