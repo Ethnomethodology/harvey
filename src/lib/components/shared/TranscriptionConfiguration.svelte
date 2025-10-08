@@ -208,7 +208,6 @@
 	{/if}
 
 	<div class="flex-grow space-y-3">
-		<DiarizationModelPanel />
 		<div class="border-y border-gray-200">
 			<button on:click={() => isModelsPanelOpen = !isModelsPanelOpen} class="w-full flex justify-between items-center py-3 text-left focus:outline-none">
 				<h3 class="block text-sm font-medium text-gray-700">
@@ -277,6 +276,7 @@
 				{/if}
 			</div>
 		{/if}
+		<DiarizationModelPanel />
 	</div>
 </div>
 

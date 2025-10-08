@@ -54,7 +54,8 @@
     "licenseFile": "../LICENSE.md",
     "license": "MIT",
     "resources": [
-      "third_party_licenses"
+      "third_party_licenses",
+      "scripts"
     ]
   }
 }
