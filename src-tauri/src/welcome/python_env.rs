@@ -111,7 +111,36 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     }
     app.emit("installation-log", LogPayload { message: "pip upgraded successfully.".into() }).unwrap();
 
-    let packages = ["ffmpeg-python", "pypandoc", "torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
+    // Install ffmpeg-python first
+    app.emit("installation-log", LogPayload { message: "Installing ffmpeg...".into() }).unwrap();
+    let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
+        .args(&["-m", "pip", "install", "ffmpeg-python"])
+        .env("PYTHONUNBUFFERED", "1")
+        .spawn()?;
+
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    let error_message = "Failed to install ffmpeg-python".to_string();
+                    app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                    return Err(CommandError::Message(error_message));
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+    app.emit("installation-log", LogPayload { message: "ffmpeg installed successfully.".into() }).unwrap();
+
+
+    let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let mut pip_args = vec!["-m", "pip", "install"];
