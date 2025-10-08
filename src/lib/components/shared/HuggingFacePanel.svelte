@@ -9,32 +9,47 @@
   let isLoading = true;
   let error = '';
   let authToken = '';
+  const MASKED_TOKEN = '**********';
 
   async function checkAuthStatus() {
+    isLoading = true;
+    error = '';
     try {
-      isLoading = true;
-      isAuthenticated = await invoke('check_hf_auth_status');
+        isAuthenticated = await invoke('check_hf_auth_status');
+        if (isAuthenticated) {
+            authToken = MASKED_TOKEN;
+        } else {
+            authToken = '';
+        }
     } catch (e) {
-      console.error('Error checking HuggingFace auth status:', e);
-      error = `Failed to check auth status: ${e.message || e}`;
-      isAuthenticated = false;
+        console.error('Error checking HuggingFace auth status:', e);
+        error = `Failed to check auth status: ${e.message || e}`;
+        isAuthenticated = false;
     } finally {
-      isLoading = false;
+        isLoading = false;
     }
   }
 
   async function saveAuthToken() {
+    if (authToken === MASKED_TOKEN || authToken.trim() === '') {
+        return;
+    }
     try {
-      await invoke('save_hf_auth_token', { token: authToken });
-      await checkAuthStatus();
-      authToken = ''; // Clear the input field after saving
+        await invoke('save_hf_auth_token', { token: authToken });
+        await checkAuthStatus();
     } catch (e) {
-      console.error('Error saving HuggingFace auth token:', e);
-      error = `Failed to save auth token: ${e.message || e}`;
+        console.error('Error saving HuggingFace auth token:', e);
+        error = `Failed to save auth token: ${e.message || e}`;
     }
   }
 
   onMount(checkAuthStatus);
+
+  function handleFocus() {
+      if (authToken === MASKED_TOKEN) {
+          authToken = '';
+      }
+  }
 
   function openLink(url) {
     openExternal(url).catch((err) => console.error(`Failed to open link: ${err}`));
@@ -95,8 +110,9 @@
       <input
         type="password"
         bind:value={authToken}
-        placeholder="Enter your HuggingFace token"
-        class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+        on:focus={handleFocus}
+        placeholder={isAuthenticated ? 'Token is set' : 'Enter your HuggingFace token'}
+        class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-white dark:bg-gray-800"
       />
       <button on:click={saveAuthToken} class="btn-blue">Save</button>
     </div>
@@ -106,3 +122,10 @@
     {/if}
   </div>
 {/if}
+
+<style lang="postcss">
+	.btn-blue {
+		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
+	}
+</style>

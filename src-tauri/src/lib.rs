@@ -163,6 +163,8 @@ pub fn run() {
             welcome::commands::install_python_libraries,
             welcome::hf_auth::check_hf_auth_status,
             welcome::hf_auth::save_hf_auth_token,
+            welcome::diarization::check_diarization_model_access,
+            welcome::diarization::download_diarization_model,
             
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,

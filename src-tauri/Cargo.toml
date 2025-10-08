@@ -56,12 +56,13 @@ walkdir = "2"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 
 # --- Asynchronous Runtime ---
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { version = "1", features = ["full"] }
 
 # --- Download / Network Feature Dependencies ---
 reqwest = { version = "0.12", features = ["stream", "json"] } # Restored reqwest version
-zip = "1.1" 
+zip = "1.1"
 html-escape = "0.2.13"
+hf-hub = { version = "0.3.2", features = ["tokio"] }
 
 csv = "1.3.1"
 calamine = { version = "0.26.0", features = ["dates"] }
