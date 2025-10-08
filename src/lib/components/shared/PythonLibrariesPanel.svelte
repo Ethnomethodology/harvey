@@ -125,3 +125,10 @@
 {/if}
 
 <InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isInstalling} />
+
+<style lang="postcss">
+	.btn-blue-small {
+		@apply px-2.5 py-1 text-xs border font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
+	}
+</style>

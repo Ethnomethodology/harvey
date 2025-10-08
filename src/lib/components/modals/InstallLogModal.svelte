@@ -60,7 +60,10 @@
 </div>
 {/if}
 
-<style>
+<style lang="postcss">
+	.btn-secondary {
+		@apply px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md border border-gray-300 dark:border-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 disabled:opacity-50;
+	}
     .log-container {
         scrollbar-width: thin;
     }
