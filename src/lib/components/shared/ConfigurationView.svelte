@@ -16,6 +16,7 @@
 	import PythonPanel from './PythonPanel.svelte';
 	import PandocPanel from './PandocPanel.svelte';
 	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
+	import HuggingFacePanel from './HuggingFacePanel.svelte';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 
@@ -199,6 +200,7 @@
 					<PandocPanel />
 					<PythonPanel />
 					<PythonLibrariesPanel />
+					<HuggingFacePanel />
 				</div>
             </div>
 		{:else if activeTab === 'transcription'}

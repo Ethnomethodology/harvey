@@ -3,3 +3,4 @@ pub mod config;
 pub mod commands;
 pub mod checkers;
 pub mod python_env;
+pub mod hf_auth;

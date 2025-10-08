@@ -1,0 +1,108 @@
+<!-- src/lib/components/shared/HuggingFacePanel.svelte -->
+<script>
+  import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { open as openExternal } from '@tauri-apps/plugin-shell';
+
+  let isPanelOpen = false;
+  let isAuthenticated = false;
+  let isLoading = true;
+  let error = '';
+  let authToken = '';
+
+  async function checkAuthStatus() {
+    try {
+      isLoading = true;
+      isAuthenticated = await invoke('check_hf_auth_status');
+    } catch (e) {
+      console.error('Error checking HuggingFace auth status:', e);
+      error = `Failed to check auth status: ${e.message || e}`;
+      isAuthenticated = false;
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  async function saveAuthToken() {
+    try {
+      await invoke('save_hf_auth_token', { token: authToken });
+      await checkAuthStatus();
+      authToken = ''; // Clear the input field after saving
+    } catch (e) {
+      console.error('Error saving HuggingFace auth token:', e);
+      error = `Failed to save auth token: ${e.message || e}`;
+    }
+  }
+
+  onMount(checkAuthStatus);
+
+  function openLink(url) {
+    openExternal(url).catch((err) => console.error(`Failed to open link: ${err}`));
+  }
+</script>
+
+<div class="border-y border-gray-200">
+  <button
+    on:click={() => (isPanelOpen = !isPanelOpen)}
+    class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
+  >
+    <div class="flex items-center">
+      <h3 class="block text-sm font-medium text-gray-700">HuggingFace Authentication</h3>
+    </div>
+    <div class="flex items-center">
+      {#if isLoading}
+        <span class="text-xs text-gray-500 mr-2">Checking...</span>
+      {:else if isAuthenticated}
+        <span class="text-sm font-medium text-green-600">Authenticated</span>
+      {:else}
+        <span class="text-sm font-medium text-red-600">Required</span>
+      {/if}
+      <svg
+        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen
+          ? 'rotate-180'
+          : ''}"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke-width="2"
+        stroke="currentColor"
+      >
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+      </svg>
+    </div>
+  </button>
+</div>
+
+{#if isPanelOpen}
+  <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
+    <p class="mb-2">
+      HuggingFace is a platform that provides tools for building, training, and deploying state-of-the-art machine learning models.
+    </p>
+    <p class="mb-4">
+      This application uses HuggingFace to download and run translation models. Authentication is required to access certain models and to ensure you have the necessary permissions.
+    </p>
+
+    <h4 class="font-semibold mb-2">Setup Instructions</h4>
+    <ol class="list-decimal list-inside mb-4 space-y-1">
+      <li>If you don't have one, create a HuggingFace account on their <a href="https://huggingface.co/join" on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline">website</a>.</li>
+      <li>
+        Generate an access token from your HuggingFace account settings. You can find it under <a href="https://huggingface.co/settings/tokens" on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline">Access Tokens</a>.
+      </li>
+      <li>Paste the access token in the field below and click "Save".</li>
+    </ol>
+
+    <div class="flex items-center space-x-2">
+      <input
+        type="password"
+        bind:value={authToken}
+        placeholder="Enter your HuggingFace token"
+        class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+      />
+      <button on:click={saveAuthToken} class="btn-blue">Save</button>
+    </div>
+
+    {#if error}
+      <p class="text-red-600 mt-4">{error}</p>
+    {/if}
+  </div>
+{/if}
