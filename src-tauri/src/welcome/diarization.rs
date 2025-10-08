@@ -67,11 +67,24 @@ pub async fn download_diarization_model<R: Runtime>(
 
     app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
 
-    let (mut rx, _child) = shell
-        .command(python_path.to_string_lossy().to_string())
-        .args(&[script_path.to_string_lossy().to_string(), token])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut command = shell.command(python_path.to_string_lossy().to_string());
+    command = command.args(&[script_path.to_string_lossy().to_string(), token.clone()]);
+
+    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include the venv's `lib` directory.
+    // This is because `torchcodec` and other libraries with native extensions may not be able to
+    // find their dependencies otherwise, especially when the app is bundled.
+    if cfg!(target_os = "macos") {
+        if let Some(venv_dir) = python_path.parent().and_then(|p| p.parent()) {
+            let lib_path = venv_dir.join("lib");
+            if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
+                command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", lib_path.to_string_lossy(), existing_path));
+            } else {
+                command = command.env("DYLD_LIBRARY_PATH", lib_path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    let (mut rx, _child) = command.spawn().map_err(|e| e.to_string())?;
 
     let mut success = false;
     while let Some(event) = rx.recv().await {

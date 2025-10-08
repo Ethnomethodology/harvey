@@ -112,22 +112,20 @@
             and <code class="text-xs">transformers</code> & <code class="text-xs">sacremoses</code> for translation.
         </p>
 
-		{#if areLibsInstalled}
-			<p class="text-green-600 mb-2">Libraries are installed in the virtual environment.</p>
-		{:else}
-            <div class="flex items-center">
-                <p class="text-red-600 mr-4">
-                    Required libraries are not installed.
-                </p>
-                <button
-                    class="btn-blue-small"
-                    on:click={handleInstall}
-                    disabled={isInstalling}
-                >
-                    {isInstalling ? 'Installing...' : 'Install'}
-                </button>
-            </div>
-		{/if}
+		<div class="flex items-center">
+			{#if areLibsInstalled}
+				<p class="text-green-600 mr-4">Libraries are installed in the virtual environment.</p>
+			{:else}
+				<p class="text-red-600 mr-4">Required libraries are not installed.</p>
+			{/if}
+			<button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling}>
+				{#if isInstalling}
+					{areLibsInstalled ? 'Re-installing...' : 'Installing...'}
+				{:else}
+					{areLibsInstalled ? 'Re-install' : 'Install'}
+				{/if}
+			</button>
+		</div>
 		{#if error}
 			<p class="text-red-600 mt-4">{error}</p>
 		{/if}
