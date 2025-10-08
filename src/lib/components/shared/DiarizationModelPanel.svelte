@@ -7,12 +7,18 @@
   let isPanelOpen = false;
   let hasAccess = false;
   let isLoading = true;
+  let isDownloading = false;
   let error = '';
+  let cachePath = '';
 
   async function checkAccessStatus() {
+    isLoading = true;
+    error = '';
     try {
-      isLoading = true;
       hasAccess = await invoke('check_diarization_model_access');
+      if (hasAccess) {
+        getCachePath(); // If we have access, try to get the path
+      }
     } catch (e) {
       console.error('Error checking diarization model access status:', e);
       error = `Failed to check access status: ${e.message || e}`;
@@ -22,14 +28,26 @@
     }
   }
 
+  async function getCachePath() {
+      try {
+        cachePath = await invoke('get_diarization_cache_path');
+      } catch (e) {
+        console.error('Error getting cache path:', e);
+        // Don't show this error to the user, as it's not critical
+      }
+  }
+
   async function downloadDiarizationModel() {
+    isDownloading = true;
+    error = '';
     try {
-      // This will be implemented in the backend step
       await invoke('download_diarization_model');
-      await checkAccessStatus();
+      await checkAccessStatus(); // This will re-check access and get the cache path
     } catch (e) {
       console.error('Error downloading diarization model:', e);
       error = `Failed to download model: ${e.message || e}`;
+    } finally {
+      isDownloading = false;
     }
   }
 
@@ -89,14 +107,22 @@
     </ol>
 
     <div class="flex items-center space-x-2">
-        <button on:click={downloadDiarizationModel} class="btn-blue" disabled={hasAccess}>
-            {#if hasAccess}
+        <button on:click={downloadDiarizationModel} class="btn-blue" disabled={hasAccess || isDownloading}>
+            {#if isDownloading}
+                Downloading...
+            {:else if hasAccess}
                 Model Downloaded
             {:else}
                 Download Model
             {/if}
         </button>
     </div>
+
+    {#if hasAccess && cachePath}
+        <p class="text-xs text-gray-500 mt-2">
+            Model files are located in: <code>{cachePath}</code>
+        </p>
+    {/if}
 
     {#if error}
       <p class="text-red-600 mt-4">{error}</p>

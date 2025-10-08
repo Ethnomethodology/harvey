@@ -2024,6 +2024,7 @@ dependencies = [
  "csv",
  "dashmap",
  "directories",
+ "dirs 5.0.1",
  "env_logger",
  "futures-util",
  "hex",

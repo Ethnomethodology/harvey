@@ -9,7 +9,7 @@ fn get_venv_path() -> Result<PathBuf, CommandError> {
     get_config_dir().map(|path| path.join(VENV_DIR))
 }
 
-fn get_python_path() -> Result<PathBuf, CommandError> {
+pub fn get_python_path() -> Result<PathBuf, CommandError> {
     let venv_path = get_venv_path()?;
     if cfg!(windows) {
         Ok(venv_path.join("Scripts").join("python.exe"))
