@@ -159,6 +159,7 @@ pub fn run() {
             welcome::commands::check_python_installed,
             welcome::commands::check_python_libraries_installed,
             welcome::commands::install_python_libraries,
+            welcome::python_env::list_venv_lib_contents, // Temp diagnostic command
             welcome::hf_auth::check_hf_auth_status,
             welcome::hf_auth::save_hf_auth_token,
             welcome::diarization::check_diarization_model_access,

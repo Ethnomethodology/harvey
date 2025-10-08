@@ -48,6 +48,31 @@ struct LogPayload {
   message: String,
 }
 
+use std::fs;
+
+// Temporary command for diagnostics
+#[tauri::command]
+pub async fn list_venv_lib_contents() -> Result<Vec<String>, String> {
+    let venv_path = get_venv_path().map_err(|e| e.to_string())?;
+    let lib_path = venv_path.join("lib");
+
+    if !lib_path.exists() {
+        return Err("Virtual environment 'lib' directory not found.".to_string());
+    }
+
+    let entries = fs::read_dir(lib_path)
+        .map_err(|e| format!("Failed to read 'lib' directory: {}", e))?
+        .filter_map(|entry| {
+            entry.ok().and_then(|e| {
+                e.file_name().into_string().ok()
+            })
+        })
+        .collect();
+
+    Ok(entries)
+}
+
+
 pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
     let venv_path = get_venv_path()?;
     let python3_command = if cfg!(windows) { "python" } else { "python3" };
