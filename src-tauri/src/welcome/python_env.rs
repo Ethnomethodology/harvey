@@ -112,34 +112,36 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     app.emit("installation-log", LogPayload { message: "pip upgraded successfully.".into() }).unwrap();
 
     let packages = ["torch", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece"];
-    for package in &packages {
-        app.emit("installation-log", LogPayload { message: format!("Installing {}...", package) }).unwrap();
-        let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
-            .args(&["-m", "pip", "install", package])
-            .env("PYTHONUNBUFFERED", "1")
-            .spawn()?;
+    app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
-        while let Some(event) = rx.recv().await {
-            match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
-                }
-                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                    app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
-                }
-                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    if payload.code != Some(0) {
-                        let error_message = format!("Failed to install {}: {}", package, "pip install failed");
-                        app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
-                        return Err(CommandError::Message(error_message));
-                    }
-                    break;
-                }
-                _ => {}
+    let mut pip_args = vec!["-m", "pip", "install"];
+    pip_args.extend_from_slice(&packages);
+
+    let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
+        .args(&pip_args)
+        .env("PYTHONUNBUFFERED", "1")
+        .spawn()?;
+
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
             }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                app.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    let error_message = "Failed to install Python libraries: pip install failed".to_string();
+                    app.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                    return Err(CommandError::Message(error_message));
+                }
+                break;
+            }
+            _ => {}
         }
-        app.emit("installation-log", LogPayload { message: format!("Successfully installed {}.", package) }).unwrap();
     }
+    app.emit("installation-log", LogPayload { message: "Successfully installed Python libraries.".into() }).unwrap();
 
     app.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
     app.emit("installation-finished", ()).unwrap();
