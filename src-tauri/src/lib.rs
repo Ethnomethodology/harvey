@@ -164,6 +164,7 @@ pub fn run() {
             welcome::hf_auth::save_hf_auth_token,
             welcome::diarization::check_diarization_model_access,
             welcome::diarization::download_diarization_model,
+            welcome::diarization::delete_diarization_model,
             welcome::diarization::get_diarization_cache_path,
             
             welcome::commands::get_theme_preference,

@@ -127,6 +127,7 @@ pub async fn download_diarization_model<R: Runtime>(
 
     let mut command = shell.command(python_path.to_string_lossy().to_string());
     command = command.args(&[script_path.to_string_lossy().to_string(), token.clone()]);
+    command = command.env("HF_HUB_DISABLE_PROGRESS_BARS", "1");
 
     // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our bundled ffmpeg libs
     // and the python venv libs, so torchcodec can find everything.
@@ -215,4 +216,37 @@ pub async fn get_diarization_cache_path<R: Runtime>(
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[tauri::command]
+pub async fn delete_diarization_model() -> Result<(), String> {
+    let hf_hub_path = dirs::home_dir()
+        .ok_or_else(|| "Could not find home directory".to_string())?
+        .join(".cache").join("huggingface").join("hub");
+
+    if !hf_hub_path.exists() {
+        log::info!("HuggingFace hub directory not found, nothing to delete.");
+        return Ok(());
+    }
+
+    log::info!("Searching for pyannote models in: {:?}", hf_hub_path);
+
+    let entries = fs::read_dir(&hf_hub_path)
+        .map_err(|e| format!("Failed to read HuggingFace hub directory: {}", e))?;
+
+    for entry in entries {
+        if let Ok(entry) = entry {
+            if let Some(file_name) = entry.file_name().to_str() {
+                if file_name.starts_with("models--pyannote--") {
+                    log::info!("Deleting model directory: {:?}", entry.path());
+                    if let Err(e) = fs::remove_dir_all(entry.path()) {
+                        log::error!("Failed to delete directory '{:?}': {}", file_name, e);
+                        // Don't return early, try to delete other matches
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

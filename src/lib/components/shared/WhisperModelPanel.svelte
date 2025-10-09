@@ -95,7 +95,7 @@
 {#if isPanelOpen}
   <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
     <p class="mb-4">
-      This application uses a Whisper model for audio transcription. The model will be downloaded and stored locally.
+      Harvey uses a Whisper model for audio transcription. The model will be downloaded and stored locally.
     </p>
 
     {#if isModelInstalled}

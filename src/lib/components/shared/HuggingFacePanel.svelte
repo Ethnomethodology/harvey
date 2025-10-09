@@ -94,7 +94,7 @@
       HuggingFace is a platform that provides tools for building, training, and deploying state-of-the-art machine learning models.
     </p>
     <p class="mb-4">
-      This application uses HuggingFace to download and run translation models. Authentication is required to access certain models and to ensure you have the necessary permissions.
+      Harvey uses HuggingFace to download and run translation models. Authentication is required to access certain models and to ensure you have the necessary permissions.
     </p>
 
     <h4 class="font-semibold mb-2">Setup Instructions</h4>

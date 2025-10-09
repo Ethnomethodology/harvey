@@ -1,6 +1,14 @@
 # src-tauri/scripts/download_diarization_model.py
 import sys
+import logging
 from pyannote.audio import Pipeline
+
+# Configure logging to capture detailed output from huggingface_hub
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - [%(name)s] - %(message)s',
+    stream=sys.stdout, # Ensure logs go to stdout
+)
 
 def download_model(token):
     """

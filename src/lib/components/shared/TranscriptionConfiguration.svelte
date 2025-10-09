@@ -221,6 +221,9 @@
 
 		{#if isModelsPanelOpen}
 			<div class="pt-4 space-y-3">
+				<p class="text-sm text-gray-600 px-1 mb-3">
+					Harvey uses <code>whisper.cpp</code> for transcription. To transcribe audio or video files, you must first download one of the available models.
+				</p>
 				{#each availableModels as model (model.name)}
 					{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
 					{@const status = display.status}

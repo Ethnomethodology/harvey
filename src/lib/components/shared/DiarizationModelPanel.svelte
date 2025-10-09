@@ -17,6 +17,21 @@
   let installLogs = [];
   let unlistenLog;
   let unlistenFinished;
+  let isDeleting = false;
+
+  async function handleDeleteModel() {
+    isDeleting = true;
+    error = '';
+    try {
+      await invoke('delete_diarization_model');
+      await checkAccessStatus(); // Re-check status after deletion
+    } catch (e) {
+      console.error('Error deleting diarization model:', e);
+      error = `Failed to delete model: ${e.message || e}`;
+    } finally {
+      isDeleting = false;
+    }
+  }
 
   async function checkAccessStatus() {
     isLoading = true;
@@ -117,7 +132,7 @@
       {#if isLoading}
         <span class="text-xs text-gray-500 mr-2">Checking...</span>
       {:else if hasAccess}
-        <span class="text-sm font-medium text-green-600">Granted</span>
+        <span class="text-sm font-medium text-green-600">Downloaded</span>
       {:else}
         <span class="text-sm font-medium text-red-600">Required</span>
       {/if}
@@ -139,7 +154,7 @@
   <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
     <div class="mb-4">
         <p class="mb-2">
-            This application uses the <code>pyannote/speaker-diarization-3.1</code> model for speaker diarization.
+            Harvey uses the <code>pyannote/speaker-diarization-3.1</code> model for speaker diarization.
         </p>
         <p class="mb-4">
             Access is gated, so you must first accept the user agreement on the model's HuggingFace page before you can download it.
@@ -163,9 +178,14 @@
     </div>
 
     {#if hasAccess && cachePath}
-        <p class="text-green-600 mt-2">
-            Model downloaded at <code>{cachePath}</code>
-        </p>
+        <div class="flex items-center justify-between mt-2">
+            <p class="text-green-600 text-xs">
+                Model downloaded at <code>{cachePath}</code>
+            </p>
+            <button on:click={handleDeleteModel} class="btn-red-small" disabled={isDeleting}>
+                {#if isDeleting}Deleting...{:else}Delete{/if}
+            </button>
+        </div>
     {/if}
     {:else}
         <p class="text-orange-600 text-sm">
@@ -182,6 +202,11 @@
 <InstallLogModal bind:showModal={showInstallModal} logs={installLogs} isInstalling={isDownloading} title="Diarization Model Download" inProgressText="Download in progress..." buttonInProgressText="Downloading..." />
 
 <style lang="postcss">
+    .btn-red-small {
+		@apply px-2.5 py-1 text-xs border font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply border-transparent text-white bg-red-600 hover:bg-red-700 focus:ring-red-500;
+	}
+
 	.btn-blue {
 		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
 		@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
