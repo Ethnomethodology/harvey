@@ -21,30 +21,87 @@ fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String>
 }
 
 #[tauri::command]
+
 pub async fn check_diarization_model_access<R: Runtime>(
+
     app_handle: AppHandle<R>,
+
 ) -> Result<bool, String> {
+
     let python_path = get_python_path().map_err(|e| e.to_string())?;
+
     let shell = app_handle.shell();
 
-    let script_path = app_handle
-        .path()
-        .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| e.to_string())?;
 
-    let output = shell
-        .command(python_path.to_string_lossy().to_string())
-        .args(&[script_path.to_string_lossy().to_string()])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+
+        let script_path = app_handle
+
+
+
+            .path()
+
+
+
+            .resolve("scripts/check_model_cached.py", tauri::path::BaseDirectory::Resource)
+
+
+
+            .map_err(|e| e.to_string())?;
+
+
+
+    let mut command = shell.command(python_path.to_string_lossy().to_string());
+
+    command = command.args(&[script_path.to_string_lossy().to_string()]);
+
+
+
+    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our bundled ffmpeg libs
+
+        if cfg!(target_os = "macos") {
+
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+
+                let ffmpeg_lib_path = resource_dir.join("binaries/ffmpeg/lib");
+
+                if ffmpeg_lib_path.exists() {
+
+                    let ffmpeg_path_str = ffmpeg_lib_path.to_string_lossy();
+
+                    if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
+
+                        command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", ffmpeg_path_str, existing_path));
+
+                    } else {
+
+                        command = command.env("DYLD_LIBRARY_PATH", ffmpeg_path_str.to_string());
+
+                    }
+
+                }
+
+            }
+
+        }
+
+
+
+    let output = command.output().await.map_err(|e| e.to_string())?;
+
+
 
     if !output.status.success() {
+
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
+
     }
 
+
+
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
     Ok(stdout == "cached")
+
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -62,25 +119,42 @@ pub async fn download_diarization_model<R: Runtime>(
 
     let script_path = app_handle
         .path()
-        .resolve("scripts/download_diarization_model.py", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| e.to_string())?;
+        .resource_dir()
+        .map_err(|e| e.to_string())?
+        .join("scripts/download_diarization_model.py");
 
     app_handle.emit("diarization-installation-log", LogPayload { message: "Starting diarization model download...".into() }).unwrap();
 
     let mut command = shell.command(python_path.to_string_lossy().to_string());
     command = command.args(&[script_path.to_string_lossy().to_string(), token.clone()]);
 
-    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include the venv's `lib` directory.
-    // This is because `torchcodec` and other libraries with native extensions may not be able to
-    // find their dependencies otherwise, especially when the app is bundled.
+    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our bundled ffmpeg libs
+    // and the python venv libs, so torchcodec can find everything.
     if cfg!(target_os = "macos") {
-        if let Some(venv_dir) = python_path.parent().and_then(|p| p.parent()) {
-            let lib_path = venv_dir.join("lib");
-            if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
-                command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", lib_path.to_string_lossy(), existing_path));
-            } else {
-                command = command.env("DYLD_LIBRARY_PATH", lib_path.to_string_lossy().to_string());
+        let mut new_paths = Vec::new();
+
+        // 1. Add bundled ffmpeg path
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let ffmpeg_lib_path = resource_dir.join("binaries/ffmpeg/lib");
+            if ffmpeg_lib_path.exists() {
+                new_paths.push(ffmpeg_lib_path.to_string_lossy().to_string());
             }
+        }
+
+        // 2. Add venv lib path
+        if let Some(venv_dir) = python_path.parent().and_then(|p| p.parent()) {
+            new_paths.push(venv_dir.join("lib").to_string_lossy().to_string());
+        }
+
+        // 3. Prepend to existing path if it exists
+        if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+            if !existing_path.is_empty() {
+                new_paths.push(existing_path);
+            }
+        }
+        
+        if !new_paths.is_empty() {
+            command = command.env("DYLD_LIBRARY_PATH", new_paths.join(":"));
         }
     }
 

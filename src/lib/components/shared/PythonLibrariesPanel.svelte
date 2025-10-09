@@ -123,17 +123,9 @@
 
 {#if isPanelOpen}
 	<div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
-		<p class="mb-4">
-			Specific Python libraries are needed for advanced features like speaker diarization and translation. These will be installed in a dedicated virtual environment (`harvey_env`) to avoid conflicts with other Python projects.
-		</p>
-
-        <p class="mb-4">
-            Main tools being installed:
-            <code class="text-xs">pyannote.audio</code> for diarization,
-            and <code class="text-xs">transformers</code> & <code class="text-xs">sacremoses</code> for translation.
-        </p>
-
-		<div class="flex items-center">
+		        <p class="mb-4">
+		                    To enable advanced features like identifying different speakers (diarization) and translating transcripts, Harvey needs to install a few extra components.
+		                </p>		<div class="flex items-center">
 			{#if $arePythonLibsInstalled}
 				<p class="text-green-600 mr-4">Libraries are installed.</p>
                 <button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
