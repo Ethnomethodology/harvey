@@ -37,9 +37,12 @@
 	];
 
 	let modelDisplayData = {};
+    let downloadedCount = 0;
 	$: {
 		const newData = {};
 		const currentDownloaded = Array.isArray(downloadedModels) ? downloadedModels : [];
+        downloadedCount = currentDownloaded.filter(m => availableModels.some(am => am.name === m.name)).length;
+
 		for (const model of availableModels) {
 			const name = model.name;
 			const getStatus = (modelName) => {
@@ -211,11 +214,18 @@
 		<div class="border-y border-gray-200">
 			<button on:click={() => isModelsPanelOpen = !isModelsPanelOpen} class="w-full flex justify-between items-center py-3 text-left focus:outline-none">
 				<h3 class="block text-sm font-medium text-gray-700">
-					Transcription Models <span class="font-normal text-gray-500">({downloadedModels.filter(m => availableModels.some(am => am.name === m.name)).length} downloaded)</span>
+					Transcription Models
 				</h3>
-				<svg class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isModelsPanelOpen ? 'rotate-180' : ''}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-				</svg>
+                <div class="flex items-center">
+                    {#if downloadedCount > 0}
+                        <span class="text-sm font-medium text-green-600 mr-2">{downloadedCount} downloaded</span>
+                    {:else}
+                        <span class="text-sm font-medium text-red-600 mr-2">None downloaded</span>
+                    {/if}
+                    <svg class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isModelsPanelOpen ? 'rotate-180' : ''}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                </div>
 			</button>
 		</div>
 

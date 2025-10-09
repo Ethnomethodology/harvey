@@ -101,9 +101,9 @@
 			{#if isLoading}
 				<span class="text-xs text-gray-500 mr-2">Checking...</span>
 			{:else if $arePythonLibsInstalled}
-				<span class="text-sm font-medium text-green-600">Installed</span>
+				<span class="text-sm font-medium text-green-600 mr-2">Installed</span>
 			{:else}
-				<span class="text-sm font-medium text-red-600">Required</span>
+				<span class="text-sm font-medium text-red-600 mr-2">Installation Required</span>
 			{/if}
 			<svg
 				class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen

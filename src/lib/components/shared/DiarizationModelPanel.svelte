@@ -128,16 +128,15 @@
     <div class="flex items-center">
       <h3 class="block text-sm font-medium text-gray-700">Diarization Model</h3>
     </div>
-    <div class="flex items-center">
-      {#if isLoading}
-        <span class="text-xs text-gray-500 mr-2">Checking...</span>
-      {:else if hasAccess}
-        <span class="text-sm font-medium text-green-600">Downloaded</span>
-      {:else}
-        <span class="text-sm font-medium text-red-600">Required</span>
-      {/if}
-      <svg
-        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''}"
+    		<div class="flex items-center">
+    			{#if isLoading}
+    				<span class="text-xs text-gray-500 mr-2">Checking...</span>
+    			{:else if hasAccess}
+    				<span class="text-sm font-medium text-green-600 mr-2">Downloaded</span>
+    			{:else}
+    				<span class="text-sm font-medium text-red-600 mr-2">Download Required</span>
+    			{/if}
+    			<svg        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''}"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
