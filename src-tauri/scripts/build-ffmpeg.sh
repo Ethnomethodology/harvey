@@ -52,7 +52,7 @@ if [ "$OS" = "Darwin" ]; then
     if [ "$ARCH" = "x86_64" ]; then CONFIGURE_OPTS="--arch=x86_64 --enable-videotoolbox"; fi
 elif [ "$OS" = "Linux" ]; then
     echo "Detected Linux."
-    check_linux_deps
+    # check_linux_deps
     if [ "$ARCH" = "aarch64" ]; then CONFIGURE_OPTS="--arch=aarch64 --enable-vfp"; fi
     if [ "$ARCH" = "x86_64" ]; then CONFIGURE_OPTS="--arch=x86_64"; fi
 elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then

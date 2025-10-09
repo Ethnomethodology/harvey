@@ -78,6 +78,7 @@ pub async fn download_translation_model_command(
     let (mut rx, _child) = app.shell()
         .command(python_path.to_str().unwrap())
         .args(&[script_path.to_str().unwrap(), &model_name, &download_location, &token])
+        .env("HF_HUB_DISABLE_PROGRESS_BARS", "1")
         .spawn()
         .map_err(|e| format!("Failed to spawn python script: {}", e))?;
 
