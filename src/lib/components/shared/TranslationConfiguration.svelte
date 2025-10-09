@@ -134,6 +134,25 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 			notificationStore.sendNotification(`Failed to delete model ${model.name}: ${err.message || err}`, 'error');
 		}
     }
+
+    function formatModelDisplayName(modelName) {
+        const parts = modelName.split('/');
+        if (parts.length === 2) {
+            const langParts = parts[1].split('-');
+            if (langParts.length >= 3 && langParts[0] === 'opus' && langParts[1] === 'mt') {
+                const fromCode = langParts[langParts.length - 2];
+                const toCode = langParts[langParts.length - 1];
+
+                const fromLang = languages.find(lang => lang.value === fromCode);
+                const toLang = languages.find(lang => lang.value === toCode);
+
+                if (fromLang && toLang) {
+                    return `${fromLang.label} to ${toLang.label} (${modelName})`;
+                }
+            }
+        }
+        return modelName; // Fallback for unexpected model name format
+    }
 </script>
 
 <div class="flex flex-col h-full">
@@ -146,26 +165,28 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	<div class="flex-grow space-y-3">
 		<div class="pt-4 space-y-3">
-			<div class="flex items-center space-x-2">
-				<div class="flex-1">
-					<label for="from-language" class="block text-sm font-medium text-gray-700">From Language</label>
+			<div class="flex items-end space-x-2">
+				<div class="flex flex-col">
+					<label for="from-language" class="block text-sm font-medium text-gray-700">From</label>
 					<Dropdown
 						id="from-language"
 						options={languages}
 						bind:value={fromLanguage}
 						placeholder="Select language"
+						containerClasses="w-32"
 					/>
 				</div>
-				<div class="flex-1">
-					<label for="to-language" class="block text-sm font-medium text-gray-700">To Language</label>
+				<div class="flex flex-col">
+					<label for="to-language" class="block text-sm font-medium text-gray-700">To</label>
 					<Dropdown
 						id="to-language"
 						options={languages}
 						bind:value={toLanguage}
 						placeholder="Select language"
+						containerClasses="w-32"
 					/>
 				</div>
-				<button on:click={handleDownload} class="btn-blue-small mt-6" disabled={isDownloading}>
+				<button on:click={handleDownload} class="btn-blue-small">
 					{#if isDownloading}
 						Downloading...
 					{:else}
@@ -174,12 +195,12 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 				</button>
 			</div>
 			<div>
-				<h4 class="text-sm font-medium text-gray-700">Downloaded Models</h4>
+				<h4 class="text-sm font-medium text-gray-700">Downloaded Models <span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600' : 'text-green-600'}">({downloadedModels.length} downloaded)</span></h4>
 				<ul class="mt-2 space-y-2">
-					{#each downloadedModels as model}
+					{#each downloadedModels as model (model.name)}
 						<li class="p-2 border rounded-md">
 							<div class="flex items-center justify-between">
-								<p class="text-sm font-medium text-gray-900">{model.name}</p>
+								<p class="text-sm font-medium text-gray-900">{formatModelDisplayName(model.name)}</p>
 								<button on:click={() => handleDelete(model)} class="btn-delete">Delete</button>
 							</div>
 						</li>
