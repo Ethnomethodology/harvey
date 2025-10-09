@@ -135,6 +135,27 @@ fn main() {
         }
     }
 
+    // --- Copy Python scripts to target/debug/scripts for development ---
+    let scripts_source_dir = manifest_dir.join("scripts");
+    let scripts_target_dir = manifest_dir.join("target").join(env::var("PROFILE").unwrap()).join("scripts");
+    fs::create_dir_all(&scripts_target_dir).expect("Failed to create target scripts directory");
+
+    let python_scripts_to_copy = vec![
+        "convert_with_pandoc.py",
+        // Add other Python scripts that are directly invoked by Rust code if any
+    ];
+
+    for script_name in python_scripts_to_copy {
+        let source_path = scripts_source_dir.join(script_name);
+        let dest_path = scripts_target_dir.join(script_name);
+        if source_path.exists() {
+            fs::copy(&source_path, &dest_path).expect(&format!("Failed to copy {} to {}", source_path.display(), dest_path.display()));
+            println!("cargo:info=Copied {} to {}", source_path.display(), dest_path.display());
+        } else {
+            println!("cargo:warning=Python script {} not found at {}", script_name, source_path.display());
+        }
+    }
+
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
