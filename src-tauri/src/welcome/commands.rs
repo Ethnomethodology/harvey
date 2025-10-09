@@ -25,7 +25,7 @@ use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
 use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
-use crate::welcome::checkers;
+
 use crate::welcome::python_env;
 
 // --- Structs for Translation Model Download ---
@@ -375,12 +375,6 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  // --- End Theme Preference Commands ---
 
  #[command]
-pub async fn check_python_installed(app: AppHandle) -> Result<bool, CommandError> {
-    let shell = app.shell();
-    checkers::check_python_installed(&shell).await
-}
-
-#[command]
 pub async fn check_python_libraries_installed(app: AppHandle) -> Result<bool, CommandError> {
     let shell = app.shell();
     python_env::check_python_libraries_installed(&shell).await

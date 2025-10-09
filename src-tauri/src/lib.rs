@@ -156,9 +156,9 @@ pub fn run() {
             welcome::commands::cancel_download_command,
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::get_platform_info,
-            welcome::commands::check_python_installed,
             welcome::commands::check_python_libraries_installed,
             welcome::commands::install_python_libraries,
+            welcome::python_env::delete_virtual_env,
             welcome::python_env::list_venv_lib_contents, // Temp diagnostic command
             welcome::hf_auth::check_hf_auth_status,
             welcome::hf_auth::save_hf_auth_token,

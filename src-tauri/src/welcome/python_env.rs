@@ -176,3 +176,15 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     app.emit("installation-finished", ()).unwrap();
     Ok(())
 }
+
+#[tauri::command]
+pub async fn delete_virtual_env() -> Result<(), String> {
+    let venv_path = get_venv_path().map_err(|e| e.to_string())?;
+    if venv_path.exists() {
+        log::info!("Deleting virtual environment at: {:?}", venv_path);
+        std::fs::remove_dir_all(&venv_path)
+            .map_err(|e| format!("Failed to delete virtual environment: {}", e))?;
+        log::info!("Virtual environment deleted successfully.");
+    }
+    Ok(())
+}

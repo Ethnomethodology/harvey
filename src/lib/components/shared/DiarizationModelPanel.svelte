@@ -4,6 +4,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
+  import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   let isPanelOpen = false;
@@ -69,13 +70,26 @@
   }
 
   onMount(async () => {
-    await checkAccessStatus();
+    // The checkAccessStatus is now triggered by the reactive block below
 
     unlistenFinished = await listen('diarization-installation-finished', () => {
         isDownloading = false;
-        checkAccessStatus(); // Re-check status after download attempt
+        // The reactive block will automatically call checkAccessStatus if libs are installed
     });
   });
+
+  // Reactively check status based on Python library installation
+  $: {
+    if ($arePythonLibsInstalled) {
+        checkAccessStatus();
+    } else {
+        // Reset local state if Python libraries are not installed
+        hasAccess = false;
+        isLoading = false;
+        error = '';
+        cachePath = '';
+    }
+  }
 
   onDestroy(() => {
     if (unlistenLog) {
@@ -97,7 +111,7 @@
     class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
   >
     <div class="flex items-center">
-      <h3 class="block text-sm font-medium text-gray-700">Access Diarization Model</h3>
+      <h3 class="block text-sm font-medium text-gray-700">Diarization Model</h3>
     </div>
     <div class="flex items-center">
       {#if isLoading}
@@ -123,22 +137,19 @@
 
 {#if isPanelOpen}
   <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
-    <p class="mb-2">
-        This application uses the <code>pyannote/speaker-diarization-3.1</code> model for accurate speaker diarization.
-    </p>
-    <p class="mb-4">
-        Access to this model is gated and requires you to accept the user agreement on its HuggingFace page.
-    </p>
+    <div class="mb-4">
+        <p class="mb-2">
+            This application uses the <code>pyannote/speaker-diarization-3.1</code> model for speaker diarization.
+        </p>
+        <p class="mb-4">
+            Access is gated, so you must first accept the user agreement on the model's HuggingFace page before you can download it.
+        </p>
+        <button class="btn-blue" on:click={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')}>
+            Request Access on HuggingFace
+        </button>
+    </div>
 
-    <h4 class="font-semibold mb-2">Access Instructions</h4>
-    <ol class="list-decimal list-inside mb-4 space-y-1">
-      <li>
-        Visit the model's page on HuggingFace: <a href="https://huggingface.co/pyannote/speaker-diarization-3.1" on:click|preventDefault={() => openLink('https://huggingface.co/pyannote/speaker-diarization-3.1')} class="text-blue-600 hover:underline">pyannote/speaker-diarization-3.1</a>.
-      </li>
-      <li>Accept the user agreement to gain access.</li>
-      <li>Once you have access, you can download the model below.</li>
-    </ol>
-
+    {#if $arePythonLibsInstalled}
     <div class="flex items-center space-x-2">
         {#if !hasAccess}
             <button on:click={handleDownload} class="btn-blue" disabled={isDownloading}>
@@ -154,6 +165,11 @@
     {#if hasAccess && cachePath}
         <p class="text-green-600 mt-2">
             Model downloaded at <code>{cachePath}</code>
+        </p>
+    {/if}
+    {:else}
+        <p class="text-orange-600 text-sm">
+            Please install the required Python libraries first to enable model downloads.
         </p>
     {/if}
 
