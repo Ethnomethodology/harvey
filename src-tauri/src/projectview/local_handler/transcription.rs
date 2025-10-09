@@ -24,10 +24,12 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 use tokio::time::sleep;
 use uuid::Uuid;
+
+use crate::projectview::utils::get_ffmpeg_path;
 
 // Structs specific to parsing whisper output
 #[derive(Deserialize, Debug)] struct WhisperJsonOutput { transcription: Option<Vec<WhisperJsonSegment>> }
@@ -48,8 +50,8 @@ struct TranscriptionJobCompletedPayload {
 #[derive(Debug, Clone)] struct RttmRecord { start_time: f64, duration: f64, speaker_id: String }
 
 #[tauri::command]
-pub async fn run_transcription(
-    app_handle: AppHandle,
+pub async fn run_transcription<R: Runtime>(
+    app_handle: AppHandle<R>,
     media_path: String,
     model_name: String,
     language: String,
@@ -304,8 +306,8 @@ pub async fn run_transcription(
 }
 
 // --- Helper: Convert to WAV using FFmpeg ---
-pub(crate) async fn convert_to_wav_if_needed(
-    app_handle: &AppHandle,
+pub(crate) async fn convert_to_wav_if_needed<R: Runtime>(
+    app_handle: &AppHandle<R>,
     input_path_str: &str,
     job_id: &str, // Now internal_job_id from caller
     cancel_flag: &Arc<AtomicBool>)
@@ -337,6 +339,8 @@ pub(crate) async fn convert_to_wav_if_needed(
     info!("[FFmpeg][{}] Starting FFmpeg conversion...", job_id);
     let _ = emit_progress(app_handle, job_id, 2.0, "Converting audio to WAV...").await;
 
+    let ffmpeg_path = get_ffmpeg_path(app_handle)?;
+
     let args: Vec<String> = vec![
         "-i".into(), input_path_str.to_string(),
         "-vn".into(),
@@ -350,7 +354,7 @@ pub(crate) async fn convert_to_wav_if_needed(
 
     let shell_scope = app_handle.shell();
     let (mut rx, child) = shell_scope
-        .sidecar("ffmpeg")?
+        .command(ffmpeg_path)
         .args(args)
         .spawn()?;
     debug!("[FFmpeg][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
@@ -442,8 +446,8 @@ async fn resolve_whisper_model_path( model_name: &str, job_id: &str) -> Result<S
 }
 
 // --- Helper: Run whisper-cli Sidecar ---
-async fn run_whisper_cpp_sidecar(
-    app_handle: &AppHandle,
+async fn run_whisper_cpp_sidecar<R: Runtime>(
+    app_handle: &AppHandle<R>,
     media_path: &str,
     whisper_model_path_str: &str,
     language: &str,
@@ -625,8 +629,8 @@ fn parse_whisper_timestamp(timestamp_str: &str) -> Result<f64, String> {
     }
 }
 
-async fn run_diarize_cli_sidecar(
-    app_handle: &AppHandle,
+async fn run_diarize_cli_sidecar<R: Runtime>(
+    app_handle: &AppHandle<R>,
     sidecar_name: &str,
     media_path: &str,
     num_speakers: usize,
@@ -901,8 +905,8 @@ fn find_model_file(model_dir: &Path) -> Result<PathBuf, CommandError> {
     Err(CommandError::from(format!("No model file (.bin, .gguf, .pt) found within directory: {}", model_dir.display())))
 }
 
-pub(crate) async fn emit_progress(
-    app_handle: &AppHandle,
+pub(crate) async fn emit_progress<R: Runtime>(
+    app_handle: &AppHandle<R>,
     job_id: &str,
     percent: f32,
     message: &str)
