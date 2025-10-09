@@ -114,7 +114,29 @@ pub async fn download_translation_model_command(
     window.emit("translation-download-finished", ()).unwrap();
 
     if success {
-        Ok(())
+        log::info!("Translation model '{}' downloaded successfully. Updating config.", &model_name);
+        match || -> Result<(), CommandError> {
+            let mut config = read_config()?;
+            let mut downloaded_model_info = model_info.clone();
+            downloaded_model_info.download_location = Some(download_location.clone());
+
+            if let Some(idx) = config.downloaded_models.iter().position(|m| m.name == downloaded_model_info.name) {
+                log::info!("Model '{}' already in config. Updating.", &model_name);
+                config.downloaded_models[idx] = downloaded_model_info;
+            } else {
+                log::info!("Adding new model '{}' to config.", &model_name);
+                config.downloaded_models.push(downloaded_model_info);
+            }
+            write_config(&config)?;
+            log::info!("Config updated successfully for '{}'.", &model_name);
+            Ok(())
+        }() {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                log::error!("Failed to update config for translation model '{}': {}", &model_name, e);
+                Err(CommandError::from(format!("Model downloaded but failed to save configuration: {}", e)))
+            }
+        }
     } else {
         Err(CommandError::Message("Translation model download failed.".to_string()))
     }

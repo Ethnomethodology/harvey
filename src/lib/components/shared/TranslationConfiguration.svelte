@@ -158,7 +158,7 @@
 			<div>
 				<h4 class="text-sm font-medium text-gray-700">Downloaded Models</h4>
 				<ul class="mt-2 space-y-2">
-					{#each downloadedModels.filter(m => m.name.startsWith('Helsinki-NLP')) as model}
+					{#each downloadedModels.filter(m => m.name.startsWith('opus-mt-')) as model}
 						<li class="p-2 border rounded-md">
 							<div class="flex items-center justify-between">
 								<p class="text-sm font-medium text-gray-900">{model.name}</p>
