@@ -167,6 +167,7 @@ pub fn run() {
             welcome::diarization::download_diarization_model,
             welcome::diarization::delete_diarization_model,
             welcome::diarization::get_diarization_cache_path,
+            welcome::status::check_config_status,
             
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,

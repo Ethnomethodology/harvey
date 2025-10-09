@@ -21,6 +21,7 @@ sudo apt-get install -y \
     wget \
     file \
     libssl-dev \
+    libglib2.0-dev \
     libgtk-3-dev \
     libayatana-appindicator3-dev \
     librsvg2-dev \

@@ -17,7 +17,7 @@ use std::{
     path::{PathBuf, Path},
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
-use tauri::{AppHandle, command, Emitter, State, Manager};
+use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
@@ -499,13 +499,13 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  // --- End Theme Preference Commands ---
 
  #[command]
-pub async fn check_python_libraries_installed(app: AppHandle) -> Result<bool, CommandError> {
+pub async fn check_python_libraries_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     let shell = app.shell();
     python_env::check_python_libraries_installed(&shell).await
 }
 
 #[command]
-pub async fn install_python_libraries(app: AppHandle) -> Result<(), CommandError> {
+pub async fn install_python_libraries<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
     let shell = app.shell();
     python_env::install_python_libraries(&app, &shell).await
 }

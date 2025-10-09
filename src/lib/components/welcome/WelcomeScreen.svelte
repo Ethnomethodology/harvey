@@ -11,6 +11,7 @@
     handleRenameConfirm,
     handleRenameCancel
   } from './actions.js';
+  import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import ProjectList from './ProjectList.svelte';
   import RenameModal from './RenameModal.svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
@@ -115,8 +116,9 @@
   // --- Tab Switching Handler ---
   function switchTab(tabName) {
     activeTab = tabName;
-    // Reset status message when switching tabs? Optional.
-    // statusMessage = '';
+    if (tabName === 'configure') {
+      updateConfigStatus();
+    }
   }
 </script>
 
@@ -137,10 +139,15 @@
       </a>
       <a
         href=""
-        class="px-3 py-2 rounded-md {activeTab === 'configure' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm"
+        class="px-3 py-2 rounded-md {activeTab === 'configure' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm flex items-center justify-between"
         on:click|preventDefault={() => switchTab('configure')}
       >
-        Configure
+        <span>Configure</span>
+        {#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.21 3.031-1.742 3.031H4.42c-1.532 0-2.492-1.697-1.742-3.031l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        {/if}
       </a>
       <a
         href=""

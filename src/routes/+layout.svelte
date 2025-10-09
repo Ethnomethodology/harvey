@@ -9,6 +9,7 @@
   
     // --- Import theme store loader ---
     import { loadThemePreferenceFromBackend } from '$lib/stores/themeStore.js';
+    import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
     import { project } from '$lib/stores/projectStore.js';
     import { page } from '$app/stores';
     import { loadProjectDataAndUpdateStore } from '$lib/services/projectService.js';
@@ -20,6 +21,7 @@
       try {
          console.debug('[+layout.svelte] Attempting to load theme preference...'); // DEBUG
          await loadThemePreferenceFromBackend();
+         await updateConfigStatus(); // Check config status on app load
          console.info('[+layout.svelte] Theme preference loaded successfully (or default used).'); // INFO
       } catch (error) {
           console.error('[+layout.svelte] Failed during theme preference loading:', error); // ERROR
