@@ -185,6 +185,17 @@ export async function cancelTranslationModelDownload(modelName) {
 	}
 }
 
+export async function getLocalTranslationModels() {
+	try {
+		const models = await invoke('get_local_translation_models');
+		console.log("Retrieved local translation models from backend:", models);
+		return Array.isArray(models) ? models : [];
+	} catch (error) {
+		console.error("Error invoking get_local_translation_models:", error);
+		return [];
+	}
+}
+
 // --- Export Action ---
 /**
  * Exports the current transcript segments to a specified file path and format.

@@ -6,7 +6,7 @@
 	import {
 		downloadTranslationModel,
 		deleteModel, // Re-using the same delete action
-        getDownloadedModels, // Re-using to check status
+        getLocalTranslationModels, // Use the new filesystem-based function
 		cancelDownload // Re-using the same cancel action
 	} from '$lib/services/configureActions';
 	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
@@ -42,7 +42,7 @@
 	onMount(async () => {
 		configError = '';
 		try {
-			downloadedModels = await getDownloadedModels();
+			downloadedModels = await getLocalTranslationModels();
 		} catch (e) {
 			configError = `Failed to load model configuration: ${e.message || e}`;
 		}
@@ -158,7 +158,7 @@
 			<div>
 				<h4 class="text-sm font-medium text-gray-700">Downloaded Models</h4>
 				<ul class="mt-2 space-y-2">
-					{#each downloadedModels.filter(m => m.name.startsWith('opus-mt-')) as model}
+					{#each downloadedModels as model}
 						<li class="p-2 border rounded-md">
 							<div class="flex items-center justify-between">
 								<p class="text-sm font-medium text-gray-900">{model.name}</p>
