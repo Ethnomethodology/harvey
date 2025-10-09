@@ -70,8 +70,8 @@ fn main() {
         }
     };
 
-    // --- FFmpeg handling for macOS ---
-    if target.contains("apple-darwin") {
+    // --- FFmpeg handling for macOS, Linux, and Windows ---
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
         let ffmpeg_built_path = manifest_dir.join("binaries").join("ffmpeg");
         let profile = env::var("PROFILE").unwrap();
 
@@ -84,12 +84,13 @@ fn main() {
             } else {
                 "dev build and libraries are missing"
             };
-            println!("cargo:info=Building FFmpeg from source for macOS (reason: {})...", reason);
+            println!("cargo:info=Building FFmpeg from source (reason: {})...", reason);
 
             let script_path = manifest_dir.join("scripts").join("build-ffmpeg.sh");
             println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
 
-            let status = Command::new("sh")
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
                 .arg(&script_path)
                 .status()
                 .expect("Failed to execute build-ffmpeg.sh script");
@@ -105,7 +106,8 @@ fn main() {
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
-    let harvey_binaries = if target.contains("apple-darwin") {
+    // Exclude ffmpeg if we are building it from source
+    let harvey_binaries = if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
         vec!["diarize-cli", "whisper-cli", "whisper-stream", "translator-sidecar"]
     } else {
         vec!["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream", "translator-sidecar"]
