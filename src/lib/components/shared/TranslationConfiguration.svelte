@@ -17,8 +17,10 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	export let downloadLocation = '';
 	export let isBusy = false;
+	export let translationModelCount = 0;
 
 	let downloadedModels = [];
+	$: translationModelCount = downloadedModels.length;
 	let configError = '';
 	let downloadStatus = {};
 

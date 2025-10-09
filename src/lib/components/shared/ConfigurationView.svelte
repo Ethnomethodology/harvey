@@ -25,6 +25,7 @@
 
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
+	let translationModelCount = 0;
 	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
 
 	onMount(async () => {
@@ -131,7 +132,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none"
+				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:border-blue-500={activeTab === 'translation'}
 				class:text-blue-600={activeTab === 'translation'}
 				class:border-transparent={activeTab !== 'translation'}
@@ -140,7 +141,13 @@
 				class:hover:border-gray-300={activeTab !== 'translation'}
 				aria-current={activeTab === 'translation' ? 'page' : undefined}
 			>
-				Translation
+				<span>Translation</span>
+				{#if activeTab !== 'translation' && translationModelCount === 0}
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-diamond text-red-500" viewBox="0 0 16 16">
+						<path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
+						<path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
+					</svg>
+				{/if}
 			</button>
 		</nav>
 	</div>
@@ -200,7 +207,7 @@
 		{:else if activeTab === 'transcription'}
 			<TranscriptionConfiguration bind:isBusy={isTranscriptionBusy} {downloadLocation} />
 		{:else if activeTab === 'translation'}
-			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} />
+			<TranslationConfiguration bind:isBusy={isTranslationBusy} {downloadLocation} bind:translationModelCount={translationModelCount} />
 		{/if}
 	</div>
 </div>
