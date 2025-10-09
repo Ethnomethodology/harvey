@@ -127,6 +127,25 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     let mut pip_args = vec!["-m", "pip", "install"];
     pip_args.extend_from_slice(&packages);
 
+    // --- Add cache directory to pip command ---
+    let pip_cache_dir: Option<PathBuf> = if cfg!(target_os = "windows") {
+        std::env::var("LOCALAPPDATA").ok().map(|p| PathBuf::from(p).join("pip").join("cache"))
+    } else if cfg!(target_os = "macos") {
+        std::env::var("HOME").ok().map(|p| PathBuf::from(p).join("Library").join("Caches").join("pip"))
+    } else { // Assuming Linux-like
+        std::env::var("HOME").ok().map(|p| PathBuf::from(p).join(".cache").join("pip"))
+    };
+
+    let cache_dir_arg_storage;
+    if let Some(cache_dir) = pip_cache_dir {
+        if cache_dir.exists() {
+            app.emit("installation-log", LogPayload { message: format!("Using pip cache: {:?}", cache_dir).into() }).unwrap();
+            cache_dir_arg_storage = cache_dir.to_string_lossy().into_owned();
+            pip_args.push("--cache-dir");
+            pip_args.push(&cache_dir_arg_storage);
+        }
+    }
+
     let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
         .args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")

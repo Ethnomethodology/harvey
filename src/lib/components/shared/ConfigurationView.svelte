@@ -12,7 +12,6 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
-	import PythonPanel from './PythonPanel.svelte';
 	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 
@@ -194,7 +193,6 @@
 
 				<div class="mb-6">
 					<h3 class="block text-sm font-medium text-gray-700 mb-1">Required Tools</h3>
-					<PythonPanel />
 					<PythonLibrariesPanel />
 					<HuggingFacePanel />
 				</div>
