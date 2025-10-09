@@ -9,6 +9,7 @@
         getLocalTranslationModels,
 		cancelTranslationModelDownload
 	} from '$lib/services/configureActions';
+	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
 import notificationStore from '$lib/stores/notificationStore';
 import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
@@ -72,6 +73,7 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 							downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
 							try {
 								downloadedModels = await getLocalTranslationModels();
+								await updateConfigStatus();
 							} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
 							modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
 						});
@@ -132,6 +134,7 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 			await deleteTranslationModel(model); // Use deleteTranslationModel
 			downloadedModels = await getLocalTranslationModels(); // Fix: Use getLocalTranslationModels
             downloadStatus = { ...downloadStatus, [model.name]: 'not_downloaded' };
+			await updateConfigStatus();
 		} catch (err) {
 			notificationStore.sendNotification(`Failed to delete model ${model.name}: ${err.message || err}`, 'error');
 		}

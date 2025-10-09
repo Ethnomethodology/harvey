@@ -9,6 +9,7 @@
 		getDownloadedModels,
 		cancelDownload,
 	} from '$lib/services/configureActions';
+	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
 	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
 
 	export let downloadLocation = '';
@@ -125,6 +126,7 @@
 				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
 				try {
 					downloadedModels = await getDownloadedModels();
+					await updateConfigStatus();
 				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
 			});
 
@@ -184,6 +186,7 @@
 		try {
 			await deleteModel(model);
 			downloadedModels = await getDownloadedModels();
+			await updateConfigStatus();
 		} catch (err) {
 			alert(`Failed to delete model ${modelName}: ${err.message || err}`);
 			try { downloadedModels = await getDownloadedModels(); } catch (refreshErr) { console.error("Failed to refresh models after delete error:", refreshErr); }

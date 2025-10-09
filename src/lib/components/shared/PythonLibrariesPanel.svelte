@@ -3,6 +3,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
 	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
+	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
 
 	let isPanelOpen = false;
@@ -21,6 +22,7 @@
 		try {
 			await invoke('delete_virtual_env');
 			await checkStatus(); // Re-check status after deletion
+			await updateConfigStatus();
 		} catch (e) {
 			console.error('Error deleting virtual environment:', e);
 			error = `Failed to delete environment: ${e.message || e}`;
@@ -51,9 +53,10 @@
             .then(contents => console.log('Venv lib contents:', contents))
             .catch(err => console.error('Error listing venv lib contents:', err));
 
-        unlistenFinished = await listen('installation-finished', () => {
+        unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
-            checkStatus(); // Re-check status after installation attempt
+            await checkStatus(); // Re-check status after installation attempt
+            await updateConfigStatus();
         });
     });
 

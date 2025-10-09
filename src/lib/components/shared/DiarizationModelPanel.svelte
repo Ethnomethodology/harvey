@@ -5,6 +5,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
   import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
+  import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   let isPanelOpen = false;
@@ -25,6 +26,7 @@
     try {
       await invoke('delete_diarization_model');
       await checkAccessStatus(); // Re-check status after deletion
+      await updateConfigStatus();
     } catch (e) {
       console.error('Error deleting diarization model:', e);
       error = `Failed to delete model: ${e.message || e}`;
@@ -67,7 +69,7 @@
 
     try {
       unlistenLog = await listen('diarization-installation-log', (event) => {
-        installLogs = [...installLogs, event.payload.message];
+        installLogs = [...installLogs, { id: installLogs.length, message: event.payload.message }];
       });
 
       await invoke('download_diarization_model');
@@ -87,9 +89,10 @@
   onMount(async () => {
     // The checkAccessStatus is now triggered by the reactive block below
 
-    unlistenFinished = await listen('diarization-installation-finished', () => {
+    unlistenFinished = await listen('diarization-installation-finished', async () => {
         isDownloading = false;
-        // The reactive block will automatically call checkAccessStatus if libs are installed
+        await checkAccessStatus(); // Re-check status after installation attempt
+        await updateConfigStatus();
     });
   });
 
