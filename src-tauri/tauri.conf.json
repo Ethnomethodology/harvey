@@ -46,7 +46,6 @@
     "externalBin": [
       "sidecar/whisper-cli",
       "sidecar/diarize-cli",
-      "sidecar/pandoc",
       "sidecar/whisper-stream",
       "sidecar/translator-sidecar"
     ],

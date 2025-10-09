@@ -9,9 +9,11 @@ use std::{
     path::{Path, PathBuf},
 };
 use log::{info, warn, error, debug};
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use crate::welcome::python_env::get_python_path;
 use uuid::Uuid;
 use html_escape::encode_text;
 
@@ -230,8 +232,8 @@ fn get_unique_temp_path_for_conversion(
 
 
 #[tauri::command]
-pub async fn export_transcript_to_docx(
-    app_handle: AppHandle,
+pub async fn export_transcript_to_docx<R: Runtime>(
+    app_handle: AppHandle<R>,
     transcript_json_path_str: String,
     output_path_str: String,
     layout_choice: Option<String>, // Added layout_choice parameter
@@ -505,35 +507,28 @@ pub async fn export_transcript_to_docx(
     debug!("[export_transcript_to_docx] Writing generated HTML table to temp file: {}", temp_html_path.display());
     fs::write(&temp_html_path, &html_output)?;
 
-    let temp_docx_path = get_unique_temp_path_for_conversion(&base_dir, stem, "docx")?;
-    // Path to custom reference DOCX with desired styles (compile-time asset path)
-    let reference_docx = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join("reference.docx")
-        .to_string_lossy()
-        .to_string();
+    let python_path = get_python_path()?;
+    let script_path = app_handle.path()
+        .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+
     let pandoc_args = vec![
         temp_html_path.to_string_lossy().to_string(),
-        "-f".to_string(),
-        "html".to_string(),
-        "-t".to_string(),
+        output_path_str.clone(),
         "docx".to_string(),
-        "--reference-doc".to_string(),
-        reference_docx.clone(),
-        "-o".to_string(),
-        temp_docx_path.to_string_lossy().to_string(),
     ];
 
-    info!("[export_transcript_to_docx] Executing Pandoc: pandoc {}", pandoc_args.join(" "));
+    info!("[export_transcript_to_docx] Executing Pandoc script: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
 
     let (mut rx, _child) = app_handle
         .shell()
-        .sidecar("pandoc")?
+        .command(python_path.to_string_lossy().to_string())
+        .args(&[script_path.to_string_lossy().to_string()])
         .args(&pandoc_args)
         .spawn()
         .map_err(|e| {
-            let msg = format!("Pandoc execution failed: {}. Is Pandoc configured as a sidecar?", e);
-            error!("[export_transcript_to_docx] Pandoc sidecar spawn failed: {}", e);
+            let msg = format!("Pandoc script execution failed: {}", e);
+            error!("[export_transcript_to_docx] Pandoc script spawn failed: {}", e);
             CommandError::from(msg)
         })?;
 
@@ -575,40 +570,18 @@ pub async fn export_transcript_to_docx(
         );
         error!("[export_transcript_to_docx] {}", err_msg);
         let _ = fs::remove_file(&temp_html_path);
-        let _ = fs::remove_file(&temp_docx_path);
         return Err(CommandError::from(err_msg));
     }
 
     info!("[export_transcript_to_docx] Pandoc conversion successful.");
 
-    debug!("[export_transcript_to_docx] Copying temp DOCX {} to final path {}", temp_docx_path.display(), output_path.display());
-    fs::copy(&temp_docx_path, &output_path).map_err(|e| {
-        let msg = format!(
-            "Failed to copy temporary DOCX {} to final output path {}: {}",
-            temp_docx_path.display(),
-            output_path.display(),
-            e
-        );
-        error!("[export_transcript_to_docx] {}", msg);
-         let _ = fs::remove_file(&temp_html_path);
-         let _ = fs::remove_file(&temp_docx_path);
-        CommandError::from(msg)
-    })?;
-
-    info!("[export_transcript_to_docx] DOCX file successfully copied to {}", output_path.display());
-
-    debug!("[export_transcript_to_docx] Cleaning up temporary files...");
+    debug!("[export_transcript_to_docx] Cleaning up temporary HTML file...");
     if let Err(e) = fs::remove_file(&temp_html_path) {
         warn!("[export_transcript_to_docx] Failed to delete temporary HTML file {}: {}", temp_html_path.display(), e);
     } else {
         debug!("[export_transcript_to_docx] Deleted temporary HTML file: {}", temp_html_path.display());
     }
-    if let Err(e) = fs::remove_file(&temp_docx_path) {
-        warn!("[export_transcript_to_docx] Failed to delete temporary DOCX file {}: {}", temp_docx_path.display(), e);
-    } else {
-        debug!("[export_transcript_to_docx] Deleted temporary DOCX file: {}", temp_docx_path.display());
-    }
-
+    
     info!(
         "[export_transcript_to_docx] Export process finished successfully. DOCX saved to {}",
         output_path.display()

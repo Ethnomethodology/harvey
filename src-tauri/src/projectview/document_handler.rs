@@ -14,9 +14,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH}
 };
 use log::{info, warn, error, debug};
-use tauri::{AppHandle};
+use tauri::{AppHandle, Runtime};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use crate::welcome::python_env::get_python_path;
 use uuid::Uuid;
 use quick_xml;
 // use serde::{Serialize, Deserialize};
@@ -37,8 +39,8 @@ fn get_unique_temp_path_for_conversion(base_dir: &Path, prefix: &str, extension:
 
 
 #[tauri::command]
-pub async fn import_document(
-    app_handle: AppHandle,
+pub async fn import_document<R: Runtime>(
+    app_handle: AppHandle<R>,
     source_path_str: String,
     project_xml_path_str: String,
 ) -> Result<String, CommandError> {
@@ -195,29 +197,24 @@ pub async fn import_document(
                 _ => unreachable!(), // Should be caught by outer match
             };
 
-            let mut pandoc_args = vec![
-                source_path.to_string_lossy().to_string(), // Original source path for Pandoc input
-                "-f".to_string(), source_format_arg.to_string(),
-                "-t".to_string(), "html".to_string(),
-                "--standalone".to_string(),
-                "-o".to_string(), temp_html_path.to_string_lossy().to_string(),
+            let python_path = get_python_path()?;
+            let script_path = app_handle.path()
+                .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
+                .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+
+            let pandoc_args = vec![
+                source_path.to_string_lossy().to_string(),
+                temp_html_path.to_string_lossy().to_string(),
+                "html".to_string(),
             ];
+            
+            info!("[import_document] Running pandoc script: {:?} {} {}", python_path, script_path.display(), pandoc_args.join(" "));
 
-            let mut media_extract_path_option: Option<PathBuf> = None;
-            if source_extension_lower == "docx" {
-                pandoc_args.push("--wrap=none".to_string());
-                // Use new_document_filename_stem (truncated) for media extraction folder name
-                let unique_media_extract_folder_name = format!("media_extracted_{}_{}", new_document_filename_stem, Uuid::new_v4().to_string().split('-').next().unwrap_or("rand"));
-                let media_extract_path = temp_html_path.parent().unwrap_or_else(|| Path::new(".")).join(unique_media_extract_folder_name);
-                fs::create_dir_all(&media_extract_path).map_err(|e| CommandError::from(format!("Failed to create media extract dir {}: {}", media_extract_path.display(), e)))?;
-                pandoc_args.push("--extract-media=".to_string() + &media_extract_path.to_string_lossy());
-                media_extract_path_option = Some(media_extract_path);
-            }
-
-            info!("[import_document] Running Pandoc sidecar: pandoc {}", pandoc_args.join(" "));
-
-            let (mut rx, _child) = app_handle.shell().sidecar("pandoc")?.args(&pandoc_args).spawn()
-                .map_err(|e| CommandError::from(format!("Failed Pandoc spawn for {}: {}", conversion_type, e)))?;
+            let (mut rx, _child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+                .args(&[script_path.to_string_lossy().to_string()])
+                .args(&pandoc_args)
+                .spawn()
+                .map_err(|e| CommandError::from(format!("Failed to spawn pandoc script for {}: {}", conversion_type, e)))?;
 
             let mut tool_stderr = String::new(); let mut exit_code = None;
             while let Some(event) = rx.recv().await {
@@ -230,14 +227,6 @@ pub async fn import_document(
                 }
             }
             
-            if let Some(media_extract_path) = media_extract_path_option {
-                 if media_extract_path.exists() && media_extract_path.is_dir() {
-                    debug!("[import_document] Cleaning up temporary extracted media folder: {}", media_extract_path.display());
-                    if let Err(e) = fs::remove_dir_all(&media_extract_path) {
-                        warn!("[import_document] Failed to cleanup media extraction folder {}: {}", media_extract_path.display(), e);
-                    }
-                }
-            }
 
             if exit_code != Some(0) {
                  error!("[import_document] Pandoc {} failed. Code:{:?}\nStderr:{}", conversion_type, exit_code, tool_stderr);

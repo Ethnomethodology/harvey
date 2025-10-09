@@ -1160,7 +1160,7 @@
 	<!-- Custom Controls Bar -->
 	<div
 		class="flex flex-col items-center justify-between flex-shrink-0 w-full space-y-1 px-2 pb-1 bg-gray-100 dark:bg-surface-3 rounded-b-md border border-gray-300 dark:border-border shadow-md"
-		style="position: relative; z-index: 105;"
+		style="position: relative; z-index: 30;"
 	>
 		<!-- Timeline with Tooltip -->
 		<div class="relative w-full" style="z-index: 20;"> <!-- Stacking for timeline within control bar -->

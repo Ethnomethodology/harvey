@@ -120,7 +120,7 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
         "transformers",
         "sacremoses",
         "sentencepiece",
-        "pypandoc",
+        "pypandoc_binary",
     ];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
