@@ -52,8 +52,8 @@
         </h2>
 
         <div bind:this={logContainer} class="log-container bg-gray-100 dark:bg-gray-900 p-3 rounded-md text-xs font-mono border border-gray-300 dark:border-gray-700 h-64 overflow-y-auto">
-            {#each logs as log (log)}
-                <p class="whitespace-pre-wrap">{log}</p>
+            {#each logs as log (log.id)}
+                <p class="whitespace-pre-wrap">{log.message}</p>
             {/each}
             {#if isInstalling}
                 <div class="flex items-center">

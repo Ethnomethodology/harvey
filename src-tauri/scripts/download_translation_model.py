@@ -1,7 +1,12 @@
 import sys
 import os
+import logging
 from transformers import MarianMTModel, MarianTokenizer
 from huggingface_hub import login
+
+# Configure logging for huggingface_hub
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logging.getLogger('huggingface_hub').setLevel(logging.INFO)
 
 def download_model(model_name, cache_dir, token):
     """

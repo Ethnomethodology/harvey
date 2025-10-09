@@ -5,11 +5,15 @@
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
 	import {
 		downloadTranslationModel,
-		deleteModel, // Re-using the same delete action
-        getLocalTranslationModels, // Use the new filesystem-based function
-		cancelDownload // Re-using the same cancel action
+		deleteTranslationModel,
+        getLocalTranslationModels,
+		cancelTranslationModelDownload
 	} from '$lib/services/configureActions';
-	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
+import notificationStore from '$lib/stores/notificationStore';
+import { get } from 'svelte/store';
+import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
+import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
+import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	export let downloadLocation = '';
 	export let isBusy = false;
@@ -26,8 +30,8 @@
 	let isDownloading = false;
 
 	const languages = [
-		{ code: 'en', name: 'English' },
-		{ code: 'ja', name: 'Japanese' },
+		{ value: 'en', label: 'English' },
+		{ value: 'ja', label: 'Japanese' },
 	];
 
 	$: isAnyModelDownloading = Object.values(downloadStatus).includes('downloading');
@@ -48,40 +52,38 @@
 		}
 
 		try {
-			unlistenStart = await listen('translation-download-start', (event) => {
-				const modelName = event.payload;
-				downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
-				modalLogs = [...modalLogs, `Starting download for ${modelName}...`];
-				isDownloading = true;
-				showLogModal = true;
-			});
-
-			unlistenLog = await listen('translation-download-log', (event) => {
-                const { model_name, log_line } = event.payload;
-				if (downloadStatus[model_name] === 'downloading') {
-					modalLogs = [...modalLogs, log_line];
-				}
-			});
-
-			unlistenComplete = await listen('translation-download-complete', async (event) => {
-				const modelName = event.payload;
-				downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
-				try {
-					downloadedModels = await getDownloadedModels();
-				} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
-				modalLogs = [...modalLogs, `Download complete for ${modelName}.`];
-			});
-
-			unlistenError = await listen('translation-download-error', (event) => {
+			            unlistenStart = await listen('translation-download-start', (event) => {
+							const modelName = event.payload;
+							downloadStatus = { ...downloadStatus, [modelName]: 'downloading' };
+							modalLogs = [...modalLogs, { id: uuidv4(), message: `Starting download for ${modelName}...` }];
+							isDownloading = true;
+							showLogModal = true;
+						});
+			            unlistenLog = await listen('translation-download-log', (event) => {
+			                const { model_name, log_line } = event.payload;
+							if (downloadStatus[model_name] === 'downloading') {
+								modalLogs = [...modalLogs, { id: uuidv4(), message: log_line }];
+							}
+						});
+			            unlistenComplete = await listen('translation-download-complete', async (event) => {
+							const modelName = event.payload;
+							downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
+							try {
+								downloadedModels = await getLocalTranslationModels();
+							} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
+							modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
+						});
+		            unlistenError = await listen('translation-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
 				let finalStatus;
-				if (error_message.toLowerCase().includes('cancel')) { finalStatus = 'cancelled'; } else { finalStatus = 'error'; alert(`Error downloading ${model_name}: ${error_message}`); }
+				if (error_message.toLowerCase().includes('cancel')) { finalStatus = 'cancelled'; } else { finalStatus = 'error'; notificationStore.add(`Error downloading ${model_name}: ${error_message}`, 'error'); }
 				downloadStatus = { ...downloadStatus, [model_name]: finalStatus };
-				modalLogs = [...modalLogs, `Error downloading ${model_name}: ${error_message}`];
+				modalLogs = [...modalLogs, { id: uuidv4(), message: `Error downloading ${model_name}: ${error_message}` }];
 				isDownloading = false;
 			});
 
             unlistenFinished = await listen('translation-download-finished', () => {
+                console.log('Frontend: Received translation-download-finished event. Setting isDownloading to false.');
                 isDownloading = false;
             });
 		} catch (err) {
@@ -99,31 +101,39 @@
 
 	async function handleDownload() {
 		if (isBusy) return;
-		if (!downloadLocation || downloadLocation.trim() === '') { alert('Please set a valid model download location first.'); return; }
+		if (!downloadLocation || downloadLocation.trim() === '') {
+			notificationStore.add('Please set a valid model download location first.', 'error');
+			return;
+		}
+
+		if (fromLanguage === toLanguage) {
+			notificationStore.add('From and To languages cannot be the same.', 'error');
+			return;
+		}
+
 		configError = '';
 		try {
 			modalLogs = [];
             await downloadTranslationModel(fromLanguage, toLanguage, downloadLocation);
         } catch (err) {
-			alert(`Failed to start download for ${fromLanguage}-${toLanguage}: ${err.message || err}`);
+			notificationStore.add(`Failed to start download for ${fromLanguage}-${toLanguage}: ${err.message || err}`, 'error');
             isDownloading = false; // Set to false on error
 		}
     }
 
     async function handleDelete(model) {
 		if (isBusy) return;
-		if (!model?.name) { alert("Cannot delete model: Missing name."); return; }
+		if (!model?.name) { notificationStore.add("Cannot delete model: Missing name.", 'error'); return; }
 		const confirmed = await ask(`Are you sure you want to delete the model "${model.name}"? This will remove the entire model folder from disk.`, { title: 'Confirm Deletion', type: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' });
 		if (!confirmed) return;
 		try {
-			await deleteModel(model); // Re-uses the same action
-			downloadedModels = await getDownloadedModels();
+			await deleteTranslationModel(model); // Use deleteTranslationModel
+			downloadedModels = await getLocalTranslationModels(); // Fix: Use getLocalTranslationModels
             downloadStatus = { ...downloadStatus, [model.name]: 'not_downloaded' };
 		} catch (err) {
-			alert(`Failed to delete model ${model.name}: ${err.message || err}`);
+			notificationStore.sendNotification(`Failed to delete model ${model.name}: ${err.message || err}`, 'error');
 		}
     }
-
 </script>
 
 <div class="flex flex-col h-full">
@@ -139,21 +149,29 @@
 			<div class="flex items-center space-x-2">
 				<div class="flex-1">
 					<label for="from-language" class="block text-sm font-medium text-gray-700">From Language</label>
-					<select id="from-language" bind:value={fromLanguage} class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-						{#each languages as lang}
-							<option value={lang.code}>{lang.name}</option>
-						{/each}
-					</select>
+					<Dropdown
+						id="from-language"
+						options={languages}
+						bind:value={fromLanguage}
+						placeholder="Select language"
+					/>
 				</div>
 				<div class="flex-1">
 					<label for="to-language" class="block text-sm font-medium text-gray-700">To Language</label>
-					<select id="to-language" bind:value={toLanguage} class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-						{#each languages as lang}
-							<option value={lang.code}>{lang.name}</option>
-						{/each}
-					</select>
+					<Dropdown
+						id="to-language"
+						options={languages}
+						bind:value={toLanguage}
+						placeholder="Select language"
+					/>
 				</div>
-				<button on:click={handleDownload} class="btn-blue-small mt-6">Download</button>
+				<button on:click={handleDownload} class="btn-blue-small mt-6" disabled={isDownloading}>
+					{#if isDownloading}
+						Downloading...
+					{:else}
+						Download
+					{/if}
+				</button>
 			</div>
 			<div>
 				<h4 class="text-sm font-medium text-gray-700">Downloaded Models</h4>
