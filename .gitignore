@@ -20,3 +20,4 @@ vite.config.ts.timestamp-*
 /e2e-tests/screenshots/
 /notebooks/
 /harvey-sidecars/
+/src-tauri/binaries/

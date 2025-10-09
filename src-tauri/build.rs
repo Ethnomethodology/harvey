@@ -70,10 +70,46 @@ fn main() {
         }
     };
 
+    // --- FFmpeg handling for macOS ---
+    if target.contains("apple-darwin") {
+        let ffmpeg_built_path = manifest_dir.join("binaries").join("ffmpeg");
+        let profile = env::var("PROFILE").unwrap();
+
+        // We build ffmpeg if:
+        // 1. It's a release build (e.g., `tauri build`).
+        // 2. It's a debug build AND the ffmpeg libraries don't already exist.
+        if profile == "release" || !ffmpeg_built_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and libraries are missing"
+            };
+            println!("cargo:info=Building FFmpeg from source for macOS (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("build-ffmpeg.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let status = Command::new("sh")
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute build-ffmpeg.sh script");
+
+            if !status.success() {
+                panic!("ffmpeg build script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping FFmpeg build: libraries already exist for dev build.");
+        }
+    }
+
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
-    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream", "translator-sidecar"];
+    let harvey_binaries = if target.contains("apple-darwin") {
+        vec!["diarize-cli", "whisper-cli", "whisper-stream", "translator-sidecar"]
+    } else {
+        vec!["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream", "translator-sidecar"]
+    };
 
     for binary_name in &harvey_binaries {
         let final_binary_name = format!("{}-{}{}", binary_name, target, extension);

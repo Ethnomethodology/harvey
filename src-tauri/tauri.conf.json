@@ -47,7 +47,6 @@
       "sidecar/whisper-cli",
       "sidecar/diarize-cli",
       "sidecar/pandoc",
-      "sidecar/ffmpeg",
       "sidecar/whisper-stream",
       "sidecar/translator-sidecar"
     ],
@@ -55,7 +54,8 @@
     "license": "MIT",
     "resources": [
       "third_party_licenses",
-      "scripts/*"
+      "scripts/*",
+      "binaries"
     ]
   }
 }
