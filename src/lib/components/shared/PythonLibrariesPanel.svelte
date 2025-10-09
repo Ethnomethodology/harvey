@@ -64,13 +64,13 @@
 
 		try {
 			unlistenLog = await listen('installation-log', (event) => {
-				installLogs = [...installLogs, event.payload.message];
+				installLogs = [...installLogs, { id: installLogs.length, message: event.payload.message }];
 			});
 
 			await invoke('install_python_libraries');
 		} catch (e) {
 			console.error('Error installing Python libraries:', e);
-			installLogs = [...installLogs, `Error: ${e.message || e}`];
+			installLogs = [...installLogs, { id: installLogs.length, message: `Error: ${e.message || e}` }];
             isInstalling = false; // Set to false on error
 		} finally {
 			if (unlistenLog) {
