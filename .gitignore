@@ -21,3 +21,4 @@ vite.config.ts.timestamp-*
 /notebooks/
 /harvey-sidecars/
 /src-tauri/binaries/
+/src-tauri/python/

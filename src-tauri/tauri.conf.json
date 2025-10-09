@@ -55,7 +55,8 @@
     "resources": [
       "third_party_licenses",
       "scripts/*",
-      "binaries"
+      "binaries",
+      "python"
     ]
   }
 }

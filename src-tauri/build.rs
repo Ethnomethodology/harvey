@@ -103,6 +103,38 @@ fn main() {
         }
     }
 
+    // --- Python Bundling ---
+    let python_bundle_path = manifest_dir.join("python");
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        let profile = env::var("PROFILE").unwrap();
+        // We bundle Python if:
+        // 1. It's a release build.
+        // 2. It's a debug build AND the python directory doesn't already exist.
+        if profile == "release" || !python_bundle_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and python bundle is missing"
+            };
+            println!("cargo:info=Bundling self-contained Python (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("bundle-python.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute bundle-python.sh script");
+
+            if !status.success() {
+                panic!("Python bundling script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping Python bundling: python directory already exists for dev build.");
+        }
+    }
+
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
