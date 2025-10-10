@@ -34,6 +34,8 @@
 	let modalLogs = [];
 	let isDownloading = false;
 
+	let selectedOption = 'selectLanguages'; // Default to selecting languages
+
 	const languages = [
 		{ value: 'en', label: 'English' },
 		{ value: 'ja', label: 'Japanese' },
@@ -47,6 +49,12 @@
 	let unlistenComplete = null;
 	let unlistenError = null;
     let unlistenFinished = null;
+
+	function handleOptionChange() {
+		if (selectedOption === 'selectLanguages' && modelName.trim() !== '') {
+			modelName = ''; // Clear model name if switching to language selection
+		}
+	}
 
 	onMount(async () => {
 		configError = '';
@@ -115,29 +123,27 @@
 			return;
 		}
 
-		if (modelName.trim()) {
-			configError = '';
-			try {
-				modalLogs = [];
-				await downloadTranslationModel(null, null, downloadLocation, modelName.trim());
-			} catch (err) {
-				notificationStore.add(`Failed to start download for ${modelName}: ${err.message || err}`, 'error');
-				isDownloading = false; // Set to false on error
-			}
-			return;
-		}
-
-		if (fromLanguage === toLanguage) {
-			notificationStore.add('From and To languages cannot be the same.', 'error');
-			return;
-		}
-
 		configError = '';
 		try {
 			modalLogs = [];
-            await downloadTranslationModel(fromLanguage, toLanguage, downloadLocation);
+			if (selectedOption === 'enterModelName') {
+				if (!modelName.trim()) {
+					notificationStore.add('Please enter a model name.', 'error');
+					return;
+				}
+				await downloadTranslationModel(null, null, downloadLocation, modelName.trim());
+			} else { // selectedOption === 'selectLanguages'
+				if (fromLanguage === toLanguage) {
+					notificationStore.add('From and To languages cannot be the same.', 'error');
+					return;
+				}
+				await downloadTranslationModel(fromLanguage, toLanguage, downloadLocation);
+			}
         } catch (err) {
-			notificationStore.add(`Failed to start download for ${fromLanguage}-${toLanguage}: ${err.message || err}`, 'error');
+			const errorMessage = selectedOption === 'enterModelName'
+				? `Failed to start download for ${modelName}: ${err.message || err}`
+				: `Failed to start download for ${fromLanguage}-${toLanguage}: ${err.message || err}`;
+			notificationStore.add(errorMessage, 'error');
             isDownloading = false; // Set to false on error
 		}
     }
@@ -174,19 +180,7 @@
             }
         }
         return modelName; // Fallback for unexpected model name format
-    }
-
-	function onModelNameInput() {
-		if (modelName.trim()) {
-			fromLanguage = null;
-			toLanguage = null;
-		}
-	}
-
-	function onLanguageSelect() {
-		modelName = '';
-	}
-</script>
+    }</script>
 
 <div class="flex flex-col h-full">
 	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading} title="Downloading Translation Model" inProgressText="Downloading..." />
@@ -196,67 +190,92 @@
 		</p>
 	{/if}
 
+	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Helsinki-NLP models</a> for offline translation. To translate transcripts, you must first download one of the available models.
+	</p>
+
 	<div class="flex-grow space-y-3">
 		<div class="pt-4 space-y-3">
-			<div class="flex items-end space-x-2">
-				<div class="flex flex-col">
-					<label for="from-language" class="block text-sm font-medium text-gray-700">From</label>
-					<Dropdown
-						id="from-language"
-						options={languages}
-						bind:value={fromLanguage}
-						placeholder="Select language"
-						containerClasses="w-32"
-						disabled={modelName.trim() !== ''}
-						on:change={onLanguageSelect}
-					/>
-				</div>
-				<div class="flex flex-col">
-					<label for="to-language" class="block text-sm font-medium text-gray-700">To</label>
-					<Dropdown
-						id="to-language"
-						options={languages}
-						bind:value={toLanguage}
-						placeholder="Select language"
-						containerClasses="w-32"
-						disabled={modelName.trim() !== ''}
-						on:change={onLanguageSelect}
-					/>
-				</div>
-				<div class="flex items-center px-2 text-sm text-gray-500">or</div>
-				<div class="flex flex-col">
-					<label for="model-name" class="block text-sm font-medium text-gray-700">Model Name</label>
-					<input
-						id="model-name"
-						type="text"
-						bind:value={modelName}
-						on:input={onModelNameInput}
-						class="input w-64"
-						placeholder="e.g. Helsinki-NLP/opus-mt-en-jap"
-					/>
-				</div>
-				<button on:click={handleDownload} class="btn-blue-small">
-					{#if isDownloading}
-						Downloading...
-					{:else}
-						Download
-					{/if}
-				</button>
+			<div class="flex space-x-4 mb-4">
+				<label class="inline-flex items-center">
+					<input type="radio" class="form-radio" name="translationOption" value="selectLanguages" bind:group={selectedOption} on:change={handleOptionChange}>
+					<span class="ml-2 text-gray-700">Select Languages</span>
+				</label>
+				<label class="inline-flex items-center">
+					<input type="radio" class="form-radio" name="translationOption" value="enterModelName" bind:group={selectedOption} on:change={handleOptionChange}>
+					<span class="ml-2 text-gray-700">Enter Model Name</span>
+				</label>
 			</div>
-			<div>
-				<h4 class="text-sm font-medium text-gray-700">Downloaded Models <span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600' : 'text-green-600'}">({downloadedModels.length} downloaded)</span></h4>
-				<ul class="mt-2 space-y-2">
-					{#each downloadedModels as model (model.name)}
-						<li class="p-2 border rounded-md">
-							<div class="flex items-center justify-between">
-								<p class="text-sm font-medium text-gray-900">{formatModelDisplayName(model.name)}</p>
-								<button on:click={() => handleDelete(model)} class="btn-delete">Delete</button>
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</div>
+
+			{#if selectedOption === 'selectLanguages'}
+				<div class="flex items-end space-x-2">
+					<div class="flex flex-col">
+						<label for="from-language" class="block text-sm font-medium text-gray-700">From</label>
+						<Dropdown
+							id="from-language"
+							options={languages}
+							bind:value={fromLanguage}
+							placeholder="Select language"
+							containerClasses="w-32"
+							on:change={onLanguageSelect}
+						/>
+					</div>
+					<div class="flex flex-col">
+						<label for="to-language" class="block text-sm font-medium text-gray-700">To</label>
+						<Dropdown
+							id="to-language"
+							options={languages}
+							bind:value={toLanguage}
+							placeholder="Select language"
+							containerClasses="w-32"
+							on:change={onLanguageSelect}
+						/>
+					</div>
+					<button on:click={handleDownload} class="btn-blue-small">
+						{#if isDownloading}
+							Downloading...
+						{:else}
+							Download
+						{/if}
+					</button>
+				</div>
+			{:else if selectedOption === 'enterModelName'}
+				<div class="flex items-end space-x-2">
+					<div class="flex flex-col">
+						<label for="model-name" class="block text-sm font-medium text-gray-700">Model Name</label>
+						<input
+							id="model-name"
+							type="text"
+							bind:value={modelName}
+
+							class="input w-64"
+							placeholder="e.g. Helsinki-NLP/opus-mt-en-jap"
+						/>
+					</div>
+					<button on:click={handleDownload} class="btn-blue-small">
+						{#if isDownloading}
+							Downloading...
+						{:else}
+							Download
+						{/if}
+										</button>
+									</div>
+								{/if}
+								
 		</div>
+		<div class="pt-4">
+		<h4 class="mt-2 text-sm font-semibold text-gray-700">Downloaded Models <span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600' : 'text-green-600'}">({downloadedModels.length} downloaded)</span></h4>
+								<ul class="mt-2 space-y-2">
+									{#each downloadedModels as model (model.name)}
+										<li class="p-2 border rounded-md">
+											<div class="flex items-center justify-between">
+												<p class="text-sm font-medium text-gray-900">{formatModelDisplayName(model.name)}</p>
+												<button on:click={() => handleDelete(model)} class="btn-delete">Delete</button>
+											</div>
+										</li>
+									{/each}
+								</ul>
+							</div>
 	</div>
 </div>
 
