@@ -3,25 +3,6 @@ use std::{env, fs, io, path::{Path, PathBuf}, process::Command};
 use sha2::{Digest, Sha256};
 use hex;
 
-/// Finds a file by name in a directory and its subdirectories.
-fn find_file_in_dir(dir: &Path, file_name: &str) -> Option<PathBuf> {
-    if !dir.is_dir() {
-        return None;
-    }
-    for entry in fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(found) = find_file_in_dir(&path, file_name) {
-                return Some(found);
-            }
-        } else if path.file_name().map_or(false, |name| name == file_name) {
-            return Some(path);
-        }
-    }
-    None
-}
-
 fn download_file(url: &str, dest_path: &Path) {
     println!("cargo:info=Downloading from {} to {}...", url, dest_path.display());
     let status = Command::new("curl")

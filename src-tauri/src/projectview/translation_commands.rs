@@ -1,4 +1,4 @@
-use tauri::{command, AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime, Emitter};
 use tauri_plugin_shell::ShellExt;
 use std::fs;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
@@ -8,7 +8,6 @@ use super::transcription_commands::save_transcript_json;
 use crate::welcome::config::{read_config, get_default_download_location, CommandError};
 use crate::welcome::python_env::get_python_path;
 use dashmap::DashMap;
-use tokio::sync::Mutex;
 
 
 // --- State for managing translation cancellations ---
@@ -151,7 +150,7 @@ pub async fn translate_transcript_command<R: Runtime>(
             target_language,
             cancel_flag,
         ).await {
-            Ok((new_path)) => {
+            Ok(new_path) => {
                 info!("[Translate Task][{}] Translation process completed successfully.", job_id_clone);
                 TranslationJobCompletedPayload {
                     job_id: job_id_clone,
@@ -179,8 +178,8 @@ pub async fn translate_transcript_command<R: Runtime>(
             }
         };
 
-        if let Err(e) = app_handle.emit("translation_job_completed", completion_payload) {
-            error!("[Translate Task][{}] Failed to emit completion event: {}", job_id, e);
+        if let Err(e) = app_handle.emit("translation_job_completed", &completion_payload) {
+            error!("[Translate Task][{}] Failed to emit completion event: {}", completion_payload.job_id, e);
         }
     });
 
@@ -194,9 +193,9 @@ async fn run_translation_process<R: Runtime>(
     project_xml_path: String,
     transcript_path: String,
     model_name: String,
-    target_language: String,
+    _target_language: String,
     cancel_flag: Arc<AtomicBool>,
-) -> Result<(String), CommandError> {
+) -> Result<String, CommandError> {
     emit_translation_progress(&app_handle, &job_id, 5.0, "Preparing for translation...");
 
     let config = read_config()?;
