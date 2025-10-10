@@ -11,10 +11,17 @@ on:
 jobs:
   build:
     strategy:
-      matrix:
-        os: [macos-latest, windows-latest]
-        arch: [x64, arm64]
       fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-13
+            arch: x64
+          - os: windows-latest
+            arch: x64
+          - os: windows-latest
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -38,7 +45,7 @@ jobs:
       - name: Set target triple
         id: set_target
         run: |
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          if [[ "${{ matrix.os }}" == "macos"* ]]; then
             if [ "${{ matrix.arch }}" = "x64" ]; then
               echo "triple=x86_64-apple-darwin" >> $GITHUB_OUTPUT
             else
@@ -61,7 +68,7 @@ jobs:
           override: true
 
       - name: Install macOS build dependencies
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         run: |
           brew install yasm pkg-config nasm cmake
 
@@ -111,7 +118,7 @@ jobs:
         run: cargo install tauri-cli --locked
 
       - name: Build Tauri application (macOS)
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         env:
           TAURI_SKIP_SIGNING: "true"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,7 +134,7 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         shell: msys2 {0}
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="/c/Users/runneradmin/.cargo/bin:$PATH"
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
 
@@ -138,8 +145,8 @@ jobs:
         with:
           name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ matrix.os == 'macos-latest' && 'macos/*.app' || 'msi/*.msi' }}
-            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ matrix.os == 'macos-latest' && 'dmg/*.dmg' || 'nsis/*.exe' }}
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ runner.os == 'macOS' && 'macos/*.app' || 'msi/*.msi' }}
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ runner.os == 'macOS' && 'dmg/*.dmg' || 'nsis/*.exe' }}
 
       - name: Ensure GitHub Release exists
         id: ensure_release
@@ -224,7 +231,7 @@ jobs:
           asset_content_type: application/zip
 
       - name: Find macOS DMG
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         id: find_dmg
         run: |
           dmg_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/dmg/*.dmg)
@@ -234,7 +241,7 @@ jobs:
         shell: bash
 
       - name: Upload macOS DMG
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,7 +252,7 @@ jobs:
           asset_content_type: application/octet-stream
 
       - name: Zip macOS App
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         id: zip_macos_app
         env:
           DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
@@ -258,7 +265,7 @@ jobs:
         shell: bash
 
       - name: Upload macOS App Zip
-        if: matrix.os == 'macos-latest'
+        if: runner.os == 'macOS'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
