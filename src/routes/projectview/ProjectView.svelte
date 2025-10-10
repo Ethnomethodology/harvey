@@ -37,21 +37,7 @@
         prepareMediaNoteView,
     } from '$lib/stores/projectStore.js';
     import { fetchAllTags } from '$lib/stores/tagStore.js';
-    import {
-        transcriptStore,
-        toggleTranscribeModal,
-        selectMedia as selectMediaStoreAction,
-        clearTranscriptState,
-        setRanInBackground,
-        clearPendingTranscriptData,
-        setDiarizationPreference,
-        setSelectedModel,      // <-- ADD THIS
-        setSelectedLanguage,   // <-- ADD THIS
-        setTranslateToEnglish, // <-- ADD THIS
-        updateSpeakerConfig,    // <-- ADD THIS
-        setTranslationStatus,
-        toggleTranslateModal,
-    } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
@@ -60,7 +46,7 @@
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
 	import TranscribeConfirmModal from '$lib/components/projectview/modals/TranscribeConfirmModal.svelte';
-    import TranslateProgressModal from '$lib/components/projectview/modals/TranslateProgressModal.svelte';
+    
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
     import ConfirmConversionModal from '$lib/components/projectview/modals/ConfirmConversionModal.svelte';
     import ImportTranscriptSourceModal from '$lib/components/projectview/modals/ImportTranscriptSourceModal.svelte';
@@ -856,6 +842,8 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 			<TranscriptionsTopBar
 				bind:this={transcriptionsViewRef}
                 on:requestImport={handleImportMediaInSidebar}
+				on:cancelTranslationRequest={handleCancelTranslationRequest}
+				on:runTranslationInBackground={() => setRanTranslationInBackground(true)}
 			/>
 		{:else if selectedTab === 'tags'}
 			<SimpleTopBar on:requestImport={handleImportMediaInSidebar} />
@@ -922,15 +910,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false }));
         }} />
 
-    <TranslateProgressModal
-        on:cancelRequest={handleCancelTranslationRequest}
-        on:closeAndReset={() => {
-            transcriptStore.update(ts => ({ ...ts, showTranslateModal: false, translationJobStatus: null, translationErrorMessage: null, translationJobId: null, isTranslating: false, translationProgress: { percent: 0, message: '' } }));
-        }}
-        on:runInBackgroundAndClose={() => {
-            transcriptStore.update(ts => ({ ...ts, showTranslateModal: false }));
-        }}
-    />
+    
 
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />

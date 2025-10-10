@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -33,7 +33,6 @@
 	let isSpeakersModalOpen = false;
 	let isExportModalOpen = false;
 	let isLayoutSettingsModalOpen = false; // Added
-	let isTranslateModalOpen = false;
 	let transcriptsForModal = [];
 
 	function openTranslateModal() {
@@ -41,7 +40,7 @@
 
 		if (!selectedMedia?.relative_path) {
 			transcriptsForModal = [];
-			isTranslateModalOpen = true;
+			toggleTranslateModal(true);
 			return;
 		}
 
@@ -68,7 +67,7 @@
 		            console.warn("DEBUG: No transcripts found for modal or foundFile missing:", foundFile);
 		            transcriptsForModal = [];
 		        }
-		isTranslateModalOpen = true;
+		toggleTranslateModal(true);
 	}
 	let transcriptionMode = 'automatic';
 	// Variable to hold transcript path for export modal
@@ -428,13 +427,16 @@
 />
 
 <TranslateModal 
-    bind:showModal={isTranslateModalOpen}
     availableTranscripts={transcriptsForModal}
-    on:close={() => isTranslateModalOpen = false}
     on:confirm={async (e) => {
         console.log('Translation confirmed:', e.detail);
-        isTranslateModalOpen = false;
         await requestTranslation(e.detail.transcript.path, e.detail.model);
+    }}
+    on:cancelRequest={() => dispatch('cancelTranslationRequest')}
+    on:closeAndReset={() => toggleTranslateModal(false)}
+    on:runInBackgroundAndClose={() => {
+        dispatch('runTranslationInBackground');
+        toggleTranslateModal(false);
     }}
 />
 
