@@ -47,7 +47,12 @@ echo "[INFO] Querying GitHub API for Python ${PYTHON_VERSION} for ${TARGET_PLATF
 
 # Use a chain of simple, case-insensitive greps to find the correct URL.
 # This is more robust than a single complex regex.
-DOWNLOAD_URL=$(curl --retry 3 --retry-delay 5 -sL "${API_URL}" | \
+API_CURL_ARGS=("--retry" "3" "--retry-delay" "5" "-sL")
+if [ -n "$GITHUB_TOKEN" ]; then
+    API_CURL_ARGS+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+fi
+
+DOWNLOAD_URL=$(curl "${API_CURL_ARGS[@]}" "${API_URL}" | \
     grep 'browser_download_url' | \
     grep -i "cpython-${PYTHON_VERSION}" | \
     grep -i "${TARGET_PLATFORM}-install_only.tar.gz" | \
