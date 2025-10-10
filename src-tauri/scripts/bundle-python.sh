@@ -45,7 +45,7 @@ echo "[INFO] Querying GitHub API for Python ${PYTHON_VERSION} for ${TARGET_PLATF
 
 # Use a chain of simple, case-insensitive greps to find the correct URL.
 # This is more robust than a single complex regex.
-DOWNLOAD_URL=$(curl -sL "${API_URL}" | \
+DOWNLOAD_URL=$(curl --retry 3 --retry-delay 5 -sL "${API_URL}" | \
     grep 'browser_download_url' | \
     grep -i "cpython-${PYTHON_VERSION}" | \
     grep -i "${TARGET_PLATFORM}-install_only.tar.gz" | \
@@ -64,7 +64,7 @@ rm -f "${TMP_TAR_PATH}"
 # 3. Download and Extract Python
 echo "[INFO] Found download URL: ${DOWNLOAD_URL}"
 echo "[INFO] Downloading Python bundle..."
-curl -L "${DOWNLOAD_URL}" -o "${TMP_TAR_PATH}"
+curl --retry 3 --retry-delay 5 -L "${DOWNLOAD_URL}" -o "${TMP_TAR_PATH}"
 
 echo "[INFO] Extracting Python bundle..."
 tar -xzf "${TMP_TAR_PATH}" -C "${TAURI_DIR}"

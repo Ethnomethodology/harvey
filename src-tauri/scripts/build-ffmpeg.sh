@@ -85,7 +85,7 @@ mkdir -p "${INSTALL_PREFIX}"
 
 # 2. Download and Extract FFmpeg
 echo "Downloading FFmpeg ${FFMPEG_VERSION}..."
-curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.gz" -o "${FFMPEG_TARBALL}"
+curl --retry 3 --retry-delay 5 -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.gz" -o "${FFMPEG_TARBALL}"
 
 echo "Extracting FFmpeg source..."
 tar -xzf "${FFMPEG_TARBALL}" -C "${TAURI_DIR}"
