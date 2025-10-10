@@ -48,8 +48,7 @@ echo "[INFO] Querying GitHub API for Python ${PYTHON_VERSION} for ${TARGET_PLATF
 DOWNLOAD_URL=$(curl -sL "${API_URL}" | \
     grep 'browser_download_url' | \
     grep -i "cpython-${PYTHON_VERSION}" | \
-    grep -i "${TARGET_PLATFORM}" | \
-    grep -i "install_only.tar.gz" | \
+    grep -i "${TARGET_PLATFORM}-install_only.tar.gz" | \
     cut -d '"' -f 4 | \
     head -n 1)
 
