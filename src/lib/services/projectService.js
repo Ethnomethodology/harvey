@@ -1146,6 +1146,9 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         }
         const backendJobId = initiatedPayload.job_id;
 
+        // Immediately set the job ID in the store
+        transcriptStore.update(ts => ({ ...ts, transcriptionJobId: backendJobId }));
+
         // Step 2: Update status to 'running' with the actual job ID from the backend.
         setTranscriptionStatus(true, backendJobId, { // Pass the backendJobId
             status: 'running',

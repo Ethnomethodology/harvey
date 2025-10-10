@@ -1830,20 +1830,25 @@ async fn run_whisper_cpp_sidecar_cmd<R: Runtime>(
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
 
-    loop {
-        if cancel_flag.load(AtomicOrdering::Relaxed) {
-            warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process...", job_id);
-            let _ = child.kill();
-            if expected_whisper_json_output_path.exists() {
-                if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
-                    warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
-                } else {
-                    info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
-                }
-            }
-            return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
-        }
+    let shared_child = Arc::new(Mutex::new(Some(child)));
+    let cancel_flag_clone = cancel_flag.clone();
+    let shared_child_clone_for_cancel = shared_child.clone();
+    let job_id_clone = job_id.to_string();
 
+    tokio::spawn(async move {
+        loop {
+            if cancel_flag_clone.load(AtomicOrdering::Relaxed) {
+                warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process from spawned task...", job_id_clone);
+                if let Some(child_to_kill) = shared_child_clone_for_cancel.lock().await.take() {
+                    let _ = child_to_kill.kill();
+                }
+                break;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    });
+
+    loop {
         tokio::select! {
             biased;
             maybe_event = rx.recv() => {
@@ -1864,10 +1869,20 @@ async fn run_whisper_cpp_sidecar_cmd<R: Runtime>(
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                // Continue to check cancel_flag
+        }
+    }
+
+    // Check cancel_flag one last time after loop exits to ensure consistent error reporting
+    if cancel_flag.load(AtomicOrdering::Relaxed) {
+        warn!("[Whisper CPP CMD][{}] Process terminated due to cancellation. Returning cancellation error.", job_id);
+        if expected_whisper_json_output_path.exists() {
+            if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
+                warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
+            } else {
+                info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
             }
         }
+        return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
     }
 
     if process_error.is_some() || exit_code != Some(0) {
