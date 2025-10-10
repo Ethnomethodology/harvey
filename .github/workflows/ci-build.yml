@@ -61,6 +61,24 @@ jobs:
           target: ${{ steps.set_target.outputs.triple }}
           override: true
 
+      - name: Install macOS build dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install yasm pkg-config nasm cmake
+
+      - name: Set up MSYS2 and install Windows build dependencies
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-yasm
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkg-config
+
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
         with:
@@ -80,7 +98,7 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
-          echo "The build.rs script will now handle downloading all sidecars..."
+          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
           
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
