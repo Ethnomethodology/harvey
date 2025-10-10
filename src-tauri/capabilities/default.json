@@ -60,10 +60,10 @@
       ]
     },
     {
-      "identifier": "shell:allow-execute",
+      "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "sidecar/whisper-cli",
+          "name": "binaries/whisper.cpp/bin/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",
@@ -169,7 +169,7 @@
           ]
         },
         {
-          "name": "sidecar/whisper-stream",
+          "name": "binaries/whisper.cpp/bin/whisper-stream",
           "sidecar": true,
           "args": [
             "-m",
@@ -186,10 +186,10 @@
       ]
     },
     {
-      "identifier": "shell:allow-spawn",
+      "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "sidecar/whisper-cli",
+          "name": "binaries/whisper.cpp/bin/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",
@@ -295,7 +295,7 @@
           ]
         },
         {
-          "name": "sidecar/whisper-stream",
+          "name": "binaries/whisper.cpp/bin/whisper-stream",
           "sidecar": true,
           "args": [
             "-m",

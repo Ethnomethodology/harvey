@@ -44,9 +44,9 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "sidecar/whisper-cli",
+      "binaries/whisper.cpp/bin/whisper-cli",
       "sidecar/diarize-cli",
-      "sidecar/whisper-stream",
+      "binaries/whisper.cpp/bin/whisper-stream",
       "sidecar/translator-sidecar"
     ],
     "licenseFile": "../LICENSE.md",

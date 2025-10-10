@@ -135,6 +135,39 @@ fn main() {
         }
     }
 
+    // --- whisper.cpp handling for macOS, Linux, and Windows ---
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        let whisper_built_path = manifest_dir.join("binaries").join("whisper.cpp");
+        let profile = env::var("PROFILE").unwrap();
+
+        // We build whisper.cpp if:
+        // 1. It's a release build (e.g., `tauri build`).
+        // 2. It's a debug build AND the whisper.cpp binaries don't already exist.
+        if profile == "release" || !whisper_built_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and binaries are missing"
+            };
+            println!("cargo:info=Building whisper.cpp from source (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("build-whisper.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute build-whisper.sh script");
+
+            if !status.success() {
+                panic!("whisper.cpp build script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping whisper.cpp build: binaries already exist for dev build.");
+        }
+    }
+
     // --- Copy Python scripts to target/debug/scripts for development ---
     let scripts_source_dir = manifest_dir.join("scripts");
     let scripts_target_dir = manifest_dir.join("target").join(env::var("PROFILE").unwrap()).join("scripts");
@@ -161,9 +194,9 @@ fn main() {
     let harvey_tag = "v0.2.0";
     // Exclude ffmpeg if we are building it from source
     let harvey_binaries = if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
-        vec!["diarize-cli", "whisper-cli", "whisper-stream", "translator-sidecar"]
+        vec!["diarize-cli", "translator-sidecar"]
     } else {
-        vec!["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream", "translator-sidecar"]
+        vec!["diarize-cli", "ffmpeg", "translator-sidecar"]
     };
 
     for binary_name in &harvey_binaries {

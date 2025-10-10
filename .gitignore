@@ -22,3 +22,7 @@ vite.config.ts.timestamp-*
 /harvey-sidecars/
 /src-tauri/binaries/
 /src-tauri/python/
+/src-tauri/SDL2-src/
+/src-tauri/third_party_libs/
+
+
