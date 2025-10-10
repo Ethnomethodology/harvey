@@ -58,7 +58,15 @@ elif [ "$OS" = "Linux" ]; then
 elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
     echo "Detected Windows (MSYS/MINGW)."
     check_windows_deps
-    CONFIGURE_OPTS="--target-os=win64 --disable-asm"
+
+    # Check if we are cross-compiling for arm64
+    if [ "$TARGET_ARCH" = "arm64" ]; then
+        echo "Setting up for Windows ARM64 cross-compilation..."
+        CONFIGURE_OPTS="--target-os=win64 --arch=aarch64 --cc=clang --cxx=clang++ --ar=llvm-ar --ranlib=llvm-ranlib --enable-cross-compile --disable-asm"
+    else
+        echo "Setting up for Windows x64 native compilation..."
+        CONFIGURE_OPTS="--target-os=win64 --disable-asm"
+    fi
 else
     echo "Unsupported operating system: $OS"
     exit 1
