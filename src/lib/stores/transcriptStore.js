@@ -1300,3 +1300,20 @@ export function updateTranslationProgress(progressPayload) {
         };
     });
 }
+
+export function clearTranslationStatus(finalStatusMessage = 'Ready', error = null) {
+    transcriptStore.update(ts => {
+        console.log(`[JULES-DEBUG TS clearTranslationStatus] Called. Current store before clear: isTranslating=${ts.isTranslating}, jobId=${ts.translationJobId}, jobStatus=${ts.translationJobStatus}`);
+        return {
+            ...ts,
+            isTranslating: false,
+            translationJobId: null,
+            translationProgress: { percent: 0, message: '' },
+            translationJobStatus: null,
+            translationErrorMessage: null,
+            ranTranslationInBackground: false,
+            showTranslateModal: false,
+        };
+    });
+    updateProjectStoreState({ statusMessage: finalStatusMessage, error: error });
+}

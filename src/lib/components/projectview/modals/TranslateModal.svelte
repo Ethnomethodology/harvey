@@ -6,7 +6,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 	import { languageMap } from '$lib/constants/languageMap.js';
-	import { transcriptStore, setRanTranslationInBackground } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 
 	export let availableTranscripts = [];
 
@@ -82,6 +82,7 @@
 	}
 
 	function handleCloseAndReset() {
+		clearTranslationStatus(); // Reset translation-related states
 		dispatch('closeAndReset');
 	}
 
