@@ -14,6 +14,7 @@
     import { page } from '$app/stores';
     import { loadProjectDataAndUpdateStore } from '$lib/services/projectService.js';
     import { tick } from 'svelte';
+    import { Loader } from 'lucide-svelte'; // Import Loader component
   
     onMount(async () => {
       console.debug('[+layout.svelte] onMount started.'); // DEBUG
@@ -49,7 +50,8 @@
                   console.info(`[+layout.svelte] Project context OK (xmlPath loaded), but no media file selected yet. Store xmlPath: ${loadedProjectState.xmlPath}`); // INFO
                   // Update status to guide user - Optional
                   project.update(p => ({ ...p, statusMessage: 'Project loaded. Import or select a media file.' }));
-              } else if (!loadedProjectState.selectedMediaFile.name) {
+              }
+               else if (!loadedProjectState.selectedMediaFile.name) {
                    // Project path loaded, media object exists, but NAME is missing (Data integrity issue!)
                    console.error(`[+layout.svelte] CRITICAL: Project context inconsistent! xmlPath is present, but selectedMediaFile is missing its 'name'. selectedMediaFile: ${JSON.stringify(loadedProjectState.selectedMediaFile)}`); // ERROR
                    project.update(p => ({ ...p, isLoading: false, error: 'Project context inconsistent: selected media file missing name.', statusMessage: 'Error: Project load inconsistent.' }));
@@ -67,9 +69,8 @@
       } else {
           // This is expected on the welcome page, don't treat as an error here
           console.info('[+layout.svelte] Project path missing in URL (likely welcome page).'); // INFO
-          // Clear any potentially stale project data if landing on welcome page without path
-          // Consider if this is needed:
-          // project.update(p => ({ ...p, isLoading: false, error: null, xmlPath: null, selectedMediaFile: null, /* etc */ }));
+          // Explicitly set isLoading to false for the welcome page
+          project.update(p => ({ ...p, isLoading: false, statusMessage: 'Welcome' }));
       }
   
       
@@ -81,3 +82,12 @@
   <slot />
   <ToastNotifications />
 <HeaderConfirmationModal />
+
+{#if $project.isLoading}
+    <div class="absolute inset-0 z-[120] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+        <div class="flex flex-col items-center p-6 bg-white dark:bg-surface-2 rounded-lg shadow-xl">
+             <Loader class="w-12 h-12 text-blue-500 animate-spin mb-3" />
+             <p class="text-sm text-gray-700 dark:text-d-gray-300">{$project.statusMessage || 'Loading project...'}</p>
+        </div>
+    </div>
+{/if}
