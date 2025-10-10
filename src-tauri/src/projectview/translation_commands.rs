@@ -1,6 +1,5 @@
 use tauri::{command, AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
-use std::io::Write;
 use std::fs;
 use serde_json::{Value, json};
 use log::{info, error};
@@ -88,7 +87,7 @@ pub async fn translate_transcript_command(
 
     let python_path = get_python_path().map_err(|e| e.to_string())?;
     let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
-        .ok_or("Failed to resolve script path".to_string())?;
+        .map_err(|e| format!("Failed to resolve script path: {}", e))?;
 
     let (mut rx, mut child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
         .args(&[
@@ -100,9 +99,8 @@ pub async fn translate_transcript_command(
         .map_err(|e| format!("Failed to spawn Python script: {}", e))?;
 
     let input_text = texts_to_translate.join("\n");
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(input_text.as_bytes()).map_err(|e| e.to_string())?;
-    }
+    child.write(input_text.as_bytes())
+        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
 
     let mut translated_output = String::new();
     let mut stderr_output = String::new();
