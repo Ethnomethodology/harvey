@@ -19,7 +19,7 @@
 	let modalSelectedModel = '';
 	let modalTranscriptionMode = 'automatic';
 	let modalSelectedLanguage = 'auto';
-	let modalTranslateToEnglish = false;
+	
 	let modalEnableDiarization = false;
 	let modalSpeakersConfig = { count: 0, names: [], translatedNames: [] };
 	let showNestedSpeakersModal = false;
@@ -30,7 +30,7 @@
 			selectedModel: modalSelectedModel,
 			transcriptionMode: modalTranscriptionMode,
 			selectedLanguage: modalSelectedLanguage,
-			translateToEnglish: modalTranslateToEnglish,
+			
 			enableDiarization: modalEnableDiarization,
 			speakersConfig: modalSpeakersConfig
 		});
@@ -74,7 +74,7 @@
 	$: if (showModal && !isTranscribing && jobStatus === null && !isInitialized) {
 		modalSelectedModel = $transcriptStore.selectedModelName || (downloadedModelsList.length > 0 ? downloadedModelsList[0].name : '');
 		modalSelectedLanguage = $transcriptStore.selectedLanguage || 'auto';
-		modalTranslateToEnglish = $transcriptStore.translateToEnglish;
+		
 		modalEnableDiarization = $transcriptStore.diarizationEnabledForNextJob;
 		// Initialize modalSpeakersConfig from the speakers prop (which comes from transcriptStore initially)
 		// Use a deep copy to prevent direct mutation of the prop or store value until confirmed.
@@ -190,12 +190,7 @@
 						</select>
 					</div>
 
-					<div class="flex items-center space-x-2 pt-1"> 
-						<input type="checkbox" id="modalTranslateToEnglishCheckbox" class="ui-checkbox" bind:checked={modalTranslateToEnglish} disabled={modalSelectedLanguage === 'en'} />
-						<label for="modalTranslateToEnglishCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" class:opacity-50={modalSelectedLanguage === 'en'}>
-							Translate to English
-						</label>
-					</div>
+					
 
 					<div class="pt-1 space-y-1"> 
 						<div class="flex justify-between items-center">

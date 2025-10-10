@@ -13,9 +13,11 @@ use std::{
     // time::{SystemTime, UNIX_EPOCH}, // Removed as timestamp is no longer in filename
 };
 use chrono::Utc; // Added for timestamping metadata
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // For temp file uniqueness
+use crate::welcome::python_env::get_python_path;
 use log::{debug, error, info, warn};
 
 // Helper to convert HH:MM:SS to seconds
@@ -152,8 +154,8 @@ fn parse_transcript_block(transcript_text_content: &str) -> Result<Vec<Transcrip
 
 
 #[tauri::command]
-pub async fn import_word_transcript(
-    app_handle: AppHandle,
+pub async fn import_word_transcript<R: Runtime>(
+    app_handle: AppHandle<R>,
     source_docx_path_str: String,
     project_xml_path_str: String,
 ) -> Result<String, CommandError> {
@@ -186,17 +188,23 @@ pub async fn import_word_transcript(
     let temp_html_filename = format!("temp_transcript_html_{}_{}.html", transcript_filename_stem, unique_id);
     let temp_html_path = temp_html_dir.join(&temp_html_filename);
 
+    let python_path = get_python_path()?;
+    let script_path = app_handle.path()
+        .resolve("scripts/convert_with_pandoc.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve pandoc script path: {}", e)))?;
+
     let pandoc_args = vec![
         source_docx_path.to_string_lossy().to_string(),
-        "-f".to_string(), "docx".to_string(),
-        "-t".to_string(), "html".to_string(),
-        "--standalone".to_string(),
-        "-o".to_string(), temp_html_path.to_string_lossy().to_string(),
+        temp_html_path.to_string_lossy().to_string(),
+        "html".to_string(),
     ];
 
-    info!("[import_word_transcript] Pandoc CMD: pandoc {}", pandoc_args.join(" "));
-    let (mut rx, _child) = app_handle.shell().sidecar("pandoc")?.args(&pandoc_args).spawn()
-        .map_err(|e| CommandError::from(format!("Failed to spawn Pandoc: {}", e)))?;
+    info!("[import_word_transcript] Pandoc CMD: {} {} {}", python_path.display(), script_path.display(), pandoc_args.join(" "));
+    let (mut rx, _child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+        .args(&[script_path.to_string_lossy().to_string()])
+        .args(&pandoc_args)
+        .spawn()
+        .map_err(|e| CommandError::from(format!("Failed to spawn Pandoc script: {}", e)))?;
 
     let mut pandoc_output_stderr = String::new();
     let mut pandoc_success = false;

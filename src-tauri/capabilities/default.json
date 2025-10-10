@@ -60,10 +60,10 @@
       ]
     },
     {
-      "identifier": "shell:allow-execute",
+      "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "sidecar/whisper-cli",
+          "name": "binaries/whisper.cpp/bin/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",
@@ -82,37 +82,6 @@
             "-of",
             {
               "validator": "\\S+"
-            }
-          ]
-        },
-        {
-          "name": "sidecar/diarize-cli",
-          "sidecar": true,
-          "args": [
-            "--audio",
-            {
-              "validator": "\\S+"
-            },
-            "--output",
-            {
-              "validator": "\\S+"
-            },
-            {
-              "strategy": "flag",
-              "value": [
-                "--num_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--min_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--max_speakers",
-                {
-                  "validator": "\\d+"
-                }
-              ]
             }
           ]
         },
@@ -169,7 +138,7 @@
           ]
         },
         {
-          "name": "sidecar/whisper-stream",
+          "name": "binaries/whisper.cpp/bin/whisper-stream",
           "sidecar": true,
           "args": [
             "-m",
@@ -186,10 +155,10 @@
       ]
     },
     {
-      "identifier": "shell:allow-spawn",
+      "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "sidecar/whisper-cli",
+          "name": "binaries/whisper.cpp/bin/whisper-cli",
           "sidecar": true,
           "args": [
             "-m",
@@ -208,37 +177,6 @@
             "-of",
             {
               "validator": "\\S+"
-            }
-          ]
-        },
-        {
-          "name": "sidecar/diarize-cli",
-          "sidecar": true,
-          "args": [
-            "--audio",
-            {
-              "validator": "\\S+"
-            },
-            "--output",
-            {
-              "validator": "\\S+"
-            },
-            {
-              "strategy": "flag",
-              "value": [
-                "--num_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--min_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--max_speakers",
-                {
-                  "validator": "\\d+"
-                }
-              ]
             }
           ]
         },
@@ -295,7 +233,7 @@
           ]
         },
         {
-          "name": "sidecar/whisper-stream",
+          "name": "binaries/whisper.cpp/bin/whisper-stream",
           "sidecar": true,
           "args": [
             "-m",

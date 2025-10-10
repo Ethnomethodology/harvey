@@ -21,14 +21,28 @@ sudo apt-get install -y \
     wget \
     file \
     libssl-dev \
+    libglib2.0-dev \
     libgtk-3-dev \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libsoup-3.0-dev \
-    libwebkit2gtk-4.1-dev
+    libwebkit2gtk-4.1-dev \
+    nasm \
+    yasm
 ```
 
-## 2. Building the Application
+## 2. Python Virtual Environment
+
+The application backend creates and manages a self-contained Python virtual environment (`harvey_env`) within the app's configuration directory. This environment is used for running tasks that rely on Python libraries, such as audio processing and document conversion.
+
+Core dependencies are installed automatically by the application on first launch or when required. Key libraries include:
+- `torch` and `torchaudio` for audio processing.
+- `pyannote.audio` for speaker diarization.
+- `pypandoc_binary` for document conversion.
+
+No manual Python setup is required by the user, as the application handles the creation and management of this environment.
+
+## 3. Building the Application
 
 After installing the dependencies inside the build environment, you can build the Tauri application:
 

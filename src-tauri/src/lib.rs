@@ -1,9 +1,10 @@
 // src-tauri/src/lib.rs
+use tauri::Manager;
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
-use tauri::{Manager}; // Ensure Manager is used for app.handle()
+// use tauri::{Manager}; // Ensure Manager is used for app.handle()
 use tauri_plugin_global_shortcut::{
     self, // Keep or remove 'self' based on preference for qualification
     Code, // For Shortcut::new(..., Code::F7)
@@ -29,6 +30,11 @@ pub struct DownloadCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
 // Define state for managing transcription cancellation flags
 #[derive(Default)]
 pub struct TranscriptionCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
+
+// Define state for managing translation cancellation flags
+#[derive(Default)]
+pub struct TranslationCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
+
 
 // Define state for managing live transcription
 #[derive(Default)]
@@ -56,6 +62,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(DownloadCancellationState::default())
         .manage(TranscriptionCancellationState::default())
+        .manage(TranslationCancellationState::default())
         .manage(projectview::transcription_commands::LiveTranscriptionState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -149,10 +156,24 @@ pub fn run() {
             welcome::commands::save_download_location,
             welcome::commands::get_download_location,
             welcome::commands::get_downloaded_models,
+            welcome::commands::get_local_translation_models,
             welcome::commands::delete_model,
             welcome::commands::download_model_command,
+            welcome::commands::download_translation_model_command,
             welcome::commands::cancel_download_command,
             welcome::commands::change_download_location_and_move_models,
+            welcome::commands::get_platform_info,
+            welcome::commands::check_python_libraries_installed,
+            welcome::commands::install_python_libraries,
+            welcome::python_env::delete_virtual_env,
+            welcome::python_env::list_venv_lib_contents, // Temp diagnostic command
+            welcome::hf_auth::check_hf_auth_status,
+            welcome::hf_auth::save_hf_auth_token,
+            welcome::diarization::check_diarization_model_access,
+            welcome::diarization::download_diarization_model,
+            welcome::diarization::delete_diarization_model,
+            welcome::diarization::get_diarization_cache_path,
+            welcome::status::check_config_status,
             
             welcome::commands::get_theme_preference,
             welcome::commands::set_theme_preference,
@@ -200,6 +221,11 @@ pub fn run() {
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,
+            
+            // --- Project view TRANSLATION commands ---
+            projectview::translation_commands::translate_transcript_command,
+            projectview::translation_commands::cancel_translation_command,
+
 
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,

@@ -18,3 +18,11 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /e2e-tests/screenshots/
+/notebooks/
+/harvey-sidecars/
+/src-tauri/binaries/
+/src-tauri/python/
+/src-tauri/SDL2-src/
+/src-tauri/third_party_libs/
+
+

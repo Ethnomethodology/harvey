@@ -3,25 +3,6 @@ use std::{env, fs, io, path::{Path, PathBuf}, process::Command};
 use sha2::{Digest, Sha256};
 use hex;
 
-/// Finds a file by name in a directory and its subdirectories.
-fn find_file_in_dir(dir: &Path, file_name: &str) -> Option<PathBuf> {
-    if !dir.is_dir() {
-        return None;
-    }
-    for entry in fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(found) = find_file_in_dir(&path, file_name) {
-                return Some(found);
-            }
-        } else if path.file_name().map_or(false, |name| name == file_name) {
-            return Some(path);
-        }
-    }
-    None
-}
-
 fn download_file(url: &str, dest_path: &Path) {
     println!("cargo:info=Downloading from {} to {}...", url, dest_path.display());
     let status = Command::new("curl")
@@ -70,10 +51,134 @@ fn main() {
         }
     };
 
+    // --- FFmpeg handling for macOS, Linux, and Windows ---
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        let ffmpeg_built_path = manifest_dir.join("binaries").join("ffmpeg");
+        let profile = env::var("PROFILE").unwrap();
+
+        // We build ffmpeg if:
+        // 1. It's a release build (e.g., `tauri build`).
+        // 2. It's a debug build AND the ffmpeg libraries don't already exist.
+        if profile == "release" || !ffmpeg_built_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and libraries are missing"
+            };
+            println!("cargo:info=Building FFmpeg from source (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("build-ffmpeg.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute build-ffmpeg.sh script");
+
+            if !status.success() {
+                panic!("ffmpeg build script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping FFmpeg build: libraries already exist for dev build.");
+        }
+    }
+
+    // --- Python Bundling ---
+    let python_bundle_path = manifest_dir.join("python");
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        let profile = env::var("PROFILE").unwrap();
+        // We bundle Python if:
+        // 1. It's a release build.
+        // 2. It's a debug build AND the python directory doesn't already exist.
+        if profile == "release" || !python_bundle_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and python bundle is missing"
+            };
+            println!("cargo:info=Bundling self-contained Python (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("bundle-python.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute bundle-python.sh script");
+
+            if !status.success() {
+                panic!("Python bundling script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping Python bundling: python directory already exists for dev build.");
+        }
+    }
+
+    // --- whisper.cpp handling for macOS, Linux, and Windows ---
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        let whisper_built_path = manifest_dir.join("binaries").join("whisper.cpp");
+        let profile = env::var("PROFILE").unwrap();
+
+        // We build whisper.cpp if:
+        // 1. It's a release build (e.g., `tauri build`).
+        // 2. It's a debug build AND the whisper.cpp binaries don't already exist.
+        if profile == "release" || !whisper_built_path.exists() {
+            let reason = if profile == "release" {
+                "release build"
+            } else {
+                "dev build and binaries are missing"
+            };
+            println!("cargo:info=Building whisper.cpp from source (reason: {})...", reason);
+
+            let script_path = manifest_dir.join("scripts").join("build-whisper.sh");
+            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
+
+            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
+            let status = Command::new(command)
+                .arg(&script_path)
+                .status()
+                .expect("Failed to execute build-whisper.sh script");
+
+            if !status.success() {
+                panic!("whisper.cpp build script failed with exit code: {}", status);
+            }
+        } else {
+            println!("cargo:info=Skipping whisper.cpp build: binaries already exist for dev build.");
+        }
+    }
+
+    // --- Copy Python scripts to target/debug/scripts for development ---
+    let scripts_source_dir = manifest_dir.join("scripts");
+    let scripts_target_dir = manifest_dir.join("target").join(env::var("PROFILE").unwrap()).join("scripts");
+    fs::create_dir_all(&scripts_target_dir).expect("Failed to create target scripts directory");
+
+    let python_scripts_to_copy = vec![
+        "convert_with_pandoc.py",
+        // Add other Python scripts that are directly invoked by Rust code if any
+    ];
+
+    for script_name in python_scripts_to_copy {
+        let source_path = scripts_source_dir.join(script_name);
+        let dest_path = scripts_target_dir.join(script_name);
+        if source_path.exists() {
+            fs::copy(&source_path, &dest_path).expect(&format!("Failed to copy {} to {}", source_path.display(), dest_path.display()));
+            println!("cargo:info=Copied {} to {}", source_path.display(), dest_path.display());
+        } else {
+            println!("cargo:warning=Python script {} not found at {}", script_name, source_path.display());
+        }
+    }
+
     // --- Binaries from harvey-sidecars repo ---
     let harvey_repo = "dipanjan92/harvey-sidecars";
     let harvey_tag = "v0.2.0";
-    let harvey_binaries = ["diarize-cli", "ffmpeg", "whisper-cli", "whisper-stream"];
+    // Exclude ffmpeg if we are building it from source
+    let harvey_binaries = if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        vec![]
+    } else {
+        vec!["ffmpeg"]
+    };
 
     for binary_name in &harvey_binaries {
         let final_binary_name = format!("{}-{}{}", binary_name, target, extension);
@@ -109,72 +214,6 @@ fn main() {
             Command::new("chmod").arg("+x").arg(&dest_path).status().expect("Failed to make binary executable");
         }
     }
-
-    // --- Pandoc from official repo ---
-    let pandoc_final_name = format!("pandoc-{}{}", target, extension);
-    let pandoc_dest_path = sidecar_dir.join(&pandoc_final_name);
-    if !pandoc_dest_path.exists() {
-        let pandoc_asset_part = match target.as_str() {
-            "aarch64-apple-darwin" => "arm64-macOS",
-            "x86_64-apple-darwin" => "x86_64-macOS",
-            "x86_64-pc-windows-msvc" => "windows-x86_64",
-            "aarch64-pc-windows-msvc" => "windows-arm64",
-            "x86_64-unknown-linux-gnu" => "linux-amd64",
-            "aarch64-unknown-linux-gnu" => "linux-arm64",
-            _ => "",
-        };
-
-
-        if !pandoc_asset_part.is_empty() {
-            let pandoc_release_url = "https://api.github.com/repos/jgm/pandoc/releases/latest";
-            let pandoc_release_json = Command::new("curl").args(&["-sL", pandoc_release_url]).output().expect("Failed to fetch Pandoc release info");
-            let pandoc_release_str = String::from_utf8_lossy(&pandoc_release_json.stdout);
-            let pandoc_tag = pandoc_release_str
-                .lines()
-                .find(|line| line.contains("\"tag_name\""))
-                .and_then(|line| line.split(':').nth(1))
-                .map(|value| value.trim().trim_matches(|c| c == '"' || c == ','))
-                .unwrap_or("3.2.1"); // Fallback tag
-
-            let archive_extension = if target.contains("linux") { "tar.gz" } else { "zip" };
-            let pandoc_asset_name = format!("pandoc-{}-{}.{}", pandoc_tag, pandoc_asset_part, archive_extension);
-            let pandoc_url = format!("https://github.com/jgm/pandoc/releases/download/{}/{}", pandoc_tag, pandoc_asset_name);
-            let archive_path = temp_dir.join(&pandoc_asset_name);
-
-            download_file(&pandoc_url, &archive_path);
-
-            println!("cargo:info=Extracting {}...", archive_path.display());
-            let extract_status = if archive_extension == "zip" {
-                Command::new("unzip")
-                    .args(&["-o", &archive_path.to_string_lossy(), "-d", &temp_dir.to_string_lossy()])
-                    .status()
-            } else { // tar.gz
-                Command::new("tar")
-                    .args(&["-xzf", &archive_path.to_string_lossy(), "-C", &temp_dir.to_string_lossy()])
-                    .status()
-            };
-
-            let status = extract_status.expect("Failed to start extraction command");
-
-            if !status.success() {
-                panic!("Failed to extract pandoc archive: {}. Extraction exit code: {}", archive_path.display(), status);
-            }
-
-            let search_filename = format!("pandoc{}", extension);
-            if let Some(found_path) = find_file_in_dir(&temp_dir, &search_filename) {
-                fs::rename(&found_path, &pandoc_dest_path).expect("Failed to move pandoc binary");
-            } else {
-                println!("cargo:warning=Could not find pandoc in the extracted archive.");
-            }
-        }
-    }
-    
-    if !target.contains("windows") {
-        if pandoc_dest_path.exists() {
-            Command::new("chmod").arg("+x").arg(&pandoc_dest_path).status().expect("Failed to make pandoc executable");
-        }
-    }
-
 
     // Clean up
     fs::remove_dir_all(&temp_dir).expect("Failed to remove temp directory");

@@ -83,6 +83,9 @@ import {
     clearTranscriptState,
     markTranscriptAsSaved,
     prepareForNewTranscription, // Import the function directly
+    setTranslationStatus,
+    toggleTranslateModal,
+    updateTranslationProgress,
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -342,6 +345,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
+                    let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
@@ -352,15 +356,22 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
                         absolutePath = `${base}/${rel}`;
+                        if (!name) { // If name is not provided by backend, derive from relativePath
+                            name = t.relativePath.split(/[\\/]/).pop();
+                        }
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
                         console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                            name = t.relativePath;
+                        }
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
                         relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code // Pass the language code
+                        language_code: t.language_code, // Pass the language code
+                        name: name // Add the name property
                     };
                 });
               }
@@ -470,6 +481,7 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
               if (node.file_type === 'media' && node.transcripts) {
                  node.transcripts = node.transcripts.map(t => {
                     let absolutePath = null;
+                    let name = t.name; // Preserve existing name if available
                     if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
@@ -480,15 +492,22 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
                         absolutePath = `${base}/${rel}`;
+                        if (!name) { // If name is not provided by backend, derive from relativePath
+                            name = t.relativePath.split(/[\\/]/).pop();
+                        }
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
                         console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
+                            name = t.relativePath;
+                        }
                     }
                     return {
                         path: absolutePath, // This will be null if construction failed
                         relativePath: t.relativePath, // Always preserve the original relativePath
-                        language_code: t.language_code // Pass the language code
+                        language_code: t.language_code, // Pass the language code
+                        name: name // Add the name property
                     };
                 });
               }
@@ -1127,6 +1146,9 @@ export async function handleConfirmStartTranscription(transcriptionMode) {
         }
         const backendJobId = initiatedPayload.job_id;
 
+        // Immediately set the job ID in the store
+        transcriptStore.update(ts => ({ ...ts, transcriptionJobId: backendJobId }));
+
         // Step 2: Update status to 'running' with the actual job ID from the backend.
         setTranscriptionStatus(true, backendJobId, { // Pass the backendJobId
             status: 'running',
@@ -1262,15 +1284,30 @@ export async function convertAndSaveTranscriptAsDoc() {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
         finalLexicalJsonString = fullLexicalTableString;
-        const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => { const mediaName = selectedMedia.name; return mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; })();
-        const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`;
-        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
-        const targetFullPath = await invoke('get_unique_document_path', { projectBaseDirStr: projectBaseDir, baseName: docFilenameBase, extension: 'json' });
-        const docFilename = await basename(targetFullPath);
+                const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
+                console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
+                const originalTranscriptStem = originalTranscriptFilename.includes('.')
+                    ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
+                    : originalTranscriptFilename; // e.g., "20130922_1"
+                console.debug(`[ProjectService] originalTranscriptStem: ${originalTranscriptStem}`);
+            
+                // The base name for the new document file will be the original transcript's stem
+                const docFilenameBase = originalTranscriptStem; // Use the original stem
+                console.debug(`[ProjectService] docFilenameBase: ${docFilenameBase}`);
+            
+                // Construct the full target directory path for the new document
+                // This should be projectBaseDir/HARVEY_FILES_DIR/DOCS_DIR_NAME/originalTranscriptStem
+                const targetDocumentDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem}`;
+                console.debug(`[ProjectService] targetDocumentDir: ${targetDocumentDir}`);
+            
+                project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+            
+                const targetFullPath = await invoke('get_unique_document_path', {
+                    targetDirStr: targetDocumentDir, // Pass the correctly constructed target directory
+                    baseName: docFilenameBase,
+                    extension: 'json'
+                });
+                console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`);        const docFilename = await basename(targetFullPath);
         await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
@@ -1959,5 +1996,84 @@ export async function renameTableHeader(tablePath, oldHeader, newHeader) {
         const errorMessage = error.message || String(error);
         await message(`Error renaming header: ${errorMessage}`, { title: 'Rename Header Error', type: 'error' });
         throw error;
+    }
+}
+
+export let translationProgressListenerInitialized = false;
+export let translationProgressUnlistenFn = null;
+
+export async function initializeTranslationProgressListener() {
+    if (translationProgressListenerInitialized) return;
+    try {
+        translationProgressUnlistenFn = await listen('TRANSLATION_PROGRESS', (event) => {
+            const payload = event.payload;
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            updateTranslationProgress(payload);
+        });
+        translationProgressListenerInitialized = true;
+    } catch (e) {
+        console.error("[ProjectService] Failed to initialize translation progress listener:", e);
+    }
+}
+
+export async function requestTranslation(transcriptPath, modelName) {
+    const currentProject = get(project);
+    const ts = get(transcriptStore);
+
+    if (ts.isTranslating) {
+        toggleTranslateModal(true);
+        return;
+    }
+
+    if (!currentProject.xmlPath) {
+        await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
+        return;
+    }
+
+    setTranslationStatus(true, null, { status: 'initiating' });
+
+    try {
+        const initiatedPayload = await invoke('translate_transcript_command', {
+            projectXmlPath: currentProject.xmlPath,
+            transcriptPath,
+            modelName: modelName,
+            targetLanguage: ts.selectedLanguage,
+        });
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id for translation.");
+        }
+
+        setTranslationStatus(true, initiatedPayload.job_id, { status: 'running' });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        setTranslationStatus(false, null, { status: 'error', errorMessage });
+        console.error(`[ProjectService] Error during translate_transcript_command invocation:`, error);
+    }
+}
+
+export async function handleCancelTranslationRequest() {
+    const ts = get(transcriptStore);
+    const jobId = ts.translationJobId;
+
+    if (!jobId || !ts.isTranslating) {
+        console.warn("[ProjectService] No active translation job to cancel.");
+        return;
+    }
+
+    transcriptStore.update(s => ({ ...s, translationJobStatus: 'cancelling' }));
+
+    try {
+        await invoke('cancel_translation_command', { jobId });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        transcriptStore.update(s => ({
+            ...s,
+            translationJobStatus: 'error',
+            translationErrorMessage: `Failed to send cancel request: ${errorMessage}`
+        }));
+        notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
 }

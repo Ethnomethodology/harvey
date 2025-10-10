@@ -11,6 +11,7 @@
     handleRenameConfirm,
     handleRenameCancel
   } from './actions.js';
+  import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
   import ProjectList from './ProjectList.svelte';
   import RenameModal from './RenameModal.svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
@@ -115,8 +116,9 @@
   // --- Tab Switching Handler ---
   function switchTab(tabName) {
     activeTab = tabName;
-    // Reset status message when switching tabs? Optional.
-    // statusMessage = '';
+    if (tabName === 'configure') {
+      updateConfigStatus();
+    }
   }
 </script>
 
@@ -137,10 +139,16 @@
       </a>
       <a
         href=""
-        class="px-3 py-2 rounded-md {activeTab === 'configure' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm"
+        class="px-3 py-2 rounded-md {activeTab === 'configure' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm flex items-center justify-between"
         on:click|preventDefault={() => switchTab('configure')}
       >
-        Configure
+        <span>Configure</span>
+        {#if !$configStatus.python_libraries_installed || !$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="h-4 w-4 text-red-500" viewBox="0 0 16 16">
+            <path d="M6.95.435c.58-.58 1.52-.58 2.1 0l6.515 6.516c.58.58.58 1.519 0 2.098L9.05 15.565c-.58.58-1.519.58-2.098 0L.435 9.05a1.48 1.48 0 0 1 0-2.098zm1.4.7a.495.495 0 0 0-.7 0L1.134 7.65a.495.495 0 0 0 0 .7l6.516 6.516a.495.495 0 0 0 .7 0l6.516-6.516a.495.495 0 0 0 0-.7L8.35 1.134z"/>
+            <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0M7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/>
+          </svg>
+        {/if}
       </a>
       <a
         href=""
@@ -196,8 +204,25 @@
       <!-- For demonstration, we'll just show a simple About text -->
       <div class="flex-grow overflow-y-auto bg-white p-6 rounded-lg border border-gray-200 shadow-inner">
         <h2 class="text-lg font-semibold mb-4 text-gray-700 border-b border-gray-200 pb-2">About Harvey</h2>
-        <p class="text-gray-600">Harvey is a desktop application for local audio/video transcription with speaker diarization. Version 0.1.</p>
-        <!-- Add more about info here if needed -->
+
+        <p class="text-gray-600 mb-2">Harvey is a desktop application for qualitative researchers and anyone working with multimedia content. It streamlines the research workflow by integrating a powerful suite of tools into a single, cohesive environment:</p>
+        <ul class="list-disc list-inside text-gray-600 mb-2 pl-4">
+            <li><strong>Transcribe</strong> audio and video with local AI models.</li>
+            <li><strong>Translate</strong> transcripts into English.</li>
+            <li><strong>Edit</strong> and <strong>annotate</strong> transcripts, documents, PDFs, and images.</li>
+            <li><strong>Manage</strong> all your project files in one place.</li>
+        </ul>
+        <p class="text-gray-600 mb-2">Harvey is named in honor of Sociologist <a href="https://emcawiki.net/bibtex/browser.php?author=Harvey+Sacks&bib=emca.bib" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline"><strong>Harvey Sacks</strong></a> (1935-1975), whose foundational work revolutionized social research methods.</p>
+        <h4 class="text-md font-semibold mt-4 mb-2 text-gray-700">Privacy First</h4>
+        <p class="text-gray-600 mb-2">Privacy is the core of Harvey's design. All core AI functionalities, like transcription and diarization (speaker identification), run <strong>100% locally</strong> on your computer. You download the AI models once and can use them forever offline. Your data never leaves your device.</p>
+        <blockquote class="border-l-4 border-gray-300 pl-4 italic text-gray-600 mb-4">It's an application built <em>by researchers, for researchers</em>.</blockquote>
+      </div>
+      <div class="flex-shrink-0 mt-auto text-center py-4">
+        <p class="text-gray-600">
+            <a href="https://github.com/Ethnomethodology/harvey" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Harvey</a>
+            <span class="mx-1">•</span>
+            <a href="https://github.com/Ethnomethodology/harvey/blob/main/LICENSE.md" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">MIT License</a>
+        </p>
       </div>
     {/if}
   </div>

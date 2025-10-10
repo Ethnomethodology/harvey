@@ -11,7 +11,9 @@ pub mod table_handler;
 pub mod image_handler;
 pub mod transcription_handler; // For imported transcripts
 pub mod pdf_annotation_handler; // ADDED
+pub mod translation_commands;
 pub mod local_handler;
+
 
 pub mod export_handler;
 pub mod shared_types;
@@ -20,6 +22,7 @@ pub mod db_handler;
 pub mod waveform_utils;
 pub mod lexical_highlight_handler;
 pub mod tag_handler;
+pub mod utils;
 
 // Re-export specific commands if needed, for now, direct paths are used in lib.rs
 // Example: pub use core_commands::load_project_data;

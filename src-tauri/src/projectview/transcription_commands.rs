@@ -5,9 +5,10 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter}; // Removed ShellExt from here
+use tauri::{AppHandle, Emitter, Runtime}; // Removed ShellExt from here
 use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
+use crate::projectview::utils::{get_ffmpeg_path, get_ffprobe_path};
 use serde::Deserialize; // Added for FFProbeOutput
 use chrono::Utc; // Added for timestamps
 // use uuid::Uuid; // Removed unused import
@@ -300,7 +301,7 @@ pub fn create_lexical_table_from_segments(segments: &[TranscriptSegment]) -> Jso
 
 
 #[tauri::command]
-pub async fn trim_media( app_handle: AppHandle, original_media_path: String, start_time: f64, end_time: f64) -> Result<Vec<FileEntry>, CommandError> {
+pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_path: String, start_time: f64, end_time: f64) -> Result<Vec<FileEntry>, CommandError> {
     info!("[Trim Backend] Start: Path='{}', Start={:.3}, End={:.3}", original_media_path, start_time, end_time);
     let original_path = PathBuf::from(&original_media_path);
 
@@ -359,6 +360,8 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
     let output_media_path = output_media_subdir.join(&output_filename);
     let output_media_path_str = output_media_path.to_string_lossy().to_string();
 
+    let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
+
     let args: Vec<String> = vec![
         "-i".into(),
         original_media_path.clone(),
@@ -376,10 +379,10 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
         output_media_path_str.clone(),
     ];
 
-    info!("[Trim Backend] FFmpeg Cmd: ffmpeg {}", args.join(" "));
+    info!("[Trim Backend] FFmpeg Cmd: {:?} {}", ffmpeg_path, args.join(" "));
     let shell_scope = app_handle.shell();
     let (mut rx, _child) = shell_scope
-        .sidecar("ffmpeg")?
+        .command(ffmpeg_path)
         .args(args)
         .spawn()?;
 
@@ -486,7 +489,8 @@ pub async fn trim_media( app_handle: AppHandle, original_media_path: String, sta
         ];
 
         info!("[Trim Backend] Running ffprobe for new trimmed media: {}", output_media_path.display());
-        match app_handle.shell().sidecar("ffprobe").expect("ffprobe sidecar not configured").args(ffprobe_args).output().await {
+    let ffprobe_path = get_ffprobe_path(&app_handle)?;
+    match app_handle.shell().command(ffprobe_path).args(ffprobe_args).output().await {
             Ok(output) => {
                 if output.status.success() {
                     let ffprobe_json_str = String::from_utf8_lossy(&output.stdout).to_string();
@@ -1034,8 +1038,8 @@ pub struct TranscriptionJobCompletedPayload { // Made pub
 }
 
 #[tauri::command]
-pub async fn transcribe_media_command(
-    app_handle: AppHandle,
+pub async fn transcribe_media_command<R: Runtime>(
+    app_handle: AppHandle<R>,
     payload: TranscribeMediaPayload,
     cancel_state: tauri::State<'_, crate::TranscriptionCancellationState>, // Added
 ) -> Result<TranscriptionInitiatedPayload, CommandError> {
@@ -1569,8 +1573,8 @@ fn align_speakers_to_translated_segments(
 
 // Adapted from local_handler/transcription.rs
 // Omitting cancel_flag for now
-pub(crate) async fn convert_to_wav_if_needed_cmd(
-    app_handle: &AppHandle,
+pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
+    app_handle: &AppHandle<R>,
     input_path_str: &str,
     job_id: &str,
     media_filename_for_progress: &str,
@@ -1604,6 +1608,8 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
     // Using emit_progress_cmd from this file
     let _ = emit_progress_cmd(app_handle, job_id, 2.0, &format!("Converting {} to WAV...", media_filename_for_progress))?;
 
+    let ffmpeg_path = get_ffmpeg_path(app_handle)?;
+
     let args: Vec<String> = vec![
         "-i".into(), input_path_str.to_string(),
         "-vn".into(),
@@ -1617,7 +1623,7 @@ pub(crate) async fn convert_to_wav_if_needed_cmd(
 
     let shell_scope = app_handle.shell();
     let (mut rx, child) = shell_scope
-        .sidecar("ffmpeg")?
+        .command(ffmpeg_path)
         .args(args)
         .spawn()?;
     debug!("[FFmpeg CMD][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
@@ -1782,8 +1788,8 @@ pub(crate) fn resolve_whisper_model_path_cmd(
 // --- START: Adapted Helper Functions for execute_transcription_pass ---
 
 // Adapted from local_handler/transcription.rs
-async fn run_whisper_cpp_sidecar_cmd(
-    app_handle: &AppHandle,
+async fn run_whisper_cpp_sidecar_cmd<R: Runtime>(
+    app_handle: &AppHandle<R>,
     media_path: &str, // Should be wav_media_path.to_string_lossy().to_string()
     whisper_model_path_str: &str,
     language: &str,
@@ -1824,20 +1830,25 @@ async fn run_whisper_cpp_sidecar_cmd(
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
 
-    loop {
-        if cancel_flag.load(AtomicOrdering::Relaxed) {
-            warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process...", job_id);
-            let _ = child.kill();
-            if expected_whisper_json_output_path.exists() {
-                if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
-                    warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
-                } else {
-                    info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
-                }
-            }
-            return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
-        }
+    let shared_child = Arc::new(Mutex::new(Some(child)));
+    let cancel_flag_clone = cancel_flag.clone();
+    let shared_child_clone_for_cancel = shared_child.clone();
+    let job_id_clone = job_id.to_string();
 
+    tokio::spawn(async move {
+        loop {
+            if cancel_flag_clone.load(AtomicOrdering::Relaxed) {
+                warn!("[Whisper CPP CMD][{}] Cancellation requested. Killing process from spawned task...", job_id_clone);
+                if let Some(child_to_kill) = shared_child_clone_for_cancel.lock().await.take() {
+                    let _ = child_to_kill.kill();
+                }
+                break;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    });
+
+    loop {
         tokio::select! {
             biased;
             maybe_event = rx.recv() => {
@@ -1858,10 +1869,20 @@ async fn run_whisper_cpp_sidecar_cmd(
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                // Continue to check cancel_flag
+        }
+    }
+
+    // Check cancel_flag one last time after loop exits to ensure consistent error reporting
+    if cancel_flag.load(AtomicOrdering::Relaxed) {
+        warn!("[Whisper CPP CMD][{}] Process terminated due to cancellation. Returning cancellation error.", job_id);
+        if expected_whisper_json_output_path.exists() {
+            if let Err(e) = fs::remove_file(expected_whisper_json_output_path) {
+                warn!("[Whisper CPP CMD][{}] Failed to remove partial JSON output {:?}: {}", job_id, expected_whisper_json_output_path, e);
+            } else {
+                info!("[Whisper CPP CMD][{}] Removed partial JSON output {:?}", job_id, expected_whisper_json_output_path);
             }
         }
+        return Err(CommandError::from(format!("Whisper C++ process cancelled for job {}.", job_id)));
     }
 
     if process_error.is_some() || exit_code != Some(0) {
@@ -1957,8 +1978,8 @@ fn parse_whisper_json_cmd(json_path: &Path) -> Result<Vec<TranscriptSegment>, Co
 }
 
 // Adapted from local_handler/transcription.rs
-async fn run_diarize_cli_sidecar_cmd(
-    app_handle: &AppHandle,
+async fn run_diarize_cli_sidecar_cmd<R: Runtime>(
+    app_handle: &AppHandle<R>,
     media_path: &str, // wav_media_path.to_string_lossy().to_string()
     num_speakers: usize,
     output_rttm_path: &Path,
@@ -2115,8 +2136,8 @@ fn merge_diarization_results_cmd(whisper_segments: &mut Vec<TranscriptSegment>, 
 
 // --- END: Adapted Helper Functions ---
 
-pub(crate) async fn execute_transcription_pass(
-    app_handle: &AppHandle,
+pub(crate) async fn execute_transcription_pass<R: Runtime>(
+    app_handle: &AppHandle<R>,
     wav_media_path_str: &str, // Changed to &str to match caller
     model_path: &str,
     language_code: &str,
@@ -2230,8 +2251,8 @@ pub(crate) async fn execute_transcription_pass(
 
 
 // Helper to emit progress
-pub(crate) fn emit_progress_cmd(
-    app_handle: &AppHandle,
+pub(crate) fn emit_progress_cmd<R: Runtime>(
+    app_handle: &AppHandle<R>,
     job_id: &str,
     percent: f32,
     message: &str,

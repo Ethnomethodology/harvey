@@ -48,7 +48,9 @@ export async function getDownloadedModels() {
   try {
 	const models = await invoke('get_downloaded_models');
 	console.log("Retrieved downloaded models from backend:", models);
-	return Array.isArray(models) ? models : [];
+	// Filter out translation models (e.g., those starting with 'Helsinki-NLP/opus-mt-')
+	const transcriptionModels = Array.isArray(models) ? models.filter(model => !model.name.startsWith('Helsinki-NLP/opus-mt-')) : [];
+	return transcriptionModels;
   } catch (error) {
 	console.error("Error invoking get_downloaded_models:", error);
 	return [];
@@ -122,6 +124,81 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 	} catch (error) {
 		console.error(`Error invoking change_download_location_and_move_models to ${newLocation}:`, error);
 		throw new Error(`Failed to move models/update location: ${error?.message || error}`);
+	}
+}
+
+// --- Translation Model Actions ---
+export async function downloadTranslationModel(from, to, downloadLocation, modelName = null) {
+  let to_lang = to;
+  if (to === 'ja') {
+    to_lang = 'jap';
+  }
+  const model_name = modelName || `Helsinki-NLP/opus-mt-${from}-${to_lang}`;
+  const modelInfo = {
+    name: model_name,
+    download_url: `https://huggingface.co/${model_name}`
+  };
+  if (!downloadLocation || downloadLocation.trim() === '') {
+    const errorMsg = `Download location is not set. Cannot download translation model.`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+  console.log(`Attempting to download translation model: ${model_name} to ${downloadLocation}`);
+  try {
+    await invoke('download_translation_model_command', {
+      modelInfo: modelInfo,
+      downloadLocation: downloadLocation
+    });
+    console.log(`Download command invoked for translation model: ${model_name}`);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking download_translation_model_command for ${model_name}:`, error);
+    throw new Error(`Failed to start translation model download: ${error?.message || error}`);
+  }
+}
+
+export async function deleteTranslationModel(model) {
+  console.log(`Attempting to delete translation model: ${model.name}`);
+  try {
+    if (!model?.name) {
+      const errorMsg = `Cannot delete translation model without a name.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    // This uses the same backend `delete_model` command, which is fine as it just deletes the folder.
+    await invoke('delete_model', { modelToDelete: model });
+    console.log("Translation model deletion command invoked:", model.name);
+    return true;
+  } catch (error) {
+    console.error(`Error invoking delete_model for translation model ${model.name}:`, error);
+    throw new Error(`Failed to delete translation model: ${error?.message || error}`);
+  }
+}
+
+export async function cancelTranslationModelDownload(modelName) {
+	if (!modelName) {
+		console.error("Cannot cancel download without a model name.");
+		return;
+	}
+	console.log(`Requesting cancellation for translation model: ${modelName}`);
+	try {
+        // This uses the same backend `cancel_download_command`, which is fine as it works by model name.
+		await invoke('cancel_download_command', { modelName: modelName });
+		console.log(`Cancellation command invoked for ${modelName}.`);
+	} catch (error) {
+		console.error(`Error invoking cancel_download_command for ${modelName}:`, error);
+		throw new Error(`Failed to request download cancellation: ${error?.message || error}`);
+	}
+}
+
+export async function getLocalTranslationModels() {
+	try {
+		const models = await invoke('get_local_translation_models');
+		console.log("Retrieved local translation models from backend:", models);
+		return Array.isArray(models) ? models : [];
+	} catch (error) {
+		console.error("Error invoking get_local_translation_models:", error);
+		return [];
 	}
 }
 

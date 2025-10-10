@@ -44,16 +44,16 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "sidecar/whisper-cli",
-      "sidecar/diarize-cli",
-      "sidecar/pandoc",
-      "sidecar/ffmpeg",
-      "sidecar/whisper-stream"
+      "binaries/whisper.cpp/bin/whisper-cli",
+      "binaries/whisper.cpp/bin/whisper-stream"
     ],
     "licenseFile": "../LICENSE.md",
     "license": "MIT",
     "resources": [
-      "third_party_licenses"
+      "third_party_licenses",
+      "scripts/*",
+      "binaries",
+      "python"
     ]
   }
 }

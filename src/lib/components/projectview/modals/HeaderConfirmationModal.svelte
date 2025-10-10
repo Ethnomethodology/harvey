@@ -13,6 +13,13 @@
 	let modalElement;
 
 	function handleConfirm() {
+		if (!tablePath) {
+			// Optionally, show a warning to the user that tablePath is missing
+			console.error("[HeaderConfirmationModal] Cannot confirm: tablePath is missing.");
+			// message("Cannot confirm: Table path is missing. Please report this bug.", { title: "Error", type: "error" });
+			closeModal(); // Close the modal anyway to prevent further issues
+			return;
+		}
 		dispatch('confirm', { hasHeaders });
 		closeModal();
 	}
