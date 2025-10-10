@@ -1186,7 +1186,41 @@ listen('translation_job_completed', async (event) => {
             try {
                 const service = await import('../services/projectService.js');
                 if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
+                    console.log('[TranscriptStore] Refreshing project files to update transcript associations after translation.');
                     await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+
+                    // After refreshing project files, re-select the media to ensure transcriptStore is updated
+                    // with the newly available translated transcript.
+                    const latestProjectStore = get(projectMainStore);
+                    const allFiles = latestProjectStore.files;
+                    const mediaPath = currentStore.selectedMediaFile.path;
+
+                    let updatedMediaFile = null;
+
+                    function findMediaNodeByPath(nodes, path) {
+                        if (!Array.isArray(nodes)) return null;
+                        for (const node of nodes) {
+                            if (node.path === path && node.file_type === 'media' && !node.is_directory) {
+                                return node;
+                            }
+                            if (node.children && node.children.length > 0) {
+                                const found = findMediaNodeByPath(node.children, path);
+                                if (found) {
+                                    return found;
+                                }
+                            }
+                        }
+                        return null;
+                    }
+
+                    updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
+
+                    if (updatedMediaFile) {
+                        console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
+                        selectMedia(updatedMediaFile);
+                    } else {
+                        console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
+                    }
                 }
             } catch (e) {
                 console.error('[TranscriptStore] Error refreshing project files after translation completion:', e);
