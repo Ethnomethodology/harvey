@@ -101,8 +101,9 @@ pub async fn translate_transcript_command(
     let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to resolve script path: {}", e))?;
 
-    let input_text = texts_to_translate.join("\n");
-    info!("[Translate] Input text to Python script: \n{}", input_text);
+    let input_json = serde_json::to_string(&texts_to_translate)
+        .map_err(|e| format!("Failed to serialize input text to JSON: {}", e))?;
+    info!("[Translate] Input JSON to Python script: \n{}", input_json);
 
     let output = app_handle.shell().command(python_path.to_string_lossy().to_string())
         .args(&[
@@ -110,7 +111,7 @@ pub async fn translate_transcript_command(
             "--model-path".to_string(),
             model_path.to_string_lossy().to_string(),
             "--text".to_string(),
-            input_text,
+            input_json,
         ])
         .output()
         .await
@@ -125,7 +126,8 @@ pub async fn translate_transcript_command(
     let translated_output = String::from_utf8_lossy(&output.stdout);
     info!("[Translate] Translated output from Python script: \n{}", translated_output);
 
-    let translated_texts: Vec<String> = translated_output.lines().map(|s| s.to_string()).collect();
+    let translated_texts: Vec<String> = serde_json::from_str(&translated_output)
+        .map_err(|e| format!("Failed to deserialize translated text from JSON: {}", e))?;
 
     if translated_texts.len() != texts_to_translate.len() {
         return Err(format!("Translation count mismatch. Expected {}, got {}.", texts_to_translate.len(), translated_texts.len()));

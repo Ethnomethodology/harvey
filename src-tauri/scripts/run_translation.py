@@ -1,6 +1,7 @@
 # src-tauri/scripts/run_translation.py
 import argparse
 import sys
+import json
 from transformers import MarianMTModel, MarianTokenizer
 
 def translate_line(text, model, tokenizer):
@@ -14,7 +15,7 @@ def translate_line(text, model, tokenizer):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Translate text using a local MarianMT model.")
     parser.add_argument("--model-path", required=True, help="Path to the local MarianMT model directory.")
-    parser.add_argument("--text", required=True, help="Text to translate.")
+    parser.add_argument("--text", required=True, help="A JSON string of a list of text segments to translate.")
 
     args = parser.parse_args()
 
@@ -24,11 +25,11 @@ if __name__ == "__main__":
         model = MarianMTModel.from_pretrained(args.model_path)
         sys.stderr.write("[Python Debug] Model and tokenizer loaded.\n")
 
-        lines = args.text.split('\n')
-        translated_lines = [translate_line(line, model, tokenizer) for line in lines]
+        segments = json.loads(args.text)
+        translated_segments = [translate_line(segment, model, tokenizer) for segment in segments]
 
-        final_output = "\n".join(translated_lines)
-        sys.stderr.write(f"[Python Debug] Final translated output:\n{final_output}\n")
+        final_output = json.dumps(translated_segments, ensure_ascii=False)
+        sys.stderr.write(f"[Python Debug] Final translated JSON output:\n{final_output}\n")
 
         print(final_output)
 
