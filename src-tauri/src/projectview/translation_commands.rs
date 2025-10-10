@@ -125,15 +125,15 @@ pub async fn translate_transcript_command<R: Runtime>(
     let cancel_flag = Arc::new(AtomicBool::new(false));
     cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
 
-    let _cancel_guard = CancelGuard {
-        job_id: job_id.clone(),
-        state: Arc::clone(&cancel_state.0),
-    };
-
     let app_handle_clone = app_handle.clone();
     let job_id_clone = job_id.clone();
+    let cancel_state_for_spawn = cancel_state.inner().0.clone(); // Clone the inner Arc<DashMap> directly
 
     tokio::spawn(async move {
+        let _cancel_guard = CancelGuard {
+            job_id: job_id_clone.clone(),
+            state: cancel_state_for_spawn,
+        };
         let completion_payload = match run_translation_process(
             app_handle_clone,
             job_id_clone.clone(),
@@ -231,7 +231,7 @@ async fn run_translation_process<R: Runtime>(
         .map_err(|e| CommandError::from(format!("Failed to resolve script path: {}", e)))?;
     let input_json = serde_json::to_string(&texts_to_translate)?;
 
-    let mut python_args: Vec<String> = vec![
+    let python_args: Vec<String> = vec![
         script_path.to_string_lossy().to_string(),
         "--model-path".to_string(),
         model_path.to_string_lossy().to_string(),
@@ -295,17 +295,20 @@ async fn run_translation_process<R: Runtime>(
             }
             _ = tokio::time::sleep(std::time::Duration::from_millis(50)) => {
                 if cancel_flag.load(AtomicOrdering::Relaxed) && !cancellation_initiated {
-                    warn!("[Translate Python CMD][{}] Cancellation requested. Killing Python process...", job_id);
+                    debug!("[Translate Python CMD][{}] Cancellation flag is true. Attempting to kill Python process.", job_id);
                     if let Some(child_to_kill) = shared_child.lock().await.take() {
                         let _ = child_to_kill.kill();
+                        debug!("[Translate Python CMD][{}] child.kill() called.", job_id);
                     }
                     cancellation_initiated = true;
+                    debug!("[Translate Python CMD][{}] cancellation_initiated set to true.", job_id);
                     // Do not return here, continue the loop to wait for Terminated event
                 }
             }
         }
     }
 
+    debug!("[Translate Python CMD][{}] Loop broken. Checking cancellation status.", job_id);
     if cancellation_initiated {
         warn!("[Translate Python CMD][{}] Process terminated due to cancellation. Returning cancellation error.", job_id);
         return Err(CommandError::from(format!("Translation cancelled for job {}.", job_id)));
