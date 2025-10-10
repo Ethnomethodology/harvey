@@ -1,59 +1,91 @@
 <script>
 	import { createEventDispatcher, onMount } from 'svelte';
-	import Dropdown from '$lib/components/shared/Dropdown.svelte'; // Import the Dropdown component
+	import { invoke } from '@tauri-apps/api/core';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	export let showModal = false;
 	export let availableTranscripts = [];
 
 	const dispatch = createEventDispatcher();
 
-	let fromLanguage = 'en';
-	let toLanguage = 'ja';
-    let selectedTranscript = '';
+	let selectedTranscript = '';
+	let localModels = [];
+	let modelOptions = [];
+	let selectedModel = '';
 
-	const languageOptions = [
+	// Temporary list of languages for formatting model names.
+	// In a real scenario, this might come from a shared config.
+	const languages = [
 		{ value: 'en', label: 'English' },
 		{ value: 'ja', label: 'Japanese' },
 	];
 
-    let transcriptOptions = [];
+	function formatModelDisplayName(modelName) {
+		const parts = modelName.split('/');
+		if (parts.length === 2) {
+			const langParts = parts[1].split('-');
+			if (langParts.length >= 3 && langParts[0] === 'opus' && langParts[1] === 'mt') {
+				const fromCode = langParts[langParts.length - 2];
+				const toCode = langParts[langParts.length - 1];
 
-    $: {
-        console.log("availableTranscripts", availableTranscripts);
-        console.log("selectedTranscript before", selectedTranscript);
-        // Reactively update transcriptOptions when availableTranscripts changes
-        if (availableTranscripts.length > 0) {
-            transcriptOptions = availableTranscripts.map(t => ({
-                value: t.relativePath,
-                label: t.name || t.relative_path
-            }));
-            console.log("transcriptOptions", transcriptOptions);
-            const isSelectedTranscriptValid = availableTranscripts.some(t => t.relative_path === selectedTranscript);
-            console.log("isSelectedTranscriptValid", isSelectedTranscriptValid);
-            // If selectedTranscript is not set or is no longer valid, set it to the first actual transcript
-if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
-                console.log("Resetting selectedTranscript");
-                selectedTranscript = availableTranscripts[0].relativePath;
-            }
-        } else {
-            transcriptOptions = [];
-            selectedTranscript = '';
-        }
-        console.log("selectedTranscript after", selectedTranscript);
-    }
+				const fromLang = languages.find(lang => lang.value === fromCode);
+				const toLang = languages.find(lang => lang.value === toCode);
 
-    onMount(() => {
-        console.log("DEBUG: TranslateModal received transcripts:", availableTranscripts);
-        // Initial selection logic is now handled reactively by the $: block
-    });
+				if (fromLang && toLang) {
+					return `${fromLang.label} to ${toLang.label}`;
+				}
+			}
+		}
+		return modelName;
+	}
+
+	let transcriptOptions = [];
+
+	$: {
+		if (availableTranscripts.length > 0) {
+			transcriptOptions = availableTranscripts.map(t => ({
+				value: t.relativePath,
+				label: t.name || t.relativePath
+			}));
+			if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
+				selectedTranscript = availableTranscripts[0].relativePath;
+			}
+		} else {
+			transcriptOptions = [];
+			selectedTranscript = '';
+		}
+	}
+
+	$: {
+		if (localModels.length > 0) {
+			modelOptions = localModels.map(model => ({
+				value: model.name,
+				label: formatModelDisplayName(model.name)
+			}));
+			if (!selectedModel || !localModels.some(m => m.name === selectedModel)) {
+				selectedModel = localModels[0]?.name || '';
+			}
+		} else {
+			modelOptions = [];
+			selectedModel = '';
+		}
+	}
+
+	onMount(async () => {
+		try {
+			localModels = await invoke('get_local_translation_models');
+		} catch (e) {
+			console.error("Failed to fetch local translation models:", e);
+			// Optionally, show an error to the user in the modal
+		}
+	});
 
 	function handleConfirm() {
-		// TODO: Implement actual translation logic
-		console.log(`Start translation for ${selectedTranscript} from ${fromLanguage} to ${toLanguage}`);
-        console.log("availableTranscripts in handleConfirm", availableTranscripts);
-        const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
-        console.log("selectedTranscriptObject", selectedTranscriptObject);
-		dispatch('confirm', { transcript: selectedTranscriptObject, from: fromLanguage, to: toLanguage });
+		const selectedTranscriptObject = availableTranscripts.find(t => t.relativePath === selectedTranscript);
+		dispatch('confirm', {
+			transcript: selectedTranscriptObject,
+			model: selectedModel,
+		});
 	}
 
 	function handleClose() {
@@ -61,10 +93,10 @@ if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === se
 	}
 
 	function handleKeydown(event) {
-        if (event.key === 'Escape') {
-            handleClose();
-        }
-    }
+		if (event.key === 'Escape') {
+			handleClose();
+		}
+	}
 </script>
 
 {#if showModal}
@@ -87,7 +119,7 @@ if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === se
             <div class="space-y-4 mb-6">
                 {#if availableTranscripts.length === 0}
                     <p class="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md">
-                        No transcripts found for the selected media file. Please generate a transcript first.
+                        No transcripts found. Please generate a transcript first.
                     </p>
                 {:else}
                     <div class="space-y-1">
@@ -96,36 +128,27 @@ if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === se
                             containerClasses="w-full"
                             options={transcriptOptions}
                             bind:value={selectedTranscript}
-                            placeholder={availableTranscripts.length === 0 ? "No Transcripts Available" : "Select a Transcript"}
+                            placeholder="Select a Transcript"
                             disabled={availableTranscripts.length === 0}
                         />
                     </div>
                 {/if}
 
                 <div class="space-y-1">
-                    <label for="fromLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translate From:</label>
+                    <label for="modelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translation Model:</label>
                     <Dropdown
                         containerClasses="w-full"
-                        options={languageOptions}
-                        bind:value={fromLanguage}
-                        on:change={(e) => fromLanguage = e.detail}
-                    />
-                </div>
-
-                <div class="space-y-1">
-                    <label for="toLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translate To:</label>
-                    <Dropdown
-                        containerClasses="w-full"
-                        options={languageOptions}
-                        bind:value={toLanguage}
-                        on:change={(e) => toLanguage = e.detail}
+                        options={modelOptions}
+                        bind:value={selectedModel}
+                        placeholder={localModels.length === 0 ? "No Models Downloaded" : "Select a Model"}
+                        disabled={localModels.length === 0}
                     />
                 </div>
             </div>
 
             <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button class="btn-secondary" on:click={handleClose}>Cancel</button>
-                <button class="btn-primary" on:click={handleConfirm} disabled={availableTranscripts.length === 0 || !selectedTranscript}>
+                <button class="btn-primary" on:click={handleConfirm} disabled={availableTranscripts.length === 0 || !selectedTranscript || !selectedModel}>
                     Start Translation
                 </button>
             </div>

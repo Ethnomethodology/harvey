@@ -194,9 +194,9 @@ fn main() {
     let harvey_tag = "v0.2.0";
     // Exclude ffmpeg if we are building it from source
     let harvey_binaries = if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
-        vec!["translator-sidecar"]
+        vec![]
     } else {
-        vec!["ffmpeg", "translator-sidecar"]
+        vec!["ffmpeg"]
     };
 
     for binary_name in &harvey_binaries {

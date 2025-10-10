@@ -45,8 +45,7 @@
     ],
     "externalBin": [
       "binaries/whisper.cpp/bin/whisper-cli",
-      "binaries/whisper.cpp/bin/whisper-stream",
-      "sidecar/translator-sidecar"
+      "binaries/whisper.cpp/bin/whisper-stream"
     ],
     "licenseFile": "../LICENSE.md",
     "license": "MIT",

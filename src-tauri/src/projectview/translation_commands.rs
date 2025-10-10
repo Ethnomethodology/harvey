@@ -1,12 +1,13 @@
-
-use tauri::{command, AppHandle};
+use tauri::{command, AppHandle, Manager};
 use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::CommandEvent;
+use std::io::Write;
 use std::fs;
 use serde_json::{Value, json};
 use log::{info, error};
 use super::transcription_commands::save_transcript_json;
 use crate::welcome::config::{read_config, get_default_download_location};
+use crate::welcome::python_env::get_python_path;
+use tauri_plugin_shell::process::CommandEvent;
 
 // Helper to extract plain text from a Lexical JSON structure.
 fn extract_plain_text_from_lexical(node: &Value) -> String {
@@ -51,28 +52,24 @@ fn create_lexical_with_text(text: &str) -> Value {
     })
 }
 
-
-
 #[command]
 pub async fn translate_transcript_command(
     app_handle: AppHandle,
     project_xml_path: String,
     transcript_path: String,
     model_name: String,
-    target_lang: String
 ) -> Result<String, String> {
-    info!("[Translate JS] Starting translation for transcript: {}", transcript_path);
+    info!("[Translate] Starting translation for transcript: {}", transcript_path);
 
-    // Get custom model download location from config
     let config = read_config().map_err(|e| e.to_string())?;
     let download_location = if !config.download_location.trim().is_empty() {
         config.download_location.clone()
     } else {
-        get_default_download_location().map_err(|e| e.to_string())? 
+        get_default_download_location().map_err(|e| e.to_string())?
     };
-    info!("[Translate JS] Using model cache directory: {}", download_location);
+    let model_path = std::path::Path::new(&download_location).join(&model_name);
+    info!("[Translate] Using model path: {}", model_path.display());
 
-    // 1. Read transcript and extract text segments
     let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
     let mut lexical_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
@@ -85,44 +82,43 @@ pub async fn translate_transcript_command(
     } else { Vec::new() };
 
     if texts_to_translate.is_empty() {
-        info!("[Translate JS] No text found to translate.");
+        info!("[Translate] No text found to translate.");
         return Ok(transcript_path);
     }
 
-    // 2. Execute sidecar script for translation
-    info!("[Translate JS] Using model: {}", &model_name);
+    let python_path = get_python_path().map_err(|e| e.to_string())?;
+    let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
+        .ok_or("Failed to resolve script path".to_string())?;
 
-    let (mut rx, mut child) = app_handle.shell().sidecar("translator-sidecar")
-        .map_err(|e| format!("Failed to create sidecar command: {}. This is a packaging issue.", e))? 
-        .args([&model_name, &download_location])
+    let (mut rx, mut child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+        .args(&[
+            script_path.to_string_lossy().to_string(),
+            "--model-path".to_string(),
+            model_path.to_string_lossy().to_string(),
+        ])
         .spawn()
-        .map_err(|e| format!("Failed to spawn sidecar: {}. The sidecar executable may be missing or have permission issues.", e))?;
+        .map_err(|e| format!("Failed to spawn Python script: {}", e))?;
 
     let input_text = texts_to_translate.join("\n");
-    child.write(input_text.as_bytes()).map_err(|e| e.to_string())?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(input_text.as_bytes()).map_err(|e| e.to_string())?;
+    }
 
-    // 3. Read translated texts from sidecar stdout
-    let mut translated_texts = Vec::new();
-    let mut buffer = String::new();
+    let mut translated_output = String::new();
+    let mut stderr_output = String::new();
     let mut exit_code = None;
 
     while let Some(event) = rx.recv().await {
         match event {
-            CommandEvent::Stdout(line_bytes) => {
-                let line = String::from_utf8_lossy(&line_bytes).to_string();
-                if line == "---END_OF_TRANSLATION---" {
-                    translated_texts.push(buffer.trim_end().to_string());
-                    buffer.clear();
-                } else {
-                    buffer.push_str(&line);
-                    buffer.push('\n');
-                }
+            CommandEvent::Stdout(bytes) => {
+                translated_output.push_str(&String::from_utf8_lossy(&bytes));
             }
-            CommandEvent::Stderr(line) => {
-                error!("[Translate JS Sidecar Stderr] {}", String::from_utf8_lossy(&line));
+            CommandEvent::Stderr(bytes) => {
+                let line = String::from_utf8_lossy(&bytes);
+                error!("[Translate Python Stderr] {}", line);
+                stderr_output.push_str(&line);
             }
             CommandEvent::Terminated(payload) => {
-                info!("[Translate JS] Sidecar process terminated with payload: {:?}", payload);
                 exit_code = payload.code;
                 break;
             }
@@ -131,15 +127,15 @@ pub async fn translate_transcript_command(
     }
 
     if exit_code.is_none() || exit_code != Some(0) {
-        error!("[Translate JS] Sidecar process exited with non-zero status or was terminated.");
-        return Err("Sidecar process failed. Check application logs for errors from the sidecar.".to_string());
+        return Err(format!("Translation script failed with exit code {:?}: {}", exit_code, stderr_output));
     }
+
+    let translated_texts: Vec<String> = translated_output.lines().map(|s| s.to_string()).collect();
 
     if translated_texts.len() != texts_to_translate.len() {
-        return Err(format!("Translation count mismatch. Expected {}, got {}. Instead, got {}.", texts_to_translate.len(), translated_texts.len(), translated_texts.join(", ")));
+        return Err(format!("Translation count mismatch. Expected {}, got {}.", texts_to_translate.len(), translated_texts.len()));
     }
 
-    // 4. Reconstruct the new transcript JSON
     if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
         if let Some(rows) = table_node.get_mut("children").and_then(|c| c.as_array_mut()) {
             for (row, translated_text) in rows.iter_mut().skip(1).zip(translated_texts.iter()) {
@@ -157,12 +153,12 @@ pub async fn translate_transcript_command(
         }
     }
 
-    // 5. Save the new transcript file
+    let target_lang = model_name.split('-').last().unwrap_or("trans");
     let new_path = transcript_path.replace(".json", &format!(".{}.json", target_lang));
     let new_content = serde_json::to_string_pretty(&lexical_json).map_err(|e| e.to_string())?;
     fs::write(&new_path, &new_content).map_err(|e| e.to_string())?;
 
-    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang))
+    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang.to_string()))
         .await
         .map_err(|e| format!("[Translate] Failed to register translated transcript: {}", e))?;
 
