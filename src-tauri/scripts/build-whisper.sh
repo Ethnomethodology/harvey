@@ -227,8 +227,14 @@ elif [ "$OS" = "Linux" ]; then
     make -j"${CPU_COUNT}"
     make install
 elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
-    # For Windows, the GitHub workflow uses -G "Unix Makefiles" and specific linker flags
-    CMAKE_WINDOWS_FLAGS="-G \"Unix Makefiles\" -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_FLAGS=\"std=c++17\" -DCMAKE_EXE_LINKER_FLAGS=\"static -static-libgcc -static-libstdc++\""
+    # Check if we are cross-compiling for arm64
+    if [ "$TARGET_ARCH" = "arm64" ]; then
+        echo "Configuring whisper.cpp for Windows ARM64 cross-compilation..."
+        CMAKE_WINDOWS_FLAGS="-G \"Unix Makefiles\" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_RC_COMPILER=llvm-windres -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_FLAGS='-target aarch64-w64-mingw32' -DCMAKE_CXX_FLAGS='-target aarch64-w64-mingw32'"
+    else
+        echo "Configuring whisper.cpp for Windows x64 native compilation..."
+        CMAKE_WINDOWS_FLAGS="-G \"Unix Makefiles\" -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_CXX_FLAGS=\"std=c++17\" -DCMAKE_EXE_LINKER_FLAGS=\"static -static-libgcc -static-libstdc++\""
+    fi
     cmake .. ${CMAKE_COMMON_FLAGS} -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" -DCMAKE_PREFIX_PATH="${SDL2_DIR_ENV}" ${CMAKE_WINDOWS_FLAGS}
     make -j"${CPU_COUNT}"
     make install

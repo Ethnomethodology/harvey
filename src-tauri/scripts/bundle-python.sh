@@ -20,9 +20,11 @@ elif [ "$OS" = "Linux" ]; then
     if [ "$ARCH" = "aarch64" ]; then TARGET_PLATFORM="aarch64-unknown-linux-gnu"; fi
     if [ "$ARCH" = "x86_64" ]; then TARGET_PLATFORM="x86_64-unknown-linux-gnu"; fi
 elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
-    if [ "$ARCH" = "x86_64" ]; then
+    # In the CI environment, TARGET_ARCH is set. Locally, we fall back to uname.
+    CURRENT_ARCH=${TARGET_ARCH:-$(uname -m)}
+    if [ "$CURRENT_ARCH" = "x86_64" ]; then
         TARGET_PLATFORM="x86_64-pc-windows-msvc"
-    elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+    elif [ "$CURRENT_ARCH" = "arm64" ] || [ "$CURRENT_ARCH" = "aarch64" ]; then
         TARGET_PLATFORM="aarch64-pc-windows-msvc"
     fi
 fi

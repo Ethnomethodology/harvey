@@ -65,8 +65,8 @@ jobs:
         run: |
           brew install yasm pkg-config nasm cmake
 
-      - name: Set up MSYS2 and install Windows build dependencies
-        if: matrix.os == 'windows-latest'
+      - name: Set up MSYS2 (MINGW64 for x64)
+        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -77,6 +77,24 @@ jobs:
             mingw-w64-x86_64-yasm
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
+
+      - name: Set up MSYS2 (CLANG64 for arm64 cross-compile)
+        if: matrix.os == 'windows-latest' && matrix.arch == 'arm64'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            make
+            mingw-w64-clang-x86_64-toolchain
+            mingw-w64-clang-x86_64-lld
+            mingw-w64-clang-aarch64-pkg-config
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-libiconv
+
+      - name: Set TARGET_ARCH for build scripts
+        if: matrix.os == 'windows-latest'
+        run: echo "TARGET_ARCH=${{ matrix.arch }}" >> $GITHUB_ENV
 
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
@@ -92,13 +110,25 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      - name: Build Tauri application
+      - name: Build Tauri application (macOS)
+        if: matrix.os == 'macos-latest'
         env:
           TAURI_SKIP_SIGNING: "true"
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
-          
+
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
+
+      - name: Build Tauri application (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          TAURI_SKIP_SIGNING: "true"
+        shell: msys2 {0}
+        run: |
+          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
+          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
+
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
       - name: Upload build artifact
