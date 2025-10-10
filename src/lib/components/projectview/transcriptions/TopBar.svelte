@@ -427,7 +427,7 @@
     on:confirm={(e) => {
         console.log('Translation confirmed:', e.detail);
         isTranslateModalOpen = false;
-        requestTranslation(e.detail.transcript.path, e.detail.from, e.detail.to);
+        requestTranslation(e.detail.transcript.path, e.detail.model, get(transcriptStore).selectedLanguage);
     }}
 />
 

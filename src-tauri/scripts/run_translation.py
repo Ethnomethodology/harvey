@@ -12,9 +12,11 @@ def translate(text, model_path):
         model_path (str): The local file path to the pre-trained MarianMT model directory.
     """
     try:
+        sys.stderr.write(f"[Python Debug] Starting translation with model: {model_path}\n")
         # Load the tokenizer and model from the specified local path
         tokenizer = MarianTokenizer.from_pretrained(model_path)
         model = MarianMTModel.from_pretrained(model_path)
+        sys.stderr.write("[Python Debug] Model and tokenizer loaded.\n")
 
         # The transformers pipeline handles tokenization, generation, and decoding.
         # It's better to handle batching for longer texts if necessary.
@@ -29,6 +31,7 @@ def translate(text, model_path):
 
         # Decode the tokens into a string
         translated_text = tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
+        sys.stderr.write(f"[Python Debug] Translated text: {translated_text}\n")
 
         # Print the final translated text to standard output
         print(translated_text)
@@ -46,6 +49,7 @@ if __name__ == "__main__":
 
     # Read the entire text to be translated from standard input
     text_to_translate = sys.stdin.read()
+    sys.stderr.write(f"[Python Debug] Received text to translate (first 100 chars): {text_to_translate[:100]}\n")
 
     if not text_to_translate.strip():
         # Handle cases where input is empty or just whitespace

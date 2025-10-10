@@ -1993,21 +1993,24 @@ export async function renameTableHeader(tablePath, oldHeader, newHeader) {
     }
 }
 
-export async function requestTranslation(transcriptPath, fromLanguage, toLanguage) {
+export async function requestTranslation(transcriptPath, modelName) {
     const currentProject = get(project);
-    const projectXmlPath = currentProject.xmlPath;
+    console.log(`[ProjectService] requestTranslation: projectXmlPath = ${currentProject.xmlPath}`);
+    console.log(`[ProjectService] requestTranslation: transcriptPath = ${transcriptPath}`);
+    console.log(`[ProjectService] requestTranslation: modelName = ${modelName}`);
+    console.log(`[ProjectService] requestTranslation: targetLanguage = ${get(transcriptStore).selectedLanguage}`);
 
-    if (!projectXmlPath) {
+    if (!currentProject.xmlPath) {
         await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
         return;
     }
 
     try {
         const newTranscriptPath = await invoke('translate_transcript_command', {
-            projectXmlPath: projectXmlPath,
+            projectXmlPath: currentProject.xmlPath,
             transcriptPath,
-            sourceLang: fromLanguage,
-            targetLang: toLanguage,
+            modelName: modelName,
+            targetLanguage: get(transcriptStore).selectedLanguage,
         });
         await refreshProjectFiles(newTranscriptPath);
         await loadTranscriptFile(newTranscriptPath);

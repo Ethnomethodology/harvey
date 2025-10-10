@@ -51,12 +51,14 @@ fn create_lexical_with_text(text: &str) -> Value {
     })
 }
 
-#[command]
+#[tauri::command]
 pub async fn translate_transcript_command(
     app_handle: AppHandle,
+    window: tauri::Window,
     project_xml_path: String,
     transcript_path: String,
     model_name: String,
+    target_language: String,
 ) -> Result<String, String> {
     info!("[Translate] Starting translation for transcript: {}", transcript_path);
 
@@ -86,6 +88,7 @@ pub async fn translate_transcript_command(
     }
 
     let python_path = get_python_path().map_err(|e| e.to_string())?;
+    info!("[Translate] Using Python path: {}", python_path.display());
     let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to resolve script path: {}", e))?;
 
@@ -99,6 +102,7 @@ pub async fn translate_transcript_command(
         .map_err(|e| format!("Failed to spawn Python script: {}", e))?;
 
     let input_text = texts_to_translate.join("\n");
+    info!("[Translate] Input text to Python script: \n{}", input_text);
     child.write(input_text.as_bytes())
         .map_err(|e| format!("Failed to write to stdin: {}", e))?;
 
@@ -123,6 +127,8 @@ pub async fn translate_transcript_command(
             _ => {}
         }
     }
+
+    info!("[Translate] Translated output from Python script: \n{}", translated_output);
 
     if exit_code.is_none() || exit_code != Some(0) {
         return Err(format!("Translation script failed with exit code {:?}: {}", exit_code, stderr_output));
@@ -155,6 +161,8 @@ pub async fn translate_transcript_command(
     let new_path = transcript_path.replace(".json", &format!(".{}.json", target_lang));
     let new_content = serde_json::to_string_pretty(&lexical_json).map_err(|e| e.to_string())?;
     fs::write(&new_path, &new_content).map_err(|e| e.to_string())?;
+
+    info!("[Translate] New translated transcript path: {}", new_path);
 
     save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang.to_string()))
         .await
