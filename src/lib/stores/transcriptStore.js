@@ -1130,6 +1130,71 @@ listen('custom_transcription_job_completed', async (event) => {
     }
 });
 
+
+listen('translation_job_completed', async (event) => {
+    if (!event.payload) return;
+    const { jobId, status, originalTranscriptPath, newTranscriptPath, errorMessage } = event.payload;
+    const currentStore = get(transcriptStore);
+
+    if (currentStore.isTranslating && jobId === currentStore.translationJobId) {
+        const wasModalVisibleAtEventTime = currentStore.showTranslateModal;
+        const wasJobRunInBackground = currentStore.ranTranslationInBackground;
+        const shouldShowToastNotification = wasJobRunInBackground || !wasModalVisibleAtEventTime;
+
+        let finalProgressMessage = '';
+        const updatePayload = {};
+
+        switch (status) {
+            case 'done':
+                finalProgressMessage = "Translation successful";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "success", 0);
+                }
+                updatePayload.translationJobStatus = 'done';
+                updatePayload.translationErrorMessage = null;
+                updatePayload.isTranslating = false;
+                break;
+            case 'error':
+                finalProgressMessage = `Translation failed: ${errorMessage || 'Unknown error'}`;
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "error", 0);
+                }
+                updatePayload.translationJobStatus = 'error';
+                updatePayload.translationErrorMessage = errorMessage;
+                updatePayload.isTranslating = false;
+                break;
+            case 'cancelled':
+                finalProgressMessage = "Translation cancelled";
+                if (shouldShowToastNotification) {
+                    notificationManager.add(finalProgressMessage, "info", 0);
+                }
+                updatePayload.translationJobStatus = 'cancelled';
+                updatePayload.translationErrorMessage = null;
+                updatePayload.isTranslating = false;
+                break;
+            default:
+                console.warn(`[TranscriptStore] Unknown status in translation_job_completed: ${status}`);
+                return;
+        }
+
+        updatePayload.showTranslateModal = shouldShowToastNotification ? false : true;
+        updatePayload.translationProgress = { ...currentStore.translationProgress, message: finalProgressMessage };
+
+        transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
+
+        if (status === 'done') {
+            try {
+                const service = await import('../services/projectService.js');
+                if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
+                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
+                }
+            } catch (e) {
+                console.error('[TranscriptStore] Error refreshing project files after translation completion:', e);
+            }
+        }
+    }
+});
+
 export function setTranslateToEnglish(value) {
     transcriptStore.update(ts => {
         if (ts.translateToEnglish !== !!value) {

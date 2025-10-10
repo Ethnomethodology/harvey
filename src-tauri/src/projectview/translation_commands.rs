@@ -8,15 +8,8 @@ use super::transcription_commands::save_transcript_json;
 use crate::welcome::config::{read_config, get_default_download_location, CommandError};
 use crate::welcome::python_env::get_python_path;
 use dashmap::DashMap;
+use crate::TranslationCancellationState;
 
-
-// --- State for managing translation cancellations ---
-pub struct TranslationCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
-impl Default for TranslationCancellationState {
-    fn default() -> Self {
-        Self(Arc::new(DashMap::new()))
-    }
-}
 
 // --- CancelGuard for ensuring cleanup ---
 struct CancelGuard {
