@@ -44,16 +44,15 @@ def translate(text, model_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Translate text using a local MarianMT model.")
     parser.add_argument("--model-path", required=True, help="Path to the local MarianMT model directory.")
+    parser.add_argument("--text", required=True, help="Text to translate.")
 
     args = parser.parse_args()
 
-    # Read the entire text to be translated from standard input
-    text_to_translate = sys.stdin.read()
+    text_to_translate = args.text
     sys.stderr.write(f"[Python Debug] Received text to translate (first 100 chars): {text_to_translate[:100]}\n")
 
     if not text_to_translate.strip():
         # Handle cases where input is empty or just whitespace
-        # The calling Rust code should ideally prevent this, but it's good practice.
         print("", end="")
         sys.exit(0)
 

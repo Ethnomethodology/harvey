@@ -26,7 +26,9 @@ sudo apt-get install -y \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libsoup-3.0-dev \
-    libwebkit2gtk-4.1-dev
+    libwebkit2gtk-4.1-dev \
+    nasm \
+    yasm
 ```
 
 ## 2. Python Virtual Environment

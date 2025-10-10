@@ -6,8 +6,6 @@ use log::{info, error};
 use super::transcription_commands::save_transcript_json;
 use crate::welcome::config::{read_config, get_default_download_location};
 use crate::welcome::python_env::get_python_path;
-use tauri_plugin_shell::process::CommandEvent;
-
 // Helper to extract plain text from a Lexical JSON structure.
 fn extract_plain_text_from_lexical(node: &Value) -> String {
     let mut text = String::new();
@@ -92,47 +90,29 @@ pub async fn translate_transcript_command(
     let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to resolve script path: {}", e))?;
 
-    let (mut rx, mut child) = app_handle.shell().command(python_path.to_string_lossy().to_string())
+    let input_text = texts_to_translate.join("\n");
+    info!("[Translate] Input text to Python script: \n{}", input_text);
+
+    let output = app_handle.shell().command(python_path.to_string_lossy().to_string())
         .args(&[
             script_path.to_string_lossy().to_string(),
             "--model-path".to_string(),
             model_path.to_string_lossy().to_string(),
+            "--text".to_string(),
+            input_text,
         ])
-        .spawn()
-        .map_err(|e| format!("Failed to spawn Python script: {}", e))?;
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
 
-    let input_text = texts_to_translate.join("\n");
-    info!("[Translate] Input text to Python script: \n{}", input_text);
-    child.write(input_text.as_bytes())
-        .map_err(|e| format!("Failed to write to stdin: {}", e))?;
-
-    let mut translated_output = String::new();
-    let mut stderr_output = String::new();
-    let mut exit_code = None;
-
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(bytes) => {
-                translated_output.push_str(&String::from_utf8_lossy(&bytes));
-            }
-            CommandEvent::Stderr(bytes) => {
-                let line = String::from_utf8_lossy(&bytes);
-                error!("[Translate Python Stderr] {}", line);
-                stderr_output.push_str(&line);
-            }
-            CommandEvent::Terminated(payload) => {
-                exit_code = payload.code;
-                break;
-            }
-            _ => {}
-        }
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        error!("[Translate Python Stderr] {}", stderr);
+        return Err(format!("Translation script failed with exit code {:?}: {}", output.status.code(), stderr));
     }
 
+    let translated_output = String::from_utf8_lossy(&output.stdout);
     info!("[Translate] Translated output from Python script: \n{}", translated_output);
-
-    if exit_code.is_none() || exit_code != Some(0) {
-        return Err(format!("Translation script failed with exit code {:?}: {}", exit_code, stderr_output));
-    }
 
     let translated_texts: Vec<String> = translated_output.lines().map(|s| s.to_string()).collect();
 
