@@ -66,7 +66,18 @@ pub async fn translate_transcript_command(
     } else {
         get_default_download_location().map_err(|e| e.to_string())?
     };
-    let model_path = std::path::Path::new(&download_location).join(&model_name);
+    // Correctly construct the path to the Hugging Face model snapshot directory.
+    // The hf-hub library downloads models into a specific structure.
+    let model_cache_dir_name = format!("models--{}", model_name.replace('/', "--"));
+    let model_base_path = std::path::Path::new(&download_location).join(model_cache_dir_name);
+
+    let refs_path = model_base_path.join("refs/main");
+    let commit_hash = fs::read_to_string(refs_path)
+        .map_err(|e| format!("Failed to read commit hash for model '{}': {}", model_name, e))?
+        .trim()
+        .to_string();
+
+    let model_path = model_base_path.join("snapshots").join(commit_hash);
     info!("[Translate] Using model path: {}", model_path.display());
 
     let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
