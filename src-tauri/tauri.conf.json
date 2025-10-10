@@ -45,7 +45,6 @@
     ],
     "externalBin": [
       "binaries/whisper.cpp/bin/whisper-cli",
-      "sidecar/diarize-cli",
       "binaries/whisper.cpp/bin/whisper-stream",
       "sidecar/translator-sidecar"
     ],

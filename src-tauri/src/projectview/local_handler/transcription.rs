@@ -9,6 +9,7 @@ use crate::projectview::transcription_commands::{
 };
 use serde_json;
 use crate::welcome::config::{get_default_download_location, read_config, CommandError};
+use crate::welcome::python_env::get_python_path;
 
 use log::{debug, error, info, warn};
 use serde::{Deserialize}; // Removed Serialize
@@ -24,7 +25,7 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -190,9 +191,8 @@ pub async fn run_transcription<R: Runtime>(
 
     let rttm_records: Option<Vec<RttmRecord>> = if num_speakers > 0 {
         let _ = emit_progress(&app_handle, &internal_job_id, 50.0, "Running diarization...").await;
-        match run_diarize_cli_sidecar(
+        match run_python_diarization(
             &app_handle,
-            "diarize-cli",
             &wav_media_path.to_string_lossy(),
             num_speakers,
             &expected_rttm_path,
@@ -233,7 +233,7 @@ pub async fn run_transcription<R: Runtime>(
                     return Err(CommandError::from(error_message));
                  } else {
                     error!("[Transcription][LocalRun][{}] Diarization failed: {}.", internal_job_id, error_message);
-                    warn!("Ensure diarization CLI (diarize-cli) is installed and accessible (e.g., via pipx or venv).");
+                    warn!("Diarization script failed. Ensure the Python environment is correctly set up and `pyannote.audio` is installed.");
                     let _ = emit_progress(&app_handle, &internal_job_id, 85.0, "Diarization failed.").await;
                     None
                 }
@@ -569,7 +569,7 @@ async fn run_whisper_cpp_sidecar<R: Runtime>(
     Ok(expected_output_path.to_path_buf())
 }
 
-// (The rest of the file: parse_whisper_json, parse_whisper_timestamp, run_diarize_cli_sidecar, parse_rttm_file, merge_diarization_results, find_model_file, emit_progress remain unchanged from the previous version as they were correctly using internal_job_id or not using job_id at all in a way that needed changes for this specific refactor pass)
+// (The rest of the file: parse_whisper_json, parse_whisper_timestamp, run_python_diarization, parse_rttm_file, merge_diarization_results, find_model_file, emit_progress remain unchanged from the previous version as they were correctly using internal_job_id or not using job_id at all in a way that needed changes for this specific refactor pass)
 // ... (rest of the file as per previous correct version)
 fn parse_whisper_json(json_path: &Path) -> Result<Vec<TranscriptSegment>, CommandError> {
     debug!("[JSON Parse] Reading whisper output: {:?}", json_path);
@@ -629,43 +629,47 @@ fn parse_whisper_timestamp(timestamp_str: &str) -> Result<f64, String> {
     }
 }
 
-async fn run_diarize_cli_sidecar<R: Runtime>(
+async fn run_python_diarization<R: Runtime>(
     app_handle: &AppHandle<R>,
-    sidecar_name: &str,
     media_path: &str,
     num_speakers: usize,
     output_rttm_path: &Path,
     job_id: &str,
     cancel_flag: &Arc<AtomicBool>
 ) -> Result<PathBuf, CommandError> {
-    info!("[DiarizeCLI][{}] Starting diarization for: {}", job_id, media_path);
+    info!("[PyDiarize][{}] Starting diarization for: {}", job_id, media_path);
     if let Some(parent_dir) = output_rttm_path.parent() {
         fs::create_dir_all(parent_dir)?;
     } else {
         return Err(CommandError::from(format!("Could not get parent directory for RTTM output: {}", output_rttm_path.display())));
     }
 
-    let mut args = vec![
-        "--audio".into(), media_path.to_string(),
-        "--output".into(), output_rttm_path.to_string_lossy().to_string(),
-    ];
-    if num_speakers > 0 {
-        args.push("--num_speakers".into()); args.push(num_speakers.to_string());
-        args.push("--min_speakers".into()); args.push(1.to_string());
-        args.push("--max_speakers".into()); args.push(num_speakers.max(1).to_string());
-        debug!("[DiarizeCLI][{}] Using speaker count hint: [1, {}]", job_id, num_speakers.max(1));
-    } else {
-        warn!("[DiarizeCLI][{}] num_speakers=0 provided, running diarization without speaker count hints.", job_id);
-    }
+    let python_path = get_python_path().map_err(|e| CommandError::from(e.to_string()))?;
+    let script_path = app_handle
+        .path()
+        .resolve("scripts/run_diarization.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(e.to_string()))?;
 
-    debug!("[DiarizeCLI][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
+    // Read the Hugging Face token
+    let config_dir = app_handle.path().app_config_dir().map_err(|_| CommandError::from("Failed to get app config dir"))?;
+    let token_path = config_dir.join("hf_token");
+    let token = fs::read_to_string(token_path).map_err(|e| CommandError::from(format!("Failed to read Hugging Face token: {}. Please save it in the configuration.", e)))?;
+
+    let args = vec![
+        script_path.to_string_lossy().to_string(),
+        media_path.to_string(),
+        num_speakers.to_string(),
+        token,
+    ];
+
+    debug!("[PyDiarize][{}] Running script '{}' with python '{}'", job_id, script_path.display(), python_path.display());
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+    let (mut rx, child) = shell_scope.command(python_path.to_string_lossy().to_string()).args(args).spawn()
       .map_err(|e| {
-          error!("Failed to spawn {}: {}. Ensure Python environment with pyannote.audio and diarize-cli is set up (e.g., via pipx or venv) and accessible.", sidecar_name, e);
-          CommandError::from(format!("Failed to execute {} sidecar: {}. Check Python environment.", sidecar_name, e))
+          error!("Failed to spawn Python script: {}. Ensure Python environment and pyannote.audio are set up.", e);
+          CommandError::from(format!("Failed to execute Python diarization script: {}.", e))
       })?;
-    debug!("[DiarizeCLI][{}] Spawned '{}' process (PID: {:?})", job_id, sidecar_name, child.pid());
+    debug!("[PyDiarize][{}] Spawned Python process (PID: {:?})", job_id, child.pid());
 
     let mut stderr_lines: Vec<String> = Vec::new();
     let mut stdout_lines: Vec<String> = Vec::new();
@@ -674,7 +678,7 @@ async fn run_diarize_cli_sidecar<R: Runtime>(
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
-            warn!("[DiarizeCLI][{}] Cancellation requested during '{}'. Killing process...", job_id, sidecar_name);
+            warn!("[PyDiarize][{}] Cancellation requested. Killing process...", job_id);
             let _ = child.kill();
             if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
             return Err(CommandError::from("Diarization process cancelled."));
@@ -685,65 +689,53 @@ async fn run_diarize_cli_sidecar<R: Runtime>(
             maybe_event = rx.recv() => {
                 match maybe_event {
                     Some(event) => match event {
-                        CommandEvent::Stdout(line) => { let l = String::from_utf8_lossy(&line); debug!("[{}][stdout][{}] {}", sidecar_name, job_id, l.trim_end()); stdout_lines.push(l.to_string()); },
-                        CommandEvent::Stderr(line) => { let l = String::from_utf8_lossy(&line); debug!("[{}][stderr][{}] {}", sidecar_name, job_id, l.trim_end()); stderr_lines.push(l.to_string()); }
-                        CommandEvent::Error(msg) => { error!("[{}][error][{}] {}", sidecar_name, job_id, msg); process_error = Some(msg); break; }
-                        CommandEvent::Terminated(payload) => { info!("[{}][term][{}] Process terminated. Code: {:?}, Signal: {:?}", sidecar_name, job_id, payload.code, payload.signal); exit_code = payload.code; if payload.signal.is_some() && exit_code.is_none() { exit_code = Some(-1); } break; }
+                        CommandEvent::Stdout(line) => { let l = String::from_utf8_lossy(&line); stdout_lines.push(l.to_string()); },
+                        CommandEvent::Stderr(line) => { let l = String::from_utf8_lossy(&line); debug!("[PyDiarize][stderr][{}] {}", job_id, l.trim_end()); stderr_lines.push(l.to_string()); }
+                        CommandEvent::Error(msg) => { error!("[PyDiarize][error][{}] {}", job_id, msg); process_error = Some(msg); break; }
+                        CommandEvent::Terminated(payload) => { info!("[PyDiarize][term][{}] Process terminated. Code: {:?}, Signal: {:?}", job_id, payload.code, payload.signal); exit_code = payload.code; if payload.signal.is_some() && exit_code.is_none() { exit_code = Some(-1); } break; }
                         _ => {}
                     },
-                    None => { if exit_code.is_none() && process_error.is_none() { warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id); exit_code = Some(-1); } break; }
+                    None => { if exit_code.is_none() && process_error.is_none() { warn!("[PyDiarize][{}] Event channel closed unexpectedly.", job_id); exit_code = Some(-1); } break; }
                 }
             }
             _ = sleep(Duration::from_millis(100)) => { continue; }
         }
     }
 
-    let final_stdout = stdout_lines.join("\n");
+    let rttm_output = stdout_lines.join("");
     let final_stderr = stderr_lines.join("\n");
-    info!("[DiarizeCLI][{}] Sidecar '{}' finished. Code: {:?}, Error: {:?}.", job_id, sidecar_name, exit_code, process_error);
+    info!("[PyDiarize][{}] Python script finished. Code: {:?}, Error: {:?}.", job_id, exit_code, process_error);
 
-    if !final_stdout.is_empty() { debug!("[DiarizeCLI][{}] '{}' Stdout:\n{}", job_id, sidecar_name, final_stdout); }
     if !final_stderr.is_empty() {
-        if process_error.is_some() || exit_code != Some(0) { error!("[DiarizeCLI][{}] '{}' Stderr:\n{}", job_id, sidecar_name, final_stderr); }
-        else { debug!("[DiarizeCLI][{}] '{}' Stderr:\n{}", job_id, sidecar_name, final_stderr); }
+        if process_error.is_some() || exit_code != Some(0) { error!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr); }
+        else { debug!("[PyDiarize][{}] Stderr:\n{}", job_id, final_stderr); }
     }
 
     if process_error.is_some() || exit_code != Some(0) {
         let ec_str = exit_code.map_or("N/A".to_string(), |c| c.to_string());
-        let error_message = format!("Sidecar '{}' failed. Exit Code: {}. Error: {}. Stderr: {}",
-            sidecar_name, ec_str, process_error.unwrap_or_default(), final_stderr.chars().take(500).collect::<String>());
-        error!("[DiarizeCLI][{}] Error: {}", job_id, error_message);
+        let error_message = format!("Python script failed. Exit Code: {}. Error: {}. Stderr: {}",
+            ec_str, process_error.unwrap_or_default(), final_stderr.chars().take(500).collect::<String>());
+        error!("[PyDiarize][{}] Error: {}", job_id, error_message);
         if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
         return Err(CommandError::from(error_message));
     }
 
-    let mut attempts = 0;
-    while !output_rttm_path.exists() && attempts < 5 {
-        attempts += 1;
-        warn!("[DiarizeCLI][{}] Output RTTM '{:?}' not found yet, waiting {}ms (attempt {}/5)...", job_id, output_rttm_path, 200, attempts);
-        sleep(Duration::from_millis(200)).await;
-        if cancel_flag.load(Ordering::Relaxed) {
-            if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
-            return Err(CommandError::from("Cancelled while waiting for diarization output file."));
-        }
-    }
+    // Write the captured stdout (RTTM content) to the output file
+    fs::write(output_rttm_path, rttm_output)?;
 
-    if !output_rttm_path.exists() {
-        return Err(CommandError::from(format!("Sidecar '{}' completed successfully, but RTTM output file is missing: {:?}", sidecar_name, output_rttm_path)));
-    }
     match output_rttm_path.metadata() {
         Ok(m) if m.len() == 0 => {
-            warn!("[DiarizeCLI][{}] Output RTTM file exists but is empty: {:?}", job_id, output_rttm_path);
+            warn!("[PyDiarize][{}] Output RTTM file exists but is empty: {:?}", job_id, output_rttm_path);
         },
         Err(e) => {
-            error!("[DiarizeCLI][{}] Failed to get metadata for RTTM output file {}: {}", job_id, output_rttm_path.display(), e);
+            error!("[PyDiarize][{}] Failed to get metadata for RTTM output file {}: {}", job_id, output_rttm_path.display(), e);
             let _ = fs::remove_file(output_rttm_path);
             return Err(CommandError::from(format!("RTTM output file validation error: {}", e)));
         },
         Ok(_) => {}
     }
 
-    info!("[DiarizeCLI][{}] RTTM file created successfully by '{}': {:?}", job_id, sidecar_name, output_rttm_path);
+    info!("[PyDiarize][{}] RTTM file created successfully: {:?}", job_id, output_rttm_path);
     Ok(output_rttm_path.to_path_buf())
 }
 

@@ -86,37 +86,6 @@
           ]
         },
         {
-          "name": "sidecar/diarize-cli",
-          "sidecar": true,
-          "args": [
-            "--audio",
-            {
-              "validator": "\\S+"
-            },
-            "--output",
-            {
-              "validator": "\\S+"
-            },
-            {
-              "strategy": "flag",
-              "value": [
-                "--num_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--min_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--max_speakers",
-                {
-                  "validator": "\\d+"
-                }
-              ]
-            }
-          ]
-        },
-        {
           "name": "sidecar/ffmpeg",
           "sidecar": true,
           "args": [
@@ -208,37 +177,6 @@
             "-of",
             {
               "validator": "\\S+"
-            }
-          ]
-        },
-        {
-          "name": "sidecar/diarize-cli",
-          "sidecar": true,
-          "args": [
-            "--audio",
-            {
-              "validator": "\\S+"
-            },
-            "--output",
-            {
-              "validator": "\\S+"
-            },
-            {
-              "strategy": "flag",
-              "value": [
-                "--num_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--min_speakers",
-                {
-                  "validator": "\\d+"
-                },
-                "--max_speakers",
-                {
-                  "validator": "\\d+"
-                }
-              ]
             }
           ]
         },

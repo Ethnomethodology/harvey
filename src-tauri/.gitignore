@@ -8,3 +8,6 @@
 
 # Ignore ffmpeg source dependency
 /ffmpeg-src/
+
+# Ignore downloaded archives
+*.tar.gz

@@ -194,9 +194,9 @@ fn main() {
     let harvey_tag = "v0.2.0";
     // Exclude ffmpeg if we are building it from source
     let harvey_binaries = if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
-        vec!["diarize-cli", "translator-sidecar"]
+        vec!["translator-sidecar"]
     } else {
-        vec!["diarize-cli", "ffmpeg", "translator-sidecar"]
+        vec!["ffmpeg", "translator-sidecar"]
     };
 
     for binary_name in &harvey_binaries {
