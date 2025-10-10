@@ -186,7 +186,7 @@
 							id="download-location-input"
 							type="text"
 							bind:value={downloadLocation}
-							class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-white text-gray-700 cursor-default"
+							class="input w-full flex-grow"
 							readonly
 							placeholder="Set a location..."
 							title={downloadLocation || 'No location set'}
@@ -226,6 +226,9 @@
 </div>
 
 <style lang="postcss">
+	.input {
+		@apply bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500;
+	}
 	.btn-blue {
 		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
 		@apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;

@@ -2,6 +2,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
 	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import { languageMap } from '$lib/constants/languageMap.js';
 
 	export let showModal = false;
 	export let availableTranscripts = [];
@@ -13,13 +14,6 @@
 	let modelOptions = [];
 	let selectedModel = '';
 
-	// Temporary list of languages for formatting model names.
-	// In a real scenario, this might come from a shared config.
-	const languages = [
-		{ value: 'en', label: 'English' },
-		{ value: 'ja', label: 'Japanese' },
-	];
-
 	function formatModelDisplayName(modelName) {
 		const parts = modelName.split('/');
 		if (parts.length === 2) {
@@ -28,11 +22,11 @@
 				const fromCode = langParts[langParts.length - 2];
 				const toCode = langParts[langParts.length - 1];
 
-				const fromLang = languages.find(lang => lang.value === fromCode);
-				const toLang = languages.find(lang => lang.value === toCode);
+				const fromLang = languageMap.get(fromCode);
+				const toLang = languageMap.get(toCode);
 
 				if (fromLang && toLang) {
-					return `${fromLang.label} to ${toLang.label}`;
+					return `${fromLang} to ${toLang}`;
 				}
 			}
 		}

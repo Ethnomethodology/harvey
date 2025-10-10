@@ -10,11 +10,12 @@
 		cancelTranslationModelDownload
 	} from '$lib/services/configureActions';
 	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
-import notificationStore from '$lib/stores/notificationStore';
-import { get } from 'svelte/store';
-import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
-import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
-import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import notificationStore from '$lib/stores/notificationStore.js';
+	import { get } from 'svelte/store';
+	import { v4 as uuidv4 } from 'uuid'; // Import uuidv4
+	import InstallLogModal from '$lib/components/modals/InstallLogModal.svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import { languageMap } from '$lib/constants/languageMap.js';
 
 	export let downloadLocation = '';
 	export let isBusy = false;
@@ -27,6 +28,7 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	let fromLanguage = 'en';
 	let toLanguage = 'ja';
+	let modelName = '';
 
 	let showLogModal = false;
 	let modalLogs = [];
@@ -69,13 +71,16 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 							}
 						});
 			            unlistenComplete = await listen('translation-download-complete', async (event) => {
-							const modelName = event.payload;
-							downloadStatus = { ...downloadStatus, [modelName]: 'complete' };
+							const downloadedModelName = event.payload;
+							downloadStatus = { ...downloadStatus, [downloadedModelName]: 'complete' };
 							try {
 								downloadedModels = await getLocalTranslationModels();
 								await updateConfigStatus();
-							} catch (e) { console.error(`Failed to refresh models after ${modelName} completion:`, e); }
-							modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${modelName}.` }];
+							} catch (e) { console.error(`Failed to refresh models after ${downloadedModelName} completion:`, e); }
+							modalLogs = [...modalLogs, { id: uuidv4(), message: `Download complete for ${downloadedModelName}.` }];
+							if (modelName.trim() === downloadedModelName) {
+								modelName = '';
+							}
 						});
 		            unlistenError = await listen('translation-download-error', (event) => {
 				const { model_name, error_message } = event.payload;
@@ -107,6 +112,18 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 		if (isBusy) return;
 		if (!downloadLocation || downloadLocation.trim() === '') {
 			notificationStore.add('Please set a valid model download location first.', 'error');
+			return;
+		}
+
+		if (modelName.trim()) {
+			configError = '';
+			try {
+				modalLogs = [];
+				await downloadTranslationModel(null, null, downloadLocation, modelName.trim());
+			} catch (err) {
+				notificationStore.add(`Failed to start download for ${modelName}: ${err.message || err}`, 'error');
+				isDownloading = false; // Set to false on error
+			}
 			return;
 		}
 
@@ -148,16 +165,27 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
                 const fromCode = langParts[langParts.length - 2];
                 const toCode = langParts[langParts.length - 1];
 
-                const fromLang = languages.find(lang => lang.value === fromCode);
-                const toLang = languages.find(lang => lang.value === toCode);
+                const fromLang = languageMap.get(fromCode);
+                const toLang = languageMap.get(toCode);
 
                 if (fromLang && toLang) {
-                    return `${fromLang.label} to ${toLang.label} (${modelName})`;
+                    return `${fromLang} to ${toLang} (${modelName})`;
                 }
             }
         }
         return modelName; // Fallback for unexpected model name format
     }
+
+	function onModelNameInput() {
+		if (modelName.trim()) {
+			fromLanguage = null;
+			toLanguage = null;
+		}
+	}
+
+	function onLanguageSelect() {
+		modelName = '';
+	}
 </script>
 
 <div class="flex flex-col h-full">
@@ -179,6 +207,8 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 						bind:value={fromLanguage}
 						placeholder="Select language"
 						containerClasses="w-32"
+						disabled={modelName.trim() !== ''}
+						on:change={onLanguageSelect}
 					/>
 				</div>
 				<div class="flex flex-col">
@@ -189,6 +219,20 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 						bind:value={toLanguage}
 						placeholder="Select language"
 						containerClasses="w-32"
+						disabled={modelName.trim() !== ''}
+						on:change={onLanguageSelect}
+					/>
+				</div>
+				<div class="flex items-center px-2 text-sm text-gray-500">or</div>
+				<div class="flex flex-col">
+					<label for="model-name" class="block text-sm font-medium text-gray-700">Model Name</label>
+					<input
+						id="model-name"
+						type="text"
+						bind:value={modelName}
+						on:input={onModelNameInput}
+						class="input w-64"
+						placeholder="e.g. Helsinki-NLP/opus-mt-en-jap"
 					/>
 				</div>
 				<button on:click={handleDownload} class="btn-blue-small">
@@ -217,6 +261,9 @@ import Dropdown from '$lib/components/shared/Dropdown.svelte';
 </div>
 
 <style lang="postcss">
+	.input {
+		@apply bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500;
+	}
 	.btn-blue-small, .btn-delete, .btn-cancel, .btn-retry {
 		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
         @apply px-2.5 py-1 text-xs;

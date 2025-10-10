@@ -126,8 +126,12 @@ export async function moveModelsAndUpdateLocation(newLocation) {
 }
 
 // --- Translation Model Actions ---
-export async function downloadTranslationModel(from, to, downloadLocation) {
-  const model_name = `Helsinki-NLP/opus-mt-${from}-${to}`;
+export async function downloadTranslationModel(from, to, downloadLocation, modelName = null) {
+  let to_lang = to;
+  if (to === 'ja') {
+    to_lang = 'jap';
+  }
+  const model_name = modelName || `Helsinki-NLP/opus-mt-${from}-${to_lang}`;
   const modelInfo = {
     name: model_name,
     download_url: `https://huggingface.co/${model_name}`
