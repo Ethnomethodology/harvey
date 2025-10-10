@@ -11,6 +11,8 @@
 		registerTranscribeModal,
 		initializeProgressListener,
 		cleanupProgressListener,
+        initializeTranslationProgressListener,
+        handleCancelTranslationRequest,
 		importMediaFile,
 		checkUnsavedChangesThenProceed,
         importDocumentFile,
@@ -46,7 +48,9 @@
         setSelectedModel,      // <-- ADD THIS
         setSelectedLanguage,   // <-- ADD THIS
         setTranslateToEnglish, // <-- ADD THIS
-        updateSpeakerConfig    // <-- ADD THIS
+        updateSpeakerConfig,    // <-- ADD THIS
+        setTranslationStatus,
+        toggleTranslateModal,
     } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -56,6 +60,7 @@
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
 	import TranscribeConfirmModal from '$lib/components/projectview/modals/TranscribeConfirmModal.svelte';
+    import TranslateProgressModal from '$lib/components/projectview/modals/TranslateProgressModal.svelte';
     import UnsavedChangesModal from '$lib/components/projectview/modals/UnsavedChangesModal.svelte';
     import ConfirmConversionModal from '$lib/components/projectview/modals/ConfirmConversionModal.svelte';
     import ImportTranscriptSourceModal from '$lib/components/projectview/modals/ImportTranscriptSourceModal.svelte';
@@ -88,6 +93,7 @@
 	let showConfigurationModal = false;
 	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
+    let unlistenTranslationComplete = null;
     let unlistenSelectMedia = null;
 
 	// Transcription configuration data
@@ -142,6 +148,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 			console.error('[ProjectView] Mount error: Project XML path missing in URL parameters.');
 		}
 		initializeProgressListener();
+        initializeTranslationProgressListener();
 
         unlistenTranscriptionComplete = await listen('custom_transcription_job_completed', (event) => {
             if (event.payload && event.payload.status === 'done') {
@@ -160,6 +167,17 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             } else {
                 console.log('[ProjectView event_listener] Foreground job done, NOT calling clearPendingTranscriptData here (handleModalClose will).');
             }
+            }
+        });
+
+        unlistenTranslationComplete = await listen('translation_job_completed', (event) => {
+            if (event.payload && event.payload.status === 'done') {
+                const { newTranscriptPath } = event.payload;
+                silentlyRefreshProjectData(get(project).xmlPath).then(() => {
+                    if (newTranscriptPath) {
+                        loadTranscriptFile(newTranscriptPath);
+                    }
+                });
             }
         });
 
@@ -186,6 +204,9 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 		cleanupProgressListener();
         if (unlistenTranscriptionComplete) {
             unlistenTranscriptionComplete();
+        }
+        if (unlistenTranslationComplete) {
+            unlistenTranslationComplete();
         }
         if (unlistenSelectMedia) {
             unlistenSelectMedia();
@@ -900,6 +921,17 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             setRanInBackground(true);
             transcriptStore.update(ts => ({ ...ts, showTranscribeModal: false }));
         }} />
+
+    <TranslateProgressModal
+        on:cancelRequest={handleCancelTranslationRequest}
+        on:closeAndReset={() => {
+            transcriptStore.update(ts => ({ ...ts, showTranslateModal: false, translationJobStatus: null, translationErrorMessage: null, translationJobId: null, isTranslating: false, translationProgress: { percent: 0, message: '' } }));
+        }}
+        on:runInBackgroundAndClose={() => {
+            transcriptStore.update(ts => ({ ...ts, showTranslateModal: false }));
+        }}
+    />
+
     <UnsavedChangesModal bind:showModal={$project.showUnsavedChangesModal} itemName={$project.unsavedItemName} itemType={$project.unsavedItemType} on:save={handleUnsavedResponse} on:discard={handleUnsavedResponse} on:cancel={handleUnsavedResponse} />
     <ConfirmConversionModal bind:showModal={$project.showConfirmConversionModal} fileName={$project.conversionFileName} on:confirm={handleConversionResponse} on:cancel={handleConversionResponse} />
     <ImportTranscriptSourceModal bind:showModal={showImportTranscriptSourceModal} on:confirm={handleImportTranscriptSourceConfirm} on:close={() => showImportTranscriptSourceModal = false}/>

@@ -1,11 +1,62 @@
-use tauri::{command, AppHandle, Manager};
+use tauri::{command, AppHandle, Manager, Runtime};
 use tauri_plugin_shell::ShellExt;
 use std::fs;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use serde_json::{Value, json};
-use log::{info, error};
+use log::{info, error, debug, warn};
 use super::transcription_commands::save_transcript_json;
-use crate::welcome::config::{read_config, get_default_download_location};
+use crate::welcome::config::{read_config, get_default_download_location, CommandError};
 use crate::welcome::python_env::get_python_path;
+use dashmap::DashMap;
+use tokio::sync::Mutex;
+
+
+// --- State for managing translation cancellations ---
+pub struct TranslationCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
+impl Default for TranslationCancellationState {
+    fn default() -> Self {
+        Self(Arc::new(DashMap::new()))
+    }
+}
+
+// --- CancelGuard for ensuring cleanup ---
+struct CancelGuard {
+    job_id: String,
+    state: Arc<DashMap<String, Arc<AtomicBool>>>,
+}
+
+impl Drop for CancelGuard {
+    fn drop(&mut self) {
+        self.state.remove(&self.job_id);
+        debug!("[Translate CancelGuard] Removed cancel flag for job '{}' on drop.", self.job_id);
+    }
+}
+
+// --- Payloads for frontend communication ---
+#[derive(serde::Serialize, Clone)]
+pub struct TranslationInitiatedPayload {
+    job_id: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationJobCompletedPayload {
+    job_id: String,
+    status: String, // "done", "cancelled", "error"
+    original_transcript_path: String,
+    new_transcript_path: Option<String>,
+    error_message: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationProgressPayload {
+    job_id: String,
+    percent: f32,
+    message: String,
+}
+
+
 // Helper to extract plain text from a Lexical JSON structure.
 fn extract_plain_text_from_lexical(node: &Value) -> String {
     let mut text = String::new();
@@ -49,39 +100,124 @@ fn create_lexical_with_text(text: &str) -> Value {
     })
 }
 
+// Helper to emit progress updates
+fn emit_translation_progress<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    job_id: &str,
+    percent: f32,
+    message: &str,
+) {
+    let payload = TranslationProgressPayload {
+        job_id: job_id.to_string(),
+        percent,
+        message: message.to_string(),
+    };
+    if let Err(e) = app_handle.emit("TRANSLATION_PROGRESS", payload) {
+        error!("[Translate Progress][{}] Failed to emit progress event: {}", job_id, e);
+    }
+}
+
+
 #[tauri::command]
-pub async fn translate_transcript_command(
-    app_handle: AppHandle,
-    window: tauri::Window,
+pub async fn translate_transcript_command<R: Runtime>(
+    app_handle: AppHandle<R>,
     project_xml_path: String,
     transcript_path: String,
     model_name: String,
     target_language: String,
-) -> Result<String, String> {
-    info!("[Translate] Starting translation for transcript: {}", transcript_path);
+    cancel_state: tauri::State<'_, TranslationCancellationState>,
+) -> Result<TranslationInitiatedPayload, String> {
+    let job_id = uuid::Uuid::new_v4().to_string();
+    info!("[Translate Command][{}] Received request for transcript: {}", job_id, transcript_path);
 
-    let config = read_config().map_err(|e| e.to_string())?;
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    cancel_state.0.insert(job_id.clone(), Arc::clone(&cancel_flag));
+
+    let _cancel_guard = CancelGuard {
+        job_id: job_id.clone(),
+        state: Arc::clone(&cancel_state.0),
+    };
+
+    let app_handle_clone = app_handle.clone();
+    let job_id_clone = job_id.clone();
+
+    tokio::spawn(async move {
+        let completion_payload = match run_translation_process(
+            app_handle_clone,
+            job_id_clone.clone(),
+            project_xml_path,
+            transcript_path,
+            model_name,
+            target_language,
+            cancel_flag,
+        ).await {
+            Ok((new_path)) => {
+                info!("[Translate Task][{}] Translation process completed successfully.", job_id_clone);
+                TranslationJobCompletedPayload {
+                    job_id: job_id_clone,
+                    status: "done".to_string(),
+                    original_transcript_path: new_path.clone(),
+                    new_transcript_path: Some(new_path),
+                    error_message: None,
+                }
+            }
+            Err(e) => {
+                error!("[Translate Task][{}] Translation process failed: {}", job_id_clone, e);
+                let (status, err_msg, path) = if e.to_string().to_lowercase().contains("cancel") {
+                    ("cancelled".to_string(), e.to_string(), e.to_string())
+                } else {
+                    ("error".to_string(), e.to_string(), e.to_string())
+                };
+
+                TranslationJobCompletedPayload {
+                    job_id: job_id_clone,
+                    status: status,
+                    original_transcript_path: path,
+                    new_transcript_path: None,
+                    error_message: Some(err_msg),
+                }
+            }
+        };
+
+        if let Err(e) = app_handle.emit("translation_job_completed", completion_payload) {
+            error!("[Translate Task][{}] Failed to emit completion event: {}", job_id, e);
+        }
+    });
+
+    Ok(TranslationInitiatedPayload { job_id })
+}
+
+
+async fn run_translation_process<R: Runtime>(
+    app_handle: AppHandle<R>,
+    job_id: String,
+    project_xml_path: String,
+    transcript_path: String,
+    model_name: String,
+    target_language: String,
+    cancel_flag: Arc<AtomicBool>,
+) -> Result<(String), CommandError> {
+    emit_translation_progress(&app_handle, &job_id, 5.0, "Preparing for translation...");
+
+    let config = read_config()?;
     let download_location = if !config.download_location.trim().is_empty() {
         config.download_location.clone()
     } else {
-        get_default_download_location().map_err(|e| e.to_string())?
+        get_default_download_location()?
     };
-    // Correctly construct the path to the Hugging Face model snapshot directory.
-    // The hf-hub library downloads models into a specific structure.
+
     let model_cache_dir_name = format!("models--{}", model_name.replace('/', "--"));
     let model_base_path = std::path::Path::new(&download_location).join(model_cache_dir_name);
-
     let refs_path = model_base_path.join("refs/main");
-    let commit_hash = fs::read_to_string(refs_path)
-        .map_err(|e| format!("Failed to read commit hash for model '{}': {}", model_name, e))?
-        .trim()
-        .to_string();
-
+    let commit_hash = fs::read_to_string(refs_path).map_err(|e| CommandError::from(format!("Failed to read commit hash for model '{}': {}", model_name, e)))?.trim().to_string();
     let model_path = model_base_path.join("snapshots").join(commit_hash);
-    info!("[Translate] Using model path: {}", model_path.display());
 
-    let content = fs::read_to_string(&transcript_path).map_err(|e| e.to_string())?;
-    let mut lexical_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    info!("[Translate][{}] Using model path: {}", job_id, model_path.display());
+
+    if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
+
+    let content = fs::read_to_string(&transcript_path)?;
+    let mut lexical_json: Value = serde_json::from_str(&content)?;
 
     let texts_to_translate: Vec<String> = if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
         if let Some(rows) = table_node.get("children").and_then(|c| c.as_array()) {
@@ -92,18 +228,16 @@ pub async fn translate_transcript_command(
     } else { Vec::new() };
 
     if texts_to_translate.is_empty() {
-        info!("[Translate] No text found to translate.");
+        info!("[Translate][{}] No text found to translate.", job_id);
         return Ok(transcript_path);
     }
 
-    let python_path = get_python_path().map_err(|e| e.to_string())?;
-    info!("[Translate] Using Python path: {}", python_path.display());
-    let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("Failed to resolve script path: {}", e))?;
+    emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
 
-    let input_json = serde_json::to_string(&texts_to_translate)
-        .map_err(|e| format!("Failed to serialize input text to JSON: {}", e))?;
-    info!("[Translate] Input JSON to Python script: \n{}", input_json);
+    let python_path = get_python_path()?;
+    let script_path = app_handle.path().resolve("scripts/run_translation.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(format!("Failed to resolve script path: {}", e)))?;
+    let input_json = serde_json::to_string(&texts_to_translate)?;
 
     let output = app_handle.shell().command(python_path.to_string_lossy().to_string())
         .args(&[
@@ -115,22 +249,23 @@ pub async fn translate_transcript_command(
         ])
         .output()
         .await
-        .map_err(|e| format!("Failed to execute Python script: {}", e))?;
+        .map_err(|e| CommandError::from(format!("Failed to execute Python script: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        error!("[Translate Python Stderr] {}", stderr);
-        return Err(format!("Translation script failed with exit code {:?}: {}", output.status.code(), stderr));
+        error!("[Translate Python Stderr][{}] {}", job_id, stderr);
+        return Err(CommandError::from(format!("Translation script failed: {}", stderr)));
     }
 
-    let translated_output = String::from_utf8_lossy(&output.stdout);
-    info!("[Translate] Translated output from Python script: \n{}", translated_output);
+    if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
 
-    let translated_texts: Vec<String> = serde_json::from_str(&translated_output)
-        .map_err(|e| format!("Failed to deserialize translated text from JSON: {}", e))?;
+    emit_translation_progress(&app_handle, &job_id, 80.0, "Processing results...");
+
+    let translated_output = String::from_utf8_lossy(&output.stdout);
+    let translated_texts: Vec<String> = serde_json::from_str(&translated_output)?;
 
     if translated_texts.len() != texts_to_translate.len() {
-        return Err(format!("Translation count mismatch. Expected {}, got {}.", texts_to_translate.len(), translated_texts.len()));
+        return Err(CommandError::from("Translation count mismatch."));
     }
 
     if let Some(table_node) = lexical_json.get_mut("root").and_then(|r| r.get_mut("children")).and_then(|c| c.as_array_mut()).and_then(|c| c.iter_mut().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
@@ -152,14 +287,29 @@ pub async fn translate_transcript_command(
 
     let target_lang = model_name.split('-').last().unwrap_or("trans");
     let new_path = transcript_path.replace(".json", &format!(".{}.json", target_lang));
-    let new_content = serde_json::to_string_pretty(&lexical_json).map_err(|e| e.to_string())?;
-    fs::write(&new_path, &new_content).map_err(|e| e.to_string())?;
+    let new_content = serde_json::to_string_pretty(&lexical_json)?;
+    fs::write(&new_path, &new_content)?;
 
-    info!("[Translate] New translated transcript path: {}", new_path);
+    emit_translation_progress(&app_handle, &job_id, 95.0, "Saving translated transcript...");
 
-    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang.to_string()))
-        .await
-        .map_err(|e| format!("[Translate] Failed to register translated transcript: {}", e))?;
+    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang.to_string())).await?;
+
+    emit_translation_progress(&app_handle, &job_id, 100.0, "Translation complete.");
 
     Ok(new_path)
+}
+
+#[tauri::command]
+pub async fn cancel_translation_command(
+    job_id: String,
+    cancel_state: tauri::State<'_, TranslationCancellationState>,
+) -> Result<(), String> {
+    info!("[Translate Cancel][{}] Received cancellation request.", job_id);
+    if let Some(flag_entry) = cancel_state.0.get(&job_id) {
+        flag_entry.value().store(true, AtomicOrdering::Relaxed);
+        info!("[Translate Cancel][{}] Cancellation flag set.", job_id);
+    } else {
+        warn!("[Translate Cancel][{}] Job ID not found in cancellation state.", job_id);
+    }
+    Ok(())
 }

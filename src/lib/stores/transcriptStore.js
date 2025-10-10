@@ -36,6 +36,15 @@ export const initialTranscriptState = {
     transcriptionErrorMessage: null,
     translateToEnglish: false,
     diarizationEnabledForNextJob: false,
+
+    // Translation states
+    isTranslating: false,
+    translationProgress: { percent: 0, message: '' },
+    translationJobId: null,
+    showTranslateModal: false,
+    ranTranslationInBackground: false,
+    translationJobStatus: null, // e.g., 'initiating', 'running', 'done', 'error', 'cancelled'
+    translationErrorMessage: null,
 };
 
 export const transcriptStore = writable({ ...initialTranscriptState });
@@ -1139,4 +1148,90 @@ export function setSpeakerConfig(newSpeakerConfig) {
         ...ts,
         speakers: newSpeakerConfig,
     }));
+}
+
+// --- Translation Management Functions ---
+
+export function toggleTranslateModal(show) {
+    transcriptStore.update((ts) => ({ ...ts, showTranslateModal: !!show }));
+}
+
+export function setRanTranslationInBackground(value) {
+    transcriptStore.update((ts) => ({ ...ts, ranTranslationInBackground: !!value }));
+}
+
+export function setTranslationStatus(isTranslating, jobIdToSet = null, options = {}) {
+    const {
+        status = null,
+        errorMessage = null
+    } = options;
+
+    transcriptStore.update((ts) => {
+        let updatedState = { ...ts };
+
+        if (isTranslating) {
+            const jobStatusToSet = status || (jobIdToSet ? 'running' : 'initiating');
+            updatedState = {
+                ...ts,
+                isTranslating: true,
+                translationJobId: jobIdToSet !== null ? jobIdToSet : ts.translationJobId,
+                translationProgress: {
+                    percent: 0,
+                    message: 'Initiating translation...'
+                },
+                translationJobStatus: jobStatusToSet,
+                translationErrorMessage: null,
+                ranTranslationInBackground: false,
+                showTranslateModal: true,
+            };
+        } else {
+            const currentJobStatus = status || ts.translationJobStatus;
+            let newShowModalConfig = ts.showTranslateModal;
+
+            if (currentJobStatus === 'done') {
+                newShowModalConfig = ts.ranTranslationInBackground ? false : true;
+            } else if (currentJobStatus === 'error' || currentJobStatus === 'cancelled') {
+                newShowModalConfig = true;
+            } else if (currentJobStatus === null) {
+                newShowModalConfig = false;
+            }
+
+            updatedState = {
+                ...ts,
+                isTranslating: false,
+                translationJobStatus: currentJobStatus,
+                translationErrorMessage: errorMessage || ts.translationErrorMessage,
+                showTranslateModal: newShowModalConfig,
+            };
+
+            if (currentJobStatus === null) {
+                updatedState.translationJobId = null;
+                updatedState.translationProgress = { percent: 0, message: '' };
+                updatedState.ranTranslationInBackground = false;
+            }
+        }
+        return updatedState;
+    });
+
+    if (isTranslating) {
+        updateProjectStoreState({ error: null });
+    }
+}
+
+export function updateTranslationProgress(progressPayload) {
+    transcriptStore.update((ts) => {
+        const eventJobId = progressPayload?.jobId;
+        if (!eventJobId || !ts.isTranslating || ts.translationJobId !== eventJobId) {
+            return ts;
+        }
+
+        return {
+            ...ts,
+            translationJobStatus: 'running',
+            translationProgress: {
+                percent: progressPayload?.percent ?? ts.translationProgress.percent,
+                message: progressPayload?.message ?? ts.translationProgress.message
+            },
+        };
+    });
 }

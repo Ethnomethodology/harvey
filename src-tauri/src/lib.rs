@@ -31,6 +31,11 @@ pub struct DownloadCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
 #[derive(Default)]
 pub struct TranscriptionCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
 
+// Define state for managing translation cancellation flags
+#[derive(Default)]
+pub struct TranslationCancellationState(pub Arc<DashMap<String, Arc<AtomicBool>>>);
+
+
 // Define state for managing live transcription
 #[derive(Default)]
 pub struct LiveTranscriptionState(pub Arc<projectview::transcription_commands::LiveTranscriptionState>);
@@ -57,6 +62,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(DownloadCancellationState::default())
         .manage(TranscriptionCancellationState::default())
+        .manage(TranslationCancellationState::default())
         .manage(projectview::transcription_commands::LiveTranscriptionState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -215,8 +221,11 @@ pub fn run() {
             projectview::transcription_commands::transcribe_media_command, // <--- ADD THIS LINE
             projectview::transcription_commands::start_live_transcription,
             projectview::transcription_commands::stop_live_transcription,
-            projectview::translation_commands::translate_transcript_command,
             
+            // --- Project view TRANSLATION commands ---
+            projectview::translation_commands::translate_transcript_command,
+            projectview::translation_commands::cancel_translation_command,
+
 
             // --- Project view DOCUMENT/DATA commands ---
             projectview::document_commands::save_note_json,

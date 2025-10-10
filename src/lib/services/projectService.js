@@ -83,6 +83,9 @@ import {
     clearTranscriptState,
     markTranscriptAsSaved,
     prepareForNewTranscription, // Import the function directly
+    setTranslationStatus,
+    toggleTranslateModal,
+    updateTranslationProgress,
 } from '$lib/stores/transcriptStore.js';
 
 import notificationStore from '$lib/stores/notificationStore.js';
@@ -1993,29 +1996,81 @@ export async function renameTableHeader(tablePath, oldHeader, newHeader) {
     }
 }
 
+export let translationProgressListenerInitialized = false;
+export let translationProgressUnlistenFn = null;
+
+export async function initializeTranslationProgressListener() {
+    if (translationProgressListenerInitialized) return;
+    try {
+        translationProgressUnlistenFn = await listen('TRANSLATION_PROGRESS', (event) => {
+            const payload = event.payload;
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            updateTranslationProgress(payload);
+        });
+        translationProgressListenerInitialized = true;
+    } catch (e) {
+        console.error("[ProjectService] Failed to initialize translation progress listener:", e);
+    }
+}
+
 export async function requestTranslation(transcriptPath, modelName) {
     const currentProject = get(project);
-    console.log(`[ProjectService] requestTranslation: projectXmlPath = ${currentProject.xmlPath}`);
-    console.log(`[ProjectService] requestTranslation: transcriptPath = ${transcriptPath}`);
-    console.log(`[ProjectService] requestTranslation: modelName = ${modelName}`);
-    console.log(`[ProjectService] requestTranslation: targetLanguage = ${get(transcriptStore).selectedLanguage}`);
+    const ts = get(transcriptStore);
+
+    if (ts.isTranslating) {
+        toggleTranslateModal(true);
+        return;
+    }
 
     if (!currentProject.xmlPath) {
         await message('Cannot translate: Project path is not set.', { title: 'Translation Error', type: 'error' });
         return;
     }
 
+    setTranslationStatus(true, null, { status: 'initiating' });
+
     try {
-        const newTranscriptPath = await invoke('translate_transcript_command', {
+        const initiatedPayload = await invoke('translate_transcript_command', {
             projectXmlPath: currentProject.xmlPath,
             transcriptPath,
             modelName: modelName,
-            targetLanguage: get(transcriptStore).selectedLanguage,
+            targetLanguage: ts.selectedLanguage,
         });
-        await refreshProjectFiles(newTranscriptPath);
-        await loadTranscriptFile(newTranscriptPath);
+
+        if (!initiatedPayload || typeof initiatedPayload.job_id !== 'string') {
+            throw new Error("Backend did not return a valid job_id for translation.");
+        }
+
+        setTranslationStatus(true, initiatedPayload.job_id, { status: 'running' });
     } catch (error) {
         const errorMessage = error.message || String(error);
-        await message(`Error translating transcript: ${errorMessage}`, { title: 'Translation Error', type: 'error' });
+        setTranslationStatus(false, null, { status: 'error', errorMessage });
+        console.error(`[ProjectService] Error during translate_transcript_command invocation:`, error);
+    }
+}
+
+export async function handleCancelTranslationRequest() {
+    const ts = get(transcriptStore);
+    const jobId = ts.translationJobId;
+
+    if (!jobId || !ts.isTranslating) {
+        console.warn("[ProjectService] No active translation job to cancel.");
+        return;
+    }
+
+    transcriptStore.update(s => ({ ...s, translationJobStatus: 'cancelling' }));
+
+    try {
+        await invoke('cancel_translation_command', { jobId });
+    } catch (error) {
+        const errorMessage = error.message || String(error);
+        transcriptStore.update(s => ({
+            ...s,
+            translationJobStatus: 'error',
+            translationErrorMessage: `Failed to send cancel request: ${errorMessage}`
+        }));
+        notificationStore.add(`Cancellation request failed: ${errorMessage}`, 'error');
     }
 }
