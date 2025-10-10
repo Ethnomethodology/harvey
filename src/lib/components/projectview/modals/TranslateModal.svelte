@@ -6,6 +6,7 @@
 
 	export let showModal = false;
 	export let availableTranscripts = [];
+	export let isTranslating = false;
 
 	const dispatch = createEventDispatcher();
 
@@ -13,6 +14,7 @@
 	let localModels = [];
 	let modelOptions = [];
 	let selectedModel = '';
+	let translationStatusMessage = '';
 
 	function formatModelDisplayName(modelName) {
 		const parts = modelName.split('/');
@@ -111,10 +113,14 @@
             <h2 class="text-lg font-semibold mb-4 text-center">Translate Transcript</h2>
 
             <div class="space-y-4 mb-6">
-                {#if availableTranscripts.length === 0}
-                    <p class="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md">
-                        No transcripts found. Please generate a transcript first.
-                    </p>
+                {#if isTranslating}
+                    <div class="flex flex-col items-center justify-center space-y-2">
+                        <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="text-sm text-gray-500">{translationStatusMessage}</p>
+                    </div>
                 {:else}
                     <div class="space-y-1">
                         <label for="transcriptSelect" class="block font-medium text-gray-900 dark:text-gray-100">Transcript to Translate:</label>
@@ -126,24 +132,23 @@
                             disabled={availableTranscripts.length === 0}
                         />
                     </div>
+                    <div class="space-y-1">
+                        <label for="modelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translation Model:</label>
+                        <Dropdown
+                            containerClasses="w-full"
+                            options={modelOptions}
+                            bind:value={selectedModel}
+                            placeholder={localModels.length === 0 ? "No Models Downloaded" : "Select a Model"}
+                            disabled={localModels.length === 0}
+                        />
+                    </div>
                 {/if}
-
-                <div class="space-y-1">
-                    <label for="modelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Translation Model:</label>
-                    <Dropdown
-                        containerClasses="w-full"
-                        options={modelOptions}
-                        bind:value={selectedModel}
-                        placeholder={localModels.length === 0 ? "No Models Downloaded" : "Select a Model"}
-                        disabled={localModels.length === 0}
-                    />
-                </div>
             </div>
 
             <div class="flex justify-end space-x-3 mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button class="btn-secondary" on:click={handleClose}>Cancel</button>
-                <button class="btn-primary" on:click={handleConfirm} disabled={availableTranscripts.length === 0 || !selectedTranscript || !selectedModel}>
-                    Start Translation
+                <button class="btn-secondary" on:click={handleClose} disabled={isTranslating}>Cancel</button>
+                <button class="btn-primary" on:click={handleConfirm} disabled={availableTranscripts.length === 0 || !selectedTranscript || !selectedModel || isTranslating}>
+                    {#if isTranslating}Translating...{:else}Start Translation{/if}
                 </button>
             </div>
         </div>
