@@ -114,6 +114,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         env:
           TAURI_SKIP_SIGNING: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
@@ -126,6 +127,7 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         shell: msys2 {0}
         run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
 
