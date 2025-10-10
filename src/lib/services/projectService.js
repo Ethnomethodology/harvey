@@ -1278,15 +1278,30 @@ export async function convertAndSaveTranscriptAsDoc() {
         const fullLexicalTableString = await invoke('load_transcript_json', { transcriptPath: transcriptPath });
         if (!fullLexicalTableString) throw new Error("Transcript file content is empty.");
         finalLexicalJsonString = fullLexicalTableString;
-        const mediaStemIdentifier = selectedMedia.media_xml_identifier || (() => { const mediaName = selectedMedia.name; return mediaName.includes('.') ? mediaName.substring(0, mediaName.lastIndexOf('.')) : mediaName; })();
-        const safeStem = mediaStemIdentifier.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-        const docFilenameBase = `${safeStem}_transcript_as_doc_${dateStr}_${timeStr}`;
-        project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
-        const targetFullPath = await invoke('get_unique_document_path', { projectBaseDirStr: projectBaseDir, baseName: docFilenameBase, extension: 'json' });
-        const docFilename = await basename(targetFullPath);
+                const originalTranscriptFilename = await basename(transcriptPath); // e.g., "20130922_1.json"
+                console.debug(`[ProjectService] originalTranscriptFilename: ${originalTranscriptFilename}`);
+                const originalTranscriptStem = originalTranscriptFilename.includes('.')
+                    ? originalTranscriptFilename.substring(0, originalTranscriptFilename.lastIndexOf('.'))
+                    : originalTranscriptFilename; // e.g., "20130922_1"
+                console.debug(`[ProjectService] originalTranscriptStem: ${originalTranscriptStem}`);
+            
+                // The base name for the new document file will be the original transcript's stem
+                const docFilenameBase = originalTranscriptStem; // Use the original stem
+                console.debug(`[ProjectService] docFilenameBase: ${docFilenameBase}`);
+            
+                // Construct the full target directory path for the new document
+                // This should be projectBaseDir/HARVEY_FILES_DIR/DOCS_DIR_NAME/originalTranscriptStem
+                const targetDocumentDir = `${projectBaseDir}${sep()}${HARVEY_FILES_DIR}${sep()}${DOCS_DIR_NAME}${sep()}${originalTranscriptStem}`;
+                console.debug(`[ProjectService] targetDocumentDir: ${targetDocumentDir}`);
+            
+                project.update(p => ({ ...p, statusMessage: `Saving transcript document...` }));
+            
+                const targetFullPath = await invoke('get_unique_document_path', {
+                    targetDirStr: targetDocumentDir, // Pass the correctly constructed target directory
+                    baseName: docFilenameBase,
+                    extension: 'json'
+                });
+                console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`);        const docFilename = await basename(targetFullPath);
         await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
