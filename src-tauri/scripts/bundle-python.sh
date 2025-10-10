@@ -5,8 +5,8 @@ set -e
 # by querying the GitHub API to find the correct download URL.
 
 # --- Configuration ---
-PYTHON_VERSION="3.10.18"
-PYTHON_BUILD_TAG="20251007"
+PYTHON_VERSION="3.12.12"
+PYTHON_BUILD_TAG="20251010"
 
 # --- Platform Detection ---
 OS="$(uname -s)"
@@ -20,7 +20,11 @@ elif [ "$OS" = "Linux" ]; then
     if [ "$ARCH" = "aarch64" ]; then TARGET_PLATFORM="aarch64-unknown-linux-gnu"; fi
     if [ "$ARCH" = "x86_64" ]; then TARGET_PLATFORM="x86_64-unknown-linux-gnu"; fi
 elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
-    if [ "$ARCH" = "x86_64" ]; then TARGET_PLATFORM="x86_64-pc-windows-msvc"; fi
+    if [ "$ARCH" = "x86_64" ]; then
+        TARGET_PLATFORM="x86_64-pc-windows-msvc"
+    elif [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+        TARGET_PLATFORM="aarch64-pc-windows-msvc"
+    fi
 fi
 
 if [ -z "$TARGET_PLATFORM" ]; then

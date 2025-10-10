@@ -14,9 +14,6 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         arch: [x64, arm64]
-        exclude:
-          - os: windows-latest
-            arch: arm64
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -50,6 +47,8 @@ jobs:
           elif [ "${{ matrix.os }}" = "windows-latest" ]; then
             if [ "${{ matrix.arch }}" = "x64" ]; then
               echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
+            elif [ "${{ matrix.arch }}" = "arm64" ]; then
+              echo "triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT
             fi
           fi
         shell: bash
