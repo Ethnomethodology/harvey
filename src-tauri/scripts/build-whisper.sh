@@ -100,7 +100,7 @@ build_sdl2() {
     mkdir -p "${SDL2_INSTALL_PATH}"
 
     echo "Downloading SDL2 source ${SDL2_VERSION}..."
-    curl -sL "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz" | tar xz -C "${TAURI_DIR}"
+    curl --retry 3 --retry-delay 5 -sL "https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz" | tar xz -C "${TAURI_DIR}"
     mv "${TAURI_DIR}/SDL2-${SDL2_VERSION}" "${SDL2_SOURCE_DIR}"
 
     cd "${SDL2_SOURCE_DIR}"
@@ -173,7 +173,7 @@ elif [ "$OS" = "Linux" ]; then
         TOOLCHAIN_DIR="${TAURI_DIR}/arm-gnu-toolchain"
         TOOLCHAIN_URL="https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz"
         echo "Downloading toolchain..."
-        curl -L -o "${TAURI_DIR}/toolchain.tar.xz" "${TOOLCHAIN_URL}"
+        curl --retry 3 --retry-delay 5 -L -o "${TAURI_DIR}/toolchain.tar.xz" "${TOOLCHAIN_URL}"
         echo "Extracting toolchain..."
         mkdir -p "${TOOLCHAIN_DIR}"
         tar -xJf "${TAURI_DIR}/toolchain.tar.xz" -C "${TOOLCHAIN_DIR}" --strip-components=1
