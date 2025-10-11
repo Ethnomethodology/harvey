@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# On Windows, the PATH is inherited in Windows format (e.g., "C:\...").
+# The bash shell and its tools (make, sed, etc.) cannot parse this format.
+# We use cygpath to convert the PATH to a Unix-style format that bash can understand.
+if [[ "$(uname -s)" == "MINGW64"* || "$(uname -s)" == "MSYS"* ]]; then
+  export PATH=$(cygpath -p "$PATH")
+fi
+
 # This script builds FFmpeg from source for macOS, Linux, and Windows,
 # creating shared libraries that are then bundled with the Tauri application.
 
