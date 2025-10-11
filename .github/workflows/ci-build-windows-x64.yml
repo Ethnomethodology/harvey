@@ -54,7 +54,11 @@ jobs:
             mingw-w64-x86_64-yasm
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
-          msys2-path-type: inherit
+
+      - name: Add MSYS2 to PATH
+        run: |
+          echo "C:\\msys64\\mingw64\\bin" >> $GITHUB_PATH
+          echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
 
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=x64" >> $GITHUB_ENV
@@ -76,7 +80,6 @@ jobs:
       - name: Build Tauri application (Windows)
         env:
           TAURI_SKIP_SIGNING: "true"
-        shell: msys2 {0}
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
