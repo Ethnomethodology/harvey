@@ -23,8 +23,8 @@ jobs:
           target: ${{ steps.set_target.outputs.triple }}
           override: true
 
-      - name: Set up MSVC developer environment
-        uses: microsoft/setup-msbuild@v2
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Set up MSYS2 (MINGW64 for x64)
         uses: msys2/setup-msys2@v2
@@ -53,5 +53,5 @@ jobs:
           where.exe cargo
           where.exe cl
           where.exe lib
-          echo "--- Running diagnostics within Bash ---"
-          bash -c 'echo "--- Bash PATH ---"; echo $PATH; echo "--- Checking for executables in Bash ---"; which cargo; which cl; which lib; which bash'
+          echo "--- Running diagnostics within Bash (with PATH conversion) ---"
+          bash -c 'echo "--- Original Bash PATH ---"; echo $PATH; export PATH=$(cygpath -p "$PATH"); echo "--- Converted Bash PATH ---"; echo $PATH; echo "--- Checking for executables in Bash (after conversion) ---"; which cargo; which cl; which lib; which bash'
