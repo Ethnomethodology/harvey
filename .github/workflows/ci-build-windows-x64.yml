@@ -14,6 +14,7 @@ jobs:
 
     env:
       APP_NAME: harvey
+      SHELL: C:\\msys64\\usr\\bin\\bash.exe
       # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
       # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
       # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
@@ -71,7 +72,6 @@ jobs:
       - name: Build Tauri application (Windows)
         env:
           TAURI_SKIP_SIGNING: "true"
-          SHELL: C:\\msys64\\usr\\bin\\bash.exe
         shell: msys2 {0}
         run: |
           export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
