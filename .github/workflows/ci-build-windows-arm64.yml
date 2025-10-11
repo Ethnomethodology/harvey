@@ -51,6 +51,8 @@ jobs:
             mingw-w64-clang-aarch64-pkg-config
             mingw-w64-clang-aarch64-zlib
             mingw-w64-clang-aarch64-libiconv
+            mingw-w64-clang-aarch64-crt-git
+            mingw-w64-clang-aarch64-headers-git
 
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=arm64" >> $GITHUB_ENV
