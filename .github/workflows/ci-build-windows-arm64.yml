@@ -45,9 +45,9 @@ jobs:
           update: true
           install: >-
             make
+            mingw-w64-clang-x86_64-cmake
             mingw-w64-clang-x86_64-toolchain
             mingw-w64-clang-x86_64-lld
-            mingw-w64-clang-aarch64-toolchain
             mingw-w64-clang-aarch64-pkg-config
             mingw-w64-clang-aarch64-zlib
             mingw-w64-clang-aarch64-libiconv
