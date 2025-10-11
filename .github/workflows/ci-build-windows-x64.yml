@@ -52,6 +52,9 @@ jobs:
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
 
+      - name: Add MSYS2 to PATH
+        run: echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
+
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=x64" >> $GITHUB_ENV
 
