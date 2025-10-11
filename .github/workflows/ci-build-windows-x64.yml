@@ -32,13 +32,6 @@ jobs:
           echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ steps.set_target.outputs.triple }}
-          override: true
-
       - name: Set up MSYS2 (MINGW64 for x64)
         uses: msys2/setup-msys2@v2
         with:
@@ -53,8 +46,12 @@ jobs:
             mingw-w64-x86_64-pkg-config
           msys2-path-type: inherit
 
-      - name: Add MSYS2 to PATH
-        run: echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ steps.set_target.outputs.triple }}
+          override: true
 
       - name: Set up MSVC developer environment
         uses: microsoft/setup-msbuild@v2
