@@ -54,8 +54,8 @@ jobs:
             mingw-w64-clang-aarch64-crt-git
             mingw-w64-clang-aarch64-headers-git
 
-      - name: Set CPATH for ARM64 cross-compile
-        run: echo "CPATH=/clangarm64/include" >> $GITHUB_ENV
+      - name: Set CFLAGS for ARM64 cross-compile
+        run: echo "CFLAGS=-I/clangarm64/include" >> $GITHUB_ENV
 
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=arm64" >> $GITHUB_ENV
