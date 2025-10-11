@@ -82,7 +82,7 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
-          export PATH=$(cygpath -p "$PATH")
+          $env:PATH = cygpath -p $env:PATH
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
       - name: Upload build artifact
