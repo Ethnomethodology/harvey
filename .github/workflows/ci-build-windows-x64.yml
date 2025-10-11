@@ -70,6 +70,9 @@ jobs:
           npm ci
           npm run build
 
+      - name: Set up MSVC developer environment
+        uses: microsoft/setup-msbuild@v2
+
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
