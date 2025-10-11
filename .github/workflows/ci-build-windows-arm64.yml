@@ -54,6 +54,14 @@ jobs:
             mingw-w64-clang-aarch64-crt-git
             mingw-w64-clang-aarch64-headers-git
 
+      - name: DEBUG - Find assert.h and Print Env
+        shell: msys2 {0}
+        run: |
+          echo "--- Searching for assert.h ---"
+          find / -name "assert.h" 2>/dev/null || echo "assert.h not found"
+          echo "--- Printing Environment Variables ---"
+          env
+
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=arm64" >> $GITHUB_ENV
 
