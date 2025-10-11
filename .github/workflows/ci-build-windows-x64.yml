@@ -1,4 +1,4 @@
-name: CI Build (macOS & Windows)
+name: CI Build (Windows x64)
 
 on:
   workflow_dispatch:
@@ -10,30 +10,13 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            arch: arm64
-          - os: macos-13
-            arch: x64
-          - os: windows-latest
-            arch: x64
-          - os: windows-latest
-            arch: arm64
-
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     env:
       APP_NAME: harvey
       # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
       # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
       # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-      # TAURI_APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-      # TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      # TAURI_APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }}
 
     steps:
       - name: Checkout application code
@@ -45,19 +28,7 @@ jobs:
       - name: Set target triple
         id: set_target
         run: |
-          if [[ "${{ matrix.os }}" == "macos"* ]]; then
-            if [ "${{ matrix.arch }}" = "x64" ]; then
-              echo "triple=x86_64-apple-darwin" >> $GITHUB_OUTPUT
-            else
-              echo "triple=aarch64-apple-darwin" >> $GITHUB_OUTPUT
-            fi
-          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
-            if [ "${{ matrix.arch }}" = "x64" ]; then
-              echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
-            elif [ "${{ matrix.arch }}" = "arm64" ]; then
-              echo "triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT
-            fi
-          fi
+          echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Set up Rust
@@ -67,13 +38,7 @@ jobs:
           target: ${{ steps.set_target.outputs.triple }}
           override: true
 
-      - name: Install macOS build dependencies
-        if: runner.os == 'macOS'
-        run: |
-          brew install yasm pkg-config nasm cmake
-
       - name: Set up MSYS2 (MINGW64 for x64)
-        if: matrix.os == 'windows-latest' && matrix.arch == 'x64'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -86,57 +51,27 @@ jobs:
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
 
-      - name: Set up MSYS2 (CLANG64 for arm64 cross-compile)
-        if: matrix.os == 'windows-latest' && matrix.arch == 'arm64'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: CLANG64
-          update: true
-          install: >-
-            make
-            mingw-w64-clang-x86_64-cmake
-            mingw-w64-clang-x86_64-toolchain
-            mingw-w64-clang-x86_64-lld
-            mingw-w64-clang-aarch64-pkg-config
-            mingw-w64-clang-aarch64-zlib
-            mingw-w64-clang-aarch64-libiconv
-            mingw-w64-clang-aarch64-crt-git
-            mingw-w64-clang-aarch64-headers-git
-
       - name: Set TARGET_ARCH for build scripts
-        if: matrix.os == 'windows-latest'
-        run: echo "TARGET_ARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+        run: echo "TARGET_ARCH=x64" >> $GITHUB_ENV
 
       - name: Install Node.js & npm
         uses: actions/setup-node@v4
         with:
           node-version: '24.1.0'
           cache: 'npm'
-      
+
       - name: Install frontend dependencies and build
         run: |
-          npm ci 
+          npm ci
           npm run build
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
 
-      - name: Build Tauri application (macOS)
-        if: runner.os == 'macOS'
-        env:
-          TAURI_SKIP_SIGNING: "true"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
-          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
-
-          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
-
       - name: Build Tauri application (Windows)
-        if: matrix.os == 'windows-latest'
         env:
           TAURI_SKIP_SIGNING: "true"
-          SHELL: C:\msys64\usr\bin\bash.exe
+          SHELL: C:\\msys64\\usr\\bin\\bash.exe
         shell: msys2 {0}
         run: |
           export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
@@ -148,10 +83,10 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
+          name: ${{ env.APP_NAME }}-windows-x64
           path: |
-            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ runner.os == 'macOS' && 'macos/*.app' || 'msi/*.msi' }}
-            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ runner.os == 'macOS' && 'dmg/*.dmg' || 'nsis/*.exe' }}
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/*.exe
 
       - name: Ensure GitHub Release exists
         id: ensure_release
@@ -181,7 +116,6 @@ jobs:
             }
 
       - name: Find Windows MSI
-        if: matrix.os == 'windows-latest'
         id: find_msi
         run: |
           msi_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/msi/*.msi)
@@ -191,7 +125,6 @@ jobs:
         shell: bash
 
       - name: Upload Windows MSI
-        if: matrix.os == 'windows-latest'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -202,7 +135,6 @@ jobs:
           asset_content_type: application/octet-stream
 
       - name: Find Windows NSIS Installer
-        if: matrix.os == 'windows-latest'
         id: find_nsis
         run: |
           exe_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/*.exe)
@@ -212,7 +144,6 @@ jobs:
         shell: bash
 
       - name: Zip Windows NSIS Installer
-        if: matrix.os == 'windows-latest'
         id: zip_windows_nsis
         shell: pwsh
         run: |
@@ -225,7 +156,6 @@ jobs:
           "zip_name=$zipName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload Windows NSIS Zip
-        if: matrix.os == 'windows-latest'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -233,49 +163,4 @@ jobs:
           upload_url: ${{ steps.ensure_release.outputs.result }}
           asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
           asset_name: ${{ steps.zip_windows_nsis.outputs.zip_name }}
-          asset_content_type: application/zip
-
-      - name: Find macOS DMG
-        if: runner.os == 'macOS'
-        id: find_dmg
-        run: |
-          dmg_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/dmg/*.dmg)
-          dmg_name=$(basename "$dmg_path")
-          echo "dmg_path=$dmg_path" >> $GITHUB_OUTPUT
-          echo "dmg_name=$dmg_name" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Upload macOS DMG
-        if: runner.os == 'macOS'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
-          asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
-          asset_content_type: application/octet-stream
-
-      - name: Zip macOS App
-        if: runner.os == 'macOS'
-        id: zip_macos_app
-        env:
-          DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
-        run: |
-          BUNDLE_DIR="src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle"
-          cd "$BUNDLE_DIR"
-          zip_name="${DMG_NAME%.dmg}.zip"
-          zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
-          echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Upload macOS App Zip
-        if: runner.os == 'macOS'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
-          asset_name: ${{ steps.zip_macos_app.outputs.zip_name }}
           asset_content_type: application/zip

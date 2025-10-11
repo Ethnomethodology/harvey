@@ -1,0 +1,147 @@
+name: CI Build (macOS arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag of your application to build'
+        required: true
+        default: 'main'
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    env:
+      APP_NAME: harvey
+      # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
+      # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
+      # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+      # TAURI_APPLE_CERTIFICATE_SECRET: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      # TAURI_APPLE_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      # TAURI_APPLE_SIGNING_IDENTITY_SECRET: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      # TAURI_APPLE_DEVELOPER_TEAM_SECRET: ${{ secrets.APPLE_DEVELOPER_TEAM }}
+
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Set target triple
+        id: set_target
+        run: |
+          echo "triple=aarch64-apple-darwin" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ steps.set_target.outputs.triple }}
+          override: true
+
+      - name: Install macOS build dependencies
+        run: |
+          brew install yasm pkg-config nasm cmake
+
+      - name: Install Node.js & npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.1.0'
+          cache: 'npm'
+
+      - name: Install frontend dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      - name: Build Tauri application (macOS)
+        env:
+          TAURI_SKIP_SIGNING: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
+          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
+
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macos-arm64
+          path: |
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/macos/*.app
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/dmg/*.dmg
+
+      - name: Ensure GitHub Release exists
+        id: ensure_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const tag = '${{ github.event.inputs.ref }}';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              return rel.data.upload_url;
+            } catch {
+              const rel = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `Release ${tag}`,
+                draft: false,
+                prerelease: false
+              });
+              return rel.data.upload_url;
+            }
+
+      - name: Find macOS DMG
+        id: find_dmg
+        run: |
+          dmg_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/dmg/*.dmg)
+          dmg_name=$(basename "$dmg_path")
+          echo "dmg_path=$dmg_path" >> $GITHUB_OUTPUT
+          echo "dmg_name=$dmg_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload macOS DMG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
+          asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Zip macOS App
+        id: zip_macos_app
+        env:
+          DMG_NAME: ${{ steps.find_dmg.outputs.dmg_name }}
+        run: |
+          BUNDLE_DIR="src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle"
+          cd "$BUNDLE_DIR"
+          zip_name="${DMG_NAME%.dmg}.zip"
+          zip -r "$zip_name" "macos/${{ env.APP_NAME }}.app"
+          echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload macOS App Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
+          asset_name: ${{ steps.zip_macos_app.outputs.zip_name }}
+          asset_content_type: application/zip
