@@ -22,8 +22,16 @@ fn main() {
             let script_path = manifest_dir.join("scripts").join("build-ffmpeg.sh");
             println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
 
-            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
-            let status = Command::new(command)
+            let command = if cfg!(target_os = "windows") {
+                // On Windows, use the explicit bash path from the CI env var if it exists.
+                // This avoids PATH resolution issues where the wrong `bash.exe` (e.g., WSL) might be found.
+                // Fall back to a generic "bash" for local builds or if the var isn't set.
+                env::var("MSYS2_BASH").unwrap_or_else(|_| "bash".to_string())
+            } else {
+                // On macOS and Linux, "sh" is sufficient and standard.
+                "sh".to_string()
+            };
+            let status = Command::new(&command)
                 .arg(&script_path)
                 .status()
                 .expect("Failed to execute build-ffmpeg.sh script");
@@ -54,8 +62,12 @@ fn main() {
             let script_path = manifest_dir.join("scripts").join("bundle-python.sh");
             println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
 
-            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
-            let status = Command::new(command)
+            let command = if cfg!(target_os = "windows") {
+                env::var("MSYS2_BASH").unwrap_or_else(|_| "bash".to_string())
+            } else {
+                "sh".to_string()
+            };
+            let status = Command::new(&command)
                 .arg(&script_path)
                 .status()
                 .expect("Failed to execute bundle-python.sh script");
@@ -87,8 +99,12 @@ fn main() {
             let script_path = manifest_dir.join("scripts").join("build-whisper.sh");
             println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
 
-            let command = if cfg!(target_os = "windows") { "bash" } else { "sh" };
-            let status = Command::new(command)
+            let command = if cfg!(target_os = "windows") {
+                env::var("MSYS2_BASH").unwrap_or_else(|_| "bash".to_string())
+            } else {
+                "sh".to_string()
+            };
+            let status = Command::new(&command)
                 .arg(&script_path)
                 .status()
                 .expect("Failed to execute build-whisper.sh script");
