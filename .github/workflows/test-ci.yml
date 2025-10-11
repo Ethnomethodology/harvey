@@ -1,0 +1,57 @@
+name: Test CI Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-environment:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+
+      - name: Set target triple
+        id: set_target
+        run: |
+          echo "triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ steps.set_target.outputs.triple }}
+          override: true
+
+      - name: Set up MSVC developer environment
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up MSYS2 (MINGW64 for x64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-yasm
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkg-config
+
+      - name: Add MSYS2 to PATH
+        run: |
+          echo "C:\\msys64\\mingw64\\bin" >> $GITHUB_PATH
+          echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
+
+      - name: Run Diagnostics
+        run: |
+          echo "--- PowerShell PATH ---"
+          echo $env:PATH
+          echo "--- Checking for executables in PowerShell ---"
+          where.exe bash
+          where.exe cargo
+          where.exe cl
+          where.exe lib
+          echo "--- Running diagnostics within Bash ---"
+          bash -c 'echo "--- Bash PATH ---"; echo $PATH; echo "--- Checking for executables in Bash ---"; which cargo; which cl; which lib; which bash'
