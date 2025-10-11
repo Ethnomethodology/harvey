@@ -54,9 +54,6 @@ jobs:
             mingw-w64-clang-aarch64-crt-git
             mingw-w64-clang-aarch64-headers-git
 
-      - name: Set CFLAGS for ARM64 cross-compile
-        run: echo "CFLAGS=-I/clangarm64/include" >> $GITHUB_ENV
-
       - name: Set TARGET_ARCH for build scripts
         run: echo "TARGET_ARCH=arm64" >> $GITHUB_ENV
 
@@ -78,6 +75,7 @@ jobs:
         env:
           TAURI_SKIP_SIGNING: "true"
           SHELL: C:\\msys64\\usr\\bin\\bash.exe
+          CFLAGS: -I/clangarm64/include
         shell: msys2 {0}
         run: |
           export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
