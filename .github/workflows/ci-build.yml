@@ -80,6 +80,7 @@ jobs:
           update: true
           install: >-
             make
+            mingw-w64-x86_64-cmake
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-yasm
             mingw-w64-x86_64-nasm
@@ -93,6 +94,7 @@ jobs:
           update: true
           install: >-
             make
+            mingw-w64-clang-x86_64-cmake
             mingw-w64-clang-x86_64-toolchain
             mingw-w64-clang-x86_64-lld
             mingw-w64-clang-aarch64-pkg-config
