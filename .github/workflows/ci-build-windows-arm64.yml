@@ -1,0 +1,167 @@
+name: CI Build (Windows arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag of your application to build'
+        required: true
+        default: 'main'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      APP_NAME: harvey
+      # --- Signing Environment Variables (Commented Out for Unsigned Builds) ---
+      # TAURI_WINDOWS_PFX_SECRET: ${{ secrets.WINDOWS_PFX_BASE64 }}
+      # TAURI_WINDOWS_PFX_PASSWORD_SECRET: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Set target triple
+        id: set_target
+        run: |
+          echo "triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ steps.set_target.outputs.triple }}
+          override: true
+
+      - name: Set up MSYS2 (CLANG64 for arm64 cross-compile)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            make
+            mingw-w64-clang-x86_64-toolchain
+            mingw-w64-clang-x86_64-lld
+            mingw-w64-clang-aarch64-toolchain
+            mingw-w64-clang-aarch64-pkg-config
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-libiconv
+
+      - name: Set TARGET_ARCH for build scripts
+        run: echo "TARGET_ARCH=arm64" >> $GITHUB_ENV
+
+      - name: Install Node.js & npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.1.0'
+          cache: 'npm'
+      
+      - name: Install frontend dependencies and build
+        run: |
+          npm ci 
+          npm run build
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
+
+      - name: Build Tauri application (Windows)
+        env:
+          TAURI_SKIP_SIGNING: "true"
+          SHELL: C:\\msys64\\usr\\bin\\bash.exe
+        shell: msys2 {0}
+        run: |
+          export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
+          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
+          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
+
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-windows-arm64
+          path: |
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/*.exe
+
+      - name: Ensure GitHub Release exists
+        id: ensure_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const tag = '${{ github.event.inputs.ref }}';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              return rel.data.upload_url;
+            } catch {
+              const rel = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `Release ${tag}`,
+                draft: false,
+                prerelease: false
+              });
+              return rel.data.upload_url;
+            }
+
+      - name: Find Windows MSI
+        id: find_msi
+        run: |
+          msi_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/msi/*.msi)
+          msi_name=$(basename "$msi_path")
+          echo "msi_path=$msi_path" >> $GITHUB_OUTPUT
+          echo "msi_name=$msi_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload Windows MSI
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: ${{ steps.find_msi.outputs.msi_path }}
+          asset_name: ${{ steps.find_msi.outputs.msi_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Find Windows NSIS Installer
+        id: find_nsis
+        run: |
+          exe_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/*.exe)
+          exe_name=$(basename "$exe_path")
+          echo "nsis_path=$exe_path" >> $GITHUB_OUTPUT
+          echo "nsis_name=$exe_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Zip Windows NSIS Installer
+        id: zip_windows_nsis
+        shell: pwsh
+        run: |
+          $nsisPath = '${{ steps.find_nsis.outputs.nsis_path }}'
+          $dir = Split-Path $nsisPath
+          $exeName = Split-Path $nsisPath -Leaf
+          $zipName = $exeName -replace '\.exe$', '.zip'
+          $zipPath = Join-Path $dir $zipName
+          Compress-Archive -Path $nsisPath -DestinationPath $zipPath -Force
+          "zip_name=$zipName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload Windows NSIS Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
+          asset_name: ${{ steps.zip_windows_nsis.outputs.zip_name }}
+          asset_content_type: application/zip
