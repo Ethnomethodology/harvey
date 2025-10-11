@@ -81,10 +81,7 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         shell: msys2 {0}
         run: |
-          export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
-          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
-
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 
       - name: Upload build artifact
