@@ -51,6 +51,7 @@ jobs:
             mingw-w64-x86_64-yasm
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
+          msys2-path-type: inherit
 
       - name: Add MSYS2 to PATH
         run: echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
