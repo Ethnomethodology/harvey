@@ -82,6 +82,7 @@ jobs:
         env:
           TAURI_SKIP_SIGNING: "true"
           SHELL: C:\\msys64\\usr\\bin\\bash.exe
+          CC: cl.exe
         shell: msys2 {0}
         run: |
           export PATH="/c/Users/runneradmin/.cargo/bin:/c/Program Files/nodejs:$PATH"
