@@ -51,6 +51,8 @@ jobs:
             mingw-w64-x86_64-yasm
             mingw-w64-x86_64-nasm
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libiconv
 
       - name: Add MSYS2 to PATH
         run: |

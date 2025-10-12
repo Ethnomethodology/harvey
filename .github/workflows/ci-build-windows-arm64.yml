@@ -38,13 +38,6 @@ jobs:
           target: ${{ steps.set_target.outputs.triple }}
           override: true
 
-      - name: Set up MSBuild for cross-compile
-        uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64
-          platform: arm64
-          vs-version: '17.0'
-
       - name: Set up MSYS2 (CLANG64 for arm64 cross-compile)
         uses: msys2/setup-msys2@v2
         with:
