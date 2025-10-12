@@ -75,7 +75,7 @@ jobs:
         env:
           TAURI_SKIP_SIGNING: "true"
           SHELL: C:\\msys64\\usr\\bin\\bash.exe
-          CC: cl.exe
+          CC: clang
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
