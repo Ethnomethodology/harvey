@@ -115,7 +115,6 @@ CPU_COUNT=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
 ./configure \
   --prefix="${INSTALL_PREFIX}" \
   $CONFIGURE_OPTS \
-  --toolchain=msvc \
   --enable-shared \
   --disable-static \
   --disable-gpl \
