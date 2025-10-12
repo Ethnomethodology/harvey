@@ -123,7 +123,7 @@ CPU_COUNT=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
   --disable-ffplay \
   --disable-ffprobe \
   --disable-doc \
-  --enable-zlib \
+  --disable-zlib \
   --disable-iconv
 
 echo "Building FFmpeg (using $CPU_COUNT cores)..."
