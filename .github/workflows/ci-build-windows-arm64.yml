@@ -29,7 +29,7 @@ jobs:
       - name: Set target triple
         id: set_target
         run: |
-          echo "triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT
+          echo "triple=aarch64-pc-windows-gnu" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Set up Rust
