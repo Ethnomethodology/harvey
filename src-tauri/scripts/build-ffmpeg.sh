@@ -69,7 +69,7 @@ elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
     # Check if we are cross-compiling for arm64
     if [ "$TARGET_ARCH" = "arm64" ]; then
         echo "Setting up for Windows ARM64 cross-compilation..."
-        CONFIGURE_OPTS="--target-os=win64 --arch=aarch64 --cc=clang --cxx=clang++ --ar=llvm-ar --ranlib=llvm-ranlib --enable-cross-compile --disable-asm"
+        CONFIGURE_OPTS="--target-os=win64 --arch=aarch64 --cc=clang --cxx=clang++ --ar=llvm-ar --ranlib=llvm-ranlib --enable-cross-compile --disable-asm --extra-cflags='-fuse-ld=lld' --extra-cxxflags='-fuse-ld=lld'"
     else
         echo "Setting up for Windows x64 native compilation..."
         CONFIGURE_OPTS="--target-os=win64 --arch=x86_64 --cc=gcc --ar=ar --ranlib=ranlib --dlltool=dlltool"
@@ -122,8 +122,8 @@ CPU_COUNT=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)
   --disable-ffplay \
   --disable-ffprobe \
   --disable-doc \
-  --disable-zlib \
-  --disable-iconv
+  --enable-zlib \
+  --enable-iconv
 
 echo "Building FFmpeg (using $CPU_COUNT cores)..."
 make -j${CPU_COUNT}
