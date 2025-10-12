@@ -72,7 +72,7 @@ elif [[ "$OS" == "MINGW64"* || "$OS" == "MSYS"* ]]; then
         CONFIGURE_OPTS="--target-os=win64 --arch=aarch64 --cc=clang --cxx=clang++ --ar=llvm-ar --ranlib=llvm-ranlib --enable-cross-compile --disable-asm"
     else
         echo "Setting up for Windows x64 native compilation..."
-        CONFIGURE_OPTS="--target-os=win64 --disable-asm"
+        CONFIGURE_OPTS="--target-os=win64"
     fi
 else
     echo "Unsupported operating system: $OS"
