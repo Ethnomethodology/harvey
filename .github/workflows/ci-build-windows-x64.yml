@@ -79,6 +79,7 @@ jobs:
       - name: Build Tauri application (Windows)
         env:
           TAURI_SKIP_SIGNING: "true"
+          CC: gcc
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
