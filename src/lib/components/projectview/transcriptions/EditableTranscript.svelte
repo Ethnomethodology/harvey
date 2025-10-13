@@ -177,7 +177,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             version: 1
                         }
                     };
-                    initialJsonForEditor = defaultEmptyJsonString;
+                    initialJsonForEditor = JSON.stringify(sanitizedEditorState);
                 } catch (e) {
                     initialJsonForEditor = defaultEmptyJsonString;
                 }
