@@ -11,3 +11,6 @@
 
 # Ignore downloaded archives
 *.tar.gz
+
+# Ignore downloaded binaries
+/sidecars/

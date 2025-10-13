@@ -44,15 +44,15 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/whisper.cpp/bin/whisper-cli",
-      "binaries/whisper.cpp/bin/whisper-stream"
+      "sidecars/whisper-cli",
+      "sidecars/whisper-stream"
     ],
     "licenseFile": "../LICENSE.md",
     "license": "MIT",
     "resources": [
       "third_party_licenses",
       "scripts/*",
-      "binaries",
+      "sidecars",
       "python"
     ]
   }

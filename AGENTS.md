@@ -12,7 +12,7 @@ First, ensure the package list is up to date within your build environment:
 sudo apt-get update
 ```
 
-Next, install the required libraries and build tools. This single command installs everything needed for the Tauri backend on Linux:
+Next, install the required libraries and build tools for Tauri. The command below installs the core system dependencies:
 
 ```bash
 sudo apt-get install -y \
@@ -26,9 +26,7 @@ sudo apt-get install -y \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libsoup-3.0-dev \
-    libwebkit2gtk-4.1-dev \
-    nasm \
-    yasm
+    libwebkit2gtk-4.1-dev
 ```
 
 ## 2. Python Virtual Environment
