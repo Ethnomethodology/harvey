@@ -62,7 +62,7 @@ pub async fn check_diarization_model_access<R: Runtime>(
 
         if let Ok(resource_dir) = app_handle.path().resource_dir() {
 
-                let ffmpeg_lib_path = resource_dir.join("binaries/ffmpeg/lib");
+                let ffmpeg_lib_path = resource_dir.join("sidecars");
 
                 if ffmpeg_lib_path.exists() {
 
@@ -136,7 +136,7 @@ pub async fn download_diarization_model<R: Runtime>(
 
         // 1. Add bundled ffmpeg path
         if let Ok(resource_dir) = app_handle.path().resource_dir() {
-            let ffmpeg_lib_path = resource_dir.join("binaries/ffmpeg/lib");
+            let ffmpeg_lib_path = resource_dir.join("sidecars");
             if ffmpeg_lib_path.exists() {
                 new_paths.push(ffmpeg_lib_path.to_string_lossy().to_string());
             }

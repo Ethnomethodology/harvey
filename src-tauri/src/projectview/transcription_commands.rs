@@ -5,7 +5,7 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Runtime}; // Removed ShellExt from here
+use tauri::{AppHandle, Emitter, Manager, Runtime}; // Removed ShellExt from here
 use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
 use crate::projectview::utils::{get_ffmpeg_path, get_ffprobe_path};
@@ -381,10 +381,23 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 
     info!("[Trim Backend] FFmpeg Cmd: {:?} {}", ffmpeg_path, args.join(" "));
     let shell_scope = app_handle.shell();
-    let (mut rx, _child) = shell_scope
-        .command(ffmpeg_path)
-        .args(args)
-        .spawn()?;
+    let mut command = shell_scope.command(ffmpeg_path).args(args);
+
+    if cfg!(target_os = "macos") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let sidecars_path_str = sidecars_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                }
+            }
+        }
+    }
+
+    let (mut rx, _child) = command.spawn()?;
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
     let mut ffmpeg_exit_code: Option<i32> = None;
@@ -1622,10 +1635,23 @@ pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
     debug!("[FFmpeg CMD][{}] Command arguments: {:?}", job_id, args);
 
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope
-        .command(ffmpeg_path)
-        .args(args)
-        .spawn()?;
+    let mut command = shell_scope.command(ffmpeg_path).args(args);
+
+    if cfg!(target_os = "macos") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let sidecars_path_str = sidecars_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                }
+            }
+        }
+    }
+
+    let (mut rx, child) = command.spawn()?;
     debug!("[FFmpeg CMD][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
