@@ -367,6 +367,7 @@
                 {#if currentTrimAudioBuffer && dataTrimEndTime > 0}
                     <div class="waveform-container w-full h-[75px] bg-gray-100 dark:bg-d-gray-700 overflow-hidden">
                         <InteractiveWaveform
+                            startZoomedOut={true}
                             externalAudioBuffer={currentTrimAudioBuffer}
                             externalCurrentTime={dataMediaPlayerCurrentTime}
                             externalDuration={mediaPlayerInDataRef?.localDuration}
