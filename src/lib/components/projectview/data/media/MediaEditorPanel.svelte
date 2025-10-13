@@ -24,6 +24,7 @@
     import MediaPlayer from '../../shared/MediaPlayer.svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import InteractiveWaveform from '../../shared/InteractiveWaveform.svelte';
+    import TimestampInput from '../../shared/TimestampInput.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js';
 
     export let mediaPath = null;
@@ -356,9 +357,20 @@
         {#if showDataTrimUI && mediaPath}
             <div class="inline-trim-ui-wrapper">
                 <div class="flex justify-between items-center mb-1">
-                    <p class="text-xs text-gray-600 dark:text-d-gray-400">
-                        Adjust start and end times by dragging the red bars on both sides: {dataTrimStartTime.toFixed(3)}s — {dataTrimEndTime.toFixed(3)}s
-                    </p>
+                    <div class="flex items-center gap-x-2">
+                        <p class="text-xs text-gray-600 dark:text-d-gray-400">
+                            Adjust start and end times:
+                        </p>
+                        <TimestampInput
+                            value={dataTrimStartTime}
+                            on:update={(e) => dataTrimStartTime = e.detail}
+                        />
+                        <span class="text-gray-400 dark:text-white">—</span>
+                        <TimestampInput
+                            value={dataTrimEndTime}
+                            on:update={(e) => dataTrimEndTime = e.detail}
+                        />
+                    </div>
                     <div class="space-x-2">
                         <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" on:click={handleConfirmDataTrim}>Trim</button>
                         <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-semibold py-1 px-3 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50" on:click={handleCancelDataTrim}>Cancel</button>
