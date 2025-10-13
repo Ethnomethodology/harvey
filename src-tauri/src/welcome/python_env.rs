@@ -113,14 +113,14 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     // in the same transaction as the libraries that depend on it (like `torchcodec`).
     let packages = [
         "--upgrade", "pip",
-        "ffmpeg-python",
-        "torch",
-        "torchcodec",
-        "pyannote.audio",
-        "transformers",
-        "sacremoses",
-        "sentencepiece",
-        "pypandoc_binary",
+        "ffmpeg-python==0.2.0",
+        "torch==2.8.0",
+        "torchcodec==0.7.0",
+        "pyannote.audio==4.0.1",
+        "transformers==4.57.0",
+        "sacremoses==0.1.1",
+        "sentencepiece==0.2.1",
+        "pypandoc_binary==1.15",
     ];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
