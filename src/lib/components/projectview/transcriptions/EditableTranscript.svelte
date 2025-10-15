@@ -537,7 +537,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         textEditorContainerStyle = 'flex-grow';
 
         if (layoutKey === 'Layout1') {
-            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4';
+            columnContainerClass = 'flex flex-col items-start gap-y-2 flex-grow min-h-0 w-full mt-4';
             segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400';
         } else if (layoutKey === 'Layout2') {
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
@@ -750,7 +750,11 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         </div>
 
                         {#if $transcriptStore.isDualModeActive}
-                            <hr class="my-4 border-gray-300 dark:border-gray-600">
+                            {#if isLayout1Active}
+                                <div class="w-full my-4 border-t border-gray-300 dark:border-gray-600"></div>
+                            {:else}
+                                <hr class="my-4 border-gray-300 dark:border-gray-600">
+                            {/if}
 
                             <!-- Secondary Segment Editor -->
                             <div class="secondary-segment-editor">
