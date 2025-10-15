@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -385,6 +385,20 @@
 				<span class="text-xs">Translate</span>
 				{/if}
 			</button>
+
+			<!-- Dual Transcript Mode Checkbox -->
+			<div class="flex items-center ml-2">
+				<input
+					id="dual-transcript-mode"
+					type="checkbox"
+					class="ui-checkbox"
+					bind:checked={$transcriptStore.isDualModeActive}
+					on:change={(e) => toggleDualMode(e.currentTarget.checked)}
+					disabled={$transcriptStore.transcriptDirty}
+					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : 'Enable Dual Transcript Mode'}
+				/>
+				<label for="dual-transcript-mode" class="ml-1.5 text-xs text-gray-700 dark:text-gray-300">Dual Transcript Mode</label>
+			</div>
 	</div>
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->

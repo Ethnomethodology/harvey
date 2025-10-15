@@ -1,7 +1,7 @@
 <!-- src/lib/components/projectview/transcriptions/RichTextPreview.svelte -->
 <script>
 	import { project, prepareDocumentView } from '$lib/stores/projectStore.js';
-	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, updatePlayerCurrentSegmentIndex, switchTranscript, setSecondaryTranscript } from '$lib/stores/transcriptStore.js';
 	import { createEventDispatcher, tick, onMount, onDestroy } from 'svelte';
 	import { basename } from '@tauri-apps/api/path';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
@@ -95,6 +95,35 @@
 			const displayLabel = `${langLabel}${fileNamePart}`;
 			return { ...t, displayLabel };
 		});
+
+		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+	});
+
+	const secondaryDisplayedTranscripts = derived(transcriptStore, ($transcriptStore) => {
+		const transcripts = $transcriptStore.selectedMediaFile?.associated_transcripts;
+		if (!$transcriptStore.isDualModeActive || !transcripts || transcripts.length < 2) return [];
+
+		const withLabels = transcripts
+			.filter(t => t.path !== $transcriptStore.currentTranscriptPath)
+			.map(t => {
+				const langLabel = getLanguageLabel(t.language_code || 'original');
+				let fileName = t.name;
+				if (!fileName && t.path) {
+					try {
+						const pathParts = t.path.split(/[\\/]/);
+						fileName = pathParts[pathParts.length - 1];
+						if (fileName.toLowerCase().endsWith('.json')) {
+							fileName = fileName.substring(0, fileName.length - 5);
+						}
+					} catch (e) {
+						console.error("Error extracting filename from path:", e);
+						fileName = '';
+					}
+				}
+				const fileNamePart = fileName ? ` (${fileName})` : '';
+				const displayLabel = `${langLabel}${fileNamePart}`;
+				return { ...t, displayLabel };
+			});
 
 		return withLabels.sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
 	});
@@ -251,16 +280,33 @@
 	let canRedo = false;
 
 	$: {
-	  const segs = $transcriptStore.segments || [];
-	  canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
-	  canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
-      // Minimal initial mapping, just to have an array of the correct length with original data
-	  allSegmentsData = segs.map((seg, segIdx) => ({
-	      segmentIndex: segIdx,
-          originalSegment: seg
-          // Add any other absolutely essential lightweight data needed by virtualization itself, if any.
-          // For now, originalSegment and segmentIndex should be enough.
-	  }));
+		canUndo = ($transcriptStore.transcriptUndoStack?.length || 0) > 0;
+		canRedo = ($transcriptStore.transcriptRedoStack?.length || 0) > 0;
+
+		if ($transcriptStore.isDualModeActive && $transcriptStore.secondaryTranscriptPath) {
+			const primarySegs = $transcriptStore.segments || [];
+			const secondarySegs = $transcriptStore.secondaryTranscriptSegments || [];
+
+			if (primarySegs.length === secondarySegs.length) {
+				allSegmentsData = primarySegs.flatMap((pSeg, i) => {
+					const sSeg = secondarySegs[i];
+					return [
+						{ segmentIndex: i, originalSegment: pSeg, isPrimary: true },
+						{ segmentIndex: i, originalSegment: sSeg, isPrimary: false }
+					];
+				});
+			} else {
+				// This case is handled by the store, but as a fallback:
+				allSegmentsData = [];
+			}
+		} else {
+			const segs = $transcriptStore.segments || [];
+			allSegmentsData = segs.map((seg, segIdx) => ({
+				segmentIndex: segIdx,
+				originalSegment: seg,
+				isPrimary: true
+			}));
+		}
 	}
 
     // --- Virtualization Calculations ---
@@ -279,7 +325,7 @@
             paddingTop = visibleStartIndex * ESTIMATED_SEGMENT_HEIGHT;
             paddingBottom = (totalItems - 1 - visibleEndIndex) * ESTIMATED_SEGMENT_HEIGHT;
 
-            visibleSegments = allSegmentsData.slice(visibleStartIndex, visibleEndIndex + 1).map(item => {
+            visibleSegments = allSegmentsData.slice(visibleStartIndex, visibleEndIndex + 1).map((item, i) => {
                 const seg = item.originalSegment;
                 const segIdx = item.segmentIndex;
                 const rawContent = seg.text;
@@ -301,6 +347,7 @@
 
                 return {
                   segmentIndex: segIdx,
+                  isPrimary: item.isPrimary,
                   startTime: formatTimestamp(seg.start_time),
                   endTime: formatTimestamp(seg.end_time),
                   rawStart: seg.start_time,
@@ -530,7 +577,44 @@
     }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
-    async function handleInsertNewSegment(index) { if (!previewEditMode) return; const MIN_GAP_SECONDS = 1.0; const TIME_TOLERANCE = 0.001; const currentSegments = get(transcriptStore).segments; const mediaDuration = get(transcriptStore).player.duration; let prevEndTime = 0.0; let nextStartTime = mediaDuration; if (index > 0) { prevEndTime = currentSegments[index - 1]?.end_time ?? 0.0; } if (index < currentSegments.length) { nextStartTime = currentSegments[index]?.start_time ?? mediaDuration; } const gap = nextStartTime - prevEndTime; if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) { await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' }); return; } let newStartTime = prevEndTime + TIME_TOLERANCE; let newEndTime = nextStartTime - TIME_TOLERANCE; newStartTime = Math.max(0, newStartTime); newEndTime = Math.min(mediaDuration, newEndTime); newEndTime = Math.max(newStartTime, newEndTime); if (newEndTime > newStartTime) { dispatch('insertnewsegment', { index, startTime: newStartTime, endTime: newEndTime }); } else { console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`); await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' }); } }
+    async function handleInsertNewSegment(index, before = false) {
+        if (!previewEditMode) return;
+        const MIN_GAP_SECONDS = 1.0;
+        const TIME_TOLERANCE = 0.001;
+        const currentSegments = get(transcriptStore).segments;
+        const mediaDuration = get(transcriptStore).player.duration;
+
+        let finalIndex = before ? index : index + 1;
+
+        let prevEndTime = 0.0;
+        let nextStartTime = mediaDuration;
+
+        if (finalIndex > 0) {
+            prevEndTime = currentSegments[finalIndex - 1]?.end_time ?? 0.0;
+        }
+        if (finalIndex < currentSegments.length) {
+            nextStartTime = currentSegments[finalIndex]?.start_time ?? mediaDuration;
+        }
+
+        const gap = nextStartTime - prevEndTime;
+        if (gap < MIN_GAP_SECONDS + (2 * TIME_TOLERANCE)) {
+            await message(`Cannot insert segment here. The gap between segments must be at least ${MIN_GAP_SECONDS.toFixed(1)} seconds. Current gap is ${gap.toFixed(3)} seconds.`, { title: 'Cannot Insert Segment', type: 'info' });
+            return;
+        }
+
+        let newStartTime = prevEndTime + TIME_TOLERANCE;
+        let newEndTime = nextStartTime - TIME_TOLERANCE;
+        newStartTime = Math.max(0, newStartTime);
+        newEndTime = Math.min(mediaDuration, newEndTime);
+        newEndTime = Math.max(newStartTime, newEndTime);
+
+        if (newEndTime > newStartTime) {
+            dispatch('insertnewsegment', { index: finalIndex, startTime: newStartTime, endTime: newEndTime });
+        } else {
+            console.error(`[RichTextPreview] Calculated invalid times for gap fill insertion: start=${newStartTime.toFixed(3)}, end=${newEndTime.toFixed(3)}`);
+            await message('Could not calculate valid timestamps for the new segment in the available gap.', { title: 'Insertion Error', type: 'error' });
+        }
+    }
 
 	// --- SVG Icons (Unchanged) ---
 	const EDIT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"> <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /> </svg>`;
@@ -592,6 +676,16 @@
 					placeholder="No Transcripts"
 					disabled={$displayedTranscripts.length === 0}
 				/>
+				{#if $transcriptStore.isDualModeActive}
+				<Dropdown
+					containerClasses="max-w-[150px] sm:max-w-[200px] md:max-w-[250px] ml-2"
+					options={$secondaryDisplayedTranscripts.map(t => ({ value: t.path, label: t.displayLabel }))}
+					value={$transcriptStore.secondaryTranscriptPath || ''}
+					on:change={(e) => setSecondaryTranscript(e.detail)}
+					placeholder="Select Transcript"
+					disabled={$secondaryDisplayedTranscripts.length === 0}
+				/>
+				{/if}
             {:else}
                 <span class="px-3 py-1 text-xs text-gray-500 dark:text-d-gray-400 italic">No Media Selected</span>
             {/if}
@@ -654,10 +748,11 @@
             {#if previewEditMode && visibleStartIndex === 0}
               <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(0)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
             {/if}
-            {#each visibleSegments as seg (seg.segmentIndex)}
+            {#each visibleSegments as seg (`${seg.segmentIndex}-${seg.isPrimary}`)}
                 <div
-                    id={`segment-${seg.segmentIndex}`}
+                    id={`segment-${seg.segmentIndex}-${seg.isPrimary ? 'p' : 's'}`}
                     class:segment-block={true}
+                    class:secondary-segment={$transcriptStore.isDualModeActive && !seg.isPrimary}
                     class:hovering={hoveredSegment === seg.segmentIndex}
                     on:mouseenter={() => hoveredSegment = seg.segmentIndex}
                     on:mouseleave={() => hoveredSegment = -1}
@@ -665,7 +760,8 @@
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
-                    class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
+                    class:bg-blue-100={seg.segmentIndex === activeSegmentIndex && seg.isPrimary}
+                    class:bg-blue-50={seg.segmentIndex === activeSegmentIndex && !seg.isPrimary}
                     class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex}
                     class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex}
                     class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
@@ -797,6 +893,7 @@
 	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
     .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-d-gray-500; }
 	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }
+	.segment-block.secondary-segment { @apply bg-gray-50 dark:bg-gray-800; }
 	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
 	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
 	.preview-interaction-disabled { @apply cursor-default opacity-80; }

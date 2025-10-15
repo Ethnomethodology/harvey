@@ -1,7 +1,7 @@
 <script>
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
-    import { transcriptStore, updateSegment, updatePlayerTime } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, updateSegment, updatePlayerTime, updateSecondarySegment } from '$lib/stores/transcriptStore.js';
     import { onMount, onDestroy, tick, createEventDispatcher, afterUpdate } from 'svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
@@ -50,11 +50,24 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     export let previewEditMode = false;
     let editEnabled = false;
     let segments = [];
+    let secondarySegments = [];
     let currentIndex = -1;
     let targetIndexForLoad = -1; // Primarily for tracking if a load was requested externally
+
+    // --- Primary Segment State ---
     let localStart = '';
     let localEnd = '';
     let localSpeaker = '';
+    let lexicalEditorInstance;
+    let currentEditorJson = null;
+    let initialJsonForEditor = null;
+
+    // --- Secondary Segment State (for Dual Mode) ---
+    let localSpeakerSecondary = '';
+    let lexicalEditorInstanceSecondary;
+    let currentEditorJsonSecondary = null;
+    let initialJsonForEditorSecondary = null;
+
     function handleSpeakerSelectionChange(event) {
         const newSpeaker = event.detail;
         if (newSpeaker !== localSpeaker) {
@@ -62,9 +75,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             handleSpeakerChange();
         }
     }
-    let lexicalEditorInstance;
-    let currentEditorJson = null;
-    let initialJsonForEditor = null;
+     function handleSpeakerSelectionChangeSecondary(event) {
+        const newSpeaker = event.detail;
+        if (newSpeaker !== localSpeakerSecondary) {
+            localSpeakerSecondary = newSpeaker;
+            // This will be saved on commit
+        }
+    }
+
     const dispatch = createEventDispatcher();
     let isMounted = false;
     let isEditorVisible = false;
@@ -98,103 +116,86 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     async function renderSegmentUI(idx) {
         if (!isMounted) return;
 
-        if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length) {
+        const isDual = get(transcriptStore).isDualModeActive;
+
+        if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length || (isDual && (!secondarySegments || secondarySegments.length === 0))) {
             const needsClear = currentIndex !== -1;
-            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = '';
-            initialJsonForEditor = defaultEmptyJsonString; // Ensure it's set for potential editor reset
+            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = ''; localSpeakerSecondary = '';
+            initialJsonForEditor = defaultEmptyJsonString;
             currentEditorJson = defaultEmptyJsonString;
-            if (lexicalEditorInstance && isEditorVisible) { // Check isEditorVisible to avoid errors if editor is not in DOM
-                 lexicalEditorInstance.resetEditorState(defaultEmptyJsonString);
-            }
+            initialJsonForEditorSecondary = defaultEmptyJsonString;
+            currentEditorJsonSecondary = defaultEmptyJsonString;
+            if (lexicalEditorInstance && isEditorVisible) lexicalEditorInstance.resetEditorState(defaultEmptyJsonString);
+            if (lexicalEditorInstanceSecondary && isEditorVisible && isDual) lexicalEditorInstanceSecondary.resetEditorState(defaultEmptyJsonString);
             if (needsClear) { await tick(); dispatchEditState(); }
             return;
         }
 
-        const oldIndex = currentIndex;
         currentIndex = idx;
-        const seg = segments[idx];
         targetIndexForLoad = -1;
 
-        if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
-            localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error';
-            initialJsonForEditor = defaultEmptyJsonString;
-        } else {
-            localStart = formatTimestamp(seg.start_time);
-            localEnd = formatTimestamp(seg.end_time);
-            localSpeaker = seg.speaker || 'Unknown';
+        // Process a single segment (primary or secondary)
+        const processSegment = (seg) => {
+            if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
+                return { localSpeaker: 'Error', initialJson: defaultEmptyJsonString };
+            }
+            const localSpeaker = seg.speaker || 'Unknown';
             let segmentText = seg.text || '';
             let jsonToProcess = segmentText;
             let isValidLexicalJson = false;
+
             if (segmentText && typeof segmentText === 'string') {
                 try {
                     const parsed = JSON.parse(segmentText);
-                    if (parsed && parsed.root && parsed.root.type === 'root') {
-                        isValidLexicalJson = true;
-                        jsonToProcess = segmentText;
-                    } else if (parsed && Array.isArray(parsed.children)) {
-                        isValidLexicalJson = true;
-                        const fullState = {
-                            root: {
-                                children: [parsed], // Wrap the array of nodes in a single root object
-                                direction: parsed.direction || 'ltr',
-                                format: '',
-                                indent: 0,
-                                type: 'root',
-                                version: 1
-                            }
-                        };
-                        jsonToProcess = JSON.stringify(fullState);
-                    }
-                } catch (e) {
-                    isValidLexicalJson = false;
-                }
+                    if (parsed && parsed.root && parsed.root.type === 'root') isValidLexicalJson = true;
+                } catch (e) { /* not json */ }
             }
 
+            let initialJson;
             if (isValidLexicalJson) {
-                if (!jsonToProcess || jsonToProcess.trim() === '') {
-                    jsonToProcess = defaultEmptyJsonString;
-                }
-                try {
-                    const parsedOriginal = JSON.parse(jsonToProcess);
-                    function flattenChildren(nodes) {
-                      return nodes.flatMap(n =>
-                        n.type === 'root' && Array.isArray(n.children)
-                          ? flattenChildren(n.children)
-                          : [n]
-                      );
-                    }
-                    let finalChildren = flattenChildren(parsedOriginal.root.children || []);
-                    if (finalChildren.length === 0) {
-                      finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
-                    }
-                    const sanitizedEditorState = {
-                        root: {
-                            children: finalChildren,
-                            direction: parsedOriginal.root?.direction || 'ltr',
-                            format: parsedOriginal.root?.format || '',
-                            indent: parsedOriginal.root?.indent || 0,
-                            type: 'root',
-                            version: 1
-                        }
-                    };
-                    initialJsonForEditor = JSON.stringify(sanitizedEditorState);
-                } catch (e) {
-                    initialJsonForEditor = defaultEmptyJsonString;
-                }
+                initialJson = !jsonToProcess || jsonToProcess.trim() === '' ? defaultEmptyJsonString : jsonToProcess;
             } else {
-                const plainTextContent = extractPlainText(segmentText);
-                initialJsonForEditor = createJsonFromPlainText(plainTextContent);
+                initialJson = createJsonFromPlainText(extractPlainText(segmentText));
             }
+            return { localSpeaker, initialJson };
+        };
+
+        // Load Primary Segment
+        const primarySeg = segments[idx];
+        const { localSpeaker: primarySpeaker, initialJson: primaryJson } = processSegment(primarySeg);
+        localSpeaker = primarySpeaker;
+        initialJsonForEditor = primaryJson;
+        currentEditorJson = initialJsonForEditor;
+
+        if (primarySeg) {
+             localStart = formatTimestamp(primarySeg.start_time);
+             localEnd = formatTimestamp(primarySeg.end_time);
         }
-        currentEditorJson = initialJsonForEditor; // Keep track of current JSON for saving
 
         if (lexicalEditorInstance) {
-            // If the editor instance exists, update its content directly.
-            // This avoids re-creating the entire component, which is more performant.
             lexicalEditorInstance.updateContent(initialJsonForEditor);
-        } else if (isEditorVisible) {
-            // Editor will be created by Svelte due to #if block, and will use initialJsonForEditor prop
         }
+
+        // Load Secondary Segment if in Dual Mode
+        if (isDual) {
+            const secondarySeg = secondarySegments[idx];
+            if (secondarySeg) {
+                const { localSpeaker: secondarySpeaker, initialJson: secondaryJson } = processSegment(secondarySeg);
+                localSpeakerSecondary = secondarySpeaker;
+                initialJsonForEditorSecondary = secondaryJson;
+                currentEditorJsonSecondary = initialJsonForEditorSecondary;
+
+                if (lexicalEditorInstanceSecondary) {
+                    lexicalEditorInstanceSecondary.updateContent(initialJsonForEditorSecondary);
+                }
+            } else {
+                 localSpeakerSecondary = 'Error';
+                 initialJsonForEditorSecondary = defaultEmptyJsonString;
+                 currentEditorJsonSecondary = defaultEmptyJsonString;
+                 if(lexicalEditorInstanceSecondary) lexicalEditorInstanceSecondary.resetEditorState(defaultEmptyJsonString);
+            }
+        }
+
 
         dispatchEditState();
         await tick();
@@ -204,7 +205,40 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     /* --- Public methods --- */
     export function loadSegment(i) { if (i >= 0 && i < segments.length) { targetIndexForLoad = i; if (i !== currentIndex) { dispatch('navigate', { index: i }); } renderSegmentUI(i); } else { targetIndexForLoad = -1; renderSegmentUI(i); } }
     export function loadSegmentSilent(i) { if (i >= 0 && i < segments.length) { if (i !== currentIndex) { targetIndexForLoad = i; renderSegmentUI(i); } } else { targetIndexForLoad = -1; if (i !== currentIndex) renderSegmentUI(i); } }
-    export function updateTimesFromExternal(newStartTime, newEndTime) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return; let changed = false; const currentSeg = segments[currentIndex]; if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
+    export function updateTimesFromExternal(newStartTime, newEndTime) {
+        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return;
+
+        let changes = {};
+        const currentSeg = segments[currentIndex];
+
+        if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) {
+            localStart = formatTimestamp(newStartTime);
+            changes.start_time = newStartTime;
+        } else {
+            localStart = formatTimestamp(currentSeg.start_time);
+        }
+
+        if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) {
+            localEnd = formatTimestamp(newEndTime);
+            changes.end_time = newEndTime;
+        } else {
+            localEnd = formatTimestamp(currentSeg.end_time);
+        }
+
+        if (Object.keys(changes).length > 0) {
+            if (get(transcriptStore).isDualModeActive) {
+                updateSegment(currentIndex, changes, true);
+                updateSecondarySegment(currentIndex, changes);
+            } else {
+                updateSegment(currentIndex, changes, true);
+            }
+            tick().then(dispatchEditState);
+            const currentTime = get(transcriptStore).player.currentTime;
+            if (currentTime < newStartTime || currentTime >= newEndTime) {
+                updatePlayerTime(newStartTime);
+            }
+        }
+    }
     export function focusEditor() { /* Lexical focus */ }
     export function forceReloadFromStore() { if (isMounted && currentIndex >= 0 && currentIndex < segments.length) { renderSegmentUI(currentIndex); } }
 
@@ -216,6 +250,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             if (!isMounted) return;
 
             const newSegments = ts.segments || [];
+            const newSecondarySegments = ts.secondaryTranscriptSegments || [];
             const currentStoreIndex = ts.player?.currentSegmentIndex ?? -1;
             const activeTranscriptPath = ts.activeTranscript?.path;
 
@@ -224,13 +259,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             // For deep content changes, we rely on the activeTranscript.segments reference or explicit actions.
             const segmentsArrayReferenceChanged = newSegments !== segments;
             const segmentsLengthChanged = newSegments.length !== segments.length;
+            const secondarySegmentsChanged = newSecondarySegments !== secondarySegments;
 
             // Update local segments reference
             segments = newSegments;
+            secondarySegments = newSecondarySegments;
 
             // Scenario 1: Structural change (segments array reference or length changed)
             // This covers new transcript loads, undo/redo, segment insert/delete.
-            if (segmentsArrayReferenceChanged || segmentsLengthChanged) {
+            if (segmentsArrayReferenceChanged || segmentsLengthChanged || secondarySegmentsChanged) {
                 // If segments become empty, ensure transcript is not dirty.
                 if (newSegments.length === 0) {
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false }));
@@ -322,7 +359,37 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function handleNextClick() { dispatch('next'); }
 
     /* --- Editor Actions --- */
-    function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
+    function handleBlurTimestamp(field, value) {
+        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false;
+        const parsedTime = parseTimestamp(value);
+        if (parsedTime === null) {
+            // Revert to original if invalid
+            const seg = segments[currentIndex];
+            if (field === 'start_time') localStart = formatTimestamp(seg.start_time);
+            else localEnd = formatTimestamp(seg.end_time);
+            return;
+        }
+
+        const changes = {};
+        changes[field] = parsedTime;
+
+        // In dual mode, apply timestamp changes to both segments
+        if (get(transcriptStore).isDualModeActive) {
+            updateSegment(currentIndex, changes); // Update primary
+            updateSecondarySegment(currentIndex, changes); // Update secondary
+        } else {
+            updateSegment(currentIndex, changes);
+        }
+
+        tick().then(dispatchEditState);
+        const playerTime = get(transcriptStore).player.currentTime;
+        const seg = segments[currentIndex];
+        const startTime = field === 'start_time' ? parsedTime : seg.start_time;
+        const endTime = field === 'end_time' ? parsedTime : seg.end_time;
+        if (playerTime < startTime || playerTime >= endTime) {
+            updatePlayerTime(startTime);
+        }
+    }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
     function handleEditorUpdate(event) {
         currentEditorJson = event.detail.jsonString;
@@ -411,8 +478,28 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
         if (hasChanges) {
             updateSegment(currentIndex, changes);
-        } else {
         }
+
+        // --- Commit secondary segment changes in dual mode ---
+        if (get(transcriptStore).isDualModeActive) {
+            const secondarySegmentInStore = get(transcriptStore).secondaryTranscriptSegments[currentIndex];
+            let secondaryChanges = {};
+            let secondaryTextChanged = false;
+
+            if (currentEditorJsonSecondary && currentEditorJsonSecondary !== secondarySegmentInStore.text) {
+                secondaryChanges.text = currentEditorJsonSecondary;
+                secondaryTextChanged = true;
+            }
+            if (localSpeakerSecondary !== secondarySegmentInStore.speaker) {
+                secondaryChanges.speaker = localSpeakerSecondary;
+            }
+
+            if (Object.keys(secondaryChanges).length > 0) {
+                updateSecondarySegment(currentIndex, secondaryChanges);
+                return true; // Indicate that a change was made
+            }
+        }
+
         return hasChanges;
     }
     function handleEditSaveClick() {
@@ -492,11 +579,23 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 </button>
             </div>
             <!-- Main content area for inputs, layout driven by $activeLayout -->
-            <div class="flex justify-center">
-            <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
+            <div class="flex-grow overflow-y-auto">
+                <div class="flex justify-center">
+                    <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
 
-                {#if isLayout1Active}
-                    <!-- Layout 1: Single Row Table -->
+                        <!-- Add Segment Before Button -->
+                        {#if editEnabled}
+                        <div class="flex justify-center my-2">
+                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: true })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment Before">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>
+                            </button>
+                        </div>
+                        {/if}
+
+                        <!-- Primary Segment Editor -->
+                        <div class="primary-segment-editor">
+                            {#if isLayout1Active}
+                                <!-- Layout 1: Single Row Table -->
                     <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
 <div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
@@ -647,8 +746,72 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                              {/if}
                         </div>
                     </div>
-                {/if}
-            </div>
+                                {/if}
+                        </div>
+
+                        {#if $transcriptStore.isDualModeActive}
+                            <hr class="my-4 border-gray-300 dark:border-gray-600">
+
+                            <!-- Secondary Segment Editor -->
+                            <div class="secondary-segment-editor">
+                                {#if isLayout1Active}
+                                    <!-- Layout 1: Single Row Table -->
+                                    <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
+                                        <div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                                            <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                                        </div>
+                                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                                            <input class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                                            <input class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                                        </div>
+                                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5'>
+                                            <Dropdown
+                                                options={speakerOptions}
+                                                bind:value={localSpeakerSecondary}
+                                                on:change={handleSpeakerSelectionChangeSecondary}
+                                                disabled={!editEnabled}
+                                                placeholder="Select Speaker"
+                                                containerClasses="w-full"
+                                            />
+                                        </div>
+                                        <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
+                                            {#if currentIndex !== -1 && initialJsonForEditorSecondary}
+                                                <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{(e) => currentEditorJsonSecondary = e.detail.jsonString}" enableFloatingToolbar="{false}" />
+                                            {/if}
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
+                                            <Dropdown
+                                                options={speakerOptions}
+                                                bind:value={localSpeakerSecondary}
+                                                on:change={handleSpeakerSelectionChangeSecondary}
+                                                disabled={!editEnabled}
+                                                placeholder="Select Speaker"
+                                                containerClasses="w-full"
+                                            />
+                                        </div>
+                                        <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                                            {#if currentIndex !== -1 && initialJsonForEditorSecondary}
+                                                <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{(e) => currentEditorJsonSecondary = e.detail.jsonString}" enableFloatingToolbar="{false}" />
+                                            {/if}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
+
+                        <!-- Add Segment After Button -->
+                        {#if editEnabled}
+                        <div class="flex justify-center my-2">
+                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: false })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment After">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>
+                            </button>
+                        </div>
+                        {/if}
+                    </div>
+                </div>
             </div>
             <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
         </div>
