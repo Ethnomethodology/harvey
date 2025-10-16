@@ -292,8 +292,6 @@
 
 	.btn-secondary { padding: 0.4rem 1rem; background-color: #e5e7eb; color: #374151; border: 1px solid #d1d5db; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s ease-in-out; }
 	.btn-secondary:hover { background-color: #d1d5db; }
-	/* Specific style for the small add button */
-	.btn-secondary.text-xs { font-size: 0.75rem; padding: 0.25rem 0.75rem; }
 
 	.input-field { border: 1px solid #d1d5db; padding: 0.4rem 0.6rem; border-radius: 0.375rem; font-size: 0.875rem; background-color: white; color: #374151; }
 	.input-field:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; }

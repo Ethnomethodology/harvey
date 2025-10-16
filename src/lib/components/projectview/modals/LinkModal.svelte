@@ -160,10 +160,6 @@
   .btn-secondary:disabled {
     @apply bg-gray-100 text-gray-400 border-gray-200;
   }
-  .btn-primary.text-xs,
-  .btn-secondary.text-xs {
-    @apply py-1 px-2;
-  }
 
   .btn-danger-secondary {
     @apply py-1 px-2 bg-transparent text-red-600 dark:text-red-400 border border-red-300 dark:border-red-600 rounded-md cursor-pointer

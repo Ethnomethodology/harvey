@@ -492,8 +492,6 @@
 	.w-28 { width: 7rem; } /* approx */
 
 	/* Tailwind class used in SVG - ensure consistency */
-	.w-4 { width: 1rem; } /* 16px */
-	.h-4 { height: 1rem; } /* 16px */
 
 	/* Extra small text for speaker count badge */
 	.text-xxs {
