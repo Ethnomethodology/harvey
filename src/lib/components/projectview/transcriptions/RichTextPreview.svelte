@@ -559,15 +559,18 @@
 
     async function handleDeleteSegment(idx) {
         if (!previewEditMode) return;
-        const storeSegments = get(transcriptStore).segments;
-        const segmentToDelete = storeSegments[idx];
-        if (!segmentToDelete) {
-            console.error(`[RichTextPreview] Delete requested for invalid index: ${idx}`); return;
+        const store = get(transcriptStore);
+
+        let confirmationMessage = '';
+
+        if (store.isDualModeActive) {
+            confirmationMessage = `Are you sure you want to delete segment ${idx + 1} from both transcripts? This action can be undone until you save the transcript.`;
+        } else {
+            confirmationMessage = `Are you sure you want to delete segment ${idx + 1}? This action can be undone until you save the transcript.`;
         }
-        // Simplified confirmation message as full plainText might not be readily processed for non-visible items
-        const textPreview = segmentToDelete.text ? (isLexicalJson(segmentToDelete.text) ? "[Rich Content]" : String(segmentToDelete.text).substring(0,50) + "...") : "[empty]";
+
         const confirmation = await confirm(
-            `Are you sure you want to delete segment ${idx + 1}?\n\n[${formatTimestamp(segmentToDelete.start_time)} - ${formatTimestamp(segmentToDelete.end_time)}]\n\"${textPreview}\"\n\nThis action can be undone until you save the transcript.`,
+            confirmationMessage,
             { title: 'Confirm Delete Segment', type: 'warning', okLabel: 'Delete Segment', cancelLabel: 'Cancel' }
         );
         if (confirmation) {
@@ -878,7 +881,7 @@
                     </div>
                     {/if}
                 </div>
-                {#if previewEditMode}
+                {#if previewEditMode && (!$transcriptStore.isDualModeActive || !seg.isPrimary)}
                       <div class="flex justify-center insert-button-wrapper"> <button class="btn-icon text-green-400 hover:text-green-600 dark:hover:text-green-300" on:click={() => handleInsertNewSegment(seg.segmentIndex + 1)} title="Insert New Segment" aria-label="Insert New Segment"> {@html INSERT_ICON} </button> </div>
                     {/if}
             {/each}
