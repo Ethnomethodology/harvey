@@ -577,14 +577,14 @@
     }
     function handleUndo() { if (canUndo) { dispatch('undo'); } }
     function handleRedo() { if (canRedo) { dispatch('redo'); } }
-    async function handleInsertNewSegment(index, before = false) {
+    async function handleInsertNewSegment(index) {
         if (!previewEditMode) return;
         const MIN_GAP_SECONDS = 1.0;
         const TIME_TOLERANCE = 0.001;
         const currentSegments = get(transcriptStore).segments;
         const mediaDuration = get(transcriptStore).player.duration;
 
-        let finalIndex = before ? index : index + 1;
+        let finalIndex = index;
 
         let prevEndTime = 0.0;
         let nextStartTime = mediaDuration;
