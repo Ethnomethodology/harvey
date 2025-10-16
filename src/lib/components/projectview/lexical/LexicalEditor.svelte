@@ -1829,7 +1829,7 @@ $: if (editor && activeLayout) {
 
 <div class="lexical-editor-root h-full flex flex-col {backgroundClass} overflow-visible shadow-sm">
   {#if editable}
-    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md">
+    <div class="toolbar relative flex items-center flex-wrap gap-x-1 border-b border-gray-300 dark:border-border p-1 flex-shrink-0 bg-gray-50 dark:bg-surface-3 shadow-md z-40">
       {#if toolbarConfig.undo}
         <button class="mini-toolbar-button" on:click={undo} title="Undo ({modLabel}+Z)" disabled={!editable || !canUndo}>↺</button>
       {/if}
@@ -1994,7 +1994,7 @@ $: if (editor && activeLayout) {
             <svg class="ml-1 h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
           </button>
           {#if isColorDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each colorOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2025,7 +2025,7 @@ $: if (editor && activeLayout) {
             </svg>
           </button>
           {#if isHighlightDropdownOpen}
-            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+            <div class="absolute mt-1 z-30 w-32 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg">
               {#each highlightOptions as option}
                 <div
                   class="px-2 py-1 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
@@ -2059,7 +2059,7 @@ $: if (editor && activeLayout) {
   {/if}
 
   <div
-    class="lexical-wrapper flex-grow min-h-0 overflow-y-auto p-2 relative"
+    class="lexical-wrapper flex-grow min-h-0 p-2"
     bind:this={editorWrapper}
   >
     <div
@@ -2118,6 +2118,7 @@ $: if (editor && activeLayout) {
 />
 {/if}
 
+{#if enableFloatingToolbar}
 <FloatingModifyHighlightToolbar
   editor={editor}
   showToolbar={showModifyToolbar}
@@ -2183,6 +2184,7 @@ $: if (editor && activeLayout) {
     clickedNodeKey = null;
   }}
 />
+{/if}
 
 
 <style lang="postcss">

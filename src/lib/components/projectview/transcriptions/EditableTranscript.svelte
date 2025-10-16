@@ -559,7 +559,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls"
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm editable-transcript-controls"
      class:read-mode="{!editEnabled}"
      class:edit-mode="{editEnabled}">
     {#if !isEditorVisible}
@@ -571,7 +571,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 <button on:click="{handleEditSaveClick}"
                         class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white'
                         title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}">
+                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
+                        style="padding-left:0px;">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
@@ -823,7 +824,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .lexical-editor-wrapper-style {
         display: flex;
         flex-direction: column;
-        @apply rounded overflow-hidden;
+        @apply rounded;
+        overflow: visible;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
         @apply border border-gray-300 dark:border-border bg-white dark:bg-transparent;
@@ -838,7 +840,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         border: none !important;
         border-radius: 0 !important;
         box-shadow: none !important;
-        overflow: hidden;
+        overflow: visible;
         background-color: transparent !important;
     }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
