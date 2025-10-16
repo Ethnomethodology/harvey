@@ -108,8 +108,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function createJsonFromPlainText(text) { const editor = getPlainTextConverter(); let jsonString = defaultEmptyJsonString; const plainText = text || ''; try { editor.update(() => { const root = getRoot(); root.clear(); const p = createParagraphNode(); p.append(createTextNode(plainText)); root.append(p); }, { discrete: true }); const editorState = editor.getEditorState(); if (!editorState.isEmpty()) { jsonString = JSON.stringify(editorState.toJSON()); } else { console.warn("[EditableTranscript] createJsonFromPlainText empty state."); } } catch (e) { console.error("Error creating JSON from plain text:", e); } return jsonString; }
     function cleanupPlainTextConverter() { plainTextConverterEditor = null; }
     function extractPlainText(inputString) { if (!inputString || typeof inputString !== 'string') return ''; if (inputString.trim().startsWith('{') && inputString.trim().endsWith('}')) { try { JSON.parse(inputString); console.warn("[EditableTranscript] extractPlainText received likely JSON, returning empty."); return ''; } catch (e) { /* Ignore */ } } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); return doc.body.textContent || ""; } catch (e) { console.error("[EditableTranscript] Error parsing input string:", e); return inputString; } }
-    function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const tot = Math.floor(sec); return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}.${ms}`; }
-    function parseTimestamp(str) { const parts = str?.match(/^(\d{1,9}):(\d{2})\.(\d{3})$/); if (parts) { const minutes = parseInt(parts[1], 10); const seconds = parseInt(parts[2], 10); const milliseconds = parseInt(parts[3], 10); if (!isNaN(minutes) && !isNaN(seconds) && !isNaN(milliseconds) && seconds < 60 && milliseconds < 1000) return minutes * 60 + seconds + milliseconds / 1000; } const floatVal = parseFloat(str); return isNaN(floatVal) ? null : floatVal; }
+    function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalSeconds = Math.floor(sec); const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0'); const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'); const seconds = String(totalSeconds % 60).padStart(2, '0'); return `${hours}:${minutes}:${seconds}.${ms}`; }
+    function parseTimestamp(str) { if (!str) return null; let parts = str.match(/^(\d{2,}):(\d{2}):(\d{2})\.(\d{3})$/); if (parts) { const hours = parseInt(parts[1], 10); const minutes = parseInt(parts[2], 10); const seconds = parseInt(parts[3], 10); const milliseconds = parseInt(parts[4], 10); if (minutes < 60 && seconds < 60) { return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000; } } parts = str.match(/^(\d{1,9}):(\d{2})\.(\d{3})$/); if (parts) { const minutes = parseInt(parts[1], 10); const seconds = parseInt(parts[2], 10); const milliseconds = parseInt(parts[3], 10); if (seconds < 60) { return minutes * 60 + seconds + milliseconds / 1000; } } const floatVal = parseFloat(str); return isNaN(floatVal) ? null : floatVal; }
     function dispatchEditState() { if (!isMounted) return; if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const seg = segments[currentIndex]; const startTime = typeof seg?.start_time === 'number' ? seg.start_time : 0; const endTime = typeof seg?.end_time === 'number' ? seg.end_time : 0; dispatch('segmenteditfocus', { isEditing: true, startTime: startTime, endTime: endTime }); } else { dispatch('segmenteditfocus', { isEditing: false, startTime: 0, endTime: 0 }); } }
 
     /* --- Render UI --- */
@@ -586,7 +586,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <!-- Add Segment Before Button -->
                         {#if editEnabled}
                         <div class="flex justify-center my-2">
-                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: true })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment Before">
+                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: true })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment Before" aria-label="Insert New Segment Before">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>
                             </button>
                         </div>
@@ -596,15 +596,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <div class="primary-segment-editor">
                             {#if isLayout1Active}
                                 <!-- Layout 1: Single Row Table -->
-                    <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-<div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+<div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
 </div>
-                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
-                            <input id='startTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <input id='endTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        <div class='flex-shrink-0 pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                            <input id='startTimeInput_L1' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
+                            <input id='endTimeInput_L1' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5'>
+                        <div class='relative flex-shrink-0 pr-1 py-0.5'>
                             <Dropdown
                                 options={speakerOptions}
                                 bind:value={localSpeaker}
@@ -624,14 +624,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 {:else if $activeLayout === 'Layout2'}
                     <!-- Layout 2: Original Two Row Structure -->
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L2' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L2' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
@@ -655,14 +655,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 {:else if $activeLayout === 'Layout3'}
                     <!-- Layout 3: Num, Time, Speaker on first row; Text on second -->
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                          <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L3' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L3' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                         <div class='relative {speakerContainerStyle}'>
                             <Dropdown
@@ -686,14 +686,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
 
                 {:else if $activeLayout === 'Layout4'}
-                     <div class="flex items-center gap-x-1 flex-shrink-0">
+                     <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L4' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L4' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
@@ -717,14 +717,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
 
                 {:else if $activeLayout === 'Layout5'}
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L5' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L5' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
                              <Dropdown
@@ -760,15 +760,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                             <div class="secondary-segment-editor">
                                 {#if isLayout1Active}
                                     <!-- Layout 1: Single Row Table -->
-                                    <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-                                        <div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+                                        <div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
                                             <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                                         </div>
-                                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
-                                            <input class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                                            <input class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                                        <div class='flex-shrink-0 pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                                            <input class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
+                                            <input class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                                         </div>
-                                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5'>
+                                        <div class='relative flex-shrink-0 pr-1 py-0.5'>
                                             <Dropdown
                                                 options={speakerOptions}
                                                 bind:value={localSpeakerSecondary}
@@ -809,7 +809,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                         <!-- Add Segment After Button -->
                         {#if editEnabled}
                         <div class="flex justify-center my-2">
-                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: false })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment After">
+                            <button on:click={() => dispatch('insertnewsegment', { index: currentIndex, before: false })} class="btn-icon text-green-500 hover:text-green-700" title="Insert New Segment After" aria-label="Insert New Segment After">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 16 16"> <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/> </svg>
                             </button>
                         </div>
