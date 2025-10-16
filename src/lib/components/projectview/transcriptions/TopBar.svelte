@@ -386,19 +386,7 @@
 				{/if}
 			</button>
 
-			<!-- Dual Transcript Mode Checkbox -->
-			<div class="flex items-center ml-2">
-				<input
-					id="dual-transcript-mode"
-					type="checkbox"
-					class="ui-checkbox"
-					bind:checked={$transcriptStore.isDualModeActive}
-					on:change={(e) => toggleDualMode(e.currentTarget.checked)}
-					disabled={$transcriptStore.transcriptDirty}
-					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : 'Enable Dual Transcript Mode'}
-				/>
-				<label for="dual-transcript-mode" class="ml-1.5 text-xs text-gray-700 dark:text-gray-300">Dual Transcript Mode</label>
-			</div>
+			
 	</div>
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->
