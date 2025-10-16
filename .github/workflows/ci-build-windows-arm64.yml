@@ -63,8 +63,10 @@ jobs:
         with:
           node-version: '24.1.0'
       
-      - name: Install frontend dependencies and build
+      - name: Clean and Install frontend dependencies
+        shell: bash
         run: |
+          rm -rf build/
           npm install
           npm run build
 
