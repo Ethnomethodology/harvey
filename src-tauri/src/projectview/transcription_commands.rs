@@ -5,7 +5,7 @@ use super::shared_utils::*;
 use crate::welcome::config::{CommandError, read_config, get_default_download_location};
 use log::{debug, error, info, warn};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Runtime}; // Removed ShellExt from here
+use tauri::{AppHandle, Emitter, Manager, Runtime}; // Removed ShellExt from here
 use tauri_plugin_shell::ShellExt; // Added specific import for ShellExt
 use serde_json::Value as JsonValue;
 use crate::projectview::utils::{get_ffmpeg_path, get_ffprobe_path};
@@ -27,6 +27,22 @@ use dashmap::DashMap;
 use tauri_plugin_shell::{process::CommandEvent};
 use tokio::time::{sleep, Duration};
 use quick_xml;
+use crate::welcome::python_env::get_python_path;
+
+// Helper to read the HuggingFace token
+fn get_hf_token<R: Runtime>(app_handle: &AppHandle<R>) -> Result<String, String> {
+    let config_dir = app_handle
+        .path()
+        .app_config_dir()
+        .expect("Failed to get app config dir");
+    let token_path = config_dir.join("hf_token");
+    fs::read_to_string(token_path).map_err(|e| {
+        format!(
+            "Failed to read token: {}. Please ensure you have saved your HuggingFace token.",
+            e
+        )
+    })
+}
 
 
 // --- State for Live Transcription ---
@@ -381,10 +397,23 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 
     info!("[Trim Backend] FFmpeg Cmd: {:?} {}", ffmpeg_path, args.join(" "));
     let shell_scope = app_handle.shell();
-    let (mut rx, _child) = shell_scope
-        .command(ffmpeg_path)
-        .args(args)
-        .spawn()?;
+    let mut command = shell_scope.command(ffmpeg_path).args(args);
+
+    if cfg!(target_os = "macos") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let sidecars_path_str = sidecars_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                }
+            }
+        }
+    }
+
+    let (mut rx, _child) = command.spawn()?;
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
     let mut ffmpeg_exit_code: Option<i32> = None;
@@ -1622,10 +1651,23 @@ pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
     debug!("[FFmpeg CMD][{}] Command arguments: {:?}", job_id, args);
 
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope
-        .command(ffmpeg_path)
-        .args(args)
-        .spawn()?;
+    let mut command = shell_scope.command(ffmpeg_path).args(args);
+
+    if cfg!(target_os = "macos") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let sidecars_path_str = sidecars_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                }
+            }
+        }
+    }
+
+    let (mut rx, child) = command.spawn()?;
     debug!("[FFmpeg CMD][{}] Spawned FFmpeg process (PID: {:?})", job_id, child.pid());
 
     let mut ffmpeg_stderr: Vec<String> = Vec::new();
@@ -1978,48 +2020,63 @@ fn parse_whisper_json_cmd(json_path: &Path) -> Result<Vec<TranscriptSegment>, Co
 }
 
 // Adapted from local_handler/transcription.rs
-async fn run_diarize_cli_sidecar_cmd<R: Runtime>(
+async fn run_diarization_script<R: Runtime>(
     app_handle: &AppHandle<R>,
-    media_path: &str, // wav_media_path.to_string_lossy().to_string()
+    media_path: &str,
     num_speakers: usize,
     output_rttm_path: &Path,
     job_id: &str,
-    cancel_flag: Arc<AtomicBool>, // New argument
+    cancel_flag: Arc<AtomicBool>,
 ) -> Result<PathBuf, CommandError> {
-    let sidecar_name = "diarize-cli";
-    info!("[DiarizeCLI CMD][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
+    info!("[Diarization Script][{}] Starting for: {}, num_speakers: {}", job_id, media_path, num_speakers);
     if let Some(parent_dir) = output_rttm_path.parent() { fs::create_dir_all(parent_dir)?; }
 
-    let mut args = vec![
-        "--audio".into(), media_path.to_string(),
-        "--output".into(), output_rttm_path.to_string_lossy().to_string(),
+    let python_path = get_python_path().map_err(|e| CommandError::from(e.to_string()))?;
+
+    let script_path = app_handle
+        .path()
+        .resolve("scripts/run_diarization.py", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::from(e.to_string()))?;
+
+    let token = get_hf_token(app_handle).map_err(|e| CommandError::from(e.to_string()))?;
+
+    let args = vec![
+        script_path.to_string_lossy().to_string(),
+        media_path.to_string(),
+        num_speakers.to_string(),
+        token,
     ];
-    if num_speakers > 0 { // diarize-cli might handle num_speakers=0 as auto, but explicit is safer
-        args.push("--num_speakers".into()); args.push(num_speakers.to_string());
-        // Add min/max if your diarize-cli version supports/requires them
-        args.push("--min_speakers".into()); args.push(1.to_string()); // Example
-        args.push("--max_speakers".into()); args.push(num_speakers.max(1).to_string()); // Example
-    }
 
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
-        .map_err(|e| CommandError::from(format!("Failed to execute {} sidecar: {}", sidecar_name, e)))?;
-    info!("[DiarizeCLI CMD][{}] Spawned '{}' (PID: {:?})", job_id, sidecar_name, child.pid());
+    let mut command = shell_scope.command(python_path.to_string_lossy().to_string()).args(args);
+
+    if cfg!(target_os = "macos") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let sidecars_path_str = sidecars_path.to_string_lossy();
+                if let Ok(existing_path) = std::env::var("DYLD_LIBRARY_PATH") {
+                    command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", sidecars_path_str, existing_path));
+                } else {
+                    command = command.env("DYLD_LIBRARY_PATH", sidecars_path_str.to_string());
+                }
+            }
+        }
+    }
+
+    let (mut rx, child) = command.spawn()
+        .map_err(|e| CommandError::from(format!("Failed to execute diarization script: {}", e)))?;
+    info!("[Diarization Script][{}] Spawned python script (PID: {:?})", job_id, child.pid());
 
     let mut process_error: Option<String> = None;
     let mut exit_code: Option<i32> = None;
+    let mut stderr_lines = Vec::new();
+    let mut stdout_lines = Vec::new();
 
     loop {
         if cancel_flag.load(AtomicOrdering::Relaxed) {
-            warn!("[DiarizeCLI CMD][{}] Cancellation requested. Killing process...", job_id);
+            warn!("[Diarization Script][{}] Cancellation requested. Killing process...", job_id);
             let _ = child.kill();
-            if output_rttm_path.exists() {
-                if let Err(e) = fs::remove_file(output_rttm_path) {
-                    warn!("[DiarizeCLI CMD][{}] Failed to remove partial RTTM output {:?}: {}", job_id, output_rttm_path, e);
-                } else {
-                    info!("[DiarizeCLI CMD][{}] Removed partial RTTM output {:?}", job_id, output_rttm_path);
-                }
-            }
             return Err(CommandError::from(format!("Diarization process cancelled for job {}.", job_id)));
         }
 
@@ -2028,50 +2085,43 @@ async fn run_diarize_cli_sidecar_cmd<R: Runtime>(
             maybe_event = rx.recv() => {
                 match maybe_event {
                     Some(event) => match event {
-                        CommandEvent::Stdout(line) => { debug!("[{}][stdout][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
-                        CommandEvent::Stderr(line) => { debug!("[{}][stderr][{}] {}", sidecar_name, job_id, String::from_utf8_lossy(&line).trim_end()); },
+                        CommandEvent::Stdout(line) => {
+                            let line_str = String::from_utf8_lossy(&line).to_string();
+                            debug!("[Diarization Script][stdout][{}] {}", job_id, line_str.trim_end());
+                            stdout_lines.push(line_str);
+                        },
+                        CommandEvent::Stderr(line) => {
+                            let line_str = String::from_utf8_lossy(&line).to_string();
+                            debug!("[Diarization Script][stderr][{}] {}", job_id, line_str.trim_end());
+                            stderr_lines.push(line_str);
+                        },
                         CommandEvent::Error(msg) => { process_error = Some(msg); break; },
                         CommandEvent::Terminated(payload) => { exit_code = payload.code; break; },
                         _ => {}
                     },
                     None => {
                         if exit_code.is_none() && process_error.is_none() {
-                            warn!("[{}][{}] Event channel closed unexpectedly.", sidecar_name, job_id);
-                            exit_code = Some(-1); // Treat as error
+                            warn!("[Diarization Script][{}] Event channel closed unexpectedly.", job_id);
+                            exit_code = Some(-1);
                         }
                         break;
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(50)) => {
-                // Continue to check cancel_flag
-            }
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {}
         }
     }
 
     if process_error.is_some() || exit_code != Some(0) {
-        // Cleanup even on non-cancellation error
-        if output_rttm_path.exists() { let _ = fs::remove_file(output_rttm_path); }
-        return Err(CommandError::from(format!("Sidecar '{}' failed. Exit: {:?}, Err: {:?}", sidecar_name, exit_code, process_error)));
+        let stderr_output = stderr_lines.join("\n");
+        let error_message = format!("Diarization script failed. Exit: {:?}, Err: {:?}\nStderr:\n{}", exit_code, process_error, stderr_output);
+        error!("{}", error_message);
+        return Err(CommandError::from(error_message));
     }
 
-    // Wait for file to appear, with cancellation check
-    let mut attempts = 0;
-    while !output_rttm_path.exists() && attempts < 10 {
-        if cancel_flag.load(AtomicOrdering::Relaxed) {
-            warn!("[DiarizeCLI CMD][{}] Cancelled while waiting for RTTM file.", job_id);
-            return Err(CommandError::from(format!("Diarization process cancelled (waiting for file) for job {}.", job_id)));
-        }
-        sleep(Duration::from_millis(200)).await; // RTTM files are usually small
-        attempts += 1;
-    }
+    let stdout_output = stdout_lines.join("");
+    fs::write(output_rttm_path, stdout_output)?;
 
-    if !output_rttm_path.exists() {
-         error!("[DiarizeCLI CMD][{}] RTTM output missing after wait: {:?}", job_id, output_rttm_path);
-         return Err(CommandError::from(format!("Diarization RTTM output missing: {:?}", output_rttm_path)));
-    }
-    // An empty RTTM file can be valid if no speech is detected or no speaker turns.
-    // So, no specific check for empty file here, unlike whisper output.
     Ok(output_rttm_path.to_path_buf())
 }
 
@@ -2211,7 +2261,7 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?;
 
         // RTTM path is already temporary and short based on prepare_output_paths change.
-        let rttm_path = run_diarize_cli_sidecar_cmd(
+        let rttm_path = run_diarization_script(
             app_handle,
             wav_media_path_str,
             num_speakers,

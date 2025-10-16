@@ -12,6 +12,7 @@
         insertTranscriptSegment,
         selectMedia,
         markTranscriptAsSaved, // <-- Added this import
+        switchDualModeTranscripts,
     } from '$lib/stores/transcriptStore.js';
     import {
         saveTranscriptData,
@@ -415,33 +416,41 @@ Discard changes and exit edit mode anyway?`, { title: "Save Failed", type: "warn
     // New helper function to encapsulate the loading logic
     async function loadRequestedItem(item) {
         panelEditModeActive = false; // Exit edit mode
+        const store = get(transcriptStore);
 
         if (item.file_type === 'media') {
             console.log('[TranscriptionsView] Loading media via selectMedia.');
             selectMedia(item);
         } else if (item.file_type === 'transcript') {
-            const currentProjectFiles = get(project).files;
-            console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
-            const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
-
-            if (associatedMedia) {
-                console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
-                // First, select the media, which will trigger loadInitialTranscript for that media
-                selectMedia(associatedMedia, item.path);
+            if (store.isDualModeActive) {
+                const currentProjectFiles = get(project).files;
+                const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
+                if (associatedMedia && get(transcriptStore).selectedMediaFile?.path !== associatedMedia.path) {
+                    selectMedia(associatedMedia, item.path);
+                } else {
+                    switchDualModeTranscripts(item.path);
+                }
             } else {
-                console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
-                selectMedia(null);
-            }
+                const currentProjectFiles = get(project).files;
+                console.log('[TranscriptionsView] Calling findMediaByTranscriptPath with transcript path:', item.path);
+                const associatedMedia = findMediaByTranscriptPath(item.path, currentProjectFiles);
 
-            // Now, explicitly load the transcript file if it's not already loaded by selectMedia
-            // This is a fallback/re-confirmation to ensure the correct transcript is active
-            try {
-                await loadTranscriptFile(item.path);
-                console.log('[TranscriptionsView] Transcript loaded successfully.');
-            } catch (error) {
-                console.error('[TranscriptionsView] Error loading transcript:', error);
-                message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
-                return;
+                if (associatedMedia) {
+                    console.log('[TranscriptionsView] Found associated media for transcript, selecting:', associatedMedia.name, associatedMedia);
+                    selectMedia(associatedMedia, item.path);
+                } else {
+                    console.warn('[TranscriptionsView] No associated media found for transcript:', item.path);
+                    selectMedia(null);
+                }
+
+                try {
+                    await loadTranscriptFile(item.path);
+                    console.log('[TranscriptionsView] Transcript loaded successfully.');
+                } catch (error) {
+                    console.error('[TranscriptionsView] Error loading transcript:', error);
+                    message(`Error loading transcript: ${error.message || error}`, { title: "Load Error", type: "error" });
+                    return;
+                }
             }
         }
     }

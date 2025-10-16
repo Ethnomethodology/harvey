@@ -3,6 +3,7 @@
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Import the new store
+    import { transcriptStore, toggleDualMode } from '$lib/stores/transcriptStore.js';
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
@@ -102,6 +103,25 @@
 			</div>
 			{/if}
 
+            <!-- Dual Transcript Mode Section -->
+            <div class="mb-6">
+                <h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Dual Transcript Mode</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Display two transcripts in an interleaved view for simultaneous comparison and editing.
+                </p>
+                <select
+                    value={$transcriptStore.isDualModeActive ? 'true' : 'false'}
+                    on:change={(e) => toggleDualMode(e.currentTarget.value === 'true')}
+                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+                    aria-label="Enable or disable dual transcript mode"
+                    disabled={$transcriptStore.transcriptDirty}
+                    title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
+                >
+                    <option value="false">Disable</option>
+                    <option value="true">Enable</option>
+                </select>
+            </div>
+
 			<!-- DOCX Export Layout Section -->
 			<div>
 				<h3 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">Transcript Export Layout</h3>
@@ -162,4 +182,7 @@
 
 	/* Ensure preview styles are scoped or specific enough */
 	/* The `!p-1` and `!text-xs` in the template help override generic styles from layout.previewClasses if needed */
+    .ui-checkbox {
+		@apply w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600; /* Adjusted size */
+	}
 </style>

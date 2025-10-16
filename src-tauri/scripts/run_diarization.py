@@ -24,8 +24,7 @@ def run_diarization(audio_path, num_speakers, token):
         print(f"Using device: {device}", file=sys.stderr)
 
         pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            use_auth_token=token
+            "pyannote/speaker-diarization-3.1"
         ).to(torch.device(device))
 
         if num_speakers > 0:
@@ -35,7 +34,7 @@ def run_diarization(audio_path, num_speakers, token):
             diarization = pipeline(audio_path)
 
         # Output the RTTM content to stdout
-        print(diarization.to_rttm_str())
+        diarization.speaker_diarization.write_rttm(sys.stdout)
 
     except Exception as e:
         print(f"An error occurred during diarization: {e}", file=sys.stderr)

@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::Shell;
 use crate::welcome::config::{CommandError, get_config_dir};
 
@@ -113,43 +113,44 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     // in the same transaction as the libraries that depend on it (like `torchcodec`).
     let packages = [
         "--upgrade", "pip",
-        "ffmpeg-python",
-        "torch",
-        "torchcodec",
-        "pyannote.audio",
-        "transformers",
-        "sacremoses",
-        "sentencepiece",
-        "pypandoc_binary",
+        "ffmpeg-python==0.2.0",
+        "torch==2.8.0",
+        "torchcodec==0.7.0",
+        "pyannote.audio==4.0.1",
+        "transformers==4.57.0",
+        "sacremoses==0.1.1",
+        "sentencepiece==0.2.1",
+        "pypandoc_binary==1.15",
     ];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let mut pip_args = vec!["-m", "pip", "install"];
     pip_args.extend_from_slice(&packages);
 
-    // --- Add cache directory to pip command ---
-    let pip_cache_dir: Option<PathBuf> = if cfg!(target_os = "windows") {
-        std::env::var("LOCALAPPDATA").ok().map(|p| PathBuf::from(p).join("pip").join("cache"))
-    } else if cfg!(target_os = "macos") {
-        std::env::var("HOME").ok().map(|p| PathBuf::from(p).join("Library").join("Caches").join("pip"))
-    } else { // Assuming Linux-like
-        std::env::var("HOME").ok().map(|p| PathBuf::from(p).join(".cache").join("pip"))
-    };
+    pip_args.push("--no-cache-dir");
 
-    let cache_dir_arg_storage;
-    if let Some(cache_dir) = pip_cache_dir {
-        if cache_dir.exists() {
-            app.emit("installation-log", LogPayload { message: format!("Using pip cache: {:?}", cache_dir).into() }).unwrap();
-            cache_dir_arg_storage = cache_dir.to_string_lossy().into_owned();
-            pip_args.push("--cache-dir");
-            pip_args.push(&cache_dir_arg_storage);
+    let mut command = shell.command(python_path.to_str().unwrap())
+        .args(&pip_args)
+        .env("PYTHONUNBUFFERED", "1");
+
+    // Add sidecar binaries to path
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let sidecar_dir = resource_dir.join("sidecars");
+        if sidecar_dir.exists() {
+            let existing_path = std::env::var("PATH").unwrap_or_default();
+            let new_path = if !existing_path.is_empty() {
+                format!("{}{}{}", sidecar_dir.to_string_lossy(), if cfg!(windows) { ';' } else { ':' }, existing_path)
+            } else {
+                sidecar_dir.to_string_lossy().into_owned()
+            };
+            command = command.env("PATH", new_path);
+            app.emit("installation-log", LogPayload { message: format!("Adding sidecar binaries to PATH from: {}", sidecar_dir.to_string_lossy()).into() }).unwrap();
+        } else {
+            app.emit("installation-log", LogPayload { message: format!("Sidecar directory not found, skipping PATH modification: {}", sidecar_dir.to_string_lossy()).into() }).unwrap();
         }
     }
 
-    let (mut rx, _child) = shell.command(python_path.to_str().unwrap())
-        .args(&pip_args)
-        .env("PYTHONUNBUFFERED", "1")
-        .spawn()?;
+    let (mut rx, _child) = command.spawn()?;
 
     while let Some(event) = rx.recv().await {
         match event {

@@ -4,7 +4,7 @@
 	import { createEventDispatcher, onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { project } from '$lib/stores/projectStore.js'; // For project-level state like isLoading, files, isTranscribing
-	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal } from '$lib/stores/transcriptStore.js';
+	import { transcriptStore, setSelectedModel, setSelectedLanguage, updateSpeakerConfig, selectMedia, setTranslateToEnglish, toggleTranslateModal, toggleDualMode } from '$lib/stores/transcriptStore.js';
 	import { themePreference, cycleThemePreference } from '$lib/stores/themeStore.js';
 
 	// --- Service Imports ---
@@ -385,6 +385,8 @@
 				<span class="text-xs">Translate</span>
 				{/if}
 			</button>
+
+			
 	</div>
 
 	<!-- Right Controls: Layout Settings, Theme Toggle -->

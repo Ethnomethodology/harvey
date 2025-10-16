@@ -6,7 +6,7 @@ use std::path::PathBuf;
 /// Resolves the path to the bundled ffmpeg executable.
 pub fn get_ffmpeg_path<R: Runtime>(app_handle: &AppHandle<R>) -> Result<PathBuf, String> {
     let file_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
-    let resource_path = PathBuf::from("binaries/ffmpeg/bin").join(file_name);
+    let resource_path = PathBuf::from("sidecars").join(file_name);
 
     app_handle
         .path()
@@ -17,7 +17,7 @@ pub fn get_ffmpeg_path<R: Runtime>(app_handle: &AppHandle<R>) -> Result<PathBuf,
 /// Resolves the path to the bundled ffprobe executable.
 pub fn get_ffprobe_path<R: Runtime>(app_handle: &AppHandle<R>) -> Result<PathBuf, String> {
     let file_name = if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" };
-    let resource_path = PathBuf::from("binaries/ffmpeg/bin").join(file_name);
+    let resource_path = PathBuf::from("sidecars").join(file_name);
 
     app_handle
         .path()

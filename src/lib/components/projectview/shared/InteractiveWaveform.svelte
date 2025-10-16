@@ -12,6 +12,7 @@
 	export let showTrimUI = true; // New prop, defaults to true for backward compatibility
 	export let fixedHeightPx = 0; // New prop for setting a fixed height in pixels
 export let compactMode = false; // New prop, defaults to false
+	export let startZoomedOut = false;
 	export let editSegmentStartTime = 0;
 	export let editSegmentEndTime = 0;
 
@@ -96,7 +97,7 @@ export let compactMode = false; // New prop, defaults to false
 		if (newDuration !== actualMediaDuration) {
 			actualMediaDuration = newDuration;
 			if (newDuration > 0) {
-				zoomLevel = maxZoomLevel;
+				zoomLevel = startZoomedOut ? minZoomLevel : maxZoomLevel;
 				scrollOffsetPx = 0;
 			}
 			requestRedraw(true);
@@ -109,7 +110,8 @@ export let compactMode = false; // New prop, defaults to false
 	$: canZoomOut = zoomLevel > minZoomLevel;
 	let draggingHandle = null;
 	const dispatch = createEventDispatcher();
-
+	const edgeZone = 20; // Zone in pixels for edge detection
+	
 	function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const tot = Math.floor(sec); return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}.${ms}`; }
 	function formatTimescaleTime(sec, totalDuration) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '0:00'; const tot = Math.floor(sec); const minutes = Math.floor(tot / 60); const seconds = tot % 60; const totalMinutes = Math.floor(totalDuration / 60); if (totalMinutes >= 60) { const hours = Math.floor(minutes / 60); const remainingMinutes = minutes % 60; return `${hours}:${String(remainingMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; } else { return `${String(minutes).padStart(1, '0')}:${String(seconds).padStart(2, '0')}`; } }
 	function timeToLogicalPx(time, duration, logicalWidth) { if (!duration || duration <= 0 || !logicalWidth || logicalWidth <= 0) return 0; const proportion = Math.max(0, Math.min(1, time / duration)); return proportion * logicalWidth; }
@@ -878,7 +880,6 @@ export let compactMode = false; // New prop, defaults to false
 		const minDuration = 0.1; let newStartTime = trimStartTime; let newEndTime = trimEndTime;
 
 		const containerRect = waveformScrollContainerRef.getBoundingClientRect();
-		const edgeZone = 50; // 50px from either edge
 		const mouseClientX = event.clientX;
 
 		if (mouseClientX < containerRect.left + edgeZone) {

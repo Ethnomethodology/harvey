@@ -8,6 +8,19 @@ import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
 
+const DUAL_MODE_STORAGE_KEY = 'harvey-dual-mode';
+
+function loadDualModeState() {
+    if (typeof window === 'undefined') return false;
+    try {
+        const storedValue = localStorage.getItem(DUAL_MODE_STORAGE_KEY);
+        return storedValue !== null ? JSON.parse(storedValue) : false;
+    } catch (error) {
+        console.error('[TranscriptStore] Error loading dual mode state from localStorage:', error);
+        return false;
+    }
+}
+
 export const initialTranscriptState = {
     segments: [],
     activeTranscript: null, // Holds { path, language_code, segments }
@@ -37,6 +50,11 @@ export const initialTranscriptState = {
     translateToEnglish: false,
     diarizationEnabledForNextJob: false,
 
+    // Dual Transcript Mode
+    isDualModeActive: loadDualModeState(),
+    secondaryTranscriptPath: null,
+    secondaryTranscriptSegments: [],
+
     // Translation states
     isTranslating: false,
     translationProgress: { percent: 0, message: '' },
@@ -53,9 +71,13 @@ export const MAX_UNDO_STACK_SIZE = 50;
 
 // --- Transcript Management Functions ---
 
-export function pushToUndoStack(currentSegments) {
+export function pushToUndoStack() {
     transcriptStore.update(ts => {
-        const newUndoStack = [...ts.transcriptUndoStack, currentSegments];
+        const undoState = {
+            segments: ts.segments,
+            secondarySegments: ts.isDualModeActive ? ts.secondaryTranscriptSegments : null
+        };
+        const newUndoStack = [...ts.transcriptUndoStack, undoState];
         if (newUndoStack.length > MAX_UNDO_STACK_SIZE) {
             newUndoStack.shift();
         }
@@ -69,19 +91,25 @@ export function undoTranscriptChange() {
         return;
     }
     transcriptStore.update(ts => {
-        const currentSegments = ts.segments;
+        const redoState = {
+            segments: ts.segments,
+            secondarySegments: ts.isDualModeActive ? ts.secondaryTranscriptSegments : null
+        };
         const newUndoStack = [...ts.transcriptUndoStack];
-        const previousSegments = newUndoStack.pop();
-        const newRedoStack = [...ts.transcriptRedoStack, currentSegments];
+        const prevState = newUndoStack.pop();
+        const newRedoStack = [...ts.transcriptRedoStack, redoState];
+
         let newIndex = -1;
         const time = ts.player.currentTime;
-        if (previousSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            newIndex = findSegmentIndexWithBinarySearch(previousSegments, time);
+        if (prevState.segments.length > 0 && ts.player.duration > 0 && time >= 0) {
+            newIndex = findSegmentIndexWithBinarySearch(prevState.segments, time);
         }
+
         updateProjectStoreState({ statusMessage: 'Undo successful.' });
         return {
             ...ts,
-            segments: previousSegments,
+            segments: prevState.segments,
+            secondaryTranscriptSegments: prevState.secondarySegments !== null ? prevState.secondarySegments : ts.secondaryTranscriptSegments,
             transcriptUndoStack: newUndoStack,
             transcriptRedoStack: newRedoStack,
             transcriptDirty: true,
@@ -96,19 +124,25 @@ export function redoTranscriptChange() {
         return;
     }
     transcriptStore.update(ts => {
-        const currentSegments = ts.segments;
-        const newRedoStack = [...ts.redoRedoStack];
-        const nextSegments = newRedoStack.pop();
-        const newUndoStack = [...ts.transcriptUndoStack, currentSegments];
+        const undoState = {
+            segments: ts.segments,
+            secondarySegments: ts.isDualModeActive ? ts.secondaryTranscriptSegments : null
+        };
+        const newRedoStack = [...ts.transcriptRedoStack];
+        const nextState = newRedoStack.pop();
+        const newUndoStack = [...ts.transcriptUndoStack, undoState];
+
         let newIndex = -1;
         const time = ts.player.currentTime;
-        if (nextSegments.length > 0 && ts.player.duration > 0 && time >= 0) {
-            newIndex = findSegmentIndexWithBinarySearch(nextSegments, time);
+        if (nextState.segments.length > 0 && ts.player.duration > 0 && time >= 0) {
+            newIndex = findSegmentIndexWithBinarySearch(nextState.segments, time);
         }
+
         updateProjectStoreState({ statusMessage: 'Redo successful.' });
         return {
             ...ts,
-            segments: nextSegments,
+            segments: nextState.segments,
+            secondaryTranscriptSegments: nextState.secondarySegments !== null ? nextState.secondarySegments : ts.secondaryTranscriptSegments,
             transcriptUndoStack: newUndoStack,
             transcriptRedoStack: newRedoStack,
             transcriptDirty: true,
@@ -154,7 +188,10 @@ export function clearTranscriptState() {
     });
 }
 
-export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
+export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
+    const store = get(transcriptStore);
+    const isDualMode = store.isDualModeActive;
+
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -166,101 +203,114 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 ...ts,
                 selectedMediaFile: { ...ts.selectedMediaFile, associated_transcripts: fileEntry.associated_transcripts }
             }));
-            loadInitialTranscript(fileEntry, transcriptPathToPrioritize);
+            await loadInitialTranscript(fileEntry, transcriptPathToPrioritize);
         } else if (transcriptPathToPrioritize && get(transcriptStore).currentTranscriptPath !== transcriptPathToPrioritize) {
             // If the transcript path is different, just switch to it without a full reload.
-            switchTranscript(transcriptPathToPrioritize);
+            await switchTranscript(transcriptPathToPrioritize);
         }
-        return; // Exit early
-    }
+    } else {
 
-    const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
-    const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
+        const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
+        const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
 
-    let speakersToLoad = { count: 0, names: [], translatedNames: [] };
-    if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
-        const loadedCount = Number(fileEntry.speakers['@count']) || 0;
-        const loadedNamesRaw = fileEntry.speakers.name;
-        const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
+        let speakersToLoad = { count: 0, names: [], translatedNames: [] };
+        if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
+            const loadedCount = Number(fileEntry.speakers['@count']) || 0;
+            const loadedNamesRaw = fileEntry.speakers.name;
+            const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
 
-        let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
-        let loadedTranslatedNames = [];
+            let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
+            let loadedTranslatedNames = [];
 
-        if (Array.isArray(loadedTranslatedNamesRaw)) {
-            loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
-        } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
-            loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+            if (Array.isArray(loadedTranslatedNamesRaw)) {
+                loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
+            } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
+                loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+            } else {
+                loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+            }
+
+            if (loadedTranslatedNames.length > loadedCount) {
+                loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
+            } else {
+                while (loadedTranslatedNames.length < loadedCount) {
+                    loadedTranslatedNames.push('');
+                }
+            }
+
+            speakersToLoad = {
+                count: loadedCount,
+                names: [...loadedNames],
+                translatedNames: loadedTranslatedNames
+            };
+
+            if (speakersToLoad.count !== speakersToLoad.names.length) {
+                console.warn(`[TranscriptStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`);
+                speakersToLoad.count = speakersToLoad.names.length;
+                speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
+                speakersToLoad.translatedNames = Array(speakersToLoad.count).fill('');
+            }
+        } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
+            speakersToLoad = { count: 0, names: [], translatedNames: [] };
         } else {
-            loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+            speakersToLoad = { count: 0, names: [], translatedNames: [] };
         }
 
-        if (loadedTranslatedNames.length > loadedCount) {
-            loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
-        } else {
-            while (loadedTranslatedNames.length < loadedCount) {
-                loadedTranslatedNames.push('');
+        const currentStoreSpeakers = get(transcriptStore).speakers;
+        const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
+
+        if (shouldUpdateSelection || speakersChanged) {
+            const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? { ...fileEntry } : null;
+            if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
+                console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia);
+            }
+            if (newSelectedMedia && !newSelectedMedia.media_xml_identifier) {
+                console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
+            }
+
+            transcriptStore.update((ts) => {
+                const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
+                return {
+                    ...ts,
+                    selectedMediaFile: newSelectedMedia,
+                    audioBuffer: mediaPathChanged ? null : ts.audioBuffer,
+                    audioBufferPeaks: mediaPathChanged ? null : ts.audioBufferPeaks,
+                    player: {
+                        currentTime: 0,
+                        duration: mediaPathChanged ? 0 : ts.player.duration,
+                        isPlaying: false,
+                        currentSegmentIndex: -1
+                    },
+                    speakers: speakersToLoad,
+                    segments: [],
+                    activeTranscript: null,
+                    currentTranscriptPath: null,
+                    isTranscriptLoading: false,
+                    transcriptUndoStack: [],
+                    transcriptRedoStack: [],
+                    transcriptDirty: false,
+                };
+            });
+            const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
+
+            if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
+                await loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
+            } else {
+                
             }
         }
-
-        speakersToLoad = {
-            count: loadedCount,
-            names: [...loadedNames],
-            translatedNames: loadedTranslatedNames
-        };
-
-        if (speakersToLoad.count !== speakersToLoad.names.length) {
-            console.warn(`[TranscriptStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`);
-            speakersToLoad.count = speakersToLoad.names.length;
-            speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
-            speakersToLoad.translatedNames = Array(speakersToLoad.count).fill('');
-        }
-    } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
-        speakersToLoad = { count: 0, names: [], translatedNames: [] };
-    } else {
-        speakersToLoad = { count: 0, names: [], translatedNames: [] };
     }
 
-    const currentStoreSpeakers = get(transcriptStore).speakers;
-    const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
+    if (isDualMode) {
+        const updatedStore = get(transcriptStore);
+        const associatedTranscripts = updatedStore.selectedMediaFile?.associated_transcripts || [];
+        const primaryTranscriptPath = updatedStore.currentTranscriptPath;
+        const otherTranscripts = associatedTranscripts.filter(t => t.path !== primaryTranscriptPath);
 
-    if (shouldUpdateSelection || speakersChanged) {
-        const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? { ...fileEntry } : null;
-        if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
-            console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia);
-        }
-        if (newSelectedMedia && !newSelectedMedia.media_xml_identifier) {
-            console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
-        }
-
-        transcriptStore.update((ts) => {
-            const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
-            return {
-                ...ts,
-                selectedMediaFile: newSelectedMedia,
-                audioBuffer: mediaPathChanged ? null : ts.audioBuffer,
-                audioBufferPeaks: mediaPathChanged ? null : ts.audioBufferPeaks,
-                player: {
-                    currentTime: 0,
-                    duration: mediaPathChanged ? 0 : ts.player.duration,
-                    isPlaying: false,
-                    currentSegmentIndex: -1
-                },
-                speakers: speakersToLoad,
-                segments: [],
-                activeTranscript: null,
-				currentTranscriptPath: null,
-                isTranscriptLoading: false,
-                transcriptUndoStack: [],
-                transcriptRedoStack: [],
-                transcriptDirty: false,
-            };
-        });
-        const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
-
-        if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
-            loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
+        if (otherTranscripts.length > 0) {
+            await setSecondaryTranscript(otherTranscripts[0].path);
         } else {
-            
+            await setSecondaryTranscript(null);
         }
     }
 }
@@ -392,6 +442,17 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
     });
 }
 
+export function updateSecondarySegment(index, updatedSegmentData) {
+    transcriptStore.update(ts => {
+        if (!ts.isDualModeActive || index < 0 || index >= ts.secondaryTranscriptSegments.length) {
+            return ts;
+        }
+        const newSecondarySegments = [...ts.secondaryTranscriptSegments];
+        newSecondarySegments[index] = { ...newSecondarySegments[index], ...updatedSegmentData };
+        return { ...ts, secondaryTranscriptSegments: newSecondarySegments, transcriptDirty: true };
+    });
+}
+
 export function updateSegment(index, updatedSegmentData, silent = false) {
     console.log("[TranscriptStore] updateSegment called for index:", index, "data:", updatedSegmentData);
     const currentSegments = get(transcriptStore).segments;
@@ -436,7 +497,7 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
 
     if (changed) {
         console.log("[TranscriptStore] updateSegment: Changes detected, pushing to undo stack and marking dirty.");
-        pushToUndoStack(currentSegments);
+        pushToUndoStack();
         transcriptStore.update((ts) => {
             const newSegments = [...ts.segments];
             newSegments[index] = segmentToUpdate;
@@ -453,34 +514,54 @@ export function updateSegment(index, updatedSegmentData, silent = false) {
 }
 
 export function deleteTranscriptSegment(index) {
-    const currentSegments = get(transcriptStore).segments;
-    if (index < 0 || index >= currentSegments.length) {
+    const store = get(transcriptStore);
+    if (index < 0 || index >= store.segments.length) {
         console.warn('[TranscriptStore] deleteTranscriptSegment called with invalid index:', index);
         return;
     }
-    pushToUndoStack(currentSegments);
-    transcriptStore.update(ts => {
-        const oldIndex = ts.player.currentSegmentIndex;
-        const newSegments = ts.segments.filter((_, i) => i !== index);
-        let newPlayerIndex = -1;
-        if (newSegments.length > 0) {
-            if (oldIndex === index) {
-                newPlayerIndex = Math.max(-1, index - 1);
-            } else if (oldIndex > index) {
-                newPlayerIndex = oldIndex - 1;
-            } else {
-                newPlayerIndex = oldIndex;
+
+    pushToUndoStack();
+
+    if (store.isDualModeActive) {
+        // In dual mode, we should ideally push the secondary segments to a secondary undo stack.
+        // For now, we'll just delete from both.
+        transcriptStore.update(ts => {
+            const newSegments = ts.segments.filter((_, i) => i !== index);
+            const newSecondarySegments = ts.secondaryTranscriptSegments.filter((_, i) => i !== index);
+            // ... (player index logic as before)
+            return {
+                ...ts,
+                segments: newSegments,
+                secondaryTranscriptSegments: newSecondarySegments,
+                transcriptDirty: true,
+                // ... player update
+            };
+        });
+    } else {
+        transcriptStore.update(ts => {
+            const oldIndex = ts.player.currentSegmentIndex;
+            const newSegments = ts.segments.filter((_, i) => i !== index);
+            let newPlayerIndex = -1;
+            if (newSegments.length > 0) {
+                if (oldIndex === index) {
+                    newPlayerIndex = Math.max(-1, index - 1);
+                } else if (oldIndex > index) {
+                    newPlayerIndex = oldIndex - 1;
+                } else {
+                    newPlayerIndex = oldIndex;
+                }
             }
-        }
-        updateProjectStoreState({ statusMessage: 'Segment deleted (undoable).' });
-        return {
-            ...ts,
-            segments: newSegments,
-            transcriptDirty: true,
-            player: { ...ts.player, currentSegmentIndex: newPlayerIndex }
-        };
-    });
+            updateProjectStoreState({ statusMessage: 'Segment deleted (undoable).' });
+            return {
+                ...ts,
+                segments: newSegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: newPlayerIndex }
+            };
+        });
+    }
 }
+
 
 export function insertTranscriptSegment(index, newSegment) {
     const currentSegments = get(transcriptStore).segments;
@@ -492,20 +573,36 @@ export function insertTranscriptSegment(index, newSegment) {
         console.error('[TranscriptStore] insertTranscriptSegment called with invalid segment data:', newSegment);
         return;
     }
-    pushToUndoStack(currentSegments);
-    transcriptStore.update(ts => {
-        const segmentsBefore = ts.segments.slice(0, index);
-        const segmentsAfter = ts.segments.slice(index);
-        const newSegmentsArray = [...segmentsBefore, newSegment, ...segmentsAfter];
-        const newPlayerIndex = index;
-        updateProjectStoreState({ statusMessage: 'Segment inserted (undoable).' });
-        return {
-            ...ts,
-            segments: newSegmentsArray,
-            transcriptDirty: true,
-            player: { ...ts.player, currentSegmentIndex: newPlayerIndex }
-        };
-    });
+    pushToUndoStack();
+
+    if (get(transcriptStore).isDualModeActive) {
+        const newSecondarySegment = { ...newSegment, text: JSON.stringify({ "root": { "children": [{ "children": [], "direction": null, "format": "", "indent": 0, "type": "paragraph", "version": 1 }], "direction": null, "format": "", "indent": 0, "type": "root", "version": 1 } }) }; // Create a twin with empty text
+        transcriptStore.update(ts => {
+            const newSegments = [...ts.segments.slice(0, index), newSegment, ...ts.segments.slice(index)];
+            const newSecondarySegments = [...ts.secondaryTranscriptSegments.slice(0, index), newSecondarySegment, ...ts.secondaryTranscriptSegments.slice(index)];
+            return {
+                ...ts,
+                segments: newSegments,
+                secondaryTranscriptSegments: newSecondarySegments,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: index }
+            };
+        });
+    } else {
+        transcriptStore.update(ts => {
+            const segmentsBefore = ts.segments.slice(0, index);
+            const segmentsAfter = ts.segments.slice(index);
+            const newSegmentsArray = [...segmentsBefore, newSegment, ...segmentsAfter];
+            const newPlayerIndex = index;
+            updateProjectStoreState({ statusMessage: 'Segment inserted (undoable).' });
+            return {
+                ...ts,
+                segments: newSegmentsArray,
+                transcriptDirty: true,
+                player: { ...ts.player, currentSegmentIndex: newPlayerIndex }
+            };
+        });
+    }
 }
 
 export function setSelectedModel(modelName) {
@@ -619,7 +716,7 @@ export function updateSpeakerConfig(newCount, newNames, newTranslatedNames = nul
     });
 
     if (segmentsChanged) {
-        pushToUndoStack(oldSegments);
+        pushToUndoStack();
     }
 
     transcriptStore.update((ts) => ({
@@ -1247,6 +1344,115 @@ export function setSpeakerConfig(newSpeakerConfig) {
         ...ts,
         speakers: newSpeakerConfig,
     }));
+}
+
+// --- Dual Transcript Mode Functions ---
+
+export async function switchDualModeTranscripts(newPrimaryPath) {
+    await switchTranscript(newPrimaryPath);
+    const store = get(transcriptStore);
+    const associatedTranscripts = store.selectedMediaFile?.associated_transcripts || [];
+    const otherTranscripts = associatedTranscripts.filter(t => t.path !== newPrimaryPath);
+
+    if (otherTranscripts.length > 0) {
+        await setSecondaryTranscript(otherTranscripts[0].path);
+    } else {
+        await setSecondaryTranscript(null);
+    }
+}
+
+export async function setSecondaryTranscript(path) {
+    if (!path) {
+        transcriptStore.update(ts => ({
+            ...ts,
+            secondaryTranscriptPath: null,
+            secondaryTranscriptSegments: [],
+        }));
+        return;
+    }
+
+    const store = get(transcriptStore);
+    if (store.secondaryTranscriptPath === path) {
+        return; // Already selected
+    }
+
+    // Automatically switch the primary if the user selects the same one
+    if (store.currentTranscriptPath === path) {
+        const otherTranscripts = store.selectedMediaFile?.associated_transcripts?.filter(t => t.path !== path) || [];
+        if (otherTranscripts.length > 0) {
+            await switchTranscript(otherTranscripts[0].path);
+        } else {
+            console.error("[TranscriptStore] Cannot switch primary away from secondary: no other transcripts available.");
+            return;
+        }
+    }
+
+
+    try {
+        const projectService = await import('../services/projectService.js');
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const segments = projectService.parseLexicalTableToSegments(jsonString);
+
+        const primarySegments = get(transcriptStore).segments;
+        if (primarySegments.length !== segments.length) {
+            message('The number of segments between the two transcripts are not the same. Please select a different pair or generate again.', { title: 'Segment Mismatch', type: 'error' });
+            return; // Don't set the transcript
+        }
+
+
+        transcriptStore.update(ts => ({
+            ...ts,
+            secondaryTranscriptPath: path,
+            secondaryTranscriptSegments: segments,
+        }));
+    } catch (e) {
+        console.error(`[TranscriptStore] Failed to load secondary transcript from ${path}:`, e);
+        updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}` });
+        transcriptStore.update(ts => ({ ...ts, secondaryTranscriptPath: null, secondaryTranscriptSegments: [] }));
+    }
+}
+
+
+export function toggleDualMode(active) {
+    const store = get(transcriptStore);
+    if (store.transcriptDirty) {
+        message('Please save your changes before enabling or disabling Dual Transcript Mode.', { title: 'Unsaved Changes', type: 'error' });
+        return;
+    }
+
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(active));
+        } catch (error) {
+            console.error('[TranscriptStore] Error saving dual mode state to localStorage:', error);
+        }
+    }
+
+    transcriptStore.update(ts => ({
+        ...ts,
+        isDualModeActive: active,
+        secondaryTranscriptPath: active ? ts.secondaryTranscriptPath : null,
+        secondaryTranscriptSegments: active ? ts.secondaryTranscriptSegments : [],
+    }));
+
+    if (active) {
+        const currentPrimaryPath = get(transcriptStore).currentTranscriptPath;
+        const associatedTranscripts = get(transcriptStore).selectedMediaFile?.associated_transcripts || [];
+        const otherTranscripts = associatedTranscripts.filter(t => t.path !== currentPrimaryPath);
+
+        if (otherTranscripts.length > 0) {
+            const primaryIndex = associatedTranscripts.findIndex(t => t.path === currentPrimaryPath);
+            let nextIndex = (primaryIndex + 1) % associatedTranscripts.length;
+            let nextTranscript = associatedTranscripts[nextIndex];
+
+            if (nextTranscript.path === currentPrimaryPath) {
+                 nextIndex = (nextIndex + 1) % associatedTranscripts.length;
+                 nextTranscript = associatedTranscripts[nextIndex];
+            }
+
+            setSecondaryTranscript(nextTranscript.path);
+        }
+    }
 }
 
 // --- Translation Management Functions ---

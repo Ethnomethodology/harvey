@@ -1,7 +1,7 @@
 <script>
     import { get } from 'svelte/store';
     import { project } from '$lib/stores/projectStore.js';
-    import { transcriptStore, updateSegment, updatePlayerTime } from '$lib/stores/transcriptStore.js';
+    import { transcriptStore, updateSegment, updatePlayerTime, updateSecondarySegment } from '$lib/stores/transcriptStore.js';
     import { onMount, onDestroy, tick, createEventDispatcher, afterUpdate } from 'svelte';
     import LexicalEditor from '$lib/components/projectview/lexical/LexicalEditor.svelte';
     import { activeLayout } from '$lib/stores/layoutStore.js'; // Added
@@ -50,11 +50,24 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     export let previewEditMode = false;
     let editEnabled = false;
     let segments = [];
+    let secondarySegments = [];
     let currentIndex = -1;
     let targetIndexForLoad = -1; // Primarily for tracking if a load was requested externally
+
+    // --- Primary Segment State ---
     let localStart = '';
     let localEnd = '';
     let localSpeaker = '';
+    let lexicalEditorInstance;
+    let currentEditorJson = null;
+    let initialJsonForEditor = null;
+
+    // --- Secondary Segment State (for Dual Mode) ---
+    let localSpeakerSecondary = '';
+    let lexicalEditorInstanceSecondary;
+    let currentEditorJsonSecondary = null;
+    let initialJsonForEditorSecondary = null;
+
     function handleSpeakerSelectionChange(event) {
         const newSpeaker = event.detail;
         if (newSpeaker !== localSpeaker) {
@@ -62,9 +75,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             handleSpeakerChange();
         }
     }
-    let lexicalEditorInstance;
-    let currentEditorJson = null;
-    let initialJsonForEditor = null;
+     function handleSpeakerSelectionChangeSecondary(event) {
+        const newSpeaker = event.detail;
+        if (newSpeaker !== localSpeakerSecondary) {
+            localSpeakerSecondary = newSpeaker;
+            // This will be saved on commit
+        }
+    }
+
     const dispatch = createEventDispatcher();
     let isMounted = false;
     let isEditorVisible = false;
@@ -90,111 +108,94 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function createJsonFromPlainText(text) { const editor = getPlainTextConverter(); let jsonString = defaultEmptyJsonString; const plainText = text || ''; try { editor.update(() => { const root = getRoot(); root.clear(); const p = createParagraphNode(); p.append(createTextNode(plainText)); root.append(p); }, { discrete: true }); const editorState = editor.getEditorState(); if (!editorState.isEmpty()) { jsonString = JSON.stringify(editorState.toJSON()); } else { console.warn("[EditableTranscript] createJsonFromPlainText empty state."); } } catch (e) { console.error("Error creating JSON from plain text:", e); } return jsonString; }
     function cleanupPlainTextConverter() { plainTextConverterEditor = null; }
     function extractPlainText(inputString) { if (!inputString || typeof inputString !== 'string') return ''; if (inputString.trim().startsWith('{') && inputString.trim().endsWith('}')) { try { JSON.parse(inputString); console.warn("[EditableTranscript] extractPlainText received likely JSON, returning empty."); return ''; } catch (e) { /* Ignore */ } } try { const parser = new DOMParser(); const doc = parser.parseFromString(inputString, 'text/html'); return doc.body.textContent || ""; } catch (e) { console.error("[EditableTranscript] Error parsing input string:", e); return inputString; } }
-    function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const tot = Math.floor(sec); return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}.${ms}`; }
-    function parseTimestamp(str) { const parts = str?.match(/^(\d{1,9}):(\d{2})\.(\d{3})$/); if (parts) { const minutes = parseInt(parts[1], 10); const seconds = parseInt(parts[2], 10); const milliseconds = parseInt(parts[3], 10); if (!isNaN(minutes) && !isNaN(seconds) && !isNaN(milliseconds) && seconds < 60 && milliseconds < 1000) return minutes * 60 + seconds + milliseconds / 1000; } const floatVal = parseFloat(str); return isNaN(floatVal) ? null : floatVal; }
+    function formatTimestamp(sec) { if (typeof sec !== 'number' || isNaN(sec) || sec < 0) return '00:00:00.000'; const totalMs = Math.round(sec * 1000); const ms = String(totalMs % 1000).padStart(3, '0'); const totalSeconds = Math.floor(sec); const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0'); const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'); const seconds = String(totalSeconds % 60).padStart(2, '0'); return `${hours}:${minutes}:${seconds}.${ms}`; }
+    function parseTimestamp(str) { if (!str) return null; let parts = str.match(/^(\d{2,}):(\d{2}):(\d{2})\.(\d{3})$/); if (parts) { const hours = parseInt(parts[1], 10); const minutes = parseInt(parts[2], 10); const seconds = parseInt(parts[3], 10); const milliseconds = parseInt(parts[4], 10); if (minutes < 60 && seconds < 60) { return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000; } } parts = str.match(/^(\d{1,9}):(\d{2})\.(\d{3})$/); if (parts) { const minutes = parseInt(parts[1], 10); const seconds = parseInt(parts[2], 10); const milliseconds = parseInt(parts[3], 10); if (seconds < 60) { return minutes * 60 + seconds + milliseconds / 1000; } } const floatVal = parseFloat(str); return isNaN(floatVal) ? null : floatVal; }
     function dispatchEditState() { if (!isMounted) return; if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const seg = segments[currentIndex]; const startTime = typeof seg?.start_time === 'number' ? seg.start_time : 0; const endTime = typeof seg?.end_time === 'number' ? seg.end_time : 0; dispatch('segmenteditfocus', { isEditing: true, startTime: startTime, endTime: endTime }); } else { dispatch('segmenteditfocus', { isEditing: false, startTime: 0, endTime: 0 }); } }
 
     /* --- Render UI --- */
     async function renderSegmentUI(idx) {
         if (!isMounted) return;
 
-        if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length) {
+        const isDual = get(transcriptStore).isDualModeActive;
+
+        if (!segments || segments.length === 0 || idx < 0 || idx >= segments.length || (isDual && (!secondarySegments || secondarySegments.length === 0))) {
             const needsClear = currentIndex !== -1;
-            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = '';
-            initialJsonForEditor = defaultEmptyJsonString; // Ensure it's set for potential editor reset
+            currentIndex = -1; targetIndexForLoad = -1; localStart = ''; localEnd = ''; localSpeaker = ''; localSpeakerSecondary = '';
+            initialJsonForEditor = defaultEmptyJsonString;
             currentEditorJson = defaultEmptyJsonString;
-            if (lexicalEditorInstance && isEditorVisible) { // Check isEditorVisible to avoid errors if editor is not in DOM
-                 lexicalEditorInstance.resetEditorState(defaultEmptyJsonString);
-            }
+            initialJsonForEditorSecondary = defaultEmptyJsonString;
+            currentEditorJsonSecondary = defaultEmptyJsonString;
+            if (lexicalEditorInstance && isEditorVisible) lexicalEditorInstance.resetEditorState(defaultEmptyJsonString);
+            if (lexicalEditorInstanceSecondary && isEditorVisible && isDual) lexicalEditorInstanceSecondary.resetEditorState(defaultEmptyJsonString);
             if (needsClear) { await tick(); dispatchEditState(); }
             return;
         }
 
-        const oldIndex = currentIndex;
         currentIndex = idx;
-        const seg = segments[idx];
         targetIndexForLoad = -1;
 
-        if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
-            localStart = 'Error'; localEnd = 'Error'; localSpeaker = 'Error';
-            initialJsonForEditor = defaultEmptyJsonString;
-        } else {
-            localStart = formatTimestamp(seg.start_time);
-            localEnd = formatTimestamp(seg.end_time);
-            localSpeaker = seg.speaker || 'Unknown';
+        // Process a single segment (primary or secondary)
+        const processSegment = (seg) => {
+            if (!seg || typeof seg.start_time !== 'number' || typeof seg.end_time !== 'number') {
+                return { localSpeaker: 'Error', initialJson: defaultEmptyJsonString };
+            }
+            const localSpeaker = seg.speaker || 'Unknown';
             let segmentText = seg.text || '';
             let jsonToProcess = segmentText;
             let isValidLexicalJson = false;
+
             if (segmentText && typeof segmentText === 'string') {
                 try {
                     const parsed = JSON.parse(segmentText);
-                    if (parsed && parsed.root && parsed.root.type === 'root') {
-                        isValidLexicalJson = true;
-                        jsonToProcess = segmentText;
-                    } else if (parsed && Array.isArray(parsed.children)) {
-                        isValidLexicalJson = true;
-                        const fullState = {
-                            root: {
-                                children: [parsed], // Wrap the array of nodes in a single root object
-                                direction: parsed.direction || 'ltr',
-                                format: '',
-                                indent: 0,
-                                type: 'root',
-                                version: 1
-                            }
-                        };
-                        jsonToProcess = JSON.stringify(fullState);
-                    }
-                } catch (e) {
-                    isValidLexicalJson = false;
-                }
+                    if (parsed && parsed.root && parsed.root.type === 'root') isValidLexicalJson = true;
+                } catch (e) { /* not json */ }
             }
 
+            let initialJson;
             if (isValidLexicalJson) {
-                if (!jsonToProcess || jsonToProcess.trim() === '') {
-                    jsonToProcess = defaultEmptyJsonString;
-                }
-                try {
-                    const parsedOriginal = JSON.parse(jsonToProcess);
-                    function flattenChildren(nodes) {
-                      return nodes.flatMap(n =>
-                        n.type === 'root' && Array.isArray(n.children)
-                          ? flattenChildren(n.children)
-                          : [n]
-                      );
-                    }
-                    let finalChildren = flattenChildren(parsedOriginal.root.children || []);
-                    if (finalChildren.length === 0) {
-                      finalChildren.push({ type: 'paragraph', version: 1, children: [], direction: null, format: '', indent: 0 });
-                    }
-                    const sanitizedEditorState = {
-                        root: {
-                            children: finalChildren,
-                            direction: parsedOriginal.root?.direction || 'ltr',
-                            format: parsedOriginal.root?.format || '',
-                            indent: parsedOriginal.root?.indent || 0,
-                            type: 'root',
-                            version: 1
-                        }
-                    };
-                    initialJsonForEditor = defaultEmptyJsonString;
-                } catch (e) {
-                    initialJsonForEditor = defaultEmptyJsonString;
-                }
+                initialJson = !jsonToProcess || jsonToProcess.trim() === '' ? defaultEmptyJsonString : jsonToProcess;
             } else {
-                const plainTextContent = extractPlainText(segmentText);
-                initialJsonForEditor = createJsonFromPlainText(plainTextContent);
+                initialJson = createJsonFromPlainText(extractPlainText(segmentText));
             }
+            return { localSpeaker, initialJson };
+        };
+
+        // Load Primary Segment
+        const primarySeg = segments[idx];
+        const { localSpeaker: primarySpeaker, initialJson: primaryJson } = processSegment(primarySeg);
+        localSpeaker = primarySpeaker;
+        initialJsonForEditor = primaryJson;
+        currentEditorJson = initialJsonForEditor;
+
+        if (primarySeg) {
+             localStart = formatTimestamp(primarySeg.start_time);
+             localEnd = formatTimestamp(primarySeg.end_time);
         }
-        currentEditorJson = initialJsonForEditor; // Keep track of current JSON for saving
 
         if (lexicalEditorInstance) {
-            // If the editor instance exists, update its content directly.
-            // This avoids re-creating the entire component, which is more performant.
             lexicalEditorInstance.updateContent(initialJsonForEditor);
-        } else if (isEditorVisible) {
-            // Editor will be created by Svelte due to #if block, and will use initialJsonForEditor prop
         }
+
+        // Load Secondary Segment if in Dual Mode
+        if (isDual) {
+            const secondarySeg = secondarySegments[idx];
+            if (secondarySeg) {
+                const { localSpeaker: secondarySpeaker, initialJson: secondaryJson } = processSegment(secondarySeg);
+                localSpeakerSecondary = secondarySpeaker;
+                initialJsonForEditorSecondary = secondaryJson;
+                currentEditorJsonSecondary = initialJsonForEditorSecondary;
+
+                if (lexicalEditorInstanceSecondary) {
+                    lexicalEditorInstanceSecondary.updateContent(initialJsonForEditorSecondary);
+                }
+            } else {
+                 localSpeakerSecondary = 'Error';
+                 initialJsonForEditorSecondary = defaultEmptyJsonString;
+                 currentEditorJsonSecondary = defaultEmptyJsonString;
+                 if(lexicalEditorInstanceSecondary) lexicalEditorInstanceSecondary.resetEditorState(defaultEmptyJsonString);
+            }
+        }
+
 
         dispatchEditState();
         await tick();
@@ -204,7 +205,40 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     /* --- Public methods --- */
     export function loadSegment(i) { if (i >= 0 && i < segments.length) { targetIndexForLoad = i; if (i !== currentIndex) { dispatch('navigate', { index: i }); } renderSegmentUI(i); } else { targetIndexForLoad = -1; renderSegmentUI(i); } }
     export function loadSegmentSilent(i) { if (i >= 0 && i < segments.length) { if (i !== currentIndex) { targetIndexForLoad = i; renderSegmentUI(i); } } else { targetIndexForLoad = -1; if (i !== currentIndex) renderSegmentUI(i); } }
-    export function updateTimesFromExternal(newStartTime, newEndTime) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return; let changed = false; const currentSeg = segments[currentIndex]; if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
+    export function updateTimesFromExternal(newStartTime, newEndTime) {
+        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return;
+
+        let changes = {};
+        const currentSeg = segments[currentIndex];
+
+        if (Math.abs(newStartTime - (currentSeg.start_time || 0)) > 0.0001) {
+            localStart = formatTimestamp(newStartTime);
+            changes.start_time = newStartTime;
+        } else {
+            localStart = formatTimestamp(currentSeg.start_time);
+        }
+
+        if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) {
+            localEnd = formatTimestamp(newEndTime);
+            changes.end_time = newEndTime;
+        } else {
+            localEnd = formatTimestamp(currentSeg.end_time);
+        }
+
+        if (Object.keys(changes).length > 0) {
+            if (get(transcriptStore).isDualModeActive) {
+                updateSegment(currentIndex, changes, true);
+                updateSecondarySegment(currentIndex, changes);
+            } else {
+                updateSegment(currentIndex, changes, true);
+            }
+            tick().then(dispatchEditState);
+            const currentTime = get(transcriptStore).player.currentTime;
+            if (currentTime < newStartTime || currentTime >= newEndTime) {
+                updatePlayerTime(newStartTime);
+            }
+        }
+    }
     export function focusEditor() { /* Lexical focus */ }
     export function forceReloadFromStore() { if (isMounted && currentIndex >= 0 && currentIndex < segments.length) { renderSegmentUI(currentIndex); } }
 
@@ -216,6 +250,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             if (!isMounted) return;
 
             const newSegments = ts.segments || [];
+            const newSecondarySegments = ts.secondaryTranscriptSegments || [];
             const currentStoreIndex = ts.player?.currentSegmentIndex ?? -1;
             const activeTranscriptPath = ts.activeTranscript?.path;
 
@@ -224,13 +259,15 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
             // For deep content changes, we rely on the activeTranscript.segments reference or explicit actions.
             const segmentsArrayReferenceChanged = newSegments !== segments;
             const segmentsLengthChanged = newSegments.length !== segments.length;
+            const secondarySegmentsChanged = newSecondarySegments !== secondarySegments;
 
             // Update local segments reference
             segments = newSegments;
+            secondarySegments = newSecondarySegments;
 
             // Scenario 1: Structural change (segments array reference or length changed)
             // This covers new transcript loads, undo/redo, segment insert/delete.
-            if (segmentsArrayReferenceChanged || segmentsLengthChanged) {
+            if (segmentsArrayReferenceChanged || segmentsLengthChanged || secondarySegmentsChanged) {
                 // If segments become empty, ensure transcript is not dirty.
                 if (newSegments.length === 0) {
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false }));
@@ -322,7 +359,37 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     function handleNextClick() { dispatch('next'); }
 
     /* --- Editor Actions --- */
-    function handleBlurTimestamp(field, value) { if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false; const parsedTime = parseTimestamp(value); const currentSeg = segments[currentIndex]; const currentTime = field === 'start_time' ? currentSeg.start_time : currentSeg.end_time; let changed = false; if (parsedTime !== null && Math.abs(parsedTime - currentTime) > 0.0001) { localStart = formatTimestamp(newStartTime); updateSegment(currentIndex, { start_time: newStartTime }, true); changed = true; } else { localStart = formatTimestamp(currentSeg.start_time); } if (Math.abs(newEndTime - (currentSeg.end_time || 0)) > 0.0001) { localEnd = formatTimestamp(newEndTime); updateSegment(currentIndex, { end_time: newEndTime }, true); changed = true; } else { localEnd = formatTimestamp(currentSeg.end_time); } if (changed) { tick().then(dispatchEditState); const currentTime = get(transcriptStore).player.currentTime; if (currentTime < newStartTime || currentTime >= newEndTime) { updatePlayerTime(newStartTime); } } }
+    function handleBlurTimestamp(field, value) {
+        if (!editEnabled || currentIndex < 0 || currentIndex >= segments.length) return false;
+        const parsedTime = parseTimestamp(value);
+        if (parsedTime === null) {
+            // Revert to original if invalid
+            const seg = segments[currentIndex];
+            if (field === 'start_time') localStart = formatTimestamp(seg.start_time);
+            else localEnd = formatTimestamp(seg.end_time);
+            return;
+        }
+
+        const changes = {};
+        changes[field] = parsedTime;
+
+        // In dual mode, apply timestamp changes to both segments
+        if (get(transcriptStore).isDualModeActive) {
+            updateSegment(currentIndex, changes); // Update primary
+            updateSecondarySegment(currentIndex, changes); // Update secondary
+        } else {
+            updateSegment(currentIndex, changes);
+        }
+
+        tick().then(dispatchEditState);
+        const playerTime = get(transcriptStore).player.currentTime;
+        const seg = segments[currentIndex];
+        const startTime = field === 'start_time' ? parsedTime : seg.start_time;
+        const endTime = field === 'end_time' ? parsedTime : seg.end_time;
+        if (playerTime < startTime || playerTime >= endTime) {
+            updatePlayerTime(startTime);
+        }
+    }
     function handleSpeakerChange() { if (editEnabled && currentIndex >= 0 && currentIndex < segments.length) { const currentSpeaker = segments[currentIndex].speaker || 'Unknown'; if (localSpeaker !== currentSpeaker) { updateSegment(currentIndex, { speaker: localSpeaker }); return true; } } return false; }
     function handleEditorUpdate(event) {
         currentEditorJson = event.detail.jsonString;
@@ -411,8 +478,28 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
         if (hasChanges) {
             updateSegment(currentIndex, changes);
-        } else {
         }
+
+        // --- Commit secondary segment changes in dual mode ---
+        if (get(transcriptStore).isDualModeActive) {
+            const secondarySegmentInStore = get(transcriptStore).secondaryTranscriptSegments[currentIndex];
+            let secondaryChanges = {};
+            let secondaryTextChanged = false;
+
+            if (currentEditorJsonSecondary && currentEditorJsonSecondary !== secondarySegmentInStore.text) {
+                secondaryChanges.text = currentEditorJsonSecondary;
+                secondaryTextChanged = true;
+            }
+            if (localSpeakerSecondary !== secondarySegmentInStore.speaker) {
+                secondaryChanges.speaker = localSpeakerSecondary;
+            }
+
+            if (Object.keys(secondaryChanges).length > 0) {
+                updateSecondarySegment(currentIndex, secondaryChanges);
+                return true; // Indicate that a change was made
+            }
+        }
+
         return hasChanges;
     }
     function handleEditSaveClick() {
@@ -450,7 +537,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         textEditorContainerStyle = 'flex-grow';
 
         if (layoutKey === 'Layout1') {
-            columnContainerClass = 'flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full mt-4';
+            columnContainerClass = 'flex flex-col items-start gap-y-2 flex-grow min-h-0 w-full mt-4';
             segmentNumberContainerStyle = 'flex-shrink-0 text-left py-1 text-sm text-gray-500 dark:text-gray-400';
         } else if (layoutKey === 'Layout2') {
             speakerContainerStyle = 'flex-basis: 6.5rem; max-width: 6.5rem;';
@@ -472,7 +559,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
 
 </script>
 
-<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm overflow-hidden editable-transcript-controls"
+<div class="editable-transcript-wrapper p-2 h-full flex flex-col text-gray-900 dark:text-gray-200 text-sm bg-white dark:bg-surface-2 rounded-md shadow-sm editable-transcript-controls"
      class:read-mode="{!editEnabled}"
      class:edit-mode="{editEnabled}">
     {#if !isEditorVisible}
@@ -484,7 +571,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 <button on:click="{handleEditSaveClick}"
                         class='btn-icon absolute left-0 top-1 text-gray-600 hover:text-gray-800 dark:text-white'
                         title="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
-                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}">
+                        aria-label="{editEnabled ? 'Save Changes' : 'Enable Editing'}"
+                        style="padding-left:0px;">
                     {@html editEnabled ? SAVE_ICON : EDIT_ICON}
                 </button>
                 <button on:click="{handlePreviousClick}" class="btn-nav-vertical absolute left-1/2 top-1 transform -translate-x-1/2" disabled="{currentIndex <= 0}" aria-label="Previous Segment" >
@@ -492,20 +580,25 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                 </button>
             </div>
             <!-- Main content area for inputs, layout driven by $activeLayout -->
-            <div class="flex justify-center">
-            <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
+            <div class="flex-grow overflow-y-auto">
+                <div class="flex justify-center">
+                    <div class="{columnContainerClass}" style="width: 40.01rem; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.5;">
 
-                {#if isLayout1Active}
-                    <!-- Layout 1: Single Row Table -->
-                    <div class="flex flex-row items-start gap-x-1 flex-grow min-h-0 w-full">
-<div class='flex-shrink-0 text-center py-1 basis-[5%] max-w-[5%] pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+
+
+                        <!-- Primary Segment Editor -->
+                        <div class="primary-segment-editor">
+                            {#if isLayout1Active}
+                                <!-- Layout 1: Single Row Table -->
+                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+<div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
     <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
 </div>
-                        <div class='flex-shrink-0 basis-[15%] max-w-[15%] pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
-                            <input id='startTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
-                            <input id='endTimeInput_L1' class='input-field w-full text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                        <div class='flex-shrink-0 pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                            <input id='startTimeInput_L1' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
+                            <input id='endTimeInput_L1' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
-                        <div class='relative flex-shrink-0 basis-[15%] max-w-[15%] pr-1 py-0.5'>
+                        <div class='relative flex-shrink-0 pr-1 py-0.5'>
                             <Dropdown
                                 options={speakerOptions}
                                 bind:value={localSpeaker}
@@ -525,14 +618,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 {:else if $activeLayout === 'Layout2'}
                     <!-- Layout 2: Original Two Row Structure -->
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L2' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L2' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L2' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
@@ -556,14 +649,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
                 {:else if $activeLayout === 'Layout3'}
                     <!-- Layout 3: Num, Time, Speaker on first row; Text on second -->
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                          <div class='flex-shrink-0 text-left py-1' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L3' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L3' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L3' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                         <div class='relative {speakerContainerStyle}'>
                             <Dropdown
@@ -587,14 +680,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
 
                 {:else if $activeLayout === 'Layout4'}
-                     <div class="flex items-center gap-x-1 flex-shrink-0">
+                     <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L4' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L4' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L4' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                     </div>
                     <div class="flex items-start gap-x-1 flex-grow min-h-0">
@@ -618,14 +711,14 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                     </div>
 
                 {:else if $activeLayout === 'Layout5'}
-                    <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <div class="flex items-center gap-x-1 flex-shrink-0 mb-2">
                         <div class='flex-shrink-0 text-left' style="{segmentNumberContainerStyle}">
                             <span class='w-full truncate whitespace-normal break-words text-sm text-gray-500 px-1.5 py-1' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
                         </div>
                         <div class='flex-shrink-0 text-gray-600 dark:text-white text-left leading-tight flex items-center gap-x-1' style="{timestampContainerStyle}">
-                            <input id='startTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00.000' />
+                            <input id='startTimeInput_L5' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
                             <span class='text-gray-400 dark:text-white'>–</span>
-                            <input id='endTimeInput_L5' class='input-field w-[5.641rem] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00.000' />
+                            <input id='endTimeInput_L5' class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
                         </div>
                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
                              <Dropdown
@@ -647,8 +740,69 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
                              {/if}
                         </div>
                     </div>
-                {/if}
-            </div>
+                                {/if}
+                        </div>
+
+                        {#if $transcriptStore.isDualModeActive}
+                            {#if isLayout1Active}
+                                <div class="w-full my-4 border-t border-gray-300 dark:border-gray-600"></div>
+                            {:else}
+                                <hr class="my-4 border-gray-300 dark:border-gray-600">
+                            {/if}
+
+                            <!-- Secondary Segment Editor -->
+                            <div class="secondary-segment-editor">
+                                {#if isLayout1Active}
+                                    <!-- Layout 1: Single Row Table -->
+                                    <div class="grid grid-cols-[auto,auto,auto,1fr] items-start gap-x-1 flex-grow min-h-0 w-full">
+                                        <div class='flex-shrink-0 text-center py-1 pr-1 {segmentNumberContainerStyle.includes("text-gray-500") ? "text-gray-500 dark:text-gray-400" : ""}'>
+                                            <span class='w-full truncate whitespace-nowrap text-sm' title="{String(currentIndex + 1)}">{String(currentIndex + 1)}</span>
+                                        </div>
+                                        <div class='flex-shrink-0 pr-1 text-gray-600 dark:text-gray-400 text-left leading-tight flex flex-col items-stretch gap-y-0.5 py-0.5'>
+                                            <input class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localStart}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('start_time', localStart)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment start time' placeholder='00:00:00.000' />
+                                            <input class='input-field w-[12ch] text-sm p-0' type='text' bind:value="{localEnd}" disabled="{!editEnabled}" on:blur="{() => handleBlurTimestamp('end_time', localEnd)}" on:keydown="{(e) => { if (e.key === 'Enter') e.target.blur(); }}" aria-label='Segment end time' placeholder='00:00:00.000' />
+                                        </div>
+                                        <div class='relative flex-shrink-0 pr-1 py-0.5'>
+                                            <Dropdown
+                                                options={speakerOptions}
+                                                bind:value={localSpeakerSecondary}
+                                                on:change={handleSpeakerSelectionChangeSecondary}
+                                                disabled={!editEnabled}
+                                                placeholder="Select Speaker"
+                                                containerClasses="w-full"
+                                            />
+                                        </div>
+                                        <div class='lexical-editor-wrapper-style basis-[65%] max-w-[65%]' class:is-disabled="{!editEnabled}">
+                                            {#if currentIndex !== -1 && initialJsonForEditorSecondary}
+                                                <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{(e) => currentEditorJsonSecondary = e.detail.jsonString}" enableFloatingToolbar="{false}" />
+                                            {/if}
+                                        </div>
+                                    </div>
+                                {:else}
+                                    <div class="flex items-start gap-x-1 flex-grow min-h-0">
+                                         <div class='relative flex-shrink-0' style="{speakerContainerStyle}">
+                                            <Dropdown
+                                                options={speakerOptions}
+                                                bind:value={localSpeakerSecondary}
+                                                on:change={handleSpeakerSelectionChangeSecondary}
+                                                disabled={!editEnabled}
+                                                placeholder="Select Speaker"
+                                                containerClasses="w-full"
+                                            />
+                                        </div>
+                                        <div class='lexical-editor-wrapper-style {textEditorContainerStyle}' class:is-disabled="{!editEnabled}">
+                                            {#if currentIndex !== -1 && initialJsonForEditorSecondary}
+                                                <LexicalEditor bind:this="{lexicalEditorInstanceSecondary}" initialJson="{initialJsonForEditorSecondary}" editable="{editEnabled}" placeholder='Enter transcript text…' toolbarConfig="{{ undo: true, redo: true, bold: true, italic: true, underline: true, strikethrough: true, textColor: true, highlight: true, clearFormatting: true }}" on:change="{(e) => currentEditorJsonSecondary = e.detail.jsonString}" enableFloatingToolbar="{false}" />
+                                            {/if}
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
+                        {/if}
+
+
+                    </div>
+                </div>
             </div>
             <div class="flex justify-center py-1 flex-shrink-0 mt-auto"> <button on:click="{handleNextClick}" class="btn-nav-vertical" disabled="{currentIndex >= segments.length - 1}" aria-label="Next Segment" > <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5"> <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /> </svg> </button> </div>
         </div>
@@ -670,7 +824,8 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
     .lexical-editor-wrapper-style {
         display: flex;
         flex-direction: column;
-        @apply rounded overflow-hidden;
+        @apply rounded;
+        overflow: visible;
     }
     .lexical-editor-wrapper-style:not(.is-disabled) {
         @apply border border-gray-300 dark:border-border bg-white dark:bg-transparent;
@@ -685,7 +840,7 @@ import { ExtendedTextNode } from '$lib/nodes/ExtendedTextNode.js';
         border: none !important;
         border-radius: 0 !important;
         box-shadow: none !important;
-        overflow: hidden;
+        overflow: visible;
         background-color: transparent !important;
     }
     .lexical-editor-wrapper-style > :global(.lexical-editor-root > .lexical-wrapper) {
