@@ -175,7 +175,10 @@ export function clearTranscriptState() {
     });
 }
 
-export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
+export async function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
+    const store = get(transcriptStore);
+    const isDualMode = store.isDualModeActive;
+
     const currentSelectedMedia = get(transcriptStore).selectedMediaFile;
     const currentSelectedPath = currentSelectedMedia?.path;
 
@@ -187,101 +190,114 @@ export function selectMedia(fileEntry, transcriptPathToPrioritize = null) {
                 ...ts,
                 selectedMediaFile: { ...ts.selectedMediaFile, associated_transcripts: fileEntry.associated_transcripts }
             }));
-            loadInitialTranscript(fileEntry, transcriptPathToPrioritize);
+            await loadInitialTranscript(fileEntry, transcriptPathToPrioritize);
         } else if (transcriptPathToPrioritize && get(transcriptStore).currentTranscriptPath !== transcriptPathToPrioritize) {
             // If the transcript path is different, just switch to it without a full reload.
-            switchTranscript(transcriptPathToPrioritize);
+            await switchTranscript(transcriptPathToPrioritize);
         }
-        return; // Exit early
-    }
+    } else {
 
-    const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
-    const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
+        const transcriptsChanged = JSON.stringify(currentSelectedMedia?.associated_transcripts) !== JSON.stringify(fileEntry?.associated_transcripts);
+        const shouldUpdateSelection = (!fileEntry && currentSelectedPath !== null) || (fileEntry && currentSelectedPath !== fileEntry.path) || transcriptsChanged;
 
-    let speakersToLoad = { count: 0, names: [], translatedNames: [] };
-    if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
-        const loadedCount = Number(fileEntry.speakers['@count']) || 0;
-        const loadedNamesRaw = fileEntry.speakers.name;
-        const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
+        let speakersToLoad = { count: 0, names: [], translatedNames: [] };
+        if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory && fileEntry.speakers && typeof fileEntry.speakers === 'object') {
+            const loadedCount = Number(fileEntry.speakers['@count']) || 0;
+            const loadedNamesRaw = fileEntry.speakers.name;
+            const loadedNames = Array.isArray(loadedNamesRaw) ? loadedNamesRaw : (loadedNamesRaw ? [loadedNamesRaw] : []);
 
-        let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
-        let loadedTranslatedNames = [];
+            let loadedTranslatedNamesRaw = fileEntry.speakers.translatedNames || fileEntry.speakers.translated_names || fileEntry.speakers.second_names;
+            let loadedTranslatedNames = [];
 
-        if (Array.isArray(loadedTranslatedNamesRaw)) {
-            loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
-        } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
-            loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+            if (Array.isArray(loadedTranslatedNamesRaw)) {
+                loadedTranslatedNames = loadedTranslatedNamesRaw.map(name => (typeof name === 'string' ? name.trim() : ''));
+            } else if (typeof loadedTranslatedNamesRaw === 'string' && loadedCount === 1) {
+                loadedTranslatedNames = [loadedTranslatedNamesRaw.trim()];
+            } else {
+                loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+            }
+
+            if (loadedTranslatedNames.length > loadedCount) {
+                loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
+            } else {
+                while (loadedTranslatedNames.length < loadedCount) {
+                    loadedTranslatedNames.push('');
+                }
+            }
+
+            speakersToLoad = {
+                count: loadedCount,
+                names: [...loadedNames],
+                translatedNames: loadedTranslatedNames
+            };
+
+            if (speakersToLoad.count !== speakersToLoad.names.length) {
+                console.warn(`[TranscriptStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`);
+                speakersToLoad.count = speakersToLoad.names.length;
+                speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
+                speakersToLoad.translatedNames = Array(speakersToLoad.count).fill('');
+            }
+        } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
+            speakersToLoad = { count: 0, names: [], translatedNames: [] };
         } else {
-            loadedTranslatedNames = Array(loadedCount > 0 ? loadedCount : 0).fill('');
+            speakersToLoad = { count: 0, names: [], translatedNames: [] };
         }
 
-        if (loadedTranslatedNames.length > loadedCount) {
-            loadedTranslatedNames = loadedTranslatedNames.slice(0, loadedCount);
-        } else {
-            while (loadedTranslatedNames.length < loadedCount) {
-                loadedTranslatedNames.push('');
+        const currentStoreSpeakers = get(transcriptStore).speakers;
+        const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
+
+        if (shouldUpdateSelection || speakersChanged) {
+            const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? { ...fileEntry } : null;
+            if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
+                console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia);
+            }
+            if (newSelectedMedia && !newSelectedMedia.media_xml_identifier) {
+                console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
+            }
+
+            transcriptStore.update((ts) => {
+                const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
+                return {
+                    ...ts,
+                    selectedMediaFile: newSelectedMedia,
+                    audioBuffer: mediaPathChanged ? null : ts.audioBuffer,
+                    audioBufferPeaks: mediaPathChanged ? null : ts.audioBufferPeaks,
+                    player: {
+                        currentTime: 0,
+                        duration: mediaPathChanged ? 0 : ts.player.duration,
+                        isPlaying: false,
+                        currentSegmentIndex: -1
+                    },
+                    speakers: speakersToLoad,
+                    segments: [],
+                    activeTranscript: null,
+                    currentTranscriptPath: null,
+                    isTranscriptLoading: false,
+                    transcriptUndoStack: [],
+                    transcriptRedoStack: [],
+                    transcriptDirty: false,
+                };
+            });
+            const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
+
+            if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
+                await loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
+            } else {
+                
             }
         }
-
-        speakersToLoad = {
-            count: loadedCount,
-            names: [...loadedNames],
-            translatedNames: loadedTranslatedNames
-        };
-
-        if (speakersToLoad.count !== speakersToLoad.names.length) {
-            console.warn(`[TranscriptStore selectMedia] Discrepancy count/names for ${fileEntry.name}. Adjusting.`);
-            speakersToLoad.count = speakersToLoad.names.length;
-            speakersToLoad.names = speakersToLoad.names.slice(0, speakersToLoad.count);
-            speakersToLoad.translatedNames = Array(speakersToLoad.count).fill('');
-        }
-    } else if (fileEntry && fileEntry.file_type === 'media' && !fileEntry.is_directory) {
-        speakersToLoad = { count: 0, names: [], translatedNames: [] };
-    } else {
-        speakersToLoad = { count: 0, names: [], translatedNames: [] };
     }
 
-    const currentStoreSpeakers = get(transcriptStore).speakers;
-    const speakersChanged = JSON.stringify(currentStoreSpeakers) !== JSON.stringify(speakersToLoad);
+    if (isDualMode) {
+        const updatedStore = get(transcriptStore);
+        const associatedTranscripts = updatedStore.selectedMediaFile?.associated_transcripts || [];
+        const primaryTranscriptPath = updatedStore.currentTranscriptPath;
+        const otherTranscripts = associatedTranscripts.filter(t => t.path !== primaryTranscriptPath);
 
-    if (shouldUpdateSelection || speakersChanged) {
-        const newSelectedMedia = fileEntry && !fileEntry.is_directory && fileEntry.file_type === 'media' ? { ...fileEntry } : null;
-        if (newSelectedMedia && (!newSelectedMedia.name || !newSelectedMedia.path)) {
-            console.error("[TranscriptStore] CRITICAL: Attempting set selectedMediaFile without name/path!", newSelectedMedia);
-        }
-        if (newSelectedMedia && !newSelectedMedia.media_xml_identifier) {
-            console.warn("[TranscriptStore] WARNING: Setting selectedMediaFile without media_xml_identifier! Saving might fail.", newSelectedMedia);
-        }
-
-        transcriptStore.update((ts) => {
-            const mediaPathChanged = ts.selectedMediaFile?.path !== newSelectedMedia?.path;
-            return {
-                ...ts,
-                selectedMediaFile: newSelectedMedia,
-                audioBuffer: mediaPathChanged ? null : ts.audioBuffer,
-                audioBufferPeaks: mediaPathChanged ? null : ts.audioBufferPeaks,
-                player: {
-                    currentTime: 0,
-                    duration: mediaPathChanged ? 0 : ts.player.duration,
-                    isPlaying: false,
-                    currentSegmentIndex: -1
-                },
-                speakers: speakersToLoad,
-                segments: [],
-                activeTranscript: null,
-				currentTranscriptPath: null,
-                isTranscriptLoading: false,
-                transcriptUndoStack: [],
-                transcriptRedoStack: [],
-                transcriptDirty: false,
-            };
-        });
-        const newlySelectedMedia = get(transcriptStore).selectedMediaFile;
-
-        if (newlySelectedMedia && Array.isArray(newlySelectedMedia.associated_transcripts) && newlySelectedMedia.associated_transcripts.length > 0) {
-            loadInitialTranscript(newlySelectedMedia, transcriptPathToPrioritize);
+        if (otherTranscripts.length > 0) {
+            await setSecondaryTranscript(otherTranscripts[0].path);
         } else {
-            
+            await setSecondaryTranscript(null);
         }
     }
 }
@@ -1318,6 +1334,19 @@ export function setSpeakerConfig(newSpeakerConfig) {
 }
 
 // --- Dual Transcript Mode Functions ---
+
+export async function switchDualModeTranscripts(newPrimaryPath) {
+    await switchTranscript(newPrimaryPath);
+    const store = get(transcriptStore);
+    const associatedTranscripts = store.selectedMediaFile?.associated_transcripts || [];
+    const otherTranscripts = associatedTranscripts.filter(t => t.path !== newPrimaryPath);
+
+    if (otherTranscripts.length > 0) {
+        await setSecondaryTranscript(otherTranscripts[0].path);
+    } else {
+        await setSecondaryTranscript(null);
+    }
+}
 
 export async function setSecondaryTranscript(path) {
     if (!path) {
