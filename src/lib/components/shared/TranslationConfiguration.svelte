@@ -217,7 +217,6 @@
 							bind:value={fromLanguage}
 							placeholder="Select language"
 							containerClasses="w-32"
-							on:change={onLanguageSelect}
 						/>
 					</div>
 					<div class="flex flex-col">
@@ -228,7 +227,6 @@
 							bind:value={toLanguage}
 							placeholder="Select language"
 							containerClasses="w-32"
-							on:change={onLanguageSelect}
 						/>
 					</div>
 					<button on:click={handleDownload} class="btn-blue-small">
