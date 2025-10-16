@@ -403,7 +403,7 @@
             const currentDomScrollTop = container.scrollTop;
             const maxScrollTop = container.scrollHeight - currentContainerHeight;
 
-            const itemTop = activeSegmentIndex * ESTIMATED_SEGMENT_HEIGHT;
+            const itemTop = ($transcriptStore.isDualModeActive ? activeSegmentIndex * 2 : activeSegmentIndex) * ESTIMATED_SEGMENT_HEIGHT;
             const itemBottom = itemTop + ESTIMATED_SEGMENT_HEIGHT;
 
             const shouldScroll = true;
@@ -422,11 +422,11 @@
 
                 // Condition for incremental scroll
                 if ($transcriptStore.player.isPlaying && isScrollingDown && isItemInSweetSpot && (maxScrollTop - currentDomScrollTop > 1)) {
-                    const targetScrollTop = Math.min(currentDomScrollTop + ESTIMATED_SEGMENT_HEIGHT, maxScrollTop);
+                    const targetScrollTop = Math.min(currentDomScrollTop + ($transcriptStore.isDualModeActive ? 2 * ESTIMATED_SEGMENT_HEIGHT : ESTIMATED_SEGMENT_HEIGHT), maxScrollTop);
                     manualSmoothScroll(targetScrollTop);
                 } else {
                     // Fallback to centering logic for seeking, scrolling up, or when the item is outside the sweet spot.
-                    const scrollThreshold = 2 * ESTIMATED_SEGMENT_HEIGHT;
+                    const scrollThreshold = ($transcriptStore.isDualModeActive ? 4 : 2) * ESTIMATED_SEGMENT_HEIGHT;
                     const effectiveViewportTop = viewportTop + (isScrollingUp ? scrollThreshold : 0);
                     const effectiveViewportBottom = viewportBottom - (isScrollingDown ? scrollThreshold : 0);
                     const isItemInsideEffectiveViewport = itemTop >= effectiveViewportTop && itemBottom <= effectiveViewportBottom;
