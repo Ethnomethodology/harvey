@@ -8,6 +8,19 @@ import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
 
+const DUAL_MODE_STORAGE_KEY = 'harvey-dual-mode';
+
+function loadDualModeState() {
+    if (typeof window === 'undefined') return false;
+    try {
+        const storedValue = localStorage.getItem(DUAL_MODE_STORAGE_KEY);
+        return storedValue !== null ? JSON.parse(storedValue) : false;
+    } catch (error) {
+        console.error('[TranscriptStore] Error loading dual mode state from localStorage:', error);
+        return false;
+    }
+}
+
 export const initialTranscriptState = {
     segments: [],
     activeTranscript: null, // Holds { path, language_code, segments }
@@ -38,7 +51,7 @@ export const initialTranscriptState = {
     diarizationEnabledForNextJob: false,
 
     // Dual Transcript Mode
-    isDualModeActive: false,
+    isDualModeActive: loadDualModeState(),
     secondaryTranscriptPath: null,
     secondaryTranscriptSegments: [],
 
@@ -1405,6 +1418,14 @@ export function toggleDualMode(active) {
     if (store.transcriptDirty) {
         message('Please save your changes before enabling or disabling Dual Transcript Mode.', { title: 'Unsaved Changes', type: 'error' });
         return;
+    }
+
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem(DUAL_MODE_STORAGE_KEY, JSON.stringify(active));
+        } catch (error) {
+            console.error('[TranscriptStore] Error saving dual mode state to localStorage:', error);
+        }
     }
 
     transcriptStore.update(ts => ({
