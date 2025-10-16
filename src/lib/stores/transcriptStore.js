@@ -401,7 +401,17 @@ export function setTranscriptData(path, data, inferSpeakers = false) {
         }
 
         const mediaFile = get(transcriptStore).selectedMediaFile;
-        const transcriptInfo = mediaFile?.associated_transcripts?.find(t => t.path === path);
+        const projectRootPath = get(projectMainStore).projectRootPath;
+
+        let relativePathToMatch = path;
+        if (projectRootPath && path.startsWith(projectRootPath)) {
+            relativePathToMatch = path.substring(projectRootPath.length).replace(/^[\\/]/, '');
+        }
+
+        const transcriptInfo = mediaFile?.associated_transcripts?.find(t => {
+            // Compare against relativePath if available, otherwise fallback to path
+            return t.relativePath === relativePathToMatch || t.path === path;
+        });
 
         if (!transcriptInfo) {
             console.error(`[setTranscriptData] Could not find transcript info for path: ${path}. Current selectedMediaFile:`, mediaFile);
