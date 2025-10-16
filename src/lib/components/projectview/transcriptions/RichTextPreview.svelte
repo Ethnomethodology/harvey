@@ -760,8 +760,7 @@
                     class="p-2 border rounded-lg shadow-sm transition-colors duration-150 ease-in-out dark:border-border flex items-start gap-x-2"
                     class:segment-active={seg.segmentIndex === activeSegmentIndex}
                     class:border-blue-400={seg.segmentIndex === activeSegmentIndex}
-                    class:bg-blue-100={seg.segmentIndex === activeSegmentIndex && seg.isPrimary}
-                    class:bg-blue-50={seg.segmentIndex === activeSegmentIndex && !seg.isPrimary}
+                    class:bg-blue-100={seg.segmentIndex === activeSegmentIndex}
                     class:dark:bg-blue-900={seg.segmentIndex === activeSegmentIndex}
                     class:dark:border-blue-600={seg.segmentIndex === activeSegmentIndex}
                     class:border-gray-200={seg.segmentIndex !== activeSegmentIndex}
@@ -893,7 +892,7 @@
 	.btn-icon > :global(svg), .size-6 { @apply w-5 h-5; }
     .btn-icon:disabled > :global(svg) { @apply text-gray-400 dark:text-d-gray-500; }
 	.segment-block { transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out; }
-	.segment-block.secondary-segment { @apply bg-gray-50 dark:bg-gray-800; }
+	
 	.segment-block:not(.preview-interaction-disabled):not(.segment-active):hover { @apply bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-900; }
 	.segment-block:not(.preview-interaction-disabled):focus { @apply ring-1 ring-blue-300 dark:ring-blue-600 border-blue-300 dark:border-blue-600 outline-none; }
 	.preview-interaction-disabled { @apply cursor-default opacity-80; }
