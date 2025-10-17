@@ -131,14 +131,14 @@
     </div>
     <nav class="flex flex-col space-y-1">
       <a
-        href=""
+        href="#"
         class="px-3 py-2 rounded-md {activeTab === 'projects' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm"
         on:click|preventDefault={() => switchTab('projects')}
       >
         Projects
       </a>
       <a
-        href=""
+        href="#"
         class="px-3 py-2 rounded-md {activeTab === 'configure' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm flex items-center justify-between"
         on:click|preventDefault={() => switchTab('configure')}
       >
@@ -151,7 +151,7 @@
         {/if}
       </a>
       <a
-        href=""
+        href="#"
         class="px-3 py-2 rounded-md {activeTab === 'about' ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'} text-sm"
         on:click|preventDefault={() => switchTab('about')}
       >
