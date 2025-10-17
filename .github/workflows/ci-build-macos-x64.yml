@@ -68,7 +68,7 @@ jobs:
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
 
-          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }} --verbose
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
