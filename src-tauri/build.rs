@@ -4,11 +4,11 @@ use std::env;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use zip::ZipArchive;
 use anyhow::{Context, Result};
 
 const SIDECAR_VERSION: &str = "v0.2.0";
+const PYTHON_VERSION: &str = "v0.1.0";
 const SIDECARS_BASE_URL: &str = "https://github.com/dipanjan92/harvey-sidecars/releases/download";
 
 fn main() -> Result<()> {
@@ -38,22 +38,25 @@ fn main() -> Result<()> {
         println!("cargo:info=Skipping sidecar download: sidecars directory already exists for dev build.");
     }
 
-    // --- Python Bundling (existing logic) ---
+    // --- Python Bundling ---
     let python_bundle_path = manifest_dir.join("python");
-    if cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(target_os = "windows") {
-        if profile == "release" || !python_bundle_path.exists() {
-            let reason = if profile == "release" { "release build" } else { "dev build and python bundle is missing" };
-            println!("cargo:info=Bundling self-contained Python (reason: {})...", reason);
-            let script_path = manifest_dir.join("scripts").join("bundle-python.sh");
-            println!("cargo:rerun-if-changed={}", script_path.to_str().unwrap());
-            let command = if cfg!(target_os = "windows") { env::var("MSYS2_BASH").unwrap_or_else(|_| "bash".to_string()) } else { "bash".to_string() };
-            let status = Command::new(&command).arg(&script_path).status().expect("Failed to execute bundle-python.sh script");
-            if !status.success() {
-                panic!("Python bundling script failed with exit code: {}", status);
-            }
-        } else {
-            println!("cargo:info=Skipping Python bundling: python directory already exists for dev build.");
+    if profile == "release" || !python_bundle_path.exists() {
+        let reason = if profile == "release" { "release build" } else { "dev build and python bundle is missing" };
+        println!("cargo:info=Downloading self-contained Python (reason: {})...", reason);
+
+        let target_platform = get_target_platform_string()?;
+        println!("cargo:info=Detected target platform: {}", target_platform);
+
+        if python_bundle_path.exists() {
+            fs::remove_dir_all(&python_bundle_path)?;
         }
+        fs::create_dir_all(&python_bundle_path)?;
+
+        download_and_unzip_python(&target_platform, &python_bundle_path)?;
+
+        println!("cargo:info=Python downloaded and extracted successfully.");
+    } else {
+        println!("cargo:info=Skipping Python download: python directory already exists for dev build.");
     }
 
     // --- Copy Python scripts to target/debug/scripts for development (existing logic) ---
@@ -124,6 +127,52 @@ fn rename_whisper_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
 fn download_and_unzip(asset_name: &str, platform: &str, dest_dir: &Path) -> Result<()> {
     let url = format!("{}/{}/{}-{}.zip", SIDECARS_BASE_URL, SIDECAR_VERSION, asset_name, platform);
     println!("cargo:info=Downloading {} from {}", asset_name, url);
+
+    let agent = ureq::builder().build();
+    let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
+
+    if response.status() != 200 {
+        anyhow::bail!("Failed to download from {}: HTTP {}", url, response.status());
+    }
+
+    let mut bytes = Vec::new();
+    response.into_reader().read_to_end(&mut bytes)?;
+
+    let cursor = io::Cursor::new(bytes);
+    let mut archive = ZipArchive::new(cursor)?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = dest_dir.join(file.mangled_name());
+
+        if file.name().ends_with('/') {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(&p)?;
+                }
+            }
+            let mut outfile = File::create(&outpath)?;
+            io::copy(&mut file, &mut outfile)?;
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Some(mode) = file.unix_mode() {
+                if mode & 0o111 != 0 {
+                     fs::set_permissions(&outpath, fs::Permissions::from_mode(mode))?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn download_and_unzip_python(platform: &str, dest_dir: &Path) -> Result<()> {
+    let url = format!("{}/{}/python-{}.zip", SIDECARS_BASE_URL, PYTHON_VERSION, platform);
+    println!("cargo:info=Downloading python from {}", url);
 
     let agent = ureq::builder().build();
     let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
