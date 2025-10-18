@@ -349,14 +349,36 @@ async fn run_translation_process<R: Runtime>(
         }
     }
 
-    let target_lang = model_name.split('-').last().unwrap_or("trans");
-    let new_path = transcript_path.replace(".json", &format!(".{}.json", target_lang));
+    let parts: Vec<&str> = model_name.split('/').collect();
+    let model_id = parts.last().unwrap_or(&""); // e.g., opus-mt-en-jap
+    let lang_parts: Vec<&str> = model_id.split('-').collect();
+    let source_lang = lang_parts.get(2).unwrap_or(&"unk"); // e.g., en
+    let target_lang_code = lang_parts.get(3).unwrap_or(&"unk"); // e.g., jap
+
+    let original_file_stem = std::path::Path::new(&transcript_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("transcript");
+
+    let base_new_filename_stem = format!("{}-{}-{}", original_file_stem, source_lang, target_lang_code);
+    let mut new_filename = format!("{}.json", base_new_filename_stem);
+    let mut counter = 0;
+    let mut new_path_buf = std::path::PathBuf::from(&transcript_path);
+    new_path_buf.set_file_name(&new_filename);
+
+    while new_path_buf.exists() {
+        counter += 1;
+        new_filename = format!("{}-{}.json", base_new_filename_stem, counter);
+        new_path_buf.set_file_name(&new_filename);
+    }
+    let new_path = new_path_buf.to_string_lossy().to_string();
+
     let new_content = serde_json::to_string_pretty(&lexical_json)?;
     fs::write(&new_path, &new_content)?;
 
     emit_translation_progress(&app_handle, &job_id, 95.0, "Saving translated transcript...");
 
-    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(target_lang.to_string())).await?;
+    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(format!("{}-{}", source_lang, target_lang_code))).await?;
 
     emit_translation_progress(&app_handle, &job_id, 100.0, "Translation complete.");
 
