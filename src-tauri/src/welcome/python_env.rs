@@ -111,10 +111,9 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     // Consolidate all pip installations into a single command.
     // This addresses the UI hang and potential `@rpath` issues on macOS by installing `ffmpeg-python`
     // in the same transaction as the libraries that depend on it (like `torchcodec`).
-    let packages = [
+    let mut packages = vec![
         "--upgrade", "pip",
         "ffmpeg-python==0.2.0",
-        "torch==2.8.0",
         "torchcodec==0.7.0",
         "pyannote.audio==4.0.1",
         "transformers==4.57.0",
@@ -122,10 +121,18 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
         "sentencepiece==0.2.1",
         "pypandoc_binary==1.15",
     ];
+
+    if cfg!(windows) {
+        packages.push("torch==2.9.0");
+        packages.push("torchaudio==2.9.0");
+    } else {
+        packages.push("torch==2.8.0");
+        packages.push("torchaudio==2.8.0");
+    }
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let mut pip_args = vec!["-m", "pip", "install"];
-    pip_args.extend_from_slice(&packages);
+    pip_args.extend(packages);
 
     pip_args.push("--no-cache-dir");
 
