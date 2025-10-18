@@ -971,7 +971,16 @@ export async function loadTranscriptFile(transcriptFilePath) {
     try {
         const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath });
         const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
-        setTranscriptData(transcriptFilePath, segmentsArray, false);
+        const currentProject = get(project);
+        const projectBaseDir = currentProject.baseDirectory;
+        let relativeTranscriptPath = transcriptFilePath;
+        if (projectBaseDir && transcriptFilePath.startsWith(projectBaseDir)) {
+            relativeTranscriptPath = transcriptFilePath.substring(projectBaseDir.length);
+            if (relativeTranscriptPath.startsWith(sep) || relativeTranscriptPath.startsWith('/') || relativeTranscriptPath.startsWith('\\')) {
+                relativeTranscriptPath = relativeTranscriptPath.substring(1);
+            }
+        }
+        setTranscriptData(relativeTranscriptPath, segmentsArray, false);
     } catch (error) {
         let errorMessage = "Unknown error";
         if (error && typeof error === 'object') {
