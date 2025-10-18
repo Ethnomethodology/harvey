@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 use bzip2::read::BzDecoder;
 use tar::Archive;
+use serde_json::Value;
+use flate2::read::GzDecoder;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -19,6 +21,7 @@ fn main() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let sidecars_dir = manifest_dir.join("sidecars");
     let profile = env::var("PROFILE").unwrap();
+    let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
 
     if profile == "release" || !sidecars_dir.exists() {
         let reason = if profile == "release" {
@@ -51,7 +54,11 @@ fn main() -> Result<()> {
         println!("cargo:info=Skipping sidecar download: sidecars directory already exists for dev build.");
     }
 
-    bundle_micromamba()?;
+    if target_triple == "aarch64-pc-windows-msvc" {
+        bundle_python_standalone()?;
+    } else {
+        bundle_micromamba()?;
+    }
 
     // --- Copy Python scripts to target/debug/scripts for development (existing logic) ---
     let scripts_source_dir = manifest_dir.join("scripts");
@@ -104,6 +111,7 @@ fn bundle_micromamba() -> Result<()> {
         "x86_64-apple-darwin" => "osx-64",
         "aarch64-apple-darwin" => "osx-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win-64",
+        "x86_64-unknown-linux-gnu" => "linux-64",
         "aarch64-pc-windows-msvc" => {
             println!("cargo:warning=Micromamba does not support windows-arm64 yet. Skipping download.");
             return Ok(());
@@ -210,6 +218,75 @@ fn rename_whisper_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
 
     Ok(())
 }
+
+fn bundle_python_standalone() -> Result<()> {
+    const PYTHON_VERSION: &str = "3.12.12";
+    const PYTHON_BUILD_TAG: &str = "20251010";
+
+    println!("cargo:info=Bundling standalone Python for Windows ARM64...");
+
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let python_dir = manifest_dir.join("python");
+    let tmp_tar_path = manifest_dir.join("python-bundle.tar.gz");
+
+    // --- Clean up previous builds ---
+    if python_dir.exists() {
+        fs::remove_dir_all(&python_dir)?;
+    }
+    if tmp_tar_path.exists() {
+        fs::remove_file(&tmp_tar_path)?;
+    }
+
+    // --- Find Download URL via GitHub API ---
+    let api_url = format!(
+        "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/{}",
+        PYTHON_BUILD_TAG
+    );
+
+    println!("cargo:info=Querying GitHub API: {}", api_url);
+
+    let agent = ureq::builder().build();
+    let response = agent.get(&api_url).call()?;
+    let json: Value = serde_json::from_reader(response.into_reader())?;
+
+    let assets = json["assets"].as_array().context("No assets found in release")?;
+    let target_platform_str = "aarch64-pc-windows-msvc";
+
+    let download_url = assets
+        .iter()
+        .find_map(|asset| {
+            let name = asset["name"].as_str()?;
+            if name.contains(PYTHON_VERSION) && name.contains(target_platform_str) && name.ends_with("install_only.tar.gz") {
+                asset["browser_download_url"].as_str().map(String::from)
+            } else {
+                None
+            }
+        })
+        .context("Could not find a matching Python bundle URL from the GitHub API.")?;
+
+    println!("cargo:info=Found download URL: {}", download_url);
+
+    // --- Download and Extract Python ---
+    println!("cargo:info=Downloading Python bundle...");
+    let download_response = agent.get(&download_url).call()?;
+    let mut bytes = Vec::new();
+    download_response.into_reader().read_to_end(&mut bytes)?;
+    fs::write(&tmp_tar_path, &bytes)?;
+
+    println!("cargo:info=Extracting Python bundle...");
+    let tar_gz = File::open(&tmp_tar_path)?;
+    let tar = GzDecoder::new(tar_gz);
+    let mut archive = Archive::new(tar);
+    archive.unpack(&manifest_dir)?; // Unpacks into a 'python' directory
+
+    // --- Clean up downloaded tarball ---
+    fs::remove_file(&tmp_tar_path)?;
+
+    println!("cargo:info=Self-contained Python has been bundled into {}", python_dir.display());
+
+    Ok(())
+}
+
 
 fn download_and_unzip(asset_name: &str, platform: &str, dest_dir: &Path) -> Result<()> {
     let url = format!(

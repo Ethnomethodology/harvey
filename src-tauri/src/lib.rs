@@ -165,6 +165,7 @@ pub fn run() {
             welcome::commands::get_platform_info,
             welcome::commands::check_python_libraries_installed,
             welcome::commands::install_python_libraries,
+            welcome::python_env::is_ffmpeg_installed,
             welcome::python_env::delete_virtual_env,
             welcome::python_env::list_venv_lib_contents, // Temp diagnostic command
             welcome::hf_auth::check_hf_auth_status,

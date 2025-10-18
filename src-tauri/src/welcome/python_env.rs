@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_shell::Shell;
+use tauri_plugin_shell::{Shell, ShellExt};
 use crate::welcome::config::{CommandError, get_config_dir};
 use std::path::PathBuf;
 use std::fs;
@@ -54,6 +54,18 @@ pub fn get_python_path() -> Result<PathBuf, CommandError> {
 // --- Main Installation Logic ---
 
 pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
+    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
+
+    if target_triple == "aarch64-pc-windows-msvc" {
+        // This will be the new path for Windows ARM64
+        install_python_libraries_standalone(app, shell).await
+    } else {
+        // Existing path for all other platforms
+        install_python_libraries_micromamba(app, shell).await
+    }
+}
+
+async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
     let emitter = app.clone();
     emitter.emit("installation-log", LogPayload { message: "Starting installation... Cleaning up previous attempts.".into() }).unwrap();
 
@@ -154,6 +166,85 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     Ok(())
 }
 
+async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
+    let emitter = app.clone();
+    emitter.emit("installation-log", LogPayload { message: "Starting installation...".into() }).unwrap();
+
+    let env_path = get_env_path()?;
+    if env_path.exists() {
+        emitter.emit("installation-log", LogPayload { message: "Removing existing environment...".into() }).unwrap();
+        fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to remove old env: {}", e)))?;
+    }
+
+    // Step 1: Locate the bundled Python executable from build step
+    let bundled_python_dir = app.path()
+        .resolve("python", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| CommandError::Message(format!("Failed to resolve bundled python path: {}", e)))?;
+    let python_exe = bundled_python_dir.join("python.exe");
+
+    if !python_exe.exists() {
+        return Err(CommandError::Message("Bundled python.exe not found".to_string()));
+    }
+    emitter.emit("installation-log", LogPayload { message: "Located bundled Python.".into() }).unwrap();
+
+    // Step 2: Create a virtual environment using the bundled Python
+    emitter.emit("installation-log", LogPayload { message: "Creating virtual environment...".into() }).unwrap();
+    let venv_args = ["-m", "venv", env_path.to_str().unwrap()];
+    let output = shell.command(python_exe.to_str().unwrap())
+        .args(&venv_args)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(CommandError::Message(format!("Failed to create venv: {}", stderr)));
+    }
+
+    // Step 3: Install packages using pip from the new venv
+    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
+
+    let pip_exe = get_python_path()?; // This now points to the python in the venv
+    let pip_packages = [
+        "torch", "torchaudio", "torchcodec", "--extra-index-url", "https://download.pytorch.org/whl/cpu",
+        "pyannote.audio==4.0.1", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0", "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
+    ];
+    let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
+    pip_args.extend(pip_packages.iter().map(|s| *s));
+
+    let (mut rx_pip, _child_pip) = shell.command(pip_exe.to_str().unwrap())
+        .args(&pip_args)
+        .env("PYTHONUNBUFFERED", "1")
+        .spawn()?;
+
+    while let Some(event) = rx_pip.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
+            },
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    return Err(CommandError::Message("Failed to install pip packages.".into()));
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
+    emitter.emit("installation-finished", ()).unwrap();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    let shell = app.shell();
+    let command = if cfg!(windows) { "where" } else { "which" };
+    let output = shell.command(command).arg("ffmpeg").output().await?;
+    Ok(output.status.success())
+}
+
 pub async fn check_python_libraries_installed<R: Runtime>(
     app: &AppHandle<R>,
     shell: &Shell<R>,
@@ -165,11 +256,21 @@ pub async fn check_python_libraries_installed<R: Runtime>(
     }
 
     let python_path = get_python_path()?;
-    let packages = ["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"];
+    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
+
+    let packages = if target_triple == "aarch64-pc-windows-msvc" {
+        vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc_binary"]
+    } else {
+        vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"]
+    };
 
     for package in &packages {
         log::info!("Checking for package: {}", package);
-        let import_name = if package == &"pyannote.audio" { "pyannote" } else { package };
+        let import_name = match *package {
+            "pyannote.audio" => "pyannote",
+            "pypandoc_binary" => "pypandoc",
+            _ => package,
+        };
 
         let mut command = shell.command(python_path.to_str().unwrap());
 

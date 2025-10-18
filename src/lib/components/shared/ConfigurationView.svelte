@@ -15,9 +15,11 @@
 	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { platform } from '@tauri-apps/plugin-os';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
-
+	let isWinArm64 = false;
+	let isFFmpegInstalled = false;
 	let downloadLocation = '';
 	let isLoadingConfig = true;
 	let configError = '';
@@ -34,9 +36,17 @@
 		configError = '';
 		statusMessage = '';
 		try {
+			const currentPlatform = await platform();
+			const arch = await invoke('get_platform_info').then(info => info.arch);
+			isWinArm64 = currentPlatform === 'windows' && arch === 'aarch64';
+
+			if (isWinArm64) {
+				isFFmpegInstalled = await invoke('is_ffmpeg_installed');
+			}
+
 			downloadLocation = await getDownloadLocation();
 		} catch (e) {
-			console.error('Error loading download location:', e);
+			console.error('Error loading configuration:', e);
 			configError = `Failed to load configuration: ${e.message || e}`;
 		} finally {
 			isLoadingConfig = false;
@@ -107,7 +117,9 @@
 		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
+				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'application'}
 				class:text-blue-600={activeTab === 'application'}
 				class:border-transparent={activeTab !== 'application'}
@@ -126,7 +138,9 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
+				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'transcription'}
 				class:text-blue-600={activeTab === 'transcription'}
 				class:border-transparent={activeTab !== 'transcription'}
@@ -145,7 +159,9 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
+				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
+				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'translation'}
 				class:text-blue-600={activeTab === 'translation'}
 				class:border-transparent={activeTab !== 'translation'}
@@ -167,7 +183,20 @@
 
 	<!-- Tab Content Area -->
 	<div class="flex-grow min-h-0 overflow-y-auto pr-2 -mr-2">
-		{#if activeTab === 'application'}
+		{#if isWinArm64 && !isFFmpegInstalled}
+			<div class="p-4 bg-yellow-50 border border-yellow-300 rounded-md">
+				<h3 class="text-lg font-semibold text-yellow-800">FFmpeg Required</h3>
+				<p class="mt-2 text-sm text-yellow-700">
+					To use Harvey on this platform, you need to install FFmpeg. Please download and install it from the official website, ensuring it's added to your system's PATH.
+				</p>
+				<a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener noreferrer" class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+					Download FFmpeg
+				</a>
+				<p class="mt-2 text-xs text-gray-500">
+					After installation, please restart Harvey.
+				</p>
+			</div>
+		{:else if activeTab === 'application'}
             <div class="p-1">
                 {#if isLoadingConfig}
                     <p class="text-gray-500 text-center py-4">Loading configuration...</p>
