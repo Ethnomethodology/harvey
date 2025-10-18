@@ -501,7 +501,7 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  #[command]
 pub async fn check_python_libraries_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     let shell = app.shell();
-    python_env::check_python_libraries_installed(&shell).await
+    python_env::check_python_libraries_installed(&app, &shell).await
 }
 
 #[command]

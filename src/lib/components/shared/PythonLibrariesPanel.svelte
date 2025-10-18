@@ -25,7 +25,7 @@
 			await updateConfigStatus();
 		} catch (e) {
 			console.error('Error deleting virtual environment:', e);
-			error = `Failed to delete environment: ${e.message || e}`;
+			error = `Failed to delete environment: ${e.payload || e}`;
 		} finally {
 			isDeleting = false;
 		}
@@ -38,7 +38,7 @@
             arePythonLibsInstalled.set(status);
 		} catch (e) {
 			console.error('Error checking Python library status:', e);
-			error = `Failed to check dependency status: ${e.message || e}`;
+			error = `Failed to check dependency status: ${e.payload || e}`;
 			arePythonLibsInstalled.set(false);
 		} finally {
 			isLoading = false;
@@ -73,7 +73,7 @@
 			await invoke('install_python_libraries');
 		} catch (e) {
 			console.error('Error installing Python libraries:', e);
-			installLogs = [...installLogs, { id: installLogs.length, message: `Error: ${e.message || e}` }];
+			installLogs = [...installLogs, { id: installLogs.length, message: `Error: ${e.payload}` }];
             isInstalling = false; // Set to false on error
 		} finally {
 			if (unlistenLog) {

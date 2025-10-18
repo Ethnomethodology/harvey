@@ -1,33 +1,19 @@
 // src-tauri/build.rs
 
 use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
-use serde::Deserialize;
-use serde_json;
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use tar::Archive;
 use zip::ZipArchive;
+use bzip2::read::BzDecoder;
+use tar::Archive;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 const SIDECAR_VERSION: &str = "v0.2.0";
 const SIDECARS_BASE_URL: &str = "https://github.com/dipanjan92/harvey-sidecars/releases/download";
-
-// --- Python Configuration ---
-const PYTHON_VERSION: &str = "3.12.12";
-const PYTHON_BUILD_TAG: &str = "20251010";
-
-#[derive(Debug, Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Release {
-    assets: Vec<Asset>,
-}
 
 fn main() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -66,8 +52,7 @@ fn main() -> Result<()> {
         println!("cargo:info=Skipping sidecar download: sidecars directory already exists for dev build.");
     }
 
-    // --- Python Bundling ---
-    bundle_python()?;
+    bundle_micromamba()?;
 
     // --- Copy Python scripts to target/debug/scripts for development (existing logic) ---
     let scripts_source_dir = manifest_dir.join("scripts");
@@ -107,81 +92,70 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_python_target_platform_string() -> Result<String> {
-    let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
-    let platform = match target_triple.as_str() {
-        "x86_64-apple-darwin" => "x86_64-apple-darwin",
-        "aarch64-apple-darwin" => "aarch64-apple-darwin",
-        "x86_64-pc-windows-msvc" => "x86_64-pc-windows-msvc",
-        "aarch64-pc-windows-msvc" => "aarch64-pc-windows-msvc",
-        "x86_64-unknown-linux-gnu" => "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu" => "aarch64-unknown-linux-gnu",
-        _ => anyhow::bail!("Unsupported target triple for Python bundling: {}", target_triple),
-    };
-    Ok(platform.to_string())
-}
+fn bundle_micromamba() -> Result<()> {
+    println!("cargo:info=Bundling Micromamba executable...");
 
-fn bundle_python() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let python_dir = manifest_dir.join("python");
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir)?;
 
-    println!("cargo:info=Downloading self-contained Python...");
+    let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
 
-    let target_platform = get_python_target_platform_string()?;
-    println!(
-        "cargo:info=Detected target platform for Python: {}",
-        target_platform
-    );
+    let mamba_platform = match target_triple.as_str() {
+        "x86_64-apple-darwin" => "osx-64",
+        "aarch64-apple-darwin" => "osx-arm64",
+        "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win-64",
+        "aarch64-pc-windows-msvc" => {
+            println!("cargo:warning=Micromamba does not support windows-arm64 yet. Skipping download.");
+            return Ok(());
+        }
+        _ => anyhow::bail!("Unsupported target triple for Micromamba: {}", target_triple),
+    };
 
-    let api_url = format!(
-        "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/{}",
-        PYTHON_BUILD_TAG
-    );
-    println!("cargo:info=Querying GitHub API for Python release...");
+    let generic_binary_name = "micromamba";
+    let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
+    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, target_triple, exe_suffix));
+
+    if platform_path.exists() {
+        println!("cargo:info=Micromamba for {} already exists. Skipping download.", target_triple);
+        return Ok(());
+    }
+
+    let url = format!("https://micro.mamba.pm/api/micromamba/{}/latest", mamba_platform);
+    println!("cargo:info=Downloading Micromamba for {} from {}", target_triple, url);
 
     let agent = ureq::builder().build();
-    let response = agent.get(&api_url).call()?;
-    let response_str = response.into_string()?;
-    let release: Release = serde_json::from_str(&response_str)?;
+    let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
 
-    let asset_name_suffix = format!("{}-install_only.tar.gz", target_platform);
-    let asset_name_prefix = format!("cpython-{}", PYTHON_VERSION);
-
-    let download_url = release
-        .assets
-        .iter()
-        .find(|asset| {
-            asset.name.starts_with(&asset_name_prefix) && asset.name.ends_with(&asset_name_suffix)
-        })
-        .map(|asset| &asset.browser_download_url)
-        .ok_or_else(|| {
-            anyhow::anyhow!("Could not find a matching Python bundle URL from the GitHub API.")
-        })?;
-
-    println!("cargo:info=Found download URL: {}", download_url);
-
-    if python_dir.exists() {
-        fs::remove_dir_all(&python_dir)?;
+    if response.status() != 200 {
+        anyhow::bail!("Failed to download from {}: HTTP {}", url, response.status());
     }
-    let tmp_tar_path = manifest_dir.join("python-bundle.tar.gz");
 
-    println!("cargo:info=Downloading Python bundle...");
-    let mut response = agent.get(download_url).call()?.into_reader();
-    let mut tmp_file = File::create(&tmp_tar_path)?;
-    io::copy(&mut response, &mut tmp_file)?;
+    let mut compressed_bytes = Vec::new();
+    response.into_reader().read_to_end(&mut compressed_bytes)?;
 
-    println!("cargo:info=Extracting Python bundle...");
-    let tar_gz = File::open(&tmp_tar_path)?;
-    let tar = GzDecoder::new(tar_gz);
-    let mut archive = Archive::new(tar);
-    archive.unpack(&manifest_dir)?;
+    let bz_decoder = BzDecoder::new(compressed_bytes.as_slice());
+    let mut archive = Archive::new(bz_decoder);
 
-    fs::remove_file(&tmp_tar_path)?;
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?;
+        if let Some(file_name) = path.file_name() {
+            if file_name.to_string_lossy() == "micromamba" {
+                let mut decompressed_bytes = Vec::new();
+                entry.read_to_end(&mut decompressed_bytes)?;
+                fs::write(&platform_path, &decompressed_bytes)?;
+                break;
+            }
+        }
+    }
 
-    println!(
-        "cargo:info=Self-contained Python has been bundled into {}",
-        python_dir.display()
-    );
+    #[cfg(unix)]
+    {
+        fs::set_permissions(&platform_path, fs::Permissions::from_mode(0o755))?;
+    }
+    
+    println!("cargo:info=Micromamba for {} downloaded successfully to {}", target_triple, platform_path.display());
 
     Ok(())
 }
@@ -283,7 +257,6 @@ fn download_and_unzip(asset_name: &str, platform: &str, dest_dir: &Path) -> Resu
 
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = file.unix_mode() {
                 if mode & 0o111 != 0 {
                     fs::set_permissions(&outpath, fs::Permissions::from_mode(mode))?;

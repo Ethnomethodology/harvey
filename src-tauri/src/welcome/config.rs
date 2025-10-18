@@ -71,6 +71,7 @@ pub struct Config {
 
 
 #[derive(Debug, Serialize)]
+#[serde(tag = "type", content = "payload")] // This will serialize to { "type": "...", "payload": "..." }
 pub enum CommandError {
     Io(String),
     XmlProcessing(String),
