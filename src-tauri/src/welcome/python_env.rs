@@ -111,41 +111,21 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     // Consolidate all pip installations into a single command.
     // This addresses the UI hang and potential `@rpath` issues on macOS by installing `ffmpeg-python`
     // in the same transaction as the libraries that depend on it (like `torchcodec`).
-    let packages_to_install: Vec<&str> = if cfg!(windows) {
-        // torchcodec is problematic on Windows ARM64 due to lack of pre-built wheels and
-        // its dependency on CUDA, often distributed via conda-forge.
-        // Removing it from the pip installation list for Windows ARM64.
-        // Functionality relying on torchcodec might be limited or require manual installation
-        // via conda if a compatible CUDA setup is available.
-        vec![
-            "--upgrade", "pip",
-            "ffmpeg-python==0.2.0",
-            "torch==2.9.0", // Use the version that pip found for Windows ARM64
-            "torchaudio==2.9.0", // Use the version that pip found for Windows ARM64
-            "pyannote.audio==4.0.1", // Use the latest pyannote.audio
-            "transformers==4.57.1", // Use the version that pip found for Windows ARM64
-            "sacremoses==0.1.1",
-            "sentencepiece==0.2.1",
-            "pypandoc_binary==1.15",
-        ]
-    } else {
-        vec![
-            "--upgrade", "pip",
-            "ffmpeg-python==0.2.0",
-            "torch==2.8.0",
-            "torchcodec==0.7.0",
-            "pyannote.audio==4.0.1",
-            "transformers==4.57.0",
-            "sacremoses==0.1.1",
-            "sentencepiece==0.2.1",
-            "pypandoc_binary==1.15",
-        ]
-    };
-
+    let packages = [
+        "--upgrade", "pip",
+        "ffmpeg-python==0.2.0",
+        "torch==2.8.0",
+        "torchcodec==0.7.0",
+        "pyannote.audio==4.0.1",
+        "transformers==4.57.0",
+        "sacremoses==0.1.1",
+        "sentencepiece==0.2.1",
+        "pypandoc_binary==1.15",
+    ];
     app.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let mut pip_args = vec!["-m", "pip", "install"];
-    pip_args.extend(packages_to_install);
+    pip_args.extend_from_slice(&packages);
 
     pip_args.push("--no-cache-dir");
 
