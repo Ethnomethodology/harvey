@@ -42,7 +42,6 @@ fn main() -> Result<()> {
         }
         fs::create_dir_all(&sidecars_dir)?;
 
-        download_and_unzip("ffmpeg", &target_platform, &sidecars_dir)?;
         download_and_unzip("whisper-sidecars", &target_platform, &sidecars_dir)?;
 
         rename_whisper_binaries_for_tauri(&sidecars_dir)?;

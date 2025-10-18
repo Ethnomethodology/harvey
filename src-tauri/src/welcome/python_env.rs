@@ -8,7 +8,7 @@ const ENV_DIR: &str = "harvey_env";
 
 // --- Helper Functions ---
 
-fn get_env_path() -> Result<PathBuf, CommandError> {
+pub fn get_env_path() -> Result<PathBuf, CommandError> {
     get_config_dir().map(|path| path.join(ENV_DIR))
 }
 
