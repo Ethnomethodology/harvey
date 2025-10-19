@@ -186,7 +186,8 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
 
 #[command]
 pub async fn get_platform_info() -> Result<String, CommandError> {
-    Ok(std::env::consts::OS.to_string())
+    Ok(tauri::utils::platform::target_triple()
+        .unwrap_or_else(|_| "unknown".to_string()))
 }
 
 #[derive(Deserialize)]
