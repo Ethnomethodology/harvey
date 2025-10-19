@@ -4,8 +4,6 @@ use crate::welcome::config::{CommandError, get_config_dir, read_config, write_co
 use std::path::{Path, PathBuf};
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
-use futures_util::StreamExt;
-use zip;
 use reqwest;
 
 
@@ -135,58 +133,42 @@ async fn ensure_ffmpeg_is_available<R: Runtime>(app: &AppHandle<R>) -> Result<()
     // 1. Define URL and paths
     let ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-07-28-12-42/ffmpeg-n7.0-142-g089f8d5543-win64-gpl-shared-7.0.zip";
     let config_dir = get_config_dir()?;
-    let ffmpeg_dir = config_dir.join("ffmpeg");
+    let ffmpeg_root_dir = config_dir.join("ffmpeg");
     let temp_zip_path = config_dir.join("ffmpeg.zip");
 
     // Clean up previous attempts
-    if ffmpeg_dir.exists() {
-        fs::remove_dir_all(&ffmpeg_dir)?;
+    if ffmpeg_root_dir.exists() {
+        fs::remove_dir_all(&ffmpeg_root_dir)?;
     }
     if temp_zip_path.exists() {
         fs::remove_file(&temp_zip_path)?;
     }
-    fs::create_dir_all(&ffmpeg_dir)?;
+    fs::create_dir_all(&ffmpeg_root_dir)?;
 
-    // 2. Download the file
+    // 2. Download the file with error handling
     let client = reqwest::Client::new();
     let response = client.get(ffmpeg_url).send().await?;
-    let mut stream = response.bytes_stream();
+
+    if !response.status().is_success() {
+        return Err(CommandError::Message(format!("FFmpeg download failed with status: {}", response.status())));
+    }
+
     let mut dest_file = File::create(&temp_zip_path)?;
+    let content = response.bytes().await?;
+    dest_file.write_all(&content)?;
 
-    while let Some(item) = stream.next().await {
-        let chunk = item?;
-        dest_file.write_all(&chunk)?;
-    }
-
-    // 3. Extract the zip file
+    // 3. Extract the zip file using zip-extract
     emitter.emit("installation-log", LogPayload { message: "Extracting FFmpeg...".into() }).unwrap();
-    let file = File::open(&temp_zip_path)?;
-    let reader = BufReader::new(file);
-    let mut archive = zip::ZipArchive::new(reader)?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => ffmpeg_dir.join(path),
-            None => continue,
-        };
-
-        if let Some(p) = outpath.parent() {
-            if !p.exists() {
-                fs::create_dir_all(&p)?;
-            }
-        }
-
-        if (*file.name()).ends_with('/') {
-            fs::create_dir_all(&outpath)?;
-        } else {
-            let mut outfile = File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
-        }
-    }
+    zip_extract::extract(BufReader::new(File::open(&temp_zip_path)?), &ffmpeg_root_dir, true)?;
 
     // 4. Find the extracted ffmpeg.exe
-    let ffmpeg_exe_path = ffmpeg_dir.join("bin").join("ffmpeg.exe");
+    let ffmpeg_exe_path = ffmpeg_root_dir
+        .read_dir()?
+        .filter_map(Result::ok)
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("ffmpeg-"))
+        .map(|entry| entry.path().join("bin").join("ffmpeg.exe"))
+        .ok_or_else(|| CommandError::Message("Could not find ffmpeg directory after extraction.".to_string()))?;
+
     if !ffmpeg_exe_path.exists() {
         return Err(CommandError::Message("ffmpeg.exe not found after extraction.".to_string()));
     }

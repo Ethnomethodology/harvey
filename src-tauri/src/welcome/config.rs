@@ -120,6 +120,7 @@ impl From<String> for CommandError { fn from(message: String) -> Self { CommandE
 impl From<&str> for CommandError { fn from(message: &str) -> Self { CommandError::Message(message.to_string()) } }
 impl From<reqwest::Error> for CommandError { fn from(error: reqwest::Error) -> Self { CommandError::HttpDownload(error.to_string()) } }
 impl From<zip::result::ZipError> for CommandError { fn from(error: zip::result::ZipError) -> Self { CommandError::ZipExtraction(error.to_string()) } }
+impl From<zip_extract::ZipExtractError> for CommandError { fn from(error: zip_extract::ZipExtractError) -> Self { CommandError::ZipExtraction(error.to_string()) } }
 impl From<csv::Error> for CommandError { fn from(error: csv::Error) -> Self { CommandError::CsvProcessing(error.to_string()) } }
 impl From<serde_json::Error> for CommandError { fn from(error: serde_json::Error) -> Self { CommandError::JsonProcessing(error.to_string()) } }
 impl From<tauri_plugin_shell::Error> for CommandError { fn from(error: tauri_plugin_shell::Error) -> Self { CommandError::ShellCommand(error.to_string()) } }
