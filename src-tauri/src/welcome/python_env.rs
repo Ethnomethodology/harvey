@@ -266,7 +266,7 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
     // For Windows ARM64, install a specific torch version and exclude unavailable packages
     let pip_packages = vec![
-        "pyannote.audio", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0",
+        "pyannote.audio", "pypandoc==1.15", "ffmpeg-python==0.2.0",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
     ];
 
@@ -293,6 +293,23 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
             _ => {}
         }
     }
+
+    // Step 4: Download pandoc binaries
+    emitter.emit("installation-log", LogPayload { message: "Downloading Pandoc binaries...".into() }).unwrap();
+    let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
+    let output = shell.command(pip_exe.to_str().unwrap())
+        .args(&pandoc_args)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
+        // This is a soft fail, so we don't return an error
+    } else {
+        emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
+    }
+
 
     emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
     emitter.emit("installation-finished", ()).unwrap();
@@ -321,7 +338,7 @@ pub async fn check_python_libraries_installed<R: Runtime>(
     let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
     let packages = if target_triple == "aarch64-pc-windows-msvc" {
-        vec!["torch", "torchaudio", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc_binary"]
+        vec!["torch", "torchaudio", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"]
     } else {
         vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"]
     };
@@ -330,7 +347,6 @@ pub async fn check_python_libraries_installed<R: Runtime>(
         log::info!("Checking for package: {}", package);
         let import_name = match *package {
             "pyannote.audio" => "pyannote",
-            "pypandoc_binary" => "pypandoc",
             _ => package,
         };
 
