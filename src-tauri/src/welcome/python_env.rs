@@ -263,18 +263,15 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
     emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let pip_exe = get_python_path()?; // This now points to the python in the venv
-    let strategy = get_pytorch_install_strategy(shell).await;
-    let mut pip_packages = vec![
-        "torch", "torchaudio", "torchcodec",
-        "pyannote.audio==4.0.1", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0",
+
+    // For Windows ARM64, install a specific torch version and exclude unavailable packages
+    let pip_packages = vec![
+        "pyannote.audio", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
     ];
-    if strategy == PyTorchInstallStrategy::Cpu {
-        pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
-    }
 
     let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
-    pip_args.extend(pip_packages.iter().map(|s| *s));
+    pip_args.extend(pip_packages.iter());
 
     let (mut rx_pip, _child_pip) = shell.command(pip_exe.to_str().unwrap())
         .args(&pip_args)
@@ -324,7 +321,7 @@ pub async fn check_python_libraries_installed<R: Runtime>(
     let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
     let packages = if target_triple == "aarch64-pc-windows-msvc" {
-        vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc_binary"]
+        vec!["torch", "torchaudio", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc_binary"]
     } else {
         vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"]
     };

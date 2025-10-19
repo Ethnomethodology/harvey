@@ -15,7 +15,7 @@
 	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
-	import { platform } from '@tauri-apps/plugin-os';
+	import { platform, arch } from '@tauri-apps/plugin-os';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 	let isWinArm64 = false;
@@ -36,9 +36,8 @@
 		configError = '';
 		statusMessage = '';
 		try {
-			const currentPlatform = await platform();
-			const arch = await invoke('get_platform_info').then(info => info.arch);
-			isWinArm64 = currentPlatform === 'windows' && arch === 'aarch64';
+			const [currentPlatform, currentArch] = await Promise.all([platform(), arch()]);
+			isWinArm64 = currentPlatform === 'win32' && currentArch === 'aarch64';
 
 			if (isWinArm64) {
 				isFFmpegInstalled = await invoke('is_ffmpeg_installed');
