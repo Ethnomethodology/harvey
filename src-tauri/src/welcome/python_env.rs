@@ -1,8 +1,13 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{Shell, ShellExt};
-use crate::welcome::config::{CommandError, get_config_dir, read_config};
+use crate::welcome::config::{CommandError, get_config_dir, read_config, write_config};
 use std::path::{Path, PathBuf};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufReader, Write};
+use futures_util::StreamExt;
+use zip;
+use reqwest;
+
 
 const ENV_DIR: &str = "harvey_env";
 
@@ -110,12 +115,92 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
     if target_triple == "aarch64-pc-windows-msvc" {
-        // This will be the new path for Windows ARM64
+        ensure_ffmpeg_is_available(app).await?;
         install_python_libraries_standalone(app, shell).await
     } else {
-        // Existing path for all other platforms
         install_python_libraries_micromamba(app, shell).await
     }
+}
+
+async fn ensure_ffmpeg_is_available<R: Runtime>(app: &AppHandle<R>) -> Result<(), CommandError> {
+    if is_ffmpeg_installed(app.clone()).await? {
+        log::info!("FFmpeg is already installed and available.");
+        return Ok(());
+    }
+
+    log::info!("Starting FFmpeg download and installation for Windows ARM64.");
+    let emitter = app.clone();
+    emitter.emit("installation-log", LogPayload { message: "FFmpeg not found. Downloading...".into() }).unwrap();
+
+    // 1. Define URL and paths
+    let ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-07-28-12-42/ffmpeg-n7.0-142-g089f8d5543-win64-gpl-shared-7.0.zip";
+    let config_dir = get_config_dir()?;
+    let ffmpeg_dir = config_dir.join("ffmpeg");
+    let temp_zip_path = config_dir.join("ffmpeg.zip");
+
+    // Clean up previous attempts
+    if ffmpeg_dir.exists() {
+        fs::remove_dir_all(&ffmpeg_dir)?;
+    }
+    if temp_zip_path.exists() {
+        fs::remove_file(&temp_zip_path)?;
+    }
+    fs::create_dir_all(&ffmpeg_dir)?;
+
+    // 2. Download the file
+    let client = reqwest::Client::new();
+    let response = client.get(ffmpeg_url).send().await?;
+    let mut stream = response.bytes_stream();
+    let mut dest_file = File::create(&temp_zip_path)?;
+
+    while let Some(item) = stream.next().await {
+        let chunk = item?;
+        dest_file.write_all(&chunk)?;
+    }
+
+    // 3. Extract the zip file
+    emitter.emit("installation-log", LogPayload { message: "Extracting FFmpeg...".into() }).unwrap();
+    let file = File::open(&temp_zip_path)?;
+    let reader = BufReader::new(file);
+    let mut archive = zip::ZipArchive::new(reader)?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => ffmpeg_dir.join(path),
+            None => continue,
+        };
+
+        if let Some(p) = outpath.parent() {
+            if !p.exists() {
+                fs::create_dir_all(&p)?;
+            }
+        }
+
+        if (*file.name()).ends_with('/') {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            let mut outfile = File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+        }
+    }
+
+    // 4. Find the extracted ffmpeg.exe
+    let ffmpeg_exe_path = ffmpeg_dir.join("bin").join("ffmpeg.exe");
+    if !ffmpeg_exe_path.exists() {
+        return Err(CommandError::Message("ffmpeg.exe not found after extraction.".to_string()));
+    }
+
+    // 5. Update the config
+    let mut config = read_config()?;
+    config.ffmpeg_path = Some(ffmpeg_exe_path.to_string_lossy().to_string());
+    write_config(&config)?;
+
+    // 6. Clean up
+    fs::remove_file(&temp_zip_path)?;
+
+    emitter.emit("installation-log", LogPayload { message: "FFmpeg installation complete.".into() }).unwrap();
+    Ok(())
 }
 
 async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {

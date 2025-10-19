@@ -13,7 +13,7 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
-	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
+	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 
@@ -26,27 +26,16 @@
 	let isMovingModels = false;
 	let statusMessage = '';
 
-	let isInstallingFfmpeg = false;
-	let ffmpegInstallLog = '';
-	let ffmpegDownloadProgress = { downloaded: 0, total: 0 };
-
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
 	let translationModelCount = 0;
-	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy || isInstallingFfmpeg;
+	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
 
 	onMount(async () => {
 		isLoadingConfig = true;
 		configError = '';
 		statusMessage = '';
 		try {
-			const targetTriple = await invoke('get_platform_info');
-			isWinArm64 = targetTriple === 'aarch64-pc-windows-msvc';
-
-			if (isWinArm64) {
-				isFFmpegInstalled = await invoke('is_ffmpeg_installed');
-			}
-
 			downloadLocation = await getDownloadLocation();
 		} catch (e) {
 			console.error('Error loading configuration:', e);
@@ -55,34 +44,6 @@
 			isLoadingConfig = false;
 		}
 	});
-
-	async function installFfmpeg() {
-		isInstallingFfmpeg = true;
-		ffmpegInstallLog = 'Starting FFmpeg installation...';
-		ffmpegDownloadProgress = { downloaded: 0, total: 0 };
-		configError = '';
-
-		const unlistenProgress = await listen('ffmpeg-download-progress', (event) => {
-			ffmpegDownloadProgress.downloaded = event.payload.downloaded_bytes;
-			ffmpegDownloadProgress.total = event.payload.total_bytes;
-			ffmpegInstallLog = `Downloading...(${(ffmpegDownloadProgress.downloaded / 1024 / 1024).toFixed(2)} / ${(ffmpegDownloadProgress.total / 1024 / 1024).toFixed(2)} MB)`;
-		});
-
-		const unlistenLog = await listen('ffmpeg-install-log', (event) => {
-			ffmpegInstallLog = event.payload;
-		});
-
-		try {
-			await invoke('download_and_install_ffmpeg');
-			isFFmpegInstalled = true; // Assume success, refresh UI
-		} catch (e) {
-			configError = `Failed to install FFmpeg: ${e.message || e}`;
-		} finally {
-			isInstallingFfmpeg = false;
-			unlistenProgress();
-			unlistenLog();
-		}
-	}
 
 	async function pickDownloadLocation() {
 		if (isBusy) return;
@@ -148,9 +109,7 @@
 		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
-				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'application'}
 				class:text-blue-600={activeTab === 'application'}
 				class:border-transparent={activeTab !== 'application'}
@@ -169,9 +128,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'transcription'}
-				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'transcription'}
 				class:text-blue-600={activeTab === 'transcription'}
 				class:border-transparent={activeTab !== 'transcription'}
@@ -190,9 +147,7 @@
 			</button>
 			<button
 				on:click={() => activeTab = 'translation'}
-				disabled={isWinArm64 && !isFFmpegInstalled}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
-				class:disabled:opacity-50={isWinArm64 && !isFFmpegInstalled}
 				class:border-blue-500={activeTab === 'translation'}
 				class:text-blue-600={activeTab === 'translation'}
 				class:border-transparent={activeTab !== 'translation'}
@@ -214,32 +169,7 @@
 
 	<!-- Tab Content Area -->
 	<div class="flex-grow min-h-0 overflow-y-auto pr-2 -mr-2">
-		{#if isWinArm64 && !isFFmpegInstalled}
-			<div class="p-4 bg-yellow-50 border border-yellow-300 rounded-md">
-				<h3 class="text-lg font-semibold text-yellow-800">FFmpeg Installation Required</h3>
-				<p class="mt-2 text-sm text-yellow-700">
-					For Windows ARM64, Harvey needs to download and install a local copy of FFmpeg to function correctly.
-				</p>
-				<button on:click={installFfmpeg} disabled={isBusy} class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
-					{#if isInstallingFfmpeg}
-						Installing...
-					{:else}
-						Install FFmpeg
-					{/if}
-				</button>
-				{#if isInstallingFfmpeg}
-					<div class="mt-4">
-						<p class="text-sm text-gray-600">{ffmpegInstallLog}</p>
-						{#if ffmpegDownloadProgress.total > 0}
-							<progress class="w-full mt-2" value={ffmpegDownloadProgress.downloaded} max={ffmpegDownloadProgress.total}></progress>
-						{/if}
-					</div>
-				{/if}
-				{#if configError}
-					<p class="text-red-500 mt-2">{configError}</p>
-				{/if}
-			</div>
-		{:else if activeTab === 'application'}
+		{#if activeTab === 'application'}
             <div class="p-1">
                 {#if isLoadingConfig}
                     <p class="text-gray-500 text-center py-4">Loading configuration...</p>
@@ -284,8 +214,8 @@
                 </div>
 
 				<div class="mb-6">
-					<h3 class="block text-sm font-medium text-gray-700 mb-1">Required Tools</h3>
-					<PythonLibrariesPanel />
+					<h3 class="block text-sm font-medium text-gray-700 mb-1">Libraries</h3>
+					<LibrariesPanel />
 					<HuggingFacePanel />
 				</div>
             </div>

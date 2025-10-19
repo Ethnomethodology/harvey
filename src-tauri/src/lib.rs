@@ -163,7 +163,6 @@ pub fn run() {
             welcome::commands::cancel_download_command,
             welcome::commands::change_download_location_and_move_models,
             welcome::commands::get_platform_info,
-            welcome::commands::download_and_install_ffmpeg,
             welcome::commands::check_python_libraries_installed,
             welcome::commands::install_python_libraries,
             welcome::python_env::is_ffmpeg_installed,
