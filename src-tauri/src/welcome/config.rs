@@ -65,7 +65,9 @@ pub struct Config {
     // --- NEW: Theme Preference Field ---
     #[serde(rename = "themePreference", default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>, // Stores "light", "dark", or "system"
-    // --- End NEW Fields ---
+
+    #[serde(rename = "ffmpegPath", default, skip_serializing_if = "Option::is_none")]
+    pub ffmpeg_path: Option<String>,
 }
 
 

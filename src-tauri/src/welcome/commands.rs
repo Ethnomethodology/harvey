@@ -200,6 +200,89 @@ struct HuggingFaceApiFile {
     rfilename: String,
 }
 
+#[derive(Clone, serde::Serialize)]
+struct FfmpegDownloadProgress {
+  downloaded_bytes: u64,
+  total_bytes: Option<u64>,
+}
+
+#[command]
+pub async fn download_and_install_ffmpeg<R: Runtime>(app: AppHandle<R>) -> Result<(), CommandError> {
+    log::info!("Starting FFmpeg download and installation for Windows ARM64.");
+    let emitter = app.clone();
+
+    // 1. Define URL and paths
+    let ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-07-28-12-42/ffmpeg-n7.0-142-g089f8d5543-win64-gpl-shared-7.0.zip";
+    let config_dir = crate::welcome::config::get_config_dir()?;
+    let ffmpeg_dir = config_dir.join("ffmpeg");
+    let temp_zip_path = config_dir.join("ffmpeg.zip");
+
+    // Clean up previous attempts
+    if ffmpeg_dir.exists() {
+        fs::remove_dir_all(&ffmpeg_dir)?;
+    }
+    if temp_zip_path.exists() {
+        fs::remove_file(&temp_zip_path)?;
+    }
+    fs::create_dir_all(&ffmpeg_dir)?;
+
+    // 2. Download the file with progress
+    let client = reqwest::Client::new();
+    let response = client.get(ffmpeg_url).send().await?;
+    let total_size = response.content_length();
+    let mut stream = response.bytes_stream();
+    let mut dest_file = File::create(&temp_zip_path)?;
+    let mut downloaded: u64 = 0;
+
+    emitter.emit("ffmpeg-download-progress", &FfmpegDownloadProgress { downloaded_bytes: 0, total_bytes: total_size }).unwrap();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item?;
+        dest_file.write_all(&chunk)?;
+        downloaded += chunk.len() as u64;
+        emitter.emit("ffmpeg-download-progress", &FfmpegDownloadProgress { downloaded_bytes: downloaded, total_bytes: total_size }).unwrap();
+    }
+
+    // 3. Extract the zip file
+    emitter.emit("ffmpeg-install-log", "Download complete. Extracting files...").unwrap();
+    let file = File::open(&temp_zip_path)?;
+    let reader = BufReader::new(file);
+    let mut archive = zip::ZipArchive::new(reader)?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => ffmpeg_dir.join(path),
+            None => continue,
+        };
+
+        // Extract only the necessary binaries
+        if let Some(file_name) = outpath.file_name().and_then(|n| n.to_str()) {
+            if ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe"].contains(&file_name) {
+                 let mut outfile = File::create(&outpath)?;
+                 std::io::copy(&mut file, &mut outfile)?;
+            }
+        }
+    }
+
+    // 4. Find the extracted ffmpeg.exe
+    let ffmpeg_exe_path = ffmpeg_dir.join("bin").join("ffmpeg.exe");
+    if !ffmpeg_exe_path.exists() {
+        return Err(CommandError::Message("ffmpeg.exe not found after extraction.".to_string()));
+    }
+
+    // 5. Update the config
+    let mut config = read_config()?;
+    config.ffmpeg_path = Some(ffmpeg_exe_path.to_string_lossy().to_string());
+    write_config(&config)?;
+
+    // 6. Clean up
+    fs::remove_file(&temp_zip_path)?;
+
+    emitter.emit("ffmpeg-install-log", "FFmpeg installation complete.").unwrap();
+    Ok(())
+}
+
 
 
 

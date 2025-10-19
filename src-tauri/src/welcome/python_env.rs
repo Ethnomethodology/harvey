@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{Shell, ShellExt};
-use crate::welcome::config::{CommandError, get_config_dir};
-use std::path::PathBuf;
+use crate::welcome::config::{CommandError, get_config_dir, read_config};
+use std::path::{Path, PathBuf};
 use std::fs;
 
 const ENV_DIR: &str = "harvey_env";
@@ -318,6 +318,20 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
+    // 1. Check config for a managed path first
+    let config = read_config()?;
+    if let Some(ffmpeg_path_str) = config.ffmpeg_path {
+        if !ffmpeg_path_str.trim().is_empty() {
+            let ffmpeg_path = Path::new(&ffmpeg_path_str);
+            if ffmpeg_path.exists() {
+                log::info!("Found managed FFmpeg at: {:?}", ffmpeg_path);
+                return Ok(true);
+            }
+        }
+    }
+
+    // 2. Fallback to checking the system PATH
+    log::info!("No managed FFmpeg path found or path is invalid. Checking system PATH.");
     let shell = app.shell();
     let command = if cfg!(windows) { "where" } else { "which" };
     let output = shell.command(command).arg("ffmpeg").output().await?;

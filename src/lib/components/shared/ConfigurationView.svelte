@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import {
@@ -25,10 +26,14 @@
 	let isMovingModels = false;
 	let statusMessage = '';
 
+	let isInstallingFfmpeg = false;
+	let ffmpegInstallLog = '';
+	let ffmpegDownloadProgress = { downloaded: 0, total: 0 };
+
 	let isTranscriptionBusy = false;
 	let isTranslationBusy = false;
 	let translationModelCount = 0;
-	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
+	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy || isInstallingFfmpeg;
 
 	onMount(async () => {
 		isLoadingConfig = true;
@@ -50,6 +55,34 @@
 			isLoadingConfig = false;
 		}
 	});
+
+	async function installFfmpeg() {
+		isInstallingFfmpeg = true;
+		ffmpegInstallLog = 'Starting FFmpeg installation...';
+		ffmpegDownloadProgress = { downloaded: 0, total: 0 };
+		configError = '';
+
+		const unlistenProgress = await listen('ffmpeg-download-progress', (event) => {
+			ffmpegDownloadProgress.downloaded = event.payload.downloaded_bytes;
+			ffmpegDownloadProgress.total = event.payload.total_bytes;
+			ffmpegInstallLog = `Downloading...(${(ffmpegDownloadProgress.downloaded / 1024 / 1024).toFixed(2)} / ${(ffmpegDownloadProgress.total / 1024 / 1024).toFixed(2)} MB)`;
+		});
+
+		const unlistenLog = await listen('ffmpeg-install-log', (event) => {
+			ffmpegInstallLog = event.payload;
+		});
+
+		try {
+			await invoke('download_and_install_ffmpeg');
+			isFFmpegInstalled = true; // Assume success, refresh UI
+		} catch (e) {
+			configError = `Failed to install FFmpeg: ${e.message || e}`;
+		} finally {
+			isInstallingFfmpeg = false;
+			unlistenProgress();
+			unlistenLog();
+		}
+	}
 
 	async function pickDownloadLocation() {
 		if (isBusy) return;
@@ -183,16 +216,28 @@
 	<div class="flex-grow min-h-0 overflow-y-auto pr-2 -mr-2">
 		{#if isWinArm64 && !isFFmpegInstalled}
 			<div class="p-4 bg-yellow-50 border border-yellow-300 rounded-md">
-				<h3 class="text-lg font-semibold text-yellow-800">FFmpeg Required</h3>
+				<h3 class="text-lg font-semibold text-yellow-800">FFmpeg Installation Required</h3>
 				<p class="mt-2 text-sm text-yellow-700">
-					To use Harvey on this platform, you need to install FFmpeg. Please download and install it from the official website, ensuring it's added to your system's PATH.
+					For Windows ARM64, Harvey needs to download and install a local copy of FFmpeg to function correctly.
 				</p>
-				<a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener noreferrer" class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-					Download FFmpeg
-				</a>
-				<p class="mt-2 text-xs text-gray-500">
-					After installation, please restart Harvey.
-				</p>
+				<button on:click={installFfmpeg} disabled={isBusy} class="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+					{#if isInstallingFfmpeg}
+						Installing...
+					{:else}
+						Install FFmpeg
+					{/if}
+				</button>
+				{#if isInstallingFfmpeg}
+					<div class="mt-4">
+						<p class="text-sm text-gray-600">{ffmpegInstallLog}</p>
+						{#if ffmpegDownloadProgress.total > 0}
+							<progress class="w-full mt-2" value={ffmpegDownloadProgress.downloaded} max={ffmpegDownloadProgress.total}></progress>
+						{/if}
+					</div>
+				{/if}
+				{#if configError}
+					<p class="text-red-500 mt-2">{configError}</p>
+				{/if}
 			</div>
 		{:else if activeTab === 'application'}
             <div class="p-1">
