@@ -44,12 +44,65 @@ fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, Comman
 
 pub fn get_python_path() -> Result<PathBuf, CommandError> {
     let env_path = get_env_path()?;
-    if cfg!(windows) {
+    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
+
+    if target_triple == "aarch64-pc-windows-msvc" {
+        // For standalone python, the structure is different
         Ok(env_path.join("Scripts").join("python.exe"))
+    } else if cfg!(windows) {
+        // Micromamba on windows
+        Ok(env_path.join("python.exe"))
     } else {
+        // Micromamba on unix
         Ok(env_path.join("bin").join("python"))
     }
 }
+
+#[derive(PartialEq, Debug)]
+enum PyTorchInstallStrategy {
+    Gpu,
+    Cpu,
+}
+
+async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchInstallStrategy {
+    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
+
+    if target_triple.contains("apple-darwin") {
+        if target_triple.contains("aarch64") {
+            log::info!("Detected Apple Silicon, enabling GPU (MPS) support for PyTorch.");
+            return PyTorchInstallStrategy::Gpu;
+        }
+    } else if target_triple.contains("pc-windows-msvc") {
+        log::info!("Checking for NVIDIA GPU with command: nvidia-smi.exe");
+        if let Ok(output) = shell.command("nvidia-smi.exe").output().await {
+            if output.status.success() {
+                log::info!("nvidia-smi found, enabling GPU (CUDA) support for PyTorch.");
+                log::debug!("nvidia-smi stdout: {}", String::from_utf8_lossy(&output.stdout));
+                return PyTorchInstallStrategy::Gpu;
+            }
+            log::info!("nvidia-smi not found or failed, defaulting to CPU. Stderr: {}", String::from_utf8_lossy(&output.stderr));
+        } else {
+            log::info!("Error executing nvidia-smi, defaulting to CPU.");
+        }
+    } else if target_triple.contains("unknown-linux-gnu") {
+        log::info!("Checking for NVIDIA GPU with command: nvidia-smi");
+        if let Ok(output) = shell.command("nvidia-smi").output().await {
+            if output.status.success() {
+                log::info!("nvidia-smi found, enabling GPU (CUDA) support for PyTorch.");
+                log::debug!("nvidia-smi stdout: {}", String::from_utf8_lossy(&output.stdout));
+                return PyTorchInstallStrategy::Gpu;
+            }
+            log::info!("nvidia-smi not found or failed, defaulting to CPU. Stderr: {}", String::from_utf8_lossy(&output.stderr));
+        } else {
+            log::info!("Error executing nvidia-smi, defaulting to CPU.");
+        }
+    }
+
+    log::info!("Defaulting to CPU-only PyTorch installation.");
+    PyTorchInstallStrategy::Cpu
+}
+
+
 
 // --- Main Installation Logic ---
 
@@ -122,10 +175,16 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Step 2: Install packages using pip
     emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
-    let pip_packages = [
-        "torch==2.9.0", "torchvision==0.24.0", "torchaudio==2.9.0", "--extra-index-url", "https://download.pytorch.org/whl/cpu",
-        "pyannote.audio==4.0.1", "pypandoc==1.15", "ffmpeg-python==0.2.0", "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1", "torchcodec==0.8.0"
+    let strategy = get_pytorch_install_strategy(shell).await;
+    let mut pip_packages = vec![
+        "torch==2.9.0", "torchvision==0.24.0", "torchaudio==2.9.0",
+        "pyannote.audio==4.0.1", "pypandoc==1.15", "ffmpeg-python==0.2.0",
+        "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1", "torchcodec==0.8.0"
     ];
+    if strategy == PyTorchInstallStrategy::Cpu {
+        pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
+    }
+
     let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
@@ -204,10 +263,16 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
     emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let pip_exe = get_python_path()?; // This now points to the python in the venv
-    let pip_packages = [
-        "torch", "torchaudio", "torchcodec", "--extra-index-url", "https://download.pytorch.org/whl/cpu",
-        "pyannote.audio==4.0.1", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0", "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
+    let strategy = get_pytorch_install_strategy(shell).await;
+    let mut pip_packages = vec![
+        "torch", "torchaudio", "torchcodec",
+        "pyannote.audio==4.0.1", "pypandoc_binary==1.15", "ffmpeg-python==0.2.0",
+        "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
     ];
+    if strategy == PyTorchInstallStrategy::Cpu {
+        pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
+    }
+
     let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
