@@ -48,67 +48,12 @@
       "sidecars/whisper-stream"
     ],
     "licenseFile": "../LICENSE.md",
-    "license": "MIT"
-  },
-  "platforms": {
-    "windows-x86_64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars",
-          "binaries"
-        ]
-      }
-    },
-    "windows-arm64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars"
-        ]
-      }
-    },
-    "linux-x86_64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars",
-          "binaries"
-        ]
-      }
-    },
-    "linux-arm64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars",
-          "binaries"
-        ]
-      }
-    },
-    "macos-x86_64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars",
-          "binaries"
-        ]
-      }
-    },
-    "macos-arm64": {
-      "bundle": {
-        "resources": [
-          "third_party_licenses",
-          "scripts/*",
-          "sidecars",
-          "binaries"
-        ]
-      }
-    }
+    "license": "MIT",
+    "resources": [
+      "third_party_licenses",
+      "scripts/*",
+      "sidecars",
+      "binaries"
+    ]
   }
 }

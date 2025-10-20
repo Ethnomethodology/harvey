@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "resources": [
+      "third_party_licenses",
+      "scripts/*",
+      "sidecars"
+    ]
+  }
+}
