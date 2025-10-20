@@ -128,14 +128,13 @@ jobs:
         shell: bash
 
       - name: Upload Windows MSI
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_msi.outputs.msi_path }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.find_msi.outputs.msi_path }}
           asset_name: ${{ steps.find_msi.outputs.msi_name }}
-          asset_content_type: application/octet-stream
+          tag: ${{ github.ref }}
+          overwrite: true
 
       - name: Find Windows NSIS Installer
         id: find_nsis
@@ -159,11 +158,10 @@ jobs:
           "zip_name=$zipName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload Windows NSIS Zip
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/nsis/${{ steps.zip_windows_nsis.outputs.zip_name }}
           asset_name: ${{ steps.zip_windows_nsis.outputs.zip_name }}
-          asset_content_type: application/zip
+          tag: ${{ github.ref }}
+          overwrite: true
