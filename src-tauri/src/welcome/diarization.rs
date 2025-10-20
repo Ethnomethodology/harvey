@@ -56,34 +56,19 @@ pub async fn check_diarization_model_access<R: Runtime>(
 
 
 
-    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our bundled ffmpeg libs
-
-        if cfg!(target_os = "macos") {
-
-        if let Ok(resource_dir) = app_handle.path().resource_dir() {
-
-                let ffmpeg_lib_path = resource_dir.join("sidecars");
-
-                if ffmpeg_lib_path.exists() {
-
-                    let ffmpeg_path_str = ffmpeg_lib_path.to_string_lossy();
-
-                    if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
-
-                        command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", ffmpeg_path_str, existing_path));
-
-                    } else {
-
-                        command = command.env("DYLD_LIBRARY_PATH", ffmpeg_path_str.to_string());
-
-                    }
-
-                }
-
+    // On macOS, we need to set the `DYLD_LIBRARY_PATH` to include our Conda environment's lib path
+    if cfg!(target_os = "macos") {
+        let env_path = super::python_env::get_env_path().map_err(|e| e.to_string())?;
+        let env_lib_path = env_path.join("lib");
+        if env_lib_path.exists() {
+            let env_lib_path_str = env_lib_path.to_string_lossy();
+            if let Some(existing_path) = std::env::var("DYLD_LIBRARY_PATH").ok() {
+                command = command.env("DYLD_LIBRARY_PATH", format!("{}:{}", env_lib_path_str, existing_path));
+            } else {
+                command = command.env("DYLD_LIBRARY_PATH", env_lib_path_str.to_string());
             }
-
         }
-
+    }
 
 
     let output = command.output().await.map_err(|e| e.to_string())?;
@@ -134,14 +119,7 @@ pub async fn download_diarization_model<R: Runtime>(
     if cfg!(target_os = "macos") {
         let mut new_paths = Vec::new();
 
-        // 1. Add bundled ffmpeg path
-        if let Ok(resource_dir) = app_handle.path().resource_dir() {
-            let ffmpeg_lib_path = resource_dir.join("sidecars");
-            if ffmpeg_lib_path.exists() {
-                new_paths.push(ffmpeg_lib_path.to_string_lossy().to_string());
-            }
-        }
-
+        // 1. No longer bundling ffmpeg, so this path is removed.
         // 2. Add venv lib path
         if let Some(venv_dir) = python_path.parent().and_then(|p| p.parent()) {
             new_paths.push(venv_dir.join("lib").to_string_lossy().to_string());

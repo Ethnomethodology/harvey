@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { invoke } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import {
@@ -12,12 +13,13 @@
 
 	import TranscriptionConfiguration from './TranscriptionConfiguration.svelte';
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
-	import PythonLibrariesPanel from './PythonLibrariesPanel.svelte';
+	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
 	import { configStatus } from '$lib/stores/configStatusStore.js';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
-
+	let isWinArm64 = false;
+	let isFFmpegInstalled = false;
 	let downloadLocation = '';
 	let isLoadingConfig = true;
 	let configError = '';
@@ -36,7 +38,7 @@
 		try {
 			downloadLocation = await getDownloadLocation();
 		} catch (e) {
-			console.error('Error loading download location:', e);
+			console.error('Error loading configuration:', e);
 			configError = `Failed to load configuration: ${e.message || e}`;
 		} finally {
 			isLoadingConfig = false;
@@ -212,8 +214,8 @@
                 </div>
 
 				<div class="mb-6">
-					<h3 class="block text-sm font-medium text-gray-700 mb-1">Required Tools</h3>
-					<PythonLibrariesPanel />
+					<h3 class="block text-sm font-semibold text-gray-700 mb-1">Required Tools</h3>
+					<LibrariesPanel />
 					<HuggingFacePanel />
 				</div>
             </div>

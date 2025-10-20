@@ -53,7 +53,7 @@
       "third_party_licenses",
       "scripts/*",
       "sidecars",
-      "python"
+      "binaries"
     ]
   }
 }

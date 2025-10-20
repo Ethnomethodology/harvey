@@ -65,8 +65,8 @@ jobs:
           TAURI_SKIP_SIGNING: "true"
         run: |
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
+          echo "The build.rs script will now build whisper.cpp from source. FFmpeg is sourced from Conda Forge."
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
-
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

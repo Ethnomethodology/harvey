@@ -68,7 +68,7 @@ jobs:
           echo "Building for target: ${{ steps.set_target.outputs.triple }}"
           echo "Adding a small delay to prevent 'Resource busy' errors..."
           sleep 5
-          echo "The build.rs script will now build FFmpeg and whisper.cpp from source..."
+          echo "The build.rs script will now build whisper.cpp from source. FFmpeg is sourced from Conda Forge."
 
           cargo tauri build --target ${{ steps.set_target.outputs.triple }}
 

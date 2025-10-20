@@ -186,7 +186,8 @@ pub async fn get_local_translation_models() -> Result<Vec<ModelInfo>, CommandErr
 
 #[command]
 pub async fn get_platform_info() -> Result<String, CommandError> {
-    Ok(std::env::consts::OS.to_string())
+    Ok(tauri::utils::platform::target_triple()
+        .unwrap_or_else(|_| "unknown".to_string()))
 }
 
 #[derive(Deserialize)]
@@ -198,9 +199,6 @@ struct HuggingFaceApiResponse {
 struct HuggingFaceApiFile {
     rfilename: String,
 }
-
-
-
 
 // --- Structs (DownloadProgress, ErrorPayload) - Unchanged ---
 #[derive(Clone, serde::Serialize)]
@@ -501,7 +499,7 @@ async fn download_and_save_bin( app: AppHandle, cancel_flag: Arc<AtomicBool>, mo
  #[command]
 pub async fn check_python_libraries_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     let shell = app.shell();
-    python_env::check_python_libraries_installed(&shell).await
+    python_env::check_python_libraries_installed(&app, &shell).await
 }
 
 #[command]
