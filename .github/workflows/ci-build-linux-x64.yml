@@ -1,81 +1,130 @@
-name: 'CI: Build Linux (X64)'
+name: CI Build (Linux x64)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'src-tauri/**'
-      - '.github/workflows/ci-build-linux-x64.yml'
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'src-tauri/**'
-      - '.github/workflows/ci-build-linux-x64.yml'
+    inputs:
+      ref:
+        description: 'Branch or tag of your application to build'
+        required: true
+        default: 'main'
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-  TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+  APP_NAME: harvey
 
 jobs:
-  build-tauri:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-latest]
-
-    runs-on: ${{ matrix.platform }}
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout application code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set target triple
+        id: set_target
+        run: |
+          echo "triple=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          target: x86_64-unknown-linux-gnu
+          target: ${{ steps.set_target.outputs.triple }}
+          override: true
 
-      - name: Install Node.js
+      - name: Install Node.js & npm
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '24.1.0'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-          run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
+      - name: Clean and Install frontend dependencies
         run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_ENV
+          rm -rf build/
+          npm install
+          npm run build
 
-      - uses: actions/cache@v4
-        name: Setup pnpm cache
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --locked
 
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build application
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri application
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          TAURI_SKIP_SIGNING: "true"
+        run: |
+          echo "Building for target: ${{ steps.set_target.outputs.triple }}"
+          echo "The build.rs script will now build whisper.cpp from source. FFmpeg is sourced from Conda Forge."
+          cargo tauri build --target ${{ steps.set_target.outputs.triple }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          command: cargo tauri build --target x86_64-unknown-linux-gnu
-          args: ''
-          tagName: app-v__VERSION__ # the action automatically replaces `__VERSION__` with the app version.
-          packagePath: 'src-tauri'
-          distPath: '../src'
-          iconPath: 'icons/icon.icns'
-          includeDebug: false
+          name: ${{ env.APP_NAME }}-linux-x64
+          path: |
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/appimage/*.AppImage
+            src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/deb/*.deb
+
+      - name: Ensure GitHub Release exists
+        id: ensure_release
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            const tag = '${{ github.event.inputs.ref }}';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              return rel.data.upload_url;
+            } catch {
+              const rel = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `Release ${tag}`,
+                draft: false,
+                prerelease: false
+              });
+              return rel.data.upload_url;
+            }
+
+      - name: Find AppImage
+        id: find_appimage
+        run: |
+          appimage_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/appimage/*.AppImage)
+          appimage_name=$(basename "$appimage_path")
+          echo "appimage_path=$appimage_path" >> $GITHUB_OUTPUT
+          echo "appimage_name=$appimage_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload AppImage
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: ${{ steps.find_appimage.outputs.appimage_path }}
+          asset_name: ${{ steps.find_appimage.outputs.appimage_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Find Deb
+        id: find_deb
+        run: |
+          deb_path=$(ls src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/deb/*.deb)
+          deb_name=$(basename "$deb_path")
+          echo "deb_path=$deb_path" >> $GITHUB_OUTPUT
+          echo "deb_name=$deb_name" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload Deb
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.ensure_release.outputs.result }}
+          asset_path: ${{ steps.find_deb.outputs.deb_path }}
+          asset_name: ${{ steps.find_deb.outputs.deb_name }}
+          asset_content_type: application/octet-stream
