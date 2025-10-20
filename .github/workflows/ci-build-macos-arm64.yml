@@ -58,7 +58,7 @@ jobs:
           npm run build
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
+        run: cargo install tauri-cli --version 2.0.0 --locked
 
       - name: Build Tauri application (macOS)
         env:
