@@ -198,7 +198,11 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
         ""
     };
 
-    let binaries_to_rename = vec!["whisper-cli", "whisper-stream", "ffmpeg"];
+    let mut binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
+
+    if target_triple == "aarch64-pc-windows-msvc" {
+        binaries_to_rename.push("ffmpeg");
+    }
 
     for bin_name in binaries_to_rename {
         let old_name = format!("{}{}", bin_name, exe_suffix);
@@ -227,6 +231,8 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
 
     Ok(())
 }
+
+
 
 fn bundle_python_standalone() -> Result<()> {
     const PYTHON_VERSION: &str = "3.12.12";
