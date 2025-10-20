@@ -214,7 +214,7 @@
                 </div>
 
 				<div class="mb-6">
-					<h3 class="block text-sm font-medium text-gray-700 mb-1">Libraries</h3>
+					<h3 class="block text-sm font-semibold text-gray-700 mb-1">Required Tools</h3>
 					<LibrariesPanel />
 					<HuggingFacePanel />
 				</div>
