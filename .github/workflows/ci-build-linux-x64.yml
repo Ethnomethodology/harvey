@@ -106,14 +106,13 @@ jobs:
         shell: bash
 
       - name: Upload AppImage
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_appimage.outputs.appimage_path }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.find_appimage.outputs.appimage_path }}
           asset_name: ${{ steps.find_appimage.outputs.appimage_name }}
-          asset_content_type: application/octet-stream
+          tag: ${{ github.ref }}
+          overwrite: true
 
       - name: Find Deb
         id: find_deb
@@ -125,11 +124,10 @@ jobs:
         shell: bash
 
       - name: Upload Deb
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_deb.outputs.deb_path }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.find_deb.outputs.deb_path }}
           asset_name: ${{ steps.find_deb.outputs.deb_name }}
-          asset_content_type: application/octet-stream
+          tag: ${{ github.ref }}
+          overwrite: true

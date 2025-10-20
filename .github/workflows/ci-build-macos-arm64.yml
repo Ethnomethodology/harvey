@@ -115,14 +115,13 @@ jobs:
         shell: bash
 
       - name: Upload macOS DMG
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: ${{ steps.find_dmg.outputs.dmg_path }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ steps.find_dmg.outputs.dmg_path }}
           asset_name: ${{ steps.find_dmg.outputs.dmg_name }}
-          asset_content_type: application/octet-stream
+          tag: ${{ github.ref }}
+          overwrite: true
 
       - name: Zip macOS App
         id: zip_macos_app
@@ -137,11 +136,10 @@ jobs:
         shell: bash
 
       - name: Upload macOS App Zip
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ steps.ensure_release.outputs.result }}
-          asset_path: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src-tauri/target/${{ steps.set_target.outputs.triple }}/release/bundle/${{ steps.zip_macos_app.outputs.zip_name }}
           asset_name: ${{ steps.zip_macos_app.outputs.zip_name }}
-          asset_content_type: application/zip
+          tag: ${{ github.ref }}
+          overwrite: true
