@@ -23,7 +23,10 @@ fn main() -> Result<()> {
     let profile = env::var("PROFILE").unwrap();
     let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
 
-    if profile == "release" || !sidecars_dir.exists() {
+    let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
+    let whisper_cli_path = sidecars_dir.join(format!("whisper-cli{}", exe_suffix));
+
+    if profile == "release" || !whisper_cli_path.exists() {
         let reason = if profile == "release" {
             "release build"
         } else {
@@ -36,7 +39,7 @@ fn main() -> Result<()> {
 
         let target_platform = get_target_platform_string()?;
         println!(
-            "cargo:info=Detected target platform: {}",
+            "cargo:warning=Detected target platform: {}",
             target_platform
         );
 
@@ -45,9 +48,15 @@ fn main() -> Result<()> {
         }
         fs::create_dir_all(&sidecars_dir)?;
 
-        download_and_unzip("whisper-sidecars", &target_platform, &sidecars_dir)?;
+        let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
+        download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
 
-        rename_whisper_binaries_for_tauri(&sidecars_dir)?;
+        if target_platform == "windows-arm64" {
+            println!("cargo:warning=Downloading ffmpeg for windows-arm64...");
+            download_and_unzip("ffmpeg-win-arm64", &sidecars_dir)?;
+        }
+
+        rename_sidecar_binaries_for_tauri(&sidecars_dir)?;
 
         println!("cargo:info=Sidecars downloaded and extracted successfully.");
     } else {
@@ -181,7 +190,7 @@ fn get_target_platform_string() -> Result<String> {
     Ok(platform.to_string())
 }
 
-fn rename_whisper_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
+fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
     let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
     let exe_suffix = if target_triple.contains("windows") {
         ".exe"
@@ -189,7 +198,7 @@ fn rename_whisper_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
         ""
     };
 
-    let binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
+    let binaries_to_rename = vec!["whisper-cli", "whisper-stream", "ffmpeg"];
 
     for bin_name in binaries_to_rename {
         let old_name = format!("{}{}", bin_name, exe_suffix);
@@ -288,57 +297,232 @@ fn bundle_python_standalone() -> Result<()> {
 }
 
 
-fn download_and_unzip(asset_name: &str, platform: &str, dest_dir: &Path) -> Result<()> {
+fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
+
+
     let url = format!(
-        "{}/{}/{}-{}.zip",
-        SIDECARS_BASE_URL, SIDECAR_VERSION, asset_name, platform
+
+
+        "{}/{}/{}.zip",
+
+
+        SIDECARS_BASE_URL, SIDECAR_VERSION, asset_name
+
+
     );
+
+
     println!("cargo:info=Downloading {} from {}", asset_name, url);
 
+
+
+
+
     let agent = ureq::builder().build();
+
+
     let response = agent
+
+
         .get(&url)
+
+
         .call()
+
+
         .with_context(|| format!("Failed to download from {}", url))?;
 
+
+
+
+
     if response.status() != 200 {
+
+
         anyhow::bail!(
+
+
             "Failed to download from {}: HTTP {}",
+
+
             url,
+
+
             response.status()
+
+
         );
+
+
     }
+
+
+
+
 
     let mut bytes = Vec::new();
+
+
     response.into_reader().read_to_end(&mut bytes)?;
 
-    let cursor = io::Cursor::new(bytes);
-    let mut archive = ZipArchive::new(cursor)?;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = dest_dir.join(file.mangled_name());
+
+
+
+    let cursor = io::Cursor::new(bytes);
+
+
+        let mut archive = ZipArchive::new(cursor)?;
+
+
+    
+
+
+        for i in 0..archive.len() {
+
+
+            let file = archive.by_index(i)?;
+
+
+            println!("cargo:info=Found file in zip: {}", file.name());
+
+
+        }
+
+
+    
+
+
+        for i in 0..archive.len() {
+
+
+            let mut file = archive.by_index(i)?;
+
+
+            let outpath = dest_dir.join(file.mangled_name());
+
+
+    
+
+
+
+
 
         if file.name().ends_with('/') {
+
+
             fs::create_dir_all(&outpath)?;
+
+
         } else {
+
+
             if let Some(p) = outpath.parent() {
+
+
                 if !p.exists() {
+
+
                     fs::create_dir_all(&p)?;
+
+
                 }
+
+
             }
+
+
             let mut outfile = File::create(&outpath)?;
+
+
             io::copy(&mut file, &mut outfile)?;
+
+
         }
 
+
+
+
+
         #[cfg(unix)]
+
+
         {
+
+
             if let Some(mode) = file.unix_mode() {
+
+
                 if mode & 0o111 != 0 {
+
+
                     fs::set_permissions(&outpath, fs::Permissions::from_mode(mode))?;
+
+
                 }
+
+
             }
+
+
         }
+
+
     }
+
+
+
+
+
+    // --- Post-extraction adjustments for FFmpeg on Windows ARM64 ---
+
+
+    if asset_name == "ffmpeg-win-arm64" {
+
+
+        let bin_dir = dest_dir.join("bin");
+
+
+        if bin_dir.exists() && bin_dir.is_dir() {
+
+
+            for entry in fs::read_dir(bin_dir)? {
+
+
+                let entry = entry?;
+
+
+                let src_path = entry.path();
+
+
+                let dest_path = dest_dir.join(src_path.file_name().unwrap());
+
+
+                fs::rename(&src_path, &dest_path)?;
+
+
+            }
+
+
+            fs::remove_dir_all(dest_dir.join("bin"))?;
+
+
+        }
+
+
+    }
+
+
+
+
+
     Ok(())
+
+
 }
+
+    
+
+        
+
+    

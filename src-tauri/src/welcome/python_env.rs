@@ -113,77 +113,13 @@ pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Sh
     let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
     if target_triple == "aarch64-pc-windows-msvc" {
-        ensure_ffmpeg_is_available(app).await?;
         install_python_libraries_standalone(app, shell).await
     } else {
         install_python_libraries_micromamba(app, shell).await
     }
 }
 
-async fn ensure_ffmpeg_is_available<R: Runtime>(app: &AppHandle<R>) -> Result<(), CommandError> {
-    if is_ffmpeg_installed(app.clone()).await? {
-        log::info!("FFmpeg is already installed and available.");
-        return Ok(());
-    }
 
-    log::info!("Starting FFmpeg download and installation for Windows ARM64.");
-    let emitter = app.clone();
-    emitter.emit("installation-log", LogPayload { message: "FFmpeg not found. Downloading...".into() }).unwrap();
-
-    // 1. Define URL and paths
-    let ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-07-28-12-42/ffmpeg-n7.0-142-g089f8d5543-win64-gpl-shared-7.0.zip";
-    let config_dir = get_config_dir()?;
-    let ffmpeg_root_dir = config_dir.join("ffmpeg");
-    let temp_zip_path = config_dir.join("ffmpeg.zip");
-
-    // Clean up previous attempts
-    if ffmpeg_root_dir.exists() {
-        fs::remove_dir_all(&ffmpeg_root_dir)?;
-    }
-    if temp_zip_path.exists() {
-        fs::remove_file(&temp_zip_path)?;
-    }
-    fs::create_dir_all(&ffmpeg_root_dir)?;
-
-    // 2. Download the file with error handling
-    let client = reqwest::Client::new();
-    let response = client.get(ffmpeg_url).send().await?;
-
-    if !response.status().is_success() {
-        return Err(CommandError::Message(format!("FFmpeg download failed with status: {}", response.status())));
-    }
-
-    let mut dest_file = File::create(&temp_zip_path)?;
-    let content = response.bytes().await?;
-    dest_file.write_all(&content)?;
-
-    // 3. Extract the zip file using zip-extract
-    emitter.emit("installation-log", LogPayload { message: "Extracting FFmpeg...".into() }).unwrap();
-    zip_extract::extract(BufReader::new(File::open(&temp_zip_path)?), &ffmpeg_root_dir, true)?;
-
-    // 4. Find the extracted ffmpeg.exe
-    let ffmpeg_exe_path = ffmpeg_root_dir
-        .read_dir()?
-        .filter_map(Result::ok)
-        .find(|entry| entry.file_name().to_string_lossy().starts_with("ffmpeg-"))
-        .map(|entry| entry.path().join("bin").join("ffmpeg.exe"))
-        .ok_or_else(|| CommandError::Message("Could not find ffmpeg directory after extraction.".to_string()))?;
-
-    if !ffmpeg_exe_path.exists() {
-        return Err(CommandError::Message("ffmpeg.exe not found after extraction.".to_string()));
-    }
-
-    // 5. Update the config
-    let mut config = read_config()?;
-    config.ffmpeg_path = Some(ffmpeg_exe_path.to_string_lossy().to_string());
-    write_config(&config)?;
-
-    // 6. Clean up
-    fs::remove_file(&temp_zip_path)?;
-
-    emitter.emit("installation-log", LogPayload { message: "FFmpeg installation complete.".into() }).unwrap();
-    Ok(())
-}
 
 async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
     let emitter = app.clone();
@@ -245,7 +181,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let strategy = get_pytorch_install_strategy(shell).await;
     let mut pip_packages = vec![
         "torch==2.9.0", "torchvision==0.24.0", "torchaudio==2.9.0",
-        "pyannote.audio==4.0.1", "pypandoc==1.15", "ffmpeg-python==0.2.0",
+        "pyannote.audio==4.0.1", "pypandoc==1.15",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1", "torchcodec==0.8.0"
     ];
     if strategy == PyTorchInstallStrategy::Cpu {
@@ -333,14 +269,26 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
     // For Windows ARM64, install a specific torch version and exclude unavailable packages
     let pip_packages = vec![
-        "pyannote.audio", "pypandoc==1.15", "ffmpeg-python==0.2.0",
+        "pyannote.audio", "pypandoc==1.15",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
     ];
 
     let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter());
 
-    let (mut rx_pip, _child_pip) = shell.command(pip_exe.to_str().unwrap())
+    let mut command = shell.command(pip_exe.to_str().unwrap());
+
+    let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
+    let sidecars_path = resource_dir.join("sidecars");
+
+    if sidecars_path.exists() {
+        let existing_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+        command = command.env("PATH", new_path.clone());
+        log::info!("Temporarily setting PATH to: {}", new_path);
+    }
+
+    let (mut rx_pip, _child_pip) = command
         .args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")
         .spawn()?;
@@ -385,20 +333,8 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    // 1. Check config for a managed path first
-    let config = read_config()?;
-    if let Some(ffmpeg_path_str) = config.ffmpeg_path {
-        if !ffmpeg_path_str.trim().is_empty() {
-            let ffmpeg_path = Path::new(&ffmpeg_path_str);
-            if ffmpeg_path.exists() {
-                log::info!("Found managed FFmpeg at: {:?}", ffmpeg_path);
-                return Ok(true);
-            }
-        }
-    }
-
-    // 2. Fallback to checking the system PATH
-    log::info!("No managed FFmpeg path found or path is invalid. Checking system PATH.");
+    // Fallback to checking the system PATH
+    log::info!("Checking for FFmpeg in system PATH or sidecar directory.");
     let shell = app.shell();
     let command = if cfg!(windows) { "where" } else { "which" };
     let output = shell.command(command).arg("ffmpeg").output().await?;
