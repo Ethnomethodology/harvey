@@ -7,6 +7,7 @@ use serde::Deserialize;
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_opener::OpenerExt;
+
 use std::{
     fs::{self},
     path::{Path, PathBuf},
@@ -2285,6 +2286,7 @@ pub async fn reveal_in_file_explorer(app: AppHandle, file_path_str: String) -> R
 
     #[cfg(target_os = "windows")]
     {
+        use std::process::Command;
         // On Windows, use `explorer.exe /select,` to open the parent directory and select the file
         // Or, if it's a directory, just open the directory
         let final_path_for_explorer = path.to_string_lossy().replace('/', "\\"); // Ensure backslashes for explorer.exe

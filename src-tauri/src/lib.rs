@@ -1,12 +1,8 @@
 // src-tauri/src/lib.rs
-use tauri::Manager;
-use tauri::Emitter;
-use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
-// use tauri::{Manager}; // Ensure Manager is used for app.handle()
 
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
 // use tauri::Emitter; // For app.emit()
@@ -68,6 +64,7 @@ pub fn run() {
             // log::error!("!!!!!!!!!!!!!!!!! SETUP HOOK ENTERED !!!!!!!!!!!!!!!!!"); // Line removed
 
             #[cfg(debug_assertions)] {
+                use tauri::Manager;
                  match app_mut_ref.get_webview_window("main") {
                     Some(window) => {
                          log::debug!("Opening devtools for main window");
@@ -79,6 +76,8 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
             
+            use tauri::{Manager, Emitter};
+            use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 
             // log::info!("[SETUP] Preparing to set up global shortcuts..."); // Removed
             let app_handle_clone = app_mut_ref.handle().clone(); // Clone app handle for the handler
@@ -91,9 +90,7 @@ pub fn run() {
 
             // Build the plugin with a general handler
             let global_shortcut_plugin_instance = tauri_plugin_global_shortcut::Builder::new().with_handler(
-                move |_,
-                      shortcut_arg: &Shortcut,
-                      event_details: ShortcutEvent| {
+                move |_,shortcut_arg: &Shortcut,event_details: ShortcutEvent| {
 
                     if event_details.state == ShortcutState::Pressed {
                         // log::info!("[HANDLER] Global shortcut pressed: shortcut_arg: {:?}, state: {:?}", shortcut_arg, event_details.state); // Removed
