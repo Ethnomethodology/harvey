@@ -19,6 +19,10 @@ const SIDECARS_BASE_URL: &str = "https://github.com/dipanjan92/harvey-sidecars/r
 
 fn main() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let python_dir = manifest_dir.join("python");
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&python_dir).expect("failed to create python dir");
+    fs::create_dir_all(&binaries_dir).expect("failed to create binaries dir");
     let sidecars_dir = manifest_dir.join("sidecars");
     let profile = env::var("PROFILE").unwrap();
     let target_triple = env::var("TARGET").context("TARGET environment variable not set")?;
