@@ -1,5 +1,7 @@
 // src-tauri/src/lib.rs
 use tauri::Manager;
+use tauri::Emitter;
+use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 use dashmap::DashMap;
 use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;

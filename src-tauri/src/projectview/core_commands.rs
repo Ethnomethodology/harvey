@@ -6,10 +6,11 @@ use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 use std::{
     fs::{self},
     path::{Path, PathBuf},
-    process::Command, // To run external commands
+
 };
 use quick_xml;
 // use tauri_plugin_os::platform; // For OS detection
@@ -2306,10 +2307,7 @@ pub async fn reveal_in_file_explorer(app: AppHandle, file_path_str: String) -> R
 
     #[cfg(target_os = "macos")]
     {
-        // On macOS, use app.opener().open_url to reveal in Finder
-        let dir_url = format!("file://{}", path.to_string_lossy().replace('\\', "/"));
-        info!("[CMD] Executing: app.opener().open_url {}", dir_url);
-        app.opener().open_url(dir_url, None::<String>).map_err(|e| {
+        app.opener().reveal_item_in_dir(&path).map_err(|e| {
             error!("reveal_in_file_explorer: Error opening URL: {}", e);
             CommandError::from(format!("Failed to open project location: {}", e))
         })?;

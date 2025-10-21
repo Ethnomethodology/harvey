@@ -15,7 +15,7 @@ use std::{
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{PathBuf, Path},
-    process::Command, // Added for Command::new
+
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
@@ -23,7 +23,7 @@ use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
 use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
-// use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
 
@@ -314,7 +314,7 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     log::info!("---- create_project: End ----");
     Ok(absolute_xml_path)
 }
-#[command] pub async fn locate_in_finder(_app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
+#[command] pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
     log::info!("---- locate_in_finder: Start. Path='{}' ----", project_xml_path);
 
     let mut cleaned_path = project_xml_path;
@@ -348,7 +348,7 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
         // For non-Windows (e.g., macOS), use file:// URL. Ensure forward slashes.
         let dir_url = format!("file://{}", absolute_dir_path.to_string_lossy().replace('\\', "/"));
         log::info!("locate_in_finder: Attempting to open URL: {}", dir_url);
-        tauri_plugin_opener::OpenerExt::open_url(&app.opener(), dir_url, None::<String>).map_err(|e| {
+        app.opener().open_url(dir_url, None::<String>).map_err(|e| {
             log::error!("locate_in_finder: Error opening URL: {}", e);
             CommandError::from(format!("Failed to open project location: {}", e))
         })?;
