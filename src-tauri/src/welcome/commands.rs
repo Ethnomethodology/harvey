@@ -15,7 +15,7 @@ use std::{
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{PathBuf, Path},
-
+    process::Command,
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
@@ -336,6 +336,7 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
 
     #[cfg(target_os = "windows")]
     {
+        use std::process::Command;
         log::info!("locate_in_finder: Attempting to open directory with explorer.exe: {:?}", absolute_dir_path);
         Command::new("explorer.exe")
             .arg(absolute_dir_path.to_string_lossy().as_ref())
