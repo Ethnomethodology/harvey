@@ -12,7 +12,7 @@ use std::{
     process::Command, // To run external commands
 };
 use quick_xml;
-use tauri_plugin_os::platform; // For OS detection
+// use tauri_plugin_os::platform; // For OS detection
 use chrono::Utc;
 use serde_json;
 use serde::Serialize;
@@ -2261,69 +2261,82 @@ mod tests {
 }
 
 #[tauri::command]
-pub async fn reveal_in_file_explorer(file_path_str: String) -> Result<(), String> {
-    info!("[CMD] reveal_in_file_explorer for path: {}", file_path_str);
-    let path = PathBuf::from(file_path_str);
+pub async fn reveal_in_file_explorer(app: AppHandle, file_path_str: String) -> Result<(), CommandError> {
+    info!("[CMD] Revealed in Explorer: {}", file_path_str);
+
+    let mut cleaned_path_str = file_path_str;
+
+    // On Windows, remove the \\?\ prefix if present
+    if cfg!(windows) && cleaned_path_str.starts_with(r"\\\\?\\") {
+        cleaned_path_str = cleaned_path_str.trim_start_matches(r"\\\\?\\").to_string();
+        info!(r"reveal_in_file_explorer: Removed \\?\\ prefix. Cleaned path: '{}'", cleaned_path_str);
+    }
+
+    // Normalize all slashes to forward slashes for consistent PathBuf operations
+    let normalized_path_str = cleaned_path_str.replace('\\', "/");
+
+    let path = PathBuf::from(&normalized_path_str);
 
     if !path.exists() {
-        let err_msg = format!("File or directory not found: {}", path.display());
-        error!("[CMD] {}", err_msg);
-        return Err(err_msg);
+        error!("reveal_in_file_explorer: Error - File or directory not found: {:?}", path);
+        return Err(CommandError::from(format!("File or directory not found: {}", path.display())));
     }
 
-    let os_type = platform(); // Get OS type from tauri::api::os
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows, use `explorer.exe /select,` to open the parent directory and select the file
+        // Or, if it's a directory, just open the directory
+        let final_path_for_explorer = path.to_string_lossy().replace('/', "\\"); // Ensure backslashes for explorer.exe
 
-    match os_type {
-        "macos" => {
-            let status = Command::new("open")
-                .arg("-R") // Reveals the file in Finder
-                .arg(&path)
-                .status()
-                .map_err(|e| format!("Failed to execute 'open -R': {}", e))?;
-            if status.success() {
-                info!("[CMD] Revealed in Finder: {}", path.display());
-                Ok(())
-            } else {
-                Err(format!("'open -R' command failed for {}: {:?}", path.display(), status.code()))
-            }
-        }
-        "windows" => {
-            // Ensure the path is properly quoted for explorer.exe /select
-            let abs_path_str = path.to_string_lossy().into_owned();
-            let arg_str = format!("/select,\"{}\"", abs_path_str);
-
-            let status = Command::new("explorer.exe")
-                .arg(arg_str)
-                .status()
-                .map_err(|e| format!("Failed to execute 'explorer.exe': {}", e))?;
-            if status.success() {
-                info!("[CMD] Revealed in Explorer: {}", path.display());
-                Ok(())
-            } else {
-                Err(format!("'explorer.exe /select' command failed for {}: {:?}", path.display(), status.code()))
-            }
-        }
-        "linux" | _ => { // Default to xdg-open for Linux and other Unix-like systems
-            // xdg-open typically opens the directory if it's a file path,
-            // or the file itself with its default application.
-            // For revealing in file manager, we need the parent directory.
-            let target_to_open = if path.is_file() {
-                path.parent().unwrap_or(&path).to_path_buf()
-            } else {
-                path.clone()
-            };
-
-            let status = Command::new("xdg-open")
-                .arg(&target_to_open)
-                .status()
-                .map_err(|e| format!("Failed to execute 'xdg-open': {}", e))?;
-
-            if status.success() {
-                info!("[CMD] Opened directory with xdg-open: {}", target_to_open.display());
-                Ok(())
-            } else {
-                Err(format!("'xdg-open' command failed for {}: {:?}", target_to_open.display(), status.code()))
-            }
+        if path.is_file() {
+            info!("[CMD] Executing: explorer.exe /select, {}", final_path_for_explorer);
+            Command::new("explorer.exe")
+                .arg("/select,")
+                .arg(final_path_for_explorer)
+                .spawn()
+                .map_err(|e| CommandError::from(format!("Failed to open explorer: {}", e)))?;
+        } else {
+            info!("[CMD] Executing: explorer.exe {}", final_path_for_explorer);
+            Command::new("explorer.exe")
+                .arg(final_path_for_explorer)
+                .spawn()
+                .map_err(|e| CommandError::from(format!("Failed to open explorer: {}", e)))?;
         }
     }
-}
+
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS, use app.opener().open_url to reveal in Finder
+        let dir_url = format!("file://{}", path.to_string_lossy().replace('\\', "/"));
+        info!("[CMD] Executing: app.opener().open_url {}", dir_url);
+        app.opener().open_url(dir_url, None::<String>).map_err(|e| {
+            error!("reveal_in_file_explorer: Error opening URL: {}", e);
+            CommandError::from(format!("Failed to open project location: {}", e))
+        })?;
+    }
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+
+        {
+
+            // For other OS, use app.opener().open_url
+
+            let dir_url = format!("file://{}", path.to_string_lossy().replace('\\', "/"));
+
+            info!("[CMD] Executing: app.opener().open_url {}", dir_url);
+
+            app.opener().open_url(dir_url, None::<String>).map_err(|e| {
+
+                error!("reveal_in_file_explorer: Error opening URL: {}", e);
+
+                CommandError::from(format!("Failed to open project location: {}", e))
+
+            })?;
+
+        }
+
+    
+
+        Ok(())
+
+    }

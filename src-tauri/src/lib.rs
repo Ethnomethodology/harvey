@@ -5,17 +5,9 @@ use std::sync::{Arc, atomic::AtomicBool};
 use env_logger;
 use log; // Added log import
 // use tauri::{Manager}; // Ensure Manager is used for app.handle()
-use tauri_plugin_global_shortcut::{
-    self, // Keep or remove 'self' based on preference for qualification
-    Code, // For Shortcut::new(..., Code::F7)
-    GlobalShortcutExt,
-    Modifiers,
-    Shortcut,
-    ShortcutEvent,
-    ShortcutState,
-};
+
 // use tauri::Wry; // Still needed for app_handle_clone if it's explicitly typed
-use tauri::Emitter; // For app.emit()
+// use tauri::Emitter; // For app.emit()
 use crate::projectview::db_handler::init_db as init_projectview_db;
 // Removed: use crate::projectview::transcription_commands::{list_subtitle_files_command, convert_srt_to_vtt_command};
 

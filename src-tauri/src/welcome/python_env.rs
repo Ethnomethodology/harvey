@@ -1,10 +1,10 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{Shell, ShellExt};
-use crate::welcome::config::{CommandError, get_config_dir, read_config, write_config};
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::io::{BufReader, Write};
-use reqwest;
+use crate::welcome::config::{CommandError, get_config_dir};
+use std::path::{PathBuf};
+use std::fs::{self};
+// use std::io;
+// use reqwest;
 
 
 const ENV_DIR: &str = "harvey_env";

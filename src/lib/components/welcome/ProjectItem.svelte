@@ -1,11 +1,37 @@
 <!-- src/lib/components/welcome/ProjectItem.svelte -->
 <script>
   import { fly } from 'svelte/transition';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { type as getOsType } from '@tauri-apps/plugin-os';
   export let project;
   export let openMenuProjectPath = null;
 
   const dispatch = createEventDispatcher();
+  let revealButtonLabel = 'Show in Finder'; // Default label
+  let displayPath = '';
+
+  onMount(async () => {
+    try {
+      const currentOs = await getOsType();
+      if (currentOs === 'windows') {
+        revealButtonLabel = 'Reveal in Explorer';
+        if (project.path.startsWith('\\\\?\\')) {
+          displayPath = project.path.substring(4);
+        } else {
+          displayPath = project.path;
+        }
+      } else if (currentOs === 'macos') {
+        revealButtonLabel = 'Reveal in Finder';
+        displayPath = project.path;
+      } else {
+        revealButtonLabel = 'Open File Location';
+        displayPath = project.path;
+      }
+    } catch (e) {
+      console.error("Error getting OS type:", e);
+      displayPath = project.path; // Fallback
+    }
+  });
 
   function openRecent() {
     dispatch('openRecent', project);
@@ -33,7 +59,7 @@
 
     <div class="min-w-0 mr-2 flex-grow">
       <h3 class="font-medium text-gray-800 group-hover:text-blue-600 truncate">{project.name}</h3>
-      <p class="text-xs text-gray-500 truncate">{project.path}</p>
+      <p class="text-xs text-gray-500 truncate">{displayPath}</p>
     </div>
     <button
       id="menu-button-for-{project.path}"
@@ -62,7 +88,7 @@
     >
       <div class="py-1" role="none">
         <button on:click={() => onMenuAction('Open')} class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100" role="menuitem" tabindex="-1">Open</button>
-        <button on:click={() => onMenuAction('Locate')} class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100" role="menuitem" tabindex="-1">Show in Finder</button>
+        <button on:click={() => onMenuAction('Locate')} class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100" role="menuitem" tabindex="-1">{revealButtonLabel}</button>
         <button on:click={() => onMenuAction('Rename')} class="text-gray-700 block w-full px-4 py-2 text-left text-sm hover:bg-gray-100" role="menuitem" tabindex="-1">Rename</button>
         <hr class="my-1 border-gray-200">
         <button on:click={() => onMenuAction('Remove')} class="text-red-600 block w-full px-4 py-2 text-left text-sm hover:bg-red-50" role="menuitem" tabindex="-1">Remove</button>
