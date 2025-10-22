@@ -38,7 +38,14 @@ fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, Comman
 
     if !dest_path.exists() {
         log::info!("Copying micromamba from {:?} to {:?}", &resource_micromamba_path, &dest_path);
-        fs::copy(&resource_micromamba_path, &dest_path)
+
+        #[cfg(target_os = "windows")]
+        let cleaned_resource_micromamba_path = dunce::canonicalize(&resource_micromamba_path)
+            .map_err(|e| CommandError::Message(format!("Failed to canonicalize resource micromamba path: {}", e)))?;
+        #[cfg(not(target_os = "windows"))]
+        let cleaned_resource_micromamba_path = resource_micromamba_path;
+
+        fs::copy(&cleaned_resource_micromamba_path, &dest_path)
             .map_err(|e| CommandError::Message(format!("Failed to copy micromamba: {}", e)))?;
     }
 
