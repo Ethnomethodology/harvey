@@ -38,7 +38,7 @@
             arePythonLibsInstalled.set(status);
 		} catch (e) {
 			console.error('Error checking Python library status:', e);
-			error = `Failed to check dependency status: ${e.payload || e}`;
+			error = '';
 			arePythonLibsInstalled.set(false);
 		} finally {
 			isLoading = false;
