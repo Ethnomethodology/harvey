@@ -180,6 +180,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let create_args = vec![
         "create", "-p", env_path.to_str().unwrap(),
         "python=3.12", "pip", "-c", "conda-forge", "-y",
+        "--retry", "5", "--retry-delay", "5",
     ];
 
     let (mut rx_create, _child_create) = shell.command(micromamba_path.to_str().unwrap())
@@ -209,6 +210,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let install_args = vec![
         "install", "-p", env_path.to_str().unwrap(),
         "pandoc", "ffmpeg", "-c", "conda-forge", "-y", "--verbose",
+        "--retry", "5", "--retry-delay", "5",
     ];
 
     let mut attempts = 0;
