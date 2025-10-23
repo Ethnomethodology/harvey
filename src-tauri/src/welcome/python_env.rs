@@ -180,7 +180,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let create_args = vec![
         "create", "-p", env_path.to_str().unwrap(),
         "python=3.12", "pip", "-c", "conda-forge", "-y",
-        "--retry", "5", "--retry-delay", "5",
     ];
 
     let (mut rx_create, _child_create) = shell.command(micromamba_path.to_str().unwrap())
@@ -210,7 +209,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let install_args = vec![
         "install", "-p", env_path.to_str().unwrap(),
         "pandoc", "ffmpeg", "-c", "conda-forge", "-y", "--verbose",
-        "--retry", "5", "--retry-delay", "5",
     ];
 
     let mut attempts = 0;
@@ -243,6 +241,18 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
                             return Err(CommandError::Message(error_message));
                         }
                         log::warn!("Micromamba install failed, retrying...");
+
+                        // Clean tarballs before retrying
+                        emitter.emit("installation-log", LogPayload { message: "Cleaning downloaded packages before retry...".into() }).unwrap();
+                        let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
+                            .args(&["clean", "--tarballs", "-y"])
+                            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
+                            .spawn()?;
+                        while let Some(event) = rx_clean.recv().await {
+                            if let tauri_plugin_shell::process::CommandEvent::Terminated(_) = event {
+                                break;
+                            }
+                        }
                         break;
                     } else {
                         success = true;
