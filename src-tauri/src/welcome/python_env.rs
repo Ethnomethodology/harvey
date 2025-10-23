@@ -178,10 +178,23 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Step 1: Create environment with Python and pip
     emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
 
-    let create_args = vec![
-        "create", "-p", env_path.to_str().unwrap(),
-        "python=3.12", "pip", "pandoc", "--override-channels", "-c", "conda-forge", "-y", "--verbose",
+    let mut create_args = vec![
+        "create".to_string(),
+        "-p".to_string(),
+        env_path.to_str().unwrap().to_string(),
+        "python=3.12".to_string(),
+        "pip".to_string(),
+        "pandoc".to_string(),
+        "--override-channels".to_string(),
+        "-c".to_string(),
+        "conda-forge".to_string(),
+        "-y".to_string(),
+        "--verbose".to_string(),
     ];
+
+    if !cfg!(target_os = "windows") {
+        create_args.push("ffmpeg".to_string());
+    }
 
     let mut attempts = 0;
     let max_attempts = 3;
@@ -434,17 +447,7 @@ pub async fn check_python_libraries_installed<R: Runtime>(
 
             let mut command = shell.command(python_path.to_str().unwrap());
 
-            if cfg!(target_os = "windows") {
-                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-                let sidecars_path = resource_dir.join("sidecars");
-
-                if sidecars_path.exists() {
-                    let existing_path = std::env::var("PATH").unwrap_or_default();
-                    let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
-                    command = command.env("PATH", new_path.clone());
-                    log::info!("Temporarily setting PATH for verification: {}", new_path);
-                }
-            } else if cfg!(target_os = "macos") {
+            if cfg!(target_os = "macos") {
                 let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
                 let sidecars_path = resource_dir.join("sidecars");
                 
