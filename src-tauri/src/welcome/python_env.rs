@@ -175,58 +175,34 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Introduce a small delay to allow file system operations to settle
     std::thread::sleep(std::time::Duration::from_secs(2));
 
-    // Step 1: Create a minimal environment with Python and pip
-    emitter.emit("installation-log", LogPayload { message: "Creating minimal Python environment...".into() }).unwrap();
+    // Step 1: Create environment with all dependencies in a single transaction
     let create_args = vec![
         "create", "-p", env_path.to_str().unwrap(),
-        "python=3.12", "pip", "-c", "conda-forge", "-y",
-    ];
-
-    let (mut rx_create, _child_create) = shell.command(micromamba_path.to_str().unwrap())
-        .args(&create_args)
-        .env("PYTHONUNBUFFERED", "1")
-        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-        .spawn()?;
-
-    while let Some(event) = rx_create.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                emitter.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
-            },
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                if payload.code != Some(0) {
-                    return Err(CommandError::Message("Failed to create minimal conda environment.".into()));
-                }
-                break;
-            }
-            _ => {}
-        }
-    }
-    emitter.emit("installation-log", LogPayload { message: "Minimal environment created.".into() }).unwrap();
-
-    // Step 2: Install heavy packages with retry logic
-    emitter.emit("installation-log", LogPayload { message: "Installing heavy dependencies (ffmpeg, pandoc)...".into() }).unwrap();
-    let install_args = vec![
-        "install", "-p", env_path.to_str().unwrap(),
-        "pandoc", "ffmpeg", "-c", "conda-forge", "-y", "--verbose",
+        "python=3.12", "pip", "pandoc", "ffmpeg",
+        "-c", "conda-forge", "-y", "--verbose",
     ];
 
     let mut attempts = 0;
     let max_attempts = 3;
-    let mut success = false;
 
-    while attempts < max_attempts {
+    loop {
         attempts += 1;
-        emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Installing heavy dependencies...", attempts, max_attempts) }).unwrap();
+        emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
 
-        let (mut rx_install, _child_install) = shell.command(micromamba_path.to_str().unwrap())
-            .args(&install_args)
+        // Ensure env_path is clean before attempting to create
+        if env_path.exists() {
+            fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to clean env dir: {}", e)))?;
+        }
+
+        let (mut rx, _child) = shell.command(micromamba_path.to_str().unwrap())
+            .args(&create_args)
             .env("PYTHONUNBUFFERED", "1")
             .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
             .spawn()?;
 
+        let mut success = false;
         let mut output_lines = Vec::new();
-        while let Some(event) = rx_install.recv().await {
+        while let Some(event) = rx.recv().await {
             match event {
                 tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
                     let line_str = String::from_utf8_lossy(&line).to_string();
@@ -234,43 +210,43 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
                     output_lines.push(line_str);
                 },
                 tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    if payload.code != Some(0) {
-                        if attempts == max_attempts {
-                            let full_log = output_lines.join("\n");
-                            let error_message = format!("Failed to install heavy dependencies. Full log:\n{}", full_log);
-                            return Err(CommandError::Message(error_message));
-                        }
-                        log::warn!("Micromamba install failed, retrying...");
-
-                        // Clean tarballs before retrying
-                        emitter.emit("installation-log", LogPayload { message: "Cleaning downloaded packages before retry...".into() }).unwrap();
-                        let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
-                            .args(&["clean", "--tarballs", "-y"])
-                            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-                            .spawn()?;
-                        while let Some(event) = rx_clean.recv().await {
-                            if let tauri_plugin_shell::process::CommandEvent::Terminated(_) = event {
-                                break;
-                            }
-                        }
-                        break;
-                    } else {
+                    if payload.code == Some(0) {
                         success = true;
-                        break;
                     }
+                    break;
                 }
                 _ => {}
             }
         }
-        if success { break; }
+
+        if success {
+            break; // Exit the loop on success
+        }
+
+        if attempts >= max_attempts {
+            let full_log = output_lines.join("\n");
+            let error_message = format!("Failed to create conda environment after {} attempts. Full log:\n{}", max_attempts, full_log);
+            return Err(CommandError::Message(error_message));
+        }
+
+        log::warn!("Micromamba create failed, cleaning cache and retrying...");
+        emitter.emit("installation-log", LogPayload { message: "Environment creation failed. Cleaning cache before retrying...".into() }).unwrap();
+
+        let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
+            .args(&["clean", "--all", "-y"])
+            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
+            .spawn()?;
+
+        while let Some(event) = rx_clean.recv().await {
+            if let tauri_plugin_shell::process::CommandEvent::Terminated(_) = event {
+                break;
+            }
+        }
+
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
 
-    if !success {
-        return Err(CommandError::Message("Failed to install heavy dependencies after multiple attempts.".to_string()));
-    }
-
-    // Step 3: Install packages using pip
+    // Step 2: Install packages using pip
     emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     let strategy = get_pytorch_install_strategy(shell).await;
