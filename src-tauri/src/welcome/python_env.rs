@@ -404,7 +404,17 @@ pub async fn check_python_libraries_installed<R: Runtime>(
 
             let mut command = shell.command(python_path.to_str().unwrap());
 
-            if cfg!(target_os = "macos") {
+            if cfg!(target_os = "windows") {
+                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
+                let sidecars_path = resource_dir.join("sidecars");
+
+                if sidecars_path.exists() {
+                    let existing_path = std::env::var("PATH").unwrap_or_default();
+                    let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                    command = command.env("PATH", new_path.clone());
+                    log::info!("Temporarily setting PATH for verification: {}", new_path);
+                }
+            } else if cfg!(target_os = "macos") {
                 let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
                 let sidecars_path = resource_dir.join("sidecars");
                 
