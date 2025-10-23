@@ -982,7 +982,16 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
 
     let transcriptToLoad = null;
     if (transcriptPathToPrioritize) {
-        transcriptToLoad = associatedTranscripts.find(t => t.path === transcriptPathToPrioritize);
+        const projectRootPath = get(projectMainStore).projectRootPath;
+        let relativePathToPrioritize = transcriptPathToPrioritize;
+
+        if (projectRootPath && transcriptPathToPrioritize.startsWith(projectRootPath)) {
+            relativePathToPrioritize = transcriptPathToPrioritize.substring(projectRootPath.length).replace(/^[\\/]/, '');
+        }
+
+        transcriptToLoad = associatedTranscripts.find(t => {
+            return t.relativePath === relativePathToPrioritize || t.path === transcriptPathToPrioritize;
+        });
     }
 
     if (!transcriptToLoad && sortedTranscripts.length > 0) {
@@ -1324,7 +1333,7 @@ listen('translation_job_completed', async (event) => {
 
                     if (updatedMediaFile) {
                         console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
-                        selectMedia(updatedMediaFile, newTranscriptPath);
+                        selectMedia(updatedMediaFile);
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
                     }
