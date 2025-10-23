@@ -136,26 +136,6 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 		initializeProgressListener();
         initializeTranslationProgressListener();
 
-        unlistenTranscriptionComplete = await listen('custom_transcription_job_completed', (event) => {
-            if (event.payload && event.payload.status === 'done') {
-                console.log('[ProjectView] Transcription job completed event received, refreshing files silently.');
-                const currentProjectXmlPath = get(project).xmlPath;
-                if (currentProjectXmlPath) {
-                    silentlyRefreshProjectData(currentProjectXmlPath);
-                } else {
-                    console.error('[ProjectView] Cannot silently refresh project data: XML path is missing.');
-                }
-
-            const ranInBackground = get(transcriptStore).ranInBackground;
-            if (ranInBackground) {
-                console.log('[ProjectView event_listener] Background job done, calling clearPendingTranscriptData.');
-                clearPendingTranscriptData();
-            } else {
-                console.log('[ProjectView event_listener] Foreground job done, NOT calling clearPendingTranscriptData here (handleModalClose will).');
-            }
-            }
-        });
-
         unlistenTranslationComplete = await listen('translation_job_completed', (event) => {
             if (event.payload && event.payload.status === 'done') {
                 const { newTranscriptPath } = event.payload;
