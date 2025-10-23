@@ -58,6 +58,9 @@ fn main() -> Result<()> {
         if target_platform == "windows-arm64" {
             println!("cargo:warning=Downloading ffmpeg for windows-arm64...");
             download_and_unzip("ffmpeg-win-arm64", &sidecars_dir)?;
+        } else if target_platform == "windows-x86_64" {
+            println!("cargo:warning=Downloading ffmpeg for windows-x86_64...");
+            download_and_unzip("ffmpeg-windows-x86_64", &sidecars_dir)?;
         }
 
         rename_sidecar_binaries_for_tauri(&sidecars_dir)?;
@@ -204,7 +207,7 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
 
     let mut binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
 
-    if target_triple == "aarch64-pc-windows-msvc" {
+    if target_triple == "aarch64-pc-windows-msvc" || target_triple == "x86_64-pc-windows-msvc" {
         binaries_to_rename.push("ffmpeg");
     }
 
@@ -484,42 +487,18 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
 
 
 
-    // --- Post-extraction adjustments for FFmpeg on Windows ARM64 ---
-
-
-    if asset_name == "ffmpeg-win-arm64" {
-
-
+    // --- Post-extraction adjustments for FFmpeg on Windows ---
+    if asset_name == "ffmpeg-win-arm64" || asset_name == "ffmpeg-windows-x86_64" {
         let bin_dir = dest_dir.join("bin");
-
-
         if bin_dir.exists() && bin_dir.is_dir() {
-
-
             for entry in fs::read_dir(bin_dir)? {
-
-
                 let entry = entry?;
-
-
                 let src_path = entry.path();
-
-
                 let dest_path = dest_dir.join(src_path.file_name().unwrap());
-
-
                 fs::rename(&src_path, &dest_path)?;
-
-
             }
-
-
             fs::remove_dir_all(dest_dir.join("bin"))?;
-
-
         }
-
-
     }
 
 
