@@ -175,24 +175,21 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Introduce a small delay to allow file system operations to settle
     std::thread::sleep(std::time::Duration::from_secs(2));
 
-    // Step 1: Create environment with all dependencies in a single transaction
+    // Step 1: Create environment with Python and pip
+    emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
+
     let create_args = vec![
         "create", "-p", env_path.to_str().unwrap(),
-        "python=3.12", "pip", "pandoc", "ffmpeg",
-        "--override-channels", "-c", "conda-forge", "-y", "--verbose",
+        "python=3.12", "pip", "pandoc", "--override-channels", "-c", "conda-forge", "-y", "--verbose",
     ];
 
     let mut attempts = 0;
     let max_attempts = 3;
+    let mut success = false;
 
-    loop {
+    while attempts < max_attempts {
         attempts += 1;
         emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
-
-        // Ensure env_path is clean before attempting to create
-        if env_path.exists() {
-            fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to clean env dir: {}", e)))?;
-        }
 
         let (mut rx, _child) = shell.command(micromamba_path.to_str().unwrap())
             .args(&create_args)
@@ -200,50 +197,45 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
             .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
             .spawn()?;
 
-        let mut success = false;
         let mut output_lines = Vec::new();
         while let Some(event) = rx.recv().await {
             match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
                     let line_str = String::from_utf8_lossy(&line).to_string();
                     emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
                     output_lines.push(line_str);
-                },
+                }
+                tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                    let line_str = String::from_utf8_lossy(&line).to_string();
+                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
+                    output_lines.push(line_str);
+                }
                 tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    if payload.code == Some(0) {
+                    if payload.code != Some(0) {
+                        let full_log = output_lines.join("\n");
+                        let error_message = format!("Failed to create conda environment. Full log:\n{}", full_log);
+                        emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
+                        // If it's the last attempt, return the error
+                        if attempts == max_attempts {
+                            return Err(CommandError::Message(error_message));
+                        }
+                        // Otherwise, log and retry
+                        log::warn!("Micromamba create failed, retrying...");
+                        break; // Break from inner loop to retry outer loop
+                    } else {
                         success = true;
+                        break; // Break from inner loop, command succeeded
                     }
-                    break;
                 }
                 _ => {}
             }
         }
+        if success { break; } // Break from outer loop if command succeeded
+        std::thread::sleep(std::time::Duration::from_secs(5)); // Wait before retrying
+    }
 
-        if success {
-            break; // Exit the loop on success
-        }
-
-        if attempts >= max_attempts {
-            let full_log = output_lines.join("\n");
-            let error_message = format!("Failed to create conda environment after {} attempts. Full log:\n{}", max_attempts, full_log);
-            return Err(CommandError::Message(error_message));
-        }
-
-        log::warn!("Micromamba create failed, cleaning cache and retrying...");
-        emitter.emit("installation-log", LogPayload { message: "Environment creation failed. Cleaning cache before retrying...".into() }).unwrap();
-
-        let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
-            .args(&["clean", "--all", "-y"])
-            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-            .spawn()?;
-
-        while let Some(event) = rx_clean.recv().await {
-            if let tauri_plugin_shell::process::CommandEvent::Terminated(_) = event {
-                break;
-            }
-        }
-
-        std::thread::sleep(std::time::Duration::from_secs(5));
+    if !success {
+        return Err(CommandError::Message("Failed to create conda environment after multiple attempts.".to_string()));
     }
 
     // Step 2: Install packages using pip
@@ -442,7 +434,17 @@ pub async fn check_python_libraries_installed<R: Runtime>(
 
             let mut command = shell.command(python_path.to_str().unwrap());
 
-            if cfg!(target_os = "macos") {
+            if cfg!(target_os = "windows") {
+                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
+                let sidecars_path = resource_dir.join("sidecars");
+
+                if sidecars_path.exists() {
+                    let existing_path = std::env::var("PATH").unwrap_or_default();
+                    let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                    command = command.env("PATH", new_path.clone());
+                    log::info!("Temporarily setting PATH for verification: {}", new_path);
+                }
+            } else if cfg!(target_os = "macos") {
                 let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
                 let sidecars_path = resource_dir.join("sidecars");
                 
