@@ -175,75 +175,32 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Introduce a small delay to allow file system operations to settle
     std::thread::sleep(std::time::Duration::from_secs(2));
 
-    // Step 1: Create environment with all dependencies in a single transaction
+    // Step 1: Create a minimal environment with Python and pip
+    emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
     let create_args = vec![
         "create", "-p", env_path.to_str().unwrap(),
-        "python=3.12", "pip", "pandoc", "ffmpeg",
-        "-c", "conda-forge", "-y", "--verbose",
+        "python=3.12", "pip", "-c", "conda-forge", "-y",
     ];
 
-    let mut attempts = 0;
-    let max_attempts = 3;
+    let (mut rx_create, _child_create) = shell.command(micromamba_path.to_str().unwrap())
+        .args(&create_args)
+        .env("PYTHONUNBUFFERED", "1")
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
+        .spawn()?;
 
-    loop {
-        attempts += 1;
-        emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
-
-        // Ensure env_path is clean before attempting to create
-        if env_path.exists() {
-            fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to clean env dir: {}", e)))?;
-        }
-
-        let (mut rx, _child) = shell.command(micromamba_path.to_str().unwrap())
-            .args(&create_args)
-            .env("PYTHONUNBUFFERED", "1")
-            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-            .spawn()?;
-
-        let mut success = false;
-        let mut output_lines = Vec::new();
-        while let Some(event) = rx.recv().await {
-            match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                    let line_str = String::from_utf8_lossy(&line).to_string();
-                    emitter.emit("installation-log", LogPayload { message: line_str.clone() }).unwrap();
-                    output_lines.push(line_str);
-                },
-                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    if payload.code == Some(0) {
-                        success = true;
-                    }
-                    break;
+    while let Some(event) = rx_create.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                emitter.emit("installation-log", LogPayload { message: String::from_utf8_lossy(&line).to_string() }).unwrap();
+            },
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    return Err(CommandError::Message("Failed to create minimal conda environment.".into()));
                 }
-                _ => {}
-            }
-        }
-
-        if success {
-            break; // Exit the loop on success
-        }
-
-        if attempts >= max_attempts {
-            let full_log = output_lines.join("\n");
-            let error_message = format!("Failed to create conda environment after {} attempts. Full log:\n{}", max_attempts, full_log);
-            return Err(CommandError::Message(error_message));
-        }
-
-        log::warn!("Micromamba create failed, cleaning cache and retrying...");
-        emitter.emit("installation-log", LogPayload { message: "Environment creation failed. Cleaning cache before retrying...".into() }).unwrap();
-
-        let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
-            .args(&["clean", "--all", "-y"])
-            .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-            .spawn()?;
-
-        while let Some(event) = rx_clean.recv().await {
-            if let tauri_plugin_shell::process::CommandEvent::Terminated(_) = event {
                 break;
             }
+            _ => {}
         }
-
-        std::thread::sleep(std::time::Duration::from_secs(5));
     }
 
     // Step 2: Install packages using pip
@@ -251,21 +208,26 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
 
     let strategy = get_pytorch_install_strategy(shell).await;
     let mut pip_packages = vec![
+        "--upgrade", "pip",
+        "pypandoc_binary==1.15", "ffmpeg-python",
         "torch==2.9.0", "torchaudio==2.9.0",
-        "pyannote.audio==4.0.1", "pypandoc==1.15",
+        "pyannote.audio==4.0.1",
         "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1", "torchcodec==0.8.0"
     ];
+
     if strategy == PyTorchInstallStrategy::Cpu {
-        pip_packages.extend(vec!["--extra-index-url", "https://download.pytorch.org/whl/cpu"]);
+        pip_packages.push("--extra-index-url");
+        pip_packages.push("https://download.pytorch.org/whl/cpu");
     }
 
-    let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
+    let python_path = get_python_path()?;
+    let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
-    let (mut rx_pip, _child_pip) = shell.command(micromamba_path.to_str().unwrap())
+    // We use a direct command call here as `micromamba run` can be less stable for pip installs
+    let (mut rx_pip, _child_pip) = shell.command(python_path.to_str().unwrap())
         .args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")
-        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
         .spawn()?;
 
     let mut pip_output_lines = Vec::new();
