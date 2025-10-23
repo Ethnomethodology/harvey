@@ -991,16 +991,14 @@ export async function loadInitialTranscript(mediaFileEntry, transcriptPathToPrio
 
     if (transcriptToLoad) {
         try {
-            const pathToLoad = transcriptToLoad.path || transcriptPathToPrioritize;
-            await switchTranscript(pathToLoad);
+            await switchTranscript(transcriptToLoad.path);
         } catch (e) {
             console.error(`[TranscriptStore loadInitialTranscript] Failed to load prioritized transcript ${transcriptToLoad.path}:`, e);
             // Try to load the next available transcript if the prioritized one fails
             const remainingTranscripts = sortedTranscripts.filter(t => t.path !== transcriptToLoad.path);
             if (remainingTranscripts.length > 0) {
-                const fallbackPathToLoad = remainingTranscripts[0].path || '';
                 console.warn('[TranscriptStore loadInitialTranscript] Trying next available transcript.');
-                await switchTranscript(fallbackPathToLoad);
+                await switchTranscript(remainingTranscripts[0].path);
             } else {
                 console.error('[TranscriptStore loadInitialTranscript] No other transcripts available to load.');
                 transcriptStore.update(ts => ({ ...ts, isTranscriptLoading: false, transcriptErrorMessage: `Failed to load any transcript for ${mediaFileEntry.name}.` }));
@@ -1174,41 +1172,62 @@ listen('custom_transcription_job_completed', async (event) => {
         transcriptStore.update(ts => ({ ...ts, ...updatePayload }));
 
         if (status === 'done' && currentStore.selectedMediaFile?.path === jobFinishedPath) {
+            if (activePathToLoad) {
+                try {
+                    const service = await import('../services/projectService.js');
+                    if (service.loadTranscriptFile) {
+
+                        await service.loadTranscriptFile(activePathToLoad);
+                    } else {
+                        console.error('[TranscriptStore] loadTranscriptFile function not found in projectService.');
+                        updateProjectStoreState({ error: 'Internal error: Transcript loading service unavailable.'});
+                    }
+                } catch (e) {
+                    console.error(`[TranscriptStore] Error auto-loading transcript ${activePathToLoad}:`, e);
+                    updateProjectStoreState({ error: `Failed to load transcript: ${e.message || e}`});
+                }
+            }
+
             try {
                 const service = await import('../services/projectService.js');
-                if (service.refreshProjectFiles) {
+                if (service.refreshProjectFiles && currentStore.selectedMediaFile?.path) {
                     console.log('[TranscriptStore] Refreshing project files to update transcript associations.');
-                    await service.refreshProjectFiles();
+                    await service.refreshProjectFiles(currentStore.selectedMediaFile.path);
 
                     const latestProjectStore = get(projectMainStore);
                     const allFiles = latestProjectStore.files;
                     const mediaPath = jobFinishedPath;
 
                     let updatedMediaFile = null;
+
                     function findMediaNodeByPath(nodes, path) {
                         if (!Array.isArray(nodes)) return null;
                         for (const node of nodes) {
-                            if (node.path === path && (node.file_type === 'media' || node.file_type === 'directory_media_stem') && !node.is_directory) {
+                            if (node.path === path && node.file_type === 'media' && !node.is_directory) {
                                 return node;
                             }
                             if (node.children && node.children.length > 0) {
                                 const found = findMediaNodeByPath(node.children, path);
-                                if (found) return found;
+                                if (found) {
+                                    return found;
+                                }
                             }
                         }
                         return null;
                     }
+
                     updatedMediaFile = findMediaNodeByPath(allFiles, mediaPath);
 
                     if (updatedMediaFile) {
-                        selectMedia(updatedMediaFile, activePathToLoad);
+
+                        const { emit } = await import('@tauri-apps/api/event');
+                        emit('select_media_in_transcription_tab', { mediaPath: updatedMediaFile.path });
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after refresh for path: ${mediaPath}`);
                     }
                 }
             } catch (e) {
-                console.error('[TranscriptStore] Error refreshing project and selecting media after job completion:', e);
-                updateProjectStoreState({ error: `Failed to refresh project: ${e.message || e}` });
+                console.error('[TranscriptStore] Error refreshing project files after job completion:', e);
             }
         }
 
@@ -1305,7 +1324,7 @@ listen('translation_job_completed', async (event) => {
 
                     if (updatedMediaFile) {
                         console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
-                        selectMedia(updatedMediaFile);
+                        selectMedia(updatedMediaFile, newTranscriptPath);
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
                     }
