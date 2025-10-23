@@ -1324,7 +1324,7 @@ listen('translation_job_completed', async (event) => {
 
                     if (updatedMediaFile) {
                         console.log('[TranscriptStore] Re-selecting media after translation completion to update associated transcripts.', updatedMediaFile);
-                        selectMedia(updatedMediaFile);
+                        selectMedia(updatedMediaFile, newTranscriptPath);
                     } else {
                         console.warn(`[TranscriptStore] Could not find the updated media file in project store after translation refresh for path: ${mediaPath}`);
                     }
