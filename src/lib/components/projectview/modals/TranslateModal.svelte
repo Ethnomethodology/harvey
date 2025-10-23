@@ -9,6 +9,7 @@
 	import { transcriptStore, setRanTranslationInBackground, clearTranslationStatus } from '$lib/stores/transcriptStore.js';
 
 	export let availableTranscripts = [];
+	export let activeTranscriptPath = null;
 
 	const dispatch = createEventDispatcher();
 
@@ -40,7 +41,11 @@
 			value: t.relativePath,
 			label: t.name || t.relativePath
 		}));
-		if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
+
+		const activeTranscript = availableTranscripts.find(t => t.path === activeTranscriptPath);
+		if (activeTranscript) {
+			selectedTranscript = activeTranscript.relativePath;
+		} else if (!selectedTranscript || !availableTranscripts.some(t => t.relativePath === selectedTranscript)) {
 			selectedTranscript = availableTranscripts[0].relativePath;
 		}
 	} else {

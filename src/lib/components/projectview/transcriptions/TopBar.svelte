@@ -430,6 +430,7 @@
 
 <TranslateModal 
     availableTranscripts={transcriptsForModal}
+    activeTranscriptPath={$transcriptStore.currentTranscriptPath}
     on:confirm={async (e) => {
         console.log('Translation confirmed:', e.detail);
         await requestTranslation(e.detail.transcript.path, e.detail.model);
