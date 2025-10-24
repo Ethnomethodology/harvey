@@ -432,11 +432,18 @@ pub async fn check_python_libraries_installed<R: Runtime>(
         let python_path = get_python_path()?;
         let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
-        let packages = if target_triple == "aarch64-pc-windows-msvc" {
-            vec!["torch", "torchaudio", "torchcodec", "pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"]
+        let mut packages = vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"];
+
+        if target_triple == "aarch64-pc-windows-msvc" {
+            // ARM64 Windows doesn't have torchcodec, but does have torch/torchaudio
+            packages.extend(vec!["torch", "torchaudio"]);
+        } else if target_triple.contains("pc-windows") {
+            // x86_64 Windows has all of them
+            packages.extend(vec!["torch", "torchaudio", "torchcodec"]);
         } else {
-            vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "torchcodec", "pypandoc"]
-        };
+            // macOS and Linux
+            packages.extend(vec!["torch", "torchaudio", "torchcodec"]);
+        }
 
         for package in &packages {
             log::info!("Checking for package: {}", package);
@@ -447,7 +454,17 @@ pub async fn check_python_libraries_installed<R: Runtime>(
 
             let mut command = shell.command(python_path.to_str().unwrap());
 
-            if cfg!(target_os = "macos") {
+            if cfg!(target_os = "windows") {
+                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
+                let sidecars_path = resource_dir.join("sidecars");
+
+                if sidecars_path.exists() {
+                    let existing_path = std::env::var("PATH").unwrap_or_default();
+                    let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                    command = command.env("PATH", new_path.clone());
+                    log::info!("Temporarily setting PATH for verification: {}", new_path);
+                }
+            } else if cfg!(target_os = "macos") {
                 let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
                 let sidecars_path = resource_dir.join("sidecars");
                 
