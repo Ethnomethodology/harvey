@@ -184,7 +184,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         env_path.to_str().unwrap().to_string(),
         "python=3.12".to_string(),
         "pip".to_string(),
-        "pandoc".to_string(),
         "--override-channels".to_string(),
         "-c".to_string(),
         "conda-forge".to_string(),
@@ -300,6 +299,24 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     }
 
     emitter.emit("installation-log", LogPayload { message: "Successfully installed Python libraries.".into() }).unwrap();
+
+    // Step 3: Download pandoc binaries
+    emitter.emit("installation-log", LogPayload { message: "Downloading Pandoc binaries...".into() }).unwrap();
+    let python_path = get_python_path()?;
+    let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
+    let output = shell.command(python_path.to_str().unwrap())
+        .args(&pandoc_args)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
+        // This is a soft fail, so we don't return an error
+    } else {
+        emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
+    }
+
     emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
     emitter.emit("installation-finished", ()).unwrap();
     Ok(())
