@@ -487,10 +487,10 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
 
 
 
-    // --- Post-extraction adjustments for FFmpeg on Windows ARM64 ---
+    // --- Post-extraction adjustments for FFmpeg on Windows ---
 
 
-    if asset_name == "ffmpeg-win-arm64" {
+    if asset_name == "ffmpeg-win-arm64" || asset_name == "ffmpeg-windows-x86_64" {
 
 
         let bin_dir = dest_dir.join("bin");
