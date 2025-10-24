@@ -480,8 +480,12 @@ async fn run_whisper_cpp_sidecar<R: Runtime>(
         if let Ok(resource_dir) = app_handle.path().resource_dir() {
             let sidecars_path = resource_dir.join("sidecars");
             if sidecars_path.exists() {
+                let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
+                    .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?
+                    .to_string_lossy()
+                    .to_string();
                 let existing_path = std::env::var("PATH").unwrap_or_default();
-                let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                let new_path = format!("{};{}", cleaned_sidecars_path, existing_path);
                 command = command.env("PATH", new_path.clone());
                 info!("[Transcription][LocalRun][{}] Setting PATH for whisper-cli: {}", job_id, new_path);
             }

@@ -317,22 +317,14 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
 #[command] pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
     log::info!("---- locate_in_finder: Start. Path='{}' ----", project_xml_path);
 
-    let mut cleaned_path = project_xml_path;
-
-    // On Windows, remove the \\?\ prefix if present
-    if cfg!(windows) && cleaned_path.starts_with("\\\\?\\") {
-        cleaned_path = cleaned_path.trim_start_matches("\\\\?\\").to_string();
-        log::info!(r"locate_in_finder: Removed \\?\\ prefix. Cleaned path: '{}'", cleaned_path);
-    }
-
-    let path = PathBuf::from(cleaned_path);
+    let path = PathBuf::from(project_xml_path);
     if !path.exists() {
         log::error!("locate_in_finder: Error - Project file not found.");
         return Err("Project file not found.".into());
     }
     let dir_to_open = path.parent().ok_or("Could not get parent directory from path.")?;
     log::info!("locate_in_finder: Directory to open: {:?}", dir_to_open);
-    let absolute_dir_path = fs::canonicalize(dir_to_open)?;
+    let absolute_dir_path = dunce::canonicalize(dir_to_open)?;
 
     #[cfg(target_os = "windows")]
     {

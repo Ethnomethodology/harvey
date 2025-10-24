@@ -425,12 +425,12 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
     Ok(())
 }
 
+
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
     log::info!("Checking for FFmpeg...");
 
     // Step 1: Check for ffmpeg in the sidecar directory.
-    // This is the preferred location as it's bundled with the app.
     if let Ok(resource_dir) = app.path().resource_dir() {
         let ffmpeg_exe_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
         let sidecar_ffmpeg_path = resource_dir.join("sidecars").join(ffmpeg_exe_name);
@@ -445,7 +445,6 @@ pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, 
     }
 
     // Step 2: Fallback to checking the system PATH.
-    // This is for users who might have their own ffmpeg installation.
     log::info!("Checking for FFmpeg in system PATH.");
     let shell = app.shell();
     let command = if cfg!(windows) { "where" } else { "which" };
@@ -501,8 +500,12 @@ pub async fn check_python_libraries_installed<R: Runtime>(
                 let sidecars_path = resource_dir.join("sidecars");
 
                 if sidecars_path.exists() {
+                    let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
+                        .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?
+                        .to_string_lossy()
+                        .to_string();
                     let existing_path = std::env::var("PATH").unwrap_or_default();
-                    let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                    let new_path = format!("{};{}", cleaned_sidecars_path, existing_path);
                     command = command.env("PATH", new_path.clone());
                     log::info!("Temporarily setting PATH for verification: {}", new_path);
                 }
