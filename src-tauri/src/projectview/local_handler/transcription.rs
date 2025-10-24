@@ -470,7 +470,25 @@ async fn run_whisper_cpp_sidecar<R: Runtime>(
     debug!("[Transcription][LocalRun][{}] Running sidecar '{}' with args: {:?}", job_id, sidecar_name, args);
 
     let shell_scope = app_handle.shell();
-    let (mut rx, child) = shell_scope.sidecar(sidecar_name)?.args(args).spawn()
+
+    let mut command = shell_scope.sidecar(sidecar_name)?;
+    command = command.args(args);
+
+    // On Windows, ffmpeg.exe is in the sidecar dir, which whisper-cli needs to find.
+    // We must add the sidecar directory to the PATH for the child process.
+    if cfg!(target_os = "windows") {
+        if let Ok(resource_dir) = app_handle.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", sidecars_path.to_string_lossy(), existing_path);
+                command = command.env("PATH", new_path.clone());
+                info!("[Transcription][LocalRun][{}] Setting PATH for whisper-cli: {}", job_id, new_path);
+            }
+        }
+    }
+
+    let (mut rx, child) = command.spawn()
      .map_err(|e| {
          error!("Failed to spawn whisper-cli: {}. Check tauri.conf.json, binary paths, and permissions.", e);
          CommandError::from(format!("Failed to execute whisper-cli sidecar: {}. Ensure it's bundled and executable.", e))

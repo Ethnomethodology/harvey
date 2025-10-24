@@ -427,11 +427,36 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
-    // Fallback to checking the system PATH
-    log::info!("Checking for FFmpeg in system PATH or sidecar directory.");
+    log::info!("Checking for FFmpeg...");
+
+    // Step 1: Check for ffmpeg in the sidecar directory.
+    // This is the preferred location as it's bundled with the app.
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let ffmpeg_exe_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+        let sidecar_ffmpeg_path = resource_dir.join("sidecars").join(ffmpeg_exe_name);
+
+        if sidecar_ffmpeg_path.exists() {
+            log::info!("Found FFmpeg in sidecar directory: {:?}", sidecar_ffmpeg_path);
+            return Ok(true);
+        }
+        log::info!("FFmpeg not found in sidecar directory. Will check system PATH.");
+    } else {
+        log::warn!("Could not resolve resource directory. Will check system PATH.");
+    }
+
+    // Step 2: Fallback to checking the system PATH.
+    // This is for users who might have their own ffmpeg installation.
+    log::info!("Checking for FFmpeg in system PATH.");
     let shell = app.shell();
     let command = if cfg!(windows) { "where" } else { "which" };
     let output = shell.command(command).arg("ffmpeg").output().await?;
+
+    if output.status.success() {
+        log::info!("Found FFmpeg in system PATH.");
+    } else {
+        log::info!("FFmpeg not found in system PATH.");
+    }
+
     Ok(output.status.success())
 }
 
