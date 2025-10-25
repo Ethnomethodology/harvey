@@ -15,7 +15,6 @@ use std::{
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{PathBuf, Path},
-    process::Command,
     sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 use tauri::{AppHandle, command, Emitter, State, Manager, Runtime};
