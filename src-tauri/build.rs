@@ -121,22 +121,16 @@ fn bundle_micromamba() -> Result<()> {
         "aarch64-apple-darwin" => "osx-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win-64",
         "x86_64-unknown-linux-gnu" => "linux-64",
-        "aarch64-pc-windows-msvc" => "win-64",
+        // For Windows ARM64, we download the x64 binary and run it via emulation.
+        "aarch64-pc-windows-msvc" => "win-64", 
         _ => anyhow::bail!("Unsupported target triple for Micromamba: {}", target_triple),
     };
 
     let generic_binary_name = "micromamba";
     let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
 
-    // For Windows ARM64, we download the x64 binary and run it via emulation.
-    // The filename must reflect the binary's actual architecture, not the target's.
-    let binary_target_triple = if target_triple == "aarch64-pc-windows-msvc" {
-        "x86_64-pc-windows-msvc"
-    } else {
-        &target_triple
-    };
-
-    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, binary_target_triple, exe_suffix));
+    // The binary is named after the target triple, which is what Tauri expects.
+    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, target_triple, exe_suffix));
 
     if platform_path.exists() {
         println!("cargo:info=Micromamba for {} already exists. Skipping download.", target_triple);
@@ -162,8 +156,9 @@ fn bundle_micromamba() -> Result<()> {
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
+        // The binary inside the tarball is named "micromamba.exe" on Windows
         if let Some(file_name) = path.file_name() {
-            if file_name.to_string_lossy() == "micromamba" {
+            if file_name.to_string_lossy().starts_with("micromamba") {
                 let mut decompressed_bytes = Vec::new();
                 entry.read_to_end(&mut decompressed_bytes)?;
                 fs::write(&platform_path, &decompressed_bytes)?;
