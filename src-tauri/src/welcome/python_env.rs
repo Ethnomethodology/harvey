@@ -361,10 +361,10 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
 
     let pip_exe = get_python_path()?; // This now points to the python in the venv
 
-    // For Windows ARM64, install a specific torch version and exclude unavailable packages
+    // For Windows ARM64, we let pip resolve the correct versions of dependencies.
+    // This is crucial for finding compatible pre-compiled wheels for torch, torchaudio, etc.
     let pip_packages = vec![
-        "pyannote.audio", "pypandoc==1.15",
-        "transformers==4.57.1", "sacremoses==0.1.1", "sentencepiece==0.2.1"
+        "pyannote.audio", "pypandoc==1.15"
     ];
 
     let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
