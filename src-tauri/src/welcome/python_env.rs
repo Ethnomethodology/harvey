@@ -356,10 +356,35 @@ async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, she
         return Err(CommandError::Message(format!("Failed to create venv: {}", stderr)));
     }
 
-    // Step 3: Install packages using pip from the new venv
-    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
-
+    // Step 3: Install pandas wheel directly to avoid build-from-source issues.
+    emitter.emit("installation-log", LogPayload { message: "Installing pandas dependency...".into() }).unwrap();
     let pip_exe = get_python_path()?; // This now points to the python in the venv
+    let pandas_wheel_url = "https://files.pythonhosted.org/packages/a7/9e/c5349b1a77a7a24206c0b61623544a42823a1e9a565a5382835158673752/pandas-2.2.2-cp312-cp312-win_arm64.whl";
+    let pandas_args = ["-m", "pip", "install", pandas_wheel_url];
+
+    let (mut rx_pandas, _child_pandas) = shell.command(pip_exe.to_str().unwrap())
+        .args(&pandas_args)
+        .spawn()?;
+
+    while let Some(event) = rx_pandas.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line_str = String::from_utf8_lossy(&line).to_string();
+                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
+            },
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                if payload.code != Some(0) {
+                    return Err(CommandError::Message("Failed to install pandas wheel.".into()));
+                }
+                break;
+            }
+            _ => {}
+        }
+    }
+    emitter.emit("installation-log", LogPayload { message: "Pandas installed successfully.".into() }).unwrap();
+
+    // Step 4: Install the remaining packages using pip from the new venv
+    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
 
     // For Windows ARM64, we let pip resolve the correct versions of dependencies.
     // This is crucial for finding compatible pre-compiled wheels for torch, torchaudio, etc.
