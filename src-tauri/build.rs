@@ -55,10 +55,7 @@ fn main() -> Result<()> {
         let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
         download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
 
-        if target_platform == "windows-arm64" {
-            println!("cargo:warning=Downloading ffmpeg for windows-arm64...");
-            download_and_unzip("ffmpeg-win-arm64", &sidecars_dir)?;
-        } else if target_platform == "windows-x86_64" {
+        if target_platform == "windows-x86_64" {
             println!("cargo:warning=Downloading ffmpeg for windows-x86_64...");
             download_and_unzip("ffmpeg-windows-x86_64", &sidecars_dir)?;
         }
@@ -191,7 +188,8 @@ fn get_target_platform_string() -> Result<String> {
         "x86_64-apple-darwin" => "macos-x86_64",
         "aarch64-apple-darwin" => "macos-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "windows-x86_64",
-        "aarch64-pc-windows-msvc" => "windows-arm64",
+        // For Windows ARM64, we use the x64 sidecars and run them via emulation.
+        "aarch64-pc-windows-msvc" => "windows-x86_64",
         "x86_64-unknown-linux-gnu" => "linux-x86_64",
         "aarch64-unknown-linux-gnu" => "linux-arm64",
         _ => anyhow::bail!("Unsupported target triple: {}", target_triple),
