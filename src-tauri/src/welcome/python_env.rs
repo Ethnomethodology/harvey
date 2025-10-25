@@ -17,8 +17,17 @@ pub fn get_env_path() -> Result<PathBuf, CommandError> {
 
 fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
     let target_triple = tauri::utils::platform::target_triple().unwrap();
-    let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
-    let binary_name = format!("micromamba-{}{}", target_triple, exe_suffix);
+
+    // On Windows ARM64, the app runs natively, but we use an emulated x64 micromamba.
+    // The binary is named after its actual architecture, so we must look for that name.
+    let binary_target_triple = if target_triple == "aarch64-pc-windows-msvc" {
+        "x86_64-pc-windows-msvc"
+    } else {
+        &target_triple
+    };
+
+    let exe_suffix = if binary_target_triple.contains("windows") { ".exe" } else { "" };
+    let binary_name = format!("micromamba-{}{}", binary_target_triple, exe_suffix);
     let resource_path = PathBuf::from("binaries").join(&binary_name);
 
     let resource_micromamba_path = app.path()

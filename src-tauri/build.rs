@@ -130,7 +130,16 @@ fn bundle_micromamba() -> Result<()> {
 
     let generic_binary_name = "micromamba";
     let exe_suffix = if target_triple.contains("windows") { ".exe" } else { "" };
-    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, target_triple, exe_suffix));
+
+    // For Windows ARM64, we download the x64 binary and run it via emulation.
+    // The filename must reflect the binary's actual architecture, not the target's.
+    let binary_target_triple = if target_triple == "aarch64-pc-windows-msvc" {
+        "x86_64-pc-windows-msvc"
+    } else {
+        &target_triple
+    };
+
+    let platform_path = binaries_dir.join(format!("{}-{}{}", generic_binary_name, binary_target_triple, exe_suffix));
 
     if platform_path.exists() {
         println!("cargo:info=Micromamba for {} already exists. Skipping download.", target_triple);
