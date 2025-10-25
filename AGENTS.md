@@ -40,14 +40,6 @@ Core dependencies are installed automatically by the application on first launch
 
 No manual Python setup is required by the user for most platforms, as the application handles the creation and management of this environment using a bundled version of Micromamba.
 
-### Special Case: Windows ARM64
-
-Due to the lack of Micromamba support for Windows on ARM64, the setup for this platform is different:
-
-1.  **Python Environment**: The build process (`build.rs`) automatically downloads and bundles a standalone version of Python from `astral-sh/python-build-standalone`. At runtime, the application creates a standard virtual environment from this bundled Python.
-2.  **FFmpeg**: This dependency is **not** bundled. The user must manually download and install FFmpeg from the official website and ensure that the `ffmpeg.exe` binary is available in their system's `PATH`. The application will detect if it's missing and prompt the user to install it.
-3.  **Python Libraries**: The list of Python libraries for Windows ARM64 is slightly different. Notably, it uses `pypandoc_binary` instead of `pypandoc`, and the `torch` libraries are installed without version constraints to pull the correct platform-specific wheels. This is all handled automatically by the application.
-
 ## 3. Building the Application
 
 After installing the dependencies inside the build environment, you can build the Tauri application:

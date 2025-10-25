@@ -54,12 +54,7 @@ fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, Comman
 
 pub fn get_python_path() -> Result<PathBuf, CommandError> {
     let env_path = get_env_path()?;
-    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
-
-    if target_triple == "aarch64-pc-windows-msvc" {
-        // For standalone python, the structure is different
-        Ok(env_path.join("Scripts").join("python.exe"))
-    } else if cfg!(windows) {
+    if cfg!(windows) {
         // Micromamba on windows
         Ok(env_path.join("python.exe"))
     } else {
@@ -117,13 +112,7 @@ async fn get_pytorch_install_strategy<R: Runtime>(shell: &Shell<R>) -> PyTorchIn
 // --- Main Installation Logic ---
 
 pub async fn install_python_libraries<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
-    let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
-
-    if target_triple == "aarch64-pc-windows-msvc" {
-        install_python_libraries_standalone(app, shell).await
-    } else {
-        install_python_libraries_micromamba(app, shell).await
-    }
+    install_python_libraries_micromamba(app, shell).await
 }
 
 
@@ -322,139 +311,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     Ok(())
 }
 
-async fn install_python_libraries_standalone<R: Runtime>(app: &AppHandle<R>, shell: &Shell<R>) -> Result<(), CommandError> {
-    let emitter = app.clone();
-    emitter.emit("installation-log", LogPayload { message: "Starting installation...".into() }).unwrap();
-
-    let env_path = get_env_path()?;
-    if env_path.exists() {
-        emitter.emit("installation-log", LogPayload { message: "Removing existing environment...".into() }).unwrap();
-        fs::remove_dir_all(&env_path).map_err(|e| CommandError::Message(format!("Failed to remove old env: {}", e)))?;
-    }
-
-    // Step 1: Locate the bundled Python executable from build step
-    let bundled_python_dir = app.path()
-        .resolve("python", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::Message(format!("Failed to resolve bundled python path: {}", e)))?;
-    let python_exe = bundled_python_dir.join("python.exe");
-
-    if !python_exe.exists() {
-        return Err(CommandError::Message("Bundled python.exe not found".to_string()));
-    }
-    emitter.emit("installation-log", LogPayload { message: "Located bundled Python.".into() }).unwrap();
-
-    // Step 2: Create a virtual environment using the bundled Python
-    emitter.emit("installation-log", LogPayload { message: "Creating virtual environment...".into() }).unwrap();
-    let venv_args = ["-m", "venv", env_path.to_str().unwrap()];
-    let output = shell.command(python_exe.to_str().unwrap())
-        .args(&venv_args)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(CommandError::Message(format!("Failed to create venv: {}", stderr)));
-    }
-
-    // Step 3: Install pandas wheel directly to avoid build-from-source issues.
-    emitter.emit("installation-log", LogPayload { message: "Installing pandas dependency...".into() }).unwrap();
-    let pip_exe = get_python_path()?; // This now points to the python in the venv
-    let pandas_wheel_url = "https://files.pythonhosted.org/packages/a7/9e/c5349b1a77a7a24206c0b61623544a42823a1e9a565a5382835158673752/pandas-2.2.2-cp312-cp312-win_arm64.whl";
-    let pandas_args = ["-m", "pip", "install", pandas_wheel_url];
-
-    let (mut rx_pandas, _child_pandas) = shell.command(pip_exe.to_str().unwrap())
-        .args(&pandas_args)
-        .spawn()?;
-
-    while let Some(event) = rx_pandas.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
-            },
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                if payload.code != Some(0) {
-                    return Err(CommandError::Message("Failed to install pandas wheel.".into()));
-                }
-                break;
-            }
-            _ => {}
-        }
-    }
-    emitter.emit("installation-log", LogPayload { message: "Pandas installed successfully.".into() }).unwrap();
-
-    // Step 4: Install the remaining packages using pip from the new venv
-    emitter.emit("installation-log", LogPayload { message: "Installing Python libraries...".into() }).unwrap();
-
-    // For Windows ARM64, we let pip resolve the correct versions of dependencies.
-    // This is crucial for finding compatible pre-compiled wheels for torch, torchaudio, etc.
-    let pip_packages = vec![
-        "pyannote.audio", "pypandoc==1.15"
-    ];
-
-    let mut pip_args = vec!["-m", "pip", "install", "--no-cache-dir"];
-    pip_args.extend(pip_packages.iter());
-
-    let mut command = shell.command(pip_exe.to_str().unwrap());
-
-    let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-    let sidecars_path = resource_dir.join("sidecars");
-
-    if sidecars_path.exists() {
-        let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
-            .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?
-            .to_string_lossy()
-            .to_string();
-
-        let existing_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{};{}", cleaned_sidecars_path, existing_path);
-        command = command.env("PATH", new_path.clone());
-        log::info!("Temporarily setting PATH to: {}", new_path);
-    }
-
-    let (mut rx_pip, _child_pip) = command
-        .args(&pip_args)
-        .env("PYTHONUNBUFFERED", "1")
-        .spawn()?;
-
-    while let Some(event) = rx_pip.recv().await {
-        match event {
-            tauri_plugin_shell::process::CommandEvent::Stdout(line) | tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                let line_str = String::from_utf8_lossy(&line).to_string();
-                emitter.emit("installation-log", LogPayload { message: line_str }).unwrap();
-            },
-            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                if payload.code != Some(0) {
-                    return Err(CommandError::Message("Failed to install pip packages.".into()));
-                }
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Step 4: Download pandoc binaries
-    emitter.emit("installation-log", LogPayload { message: "Downloading Pandoc binaries...".into() }).unwrap();
-    let pandoc_args = ["-c", "import pypandoc; pypandoc.download_pandoc()"];
-    let output = shell.command(pip_exe.to_str().unwrap())
-        .args(&pandoc_args)
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
-        // This is a soft fail, so we don't return an error
-    } else {
-        emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
-    }
-
-
-    emitter.emit("installation-log", LogPayload { message: "Installation complete.".into() }).unwrap();
-    emitter.emit("installation-finished", ()).unwrap();
-    Ok(())
-}
-
 
 #[tauri::command]
 pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, CommandError> {
@@ -501,14 +357,10 @@ pub async fn check_python_libraries_installed<R: Runtime>(
         }
 
         let python_path = get_python_path()?;
-        let target_triple = tauri::utils::platform::target_triple().unwrap_or_default();
 
         let mut packages = vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"];
 
-        if target_triple == "aarch64-pc-windows-msvc" {
-            // ARM64 Windows doesn't have torchcodec, but does have torch/torchaudio
-            packages.extend(vec!["torch", "torchaudio"]);
-        } else if target_triple.contains("pc-windows") {
+        if cfg!(windows) {
             // x86_64 Windows has all of them
             packages.extend(vec!["torch", "torchaudio", "torchcodec"]);
         } else {
