@@ -15,51 +15,7 @@ pub fn get_env_path() -> Result<PathBuf, CommandError> {
     get_config_dir().map(|path| path.join(ENV_DIR))
 }
 
-fn get_micromamba_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, CommandError> {
-    let target_triple = tauri::utils::platform::target_triple().unwrap();
 
-    // On Windows ARM64, the app runs natively, but we use an emulated x64 micromamba.
-    // The binary is named after its actual architecture, so we must look for that name.
-    let binary_target_triple = if target_triple == "aarch64-pc-windows-msvc" {
-        "x86_64-pc-windows-msvc"
-    } else {
-        &target_triple
-    };
-
-    let exe_suffix = if binary_target_triple.contains("windows") { ".exe" } else { "" };
-    let binary_name = format!("micromamba-{}{}", binary_target_triple, exe_suffix);
-    let resource_path = PathBuf::from("binaries").join(&binary_name);
-
-    let resource_micromamba_path = app.path()
-        .resolve(&resource_path, tauri::path::BaseDirectory::Resource)
-        .map_err(|e| CommandError::Message(format!("Failed to resolve micromamba resource path: {}", e)))?;
-
-    let app_cache_dir = app.path().app_cache_dir()
-        .map_err(|e| CommandError::Message(format!("App cache directory not found: {}", e)))?;
-
-    if !app_cache_dir.exists() {
-        fs::create_dir_all(&app_cache_dir)
-            .map_err(|e| CommandError::Message(format!("Failed to create app cache directory: {}", e)))?;
-    }
-
-    let dest_binary_name = format!("micromamba{}", exe_suffix);
-    let dest_path = app_cache_dir.join(dest_binary_name);
-
-    if !dest_path.exists() {
-        log::info!("Copying micromamba from {:?} to {:?}", &resource_micromamba_path, &dest_path);
-
-        #[cfg(target_os = "windows")]
-        let cleaned_resource_micromamba_path = dunce::canonicalize(&resource_micromamba_path)
-            .map_err(|e| CommandError::Message(format!("Failed to canonicalize resource micromamba path: {}", e)))?;
-        #[cfg(not(target_os = "windows"))]
-        let cleaned_resource_micromamba_path = resource_micromamba_path;
-
-        fs::copy(&cleaned_resource_micromamba_path, &dest_path)
-            .map_err(|e| CommandError::Message(format!("Failed to copy micromamba: {}", e)))?;
-    }
-
-    Ok(dest_path)
-}
 
 pub fn get_python_path() -> Result<PathBuf, CommandError> {
     let env_path = get_env_path()?;
@@ -138,17 +94,14 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     }
 
     let config_dir = get_config_dir()?;
-    // Ensure the config directory exists before micromamba tries to use it
     fs::create_dir_all(&config_dir)
         .map_err(|e| CommandError::Message(format!("Failed to create config directory: {}", e)))?;
 
-    let micromamba_path = get_micromamba_path(app)?;
-    log::info!("Using bundled micromamba at: {:?}", micromamba_path);
     emitter.emit("installation-log", LogPayload { message: "Found environment manager.".into() }).unwrap();
 
     // Clear micromamba cache to prevent issues with corrupted downloads
     emitter.emit("installation-log", LogPayload { message: "Clearing micromamba cache...".into() }).unwrap();
-    let (mut rx_clean, _child_clean) = shell.command(micromamba_path.to_str().unwrap())
+    let (mut rx_clean, _child_clean) = shell.sidecar("micromamba")?
         .args(&["clean", "--all", "-y"])
         .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
         .spawn()?;
@@ -170,7 +123,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     }
     emitter.emit("installation-log", LogPayload { message: "Micromamba cache cleared.".into() }).unwrap();
 
-    // Introduce a small delay to allow file system operations to settle
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     // Step 1: Create environment with Python and pip
@@ -201,7 +153,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         attempts += 1;
         emitter.emit("installation-log", LogPayload { message: format!("Attempt {} of {}: Creating Python environment...", attempts, max_attempts) }).unwrap();
 
-        let (mut rx, _child) = shell.command(micromamba_path.to_str().unwrap())
+        let (mut rx, _child) = shell.sidecar("micromamba")?
             .args(&create_args)
             .env("PYTHONUNBUFFERED", "1")
             .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
@@ -225,23 +177,21 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
                         let full_log = output_lines.join("\n");
                         let error_message = format!("Failed to create conda environment. Full log:\n{}", full_log);
                         emitter.emit("installation-log", LogPayload { message: error_message.clone() }).unwrap();
-                        // If it's the last attempt, return the error
                         if attempts == max_attempts {
                             return Err(CommandError::Message(error_message));
                         }
-                        // Otherwise, log and retry
                         log::warn!("Micromamba create failed, retrying...");
-                        break; // Break from inner loop to retry outer loop
+                        break;
                     } else {
                         success = true;
-                        break; // Break from inner loop, command succeeded
+                        break;
                     }
                 }
                 _ => {}
             }
         }
-        if success { break; } // Break from outer loop if command succeeded
-        std::thread::sleep(std::time::Duration::from_secs(5)); // Wait before retrying
+        if success { break; }
+        std::thread::sleep(std::time::Duration::from_secs(5));
     }
 
     if !success {
@@ -264,7 +214,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
-    let (mut rx_pip, _child_pip) = shell.command(micromamba_path.to_str().unwrap())
+    let (mut rx_pip, _child_pip) = shell.sidecar("micromamba")?
         .args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")
         .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
@@ -310,7 +260,6 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         emitter.emit("installation-log", LogPayload { message: format!("Failed to download pandoc: {}", stderr) }).unwrap();
-        // This is a soft fail, so we don't return an error
     } else {
         emitter.emit("installation-log", LogPayload { message: "Pandoc downloaded successfully.".into() }).unwrap();
     }
