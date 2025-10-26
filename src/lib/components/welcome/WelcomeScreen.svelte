@@ -152,9 +152,6 @@
         About
       </a>
     </nav>
-    <div class="mt-auto text-xs text-gray-500 truncate">
-      Status: Ready
-    </div>
   </div>
 
   <!-- Main Content -->
