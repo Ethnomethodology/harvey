@@ -40,7 +40,7 @@
     import { fetchAllTags } from '$lib/stores/tagStore.js';
     import { transcriptStore, setRanInBackground, setRanTranslationInBackground, toggleTranscribeModal, selectMedia as selectMediaStoreAction, clearTranscriptState, setDiarizationPreference, setSelectedModel, setSelectedLanguage, setTranslateToEnglish, updateSpeakerConfig, setTranslationStatus, toggleTranslateModal, clearPendingTranscriptData } from '$lib/stores/transcriptStore.js';
     import { message, confirm } from '@tauri-apps/plugin-dialog';
-    import { getCurrentWindow } from '@tauri-apps/api/window';
+    import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
     import { configStatus } from '$lib/stores/configStatusStore.js';
 
@@ -374,6 +374,9 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 		}
 
 		if (canProceed) {
+			const appWindow = getCurrentWindow();
+			await appWindow.unmaximize();
+			await appWindow.setSize(new PhysicalSize(800, 600));
 			await goto('/');
 		}
 		handlingCloseRequest = false;
