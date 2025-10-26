@@ -21,7 +21,7 @@ pub struct ConfigStatus {
 
 #[tauri::command]
 pub async fn check_config_status<R: Runtime>(app_handle: AppHandle<R>) -> Result<ConfigStatus, CommandError> {
-    // let python_libs = check_python_libraries_installed(app_handle.clone()).await.unwrap_or(false);
+    let python_libs = check_python_libraries_installed(app_handle.clone()).await.unwrap_or(false);
     let hf_token = check_hf_auth_status(app_handle.clone()).unwrap_or(false);
     let transcription_models = !get_downloaded_models().await?.is_empty();
     let diarization_model = check_diarization_model_access(app_handle.clone()).await.unwrap_or(false);
