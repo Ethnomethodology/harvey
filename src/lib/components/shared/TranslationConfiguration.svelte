@@ -3,6 +3,7 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
+	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
 	import {
 		downloadTranslationModel,
 		deleteTranslationModel,
@@ -193,10 +194,14 @@
 	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
 		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Helsinki-NLP models</a> for offline translation. To translate transcripts, you must first download one of the available models.
 	</p>
-
-	<div class="flex-grow space-y-3">
-		<div class="pt-4 space-y-3">
-			<div class="flex space-x-4 mb-4">
+	{#if !$arePythonLibsInstalled}
+		<p class="text-orange-600 text-sm">
+			Please install the required Python libraries first to enable model downloads.
+		</p>
+	{:else}
+		<div class="flex-grow space-y-3">
+			<div class="pt-4 space-y-3">
+				<div class="flex space-x-4 mb-4">
 				<label class="inline-flex items-center">
 					<input type="radio" class="form-radio" name="translationOption" value="selectLanguages" bind:group={selectedOption} on:change={handleOptionChange}>
 					<span class="ml-2 text-gray-700">Select Languages</span>
@@ -274,7 +279,8 @@
 									{/each}
 								</ul>
 							</div>
-	</div>
+		</div>
+	{/if}
 </div>
 
 <style lang="postcss">
