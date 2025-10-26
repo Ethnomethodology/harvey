@@ -59,7 +59,7 @@
 		aria-labelledby="header-modal-title"
 	>
 		<div
-			class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col text-gray-800 dark:text-gray-200"
+			class="bg-white dark:bg-surface-2 p-6 rounded-lg shadow-xl w-full max-w-2xl m-4 flex flex-col text-gray-800 dark:text-gray-200"
 			on:click|stopPropagation
 		>
 			<h2 id="header-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">
