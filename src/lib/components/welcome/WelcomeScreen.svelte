@@ -19,7 +19,6 @@
   // --- Reactive State Variables ---
   let recentProjects = [];
   let isLoading = true;
-  let statusMessage = '';
   let openMenuProjectPath = null;
   let isRenameModalOpen = false;
   let projectToRename = null; // This will hold the *object* to rename
@@ -29,7 +28,6 @@
 
   // --- State Setter Functions (Passed down to actions.js) ---
   const setRecentProjects = (projects) => { recentProjects = projects; };
-  const setStatusMessage = (msg) => { statusMessage = msg; };
   const setIsLoading = (bool) => { isLoading = bool; };
   const setOpenMenu = (path) => { openMenuProjectPath = path; };
   // This function is now passed to handleMenuAction to update the local state
@@ -40,7 +38,7 @@
 
   // --- Lifecycle ---
   onMount(async () => {
-    await loadProjects({ setRecentProjects, setStatusMessage, setIsLoading });
+    await loadProjects({ setRecentProjects, setIsLoading });
     document.addEventListener('click', handleClickOutside);
   });
 
@@ -69,24 +67,23 @@
   // --- Handlers for Button Clicks ---
   async function onCreateProject() {
     // Pass the state setters
-    await handleCreateProject({ setStatusMessage, setRecentProjects, setIsLoading });
+    await handleCreateProject({ setRecentProjects, setIsLoading });
   }
 
   async function onOpenProject() {
      // Pass the state setters
-    await handleOpenProject({ setStatusMessage, setRecentProjects, setIsLoading });
+    await handleOpenProject({ setRecentProjects, setIsLoading });
   }
 
   async function onOpenRecent(project) {
      // Pass the state setters
-    await handleOpenRecent(project, { setStatusMessage, setRecentProjects, setIsLoading });
+    await handleOpenRecent(project, { setRecentProjects, setIsLoading });
   }
 
   // Renamed handler for clarity
   async function onDispatchMenuAction(action, project) {
     // Call the action handler, passing our local state setters
     await handleMenuAction(action, project, {
-      setStatusMessage,
       setRecentProjects,
       setOpenMenu,
       setProjectToRename: updateProjectToRename, // Pass the setter function
@@ -98,7 +95,7 @@
   // Renamed handler for clarity
   async function onConfirmRename(event) {
     // Pass the state setters
-    await handleRenameConfirm(event, { setStatusMessage, setRecentProjects, setIsLoading });
+    await handleRenameConfirm(event, { setRecentProjects, setIsLoading });
     // Close modal after confirm action is processed
     isRenameModalOpen = false;
     projectToRename = null;
@@ -107,7 +104,7 @@
   // Renamed handler for clarity
   function onCancelRename() {
     // Pass the state setter
-    handleRenameCancel({ setStatusMessage });
+    handleRenameCancel();
     // Close modal on cancel
     isRenameModalOpen = false;
     projectToRename = null;
@@ -155,8 +152,8 @@
         About
       </a>
     </nav>
-    <div class="mt-auto text-xs text-gray-500 truncate" title={statusMessage}>
-      Status: {statusMessage || 'Ready'}
+    <div class="mt-auto text-xs text-gray-500 truncate">
+      Status: Ready
     </div>
   </div>
 
