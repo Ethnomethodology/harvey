@@ -79,6 +79,7 @@
 	let headerConfirmationData = {};
     let unlistenTranscriptionComplete = null;
     let unlistenSelectMedia = null;
+    let unlistenCloseRequested = null;
 
 	// Transcription configuration data
 	let downloadedModelsList = [];
@@ -116,7 +117,8 @@ async function onConfirmTranscriptionStart(event) {
 $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus.hf_token_present || !$configStatus.transcription_models_downloaded || !$configStatus.diarization_model_downloaded || !$configStatus.translation_models_downloaded;
 
 	onMount(async () => {
-        appWindow = getCurrentWindow();
+		const appWindow = getCurrentWindow();
+		await appWindow.maximize();
 		await loadTranscriptionConfigData(); // Load model/cloud config
         await updateConfigStatus(); // Update config status on mount
 
@@ -167,6 +169,10 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             }
         });
 
+		unlistenCloseRequested = await appWindow.onCloseRequested(async (event) => {
+			event.preventDefault();
+			await handleCloseProject();
+		});
 	});
 
 	onDestroy(() => {
@@ -177,6 +183,9 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
         if (unlistenSelectMedia) {
             unlistenSelectMedia();
         }
+		if (unlistenCloseRequested) {
+			unlistenCloseRequested();
+		}
 		window.removeEventListener('keydown', handleGlobalKeys);
         if (closeImportMenuListener) { document.removeEventListener('click', closeImportMenuListener, { capture: true }); closeImportMenuListener = null; }
 	});

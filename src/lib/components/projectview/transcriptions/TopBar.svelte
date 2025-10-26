@@ -409,13 +409,6 @@
 		 <button on:click="{cycleThemePreference}" class="p-1.5 rounded-full border-0 bg-gray-100 text-gray-700 dark:bg-surface-2 dark:text-gray-300 hover:bg-blue-100 dark:hover:bg-accent-background-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors" title="{themeTitle}">
 			{@html themeIconHtml}
 		 </button>
-         <button class="ui-button-icon flex items-center space-x-0.5 hover-scale-effect" on:click={() => dispatch('close')} title="Close Project"
->
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        <span class="text-xs">Close</span>
-    </button>
 	</div>
 </div>
 
