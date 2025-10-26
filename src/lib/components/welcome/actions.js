@@ -1,24 +1,13 @@
 // src/lib/components/welcome/actions.js
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { open as openDialog, save as saveDialog, ask } from '@tauri-apps/plugin-dialog';
 import { homeDir, basename, dirname } from '@tauri-apps/api/path';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { project as projectStore } from '$lib/stores/projectStore.js';
+import { goto } from '$app/navigation';
 
-// --- showWelcomeScreen --- (No changes)
 export async function showWelcomeScreen() {
-	const welcomeWindow = getCurrentWindow();
-	if (!welcomeWindow) { console.error("ACTION_ERROR: showWelcomeScreen could not get the current window handle."); return; }
-	try {
-		console.log("[WelcomeScreen] Attempting to show and focus window:", welcomeWindow.label);
-		const isVisible = await welcomeWindow.isVisible();
-		if (!isVisible) { await welcomeWindow.show(); console.log("[WelcomeScreen] Shown window:", welcomeWindow.label); } else { console.log("[WelcomeScreen] Window already visible:", welcomeWindow.label); }
-		await welcomeWindow.unminimize();
-		await welcomeWindow.setFocus();
-		console.log("[WelcomeScreen] Unminimized and focused window:", welcomeWindow.label);
-	} catch (error) { console.error("[WelcomeScreen] Error in showWelcomeScreen for window:", welcomeWindow.label, error); }
+	console.log("[WelcomeScreen] Navigating to home.");
+	await goto('/');
 }
 
 // --- loadProjects --- (No changes)
@@ -41,77 +30,23 @@ export async function loadProjects({ setRecentProjects, setStatusMessage, setIsL
 }
 
 
-// --- openProjectWindow --- (No changes)
-export async function openProjectWindow(project, { setRecentProjects, setStatusMessage, setIsLoading }) {
-  if (!project || !project.path || !project.name) { setStatusMessage('Error: Invalid project data provided for opening window.'); console.error('[ProjectWindow] Invalid project data:', project); return; }
-  setStatusMessage(`Opening project: ${project.name}...`);
-  console.log(`[ProjectWindow] --- Starting openProjectWindow for: ${project.name} (${project.path}) ---`);
-  const welcomeWindow = getCurrentWindow();
-  if (!welcomeWindow) { console.error("[ProjectWindow] ACTION_ERROR: Could not get welcome window handle."); setStatusMessage("Error: Could not find main application window."); return; }
-  console.log("[ProjectWindow] Welcome window handle obtained:", welcomeWindow.label);
-  let projectWindowHandle = null;
-  let listenerCleanupFunctions = [];
-  try {
-    console.log(`[ProjectWindow] Invoking 'open_project' for path: ${project.path}`);
-    await invoke('open_project', { projectXmlPath: project.path });
-    console.log("[ProjectWindow] Backend 'open_project' successful.");
-    const safePathForLabel = project.path.replace(/[^a-zA-Z0-9\-_\/:]/g, '_');
-    const windowLabel = `project-${safePathForLabel}`;
-    console.log(`[ProjectWindow] Generated window label: ${windowLabel}`);
-    console.log(`[ProjectWindow] Attempting to create/get window handle with label: ${windowLabel}`);
-    projectWindowHandle = new WebviewWindow(windowLabel, { url: `/projectview?xmlPath=${encodeURIComponent(project.path)}`, title: `Harvey`, width: 1000, height: 700, minWidth: 800, minHeight: 600, fullscreen: false, center: true });
-    console.log(`[ProjectWindow] Obtained window handle for ${windowLabel}.`);
-    const errorListenerCleanup = await projectWindowHandle.once('tauri://error', (e) => {
-      console.error(`[ProjectWindow] Tauri window error for ${windowLabel}:`, e.payload);
-      setStatusMessage(`Error opening project window: ${e.payload}`);
-      showWelcomeScreen().then(() => { loadProjects({ setRecentProjects, setStatusMessage, setIsLoading }); }).catch(showErr => console.error("[ProjectWindow] Error showing welcome screen after project window error:", showErr));
-    });
-    listenerCleanupFunctions.push(errorListenerCleanup);
-    const destroyListenerCleanup = await projectWindowHandle.once('tauri://destroyed', async () => {
-        console.log(`[ProjectWindow] Project window ${windowLabel} destroyed. Showing welcome screen and reloading projects...`);
-        try {
-            await showWelcomeScreen();
-            await loadProjects({ setRecentProjects, setStatusMessage, setIsLoading });
-            console.log("[ProjectWindow] Welcome screen projects reloaded after project close.");
-        } catch (err) { console.error("[ProjectWindow] Error showing welcome screen or reloading projects after project close:", err); await showWelcomeScreen().catch(showErr => console.error("[ProjectWindow] Fallback showWelcomeScreen error:", showErr)); }
-        listenerCleanupFunctions.forEach(cleanup => cleanup());
-    });
-    console.log(`[ProjectWindow] Attached basic listeners for ${windowLabel}.`);
-    const readyPromise = new Promise(async (resolve, reject) => {
-        let unlistenReady = null;
-        const timeout = setTimeout(() => { console.error(`[ProjectWindow] Timeout waiting for 'project-view-ready' from ${windowLabel}`); if (unlistenReady) unlistenReady(); reject(new Error(`Timeout waiting for project view of ${windowLabel} to load.`)); }, 15000);
-        unlistenReady = await listen('project-view-ready', (event) => { console.log(`[ProjectWindow] Received 'project-view-ready' for ${windowLabel}.`); clearTimeout(timeout); if (unlistenReady) unlistenReady(); resolve(); });
-        listenerCleanupFunctions.push(unlistenReady);
-    });
-    console.log(`[ProjectWindow] Showing and focusing window: ${windowLabel}`);
-    await projectWindowHandle.show();
-    await projectWindowHandle.unminimize();
-    await projectWindowHandle.setFocus();
-    console.log(`[ProjectWindow] Show/Focus successful for ${windowLabel}.`);
-    console.log(`[ProjectWindow] Waiting for 'project-view-ready' event from ${windowLabel}...`);
-    await readyPromise;
-    console.log(`[ProjectWindow] 'project-view-ready' received.`);
-    console.log(`[ProjectWindow] Hiding welcome window: ${welcomeWindow.label}`);
-    await welcomeWindow.hide();
-    console.log(`[ProjectWindow] Welcome window hidden: ${welcomeWindow.label}`);
-    console.log(`[ProjectWindow] Maximizing window: ${windowLabel}`);
-    await projectWindowHandle.maximize();
-    console.log(`[ProjectWindow] Maximize call successful for ${windowLabel}.`);
-    console.log("[ProjectWindow] Updating global store and refreshing project list (background)...");
-    projectStore.set({ ...project });
-    loadProjects({}).catch(err => console.error("[ProjectWindow] Background project list refresh failed:", err));
-    console.log("[ProjectWindow] Background updates initiated.");
-    setStatusMessage(`Opened project: ${project.name}`);
-    console.log(`[ProjectWindow] --- openProjectWindow finished successfully for: ${project.name} ---`);
-  } catch (error) {
-    console.error(`[ProjectWindow] ACTION_ERROR: Failed during openProjectWindow for ${project?.name}:`, error);
-    setStatusMessage(`Error opening project ${project?.name}: ${error?.message || error}`);
-    listenerCleanupFunctions.forEach(cleanup => cleanup());
-    if (projectWindowHandle) { const win = projectWindowHandle; win.close().catch(closeErr => console.error(`[ProjectWindow] Non-critical error closing window during cleanup: ${closeErr}`)); }
-    console.log("[ProjectWindow] Error occurred, ensuring welcome screen is visible and projects reloaded.");
-    await loadProjects({ setRecentProjects, setStatusMessage, setIsLoading }).catch(loadErr => { console.error("[ProjectWindow] Error reloading projects after main error:", loadErr); if(setStatusMessage) setStatusMessage("Error reloading project list."); });
-    await showWelcomeScreen();
-  }
+export async function openProjectWindow(project, { setStatusMessage }) {
+	if (!project || !project.path || !project.name) {
+		setStatusMessage('Error: Invalid project data provided for opening window.');
+		console.error('[ProjectWindow] Invalid project data:', project);
+		return;
+	}
+	setStatusMessage(`Opening project: ${project.name}...`);
+	try {
+		await invoke('open_project', { projectXmlPath: project.path });
+		projectStore.set({ ...project });
+		await goto(`/projectview?xmlPath=${encodeURIComponent(project.path)}`);
+		setStatusMessage(`Opened project: ${project.name}`);
+	} catch (error) {
+		console.error(`[ProjectWindow] ACTION_ERROR: Failed during openProjectWindow for ${project?.name}:`, error);
+		setStatusMessage(`Error opening project ${project?.name}: ${error?.message || error}`);
+		await showWelcomeScreen();
+	}
 }
 
 

@@ -40,7 +40,28 @@ Core dependencies are installed automatically by the application on first launch
 
 No manual Python setup is required by the user for most platforms, as the application handles the creation and management of this environment using a bundled version of Micromamba.
 
-## 3. Building the Application
+## 3. Development Setup
+
+Before running or building the application, install the frontend dependencies:
+
+```bash
+npm install
+```
+
+## 4. Pre-Commit Checks
+
+Before submitting any changes, ensure the following checks pass:
+
+1.  **Svelte Check**:
+    ```bash
+    npm run check
+    ```
+2.  **Cargo Check**:
+    ```bash
+    cd src-tauri && cargo check
+    ```
+
+## 5. Building the Application
 
 After installing the dependencies inside the build environment, you can build the Tauri application:
 
@@ -48,7 +69,7 @@ After installing the dependencies inside the build environment, you can build th
 npm run tauri build
 ```
 
-## 3. Troubleshooting
+## 6. Troubleshooting
 
 If the build fails with an error like "The system library ... was not found," it almost always means the dependency was not installed correctly inside the build environment.
 
