@@ -5,6 +5,7 @@
 	import { CheckCircle, XCircle, Clock, Loader } from 'lucide-svelte';
 	import { transcriptStore } from '$lib/stores/transcriptStore.js';
 	import SpeakersModal from './SpeakersModal.svelte';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	// Props
 	export let fileName = '';
@@ -166,28 +167,23 @@
 
 					<div class="space-y-1">
 						<label for="modalModelSelect" class="block font-medium text-gray-900 dark:text-gray-100">Model:</label>
-						<select id="modalModelSelect" class="ui-select w-full" bind:value={modalSelectedModel}>
-							<option value="" disabled selected={!modalSelectedModel}>Select Model</option>
-							{#if downloadedModelsList.length > 0}
-							<optgroup label="Local Models">
-								{#each downloadedModelsList as model (model.name)}
-									<option value="{model.name}">{model.name}</option>
-								{/each}
-							</optgroup>
-							{/if}
-							{#if downloadedModelsList.length === 0}
-								<option value="" disabled>No models available</option>
-							{/if}
-						</select>
+						<Dropdown
+							containerClasses="w-full"
+							options={downloadedModelsList.map(m => ({ value: m.name, label: m.name }))}
+							bind:value={modalSelectedModel}
+							placeholder="Select a Model"
+							disabled={downloadedModelsList.length === 0}
+						/>
 					</div>
 
 					<div class="space-y-1">
 						<label for="modalLanguageSelect" class="block font-medium text-gray-900 dark:text-gray-100">Language:</label>
-						<select id="modalLanguageSelect" class="ui-select w-full" bind:value={modalSelectedLanguage}>
-							{#each languageOptions as lang (lang.value)}
-								<option value="{lang.value}">{lang.label}</option>
-							{/each}
-						</select>
+						<Dropdown
+							containerClasses="w-full"
+							options={languageOptions}
+							bind:value={modalSelectedLanguage}
+							placeholder="Select a Language"
+						/>
 					</div>
 
 					

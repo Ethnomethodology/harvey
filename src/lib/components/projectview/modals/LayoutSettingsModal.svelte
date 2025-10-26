@@ -4,6 +4,7 @@
 	import { DOCX_LAYOUT_OPTIONS } from '$lib/constants/exportLayouts.js';
 	import waveformLayoutStore from '$lib/stores/waveformLayoutStore.js'; // Import the new store
     import { transcriptStore, toggleDualMode } from '$lib/stores/transcriptStore.js';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
 
 	export let showModal = false;
 	export let currentLayoutKey = 'Layout2'; // Default to 'Segment Block' for DOCX
@@ -66,7 +67,7 @@
 {#if showModal}
 	<div
 		bind:this={modalElement}
-		class="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900 bg-opacity-60 backdrop-blur-sm"
+		class="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-sm"
 		on:click|self={closeModal}
 		role="dialog"
 		aria-modal="true"
@@ -90,16 +91,12 @@
 				<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
 					Choose how the audio waveform is displayed in the Transcriptions tab.
 				</p>
-				<select
+				<Dropdown
+					containerClasses="w-full"
+					options={waveformOptions}
 					bind:value={selectedWaveformLayout}
 					on:change={handleSelectWaveformLayout}
-					class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
-					aria-label="Select waveform display type"
-				>
-					{#each waveformOptions as option (option.value)}
-						<option value={option.value}>{option.label}</option>
-					{/each}
-				</select>
+				/>
 			</div>
 			{/if}
 
@@ -109,17 +106,14 @@
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
                     Display two transcripts in an interleaved view for simultaneous comparison and editing.
                 </p>
-                <select
-                    value={$transcriptStore.isDualModeActive ? 'true' : 'false'}
-                    on:change={(e) => toggleDualMode(e.currentTarget.value === 'true')}
-                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
-                    aria-label="Enable or disable dual transcript mode"
-                    disabled={$transcriptStore.transcriptDirty}
-                    title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
-                >
-                    <option value="false">Disable</option>
-                    <option value="true">Enable</option>
-                </select>
+				<Dropdown
+					containerClasses="w-full"
+					options={[{value: 'false', label: 'Disable'}, {value: 'true', label: 'Enable'}]}
+					value={$transcriptStore.isDualModeActive ? 'true' : 'false'}
+					on:change={(e) => toggleDualMode(e.detail.value === 'true')}
+					disabled={$transcriptStore.transcriptDirty}
+					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
+				/>
             </div>
 
 			<!-- DOCX Export Layout Section -->
