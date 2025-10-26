@@ -325,6 +325,8 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             return Ok(false);
         }
 
+        let python_path = get_python_path()?;
+
         let packages_to_check = vec![
             ("torch", "torch"),
             ("torchaudio", "torchaudio"),
@@ -339,15 +341,34 @@ pub async fn check_python_libraries_installed<R: Runtime>(
         for (package_name, import_name) in &packages_to_check {
             log::info!("Checking for package: {}", package_name);
 
-            let output = shell.sidecar("micromamba")?
-                .args(&[
-                    "run",
-                    "-p",
-                    env_path.to_str().unwrap(),
-                    "python",
-                    "-c",
-                    &format!("import {}", import_name)
-                ])
+            let mut command = shell.command(python_path.to_str().unwrap());
+
+            if cfg!(target_os = "windows") {
+                let env_bin_path = env_path.join("Library").join("bin");
+                if env_bin_path.exists() {
+                    let existing_path = std::env::var("PATH").unwrap_or_default();
+                    let new_path = format!("{};{}", env_bin_path.to_string_lossy(), existing_path);
+                    command = command.env("PATH", new_path.clone());
+                    log::info!("Temporarily setting PATH for verification: {}", new_path);
+                }
+            } else if cfg!(target_os = "macos") {
+                let env_lib_path = env_path.join("lib");
+                if env_lib_path.exists() {
+                    let existing_path = std::env::var("DYLD_LIBRARY_PATH").unwrap_or_default();
+                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+                    command = command.env("DYLD_LIBRARY_PATH", new_path);
+                }
+            } else if cfg!(target_os = "linux") {
+                let env_lib_path = env_path.join("lib");
+                if env_lib_path.exists() {
+                    let existing_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
+                    let new_path = format!("{}:{}", env_lib_path.to_string_lossy(), existing_path);
+                    command = command.env("LD_LIBRARY_PATH", new_path);
+                }
+            }
+
+            let output = command
+                .args(&["-c", &format!("import {}", import_name)])
                 .output()
                 .await?;
 
