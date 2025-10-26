@@ -106,14 +106,6 @@
 
 	const dispatch = createEventDispatcher();
 
-	// Loop/Pause Toggle State & Icons (only if showLoopPauseButton is true)
-	let isLooping = false;
-	const LOOP_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-repeat" viewBox="0 0 16 16"><path d="M11 5.466V4H5a4 4 0 0 0-3.584 5.777.5.5 0 1 1-.896.446A5 5 0 0 1 5 3h6V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m3.81.086a.5.5 0 0 1 .67.225A5 5 0 0 1 11 13H5v1.466a.25.25 0 0 1-.41.192l-2.36-1.966a.25.25 0 0 1 0-.384l2.36-1.966a.25.25 0 0 1 .41.192V12h6a4 4 0 0 0 3.585-5.777.5.5 0 0 1 .225-.67Z"/></svg>`;
-	const PAUSE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pause" viewBox="0 0 16 16"><path d="M6 3.5a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5m4 0a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-1 0V4a.5.5 0 0 1 .5-.5"/></svg>`;
-	function toggleLoop() {
-	  isLooping = !isLooping;
-	}
-
 	// --- Component Props ---
 	export let videoElement = null;
 	export let isTrimming = false; // For main transcriptions player's trim mode
@@ -1234,20 +1226,6 @@
 			<span class="text-xs font-mono text-gray-600 dark:text-d-gray-400 tabular-nums whitespace-nowrap">
 				{formatTime(displayTime)} / {formatTime(displayDuration)}
 			</span>
-
-			<!-- Loop Button (if showLoopPauseButton is true) -->
-			{#if showLoopPauseButton}
-			<button
-				class="ui-button-icon inline-flex items-center space-x-1 text-sm"
-				on:click={toggleLoop}
-				title={isLooping ? 'Loop while editing' : 'Pause while editing'}
-			>
-				{@html isLooping ? LOOP_ICON : PAUSE_ICON}
-				<span class="ml-1 text-xs hidden sm:inline">
-					{isLooping ? 'Loop' : 'Pause'}
-				</span>
-			</button>
-			{/if}
 
 			<!-- Conditional Data Transcribe Button -->
 			{#if showDataTranscribeButton}
