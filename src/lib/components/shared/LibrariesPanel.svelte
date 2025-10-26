@@ -127,19 +127,22 @@
 
 {#if isPanelOpen}
 	<div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
-		        <p class="mb-4">
-		                    To enable advanced features like identifying different speakers (diarization) and translating transcripts, Harvey needs to install a few extra components.
-		                </p>		<div class="flex items-center">
-			{#if $arePythonLibsInstalled}
+		<p class="mb-4">
+			To enable advanced features like identifying different speakers (diarization) and translating transcripts, Harvey needs to install a few extra components.
+		</p>
+		<div class="flex items-center">
+			{#if isLoading}
+				<p class="text-gray-500">Checking...</p>
+			{:else if $arePythonLibsInstalled}
 				<p class="text-green-600 mr-4">Libraries are installed.</p>
-                <button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
-                    {#if isDeleting}Deleting...{:else}Delete{/if}
-                </button>
+				<button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
+					{#if isDeleting}Deleting...{:else}Delete{/if}
+				</button>
 			{:else}
 				<p class="text-red-600 mr-4">Required libraries are not installed.</p>
-                <button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling || isDeleting}>
-                    {#if isInstalling}Installing...{:else}Install{/if}
-                </button>
+				<button class="btn-blue-small" on:click={handleInstall} disabled={isInstalling || isDeleting}>
+					{#if isInstalling}Installing...{:else}Install{/if}
+				</button>
 			{/if}
 		</div>
 		{#if error}
