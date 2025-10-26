@@ -338,19 +338,29 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             ("pypandoc", "pypandoc"),
         ];
 
+        // Prepare Windows PATH once, before the loop
+        let windows_path_env: Option<String> = if cfg!(target_os = "windows") {
+            let env_bin_path = env_path.join("Library").join("bin");
+            if env_bin_path.exists() {
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", env_bin_path.to_string_lossy(), existing_path);
+                log::info!("Prepared PATH for verification: {}", new_path);
+                Some(new_path)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         for (package_name, import_name) in &packages_to_check {
             log::info!("Checking for package: {}", package_name);
 
             let mut command = shell.command(python_path.to_str().unwrap());
 
-            if cfg!(target_os = "windows") {
-                let env_bin_path = env_path.join("Library").join("bin");
-                if env_bin_path.exists() {
-                    let existing_path = std::env::var("PATH").unwrap_or_default();
-                    let new_path = format!("{};{}", env_bin_path.to_string_lossy(), existing_path);
-                    command = command.env("PATH", new_path.clone());
-                    log::info!("Temporarily setting PATH for verification: {}", new_path);
-                }
+            // Apply the pre-calculated PATH for Windows
+            if let Some(path_val) = &windows_path_env {
+                command = command.env("PATH", path_val.clone());
             } else if cfg!(target_os = "macos") {
                 let env_lib_path = env_path.join("lib");
                 if env_lib_path.exists() {
