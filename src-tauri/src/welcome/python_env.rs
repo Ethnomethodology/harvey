@@ -134,16 +134,13 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
         env_path.to_str().unwrap().to_string(),
         "python=3.12".to_string(),
         "pip".to_string(),
+        "ffmpeg".to_string(), // Always include ffmpeg
         "--override-channels".to_string(),
         "-c".to_string(),
         "conda-forge".to_string(),
         "-y".to_string(),
         "--verbose".to_string(),
     ];
-
-    if !cfg!(target_os = "windows") {
-        create_args.push("ffmpeg".to_string());
-    }
 
     let mut attempts = 0;
     let max_attempts = 3;
@@ -328,94 +325,40 @@ pub async fn check_python_libraries_installed<R: Runtime>(
             return Ok(false);
         }
 
-        let python_path = get_python_path()?;
+        let packages_to_check = vec![
+            ("torch", "torch"),
+            ("torchaudio", "torchaudio"),
+            ("torchcodec", "torchcodec"),
+            ("pyannote.audio", "pyannote.audio"),
+            ("transformers", "transformers"),
+            ("sacremoses", "sacremoses"),
+            ("sentencepiece", "sentencepiece"),
+            ("pypandoc", "pypandoc"),
+        ];
 
-        let mut packages = vec!["pyannote.audio", "transformers", "sacremoses", "sentencepiece", "pypandoc"];
+        for (package_name, import_name) in &packages_to_check {
+            log::info!("Checking for package: {}", package_name);
 
-        if cfg!(windows) {
-            // x86_64 Windows has all of them
-            packages.extend(vec!["torch", "torchaudio", "torchcodec"]);
-        } else {
-            // macOS and Linux
-            packages.extend(vec!["torch", "torchaudio", "torchcodec"]);
-        }
-
-        for package in &packages {
-            log::info!("Checking for package: {}", package);
-            let import_name = match *package {
-                "pyannote.audio" => "pyannote",
-                _ => package,
-            };
-
-            let mut command = shell.command(python_path.to_str().unwrap());
-
-            if cfg!(target_os = "windows") {
-                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-                let sidecars_path = resource_dir.join("sidecars");
-
-                if sidecars_path.exists() {
-                    let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
-                        .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?
-                        .to_string_lossy()
-                        .to_string();
-                    let existing_path = std::env::var("PATH").unwrap_or_default();
-                    let new_path = format!("{};{}", cleaned_sidecars_path, existing_path);
-                    command = command.env("PATH", new_path.clone());
-                    log::info!("Temporarily setting PATH for verification: {}", new_path);
-                }
-            } else if cfg!(target_os = "macos") {
-                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-                let sidecars_path = resource_dir.join("sidecars");
-                
-                let mut dyld_paths = Vec::new();
-                if sidecars_path.exists() {
-                    dyld_paths.push(sidecars_path.to_string_lossy().to_string());
-                }
-
-                let env_lib_path = env_path.join("lib");
-                if env_lib_path.exists() {
-                    dyld_paths.push(env_lib_path.to_string_lossy().to_string());
-                }
-
-                if !dyld_paths.is_empty() {
-                    let dyld_path_str = dyld_paths.join(":");
-                    log::info!("Setting DYLD_LIBRARY_PATH to: {}", dyld_path_str);
-                    command = command.env("DYLD_LIBRARY_PATH", dyld_path_str);
-                }
-            } else if cfg!(target_os = "linux") {
-                let resource_dir = app.path().resource_dir().map_err(|e| CommandError::Message(format!("Resource dir not found: {}", e)))?;
-                let sidecars_path = resource_dir.join("sidecars");
-
-                let mut ld_paths = Vec::new();
-                if sidecars_path.exists() {
-                    ld_paths.push(sidecars_path.to_string_lossy().to_string());
-                }
-
-                let env_lib_path = env_path.join("lib");
-                if env_lib_path.exists() {
-                    ld_paths.push(env_lib_path.to_string_lossy().to_string());
-                }
-
-                if !ld_paths.is_empty() {
-                    let ld_path_str = ld_paths.join(":
-");
-                    log::info!("Setting LD_LIBRARY_PATH to: {}", ld_path_str);
-                    command = command.env("LD_LIBRARY_PATH", ld_path_str);
-                }
-            }
-            
-            let output = command
-                .args(&["-c", &format!("import {}", import_name)])
+            let output = shell.sidecar("micromamba")?
+                .args(&[
+                    "run",
+                    "-p",
+                    env_path.to_str().unwrap(),
+                    "python",
+                    "-c",
+                    &format!("import {}", import_name)
+                ])
                 .output()
                 .await?;
-            
+
             if !output.status.success() {
-                log::warn!("Package '{}' not found.", package);
+                log::warn!("Package '{}' not found.", package_name);
                 log::warn!("Import check stdout: {}", String::from_utf8_lossy(&output.stdout));
                 log::warn!("Import check stderr: {}", String::from_utf8_lossy(&output.stderr));
                 return Ok(false);
             }
         }
+
         log::info!("All required Python libraries are installed.");
         Ok(true)
     }.await;

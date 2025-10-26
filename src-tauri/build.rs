@@ -55,10 +55,10 @@ fn main() -> Result<()> {
         let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
         download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
 
-        if target_platform == "windows-x86_64" {
-            println!("cargo:warning=Downloading ffmpeg for windows-x86_64...");
-            download_and_unzip("ffmpeg-windows-x86_64", &sidecars_dir)?;
-        }
+        // if target_platform == "windows-x86_64" {
+        //     println!("cargo:warning=Downloading ffmpeg for windows-x86_64...");
+        //     download_and_unzip("ffmpeg-windows-x86_64", &sidecars_dir)?;
+        // }
 
         rename_sidecar_binaries_for_tauri(&sidecars_dir)?;
 
@@ -202,9 +202,9 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
 
     let mut binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
 
-    if target_triple == "aarch64-pc-windows-msvc" {
-        binaries_to_rename.push("ffmpeg");
-    }
+    // if target_triple == "aarch64-pc-windows-msvc" {
+    //     binaries_to_rename.push("ffmpeg");
+    // }
 
     for bin_name in binaries_to_rename {
         let old_name = format!("{}{}", bin_name, exe_suffix);
@@ -415,40 +415,40 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
     // --- Post-extraction adjustments for FFmpeg on Windows ---
 
 
-    if asset_name == "ffmpeg-win-arm64" || asset_name == "ffmpeg-windows-x86_64" {
+    // if asset_name == "ffmpeg-win-arm64" || asset_name == "ffmpeg-windows-x86_64" {
 
 
-        let bin_dir = dest_dir.join("bin");
+    //     let bin_dir = dest_dir.join("bin");
 
 
-        if bin_dir.exists() && bin_dir.is_dir() {
+    //     if bin_dir.exists() && bin_dir.is_dir() {
 
 
-            for entry in fs::read_dir(bin_dir)? {
+    //         for entry in fs::read_dir(bin_dir)? {
 
 
-                let entry = entry?;
+    //             let entry = entry?;
 
 
-                let src_path = entry.path();
+    //             let src_path = entry.path();
 
 
-                let dest_path = dest_dir.join(src_path.file_name().unwrap());
+    //             let dest_path = dest_dir.join(src_path.file_name().unwrap());
 
 
-                fs::rename(&src_path, &dest_path)?;
+    //             fs::rename(&src_path, &dest_path)?;
 
 
-            }
+    //         }
 
 
-            fs::remove_dir_all(dest_dir.join("bin"))?;
+    //         fs::remove_dir_all(dest_dir.join("bin"))?;
 
 
-        }
+    //     }
 
 
-    }
+    // }
 
 
 
