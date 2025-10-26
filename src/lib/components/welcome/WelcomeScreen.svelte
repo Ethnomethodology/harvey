@@ -11,7 +11,7 @@
     handleRenameConfirm,
     handleRenameCancel
   } from './actions.js';
-  import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+  import { configStatus } from '$lib/stores/configStatusStore.js';
   import ProjectList from './ProjectList.svelte';
   import RenameModal from './RenameModal.svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
@@ -116,9 +116,6 @@
   // --- Tab Switching Handler ---
   function switchTab(tabName) {
     activeTab = tabName;
-    if (tabName === 'configure') {
-      updateConfigStatus();
-    }
   }
 </script>
 

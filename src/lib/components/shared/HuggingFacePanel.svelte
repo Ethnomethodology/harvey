@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
-  import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
+  import { setHfTokenPresent } from '$lib/stores/configStatusStore.js';
 
   let isPanelOpen = false;
   let isAuthenticated = false;
@@ -38,7 +38,7 @@
     try {
         await invoke('save_hf_auth_token', { token: authToken });
         await checkAuthStatus();
-        await updateConfigStatus();
+        setHfTokenPresent(true);
     } catch (e) {
         console.error('Error saving HuggingFace auth token:', e);
         error = `Failed to save auth token: ${e.message || e}`;

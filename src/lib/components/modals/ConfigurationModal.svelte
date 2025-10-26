@@ -2,7 +2,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import ConfigurationView from '$lib/components/shared/ConfigurationView.svelte';
-  import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
   export let showModal = false;
 
@@ -16,11 +15,6 @@
     if (event.key === 'Escape') {
       close();
     }
-  }
-
-  // Reactive statement to check config status whenever the modal is shown
-  $: if (showModal) {
-    updateConfigStatus();
   }
 </script>
 

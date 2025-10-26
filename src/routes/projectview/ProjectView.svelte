@@ -42,7 +42,7 @@
     import { message, confirm } from '@tauri-apps/plugin-dialog';
     import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { invoke } from '@tauri-apps/api/core';
-    import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
+    import { configStatus } from '$lib/stores/configStatusStore.js';
 
 
 	import BottomBar from '$lib/components/projectview/shared/BottomBar.svelte';
@@ -120,7 +120,6 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 		const appWindow = getCurrentWindow();
 		await appWindow.maximize();
 		await loadTranscriptionConfigData(); // Load model/cloud config
-        await updateConfigStatus(); // Update config status on mount
 
 		const xmlPath = $page.url.searchParams.get('xmlPath');
 		if (xmlPath && xmlPath.trim() !== '') {

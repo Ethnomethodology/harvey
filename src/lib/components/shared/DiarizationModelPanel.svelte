@@ -5,7 +5,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
   import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
-  import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
+  import { setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   let isPanelOpen = false;
@@ -26,7 +26,7 @@
     try {
       await invoke('delete_diarization_model');
       await checkAccessStatus(); // Re-check status after deletion
-      await updateConfigStatus();
+      setDiarizationModelDownloaded(false);
     } catch (e) {
       console.error('Error deleting diarization model:', e);
       error = `Failed to delete model: ${e.message || e}`;
@@ -92,7 +92,7 @@
     unlistenFinished = await listen('diarization-installation-finished', async () => {
         isDownloading = false;
         await checkAccessStatus(); // Re-check status after installation attempt
-        await updateConfigStatus();
+        setDiarizationModelDownloaded(true);
     });
   });
 

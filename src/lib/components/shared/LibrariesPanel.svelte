@@ -1,9 +1,10 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
 	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
-	import { updateConfigStatus } from '$lib/stores/configStatusStore.js';
+	import { setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
 
 	let isPanelOpen = false;
@@ -22,7 +23,7 @@
 		try {
 			await invoke('delete_virtual_env');
 			await checkStatus(); // Re-check status after deletion
-			await updateConfigStatus();
+			setPythonLibrariesInstalled(false);
 		} catch (e) {
 			console.error('Error deleting virtual environment:', e);
 			error = `Failed to delete environment: ${e.payload || e}`;
@@ -56,7 +57,7 @@
         unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
             await checkStatus(); // Re-check status after installation attempt
-            await updateConfigStatus();
+            setPythonLibrariesInstalled(get(arePythonLibsInstalled));
         });
     });
 
