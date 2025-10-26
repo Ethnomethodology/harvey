@@ -214,11 +214,25 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     let mut pip_args = vec!["run", "-p", env_path.to_str().unwrap(), "pip", "install", "--no-cache-dir"];
     pip_args.extend(pip_packages.iter().map(|s| *s));
 
-    let (mut rx_pip, _child_pip) = shell.sidecar("micromamba")?
-        .args(&pip_args)
+    let mut pip_command = shell.sidecar("micromamba")?;
+    pip_command = pip_command.args(&pip_args)
         .env("PYTHONUNBUFFERED", "1")
-        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap())
-        .spawn()?;
+        .env("MAMBA_ROOT_PREFIX", config_dir.to_str().unwrap());
+
+    if cfg!(target_os = "windows") {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let sidecars_path = resource_dir.join("sidecars");
+            if sidecars_path.exists() {
+                let cleaned_sidecars_path = dunce::canonicalize(&sidecars_path)
+                    .map_err(|e| CommandError::Message(format!("Failed to canonicalize sidecars path: {}", e)))?;
+                let existing_path = std::env::var("PATH").unwrap_or_default();
+                let new_path = format!("{};{}", cleaned_sidecars_path.to_string_lossy(), existing_path);
+                pip_command = pip_command.env("PATH", new_path);
+            }
+        }
+    }
+
+    let (mut rx_pip, _child_pip) = pip_command.spawn()?;
 
     let mut pip_output_lines = Vec::new();
     while let Some(event) = rx_pip.recv().await {
