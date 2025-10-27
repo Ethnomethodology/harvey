@@ -90,7 +90,7 @@ import {
 
 import notificationStore from '$lib/stores/notificationStore.js';
 
-function normalizePath(path) {
+export function normalizePath(path) {
     if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
         return path.substring(4);
     }
@@ -1685,7 +1685,7 @@ export async function loadImageAnnotations(imageAbsPath) {
 
     let relativeImagePath = imageAbsPath;
     if (imageAbsPath.startsWith(projectBaseDir)) {
-        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+        relativeImagePath = imageAbsPath.substring(projectBaseDir.length).replace(/^[\\/]/, '');
     }
     relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
@@ -1723,7 +1723,7 @@ export async function saveImageAnnotations() {
 
     let relativeImagePath = imagePath;
     if (imagePath.startsWith(projectBaseDir)) {
-        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\\/]/, '');
+        relativeImagePath = imagePath.substring(projectBaseDir.length).replace(/^[\\/]/, '');
     }
     relativeImagePath = relativeImagePath.replace(/\\/g, '/');
 
