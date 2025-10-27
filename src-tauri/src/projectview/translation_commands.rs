@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime, Emitter};
 use tauri_plugin_shell::ShellExt;
 use std::fs;
@@ -189,6 +190,11 @@ async fn run_translation_process<R: Runtime>(
     _target_language: String,
     cancel_flag: Arc<AtomicBool>,
 ) -> Result<String, CommandError> {
+    use crate::projectview::shared_utils;
+
+    let normalized_project_xml_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&project_xml_path)).to_string_lossy().to_string();
+    let normalized_transcript_path = shared_utils::normalize_path_for_comparison(&PathBuf::from(&transcript_path)).to_string_lossy().to_string();
+
     emit_translation_progress(&app_handle, &job_id, 5.0, "Preparing for translation...");
 
     let config = read_config()?;
@@ -208,7 +214,7 @@ async fn run_translation_process<R: Runtime>(
 
     if cancel_flag.load(AtomicOrdering::Relaxed) { return Err(CommandError::from("Translation cancelled by user.")); }
 
-    let content = fs::read_to_string(&transcript_path)?;
+    let content = fs::read_to_string(&normalized_transcript_path)?;
     let mut lexical_json: Value = serde_json::from_str(&content)?;
 
     let texts_to_translate: Vec<String> = if let Some(table_node) = lexical_json.get("root").and_then(|r| r.get("children")).and_then(|c| c.as_array()).and_then(|c| c.iter().find(|n| n.get("type").and_then(|t| t.as_str()) == Some("table"))) {
@@ -221,7 +227,7 @@ async fn run_translation_process<R: Runtime>(
 
     if texts_to_translate.is_empty() {
         info!("[Translate][{}] No text found to translate.", job_id);
-        return Ok(transcript_path);
+        return Ok(normalized_transcript_path);
     }
 
     emit_translation_progress(&app_handle, &job_id, 20.0, "Running translation model...");
@@ -355,7 +361,7 @@ async fn run_translation_process<R: Runtime>(
     let source_lang = lang_parts.get(2).unwrap_or(&"unk"); // e.g., en
     let target_lang_code = lang_parts.get(3).unwrap_or(&"unk"); // e.g., jap
 
-    let original_file_stem = std::path::Path::new(&transcript_path)
+    let original_file_stem = std::path::Path::new(&normalized_transcript_path)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("transcript");
@@ -363,7 +369,7 @@ async fn run_translation_process<R: Runtime>(
     let base_new_filename_stem = format!("{}-{}-{}", original_file_stem, source_lang, target_lang_code);
     let mut new_filename = format!("{}.json", base_new_filename_stem);
     let mut counter = 0;
-    let mut new_path_buf = std::path::PathBuf::from(&transcript_path);
+    let mut new_path_buf = std::path::PathBuf::from(&normalized_transcript_path);
     new_path_buf.set_file_name(&new_filename);
 
     while new_path_buf.exists() {
@@ -378,7 +384,7 @@ async fn run_translation_process<R: Runtime>(
 
     emit_translation_progress(&app_handle, &job_id, 95.0, "Saving translated transcript...");
 
-    save_transcript_json(project_xml_path, new_path.clone(), new_content, Some(format!("{}-{}", source_lang, target_lang_code))).await?;
+    save_transcript_json(normalized_project_xml_path, new_path.clone(), new_content, Some(format!("{}-{}", source_lang, target_lang_code))).await?;
 
     emit_translation_progress(&app_handle, &job_id, 100.0, "Translation complete.");
 

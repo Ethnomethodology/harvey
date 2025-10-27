@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 use bzip2::read::BzDecoder;
 use tar::Archive;
-use serde_json::Value;
-use flate2::read::GzDecoder;
+
+
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -200,7 +200,7 @@ fn rename_sidecar_binaries_for_tauri(sidecars_dir: &Path) -> Result<()> {
         ""
     };
 
-    let mut binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
+    let binaries_to_rename = vec!["whisper-cli", "whisper-stream"];
 
     // if target_triple == "aarch64-pc-windows-msvc" {
     //     binaries_to_rename.push("ffmpeg");

@@ -800,14 +800,15 @@ pub async fn save_transcript_json(
     lexical_table_json_string: String,
     language_code: Option<String>, // Added language_code parameter
 ) -> Result<(), CommandError> {
+    use super::shared_utils;
     info!("[Backend Save Full Transcript JSON] Transcript Path: {}", transcript_path);
     info!("[Backend Save Full Transcript JSON] Project XML Path: {}", project_xml_path);
-    let transcript_path_buf = PathBuf::from(&transcript_path);
-    let project_xml_path_buf = PathBuf::from(&project_xml_path);
+    let normalized_transcript_path_buf = shared_utils::normalize_path_for_comparison(&PathBuf::from(&transcript_path));
+    let normalized_project_xml_path_buf = shared_utils::normalize_path_for_comparison(&PathBuf::from(&project_xml_path));
 
-    let project_base_dir = project_xml_path_buf.parent().ok_or_else(|| CommandError::from("Could not get project base dir from XML path"))?;
+    let project_base_dir = normalized_project_xml_path_buf.parent().ok_or_else(|| CommandError::from("Could not get project base dir from XML path"))?;
 
-    if let Some(parent) = transcript_path_buf.parent() {
+    if let Some(parent) = normalized_transcript_path_buf.parent() {
         fs::create_dir_all(parent)?;
     } else {
         return Err(CommandError::from(format!("Invalid transcript path (no parent directory): {}", transcript_path)));
@@ -830,23 +831,23 @@ pub async fn save_transcript_json(
         Err(e) => return Err(CommandError::from(format!("Provided string is not valid JSON: {}", e))),
     }
 
-    let file = File::create(&transcript_path_buf)?;
+    let file = File::create(&normalized_transcript_path_buf)?;
     let mut writer = BufWriter::new(file);
     writer.write_all(lexical_table_json_string.as_bytes())
         .map_err(|e| CommandError::from(format!("Failed to write transcript JSON: {}", e)))?;
     writer.flush()?; 
-    info!("[Backend Save Full Transcript JSON] Saved Lexical Table JSON to disk: {}", transcript_path_buf.display());
+    info!("[Backend Save Full Transcript JSON] Saved Lexical Table JSON to disk: {}", normalized_transcript_path_buf.display());
 
 
-    let transcript_filename = transcript_path_buf.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename"))?.to_string();
+    let transcript_filename = normalized_transcript_path_buf.file_name().and_then(|n| n.to_str()).ok_or_else(|| CommandError::from("Could not get transcript filename"))?.to_string();
 
-    let (_item_type, media_identifier_opt, transcript_relative_path_buf) = get_item_details(&transcript_path_buf, project_base_dir)?;
+    let (_item_type, media_identifier_opt, transcript_relative_path_buf) = shared_utils::get_item_details(&normalized_transcript_path_buf, project_base_dir)?;
     let media_identifier = media_identifier_opt.ok_or_else(|| CommandError::from(format!("Could not determine media identifier for transcript path: {}", transcript_path)))?;
     let transcript_relative_path = transcript_relative_path_buf.to_string_lossy().replace("\\", "/");
 
     info!("[Backend Save Full Transcript JSON] Media ID: '{}', Transcript Filename: '{}', Transcript Rel Path: '{}'", media_identifier, transcript_filename, transcript_relative_path);
 
-    let xml_content = fs::read_to_string(&project_xml_path_buf)?;
+    let xml_content = fs::read_to_string(&normalized_project_xml_path_buf)?;
     let mut project_data: ProjectXml = quick_xml::de::from_str(&xml_content)?;
     let mut found_media = false;
 
@@ -886,7 +887,7 @@ pub async fn save_transcript_json(
          return Err(CommandError::from(format!("Media identifier '{}' not found in XML. Could not link saved transcript.", media_identifier)));
     }
 
-    save_project_xml(&project_xml_path_buf, &project_data)?;
+    save_project_xml(&normalized_project_xml_path_buf, &project_data)?;
     info!("[Backend Save Full Transcript JSON] Project XML updated.");
     Ok(())
 }

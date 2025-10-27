@@ -77,7 +77,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
             
-            use tauri::{Manager, Emitter};
+            use tauri::{Emitter};
             use tauri_plugin_global_shortcut::{Shortcut, Modifiers, Code, ShortcutEvent, ShortcutState, GlobalShortcutExt};
 
             // log::info!("[SETUP] Preparing to set up global shortcuts..."); // Removed

@@ -129,7 +129,7 @@ async fn install_python_libraries_micromamba<R: Runtime>(app: &AppHandle<R>, she
     // Step 1: Create environment with Python and pip
     emitter.emit("installation-log", LogPayload { message: "Creating Python environment...".into() }).unwrap();
 
-    let mut create_args = vec![
+    let create_args = vec![
         "create".to_string(),
         "-p".to_string(),
         env_path.to_str().unwrap().to_string(),
@@ -316,7 +316,7 @@ pub async fn is_ffmpeg_installed<R: Runtime>(app: AppHandle<R>) -> Result<bool, 
 }
 
 pub async fn check_python_libraries_installed<R: Runtime>(
-    app: &AppHandle<R>,
+    _app: &AppHandle<R>,
     shell: &Shell<R>,
 ) -> Result<bool, CommandError> {
     let result: Result<bool, CommandError> = async {
