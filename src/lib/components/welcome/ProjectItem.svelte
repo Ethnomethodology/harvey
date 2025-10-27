@@ -6,6 +6,9 @@
   export let project;
   export let openMenuProjectPath = null;
 
+  $: isWindowsPathPrefix = project.path.startsWith('\\\\?\\');
+  $: normalizedProjectPath = isWindowsPathPrefix ? normalizePath(project.path) : project.path;
+
   const dispatch = createEventDispatcher();
   let revealButtonLabel = 'Show in Finder'; // Default label
   let displayPath = '';

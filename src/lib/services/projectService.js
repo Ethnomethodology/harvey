@@ -342,22 +342,28 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
     try {
         const loadedData = await invoke('load_project_data', { projectXmlPath });
         
+        const normalizedBaseDirectory = normalizePath(loadedData.base_directory);
 
         if (Array.isArray(loadedData.files)) {
           const attachTranscripts = (nodes) => {
             for (const node of nodes) {
+              // Normalize the node's own path
+              if (node.path) {
+                node.path = normalizePath(node.path);
+              }
+
               if (node.file_type === 'media') {
                 // Ensure node.associated_transcripts is an array before mapping
                 node.associated_transcripts = Array.isArray(node.associated_transcripts) ? node.associated_transcripts : [];
                 node.associated_transcripts = node.associated_transcripts.map(t => {
                     let absolutePath = null;
                     let name = t.name; // Preserve existing name if available
-                    if (loadedData.base_directory && typeof loadedData.base_directory === 'string' &&
+                    if (normalizedBaseDirectory && typeof normalizedBaseDirectory === 'string' &&
                         t.relativePath && typeof t.relativePath === 'string') {
                         // Ensure no double slashes if base_directory ends with one and relativePath starts with one (though unlikely for relativePath)
-                        const base = loadedData.base_directory.endsWith('/') || loadedData.base_directory.endsWith('\\')
-                                   ? loadedData.base_directory.slice(0, -1)
-                                   : loadedData.base_directory;
+                        const base = normalizedBaseDirectory.endsWith('/') || normalizedBaseDirectory.endsWith('\\')
+                                   ? normalizedBaseDirectory.slice(0, -1)
+                                   : normalizedBaseDirectory;
                         const rel = t.relativePath.startsWith('/') || t.relativePath.startsWith('\\')
                                     ? t.relativePath.substring(1)
                                     : t.relativePath;
@@ -368,13 +374,13 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
                     } else {
                         // If base_directory or relativePath is missing, we can't form a full path.
                         // Log this, as it indicates an issue with the data from the backend or project structure.
-                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${loadedData.base_directory}, Relative path: ${t.relativePath}`);
+                        console.warn(`[ProjectService] Cannot construct absolute path for transcript. Base dir: ${normalizedBaseDirectory}, Relative path: ${t.relativePath}`);
                         if (!name) { // If name is not provided and path construction failed, use relativePath as fallback
                             name = t.relativePath;
                         }
                     }
                     return {
-                        path: absolutePath, // This will be null if construction failed
+                        path: normalizePath(absolutePath), // Normalize absolutePath here
                         relativePath: t.relativePath, // Always preserve the original relativePath
                         language_code: t.language_code, // Pass the language code
                         name: name // Add the name property
@@ -393,7 +399,7 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             name: loadedData.project_name,
             id: loadedData.project_uuid,
             xmlPath: loadedData.project_xml_path,
-            baseDirectory: loadedData.base_directory,
+            baseDirectory: normalizedBaseDirectory,
             files: loadedData.files || [],
             documentFiles: loadedData.document_files || [],
             tableFiles: loadedData.table_files || [],
