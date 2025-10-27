@@ -205,7 +205,7 @@
 	<!-- Media Files Accordion Header -->
 	<div class="border-b border-gray-300 dark:border-border flex-shrink-0">
 		<div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
 			on:click="{() => toggleSection('files')}"
 			aria-expanded="{openSection === 'files'}" aria-controls="files-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('files'); }}"
@@ -243,7 +243,7 @@
 	<!-- Shortcuts Accordion Header -->
 	<div class="flex-shrink-0 border-gray-300 dark:border-border {openSection === 'shortcuts' ? 'border-b' : 'border-t'}">
          <div
-			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700"
+			class="flex items-center px-2 py-2 cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
 			on:click="{() => toggleSection('shortcuts')}"
 			aria-expanded="{openSection === 'shortcuts'}" aria-controls="shortcuts-content" role="button" tabindex="0"
 			on:keydown="{(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSection('shortcuts'); }}"

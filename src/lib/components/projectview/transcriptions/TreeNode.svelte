@@ -118,7 +118,7 @@ const QUESTION_ICON = `
 <li class="text-xs select-none">
     <!-- Clickable/Hoverable Row -->
     <div
-        class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="flex items-center group rounded hover:bg-gray-100 dark:hover:bg-dark-bg-tertiary"
         class:cursor-pointer="{!node.is_directory}"
         class:cursor-default="{node.is_directory}"
         class:bg-blue-100="{shouldHighlight}"
