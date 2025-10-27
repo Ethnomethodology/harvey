@@ -8,6 +8,7 @@
 	import FileRenameModal from '../modals/FileRenameModal.svelte';
 	import { confirm, message } from '@tauri-apps/plugin-dialog';
     import { createEventDispatcher } from 'svelte';
+    import { sep } from '@tauri-apps/api/path';
 
     const dispatch = createEventDispatcher();
 
@@ -32,26 +33,42 @@
 	// --- projectFileTree now directly uses the XML-derived tree from the store ---
 	$: projectFileTree = $project.files || [];
 
-    $: uniqueProjectFileTree = (() => {
+        $: uniqueProjectFileTree = (() => {
         const normalizedBaseDirectory = normalizePath($project.baseDirectory);
-        const mediaPathPrefix = `${normalizedBaseDirectory}/${HARVEY_FILES_DIR}/${MEDIA_DIR_NAME}`;
+        const mediaPathPrefix = `${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`;
         const seen = new Set();
-        return projectFileTree.filter(node => {
+        console.log('[LeftPanel] Filtering projectFileTree...');
+        console.log('[LeftPanel] normalizedBaseDirectory:', normalizedBaseDirectory);
+        console.log('[LeftPanel] mediaPathPrefix:', mediaPathPrefix);
+        const filtered = projectFileTree.filter(node => {
             const normalizedNodePath = normalizePath(node.path);
             const key = normalizedNodePath || normalizePath(node.relativePath);
+            
             if (seen.has(key)) {
                 return false;
             }
             seen.add(key);
-            // Only include nodes that are directories or whose path starts with the mediaPathPrefix
-            // and are of type 'media' or 'directory_media_stem' or 'transcript'
+
             const isMediaFileOrDirectory = node.file_type === 'media' || node.file_type === 'directory_media_stem' || node.file_type === 'transcript';
             const isWithinMediaPath = normalizedNodePath && normalizedNodePath.startsWith(mediaPathPrefix);
             const isRootMediaDirectory = normalizedNodePath === mediaPathPrefix;
 
-            // Include the root media directory itself, and any media files/directories/transcripts within it
+            console.log('---');
+            console.log('[LeftPanel] Node:', node.name, '(', node.file_type, ')');
+            console.log('[LeftPanel]   node.path:', node.path);
+            console.log('[LeftPanel]   normalizedNodePath:', normalizedNodePath);
+            console.log('[LeftPanel]   mediaPathPrefix:', mediaPathPrefix);
+            console.log('[LeftPanel]   normalizedNodePath.startsWith(mediaPathPrefix):', normalizedNodePath.startsWith(mediaPathPrefix));
+            console.log('[LeftPanel]   isMediaFileOrDirectory:', isMediaFileOrDirectory);
+            console.log('[LeftPanel]   isWithinMediaPath:', isWithinMediaPath);
+            console.log('[LeftPanel]   isRootMediaDirectory:', isRootMediaDirectory);
+            console.log('[LeftPanel]   Result:', (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory)));
+            console.log('---');
+
             return (isRootMediaDirectory || (isWithinMediaPath && isMediaFileOrDirectory));
         });
+        console.log('[LeftPanel] uniqueProjectFileTree (filtered):', filtered);
+        return filtered;
     })();
 
     // --- Function to handle opening a data ---
