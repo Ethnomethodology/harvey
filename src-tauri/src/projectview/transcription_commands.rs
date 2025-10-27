@@ -378,9 +378,12 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
 
     let ffmpeg_path = get_ffmpeg_path(&app_handle)?;
 
+    let original_media_path_arg = original_media_path.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+    let output_media_path_arg = output_media_path_str.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+
     let args: Vec<String> = vec![
         "-i".into(),
-        original_media_path.clone(),
+        original_media_path_arg,
         "-ss".into(),
         format!("{:.6}", start_time),
         "-to".into(),
@@ -392,7 +395,7 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
         "-avoid_negative_ts".into(),
         "make_zero".to_string(),
         "-y".into(),
-        output_media_path_str.clone(),
+        output_media_path_arg.clone(),
     ];
 
     info!("[Trim Backend] FFmpeg Cmd: {:?} {}", ffmpeg_path, args.join(" "));
@@ -509,12 +512,13 @@ pub async fn trim_media<R: Runtime>( app_handle: AppHandle<R>, original_media_pa
         let mut audio_codec_meta: Option<String> = None;
         let mut video_codec_meta: Option<String> = None;
 
+        let output_media_path_ffprobe_arg = output_media_path.to_string_lossy().to_string().replace("/", &std::path::MAIN_SEPARATOR.to_string());
         let ffprobe_args = vec![
             "-v".to_string(), "quiet".to_string(),
             "-print_format".to_string(), "json".to_string(),
             "-show_format".to_string(),
             "-show_streams".to_string(),
-            output_media_path.to_string_lossy().to_string(),
+            output_media_path_ffprobe_arg,
         ];
 
         info!("[Trim Backend] Running ffprobe for new trimmed media: {}", output_media_path.display());
@@ -1192,12 +1196,13 @@ pub async fn transcribe_media_command<R: Runtime>(
         &whisper_model_path_str,
         &payload.language_code.clone().unwrap_or_else(|| "auto".to_string()),
         &job_id,
-        &temp_whisper_output_base_orig_str, // Use changed variable name
+        &temp_whisper_output_base_orig_str,
         &expected_whisper_temp_json_path_orig,
+        &final_transcript_path_orig, // pass the correct final path
         payload.num_speakers,
         &expected_rttm_temp_path,
         false, // is_translation_pass
-        &payload.speaker_names, // Pass as slice
+        &payload.speaker_names,
         &media_filename_for_progress,
         cancel_flag.clone(),
     ).await {
@@ -1344,10 +1349,11 @@ pub async fn transcribe_media_command<R: Runtime>(
                 &app_handle_clone,
                 &wav_media_path.to_string_lossy(),
                 &whisper_model_path_str,
-                &source_language_for_translation, // Use determined source language
+                &source_language_for_translation,
                 &job_id,
-                &base_en_str_owned, // Use owned string
-                &json_path_en_owned,  // Use owned PathBuf
+                &base_en_str_owned,
+                &json_path_en_owned,
+                &final_path_en_pb, // pass the correct final path
                 0, // No diarization for translation pass
                 &PathBuf::new(), // Empty RTTM path
                 true, // is_translation_pass
@@ -1640,14 +1646,17 @@ pub(crate) async fn convert_to_wav_if_needed_cmd<R: Runtime>(
 
     let ffmpeg_path = get_ffmpeg_path(app_handle)?;
 
+    let input_path_arg = input_path_str.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+    let output_wav_path_arg = output_wav_path.to_string_lossy().to_string().replace("/", &std::path::MAIN_SEPARATOR.to_string());
+
     let args: Vec<String> = vec![
-        "-i".into(), input_path_str.to_string(),
+        "-i".into(), input_path_arg,
         "-vn".into(),
         "-acodec".into(), "pcm_s16le".into(),
         "-ar".into(), "16000".into(),
         "-ac".into(), "1".into(),
         "-y".into(),
-        output_wav_path.to_string_lossy().to_string(),
+        output_wav_path_arg,
     ];
     debug!("[FFmpeg CMD][{}] Command arguments: {:?}", job_id, args);
 
@@ -1846,12 +1855,16 @@ async fn run_whisper_cpp_sidecar_cmd<R: Runtime>(
     let lang_arg = if language.trim().is_empty() || language == "auto" { "auto" } else { language.trim() };
     // debug!("[Whisper CPP CMD][{}] Using language: '{}', Translate: {}", job_id, lang_arg, is_translation_pass); // Original debug
 
+    let model_path_arg = whisper_model_path_str.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+    let media_path_arg = media_path.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+    let output_base_arg = output_base_for_whisper.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+
     let mut args: Vec<String> = vec![
-        "-m".into(), whisper_model_path_str.to_string(),
-        "-f".into(), media_path.to_string(),
+        "-m".into(), model_path_arg,
+        "-f".into(), media_path_arg,
         "-l".into(), lang_arg.to_string(),
         "-oj".into(), // Output JSON
-        "-of".into(), output_base_for_whisper.to_string(),
+        "-of".into(), output_base_arg,
     ];
 
     if is_translation_pass {
@@ -2041,9 +2054,11 @@ async fn run_diarization_script<R: Runtime>(
 
     let token = get_hf_token(app_handle).map_err(|e| CommandError::from(e.to_string()))?;
 
+    let media_path_arg = media_path.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+
     let args = vec![
         script_path.to_string_lossy().to_string(),
-        media_path.to_string(),
+        media_path_arg,
         num_speakers.to_string(),
         token,
     ];
@@ -2189,18 +2204,19 @@ fn merge_diarization_results_cmd(whisper_segments: &mut Vec<TranscriptSegment>, 
 
 pub(crate) async fn execute_transcription_pass<R: Runtime>(
     app_handle: &AppHandle<R>,
-    wav_media_path_str: &str, // Changed to &str to match caller
+    wav_media_path_str: &str,
     model_path: &str,
     language_code: &str,
     job_id: &str,
     output_base_for_whisper: &str,
     expected_whisper_json_output_path: &PathBuf,
+    final_transcript_destination_path: &PathBuf, // New parameter
     num_speakers: usize,
     expected_rttm_output_path: &PathBuf,
     is_translation_pass: bool,
     speaker_names: &[String],
     media_filename_for_progress: &str,
-    cancel_flag: Arc<AtomicBool>, // New argument
+    cancel_flag: Arc<AtomicBool>,
 ) -> Result<Vec<TranscriptSegment>, CommandError> {
     info!("[Exec Pass][{}] DEBUG: Entered. Lang: {}, Translate: {}, NumSpeakers: {}, output_base_for_whisper: {}, expected_json: {:?}",
         job_id, language_code, is_translation_pass, num_speakers, output_base_for_whisper, expected_whisper_json_output_path);
@@ -2222,41 +2238,12 @@ pub(crate) async fn execute_transcription_pass<R: Runtime>(
         cancel_flag.clone(),
     ).await?;
 
-    // Determine the final destination path for this pass's transcript
-    let final_transcript_destination_path = if is_translation_pass {
-        // This requires prepare_output_paths to provide the final EN path
-        // Let's assume it's passed in or reconstructed correctly
-        // For now, we need to ensure `prepare_output_paths` returns it and it's passed here.
-        // This part of the logic needs `final_transcript_path_en` to be available here.
-        // We'll assume `final_transcript_path_orig` is for original, and a similar var for EN.
-        // Let's refine this: expected_whisper_json_output_path is temp, we need a *final* path argument.
-        // This function should take the *final_destination_path* as an argument.
-        // For now, let's construct it based on is_translation_pass:
-        let media_path = PathBuf::from(wav_media_path_str);
-        let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).unwrap_or("transcript");
-        let transcripts_dir = expected_whisper_json_output_path.parent().unwrap(); // get transcripts dir from temp path
-        if is_translation_pass {
-            transcripts_dir.join(format!("{}.en.json", media_filename_stem))
-        } else {
-            transcripts_dir.join(format!("{}.json", media_filename_stem))
-        }
-    } else {
-        // This is the original pass, use the final_transcript_path_orig from prepare_output_paths
-        // This needs to be passed into execute_transcription_pass
-        // For now, reconstructing it based on the temp path's parent and media_filename_stem.
-        let media_path = PathBuf::from(wav_media_path_str);
-        let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).unwrap_or("transcript");
-        let transcripts_dir = expected_whisper_json_output_path.parent().unwrap();
-        transcripts_dir.join(format!("{}.json", media_filename_stem))
-    };
-
-
     info!("[Exec Pass][{}] Moving temporary whisper output from {:?} to {:?}", job_id, temp_whisper_json_output_path, final_transcript_destination_path);
-    fs::rename(&temp_whisper_json_output_path, &final_transcript_destination_path)
+    fs::rename(&temp_whisper_json_output_path, final_transcript_destination_path)
         .map_err(|e| CommandError::from(format!("Failed to move whisper output to final destination: {}", e)))?;
 
     // Now parse from the final destination
-    let mut segments = parse_whisper_json_cmd(&final_transcript_destination_path)?;
+    let mut segments = parse_whisper_json_cmd(final_transcript_destination_path)?;
 
     if num_speakers > 0 && !is_translation_pass {
         emit_progress_cmd(app_handle, job_id, 30.0, &format!("Diarizing {}...", media_filename_for_progress))?;
@@ -2406,9 +2393,11 @@ pub async fn start_live_transcription(
     let model_path = resolve_whisper_model_path_cmd(&model_name, "live")
         .map_err(|e| e.to_string())?;
 
+    let model_path_arg = model_path.replace("/", &std::path::MAIN_SEPARATOR.to_string());
+
     let mut args = vec![
         "-m".to_string(),
-        model_path.clone(),
+        model_path_arg,
         "-l".to_string(),
         language.clone(),
         "--step".to_string(), "5000".to_string(),
