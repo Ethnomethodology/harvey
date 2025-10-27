@@ -49,6 +49,7 @@ ndarray = "0.15.4"
 ndarray-stats = "0.5.1"
 
 # --- Utilities ---
+thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 directories = "5.0"
 dashmap = "5.5"

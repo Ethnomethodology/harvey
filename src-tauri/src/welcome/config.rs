@@ -128,6 +128,7 @@ impl From<tauri::Error> for CommandError { fn from(error: tauri::Error) -> Self 
 impl From<rusqlite::Error> for CommandError { fn from(error: rusqlite::Error) -> Self { CommandError::RusqliteError(error.to_string()) } }
 impl From<rust_xlsxwriter::XlsxError> for CommandError { fn from(error: rust_xlsxwriter::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
 impl From<calamine::XlsxError> for CommandError { fn from(error: calamine::XlsxError) -> Self { CommandError::Message(error.to_string()) } }
+impl From<crate::utils::PathError> for CommandError { fn from(error: crate::utils::PathError) -> Self { CommandError::Path(error.to_string()) } }
 // --- End Error Conversions ---
 
 

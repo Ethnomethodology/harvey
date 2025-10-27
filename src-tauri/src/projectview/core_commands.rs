@@ -1,6 +1,7 @@
 // src-tauri/src/projectview/core_commands.rs
 use super::shared_types::{*, TABLES_DIR, IMAGES_DIR, FileMetadata};
 use super::shared_utils::*;
+use crate::utils::canonicalize_path;
 use crate::welcome::config::CommandError;
 use log::{debug, error, info, warn};
 use serde::Deserialize;
@@ -762,7 +763,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if media_file_abs_path.exists() && media_file_abs_path.is_file() {
             let media_file_name = media_file_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let media_file_canonical = fs::canonicalize(&media_file_abs_path)
+            let media_file_canonical = canonicalize_path(&media_file_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| media_file_abs_path.to_string_lossy().to_string());
 
@@ -805,7 +806,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
                     }
                 }
 
-                 let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+                 let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
@@ -893,7 +894,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+            let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
@@ -920,7 +921,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+            let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
@@ -947,7 +948,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if transcript_abs_path.exists() && transcript_abs_path.is_file() {
             let transcript_file_name = transcript_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let transcript_file_canonical = fs::canonicalize(&transcript_abs_path)
+            let transcript_file_canonical = canonicalize_path(&transcript_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| transcript_abs_path.to_string_lossy().to_string());
 
@@ -975,7 +976,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if doc_abs_path.exists() && doc_abs_path.is_file() {
             let doc_file_name = doc_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let doc_file_canonical = fs::canonicalize(&doc_abs_path)
+            let doc_file_canonical = canonicalize_path(&doc_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| doc_abs_path.to_string_lossy().to_string());
 
@@ -1009,7 +1010,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if table_abs_path.exists() && table_abs_path.is_file() {
             let table_file_name = table_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let table_file_canonical = fs::canonicalize(&table_abs_path)
+            let table_file_canonical = canonicalize_path(&table_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| table_abs_path.to_string_lossy().to_string());
 
@@ -1037,7 +1038,7 @@ pub async fn load_project_data(project_xml_path: String) -> Result<ProjectViewDa
 
         if image_abs_path.exists() && image_abs_path.is_file() {
             let image_file_name = image_abs_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-            let image_file_canonical = fs::canonicalize(&image_abs_path)
+            let image_file_canonical = canonicalize_path(&image_abs_path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| image_abs_path.to_string_lossy().to_string());
 
@@ -1149,8 +1150,8 @@ pub async fn import_media(app_handle: AppHandle, source_file_path_str: String, p
     fs::copy(&source_path, &destination_media_path)?;
     info!("[Backend Import] File copied to {}", destination_media_path.display());
 
-    let canonical_dest_path = fs::canonicalize(&destination_media_path)
-        .map_err(|e| CommandError::Io(format!("Failed to canonicalize destination media path {}: {}", destination_media_path.display(), e)))?;
+    let canonical_dest_path = canonicalize_path(&destination_media_path)
+        .map_err(|e| CommandError::Io(format!("Failed to canonicalize destination media path {}: {:?}", destination_media_path.display(), e)))?;
 
     let mut duration_seconds: Option<f64> = None;
     let mut width: Option<i32> = None;
@@ -2014,8 +2015,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             if item_path_buf == new_path { info!("[Backend Rename] New path is same as old path. No action needed."); return Ok(item_path); }
 
             if new_path.exists() {
-                 let canon_old = fs::canonicalize(&item_path_buf).ok();
-                 let canon_new = fs::canonicalize(&new_path).ok();
+                 let canon_old = canonicalize_path(&item_path_buf).ok();
+                 let canon_new = canonicalize_path(&new_path).ok();
                  if canon_old.is_some() && canon_new.is_some() && canon_old != canon_new {
                      return Err(CommandError::from(format!("File named '{}' already exists.", new_filename_with_ext)));
                  } else {
@@ -2102,8 +2103,8 @@ pub async fn rename_project_item( app_handle: tauri::AppHandle, item_path: Strin
             let final_new_transcript_file_abs_path = new_transcript_folder_abs_path.join(&new_transcript_filename_pathbuf);
             final_new_path = final_new_transcript_file_abs_path.clone();
             if final_new_transcript_file_abs_path.exists() {
-                let canon_old_abs = fs::canonicalize(old_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {}", old_transcript_file_abs_path.display(), e)))?;
-                let canon_final_target_abs = fs::canonicalize(&final_new_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {}", final_new_transcript_file_abs_path.display(), e)))?;
+                let canon_old_abs = canonicalize_path(old_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize old transcript path {}: {:?}", old_transcript_file_abs_path.display(), e)))?;
+                let canon_final_target_abs = canonicalize_path(&final_new_transcript_file_abs_path).map_err(|e| CommandError::from(format!("Cannot canonicalize final target transcript path {}: {:?}", final_new_transcript_file_abs_path.display(), e)))?;
                 if canon_final_target_abs != canon_old_abs {
                     return Err(CommandError::from(format!("An imported transcript file named '{}' already exists in the target location '{}'.", new_transcript_filename_with_ext_str, new_transcript_folder_abs_path.display())));
                  }

@@ -12,6 +12,7 @@ use crate::projectview::db_handler::init_db as init_projectview_db;
 // --- Declare top-level modules ---
 mod welcome;
 mod projectview; 
+pub mod utils;
 
 // Define the state for managing download cancellation flags
 #[derive(Default)]
