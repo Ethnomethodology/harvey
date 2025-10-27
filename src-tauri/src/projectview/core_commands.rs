@@ -7,6 +7,7 @@ use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
+#[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
 
 use std::{
@@ -2264,6 +2265,7 @@ mod tests {
 }
 
 #[tauri::command]
+#[allow(unused_variables)]
 pub async fn reveal_in_file_explorer(app: AppHandle, file_path_str: String) -> Result<(), CommandError> {
     info!("[CMD] Revealed in Explorer: {}", file_path_str);
 

@@ -23,6 +23,7 @@ use tauri_plugin_shell::ShellExt;
 use uuid::Uuid; // Added for UUID generation
 use crate::projectview::db_handler; // Added for DB operations
 use crate::projectview::shared_types::ProjectXml; // For parsing project_uuid
+#[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
 use reqwest;
 use futures_util::StreamExt;
@@ -314,7 +315,9 @@ pub async fn create_project(name: String, parent_location: String, overwrite: Op
     log::info!("---- create_project: End ----");
     Ok(absolute_xml_path)
 }
-#[command] pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
+#[command]
+#[allow(unused_variables)]
+pub async fn locate_in_finder(app: AppHandle, project_xml_path: String) -> Result<(), CommandError> {
     log::info!("---- locate_in_finder: Start. Path='{}' ----", project_xml_path);
 
     let path = PathBuf::from(project_xml_path);
@@ -394,8 +397,8 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
             #[cfg(windows)]
             {
                 log::info!("rename_project: Comparing canonical paths (Windows)...");
-                let canon1 = canonicalize_path(&old_project_dir)?;
-                let canon2 = canonicalize_path(&new_project_dir)?;
+                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
                 Ok(canon1 == canon2)
             }
             #[cfg(not(any(unix, windows)))]
