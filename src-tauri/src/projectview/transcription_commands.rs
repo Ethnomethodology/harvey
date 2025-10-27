@@ -913,7 +913,7 @@ pub(crate) fn prepare_output_paths(
     translate_to_english: bool,
 ) -> Result<(String, PathBuf, PathBuf, PathBuf, Option<String>, Option<PathBuf>, Option<PathBuf>), CommandError> { // Return signature matches new var names
     debug!("[prepare_output_paths][{}] Media path: {}, Translate: {}", job_id, media_path_str, translate_to_english);
-    let media_path = PathBuf::from(media_path_str);
+    let media_path = PathBuf::from(media_path_str.replace("/", &std::path::MAIN_SEPARATOR.to_string()));
 
     let media_filename_stem = media_path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| CommandError::from(format!("Invalid media filename: {}", media_path_str)))?.to_string();
 
