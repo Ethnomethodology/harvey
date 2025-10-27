@@ -20,6 +20,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
+        # Reconfigure stdout to ensure UTF-8 encoding, especially for Windows
+        if sys.platform == "win32":
+            sys.stdout.reconfigure(encoding='utf-8')
+            
         sys.stderr.write(f"[Python Debug] Loading model and tokenizer from: {args.model_path}\n")
         tokenizer = MarianTokenizer.from_pretrained(args.model_path)
         model = MarianMTModel.from_pretrained(args.model_path)

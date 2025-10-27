@@ -206,7 +206,7 @@
 	}
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex flex-col flex-grow overflow-y-auto">
 	{#if configError}
 		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
