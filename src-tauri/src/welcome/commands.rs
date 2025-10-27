@@ -404,8 +404,8 @@ pub async fn rename_project(project_xml_path: String, new_name: String) -> Resul
             #[cfg(not(any(unix, windows)))]
             {
                 log::info!("rename_project: Comparing canonical paths (Other OS)...");
-                let canon1 = canonicalize_path(&old_project_dir)?;
-                let canon2 = canonicalize_path(&new_project_dir)?;
+                let canon1 = canonicalize_path(&old_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                let canon2 = canonicalize_path(&new_project_dir).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
                 Ok(canon1 == canon2)
             }
         };
