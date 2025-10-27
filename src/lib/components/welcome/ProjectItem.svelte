@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition';
   import { createEventDispatcher, onMount } from 'svelte';
   import { type as getOsType } from '@tauri-apps/plugin-os';
+  import { normalizePath } from '$lib/services/projectService.js';
   export let project;
   export let openMenuProjectPath = null;
 
