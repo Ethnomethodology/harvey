@@ -184,7 +184,7 @@ fn get_target_platform_string() -> Result<String> {
         "aarch64-apple-darwin" => "macos-arm64",
         "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "windows-x86_64",
         // For Windows ARM64, we use the x64 sidecars and run them via emulation.
-        "aarch64-pc-windows-msvc" => "windows-x86_64",
+        "aarch64-pc-windows-msvc" => "windows-arm64",
         "x86_64-unknown-linux-gnu" => "linux-x86_64",
         "aarch64-unknown-linux-gnu" => "linux-arm64",
         _ => anyhow::bail!("Unsupported target triple: {}", target_triple),
