@@ -91,10 +91,16 @@ import {
 import notificationStore from '$lib/stores/notificationStore.js';
 
 export function normalizePath(path) {
-    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
-        return path.substring(4);
+    if (typeof path !== 'string') {
+        return path;
     }
-    return path;
+    // On Windows, paths may start with the `\\?\` prefix. This removes it.
+    let normalized = path.startsWith('\\\\?\\') ? path.substring(4) : path;
+
+    // Normalize backslashes to forward slashes for consistent path handling.
+    normalized = normalized.replace(/\\/g, '/');
+
+    return normalized;
 }
 
 /**
