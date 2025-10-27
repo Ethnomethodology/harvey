@@ -123,23 +123,23 @@
   }
 </script>
 
-<div class="border-y border-gray-200">
+<div class="border-y border-gray-200 dark:border-gray-700">
   <button
     on:click={() => (isPanelOpen = !isPanelOpen)}
     class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
   >
     <div class="flex items-center">
-      <h3 class="block text-sm font-medium text-gray-700">Diarization Model</h3>
+      <h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">Diarization Model</h3>
     </div>
     		<div class="flex items-center">
     			{#if isLoading}
-    				<span class="text-xs text-gray-500 mr-2">Checking...</span>
+				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
     			{:else if hasAccess}
-    				<span class="text-sm font-medium text-green-600 mr-2">Downloaded</span>
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Downloaded</span>
     			{:else}
-    				<span class="text-sm font-medium text-red-600 mr-2">Download Required</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2">Download Required</span>
     			{/if}
-    			<svg        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''}"
+			<svg        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen ? 'rotate-180' : ''} text-gray-500 dark:text-gray-400"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -153,10 +153,10 @@
 </div>
 
 {#if isPanelOpen}
-  <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
+  <div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
     <div class="mb-4">
         <p class="mb-2">
-            Harvey uses the <code>pyannote/speaker-diarization-3.1</code> model for speaker diarization.
+            Harvey uses the <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">pyannote/speaker-diarization-3.1</code> model for speaker diarization.
         </p>
         <p class="mb-4">
             Access is gated, so you must first accept the user agreement on the model's HuggingFace page before you can download it.
@@ -181,8 +181,8 @@
 
     {#if hasAccess && cachePath}
         <div class="flex items-center justify-between mt-2">
-            <p class="text-green-600 text-xs">
-                Model downloaded at <code>{cachePath}</code>
+            <p class="text-green-600 dark:text-green-400 text-xs">
+                Model downloaded at <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">{cachePath}</code>
             </p>
             <button on:click={handleDeleteModel} class="btn-red-small" disabled={isDeleting}>
                 {#if isDeleting}Deleting...{:else}Delete{/if}
@@ -190,13 +190,13 @@
         </div>
     {/if}
     {:else}
-        <p class="text-orange-600 text-sm">
+        <p class="text-orange-600 dark:text-orange-400 text-sm">
             Please install the required Python libraries first to enable model downloads.
         </p>
     {/if}
 
     {#if error && !showInstallModal}
-      <p class="text-red-600 mt-4">{error}</p>
+      <p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
     {/if}
   </div>
 {/if}

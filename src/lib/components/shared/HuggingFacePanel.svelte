@@ -58,25 +58,25 @@
   }
 </script>
 
-<div class="border-y border-gray-200">
+<div class="border-y border-gray-200 dark:border-gray-700">
   <button
     on:click={() => (isPanelOpen = !isPanelOpen)}
     class="w-full flex justify-between items-center py-3 text-left focus:outline-none"
   >
     <div class="flex items-center">
-      <h3 class="block text-sm font-medium text-gray-700">HuggingFace Authentication</h3>
+      <h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">HuggingFace Authentication</h3>
     </div>
     		<div class="flex items-center">
     			{#if isLoading}
-    				<span class="text-xs text-gray-500 mr-2">Checking...</span>
+				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
     			{:else if isAuthenticated}
-    				<span class="text-sm font-medium text-green-600 mr-2">Authenticated</span>
+				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Authenticated</span>
     			{:else}
-    				<span class="text-sm font-medium text-red-600 mr-2">Authentication Required</span>
+				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2">Authentication Required</span>
     			{/if}
     			<svg        class="w-6 h-6 transform transition-transform duration-200 ease-in-out {isPanelOpen
           ? 'rotate-180'
-          : ''}"
+          : ''} text-gray-500 dark:text-gray-400"
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -90,7 +90,7 @@
 </div>
 
 {#if isPanelOpen}
-  <div class="p-4 bg-gray-50 border-b border-gray-200 text-sm">
+  <div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
     <p class="mb-2">
       HuggingFace is a platform that provides tools for building, training, and deploying state-of-the-art machine learning models.
     </p>
@@ -98,11 +98,11 @@
       Harvey uses HuggingFace to download and run translation models. Authentication is required to access certain models and to ensure you have the necessary permissions.
     </p>
 
-    <h4 class="font-semibold mb-2">Setup Instructions</h4>
+    <h4 class="font-semibold mb-2 dark:text-gray-200">Setup Instructions</h4>
     <ol class="list-decimal list-inside mb-4 space-y-1">
-      <li>If you don't have one, create a HuggingFace account on their <a href="https://huggingface.co/join" on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline">website</a>.</li>
+      <li>If you don't have one, create a HuggingFace account on their <a href="https://huggingface.co/join" on:click|preventDefault={() => openLink('https://huggingface.co/join')} class="text-blue-600 hover:underline dark:text-blue-400">website</a>.</li>
       <li>
-        Generate an access token from your HuggingFace account settings. You can find it under <a href="https://huggingface.co/settings/tokens" on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline">Access Tokens</a>.
+        Generate an access token from your HuggingFace account settings. You can find it under <a href="https://huggingface.co/settings/tokens" on:click|preventDefault={() => openLink('https://huggingface.co/settings/tokens')} class="text-blue-600 hover:underline dark:text-blue-400">Access Tokens</a>.
       </li>
       <li>Paste the access token in the field below and click "Save".</li>
     </ol>
@@ -113,13 +113,13 @@
         bind:value={authToken}
         on:focus={handleFocus}
         placeholder={isAuthenticated ? 'Token is set' : 'Enter your HuggingFace token'}
-        class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-white dark:bg-gray-800"
+        class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600"
       />
       <button on:click={saveAuthToken} class="btn-blue">Save</button>
     </div>
 
     {#if error}
-      <p class="text-red-600 mt-4">{error}</p>
+      <p class="text-red-600 dark:text-red-400 mt-4">{error}</p>
     {/if}
   </div>
 {/if}

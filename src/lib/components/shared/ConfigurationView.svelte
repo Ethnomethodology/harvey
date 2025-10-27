@@ -4,6 +4,8 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { ask } from '@tauri-apps/plugin-dialog';
+	import Dropdown from '$lib/components/shared/Dropdown.svelte';
+	import { themePreference } from '$lib/stores/themeStore.js';
 	import {
 		saveDownloadLocation,
 		getDownloadedModels,
@@ -103,19 +105,23 @@
 	}
 </script>
 
-<div class="p-6 flex flex-col h-full bg-gray-50">
+<div class="p-6 flex flex-col h-full bg-gray-50 dark:bg-surface-1 dark:text-text-primary">
 	<!-- Tab Navigation -->
-	<div class="border-b border-gray-200 mb-6 flex-shrink-0">
+	<div class="border-b border-gray-200 dark:border-border mb-6 flex-shrink-0">
 		<nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <button
 				on:click={() => activeTab = 'application'}
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:border-blue-500={activeTab === 'application'}
 				class:text-blue-600={activeTab === 'application'}
+				class:dark:text-blue-400={activeTab === 'application'}
 				class:border-transparent={activeTab !== 'application'}
 				class:text-gray-500={activeTab !== 'application'}
+				class:dark:text-gray-400={activeTab !== 'application'}
 				class:hover:text-gray-700={activeTab !== 'application'}
+				class:dark:hover:text-gray-200={activeTab !== 'application'}
 				class:hover:border-gray-300={activeTab !== 'application'}
+				class:dark:hover:border-gray-500={activeTab !== 'application'}
 				aria-current={activeTab === 'application' ? 'page' : undefined}
 			>
 				<span>Application</span>
@@ -131,10 +137,14 @@
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:border-blue-500={activeTab === 'transcription'}
 				class:text-blue-600={activeTab === 'transcription'}
+				class:dark:text-blue-400={activeTab === 'transcription'}
 				class:border-transparent={activeTab !== 'transcription'}
 				class:text-gray-500={activeTab !== 'transcription'}
+				class:dark:text-gray-400={activeTab !== 'transcription'}
 				class:hover:text-gray-700={activeTab !== 'transcription'}
+				class:dark:hover:text-gray-200={activeTab !== 'transcription'}
 				class:hover:border-gray-300={activeTab !== 'transcription'}
+				class:dark:hover:border-gray-500={activeTab !== 'transcription'}
 				aria-current={activeTab === 'transcription' ? 'page' : undefined}
 			>
 				<span>Transcription</span>
@@ -150,10 +160,14 @@
 				class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out focus:outline-none flex items-center space-x-2"
 				class:border-blue-500={activeTab === 'translation'}
 				class:text-blue-600={activeTab === 'translation'}
+				class:dark:text-blue-400={activeTab === 'translation'}
 				class:border-transparent={activeTab !== 'translation'}
 				class:text-gray-500={activeTab !== 'translation'}
+				class:dark:text-gray-400={activeTab !== 'translation'}
 				class:hover:text-gray-700={activeTab !== 'translation'}
+				class:dark:hover:text-gray-200={activeTab !== 'translation'}
 				class:hover:border-gray-300={activeTab !== 'translation'}
+				class:dark:hover:border-gray-500={activeTab !== 'translation'}
 				aria-current={activeTab === 'translation' ? 'page' : undefined}
 			>
 				<span>Translation</span>
@@ -172,15 +186,24 @@
 		{#if activeTab === 'application'}
             <div class="p-1">
                 {#if isLoadingConfig}
-                    <p class="text-gray-500 text-center py-4">Loading configuration...</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-center py-4">Loading configuration...</p>
                 {:else if configError}
-                    <p class="text-red-600 bg-red-100 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
+                    <p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 						<span class="font-medium">Error:</span> {configError}
 					</p>
                 {/if}
 
+				<div class="mb-6 flex-shrink-0">
+					<label for="theme-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme</label>
+					<Dropdown
+						containerClasses="w-full"
+						options={[{value: 'system', label: 'System'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]}
+						bind:value={$themePreference}
+					/>
+				</div>
+
                 <div class="mb-6 flex-shrink-0">
-                    <label for="download-location-input" class="block text-sm font-medium text-gray-700 mb-1">
+                    <label for="download-location-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
 						Local Model Download Location
 					</label>
                     <div class="flex items-center space-x-2">
@@ -204,17 +227,17 @@
 						</button>
                     </div>
                     {#if isBusy && !isMovingModels}
-                        <p class="text-xs text-gray-500 mt-1">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
 							Download in progress. Cannot change location now.
 						</p>
                     {/if}
                     {#if statusMessage}
-                        <p class="text-xs text-indigo-600 mt-1">{statusMessage}</p>
+                        <p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{statusMessage}</p>
                     {/if}
                 </div>
 
 				<div class="mb-6">
-					<h3 class="block text-sm font-semibold text-gray-700 mb-1">Required Tools</h3>
+					<h3 class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">Required Tools</h3>
 					<LibrariesPanel />
 					<HuggingFacePanel />
 				</div>

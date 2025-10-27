@@ -186,16 +186,16 @@
 <div class="flex flex-col h-full">
 	<InstallLogModal bind:showModal={showLogModal} logs={modalLogs} isInstalling={isDownloading} title="Downloading Translation Model" inProgressText="Downloading..." />
 	{#if configError}
-		<p class="text-red-600 bg-red-100 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
+		<p class="text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400 p-3 rounded-md text-sm text-left py-2 mb-4 break-words flex-shrink-0">
 			<span class="font-medium">Error:</span> {configError}
 		</p>
 	{/if}
 
 	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Helsinki-NLP models</a> for offline translation. To translate transcripts, you must first download one of the available models.
+		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Helsinki-NLP models</a> for offline translation. To translate transcripts, you must first download one of the available models.
 	</p>
 	{#if !$arePythonLibsInstalled}
-		<p class="text-orange-600 text-sm">
+		<p class="text-orange-600 dark:text-orange-400 text-sm">
 			Please install the required Python libraries first to enable model downloads.
 		</p>
 	{:else}
@@ -204,18 +204,18 @@
 				<div class="flex space-x-4 mb-4">
 				<label class="inline-flex items-center">
 					<input type="radio" class="form-radio" name="translationOption" value="selectLanguages" bind:group={selectedOption} on:change={handleOptionChange}>
-					<span class="ml-2 text-gray-700">Select Languages</span>
+					<span class="ml-2 text-gray-700 dark:text-gray-300">Select Languages</span>
 				</label>
 				<label class="inline-flex items-center">
 					<input type="radio" class="form-radio" name="translationOption" value="enterModelName" bind:group={selectedOption} on:change={handleOptionChange}>
-					<span class="ml-2 text-gray-700">Enter Model Name</span>
+					<span class="ml-2 text-gray-700 dark:text-gray-300">Enter Model Name</span>
 				</label>
 			</div>
 
 			{#if selectedOption === 'selectLanguages'}
 				<div class="flex items-end space-x-2">
 					<div class="flex flex-col">
-						<label for="from-language" class="block text-sm font-medium text-gray-700">From</label>
+						<label for="from-language" class="block text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
 						<Dropdown
 							id="from-language"
 							options={languages}
@@ -225,7 +225,7 @@
 						/>
 					</div>
 					<div class="flex flex-col">
-						<label for="to-language" class="block text-sm font-medium text-gray-700">To</label>
+						<label for="to-language" class="block text-sm font-medium text-gray-700 dark:text-gray-300">To</label>
 						<Dropdown
 							id="to-language"
 							options={languages}
@@ -245,7 +245,7 @@
 			{:else if selectedOption === 'enterModelName'}
 				<div class="flex items-end space-x-2">
 					<div class="flex flex-col">
-						<label for="model-name" class="block text-sm font-medium text-gray-700">Model Name</label>
+						<label for="model-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Model Name</label>
 						<input
 							id="model-name"
 							type="text"
@@ -267,12 +267,12 @@
 								
 		</div>
 		<div class="pt-4">
-		<h4 class="mt-2 text-sm font-semibold text-gray-700">Downloaded Models <span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600' : 'text-green-600'}">({downloadedModels.length} downloaded)</span></h4>
+		<h4 class="mt-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Downloaded Models <span class="text-xs font-normal {downloadedModels.length === 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}">({downloadedModels.length} downloaded)</span></h4>
 								<ul class="mt-2 space-y-2">
 									{#each downloadedModels as model (model.name)}
-										<li class="p-2 border rounded-md">
+										<li class="p-2 border dark:border-gray-700 rounded-md">
 											<div class="flex items-center justify-between">
-												<p class="text-sm font-medium text-gray-900">{formatModelDisplayName(model.name)}</p>
+												<p class="text-sm font-medium text-gray-900 dark:text-gray-200">{formatModelDisplayName(model.name)}</p>
 												<button on:click={() => handleDelete(model)} class="btn-delete">Delete</button>
 											</div>
 										</li>
@@ -295,10 +295,10 @@
         @apply border-transparent text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500;
     }
 	.btn-delete {
-		@apply border-gray-300 text-red-700 bg-red-50 hover:bg-red-100 focus:ring-red-400;
+		@apply border-gray-300 dark:border-gray-600 text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-800/20 focus:ring-red-400;
 	}
 	.btn-cancel {
-		@apply border-gray-300 text-gray-700 bg-gray-100 hover:bg-gray-200 focus:ring-indigo-500;
+		@apply border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:ring-indigo-500;
 	}
     .btn-retry {
         @apply border-transparent text-white bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-500;
