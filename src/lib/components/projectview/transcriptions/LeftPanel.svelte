@@ -35,7 +35,7 @@
 
         $: uniqueProjectFileTree = (() => {
         const normalizedBaseDirectory = normalizePath($project.baseDirectory);
-        const mediaPathPrefix = `${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`;
+        const mediaPathPrefix = normalizePath(`${normalizedBaseDirectory}${sep()}${HARVEY_FILES_DIR}${sep()}${MEDIA_DIR_NAME}`);
         const seen = new Set();
         console.log('[LeftPanel] Filtering projectFileTree...');
         console.log('[LeftPanel] normalizedBaseDirectory:', normalizedBaseDirectory);
