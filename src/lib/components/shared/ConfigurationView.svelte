@@ -196,7 +196,7 @@
 				<div class="mb-6 flex-shrink-0">
 					<label for="theme-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Theme</label>
 					<Dropdown
-						containerClasses="w-full"
+						containerClasses="w-48"
 						options={[{value: 'system', label: 'System'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]}
 						bind:value={$themePreference}
 					/>
@@ -252,7 +252,10 @@
 
 <style lang="postcss">
 	.input {
-		@apply bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500;
+		@apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2.5 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500;
+	}
+	.input:read-only {
+		@apply bg-gray-100 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed;
 	}
 	.btn-blue {
 		@apply px-2.5 py-1.5 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed;
