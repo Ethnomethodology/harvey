@@ -7,6 +7,13 @@ import { listen } from '@tauri-apps/api/event';
 import notificationManager from '$lib/stores/notificationStore.js';
 import { project as projectMainStore, updateProjectStoreState } from './projectStore.js';
 
+function normalizePath(path) {
+    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
+        return path.substring(4);
+    }
+    return path;
+}
+
 
 const DUAL_MODE_STORAGE_KEY = 'harvey-dual-mode';
 
@@ -1063,7 +1070,8 @@ export async function switchTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const normalizedPath = normalizePath(path);
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
         setTranscriptData(path, segments); // This will handle remapping speakers and updating the store
     } catch (e) {
@@ -1400,7 +1408,8 @@ export async function setSecondaryTranscript(path) {
 
     try {
         const projectService = await import('../services/projectService.js');
-        const jsonString = await invoke('load_transcript_json', { transcriptPath: path });
+        const normalizedPath = normalizePath(path);
+        const jsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segments = projectService.parseLexicalTableToSegments(jsonString);
 
         const primarySegments = get(transcriptStore).segments;

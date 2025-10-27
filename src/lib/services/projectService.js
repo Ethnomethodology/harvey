@@ -90,6 +90,12 @@ import {
 
 import notificationStore from '$lib/stores/notificationStore.js';
 
+function normalizePath(path) {
+    if (typeof path === 'string' && path.startsWith('\\\\?\\')) {
+        return path.substring(4);
+    }
+    return path;
+}
 
 /**
  * Updates the name and description for a specific tag.
@@ -969,7 +975,8 @@ export async function loadTranscriptFile(transcriptFilePath) {
     const filename = transcriptFilePath.split(/[\\/]/).pop();
     project.update(p => ({ ...p, statusMessage: `Loading transcript ${filename}...` }));
     try {
-        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: transcriptFilePath });
+        const normalizedPath = normalizePath(transcriptFilePath);
+        const fullLexicalJsonString = await invoke('load_transcript_json', { transcriptPath: normalizedPath });
         const segmentsArray = parseLexicalTableToSegments(fullLexicalJsonString);
         const currentProject = get(project);
         const projectBaseDir = currentProject.baseDirectory;
