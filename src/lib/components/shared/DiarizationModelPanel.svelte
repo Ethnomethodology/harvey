@@ -4,7 +4,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
-  import { setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
+  import { configStatus, setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
   export let arePythonLibrariesInstalled = false;
@@ -98,7 +98,7 @@
 
   // Reactively check status based on Python library installation
   $: {
-    if (arePythonLibrariesInstalled) {
+    if ($configStatus.python_libraries_installed) {
         checkAccessStatus();
     } else {
         // Reset local state if Python libraries are not installed
@@ -153,7 +153,7 @@
 </div>
 
 {#if isPanelOpen}
-  <div class="p-4 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
+  <div class="p-4 bg-gray-100 dark:bg-[var(--color-surface-2)] border-b border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-300">
     <div class="mb-4">
         <p class="mb-2">
             Harvey uses the <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">pyannote/speaker-diarization-3.1</code> model for speaker diarization.
@@ -166,7 +166,7 @@
         </button>
     </div>
 
-    {#if arePythonLibrariesInstalled}
+    {#if $configStatus.python_libraries_installed}
     <div class="flex items-center space-x-2">
         {#if !hasAccess}
             <button on:click={handleDownload} class="btn-blue" disabled={isDownloading}>

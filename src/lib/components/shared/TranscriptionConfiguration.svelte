@@ -298,7 +298,7 @@
 				{/if}
 			</div>
 		{/if}
-		<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.arePythonLibrariesInstalled} />
+		<DiarizationModelPanel arePythonLibrariesInstalled={$configStatus.python_libraries_installed} />
 	</div>
 </div>
 
