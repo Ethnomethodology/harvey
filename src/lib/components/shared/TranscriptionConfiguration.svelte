@@ -9,7 +9,7 @@
 		getDownloadedModels,
 		cancelDownload,
 	} from '$lib/services/configureActions';
-	import { setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
+	import { configStatus, setTranscriptionModelsDownloaded } from '$lib/stores/configStatusStore.js';
 	import DiarizationModelPanel from './DiarizationModelPanel.svelte';
 
 	export let downloadLocation = '';
@@ -237,8 +237,13 @@
 				<p class="text-sm text-gray-600 dark:text-gray-400 px-1 mb-3">
 					Harvey uses <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded px-1 py-0.5">whisper.cpp</code> for transcription. To transcribe audio or video files, you must first download one of the available models.
 				</p>
-				{#each availableModels as model (model.name)}
-					{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
+				{#if !$configStatus.python_libraries_installed}
+					<p class="text-orange-600 dark:text-orange-400 text-sm px-1">
+						Please install the required Python libraries first to enable model downloads.
+					</p>
+				{:else}
+					{#each availableModels as model (model.name)}
+						{@const display = modelDisplayData[model.name] || { status: 'not_downloaded', progressText: '', progressPercent: 0 }}
 					{@const status = display.status}
 					{@const isDownloadEnabled = !isBusy && downloadLocation && downloadLocation.trim() !== '' && model.download_url}
 					{@const isDeleteEnabled = !isBusy}
@@ -289,6 +294,7 @@
 				{/each}
 				{#if availableModels.length === 0}
 					<p class="text-center text-gray-500 dark:text-gray-400 pt-4">No models defined in the application.</p>
+				{/if}
 				{/if}
 			</div>
 		{/if}

@@ -3,7 +3,7 @@
 	import { ask } from '@tauri-apps/plugin-dialog';
 	import { listen } from '@tauri-apps/api/event';
 	import { open as openExternal } from '@tauri-apps/plugin-shell';
-	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
+	import { configStatus } from '$lib/stores/configStatusStore.js';
 	import {
 		downloadTranslationModel,
 		deleteTranslationModel,
@@ -194,7 +194,7 @@
 	<p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
 		Harvey uses open-source <a href="https://huggingface.co/Helsinki-NLP" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">Helsinki-NLP models</a> for offline translation. To translate transcripts, you must first download one of the available models.
 	</p>
-	{#if !$arePythonLibsInstalled}
+	{#if !$configStatus.python_libraries_installed}
 		<p class="text-orange-600 dark:text-orange-400 text-sm">
 			Please install the required Python libraries first to enable model downloads.
 		</p>
