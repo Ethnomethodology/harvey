@@ -4,9 +4,10 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { open as openExternal } from '@tauri-apps/plugin-shell';
-  import { configStatus, setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
+  import { setDiarizationModelDownloaded } from '$lib/stores/configStatusStore.js';
   import InstallLogModal from '../modals/InstallLogModal.svelte';
 
+  export let arePythonLibrariesInstalled = false;
   let isPanelOpen = false;
   let hasAccess = false;
   let isLoading = true;
@@ -97,7 +98,7 @@
 
   // Reactively check status based on Python library installation
   $: {
-    if ($configStatus.arePythonLibrariesInstalled) {
+    if (arePythonLibrariesInstalled) {
         checkAccessStatus();
     } else {
         // Reset local state if Python libraries are not installed
@@ -165,7 +166,7 @@
         </button>
     </div>
 
-    {#if $configStatus.arePythonLibrariesInstalled}
+    {#if arePythonLibrariesInstalled}
     <div class="flex items-center space-x-2">
         {#if !hasAccess}
             <button on:click={handleDownload} class="btn-blue" disabled={isDownloading}>
