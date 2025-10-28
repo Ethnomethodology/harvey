@@ -49,11 +49,6 @@
 	onMount(async () => {
         await checkStatus();
 
-        // Temporary diagnostic code
-        invoke('list_venv_lib_contents')
-            .then(contents => console.log('Venv lib contents:', contents))
-            .catch(err => console.error('Error listing venv lib contents:', err));
-
         unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
             await checkStatus(); // Re-check status after installation attempt
