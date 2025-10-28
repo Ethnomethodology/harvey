@@ -679,6 +679,17 @@ pub async fn delete_model(model_to_delete: ModelInfo) -> Result<(), CommandError
     config.downloaded_models.retain(|m| m.name != model_to_delete.name);
 
     if config.downloaded_models.len() < initial_len {
+        let remaining_models = &config.downloaded_models;
+        let has_transcription_models = remaining_models.iter().any(|m| !m.name.contains("opus-mt"));
+        let has_translation_models = remaining_models.iter().any(|m| m.name.contains("opus-mt"));
+
+        if !has_transcription_models {
+            config.verification_status.transcription_models_verified = false;
+        }
+        if !has_translation_models {
+            config.verification_status.translation_models_verified = false;
+        }
+
         write_config(&config)?;
         log::info!("Removed entry '{}' from config.", model_to_delete.name);
     } else {

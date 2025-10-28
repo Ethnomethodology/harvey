@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_shell::{Shell, ShellExt};
-use crate::welcome::config::{CommandError, get_config_dir};
+use crate::welcome::config::{CommandError, get_config_dir, read_config, write_config};
 use std::path::{PathBuf};
 use std::fs::{self};
 // use std::io;
@@ -452,6 +452,10 @@ pub async fn delete_virtual_env() -> Result<(), String> {
         std::fs::remove_dir_all(&env_path)
             .map_err(|e| format!("Failed to delete environment: {}", e))?;
         log::info!("Environment deleted successfully.");
+
+        let mut config = read_config().map_err(|e| e.to_string())?;
+        config.verification_status.python_libraries_verified = false;
+        write_config(&config).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

@@ -51,6 +51,20 @@ pub struct ModelInfo {
 
 // *** Config Struct with Theme Preference ***
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct VerificationStatus {
+    #[serde(default)]
+    pub python_libraries_verified: bool,
+    #[serde(default)]
+    pub transcription_models_verified: bool,
+    #[serde(default)]
+    pub translation_models_verified: bool,
+    #[serde(default)]
+    pub diarization_model_verified: bool,
+    #[serde(default)]
+    pub hf_token_verified: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename = "config")]
 pub struct Config {
     #[serde(rename = "project", default)]
@@ -68,6 +82,9 @@ pub struct Config {
 
     #[serde(rename = "ffmpegPath", default, skip_serializing_if = "Option::is_none")]
     pub ffmpeg_path: Option<String>,
+
+    #[serde(rename = "verification_status", default)]
+    pub verification_status: VerificationStatus,
 }
 
 
