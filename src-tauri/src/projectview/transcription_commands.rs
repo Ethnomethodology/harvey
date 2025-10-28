@@ -925,11 +925,7 @@ pub(crate) fn prepare_output_paths(
 
     // --- Paths for original transcript ---
     let temp_whisper_output_base_orig = transcripts_dir.join(format!("whisper_temp_{}_orig", job_id));
-    let temp_whisper_output_base_orig_str = if cfg!(target_os = "windows") {
-        temp_whisper_output_base_orig.to_string_lossy().replace("/", "\\")
-    } else {
-        temp_whisper_output_base_orig.to_string_lossy().to_string()
-    };
+    let temp_whisper_output_base_orig_str = temp_whisper_output_base_orig.to_string_lossy().to_string();
     let expected_whisper_temp_json_path_orig = temp_whisper_output_base_orig.with_extension("json");
 
     let mut final_transcript_path_orig = transcripts_dir.join(format!("{}_1.json", media_filename_stem));
@@ -952,11 +948,7 @@ pub(crate) fn prepare_output_paths(
 
     if translate_to_english {
         let temp_whisper_output_base_en = transcripts_dir.join(format!("whisper_temp_{}_en", job_id));
-        temp_whisper_output_base_en_str_opt = Some(if cfg!(target_os = "windows") {
-            temp_whisper_output_base_en.to_string_lossy().replace("/", "\\")
-        } else {
-            temp_whisper_output_base_en.to_string_lossy().to_string()
-        });
+        temp_whisper_output_base_en_str_opt = Some(temp_whisper_output_base_en.to_string_lossy().to_string());
         expected_whisper_temp_json_path_en_opt = Some(temp_whisper_output_base_en.with_extension("json"));
 
         let mut final_transcript_path_en = transcripts_dir.join(format!("{}.en.json", media_filename_stem));
