@@ -3,12 +3,10 @@
 	import { get } from 'svelte/store';
 	import { invoke } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
-	import { arePythonLibsInstalled } from '$lib/stores/pythonStore.js';
-	import { setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
+	import { configStatus, updateConfigStatus, setPythonLibrariesInstalled } from '$lib/stores/configStatusStore.js';
 	import InstallLogModal from '../modals/InstallLogModal.svelte';
 
 	let isPanelOpen = false;
-	let isLoading = true;
 	let error = '';
 	let showInstallModal = false;
 	let installLogs = [];
@@ -22,7 +20,6 @@
 		error = '';
 		try {
 			await invoke('delete_virtual_env');
-			await checkStatus(); // Re-check status after deletion
 			setPythonLibrariesInstalled(false);
 		} catch (e) {
 			console.error('Error deleting virtual environment:', e);
@@ -32,27 +29,10 @@
 		}
 	}
 
-	async function checkStatus() {
-		try {
-			isLoading = true;
-			const status = await invoke('check_python_libraries_installed');
-            arePythonLibsInstalled.set(status);
-		} catch (e) {
-			console.error('Error checking Python library status:', e);
-			error = '';
-			arePythonLibsInstalled.set(false);
-		} finally {
-			isLoading = false;
-		}
-	}
-
 	onMount(async () => {
-        await checkStatus();
-
         unlistenFinished = await listen('installation-finished', async () => {
             isInstalling = false;
-            await checkStatus(); // Re-check status after installation attempt
-            setPythonLibrariesInstalled(get(arePythonLibsInstalled));
+            await updateConfigStatus(true);
         });
     });
 
@@ -97,9 +77,9 @@
 			<h3 class="block text-sm font-medium text-gray-700 dark:text-gray-200">Libraries</h3>
 		</div>
 		<div class="flex items-center">
-			{#if isLoading}
+			{#if !$configStatus.isInitialized}
 				<span class="text-xs text-gray-500 dark:text-gray-400 mr-2">Checking...</span>
-			{:else if $arePythonLibsInstalled}
+			{:else if $configStatus.python_libraries_installed}
 				<span class="text-sm font-medium text-green-600 dark:text-green-400 mr-2">Installed</span>
 			{:else}
 				<span class="text-sm font-medium text-red-600 dark:text-red-400 mr-2"
@@ -129,9 +109,9 @@
 			transcripts, Harvey needs to install a few extra components.
 		</p>
 		<div class="flex items-center">
-			{#if isLoading}
+			{#if !$configStatus.isInitialized}
 				<p class="text-gray-500 dark:text-gray-400">Checking...</p>
-			{:else if $arePythonLibsInstalled}
+			{:else if $configStatus.python_libraries_installed}
 				<p class="text-green-600 dark:text-green-400 mr-4">Libraries are installed.</p>
 				<button class="btn-red-small" on:click={handleDelete} disabled={isDeleting || isInstalling}>
 					{#if isDeleting}Deleting...{:else}Delete{/if}
