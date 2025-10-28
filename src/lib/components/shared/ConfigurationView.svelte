@@ -17,7 +17,7 @@
 	import TranslationConfiguration from './TranslationConfiguration.svelte';
 	import LibrariesPanel from './LibrariesPanel.svelte';
 	import HuggingFacePanel from './HuggingFacePanel.svelte';
-	import { configStatus } from '$lib/stores/configStatusStore.js';
+	import { configStatus, updateConfigStatus } from '$lib/stores/configStatusStore.js';
 
 	let activeTab = 'application'; // 'application', 'transcription', or 'translation'
 	let isWinArm64 = false;
@@ -34,6 +34,7 @@
 	$: isBusy = isMovingModels || isTranscriptionBusy || isTranslationBusy;
 
 	onMount(async () => {
+		updateConfigStatus(true); // Force a refresh when the component mounts
 		isLoadingConfig = true;
 		configError = '';
 		statusMessage = '';

@@ -16,9 +16,9 @@ const initialStatus = {
 export const configStatus = writable(initialStatus);
 
 // Function to fetch the status from the backend and update the store
-export async function updateConfigStatus() {
-    if (get(configStatus).isInitialized) {
-        console.log("Config status already initialized, skipping backend check.");
+export async function updateConfigStatus(force = false) {
+    if (get(configStatus).isInitialized && !force) {
+        console.log("Config status already initialized and not forced, skipping backend check.");
         return;
     }
     try {

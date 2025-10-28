@@ -30,7 +30,7 @@
 	}
 
 	function handleSelectWaveformLayout(event) {
-		const newWaveformLayout = event.target.value;
+		const newWaveformLayout = event.detail;
 		waveformLayoutStore.setLayout(newWaveformLayout);
 		// selectedWaveformLayout will update reactively due to store subscription
 	}
@@ -110,7 +110,7 @@
 					containerClasses="w-full"
 					options={[{value: 'false', label: 'Disable'}, {value: 'true', label: 'Enable'}]}
 					value={$transcriptStore.isDualModeActive ? 'true' : 'false'}
-					on:change={(e) => toggleDualMode(e.detail.value === 'true')}
+					on:change={(e) => toggleDualMode(e.detail === 'true')}
 					disabled={$transcriptStore.transcriptDirty}
 					title={$transcriptStore.transcriptDirty ? 'Save changes to enable' : ''}
 				/>
