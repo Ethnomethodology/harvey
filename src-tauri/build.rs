@@ -52,13 +52,12 @@ fn main() -> Result<()> {
         }
         fs::create_dir_all(&sidecars_dir)?;
 
-        let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
-        download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
-
-        // if target_platform == "windows-x86_64" {
-        //     println!("cargo:warning=Downloading ffmpeg for windows-x86_64...");
-        //     download_and_unzip("ffmpeg-windows-x86_64", &sidecars_dir)?;
-        // }
+        if target_triple.contains("windows") {
+            download_whisper_for_windows(&sidecars_dir)?;
+        } else {
+            let whisper_asset_name = format!("whisper-sidecars-{}", target_platform);
+            download_and_unzip(&whisper_asset_name, &sidecars_dir)?;
+        }
 
         rename_sidecar_binaries_for_tauri(&sidecars_dir)?;
 
@@ -463,4 +462,54 @@ fn download_and_unzip(asset_name: &str, dest_dir: &Path) -> Result<()> {
 
         
 
-    
+
+fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
+    let asset_name = "whisper-blas-bin-x64.zip";
+    let url = format!(
+        "https://github.com/ggml-org/whisper.cpp/releases/latest/download/{}",
+        asset_name
+    );
+
+    println!("cargo:info=Downloading {} for Windows from {}", asset_name, url);
+
+    let agent = ureq::builder().build();
+    let response = agent.get(&url).call().with_context(|| format!("Failed to download from {}", url))?;
+
+    if response.status() != 200 {
+        anyhow::bail!("Failed to download from {}: HTTP {}", url, response.status());
+    }
+
+    let mut bytes = Vec::new();
+    response.into_reader().read_to_end(&mut bytes)?;
+
+    let cursor = io::Cursor::new(bytes);
+    let mut archive = ZipArchive::new(cursor)?;
+
+    let temp_extract_dir = dest_dir.join("_temp_extract");
+    fs::create_dir_all(&temp_extract_dir)?;
+
+    archive.extract(&temp_extract_dir)?;
+
+    let files_to_keep = ["whisper-cli.exe", "whisper-stream.exe", "SDL2.dll"];
+    let whisper_dir = temp_extract_dir.join("whisper-blas-bin-x64");
+
+    if whisper_dir.exists() {
+        for file_name in &files_to_keep {
+            let src_path = whisper_dir.join(file_name);
+            let dest_path = dest_dir.join(file_name);
+            if src_path.exists() {
+                fs::rename(&src_path, &dest_path).with_context(|| {
+                    format!("Failed to move {} to {}", src_path.display(), dest_path.display())
+                })?;
+            } else {
+                println!("cargo:warning=Expected file {} not found in archive.", src_path.display());
+            }
+        }
+    } else {
+        anyhow::bail!("The expected directory '{}' was not found in the zip archive.", whisper_dir.display());
+    }
+
+    fs::remove_dir_all(&temp_extract_dir)?;
+
+    Ok(())
+}
