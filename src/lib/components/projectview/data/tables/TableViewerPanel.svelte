@@ -664,7 +664,8 @@
     function handleSearch() {
         if (!tabulatorInstance) return;
         const term = searchTerm.trim();
-        tabulatorInstance.setFilter(term ? columnFields.map(field => ({ field, type: 'like', value: term })) : []);
+        // Wrap the filters in an outer array to use OR logic instead of AND
+        tabulatorInstance.setFilter(term ? [columnFields.map(field => ({ field, type: 'like', value: term }))] : []);
         searchMatches = tabulatorInstance.getRows("active");
         currentMatchIndex = -1;
         if (searchMatches.length > 0) navigateToMatch(0);
