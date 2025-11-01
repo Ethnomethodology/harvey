@@ -2600,7 +2600,7 @@ function updateHighlightOverlayColor(id, color) {
             on:mouseenter={handleToolbarMouseEnter}
             on:mouseleave={handleToolbarMouseLeave} >
 
-            {#each highlightColors as color}
+            {#each highlightOptions.filter(opt => opt.label !== 'None') as opt}
                 <button class="floating-toolbar-button"
                     title="{toolbarMode === 'click' ? `Change highlight to ${opt.label}` : `Highlight selection ${opt.label}`}"
                     on:click|stopPropagation={() => { handleHighlightAction(opt.value); }}>
