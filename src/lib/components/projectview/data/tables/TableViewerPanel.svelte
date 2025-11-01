@@ -663,12 +663,34 @@
 
     function handleSearch() {
         if (!tabulatorInstance) return;
-        const term = searchTerm.trim();
-        // Wrap the filters in an outer array to use OR logic instead of AND
-        tabulatorInstance.setFilter(term ? [columnFields.map(field => ({ field, type: 'like', value: term }))] : []);
+        const term = searchTerm.trim().toLowerCase();
+
+        if (!term) {
+            tabulatorInstance.clearFilter();
+            searchMatches = [];
+            currentMatchIndex = -1;
+            return;
+        }
+
+        // The issue is that the `setFilter` function needs a single function
+        // that returns true if the row should be shown. We can't just pass an
+        // array of filters and expect it to work with OR.
+        tabulatorInstance.setFilter((data) => {
+            // This custom filter function will now check all columns.
+            for (const field of columnFields) {
+                const value = data[field];
+                if (value !== null && value !== undefined && String(value).toLowerCase().includes(term)) {
+                    return true; // If any column matches, show the row.
+                }
+            }
+            return false; // If no column matches, hide the row.
+        });
+
         searchMatches = tabulatorInstance.getRows("active");
         currentMatchIndex = -1;
-        if (searchMatches.length > 0) navigateToMatch(0);
+        if (searchMatches.length > 0) {
+            navigateToMatch(0);
+        }
     }
 
     async function navigateToMatch(index) {
