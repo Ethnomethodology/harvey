@@ -39,6 +39,7 @@
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
     let tableClipboard = null;
+    let searchInputRef = null;
 
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
@@ -714,11 +715,14 @@
         // Redraw the table to apply the search term highlighting via the formatter
         tabulatorInstance.redraw(true);
 
-        // Do not navigate automatically on every keystroke, as it steals focus from the input.
-        // Navigation should be user-initiated via Enter key or the next/previous buttons.
-        // if (cellMatches.length > 0) {
-        //     navigateToMatch(0);
-        // }
+        if (cellMatches.length > 0) {
+            navigateToMatch(0);
+        }
+
+        // Restore focus to the search input after the search is complete
+        if (searchInputRef) {
+            searchInputRef.focus();
+        }
     }
 
     async function navigateToMatch(index) {
@@ -885,6 +889,7 @@
          <div class="flex items-center space-x-2">
             <input
               type="search"
+              bind:this={searchInputRef}
               bind:value={searchTerm}
               on:input={handleSearch}
               on:keydown={e => {
