@@ -349,6 +349,7 @@
         if (!tabulatorInstance || !rows || rows.length === 0) return;
 
         let currentHighlights = get(project).currentTableHighlights || [];
+        const orderedColumns = tabulatorInstance.getColumns().filter(c => c.getField());
 
         rows.forEach(row => {
             const rowData = row.getData();
@@ -358,8 +359,15 @@
             currentHighlights = currentHighlights.filter(h => h.id !== `row-${rowIndex}`);
 
             if (color) {
-                // Add new highlight
-                const text = Object.values(rowData).filter(val => val !== null && val !== undefined).join(' | ');
+                // Construct the text in the correct order, starting with the 1-indexed row number.
+                const rowNumber = rowIndex + 1;
+                const textParts = [rowNumber.toString()];
+                orderedColumns.forEach(column => {
+                    const value = rowData[column.getField()];
+                    textParts.push(value !== null && value !== undefined ? value : "");
+                });
+                const text = textParts.join(' | ');
+
                 const newHighlight = {
                     id: `row-${rowIndex}`,
                     color: color,
