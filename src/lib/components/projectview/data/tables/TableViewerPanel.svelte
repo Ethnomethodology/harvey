@@ -161,7 +161,7 @@
 
     async function insertColumn(column, position) {
         const newFieldName = getUniqueColumnName("NewColumn");
-        const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: areFiltersVisible ? customHeaderFilterEditor : null };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
 
@@ -187,7 +187,7 @@
             return;
         }
         const newFieldName = getUniqueColumnName(tableClipboard.header);
-        const newColumnDef = { title: tableClipboard.header, field: newFieldName, editor: "textarea", headerFilter: "input" };
+        const newColumnDef = { title: tableClipboard.header, field: newFieldName, editor: "textarea", headerFilter: areFiltersVisible ? customHeaderFilterEditor : null };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
             const rows = tabulatorInstance.getRows();
