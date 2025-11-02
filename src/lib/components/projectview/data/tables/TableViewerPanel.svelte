@@ -49,17 +49,18 @@
         areFiltersVisible = !areFiltersVisible;
         const columns = tabulatorInstance.getColumns();
 
-        // Use Promise.all to apply all updates concurrently.
         await Promise.all(
-            columns.map(column => {
+            columns.map(async (column) => {
                 const definition = column.getDefinition();
-                // Only update columns that actually have a header filter defined.
-                if (definition.field && definition.headerFilter) {
-                    return tabulatorInstance.updateColumnDefinition(definition.field, {
-                        headerFilterVisible: areFiltersVisible
+                if (definition.field) { // Ensure it's a data column
+                    if (!areFiltersVisible) {
+                        // Clear the filter value before hiding
+                        tabulatorInstance.setHeaderFilterValue(definition.field, "");
+                    }
+                    await tabulatorInstance.updateColumnDefinition(definition.field, {
+                        headerFilter: areFiltersVisible ? customHeaderFilterEditor : null
                     });
                 }
-                return Promise.resolve(); // No action needed for this column.
             })
         );
         showOptionsMenu = false; // Hide menu after action
