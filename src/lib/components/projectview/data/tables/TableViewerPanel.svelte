@@ -130,12 +130,15 @@
     }
 
     async function deleteColumn(column) {
+        const columnName = column.getField();
         try {
+            await deleteTableColumn(tablePath, columnName);
             await column.delete();
-            await saveTableChanges();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
-            console.error(`Error deleting column:`, err);
+            console.error(`Error deleting column "${columnName}":`, err);
+            // If the backend fails, we should probably reload to be safe
+            await initializeTable(tablePath, null, true);
         }
     }
 
@@ -168,10 +171,12 @@
             field: newFieldName,
             editor: "textarea",
             headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
-            headerContextMenu: getColumnContextMenu,
         };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+            await tabulatorInstance.updateColumnDefinition(newFieldName, {
+                headerContextMenu: getColumnContextMenu
+            });
             const rows = tabulatorInstance.getRows();
             rows.forEach(row => {
                 const cell = row.getCell(newFieldName);
@@ -197,10 +202,12 @@
             field: newFieldName,
             editor: "textarea",
             headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
-            headerContextMenu: getColumnContextMenu,
         };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
+            await tabulatorInstance.updateColumnDefinition(newFieldName, {
+                headerContextMenu: getColumnContextMenu
+            });
             const rows = tabulatorInstance.getRows();
             rows.forEach((row, index) => {
                 if (tableClipboard.values[index] !== undefined) {
