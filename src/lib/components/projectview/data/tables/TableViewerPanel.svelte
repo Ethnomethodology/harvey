@@ -672,18 +672,19 @@
             return;
         }
 
-        // The issue is that the `setFilter` function needs a single function
-        // that returns true if the row should be shown. We can't just pass an
-        // array of filters and expect it to work with OR.
+        // Use a custom filter function to perform a case-insensitive "OR" search across all columns.
         tabulatorInstance.setFilter((data) => {
-            // This custom filter function will now check all columns.
-            for (const field of columnFields) {
-                const value = data[field];
+            for (const key in data) {
+                // Exclude internal properties from the search
+                if (key === 'harvey_internal_id') {
+                    continue;
+                }
+                const value = data[key];
                 if (value !== null && value !== undefined && String(value).toLowerCase().includes(term)) {
-                    return true; // If any column matches, show the row.
+                    return true; // Return true if a match is found in any column
                 }
             }
-            return false; // If no column matches, hide the row.
+            return false; // Return false if no match is found
         });
 
         searchMatches = tabulatorInstance.getRows("active");
