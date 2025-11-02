@@ -256,6 +256,7 @@ pub fn run() {
             
 
             // --- Project view TABLE commands ---
+            projectview::table_handler::create_new_table,
             projectview::table_handler::import_table_file,
             projectview::table_handler::load_table_data,
             projectview::table_handler::set_table_headers,

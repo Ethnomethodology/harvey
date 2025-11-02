@@ -892,3 +892,47 @@ mod tests {
         Ok(())
     }
 }
+#[tauri::command]
+pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) -> Result<String, CommandError> {
+    info!("[Backend Create Table] Start: project_xml_path={}, headers={:?}", project_xml_path, headers);
+
+    let xml_path = PathBuf::from(&project_xml_path);
+    let project_base_dir = xml_path.parent().ok_or_else(|| CommandError::from("Could not get project base directory."))?;
+
+    let mut project_data: ProjectXml = quick_xml::de::from_str(&fs::read_to_string(&xml_path)?)?;
+
+    // Create a unique filename
+    let mut i = 1;
+    let new_table_path;
+    let new_table_name;
+    loop {
+        let table_name = format!("Untitled_{}.csv", i);
+        let relative_path = format!("{}/{}/{}", HARVEY_FILES_DIR, TABLES_DIR, table_name);
+        if !project_data.table_files.files.iter().any(|f| f.relative_path == relative_path) {
+            new_table_path = project_base_dir.join(&relative_path);
+            new_table_name = table_name;
+            break;
+        }
+        i += 1;
+    }
+
+    // Create the CSV file with headers and an empty row
+    fs::create_dir_all(new_table_path.parent().unwrap())?;
+    let mut wtr = csv::Writer::from_path(&new_table_path)?;
+    wtr.write_record(&headers)?;
+    wtr.write_record(headers.iter().map(|_| ""))?;
+    wtr.flush()?;
+
+    // Update project XML
+    project_data.table_files.files.push(TableEntryXml {
+        name: new_table_name.clone(),
+        relative_path: new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/"),
+        has_headers: Some(true),
+        language_code: None,
+    });
+    project_data.table_files.files.sort_by(|a, b| a.name.cmp(&b.name));
+    save_project_xml(&xml_path, &project_data)?;
+
+    info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
+    Ok(new_table_path.to_string_lossy().to_string())
+}

@@ -9,6 +9,7 @@ use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 #[cfg(not(target_os = "windows"))]
 use tauri_plugin_opener::OpenerExt;
+use csv;
 
 use std::{
     fs::{self},
