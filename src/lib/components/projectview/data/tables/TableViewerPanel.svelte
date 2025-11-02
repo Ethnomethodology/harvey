@@ -42,7 +42,7 @@
     let searchInputRef = null;
 
     let showOptionsMenu = false;
-    let areFiltersVisible = true; // Start with the assumption that filters are visible
+    let areFiltersVisible = false; // Start with the assumption that filters are hidden
 
     async function toggleFilters() {
         if (!tabulatorInstance) return;
@@ -416,7 +416,7 @@
             const colDef = {
                 title: header,
                 field: header,
-                headerFilter: customHeaderFilterEditor, // Use custom editor
+                headerFilter: areFiltersVisible ? customHeaderFilterEditor : null, // Use custom editor
                 headerFilterPlaceholder: "Filter...", // Add a placeholder
                 headerFilterFunc: function(headerValue, rowValue, rowData, filterParams){
                     // headerValue is the value from the header filter input
