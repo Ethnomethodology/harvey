@@ -97,7 +97,9 @@
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
         const columns = tabulatorInstance.getColumns();
-        const orderedHeaders = columns.map(column => column.getDefinition().title);
+        const orderedHeaders = columns
+            .filter(column => column.getField()) // Ensure we only get data columns
+            .map(column => column.getDefinition().title);
 
         await saveTableData(tablePath, dataToSave, orderedHeaders);
     }
