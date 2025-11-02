@@ -273,7 +273,7 @@ pub fn remove_tag_from_highlight(
 
     if let Some(json_str) = json_string_opt {
         // 2. Parse and modify the JSON
-        let mut highlights: Vec<serde_json::Value> = match serde_json::from_str(&json_str) {
+        let mut data: serde_json::Value = match serde_json::from_str(&json_str) {
             Ok(v) => v,
             Err(e) => {
                 let err_msg = format!("Failed to parse JSON from DB for file {}: {}", file_path, e);
@@ -283,26 +283,66 @@ pub fn remove_tag_from_highlight(
         };
 
         let mut was_modified = false;
-        for highlight in highlights.iter_mut() {
-            if let Some(h_obj) = highlight.as_object_mut() {
-                if h_obj.get("id").and_then(|v| v.as_str()) == Some(&highlight_id) {
-                    if let Some(tags_val) = h_obj.get_mut("tags") {
-                        if let Some(tags_arr) = tags_val.as_array_mut() {
-                            let initial_len = tags_arr.len();
-                            tags_arr.retain(|t| t.as_str() != Some(&tag_to_remove));
-                            if tags_arr.len() < initial_len {
-                                was_modified = true;
+        if doc_type == "table" {
+            // Handle table styles, which can be a complex object.
+            // We need to find the specific style object by its ID.
+            // This is a recursive search function.
+            fn find_and_modify_tag<'a>(
+                current: &'a mut serde_json::Value,
+                highlight_id: &str,
+                tag_to_remove: &str,
+                modified: &mut bool,
+            ) {
+                if current.is_object() {
+                    let obj = current.as_object_mut().unwrap();
+                    if obj.get("id").and_then(|v| v.as_str()) == Some(highlight_id) {
+                        if let Some(tags_val) = obj.get_mut("tags") {
+                            if let Some(tags_arr) = tags_val.as_array_mut() {
+                                let initial_len = tags_arr.len();
+                                tags_arr.retain(|t| t.as_str() != Some(tag_to_remove));
+                                if tags_arr.len() < initial_len {
+                                    *modified = true;
+                                }
                             }
                         }
+                        return; // Found it, stop recursing this branch
                     }
-                    break; // Found and processed the highlight, exit loop
+                    // Recurse into nested objects and arrays
+                    for (_key, value) in obj {
+                        find_and_modify_tag(value, highlight_id, tag_to_remove, modified);
+                    }
+                } else if current.is_array() {
+                    for item in current.as_array_mut().unwrap() {
+                        find_and_modify_tag(item, highlight_id, tag_to_remove, modified);
+                    }
+                }
+            }
+            find_and_modify_tag(&mut data, &highlight_id, &tag_to_remove, &mut was_modified);
+        } else {
+            // Handle other doc types which are arrays of highlights
+            if let Some(highlights) = data.as_array_mut() {
+                for highlight in highlights.iter_mut() {
+                    if let Some(h_obj) = highlight.as_object_mut() {
+                        if h_obj.get("id").and_then(|v| v.as_str()) == Some(&highlight_id) {
+                            if let Some(tags_val) = h_obj.get_mut("tags") {
+                                if let Some(tags_arr) = tags_val.as_array_mut() {
+                                    let initial_len = tags_arr.len();
+                                    tags_arr.retain(|t| t.as_str() != Some(&tag_to_remove));
+                                    if tags_arr.len() < initial_len {
+                                        was_modified = true;
+                                    }
+                                }
+                            }
+                            break; // Found and processed the highlight, exit loop
+                        }
+                    }
                 }
             }
         }
 
         // 3. Save the modified JSON back to the DB
         if was_modified {
-            let new_json_string = serde_json::to_string(&highlights)?;
+            let new_json_string = serde_json::to_string(&data)?;
             conn.execute(
                 &format!(
                     "UPDATE {} SET {} = ?1 WHERE project_id = ?2 AND {} = ?3",
