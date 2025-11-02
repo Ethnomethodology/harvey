@@ -1018,7 +1018,9 @@
             color: #111827;
         }
         :global(.tabulator-cell.search-match-focus) {
-            outline: 2px solid #007bff !important;
-            outline-offset: -2px;
+            background-color: #a0d8ff !important;
+        }
+        :global(html.dark .tabulator-cell.search-match-focus) {
+            color: #111827 !important;
         }
 </style>
