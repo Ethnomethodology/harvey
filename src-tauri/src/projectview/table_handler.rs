@@ -593,19 +593,27 @@ fn records_to_json(_headers: &[String], records: Vec<serde_json::Map<String, Val
 }
 
 #[tauri::command]
-pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>) -> Result<(), CommandError> {
+pub async fn save_table_data(table_path_str: String, table_data: Vec<Value>, headers: Vec<String>) -> Result<(), CommandError> {
     let table_path = Path::new(&table_path_str);
     let extension = table_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
 
-    let headers = if let Some(first_row) = table_data.get(0).and_then(|v| v.as_object()) {
-        first_row.keys().cloned().collect::<Vec<String>>()
+    if headers.is_empty() && table_data.is_empty() {
+        return Ok(()); // Nothing to save
+    }
+
+    let final_headers = if headers.is_empty() {
+        if let Some(first_row) = table_data.get(0).and_then(|v| v.as_object()) {
+            first_row.keys().cloned().collect::<Vec<String>>()
+        } else {
+            vec![]
+        }
     } else {
-        return Ok(()); // No data to save
+        headers
     };
 
     match extension.as_str() {
-        "csv" => save_csv_data_with_headers(table_path, table_data, &headers),
-        "xlsx" => save_xlsx_data_with_headers(table_path, table_data, &headers),
+        "csv" => save_csv_data_with_headers(table_path, table_data, &final_headers),
+        "xlsx" => save_xlsx_data_with_headers(table_path, table_data, &final_headers),
         _ => Err(CommandError::from(format!("Unsupported table extension for saving: {}", extension))),
     }
 }

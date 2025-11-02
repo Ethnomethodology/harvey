@@ -93,11 +93,13 @@
         const updatedData = tabulatorInstance.getData();
         tableData = updatedData;
 
-        // Strip the internal ID before saving
         const dataToSave = JSON.parse(JSON.stringify(updatedData));
         dataToSave.forEach(row => delete row.harvey_internal_id);
 
-        await saveTableData(tablePath, dataToSave);
+        const columns = tabulatorInstance.getColumns();
+        const orderedHeaders = columns.map(column => column.getDefinition().title);
+
+        await saveTableData(tablePath, dataToSave, orderedHeaders);
     }
 
     const debouncedSave = debounce(saveTableChanges, 750);

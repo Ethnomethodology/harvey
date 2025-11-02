@@ -1390,7 +1390,7 @@ export async function saveCurrentPdfAnnotations() {
         // Do not throw here to avoid unhandled promise rejections if the caller doesn't catch.
     }
 }
-export async function saveTableData(tablePath, tableData) {
+export async function saveTableData(tablePath, tableData, orderedHeaders) {
     if (!tablePath) {
         throw new Error("Cannot save, no table path specified.");
     }
@@ -1402,7 +1402,7 @@ export async function saveTableData(tablePath, tableData) {
     project.update(p => ({ ...p, statusMessage: `Saving table ${filename}...` }));
 
     try {
-        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData });
+        await invoke('save_table_data', { tablePathStr: tablePath, tableData: tableData, headers: orderedHeaders });
         project.update(p => ({ ...p, isDocumentDirty: false, statusMessage: `Table saved: ${filename}` }));
     } catch (error) {
         const errorMessage = error?.message || String(error);
