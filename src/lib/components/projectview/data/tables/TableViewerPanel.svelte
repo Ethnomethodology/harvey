@@ -275,18 +275,16 @@
 
     function updateTableLayoutSnapshot() {
         if (!tabulatorInstance) return;
-        const currentColumnDefs = tabulatorInstance.getColumnDefinitions();
+        const columns = tabulatorInstance.getColumns(); // This gets columns in their current display order
         const newSnapshotColumns = {};
-        currentColumnDefs.forEach((colDef, index) => {
-            if (colDef.field) {
-                const columnComponent = tabulatorInstance.getColumn(colDef.field);
-                if (columnComponent) {
-                    newSnapshotColumns[colDef.field] = {
-                        order: index,
-                        visible: columnComponent.isVisible(),
-                        width: columnComponent.getWidth(),
-                    };
-                }
+        columns.forEach((column, index) => {
+            const definition = column.getDefinition();
+            if (definition.field) {
+                newSnapshotColumns[definition.field] = {
+                    order: index,
+                    visible: column.isVisible(),
+                    width: column.getWidth(),
+                };
             }
         });
         tableLayoutSnapshot.columns = newSnapshotColumns;
@@ -662,10 +660,6 @@
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
-
-            tabulatorInstance.on("columnAdded", (column, columns) => {
-                saveCurrentTableLayoutImmediately();
-            });
 
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
