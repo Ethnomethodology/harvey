@@ -41,6 +41,23 @@
     let tableClipboard = null;
     let searchInputRef = null;
 
+    let showOptionsMenu = false;
+    let areFiltersVisible = true; // Start with the assumption that filters are visible
+
+    function toggleFilters() {
+        if (!tabulatorInstance) return;
+        areFiltersVisible = !areFiltersVisible;
+        const columns = tabulatorInstance.getColumns();
+        columns.forEach(column => {
+            if (areFiltersVisible) {
+                column.setHeaderFilterVisible(true);
+            } else {
+                column.setHeaderFilterVisible(false);
+            }
+        });
+        showOptionsMenu = false; // Hide menu after action
+    }
+
     const saveCurrentTableLayout = debounce(async () => {
         if (!tabulatorInstance || !currentLoadedPath) return;
 
@@ -923,6 +940,30 @@
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708"/></svg>
             </button>
+             <div class="relative">
+                <button
+                  title="More Options"
+                  class="ui-button-icon"
+                  on:click={() => showOptionsMenu = !showOptionsMenu}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                    <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                  </svg>
+                </button>
+                {#if showOptionsMenu}
+                  <div
+                    class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-20"
+                    on:mouseleave={() => showOptionsMenu = false}
+                  >
+                    <button
+                      class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      on:click={toggleFilters}
+                    >
+                      {areFiltersVisible ? 'Hide' : 'Show'} Filters
+                    </button>
+                  </div>
+                {/if}
+              </div>
          </div>
          {/if}
     </div>
