@@ -711,9 +711,14 @@
             });
         });
 
-        if (cellMatches.length > 0) {
-            navigateToMatch(0);
-        }
+        // Redraw the table to apply the search term highlighting via the formatter
+        tabulatorInstance.redraw(true);
+
+        // Do not navigate automatically on every keystroke, as it steals focus from the input.
+        // Navigation should be user-initiated via Enter key or the next/previous buttons.
+        // if (cellMatches.length > 0) {
+        //     navigateToMatch(0);
+        // }
     }
 
     async function navigateToMatch(index) {
@@ -882,7 +887,13 @@
               type="search"
               bind:value={searchTerm}
               on:input={handleSearch}
-              on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }}
+              on:keydown={e => {
+                  if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      goToNextMatch();
+                  }
+              }}
               placeholder="Search table..."
               class="text-xs border border-gray-300 dark:border-dark-bg-tertiary px-2 py-1 bg-white dark:bg-dark-bg-form-field text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
               autocomplete="off"
@@ -895,6 +906,13 @@
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0"/></svg>
             </button>
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+                {#if cellMatches.length > 0}
+                    {currentMatchIndex + 1} of {cellMatches.length}
+                {:else if searchTerm}
+                    0 of 0
+                {/if}
+            </span>
             <button
               title="Next Match"
               class="ui-button-icon disabled:opacity-50 disabled:cursor-not-allowed"
@@ -985,5 +1003,17 @@
         }
         :global(html.dark .tabulator-cell.highlighted-cell) {
             color: #111827 !important;
+        }
+        :global(.search-match-highlight) {
+            background-color: #ffdd77;
+            font-weight: bold;
+        }
+        :global(html.dark .search-match-highlight) {
+            background-color: #ffdd77;
+            color: #111827;
+        }
+        :global(.tabulator-cell.search-match-focus) {
+            outline: 2px solid #007bff !important;
+            outline-offset: -2px;
         }
 </style>
