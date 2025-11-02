@@ -44,17 +44,24 @@
     let showOptionsMenu = false;
     let areFiltersVisible = true; // Start with the assumption that filters are visible
 
-    function toggleFilters() {
+    async function toggleFilters() {
         if (!tabulatorInstance) return;
         areFiltersVisible = !areFiltersVisible;
         const columns = tabulatorInstance.getColumns();
-        columns.forEach(column => {
-            if (areFiltersVisible) {
-                column.setHeaderFilterVisible(true);
-            } else {
-                column.setHeaderFilterVisible(false);
-            }
-        });
+
+        // Use Promise.all to apply all updates concurrently.
+        await Promise.all(
+            columns.map(column => {
+                const definition = column.getDefinition();
+                // Only update columns that actually have a header filter defined.
+                if (definition.field && definition.headerFilter) {
+                    return tabulatorInstance.updateColumnDefinition(definition.field, {
+                        headerFilterVisible: areFiltersVisible
+                    });
+                }
+                return Promise.resolve(); // No action needed for this column.
+            })
+        );
         showOptionsMenu = false; // Hide menu after action
     }
 
@@ -947,7 +954,7 @@
                   on:click={() => showOptionsMenu = !showOptionsMenu}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
-                    <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                    <path d="M9.5 3a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
                   </svg>
                 </button>
                 {#if showOptionsMenu}
