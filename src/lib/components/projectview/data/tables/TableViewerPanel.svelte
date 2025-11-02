@@ -130,50 +130,55 @@
     }
 
     async function deleteColumn(column) {
-        const columnName = column.getField();
         try {
-            // Step 1: Capture the current layout BEFORE doing anything else.
-            updateTableLayoutSnapshot();
-            const layoutBeforeDelete = tableLayoutSnapshot;
-
-            // Step 2: Call the backend to delete the column from the file.
-            await deleteTableColumn(tablePath, columnName);
-
-            // Step 3: Manually remove the deleted column from our captured layout.
-            if (layoutBeforeDelete.columns[columnName]) {
-                delete layoutBeforeDelete.columns[columnName];
-            }
-
-            // Step 4: Save the now-modified layout object.
-            const projectBaseDir = get(project)?.baseDirectory;
-            const relativeTablePath = getRelativePath(tablePath, projectBaseDir);
-            if (relativeTablePath) {
-                await saveTableLayoutPrefs(relativeTablePath, layoutBeforeDelete);
-            }
-
-            // Step 5: Reload the table. It will now load the correct data AND the correct layout.
-            await initializeTable(tablePath, null, true);
-
+            await column.delete();
+            await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
-            console.error(`Error deleting column "${columnName}":`, err);
+            console.error(`Error deleting column:`, err);
         }
+    }
+
+    function getColumnContextMenu(column) {
+        const menu = [
+            { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
+            { separator: true },
+            { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
+            { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
+            { separator: true },
+            { label: "Cut Column", action: (e, column) => cutColumn(column) },
+            { label: "Copy Column", action: (e, column) => copyColumn(column) },
+        ];
+        if (tableClipboard && tableClipboard.type === 'column') {
+            menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
+            menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
+        }
+        menu.push({ separator: true });
+        menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
+        menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
+        menu.push({ separator: true });
+        menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
+        return menu;
     }
 
     async function insertColumn(column, position) {
         const newFieldName = getUniqueColumnName("NewColumn");
-        const newColumnDef = { title: newFieldName, field: newFieldName, editor: "textarea", headerFilter: areFiltersVisible ? customHeaderFilterEditor : null };
+        const newColumnDef = {
+            title: newFieldName,
+            field: newFieldName,
+            editor: "textarea",
+            headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+            headerContextMenu: getColumnContextMenu,
+        };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
-
-            // Force Tabulator to update the data model for the new column
             const rows = tabulatorInstance.getRows();
             rows.forEach(row => {
                 const cell = row.getCell(newFieldName);
                 if (cell) {
-                    cell.setValue("", true); // Set empty string, suppress cellEdited event
+                    cell.setValue("", true);
                 }
             });
-
             await saveTableChanges();
             await saveCurrentTableLayoutImmediately();
         } catch (err) {
@@ -187,7 +192,13 @@
             return;
         }
         const newFieldName = getUniqueColumnName(tableClipboard.header);
-        const newColumnDef = { title: tableClipboard.header, field: newFieldName, editor: "textarea", headerFilter: areFiltersVisible ? customHeaderFilterEditor : null };
+        const newColumnDef = {
+            title: tableClipboard.header,
+            field: newFieldName,
+            editor: "textarea",
+            headerFilter: areFiltersVisible ? customHeaderFilterEditor : null,
+            headerContextMenu: getColumnContextMenu,
+        };
         try {
             await tabulatorInstance.addColumn(newColumnDef, position === 'before', column);
             const rows = tabulatorInstance.getRows();
@@ -197,6 +208,7 @@
                 }
             });
             await saveTableChanges();
+            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
         }
@@ -455,27 +467,7 @@
                     }
                     return cellValue;
                 },
-                headerContextMenu: (column) => {
-                    const menu = [
-                        { label: "Edit Header", action: (e, column) => openHeaderEditor(column) },
-                        { separator: true },
-                        { label: "Sort Ascending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'asc') },
-                        { label: "Sort Descending", action: (e, column) => tabulatorInstance.setSort(column.getField(), 'desc') },
-                        { separator: true },
-                        { label: "Cut Column", action: (e, column) => cutColumn(column) },
-                        { label: "Copy Column", action: (e, column) => copyColumn(column) },
-                    ];
-                    if (tableClipboard && tableClipboard.type === 'column') {
-                        menu.push({ label: "Paste Column Before", action: (e, column) => pasteColumn(column, 'before') });
-                        menu.push({ label: "Paste Column After", action: (e, column) => pasteColumn(column, 'after') });
-                    }
-                    menu.push({ separator: true });
-                    menu.push({ label: "Insert Column Before", action: (e, column) => insertColumn(column, 'before') });
-                    menu.push({ label: "Insert Column After", action: (e, column) => insertColumn(column, 'after') });
-                    menu.push({ separator: true });
-                    menu.push({ label: "Delete Column", action: (e, column) => deleteColumn(column) });
-                    return menu;
-                },
+                headerContextMenu: getColumnContextMenu,
                 contextMenu: (e, cell) => {
                     e.preventDefault();
                     return [];
