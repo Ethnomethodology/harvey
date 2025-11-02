@@ -34,7 +34,7 @@
 
     let tableStyles = { rowStyles: {}, cellStyles: {} }; // This will be derived from highlights
     let searchTerm = '';
-    let searchMatches = [];
+    let cellMatches = []; // Changed from searchMatches to store cell components
     let currentMatchIndex = -1;
     let columnFields = [];
     let tableLayoutSnapshot = { columns: {} };
@@ -419,7 +419,15 @@
                         cellElement.classList.remove('highlighted-cell');
                     }
                     cell.getElement().style.whiteSpace = "pre-wrap";
-                    return cell.getValue();
+
+                    const term = searchTerm.trim();
+                    const cellValue = cell.getValue();
+                    if (term && cellValue !== null && cellValue !== undefined) {
+                        const escapedTerm = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+                        return String(cellValue).replace(regex, '<span class="search-match-highlight">$1</span>');
+                    }
+                    return cellValue;
                 },
                 headerContextMenu: (column) => {
                     const menu = [
@@ -663,51 +671,83 @@
 
     function handleSearch() {
         if (!tabulatorInstance) return;
+
+        // Clear existing highlights and reset matches
+        cellMatches.forEach(cell => {
+            const el = cell.getElement();
+            if (el) el.classList.remove('search-match-focus');
+        });
+        cellMatches = [];
+        currentMatchIndex = -1;
+        tabulatorInstance.redraw(true); // Redraw to clear old highlights from formatter
+
         const term = searchTerm.trim().toLowerCase();
 
         if (!term) {
             tabulatorInstance.clearFilter();
-            searchMatches = [];
-            currentMatchIndex = -1;
             return;
         }
 
-        // Use a custom filter function to perform a case-insensitive "OR" search across all columns.
+        // Filter rows first
         tabulatorInstance.setFilter((data) => {
             for (const key in data) {
-                // Exclude internal properties from the search
-                if (key === 'harvey_internal_id') {
-                    continue;
-                }
+                if (key === 'harvey_internal_id') continue;
                 const value = data[key];
                 if (value !== null && value !== undefined && String(value).toLowerCase().includes(term)) {
-                    return true; // Return true if a match is found in any column
+                    return true;
                 }
             }
-            return false; // Return false if no match is found
+            return false;
         });
 
-        searchMatches = tabulatorInstance.getRows("active");
-        currentMatchIndex = -1;
-        if (searchMatches.length > 0) {
+        // After filtering, find all matching cells in the active (visible) rows
+        const activeRows = tabulatorInstance.getRows('active');
+        activeRows.forEach(row => {
+            row.getCells().forEach(cell => {
+                const cellValue = cell.getValue();
+                if (cellValue !== null && cellValue !== undefined && String(cellValue).toLowerCase().includes(term)) {
+                    cellMatches.push(cell);
+                }
+            });
+        });
+
+        if (cellMatches.length > 0) {
             navigateToMatch(0);
         }
     }
 
     async function navigateToMatch(index) {
-        if (!tabulatorInstance || !searchMatches[index]) return;
+        if (!tabulatorInstance || !cellMatches[index]) return;
+
+        // Remove focus from the previously selected cell
+        if (currentMatchIndex > -1 && cellMatches[currentMatchIndex]) {
+            const prevCellEl = cellMatches[currentMatchIndex].getElement();
+            if (prevCellEl) prevCellEl.classList.remove('search-match-focus');
+        }
+
         currentMatchIndex = index;
-        await searchMatches[index].scrollTo().catch(err => console.error("Scroll failed", err));
-        tabulatorInstance.deselectRow();
-        searchMatches[index].select();
+        const currentCell = cellMatches[currentMatchIndex];
+        const currentCellEl = currentCell.getElement();
+
+        // Scroll to the row of the current cell
+        await currentCell.getRow().scrollTo().catch(err => console.error("Scroll to row failed", err));
+
+        // Add focus class to the new current cell
+        if (currentCellEl) {
+            currentCellEl.classList.add('search-match-focus');
+        }
     }
 
     function goToNextMatch() {
-        if (currentMatchIndex < searchMatches.length - 1) navigateToMatch(currentMatchIndex + 1);
+        if (cellMatches.length === 0) return;
+        const nextIndex = (currentMatchIndex + 1) % cellMatches.length;
+        navigateToMatch(nextIndex);
     }
 
     function goToPreviousMatch() {
-        if (currentMatchIndex > 0) navigateToMatch(currentMatchIndex - 1);
+        if (cellMatches.length === 0) return;
+        const prevIndex = (currentMatchIndex - 1 + cellMatches.length) % cellMatches.length;
+        navigateToMatch(prevIndex);
     }
 
     let showEditHeaderModal = false;
