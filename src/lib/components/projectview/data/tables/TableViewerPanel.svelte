@@ -728,23 +728,20 @@
     async function navigateToMatch(index) {
         if (!tabulatorInstance || !cellMatches[index]) return;
 
-        // Remove focus from the previously selected cell
-        if (currentMatchIndex > -1 && cellMatches[currentMatchIndex]) {
-            const prevCellEl = cellMatches[currentMatchIndex].getElement();
-            if (prevCellEl) prevCellEl.classList.remove('search-match-focus');
+        // Clear any previous programmatically created ranges to ensure only one cell is selected
+        const ranges = tabulatorInstance.getRanges();
+        if (ranges) {
+            ranges.forEach(range => range.remove());
         }
 
         currentMatchIndex = index;
         const currentCell = cellMatches[currentMatchIndex];
-        const currentCellEl = currentCell.getElement();
 
-        // Scroll to the row of the current cell
+        // Scroll to the row of the current cell first to ensure it is visible
         await currentCell.getRow().scrollTo().catch(err => console.error("Scroll to row failed", err));
 
-        // Add focus class to the new current cell
-        if (currentCellEl) {
-            currentCellEl.classList.add('search-match-focus');
-        }
+        // Use Tabulator's built-in range selection to highlight the active cell
+        tabulatorInstance.addRange(currentCell, currentCell);
     }
 
     function goToNextMatch() {
@@ -1016,11 +1013,5 @@
         :global(html.dark .search-match-highlight) {
             background-color: #ffdd77;
             color: #111827;
-        }
-        :global(.tabulator-cell.search-match-focus) {
-            background-color: #a0d8ff !important;
-        }
-        :global(html.dark .tabulator-cell.search-match-focus) {
-            color: #111827 !important;
         }
 </style>
