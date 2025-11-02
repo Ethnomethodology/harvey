@@ -99,6 +99,8 @@ pub struct HighlightSource {
     pub file_path: String,
     pub file_name: String,
     pub file_type: String, // e.g., "pdf", "image", "document"
+    #[serde(default)] // Add default for compatibility with older data
+    pub original_doc_type: String,
 }
 
 // New struct to bundle a highlight with its source

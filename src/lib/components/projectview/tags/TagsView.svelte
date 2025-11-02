@@ -371,7 +371,7 @@
                 highlightId: item.id,
                 tagToRemove: selectedTag.name,
                 filePath: item.source.file_path,
-                docType: item.source.file_type,
+                docType: item.source.original_doc_type || item.source.file_type,
             });
             // Refresh the view
             await handleSelectTag(selectedTag);

@@ -195,6 +195,7 @@ pub fn get_tag_info(project_id: &str, _tag_id: i64, tag_name: String) -> Result<
             file_name,
             file_path: file_path.clone(),
             file_type: map_asset_type_to_icon_type(&final_asset_type).to_string(),
+            original_doc_type: final_asset_type,
         };
 
         highlight_infos.push(HighlightInfo {
