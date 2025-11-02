@@ -185,7 +185,6 @@
                 }
             });
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error inserting column ${position} ${column.getField()}:`, err);
         }
@@ -215,7 +214,6 @@
                 }
             });
             await saveTableChanges();
-            await saveCurrentTableLayoutImmediately();
         } catch (err) {
             console.error(`Error pasting column ${position} ${column.getField()}:`, err);
         }
@@ -664,6 +662,10 @@
             tabulatorInstance.on("columnMoved", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnAdded", saveCurrentTableLayoutImmediately);
             tabulatorInstance.on("columnDeleted", saveCurrentTableLayoutImmediately);
+
+            tabulatorInstance.on("columnAdded", (column, columns) => {
+                saveCurrentTableLayoutImmediately();
+            });
 
             tabulatorInstance.on("cellEdited", (cell) => {
                 debouncedSave();
