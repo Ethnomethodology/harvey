@@ -160,8 +160,13 @@ export async function loadHighlightsForFile(filePath, itemType) {
         // If not, this part needs to be implemented. For now, let's log it.
         console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
     } else { // 'doc' (non-PDF), etc.
-        // Assuming a generic document highlight loader
-        console.log(`[ProjectService] Highlight loading for document type '${itemType}' is not yet specifically implemented.`);
+        const metadata = await loadDocumentMetadata(filePath);
+        if (metadata && metadata.highlights) {
+            const { setDocumentHighlights } = await import('$lib/stores/projectStore.js');
+            setDocumentHighlights(metadata.highlights);
+        } else {
+            console.log(`[ProjectService] No highlights found for document type '${itemType}'.`);
+        }
     }
 }
 

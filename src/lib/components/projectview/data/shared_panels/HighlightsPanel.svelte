@@ -12,6 +12,7 @@
 
     export let itemPath = null;
     export let itemType = null;
+	export let refreshKey = null;
 
     let unsubscribeRefresher;
 
@@ -29,6 +30,13 @@
             }
         });
     });
+
+	$: if (refreshKey) {
+		if (itemPath) {
+			loadHighlightsForFile(itemPath, itemType);
+			fetchAllTags();
+		}
+	}
 
     onDestroy(() => {
         if (unsubscribeRefresher) {
