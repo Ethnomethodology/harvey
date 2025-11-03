@@ -30,7 +30,12 @@
             }
         });
 
+        let isFirstRun = true;
         unsubscribeRefresher = refresher.subscribe(async () => {
+            if (isFirstRun) {
+                isFirstRun = false;
+                return;
+            }
             await fetchAllTags();
             // If the selected tag was deleted, clear the view
             if (selectedTag && !$allTags.some(t => t.id === selectedTag.id)) {

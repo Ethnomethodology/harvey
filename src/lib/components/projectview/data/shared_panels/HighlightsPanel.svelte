@@ -16,7 +16,12 @@
     let unsubscribeRefresher;
 
     onMount(() => {
+        let isFirstRun = true;
         unsubscribeRefresher = refresher.subscribe(async () => {
+            if (isFirstRun) {
+                isFirstRun = false;
+                return;
+            }
             if (itemPath) {
                 console.log('[HighlightsPanel] Refresher triggered, re-loading highlights for', itemPath);
                 await loadHighlightsForFile(itemPath, itemType);
