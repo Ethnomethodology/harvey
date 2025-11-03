@@ -6,7 +6,8 @@
     import { confirm } from '@tauri-apps/plugin-dialog';
     import { TabulatorFull as Tabulator } from 'tabulator-tables';
     import { project } from '$lib/stores/projectStore.js';
-    import { allTags, updateTag, deleteTag } from '$lib/stores/tagStore.js';
+    import { allTags, updateTag, deleteTag, fetchAllTags } from '$lib/stores/tagStore.js';
+    import { refresher } from '$lib/stores/refresherStore.js';
     import { addCommentToHighlight, deleteComment, updateComment } from '$lib/stores/projectStore.js';
     import * as projectService from '$lib/services/projectService.js';
     import SimpleTopBar from '../shared/SimpleTopBar.svelte';
@@ -16,6 +17,7 @@
 
     let unsubscribePanelState;
 
+    let unsubscribeRefresher;
     onMount(() => {
         unsubscribePanelState = panelStateStore.subscribe(state => {
             console.log('panelStateStore subscription triggered in TagsView.svelte', state);
@@ -27,11 +29,24 @@
                 console.log('tabulatorInstance is null or undefined');
             }
         });
+
+        unsubscribeRefresher = refresher.subscribe(async () => {
+            await fetchAllTags();
+            // If the selected tag was deleted, clear the view
+            if (selectedTag && !$allTags.some(t => t.id === selectedTag.id)) {
+                selectedTag = null;
+                tagInfo = null;
+                description = '';
+            }
+        });
     });
 
     onDestroy(() => {
         if (unsubscribePanelState) {
             unsubscribePanelState();
+        }
+        if (unsubscribeRefresher) {
+            unsubscribeRefresher();
         }
     });
 
