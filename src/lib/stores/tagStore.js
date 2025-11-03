@@ -127,12 +127,29 @@ export async function deleteTag(tagId) {
         return;
     }
 
+    // Find the tag name before deleting
+    const tags = get(allTags);
+    const tagToDelete = tags.find(tag => tag.id === tagId);
+    if (!tagToDelete) {
+        throw new Error('Tag not found.');
+    }
+    const tagName = tagToDelete.name;
+
     try {
+        // First, remove the tag from all highlights that use it
+        await invoke('remove_tag_globally', {
+            projectId: proj.id,
+            tagName: tagName,
+        });
+
+        // Then, delete the tag itself from the central list
         await invoke('delete_tag', {
             projectId: proj.id,
             tagId: tagId
         });
+
         await fetchAllTags();
+        triggerRefresh();
     } catch (error) {
         console.error(`[tagStore] Failed to delete tag ${tagId}:`, error);
         throw error; // Re-throw to allow the component to handle it
