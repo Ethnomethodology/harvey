@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { project } from '$lib/stores/projectStore.js';
+import { triggerRefresh } from '$lib/stores/refresherStore.js';
 
 /**
  * @typedef {object} Tag
@@ -108,6 +109,7 @@ export async function updateTag(tagId, newName, newColor) {
         }
 
         await fetchAllTags();
+        triggerRefresh();
     } catch (error) {
         console.error(`[tagStore] Failed to update tag ${tagId}:`, error);
         throw error; // Re-throw to allow the component to handle it

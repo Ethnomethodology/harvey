@@ -142,6 +142,29 @@ export async function saveTableLayoutPrefs(tablePath, layoutJson) {
     }
 }
 
+export async function loadHighlightsForFile(filePath, itemType) {
+    if (!filePath || !itemType) {
+        console.warn('[ProjectService] loadHighlightsForFile called with missing filePath or itemType.');
+        return;
+    }
+
+    // Determine the correct loading function based on itemType
+    if (itemType === 'doc' && filePath.toLowerCase().endsWith('.pdf')) {
+        await loadPdfAnnotationsFromFile(filePath);
+    } else if (itemType === 'images') {
+        await loadImageAnnotations(filePath);
+    } else if (itemType === 'tables' || itemType === 'table') {
+        await loadTableHighlights(filePath);
+    } else if (itemType === 'imported_transcript') {
+        // Assuming there's a function to load highlights for imported transcripts
+        // If not, this part needs to be implemented. For now, let's log it.
+        console.log(`[ProjectService] Highlight loading for 'imported_transcript' is not yet implemented.`);
+    } else { // 'doc' (non-PDF), etc.
+        // Assuming a generic document highlight loader
+        console.log(`[ProjectService] Highlight loading for document type '${itemType}' is not yet specifically implemented.`);
+    }
+}
+
 export async function deleteTableColumn(tablePath, columnName) {
     if (!tablePath || !columnName) {
         throw new Error("Missing required parameters for deleting table column.");
