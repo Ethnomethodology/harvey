@@ -234,6 +234,62 @@ pub fn delete_tag(project_id: &str, tag_id: i64) -> Result<(), CommandError> {
 }
 
 #[tauri::command]
+pub fn rename_tag_in_highlights(
+    project_id: &str,
+    old_name: String,
+    new_name: String,
+) -> Result<(), CommandError> {
+    info!("[Tags] Renaming tag globally from '{}' to '{}' for project_id: {}", old_name, new_name, project_id);
+    let db_path = db_handler::get_db_path()?;
+    let conn = Connection::open(&db_path)?;
+
+    let all_annotations = db_handler::get_all_annotations_for_project(&conn, project_id)?;
+
+    for (path, json_str, doc_type) in all_annotations {
+        let mut highlights: Vec<serde_json::Value> = if doc_type == "table" {
+            serde_json::from_str(&json_str)
+                .or_else(|_| serde_json::from_str::<String>(&json_str).and_then(|s| serde_json::from_str(&s)))
+                .unwrap_or_else(|_| Vec::new())
+        } else {
+            serde_json::from_str(&json_str).unwrap_or_else(|_| Vec::new())
+        };
+
+        if highlights.is_empty() {
+            continue;
+        }
+
+        let mut was_modified = false;
+        for highlight in highlights.iter_mut() {
+            if let Some(h_obj) = highlight.as_object_mut() {
+                if let Some(tags_val) = h_obj.get_mut("tags") {
+                    if let Some(tags_arr) = tags_val.as_array_mut() {
+                        for tag in tags_arr.iter_mut() {
+                            if tag.as_str() == Some(&old_name) {
+                                *tag = serde_json::Value::String(new_name.clone());
+                                was_modified = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if was_modified {
+            if doc_type == "table" {
+                let inner_json = serde_json::to_string(&highlights)?;
+                let outer_json = serde_json::to_string(&inner_json)?;
+                db_handler::save_table_styles(project_id, &path, &outer_json)?;
+            } else {
+                let new_json_string = serde_json::to_string(&highlights)?;
+                db_handler::save_annotations_to_db(project_id, &path, &new_json_string, &doc_type)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn remove_tag_from_highlight(
     project_id: &str,
     highlight_id: String,

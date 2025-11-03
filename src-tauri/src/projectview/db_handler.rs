@@ -1504,6 +1504,43 @@ pub fn get_all_tags(conn: &Connection, project_id: &str) -> Result<Vec<Tag>, Com
 
 // --- End Highlight Functions ---
 
+pub fn get_all_annotations_for_project(
+    conn: &Connection,
+    project_id: &str,
+) -> Result<Vec<(String, String, String)>, CommandError> {
+    debug!("[DB] Getting all annotations for project_id '{}'", project_id);
+    let mut all_annotations = Vec::new();
+
+    // Fetch from pdf_annotations
+    let mut stmt_pdf = conn.prepare("
+        SELECT pdf_document_path, annotations_json, document_type
+        FROM pdf_annotations
+        WHERE project_id = ?1
+    ")?;
+    let pdf_rows = stmt_pdf.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?;
+    for row in pdf_rows {
+        all_annotations.push(row?);
+    }
+
+    // Fetch from table_styles
+    let mut stmt_table = conn.prepare("
+        SELECT table_path, styles, 'table' as document_type
+        FROM table_styles
+        WHERE project_id = ?1
+    ")?;
+    let table_rows = stmt_table.query_map(params![project_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?;
+    for row in table_rows {
+        all_annotations.push(row?);
+    }
+
+    info!("[DB] Found {} total annotation entries for project_id '{}'", all_annotations.len(), project_id);
+    Ok(all_annotations)
+}
+
 pub fn get_highlights_by_tag(
     conn: &Connection,
     project_id: &str,

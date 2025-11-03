@@ -82,6 +82,14 @@ export async function updateTag(tagId, newName, newColor) {
         return;
     }
 
+    // Find the original tag name before updating
+    const tags = get(allTags);
+    const originalTag = tags.find(tag => tag.id === tagId);
+    if (!originalTag) {
+        throw new Error('Tag not found.');
+    }
+    const oldName = originalTag.name;
+
     try {
         await invoke('update_tag', {
             projectId: proj.id,
@@ -89,6 +97,16 @@ export async function updateTag(tagId, newName, newColor) {
             newName: newName,
             color: newColor
         });
+
+        // After successfully renaming the tag, cascade the change to all highlights
+        if (oldName !== newName) {
+            await invoke('rename_tag_in_highlights', {
+                projectId: proj.id,
+                oldName: oldName,
+                newName: newName,
+            });
+        }
+
         await fetchAllTags();
     } catch (error) {
         console.error(`[tagStore] Failed to update tag ${tagId}:`, error);
