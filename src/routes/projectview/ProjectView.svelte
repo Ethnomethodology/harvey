@@ -395,7 +395,6 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             }
             return;
         }
-        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
 
         let canProceed = true;
         // Check for unsaved changes in the transcriptions tab before switching away
@@ -408,6 +407,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 // Set up callbacks for the modal actions
                 onUnsavedSave: async () => {
                     hideUnsavedChangesPrompt();
+                    project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
                     try {
                         await transcriptionsViewRef.handleSaveTranscript();
                         // After successful save, proceed with tab switch
@@ -420,6 +420,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
                 },
                 onUnsavedDiscard: async () => {
                     hideUnsavedChangesPrompt();
+                    project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
                     // Discard changes and proceed with tab switch
                     transcriptStore.update(ts => ({ ...ts, transcriptDirty: false, transcriptUndoStack: [], transcriptRedoStack: [] }));
                     await proceedTabSwitch(tabName);
@@ -442,6 +443,7 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
             return;
         }
 
+        project.update(p => ({ ...p, isLoading: true, statusMessage: `Switching to ${tabName} tab...` }));
         // If no unsaved changes or user chose to save/discard, proceed
         await proceedTabSwitch(tabName);
     }
