@@ -114,6 +114,8 @@
         on:focus={handleFocus}
         placeholder={isAuthenticated ? 'Token is set' : 'Enter your HuggingFace token'}
         class="flex-grow shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md bg-white dark:bg-gray-700 dark:border-gray-600"
+        autocomplete="off"
+        autocorrect="off"
       />
       <button on:click={saveAuthToken} class="btn-blue">Save</button>
     </div>

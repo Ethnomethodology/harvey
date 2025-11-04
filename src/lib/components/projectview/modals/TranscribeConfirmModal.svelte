@@ -213,7 +213,7 @@
 
 					<div class="pt-2">
 						<div class="flex items-center space-x-2">
-							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization}/>
+							<input type="checkbox" id="modalEnableDiarizationCheckbox" class="ui-checkbox" bind:checked={modalEnableDiarization} autocomplete="off" autocorrect="off"/>
 							<label for="modalEnableDiarizationCheckbox" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
 								Identify different speakers (diarize)
 							</label>

@@ -164,6 +164,8 @@
 					readonly
 					value={currentDisplayName}
 					class="mt-1 block w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed"
+					autocomplete="off"
+					autocorrect="off"
 				/>
 			</div>
 
@@ -180,6 +182,8 @@
 					required
 					class="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
 					aria-describedby="newNameHelp"
+					autocomplete="off"
+					autocorrect="off"
 				/>
 				{#if isStemInputMode}
 					<p id="newNameHelp" class="mt-1 text-xs text-gray-500 dark:text-gray-400">

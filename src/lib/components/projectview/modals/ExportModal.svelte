@@ -230,6 +230,8 @@
 						bind:value={exportFileName}
 						class="input-field w-full bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-200 focus:ring-blue-500 focus:border-blue-500"
 						placeholder="e.g., MyMeetingTranscript"
+						autocomplete="off"
+						autocorrect="off"
 					/>
 				</div>
 
@@ -294,6 +296,8 @@
 							class="input-field flex-grow bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 text-gray-600 dark:text-gray-300 cursor-not-allowed"
 							readonly
 							placeholder="Select directory..."
+							autocomplete="off"
+							autocorrect="off"
 						/>
 						<button type="button" on:click={selectExportDirectory} class="btn-secondary flex-shrink-0 text-xs px-3 py-1.5">
 							Browse

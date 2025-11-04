@@ -216,6 +216,8 @@
 							readonly
 							placeholder="Set a location..."
 							title={downloadLocation || 'No location set'}
+							autocomplete="off"
+							autocorrect="off"
 						/>
                         <button
 							type="button"

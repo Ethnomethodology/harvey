@@ -54,6 +54,8 @@
             bind:value={rows}
             min="1"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-50"
+            autocomplete="off"
+            autocorrect="off"
           />
         </div>
   
@@ -66,6 +68,8 @@
             bind:value={columns}
             min="1"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-50"
+            autocomplete="off"
+            autocorrect="off"
           />
         </div>
   

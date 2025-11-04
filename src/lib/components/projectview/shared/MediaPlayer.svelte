@@ -1169,6 +1169,8 @@
 				disabled={!localMediaUrl || isLoadingMedia || displayDuration <= 0}
 				aria-label="Video progress bar"
 				style="--progress: {displayDuration > 0 ? displayTime / displayDuration : 0};"
+				autocomplete="off"
+				autocorrect="off"
 			/>
 			<span
 				bind:this={progressTooltipElement}
@@ -1333,6 +1335,8 @@
 				disabled={!localMediaUrl || isLoadingMedia || !videoElement}
 				aria-label="Volume control"
 				style="--progress: {currentVolume};"
+				autocomplete="off"
+				autocorrect="off"
 			/>
 
 			<!-- Minimize/Maximize Video Button -->

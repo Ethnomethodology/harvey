@@ -461,7 +461,7 @@
                 <div class="h-[75%] flex flex-col">
                     <div class="flex justify-between items-center mb-2 flex-shrink-0">
                         <h3 class="text-lg font-semibold dark:text-white">Highlights ({tagInfo.highlight_count})</h3>
-                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary">
+                        <input type="text" placeholder="Search content..." bind:value={searchQuery} on:input={handleSearch} on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); } }} class="border rounded px-2 py-1 text-sm dark:bg-surface-3 dark:border-border dark:text-text-primary" autocomplete="off" autocorrect="off">
                     </div>
                     <div class="flex-grow overflow-auto border border-gray-300 dark:border-border rounded-md" bind:this={tableContainer}>
                     </div>

@@ -75,7 +75,7 @@
 
         <div class="mb-4">
             <label class="flex items-center">
-                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                <input type="checkbox" bind:checked={saveAudio} class="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 dark:border-gray-600 dark:bg-gray-700" autocomplete="off" autocorrect="off">
                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Save transcription audio</span>
             </label>
         </div>

@@ -109,6 +109,8 @@
               // e.stopPropagation(); // Optional: Only if arrow keys etc cause issues outside input
             }
           }}
+          autocomplete="off"
+          autocorrect="off"
         />
       </div>
 
