@@ -250,7 +250,8 @@
 							id="model-name"
 							type="text"
 							bind:value={modelName}
-
+							autocomplete="off"
+							autocorrect="off"
 							class="input w-64"
 							placeholder="e.g. Helsinki-NLP/opus-mt-en-jap"
 						/>

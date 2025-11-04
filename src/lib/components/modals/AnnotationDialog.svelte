@@ -55,6 +55,8 @@
             id="annotation-title"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-border dark:text-white"
             bind:value={title}
+            autocomplete="off"
+            autocorrect="off"
         />
     </div>
     <div class="mb-3">
@@ -64,6 +66,8 @@
             rows="3"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:border-border dark:text-white"
             bind:value={description}
+            autocomplete="off"
+            autocorrect="off"
         ></textarea>
     </div>
     <div class="mb-4">

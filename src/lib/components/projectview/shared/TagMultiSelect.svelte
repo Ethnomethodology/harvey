@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 
-	export let allItems: any[] = [];
-	export let assignedItems: any[] = [];
+	export let allTags: string[] = [];
+	export let assignedTags: string[] = [];
 	export let isEditable = true;
-	export let displayField: string | null = null;
-	export let itemType = 'item'; // e.g., 'tag', 'group'
 
-	let availableItems: any[] = [];
+	let availableTags: string[] = [];
 	let showDropdown = false;
 	let searchTerm = '';
 	let rootElement: HTMLElement;
@@ -15,49 +13,46 @@
 	const dispatch = createEventDispatcher();
 
 	$: {
-		updateAvailableItems();
+		console.log('[TagMultiSelect] allTags prop updated:', allTags);
+		updateAvailableTags();
 	}
 
-	function getItemValue(item: any) {
-		return displayField ? item[displayField] : item;
+	function updateAvailableTags() {
+		const assignedSet = new Set(assignedTags);
+		availableTags = allTags.filter(t => !assignedSet.has(t));
 	}
 
-	function updateAvailableItems() {
-		const assignedSet = new Set(assignedItems.map(getItemValue));
-		availableItems = allItems.filter(item => !assignedSet.has(getItemValue(item)));
-	}
-
-	function removeItem(item: any) {
+	function removeTag(tag: string) {
 		if (!isEditable) return;
-		assignedItems = assignedItems.filter(i => getItemValue(i) !== getItemValue(item));
-		updateAvailableItems();
-		dispatch('update', { items: assignedItems });
+		assignedTags = assignedTags.filter(t => t !== tag);
+		updateAvailableTags();
+		dispatch('update', { tags: assignedTags });
 	}
 
-	function addItem(item: any) {
+	function addTag(tag: string) {
 		if (!isEditable) return;
-		if (!assignedItems.find(i => getItemValue(i) === getItemValue(item))) {
-			assignedItems = [...assignedItems, item];
+		if (!assignedTags.includes(tag)) {
+			assignedTags = [...assignedTags, tag];
 		}
-		updateAvailableItems();
+		updateAvailableTags();
 		showDropdown = false;
 		searchTerm = '';
-		dispatch('update', { items: assignedItems });
+		dispatch('update', { tags: assignedTags });
 	}
 
-	function handleCreateNewItem() {
+	function handleCreateNewTag() {
 		if (!isEditable || !searchTerm.trim()) return;
-		const newItem = searchTerm.trim();
+		const newTag = searchTerm.trim();
 		showDropdown = false;
 		searchTerm = '';
-		dispatch('createitem', { item: newItem });
+		dispatch('createtag', { tag: newTag });
 	}
 
-	$: filteredAvailableItems = searchTerm
-		? availableItems.filter(item =>
-				getItemValue(item).toLowerCase().includes(searchTerm.toLowerCase())
+	$: filteredAvailableTags = searchTerm
+		? availableTags.filter(tag =>
+				tag.toLowerCase().includes(searchTerm.toLowerCase())
 		  )
-		: availableItems;
+		: availableTags;
 
 	function toggleDropdown() {
 		showDropdown = !showDropdown;
@@ -84,19 +79,19 @@
         tabindex={isEditable ? 0 : -1}
         on:keydown={(e) => { if (isEditable && (e.key === 'Enter' || e.key === ' ')) toggleDropdown()}}
     >
-		{#if assignedItems.length === 0}
-			<span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1">No {itemType}s assigned.</span>
+		{#if assignedTags.length === 0}
+			<span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1">No tags assigned.</span>
 		{:else}
-            {#each assignedItems as item (getItemValue(item))}
+            {#each assignedTags as tag (tag)}
                 <span
                     class="flex items-center bg-blue-100 dark:bg-accent-primary text-blue-800 dark:text-white text-xs font-medium px-2 py-0.5 rounded-full"
                 >
-                    {getItemValue(item)}
+                    {tag}
                     {#if isEditable}
                     <button
-                        on:click|stopPropagation={() => removeItem(item)}
+                        on:click|stopPropagation={() => removeTag(tag)}
                         class="ml-1.5 text-blue-600 dark:text-white/70 hover:text-blue-800 dark:hover:text-white"
-                        aria-label="Remove {getItemValue(item)}"
+                        aria-label="Remove {tag}"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3 w-3">
                             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -106,8 +101,8 @@
                 </span>
             {/each}
         {/if}
-        {#if isEditable && assignedItems.length > 0}
-            <span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1 flex-grow text-left">Add {itemType}...</span>
+        {#if isEditable && assignedTags.length > 0}
+            <span class="text-xs text-gray-500 dark:text-text-secondary px-2 py-1 flex-grow text-left">Add tag...</span>
         {/if}
 	</div>
 
@@ -126,21 +121,21 @@
 				/>
 			</div>
 			<ul>
-				{#each filteredAvailableItems as item (getItemValue(item))}
+				{#each filteredAvailableTags as tag (tag)}
 					<li
-						on:click={() => addItem(item)}
+						on:click={() => addTag(tag)}
 						class="px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer text-gray-700 dark:text-text-primary"
 					>
-						{getItemValue(item)}
+						{tag}
 					</li>
 				{/each}
 
-                {#if isEditable && searchTerm && !allItems.map(getItemValue).includes(searchTerm)}
+                {#if isEditable && searchTerm && !allTags.includes(searchTerm)}
                 <li
-                    on:click={handleCreateNewItem}
+                    on:click={handleCreateNewTag}
                     class="px-3 py-1.5 text-xs text-blue-600 dark:text-accent-primary hover:bg-gray-100 dark:hover:bg-accent-background-hover cursor-pointer border-t border-gray-200 dark:border-t-border"
                 >
-                    + Create new {itemType} "{searchTerm}"
+                    + Create new tag "{searchTerm}"
                 </li>
                 {/if}
 			</ul>

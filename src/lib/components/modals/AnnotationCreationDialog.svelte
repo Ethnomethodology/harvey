@@ -96,6 +96,8 @@
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm dark:bg-gray-700 dark:border-border dark:text-white focus:ring-blue-500 focus:border-blue-500"
             bind:value={title}
             placeholder="Enter title"
+            autocomplete="off"
+            autocorrect="off"
         />
     </div>
 
@@ -107,6 +109,8 @@
             bind:value={description}
             placeholder="Enter description"
             rows="3"
+            autocomplete="off"
+            autocorrect="off"
         ></textarea>
     </div>
 
