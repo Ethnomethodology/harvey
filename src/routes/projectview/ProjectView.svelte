@@ -192,6 +192,14 @@ $: hasConfigIssues = !$configStatus.python_libraries_installed || !$configStatus
 	
 
 	function handleGlobalKeys(event) {
+        if (event.key === 'Backspace') {
+            const activeElement = document.activeElement;
+            if (activeElement.tagName.toLowerCase() !== 'input' && activeElement.tagName.toLowerCase() !== 'textarea' && !activeElement.isContentEditable) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         const proj = get(project);
         const ts = get(transcriptStore);
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
