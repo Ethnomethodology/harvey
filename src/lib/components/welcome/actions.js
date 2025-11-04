@@ -36,7 +36,7 @@ export async function openProjectWindow(project) {
 	console.log(`Opening project: ${project.name}...`);
 	try {
 		await invoke('open_project', { projectXmlPath: project.path });
-		projectStore.set({ ...project });
+		projectStore.update((current) => ({ ...current, ...project }));
 		await goto(`/projectview?xmlPath=${encodeURIComponent(project.path)}`);
 		console.log(`Opened project: ${project.name}`);
 	} catch (error) {

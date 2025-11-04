@@ -444,7 +444,10 @@ export async function loadProjectDataAndUpdateStore(projectXmlPath, targetPathTo
             error: null,
             statusMessage: `Loaded project: ${loadedData.project_name}`
         };
-        project.update((current) => ({ ...current, ...dataToSet }));
+        project.update((current) => ({
+            ...current,
+            ...dataToSet
+        }));
 
         // Update project groups list
         try {
@@ -616,7 +619,10 @@ export async function silentlyRefreshProjectData(projectXmlPath) {
             error: null,
             statusMessage: 'File list updated.'
         };
-        project.update((current) => ({ ...current, ...dataToSet }));
+        project.update((current) => ({
+            ...current,
+            ...dataToSet,
+        }));
 
     } catch (error) {
         console.error('[ProjectService] Failed to silently refresh project data:', error);

@@ -30,6 +30,15 @@ const createMinimalValidLexicalJson = () => {
 };
 
 
+const AUTOSAVE_STORAGE_KEY = 'harvey_autosave_enabled';
+
+const getInitialAutosaveState = () => {
+    if (typeof window === 'undefined') return true;
+    const storedValue = localStorage.getItem(AUTOSAVE_STORAGE_KEY);
+    if (storedValue === null) return true; // Default to true if nothing is stored
+    return storedValue === 'true';
+};
+
 const initialState = {
     id: null,
     name: null,
@@ -90,7 +99,7 @@ const initialState = {
     mediaNoteTranscriptError: null,
     activeMediaNoteEditorRef: null,
 
-    autosaveEnabled: true,
+    autosaveEnabled: getInitialAutosaveState(),
 
     showUnsavedChangesModal: false,
     unsavedItemName: '',
@@ -1045,7 +1054,7 @@ export function setActiveMediaNoteEditorRef(mediaPath, editorRefInstance) { proj
 
 export function clearActiveMediaNoteEditorRef() { project.update(p => { if (p.activeMediaNoteEditorRef) { return { ...p, activeMediaNoteEditorRef: null }; } return p; }); }
 
-export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
+export function toggleAutosave() { project.update(p => { const newState = !p.autosaveEnabled; if (typeof window !== 'undefined') { localStorage.setItem(AUTOSAVE_STORAGE_KEY, newState.toString()); } return { ...p, autosaveEnabled: newState, statusMessage: `Autosave ${newState ? 'enabled' : 'disabled'}` }; }); }
 export function showUnsavedChangesPrompt(itemName, itemType, onSave, onDiscard, onCancel) { project.update(p => ({ ...p, showUnsavedChangesModal: true, unsavedItemName: itemName, unsavedItemType: itemType, onUnsavedSave: onSave, onUnsavedDiscard: onDiscard, onUnsavedCancel: onCancel, })); }
 export function hideUnsavedChangesPrompt() { project.update(p => ({ ...p, showUnsavedChangesModal: false, unsavedItemName: '', unsavedItemType: '', onUnsavedSave: () => {}, onUnsavedDiscard: () => {}, onUnsavedCancel: () => {}, })); }
 export function setAssetImportStatus(isImporting, message = null) { project.update(p => ({ ...p, isImportingAsset: isImporting, statusMessage: message !== null ? message : (isImporting ? 'Importing...' : p.statusMessage), error: isImporting ? null : p.error, documentError: isImporting ? null : p.documentError, importedTranscriptError: isImporting ? null : p.importedTranscriptError, isLoading: isImporting ? true : p.isLoading })); }
