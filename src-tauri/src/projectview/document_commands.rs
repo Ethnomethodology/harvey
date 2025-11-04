@@ -375,10 +375,13 @@ pub async fn create_new_document(
 
     let initial_content = "{\"root\":{\"children\":[{\"children\":[],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"paragraph\",\"version\":1}],\"direction\":null,\"format\":\"\",\"indent\":0,\"type\":\"root\",\"version\":1}}";
 
+    let unique_path_buf = PathBuf::from(&unique_path_str);
+    let final_document_name = unique_path_buf.file_name().unwrap().to_string_lossy().into_owned();
+
     save_document_and_update_xml(
         project_xml_path.clone(),
         unique_path_str.clone(),
-        "Untitled.json".to_string(),
+        final_document_name.clone(),
         initial_content.to_string(),
     )
     .await?;
