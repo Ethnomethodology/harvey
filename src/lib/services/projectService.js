@@ -1365,6 +1365,36 @@ export async function convertAndSaveTranscriptAsDoc() {
                 });
                 console.debug(`[ProjectService] targetFullPath from get_unique_document_path: ${targetFullPath}`);        const docFilename = await basename(targetFullPath);
         await invoke('save_document_and_update_xml', { projectXmlPath: projectXmlPath, targetPath: targetFullPath, documentName: docFilename, jsonContent: finalLexicalJsonString });
+
+        const relativePath = targetFullPath.substring(projectBaseDir.length + 1).replace(/\\/g, '/');
+        const fileMetadata = {
+            file_name: docFilename,
+            file_path: targetFullPath,
+            last_modified: new Date().toISOString(),
+            title: "",
+            description: "",
+            summary: "",
+            duration_seconds: null,
+            width: null,
+            height: null,
+            frame_rate: null,
+            bit_rate: null,
+            audio_codec: null,
+            video_codec: null,
+            created_at: new Date().toISOString(),
+            original_import_path: null,
+            speaker_names: null,
+            waveform_data: null,
+        };
+
+        await invoke('update_asset_metadata_command', {
+            projectXmlPathStr: projectXmlPath,
+            assetRelativePath: relativePath,
+            metadataPayload: fileMetadata,
+            customFieldsPayload: null,
+            assetType: 'document',
+        });
+
         project.update(p => ({ ...p, statusMessage: `Document file created: ${docFilename}` }));
         await refreshProjectFiles();
         return targetFullPath;

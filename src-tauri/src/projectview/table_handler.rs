@@ -941,6 +941,46 @@ pub async fn create_new_table(project_xml_path: String, headers: Vec<String>) ->
     project_data.table_files.files.sort_by(|a, b| a.name.cmp(&b.name));
     save_project_xml(&xml_path, &project_data)?;
 
+    let project_id_for_db = project_data.project_uuid.clone();
+    if project_id_for_db.is_empty() {
+        error!("[Backend Create Table] Project UUID is empty in XML file: {}. Cannot create table without project_id.", xml_path.display());
+        return Err(CommandError::Message(format!("Project ID (UUID) is missing in the project file ({}). Table creation cannot proceed.", xml_path.display())));
+    }
+
+    let relative_path_for_db = new_table_path.strip_prefix(project_base_dir)?.to_string_lossy().replace("\\", "/");
+
+    let file_metadata_for_db = FileMetadata {
+        file_name: new_table_name.clone(),
+        file_path: new_table_path.to_string_lossy().into_owned(),
+        last_modified: Utc::now().to_rfc3339(),
+        title: String::new(),
+        description: String::new(),
+        summary: String::new(),
+        duration_seconds: None,
+        width: None,
+        height: None,
+        frame_rate: None,
+        bit_rate: None,
+        audio_codec: None,
+        video_codec: None,
+        created_at: Some(Utc::now().to_rfc3339()),
+        original_import_path: None,
+        speaker_names: None,
+        waveform_data: None,
+    };
+
+    if let Err(e) = db_handler::save_asset_metadata(
+        &project_id_for_db,
+        &file_metadata_for_db,
+        &relative_path_for_db,
+        "table",
+        None,
+    ) {
+        error!("[Backend Create Table] Failed to save table metadata to DB for table '{}' (path: {}, project_id: {}): {}", new_table_name, relative_path_for_db, project_id_for_db, e);
+        return Err(e);
+    }
+    info!("[Backend Create Table] Saved table metadata to DB for: {} (project_id: {})", relative_path_for_db, project_id_for_db);
+
     info!("[Backend Create Table] Success: new_table_path={}", new_table_path.display());
     Ok(new_table_path.to_string_lossy().to_string())
 }

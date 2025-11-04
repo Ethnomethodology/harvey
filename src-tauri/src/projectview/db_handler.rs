@@ -558,6 +558,7 @@ pub fn get_groups_for_project(conn: &Connection, project_id: &str) -> Result<Vec
 
 pub fn add_file_to_group(conn: &Connection, project_id: &str, group_id: &str, file_asset_relative_path: &str) -> Result<(), CommandError> {
     debug!("[DB] Adding file {} to group {} for project_id {}", file_asset_relative_path, group_id, project_id);
+    info!("[DB EXEC] INSERT INTO file_groups with project_id: '{}', group_id: '{}', file_asset_path: '{}'", project_id, group_id, file_asset_relative_path);
     conn.execute(
         "INSERT INTO file_groups (project_id, group_id, file_asset_path) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
         params![project_id, group_id, file_asset_relative_path],
