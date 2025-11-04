@@ -7,7 +7,7 @@
     import { project, setDocumentHighlights, addCommentToHighlight, deleteComment, updateComment, setImportedTranscriptHighlights, updatePdfAnnotations, updateImageAnnotations, setTableHighlights } from '$lib/stores/projectStore.js';
     import { saveImageAnnotations, saveTableHighlights, loadHighlightsForFile } from '$lib/services/projectService.js';
     import { allTags as allTagsStore, addTag, fetchAllTags } from '$lib/stores/tagStore.js';
-    import TagMultiSelect from '$lib/components/projectview/shared/TagMultiSelect.svelte';
+    import MultiSelect from '$lib/components/projectview/shared/MultiSelect.svelte';
     import CommentsModal from '$lib/components/projectview/modals/CommentsModal.svelte';
 
     export let itemPath = null;
@@ -231,11 +231,13 @@
                                     <path d="M1.293 7.793A1 1 0 0 1 1 7.086V2a1 1 0 0 0-1 1v4.586a1 1 0 0 0 .293.707l7 7a1 1 0 0 0 1.414 0l.043-.043z"/>
                                 </svg>
                                 <div class="w-full relative">
-                                    <TagMultiSelect
-                                        allTags={$allTagsStore.map(t => t.name)}
-                                        assignedTags={highlight.tags}
-                                        on:update={(e) => handleTagsUpdate(highlight.id, e.detail.tags)}
-                                        on:createtag={(e) => handleCreateTag(e.detail.tag, highlight.id)}
+                                    <MultiSelect
+                                        allItems={$allTagsStore.map(t => t.name)}
+                                        selectedItems={highlight.tags}
+                                        placeholder="Add tags..."
+                                        on:add={(e) => handleTagsUpdate(highlight.id, [...highlight.tags, e.detail])}
+                                        on:remove={(e) => handleTagsUpdate(highlight.id, highlight.tags.filter(t => t !== e.detail))}
+                                        on:create={(e) => handleCreateTag(e.detail, highlight.id)}
                                     />
                                 </div>
                             </div>
