@@ -491,22 +491,17 @@ fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
     archive.extract(&temp_extract_dir)?;
 
     let files_to_keep = ["whisper-cli.exe", "whisper-stream.exe", "SDL2.dll"];
-    let whisper_dir = temp_extract_dir.join("whisper-blas-bin-x64");
 
-    if whisper_dir.exists() {
-        for file_name in &files_to_keep {
-            let src_path = whisper_dir.join(file_name);
-            let dest_path = dest_dir.join(file_name);
-            if src_path.exists() {
-                fs::rename(&src_path, &dest_path).with_context(|| {
-                    format!("Failed to move {} to {}", src_path.display(), dest_path.display())
-                })?;
-            } else {
-                println!("cargo:warning=Expected file {} not found in archive.", src_path.display());
-            }
+    for file_name in &files_to_keep {
+        let src_path = temp_extract_dir.join(file_name);
+        let dest_path = dest_dir.join(file_name);
+        if src_path.exists() {
+            fs::rename(&src_path, &dest_path).with_context(|| {
+                format!("Failed to move {} to {}", src_path.display(), dest_path.display())
+            })?;
+        } else {
+            println!("cargo:warning=Expected file {} not found in archive.", src_path.display());
         }
-    } else {
-        anyhow::bail!("The expected directory '{}' was not found in the zip archive.", whisper_dir.display());
     }
 
     fs::remove_dir_all(&temp_extract_dir)?;
