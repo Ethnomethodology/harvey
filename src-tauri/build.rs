@@ -485,33 +485,11 @@ fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
     let cursor = io::Cursor::new(bytes);
     let mut archive = ZipArchive::new(cursor)?;
 
-    let temp_extract_dir = dest_dir.join("_temp_extract");
-    fs::create_dir_all(&temp_extract_dir)?;
-
-    archive.extract(&temp_extract_dir)?;
-
-    // The upstream whisper.cpp release assets have changed.
-    // The binaries are now named main.exe and stream.exe.
-    let files_to_rename = vec![
-        ("main.exe", "whisper-cli.exe"),
-        ("stream.exe", "whisper-stream.exe"),
-        ("SDL2.dll", "SDL2.dll"), // Keep the same name
-    ];
-
-    for (original_name, new_name) in &files_to_rename {
-        let src_path = temp_extract_dir.join(original_name);
-        let dest_path = dest_dir.join(new_name);
-
-        if src_path.exists() {
-            fs::rename(&src_path, &dest_path).with_context(|| {
-                format!("Failed to move {} to {}", src_path.display(), dest_path.display())
-            })?;
-        } else {
-            println!("cargo:warning=Expected file {} not found in archive.", src_path.display());
-        }
+    let mut file_names = Vec::new();
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        file_names.push(file.name().to_string());
     }
 
-    fs::remove_dir_all(&temp_extract_dir)?;
-
-    Ok(())
+    panic!("Zip file contents: {:?}", file_names);
 }
