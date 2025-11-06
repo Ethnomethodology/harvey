@@ -485,11 +485,42 @@ fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
     let cursor = io::Cursor::new(bytes);
     let mut archive = ZipArchive::new(cursor)?;
 
-    let mut file_names = Vec::new();
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        file_names.push(file.name().to_string());
+    let temp_extract_dir = dest_dir.join("_temp_extract");
+    if temp_extract_dir.exists() {
+        fs::remove_dir_all(&temp_extract_dir)?;
+    }
+    fs::create_dir_all(&temp_extract_dir)?;
+
+    archive.extract(&temp_extract_dir)?;
+
+    // The files are inside a "Release" subdirectory in the archive.
+    let files_to_copy = vec![
+        "whisper-cli.exe",
+        "whisper-stream.exe",
+        "SDL2.dll",
+    ];
+
+    let release_dir = temp_extract_dir.join("Release");
+
+    if !release_dir.exists() {
+        anyhow::bail!("'Release' directory not found in the downloaded archive.");
     }
 
-    panic!("Zip file contents: {:?}", file_names);
+    for file_name in files_to_copy {
+        let src_path = release_dir.join(file_name);
+        let dest_path = dest_dir.join(file_name);
+
+        if src_path.exists() {
+            fs::rename(&src_path, &dest_path).with_context(|| {
+                format!("Failed to move {} to {}", src_path.display(), dest_path.display())
+            })?;
+            println!("cargo:info=Copied {} to {}", src_path.display(), dest_path.display());
+        } else {
+            anyhow::bail!("Expected file {} not found in the archive's 'Release' directory.", src_path.display());
+        }
+    }
+
+    fs::remove_dir_all(&temp_extract_dir)?;
+
+    Ok(())
 }
