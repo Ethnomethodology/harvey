@@ -490,11 +490,18 @@ fn download_whisper_for_windows(dest_dir: &Path) -> Result<()> {
 
     archive.extract(&temp_extract_dir)?;
 
-    let files_to_keep = ["whisper-cli.exe", "whisper-stream.exe", "SDL2.dll"];
+    // The upstream whisper.cpp release assets have changed.
+    // The binaries are now named main.exe and stream.exe.
+    let files_to_rename = vec![
+        ("main.exe", "whisper-cli.exe"),
+        ("stream.exe", "whisper-stream.exe"),
+        ("SDL2.dll", "SDL2.dll"), // Keep the same name
+    ];
 
-    for file_name in &files_to_keep {
-        let src_path = temp_extract_dir.join(file_name);
-        let dest_path = dest_dir.join(file_name);
+    for (original_name, new_name) in &files_to_rename {
+        let src_path = temp_extract_dir.join(original_name);
+        let dest_path = dest_dir.join(new_name);
+
         if src_path.exists() {
             fs::rename(&src_path, &dest_path).with_context(|| {
                 format!("Failed to move {} to {}", src_path.display(), dest_path.display())
