@@ -491,6 +491,7 @@
     }, true);
 
     editorContainer.addEventListener('pointerdown', handlePointerDownOnContainer);
+    editorContainer.addEventListener('pointermove', handlePointerHover);
     editorContainer.addEventListener('contextmenu', handleContextMenu, true);
 
     unregisterListeners = mergeRegister(
@@ -823,6 +824,7 @@
       unregisterListeners();
       if (editorContainer) {
           editorContainer.removeEventListener('pointerdown', handlePointerDownOnContainer);
+          editorContainer.removeEventListener('pointermove', handlePointerHover);
           editorContainer.removeEventListener('contextmenu', handleContextMenu, true);
           editorContainer.removeEventListener('click', (e) => {
               const anchor = e.target.closest('a');
@@ -1395,35 +1397,76 @@ function updateAndSaveHighlights(highlights) {
 
   const MIN_WIDTH = 50;
   const MIN_HEIGHT = 30;
-  const RESIZE_BORDER_WIDTH = 5;
+  const RESIZE_BORDER_WIDTH = 10;
+
+  function detectResizeTarget(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return null;
+      const cellElement = target.closest('.editor-table-cell');
+      if (!cellElement) return null;
+
+      const rect = cellElement.getBoundingClientRect();
+      const zoom = calculateZoomLevel(editorContainer) || 1;
+      const x = (event.clientX - rect.left);
+      const y = (event.clientY - rect.top);
+      const w = rect.width;
+      const h = rect.height;
+      const bw = RESIZE_BORDER_WIDTH;
+
+      // Check Right Edge (standard)
+      if (Math.abs(x - w) <= bw) return { element: cellElement, direction: 'col' };
+
+      // Check Left Edge (resize previous column)
+      if (Math.abs(x) <= bw) {
+          const prev = cellElement.previousElementSibling;
+          if (prev && prev.classList.contains('editor-table-cell')) {
+              return { element: prev, direction: 'col' };
+          }
+      }
+
+      // Check Bottom Edge (standard)
+      if (Math.abs(y - h) <= bw) return { element: cellElement, direction: 'row' };
+
+      // Check Top Edge (resize previous row)
+      if (Math.abs(y) <= bw) {
+          const row = cellElement.parentElement;
+          const prevRow = row?.previousElementSibling;
+          if (prevRow) {
+              // Any cell in previous row works to identify the row index
+              const prevCell = Array.from(prevRow.children).find(c => c.classList.contains('editor-table-cell'));
+              if (prevCell) return { element: prevCell, direction: 'row' };
+          }
+      }
+
+      return null;
+  }
+
+  function handlePointerHover(event) {
+      if (!editable || !editorContainer || isResizing) return;
+      // If table cell resizing is disabled, do nothing
+      if (!enableTableCellResize) return;
+
+      const targetInfo = detectResizeTarget(event);
+      if (targetInfo) {
+          editorContainer.style.cursor = targetInfo.direction === 'col' ? 'col-resize' : 'row-resize';
+      } else {
+          editorContainer.style.cursor = '';
+      }
+  }
 
   function handlePointerDownOnContainer(event) {
       if (!editable || !editor || !editorContainer) return;
-      const target = event.target;
 
       // Prevent table cell resizing if disabled
       if (!enableTableCellResize) return;
 
-      if (!(target instanceof HTMLElement)) return;
-      const cellElement = target.closest('.editor-table-cell');
-      if (!cellElement) return;
-      const cellRect = cellElement.getBoundingClientRect();
-      const offsetX = event.clientX - cellRect.left;
-      const offsetY = event.clientY - cellRect.top;
-      let direction = null;
-      if (offsetX >= cellRect.width - RESIZE_BORDER_WIDTH && offsetX <= cellRect.width + RESIZE_BORDER_WIDTH / 2) {
-        direction = 'col';
-      }
-      if (offsetY >= cellRect.height - RESIZE_BORDER_WIDTH && offsetY <= cellRect.height + RESIZE_BORDER_WIDTH / 2) {
-          if (direction !== 'col') {
-              direction = 'row';
-          }
-      }
-      if (direction) {
+      const targetInfo = detectResizeTarget(event);
+      if (targetInfo) {
+          const { element, direction } = targetInfo;
           let cellNodeKeyToResize = null;
           try {
               editor.read(() => {
-                  const cellNode = _getNearestNodeFromDOMNode(cellElement);
+                  const cellNode = _getNearestNodeFromDOMNode(element);
                   if (_isTableCellNode(cellNode)) {
                       cellNodeKeyToResize = cellNode.getKey();
                   }
@@ -1432,7 +1475,9 @@ function updateAndSaveHighlights(highlights) {
               console.error("Error reading editor state during resize check:", readError);
               return;
           }
+
           if (!cellNodeKeyToResize) return;
+
           event.preventDefault();
           event.stopPropagation();
           isResizing = true;
@@ -1468,6 +1513,12 @@ function updateAndSaveHighlights(highlights) {
       };
       const tableRect = tableElement.getBoundingClientRect();
 
+      const tableRelativeLeft = (tableRect.left - containerRect.left) / zoom;
+      const tableRelativeTop = (tableRect.top - containerRect.top) / zoom;
+      const tableRelativeWidth = tableRect.width / zoom;
+      const tableRelativeHeight = tableRect.height / zoom;
+      const relativeX = (clientX - containerRect.left) / zoom;
+      const relativeY = (clientY - containerRect.top) / zoom;
 
       if (resizeDirection === 'col') {
           const left = Math.max(tableRelativeLeft, relativeX);
@@ -1504,6 +1555,7 @@ function updateAndSaveHighlights(highlights) {
           if (!_isTableCellNode(cellNode)) return;
           try {
               const tableNode = _getTableNodeFromLexicalNodeOrThrow(cellNode);
+              const tableElement = editor.getElementByKey(tableNode.getKey());
               const [tableMap] = _computeTableMapSkipCellCheck(tableNode, null, null);
               if (resizeDirection === 'col') {
                   const colIndex = _getTableColumnIndexFromTableCellNode(cellNode, tableMap);
@@ -1512,11 +1564,40 @@ function updateAndSaveHighlights(highlights) {
                       const targetColIndex = colIndex + colSpan - 1;
 
                       const currentWidths = tableNode.getColWidths()?.slice() || [];
-                      while (currentWidths.length <= targetColIndex) {
-                          currentWidths.push(MIN_WIDTH);
+                      let currentWidthVal = currentWidths[targetColIndex];
+
+                      // Handle string/percentage widths
+                      if (typeof currentWidthVal === 'string') {
+                          if (currentWidthVal.endsWith('%')) {
+                              const pct = parseFloat(currentWidthVal);
+                              const tableWidth = tableElement.getBoundingClientRect().width / zoom;
+                              currentWidthVal = (tableWidth * pct) / 100;
+                          } else {
+                              currentWidthVal = parseFloat(currentWidthVal);
+                          }
                       }
-                      const currentWidth = currentWidths[targetColIndex];
-                      const newWidth = Math.max(MIN_WIDTH, currentWidth + diffX);
+
+                      // Initialize if undefined or NaN
+                      if (currentWidthVal === undefined || isNaN(currentWidthVal)) {
+                          if (cellNode.getColSpan() === 1) {
+                              const domElement = editor.getElementByKey(cellNode.getKey());
+                              if (domElement) {
+                                  const rect = domElement.getBoundingClientRect();
+                                  currentWidthVal = rect.width / zoom;
+                              }
+                          }
+                          if (currentWidthVal === undefined || isNaN(currentWidthVal)) {
+                              currentWidthVal = MIN_WIDTH;
+                          }
+                      }
+                      
+                      // Ensure previous columns have valid widths too (convert % to px if needed) to avoid mixing types causing layout issues?
+                      // Ideally yes, but let's just ensure they exist.
+                      for (let i = 0; i < targetColIndex; i++) {
+                          if (currentWidths[i] === undefined) currentWidths[i] = MIN_WIDTH;
+                      }
+
+                      const newWidth = Math.max(MIN_WIDTH, currentWidthVal + diffX);
                       currentWidths[targetColIndex] = newWidth;
                       tableNode.setColWidths(currentWidths);
                   }
@@ -1766,10 +1847,27 @@ function navigateToNextResult() {
   navigateToResult(currentSearchResultIndex);
 }
 
+let previousLayout = null;
+let initialSyncDone = false;
+
 function syncLayout() {
     if (!editor) return;
     const layoutConfig = DOCX_LAYOUT_COLUMN_CONFIGS[activeLayout];
     if (!layoutConfig) return;
+
+    // Detect if layout actively changed by user interaction
+    const layoutChanged = activeLayout !== previousLayout;
+    
+    // Capture initial status BEFORE updating it, for use in the closure
+    const isInitialRun = !initialSyncDone;
+
+    // Update tracking variables
+    if (isInitialRun) {
+        previousLayout = activeLayout;
+        initialSyncDone = true;
+    } else if (layoutChanged) {
+        previousLayout = activeLayout;
+    }
 
     editor.update(() => {
         const root = _getRoot();
@@ -1790,8 +1888,17 @@ function syncLayout() {
         allTableNodes.forEach(tableNode => {
             // Set column widths
             if (layoutConfig.colgroup) {
-                const newColWidths = layoutConfig.colgroup;
-                tableNode.setColWidths(newColWidths);
+                const currentWidths = tableNode.getColWidths();
+                const hasWidths = currentWidths && currentWidths.length > 0 && !currentWidths.every(w => w === undefined);
+
+                // Apply defaults ONLY if:
+                // 1. Table has no widths set (new/raw table)
+                // 2. OR Layout was explicitly changed by user (runtime switch), NOT just initial load
+                // We use isInitialRun (captured const) to safely check this inside the callback
+                if (!hasWidths || (layoutChanged && !isInitialRun)) {
+                    const newColWidths = layoutConfig.colgroup;
+                    tableNode.setColWidths(newColWidths);
+                }
             }
 
             // Hide columns
